@@ -4,6 +4,7 @@
 #include "dao/ClientExoApp.h"
 #include "dao/Effects.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 #include "dao/SafeRead.h"
 #include "dao/TypeName.h"
 
@@ -77,6 +78,47 @@ void Attach()
 constexpr std::size_t kWorldTimer = 0xD4; // in the application
 constexpr std::size_t kScale = 0x54;      // in the timer
 
+// The frame's clock: the Eclipse game object (a global) keeps an
+// EC::ITimer at +0xB4, which its update ticks each frame; the timer keeps
+// the frame's seconds at +0x10 and the total at +0x18 (a double).
+constexpr std::size_t kFrameTimer = 0xB4;
+constexpr std::size_t kFrameSeconds = 0x10;
+constexpr std::size_t kTotalSeconds = 0x18;
+std::atomic<float> g_speed{1.0F};
+
+const void *FrameTimer()
+{
+    const auto game = TryRead<std::uintptr_t>(Module::Address(addr::kEclipseGame));
+    if (!game || *game == 0)
+    {
+        return nullptr;
+    }
+    const auto timer = TryRead<std::uintptr_t>(*game + kFrameTimer);
+    return timer ? reinterpret_cast<const void *>(*timer) : nullptr;
+}
+
+// EC::ITimer::Update: __thiscall (float fixed frames per second, 0 for
+// none), `ret 4`. For the frame's timer, the frame's seconds are scaled
+// after it has taken them, and the total with them.
+using TimerUpdateFn = void(__fastcall *)(void *timer, int edx, float fixedFps);
+Detour<TimerUpdateFn> g_timerUpdate;
+
+void __fastcall TimerUpdate(void *timer, int edx, float fixedFps)
+{
+    g_timerUpdate.Original()(timer, edx, fixedFps);
+    const float speed = g_speed.load(std::memory_order_relaxed);
+    if (speed == 1.0F || timer == nullptr || timer != FrameTimer())
+    {
+        return;
+    }
+    auto *bytes = static_cast<std::byte *>(timer);
+    auto &seconds = *reinterpret_cast<float *>(bytes + kFrameSeconds);
+    auto &total = *reinterpret_cast<double *>(bytes + kTotalSeconds);
+    const float scaled = seconds * speed;
+    total -= static_cast<double>(seconds - scaled);
+    seconds = scaled;
+}
+
 float *Scale()
 {
     auto *app = CClientExoApp::Get();
@@ -96,16 +138,22 @@ float *Scale()
 
 void SetSpeed(float scale)
 {
-    if (float *speed = Scale(); speed != nullptr && scale > 0)
+    if (scale <= 0)
     {
-        *speed = scale;
+        return;
+    }
+    static std::once_flag once;
+    std::call_once(once, [] { g_timerUpdate.Attach(addr::kITimer_Update, &TimerUpdate); });
+    g_speed = scale;
+    if (float *world = Scale(); world != nullptr)
+    {
+        *world = scale;
     }
 }
 
 float Speed()
 {
-    const float *speed = Scale();
-    return speed != nullptr ? *speed : 1.0F;
+    return g_speed;
 }
 
 void Hold(bool held)

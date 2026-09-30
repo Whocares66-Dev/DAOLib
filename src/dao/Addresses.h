@@ -584,6 +584,16 @@ DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
 // hands those milliseconds to regeneration and its effects. The names are
 // ours.
 DAO_ADDRESS(kWorldTimer_Constructor, "EC::WorldTimer::WorldTimer", 0x00A35F30)
+// The frame's clock (dao/Clock.h): the Eclipse game object, a global the
+// update task reads (0x00401F30 returns it), keeps two EC::ITimer at +0xB4
+// and +0xB8 (its constructor, 0x00404260). ITimer::Update, __thiscall
+// (float fixed frames per second), `ret 4`: the microsecond clock's
+// seconds since +0x08 (or one over the fixed rate) into +0x10, added to
+// the double at +0x18. EclipseGame's frame step (0x004025C0) updates the
+// +0xB4 timer, keeps its seconds at the game's +0xBC, and gives its total
+// to the scene (0x008107F0). The game object is kEclipseGame above.
+DAO_ADDRESS(kITimer_Update, "EC::ITimer::Update", 0x004CB160)
+DAO_ADDRESS(kEclipseGame_FrameStep, "EclipseGame::FrameStep", 0x004025C0)
 DAO_ADDRESS(kWorldTimer_Update, "EC::WorldTimer::Update", 0x00A358F0)
 DAO_ADDRESS(kWorldTimer_SinceUpdate, "EC::WorldTimer::SinceUpdate", 0x00A35980)
 DAO_ADDRESS(kWorldTimer_WorldTime, "EC::WorldTimer::WorldTime", 0x00A35AF0)

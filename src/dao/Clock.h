@@ -45,16 +45,24 @@ bool Held();
 // next update. Works while held.
 void Advance(float seconds);
 
-// How fast the world runs: 1 as the game plays, 0.5 half speed, 2 twice.
-// The world timer's own scale, read 2026-09-30: every object's update
-// takes its time from the world timer (EC::WorldTimer, the application's
-// +0xD4; an object's timer, 0x006FA1D0, asks it for the world time), and
-// the timer's update (0x00A358F0) multiplies each frame's seconds by the
-// float at its +0x54. The timer's constructor sets that to 1 and nothing
-// else writes it: a speed the engine carries and never uses. So the AI,
-// commands, effects and regeneration all follow it; what else does
-// (animation, sound, the Flash UI, which keeps its own clock) is not yet
-// seen in play. Nothing while there is no world timer; 1 then.
+// How fast the game runs: 1 as it plays, 0.5 half speed, 2 twice. Read
+// 2026-09-30; the game keeps two clocks, and this scales both.
+// - The world timer (EC::WorldTimer, the application's +0xD4), which the
+//   game's logic runs on: an object's timer (0x006FA1D0) asks it for the
+//   world time, and CCCreature's update hands the difference to
+//   regeneration and the effects. Its update (0x00A358F0) multiplies each
+//   frame's seconds by a float at its +0x54 that the engine sets to 1 and
+//   never changes. In play, 2026-09-30, setting it alone changed nothing
+//   the player could see.
+// - The frame's timer (an EC::ITimer at the Eclipse game object's +0xB4),
+//   which the frame runs on: EclipseGame's update ticks it (0x004025C0),
+//   keeps its seconds as the frame's (the game's +0xBC), and gives its
+//   total to the scene (0x008107F0), what animation plays by. This hooks
+//   the timer's update (EC::ITimer::Update, 0x004CB160) and scales that
+//   timer's seconds, and the total with them.
+// Not yet seen in play with both. The Flash UI keeps its own clock
+// (Scaleform's GTimer) and is not slowed. Called on any thread; takes
+// effect from the next frame.
 void SetSpeed(float scale);
 float Speed();
 
