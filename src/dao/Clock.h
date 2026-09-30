@@ -23,6 +23,13 @@
 // Not reached: timers a script keeps itself (DelayEvent), and cooldowns,
 // which have their own script commands (GetRemainingCooldown,
 // SetCooldown). On the game's thread. Not yet seen in play.
+//
+// A consequence, seen by the turn-based mod in play, 2026-09-30: a
+// creature under an effect that holds it (a pin, a knockdown) is kept busy
+// by a command that ends when the effect does (ExecuteEffect, type 32,
+// queued at the front as the effect lands). Held, the effect does not end,
+// so neither does the command, and the creature does nothing until the
+// clock is advanced past it or the effect is removed.
 #pragma once
 
 namespace dao::clock

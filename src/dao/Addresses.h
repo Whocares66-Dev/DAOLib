@@ -564,6 +564,20 @@ DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
 DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
 DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+// Using an ability from the quickbar, read 2026-09-30 from
+// PerformAbilityMessage's handler (dao/Messages.h says how it chooses a
+// target). UseAbility (ability, caster, the message's target, the target chosen,
+// a position), `ret 0x14`, queues the ability's command;
+// BeginTargeting (ability, caster, target) asks the player for a target;
+// the attack target is what the caster fights (by id); a global holds the
+// selected target's id; ValidTarget (object, TargetType) says whether the
+// ability may be used on it. The names are ours.
+DAO_ADDRESS(kGameModeExplore_UseAbility, "GameModeExplore::UseAbility", 0x00711680)
+DAO_ADDRESS(kGameModeExplore_BeginTargeting, "GameModeExplore::BeginTargeting", 0x0070BA30)
+DAO_ADDRESS(kGameModeExplore_AttackTarget, "GameModeExplore::AttackTarget", 0x0070B980)
+DAO_ADDRESS(kGameModeExplore_ValidTarget, "GameModeExplore::ValidTarget", 0x0070D550)
+DAO_DATA(kSelectedTarget, "g_selectedTarget", 0x00C06794)
+
 // How a temporary effect runs out, read 2026-09-30 (dao/Effects.h). Each
 // object's update ages its effects through its effects holder (a virtual
 // on every object class, 0x007A1800, calling Update, 0x007A1500), which

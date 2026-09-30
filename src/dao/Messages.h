@@ -126,12 +126,23 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // All message classes, their sizes and fields, are in dev/messages.csv
 // (tools/messages.py, from each class's clone).
 
-// The player orders a creature to use an ability, on a target (the
-// quickbar, a radial menu). 0x10 bytes, from its clone (0x0077B210); the
-// fields from GameModeExplore's handler (0x00711B50), which looks the
-// ability up in the ability table by +4, the caster by +8 with
-// GetCreatureById, and the target by +0xC with GetObjectById. Read
-// 2026-09-30, not yet seen in play.
+// The player orders a creature to use an ability (the quickbar, a radial
+// menu). 0x10 bytes, from its clone (0x0077B210): the ability, the caster,
+// and a target, which the quickbar leaves 0 (seen by the turn-based mod
+// in play, 2026-09-30). The handler (GameModeExplore's, 0x00711B50, which
+// combat mode inherits), read 2026-09-30, does not take the target from
+// the message. Once the ability may be used (0x0071CE90), it reads the
+// ability's row of abi_base (TargetType, UseType, AutoTarget) and uses
+// the ability (UseAbility, dao/Addresses.h) on, in order:
+// - the caster, if the ability targets only its user, or the self-cast
+//   key is down and it may target its user, or it is an active mode
+//   being turned off (UseType 2);
+// - the selected target (a global, 0x00C06794), if the ability may be
+//   used on it;
+// - the caster's attack target, if the ability's AutoTarget is set and it
+//   may be used on it;
+// and failing all of them it asks for a target (targeting mode, 0x0070BA30),
+// which a click then answers with PerformAbilityOnTargetUnderCursorMessage.
 struct PerformAbilityMessage : Message
 {
     static constexpr std::uintptr_t kVftable = 0x00B1DEE4;
