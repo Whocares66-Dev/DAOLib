@@ -436,8 +436,8 @@ void PeekEvent(PeekState &state)
         return;
     }
     const std::string type = dao::TypeName(first.get());
-    const std::string shown = fmt::format("{} of type {}, creator {:#010x}, target {:#010x}", type, first->Type(),
-                                          first->Creator(), first->Target());
+    const std::string shown = fmt::format("{} of type {}, creator {:#010x}, target {:#010x}", type,
+                                          fmt::underlying(first->Type()), first->Creator(), first->Target());
     if (type == "CScriptEvent" && first->Type() == second->Type() && first->Creator() == second->Creator() &&
         first->Target() == second->Target())
     {
@@ -445,8 +445,8 @@ void PeekEvent(PeekState &state)
     }
     else
     {
-        Mismatched(state, shown + fmt::format("; after our push: type {}, creator {:#010x}", second->Type(),
-                                              second->Creator()));
+        Mismatched(state, shown + fmt::format("; after our push: type {}, creator {:#010x}",
+                                              fmt::underlying(second->Type()), second->Creator()));
     }
 }
 
@@ -473,7 +473,7 @@ void PeekArray(PeekState &state, std::optional<std::int32_t> team)
             if (i == 0)
             {
                 first = fmt::format(", the first {} of type {}", type,
-                                    array.Effect(0) != nullptr ? array.Effect(0)->Type() : -1);
+                                    array.Effect(0) != nullptr ? static_cast<int>(array.Effect(0)->Type()) : -1);
             }
             continue;
         }
@@ -531,12 +531,13 @@ int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
         const std::uint32_t ours = peek.eventField(*event.get());
         if (ours == *answer)
         {
-            Matched(state, fmt::format("event of type {}, engine and field both {:#x}", event->Type(), ours));
+            Matched(state,
+                    fmt::format("event of type {}, engine and field both {:#x}", fmt::underlying(event->Type()), ours));
         }
         else
         {
-            Mismatched(state, fmt::format("event of type {}: engine said {:#x}, field reads {:#x}", event->Type(),
-                                          *answer, ours));
+            Mismatched(state, fmt::format("event of type {}: engine said {:#x}, field reads {:#x}",
+                                          fmt::underlying(event->Type()), *answer, ours));
         }
         return result;
     }
@@ -570,12 +571,12 @@ int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
         if (ours == *answer)
         {
             Matched(state, fmt::format("effect {} of type {}, engine and field both {:#x}", effect->Id(),
-                                       effect->Type(), ours));
+                                       fmt::underlying(effect->Type()), ours));
         }
         else
         {
             Mismatched(state, fmt::format("effect {} of type {}: engine said {:#x}, field reads {:#x}", effect->Id(),
-                                          effect->Type(), *answer, ours));
+                                          fmt::underlying(effect->Type()), *answer, ours));
         }
         return result;
     }

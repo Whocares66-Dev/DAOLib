@@ -33,6 +33,14 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tools/gen_script_fields.py" --check
     )
+    # The scripts' constants are what script.ldf and the scripts say (passes
+    # with no game or no extracted toolset).
+    add_test(
+        NAME script_constants
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/gen_script_constants.py" --check
+    )
     # CGameObject's cast slots are what the exe says (passes with no copy).
     add_test(
         NAME object_casts

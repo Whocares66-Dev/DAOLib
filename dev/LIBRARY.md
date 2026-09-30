@@ -42,6 +42,10 @@ dao::script::Set(kIsTurnBasedCommand, &IsTurnBased);
 
 A script calls it once a `script.ldf` the toolset compiles against declares `int IsTurnBased() = <number>;`. About 150 of the 863 slots are empty. Replacing a command's handler works the same way: `Set` returns the handler it replaced, to call on.
 
+## The scripts' constants
+
+`dao/generated/ScriptConstants.h` (`tools/gen_script_constants.py`) has every constant the engine declares in `script.ldf` and the effect types the scripts declare in `effect_constants_h.nss`: 609, as 37 typed enums (`dao::script::EventType`, `EffectType`, `EffectDurationType`, `CommandResult`, `InventorySlot`, `ObjectTypeFlags`, ...) and again under their script names (`dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE`). The accessors return the enums where the constants name the field: `CScriptEvent::Type()` is an `EventType`, `CGameEffect::Type()` an `EffectType`. An enum is 32-bit, so a number no constant names, like a script's own event type, still fits.
+
 ## The game object
 
 Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/daoexe.py --bases CCCreature`, from the RTTI's class hierarchy descriptors):

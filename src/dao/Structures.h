@@ -14,6 +14,7 @@
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/core/Msvc8.h"
+#include "dao/generated/ScriptConstants.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -123,15 +124,15 @@ class CGameEffect : public CDataArrays
     {
         return Read<std::uint32_t>(0x20);
     }
-    // EFFECT_TYPE_* in script.ldf.
-    std::int32_t Type() const
+    // EFFECT_TYPE_*, the scripts' own (effect_constants_h.nss).
+    script::EffectType Type() const
     {
-        return Read<std::int32_t>(0x24);
+        return Read<script::EffectType>(0x24);
     }
-    // EFFECT_DURATION_TYPE_*.
-    std::int32_t DurationType() const
+    // EFFECT_DURATION_TYPE_* in script.ldf.
+    script::EffectDurationType DurationType() const
     {
-        return Read<std::int32_t>(0x28);
+        return Read<script::EffectDurationType>(0x28);
     }
     std::int32_t Animation() const
     {
@@ -164,10 +165,10 @@ class CScriptEvent : public CDataArrays
     CScriptEvent &operator=(const CScriptEvent &) = delete;
     ~CScriptEvent() = delete;
 
-    // EVENT_TYPE_* in script.ldf.
-    std::int32_t Type() const
+    // EVENT_TYPE_* in script.ldf; scripts also make their own numbers.
+    script::EventType Type() const
     {
-        return Read<std::int32_t>(0x20);
+        return Read<script::EventType>(0x20);
     }
     ObjectId Creator() const
     {

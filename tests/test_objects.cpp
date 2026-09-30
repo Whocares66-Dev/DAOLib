@@ -1,6 +1,7 @@
 #include "dao/core/CommandWord.h"
 #include "dao/core/FieldPath.h"
 #include "dao/core/ObjectType.h"
+#include "dao/generated/ScriptConstants.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -98,4 +99,21 @@ TEST_CASE("an object's type gives the scripts' OBJECT_TYPE_ number", "[objects]"
     CHECK(ScriptObjectType(ObjectType::Party) == 32768);
     CHECK(ScriptObjectType(ObjectType::Map) == 262144);
     CHECK(ScriptObjectType(static_cast<ObjectType>(0)) == 0);
+}
+
+TEST_CASE("the command word's types are script.ldf's COMMAND_TYPE_ constants", "[objects]")
+{
+    using dao::core::CommandType;
+    using Script = dao::script::CommandType;
+    // The hand-written enum (read off commands in play) against the generated one.
+    CHECK(static_cast<int>(CommandType::Attack) == static_cast<int>(Script::Attack));
+    CHECK(static_cast<int>(CommandType::DoFunction) == static_cast<int>(Script::DoFunction));
+    CHECK(static_cast<int>(CommandType::Wait) == static_cast<int>(Script::Wait));
+    CHECK(static_cast<int>(CommandType::MoveToLocation) == static_cast<int>(Script::MoveToLocation));
+    CHECK(static_cast<int>(CommandType::UseAbility) == static_cast<int>(Script::UseAbility));
+    CHECK(static_cast<int>(CommandType::Drive) == static_cast<int>(Script::Drive));
+    CHECK(static_cast<int>(CommandType::Deathblow) == static_cast<int>(Script::Deathblow));
+    CHECK(static_cast<int>(CommandType::Fly) == static_cast<int>(Script::Fly));
+    CHECK(dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE ==
+          static_cast<int>(dao::script::EventType::CommandComplete));
 }
