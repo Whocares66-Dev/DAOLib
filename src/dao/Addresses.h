@@ -248,6 +248,21 @@ DAO_ADDRESS(kGuiExternal_GetValue, "GuiExternal::GetValue", 0x0051EC60)
 DAO_ADDRESS(kGuiExternal_GetNumber, "GuiExternal::GetNumber", 0x0051CFD0)
 DAO_ADDRESS(kGuiExternal_AddTokenObserver, "GuiExternal::AddTokenObserver", 0x0051CD50)
 DAO_ADDRESS(kGuiExternal_SendMessage, "GuiExternal::SendMessage", 0x0051C800)
+// The plain attributes' own vtables (RTTI), by which an attribute found
+// by path says its type: SmartData::Attribute<T, NoMemberLookup,
+// InternalStorage, ObserverNotification> for each T, and float's custom
+// storage beside. Each one's slot 21 is Set(T), __thiscall, `ret 4`: it
+// stores the value and, if it changed, notifies the attribute's observers,
+// which is how a bound movie learns of it (read 2026-09-30 from
+// Attribute<int>'s: compare, store, notify). Slot 14 does not tell types
+// apart: the linker folded it to two shared bodies.
+DAO_DATA(kAttributeBool_Vftable, "SmartData::Attribute<bool>::vftable", 0x00AEA6A4)
+DAO_DATA(kAttributeInt_Vftable, "SmartData::Attribute<int>::vftable", 0x00ADE4E4)
+DAO_DATA(kAttributeUnsignedInt_Vftable, "SmartData::Attribute<unsigned int>::vftable", 0x00AED6AC)
+DAO_DATA(kAttributeShort_Vftable, "SmartData::Attribute<short>::vftable", 0x00AEC43C)
+DAO_DATA(kAttributeByte_Vftable, "SmartData::Attribute<unsigned char>::vftable", 0x00B1B0BC)
+DAO_DATA(kAttributeFloat_Vftable, "SmartData::Attribute<float>::vftable", 0x00B00CC4)
+DAO_DATA(kAttributeFloatCustom_Vftable, "SmartData::Attribute<float,CustomStorage>::vftable", 0x00B1B12C)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and

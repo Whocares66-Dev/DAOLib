@@ -162,7 +162,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The Flash UI's calls into the game: FSCommands and ExternalInterface calls by name, `GFxValue`, answering | 2026-09-30 | not yet: the example plugin logs the first 40 of each, with the owning screen's class and the thread |
 | Calling into a movie: GFxMovie's vtable (SetVariable, the array setters, Invoke), the FSCommand answer convention (`_root.fsc_retval`) | 2026-09-30 | not yet: the example plugin reads the first calling movie's `_root` and `_root.fsc_retval` |
 | The game's movies by name: the manager's set of records {name, movie}, walked with the engine's iterator | 2026-09-30 | not yet: the example plugin lists every movie's name once while exploring |
-| The data tree (SmartData): finding an attribute by path, its value as text and as a number | 2026-09-30 | not yet: the example plugin reads GUI.SelectedChar, Map.ShowAllLabels and CClientExoApp.GUIDialogResult once while exploring |
+| The data tree (SmartData): finding an attribute by path, its value as text and as a number, its type by class, setting a plain one (bool, int, unsigned, short, byte, float) | 2026-09-30 | not yet: the example plugin reads GUI.SelectedChar, Map.ShowAllLabels and CClientExoApp.GUIDialogResult once while exploring |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session

@@ -20,7 +20,7 @@ template <class Fn> Fn Slot(const void *object, std::size_t slot)
 
 } // namespace
 
-const Attribute *Find(std::wstring_view path)
+Attribute *Find(std::wstring_view path)
 {
     // The root, made on first use: __cdecl, no arguments.
     using RootFn = void *(__cdecl *)();
@@ -31,9 +31,8 @@ const Attribute *Find(std::wstring_view path)
     }
     // Find takes the engine's own string; the flag is what GetValue passes.
     WString text(path);
-    using FindFn = const Attribute *(__fastcall *)(void *, int, const core::WStringRep *, std::int32_t);
-    const Attribute *found =
-        reinterpret_cast<FindFn>(Module::Address(addr::kTokenManager_Find))(root, 0, text.Engine(), 0);
+    using FindFn = Attribute *(__fastcall *)(void *, int, const core::WStringRep *, std::int32_t);
+    Attribute *found = reinterpret_cast<FindFn>(Module::Address(addr::kTokenManager_Find))(root, 0, text.Engine(), 0);
     const auto *null = reinterpret_cast<const Attribute *>(Module::Address(addr::kNullAttribute));
     return found != null ? found : nullptr;
 }
@@ -51,6 +50,86 @@ double Attribute::Number() const
 {
     using Fn = double(__fastcall *)(const Attribute *, int);
     return Slot<Fn>(this, 13)(this, 0);
+}
+
+Attribute::Type Attribute::Kind() const
+{
+    const auto vtable = *reinterpret_cast<const std::uintptr_t *>(this);
+    const auto is = [vtable](std::uintptr_t address) { return vtable == Module::Address(address); };
+    if (is(addr::kAttributeBool_Vftable))
+    {
+        return Type::Bool;
+    }
+    if (is(addr::kAttributeInt_Vftable))
+    {
+        return Type::Int;
+    }
+    if (is(addr::kAttributeUnsignedInt_Vftable))
+    {
+        return Type::UnsignedInt;
+    }
+    if (is(addr::kAttributeShort_Vftable))
+    {
+        return Type::Short;
+    }
+    if (is(addr::kAttributeByte_Vftable))
+    {
+        return Type::Byte;
+    }
+    if (is(addr::kAttributeFloat_Vftable) || is(addr::kAttributeFloatCustom_Vftable))
+    {
+        return Type::Float;
+    }
+    return Type::Other;
+}
+
+namespace
+{
+
+// Slot 21, Set(T): the value in the low bytes of its one stack word.
+bool SetWord(Attribute *attribute, std::uint32_t word)
+{
+    using Fn = void(__fastcall *)(Attribute *, int, std::uint32_t);
+    Slot<Fn>(attribute, 21)(attribute, 0, word);
+    return true;
+}
+
+} // namespace
+
+bool Attribute::Set(bool value)
+{
+    return Kind() == Type::Bool && SetWord(this, value ? 1U : 0U);
+}
+
+bool Attribute::Set(std::int32_t value)
+{
+    switch (Kind())
+    {
+    case Type::Int:
+        return SetWord(this, static_cast<std::uint32_t>(value));
+    case Type::Short:
+        return SetWord(this, static_cast<std::uint16_t>(value));
+    case Type::Byte:
+        return SetWord(this, static_cast<std::uint8_t>(value));
+    default:
+        return false;
+    }
+}
+
+bool Attribute::Set(std::uint32_t value)
+{
+    return Kind() == Type::UnsignedInt && SetWord(this, value);
+}
+
+bool Attribute::Set(float value)
+{
+    if (Kind() != Type::Float)
+    {
+        return false;
+    }
+    using Fn = void(__fastcall *)(Attribute *, int, float);
+    Slot<Fn>(this, 21)(this, 0, value);
+    return true;
 }
 
 std::optional<std::wstring> Text(std::wstring_view path)

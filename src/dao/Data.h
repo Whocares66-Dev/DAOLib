@@ -15,9 +15,12 @@
 // seen: GUI.SelectedChar, GUI.SelectedChar.Equipment, Map.ShowAllLabels,
 // CClientExoApp.GUIDialogResult. The game's own classes are SmartObjects
 // too (the game modes, the application), with their attributes in the
-// tree. Reading only, so far; not yet seen in play.
+// tree. A plain attribute (a bool, a number) can be set, and setting one
+// tells its observers, the movies bound to it among them. Not yet seen in
+// play.
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,10 +40,33 @@ class Attribute
     // The value as the UI's GetValue gives it, and as GetNumber does.
     std::wstring Text() const;
     double Number() const;
+
+    // What the attribute holds, by its class; Other for the rest (strings,
+    // objects, lists, pointers).
+    enum class Type
+    {
+        Other,
+        Bool,
+        Int,
+        UnsignedInt,
+        Short,
+        Byte,
+        Float,
+    };
+    Type Kind() const;
+
+    // Sets a plain attribute of that type, as the engine does: stored,
+    // and its observers told if it changed. False, and nothing done, for
+    // an attribute of another type. From the scripts' thread (a frame
+    // callback), where the engine sets its own.
+    bool Set(bool value);
+    bool Set(std::int32_t value); // an Int, Short or Byte attribute, narrowed to it
+    bool Set(std::uint32_t value);
+    bool Set(float value);
 };
 
 // The attribute at a path, or null if the tree has none there.
-const Attribute *Find(std::wstring_view path);
+Attribute *Find(std::wstring_view path);
 
 std::optional<std::wstring> Text(std::wstring_view path);
 std::optional<double> Number(std::wstring_view path);

@@ -248,10 +248,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         for (const wchar_t *path : {L"GUI.SelectedChar", L"Map.ShowAllLabels", L"CClientExoApp.GUIDialogResult"})
         {
             const dao::data::Attribute *attribute = dao::data::Find(path);
-            spdlog::info("data {}: {}", dao::Utf8(path),
-                         attribute != nullptr
-                             ? fmt::format("\"{}\", {}", dao::Utf8(attribute->Text()), attribute->Number())
-                             : std::string("none"));
+            spdlog::info(
+                "data {} ({}): {}", dao::Utf8(path), attribute != nullptr ? static_cast<int>(attribute->Kind()) : -1,
+                attribute != nullptr ? fmt::format("\"{}\", {}", dao::Utf8(attribute->Text()), attribute->Number())
+                                     : std::string("none"));
         }
     });
     return true;
