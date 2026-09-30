@@ -2,6 +2,7 @@ find_package(Catch2 3 CONFIG REQUIRED)
 
 add_executable(
     dao_tests
+    test_angle.cpp
     test_code.cpp
     test_crashlog.cpp
     test_fingerprint.cpp

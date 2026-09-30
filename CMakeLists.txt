@@ -146,6 +146,7 @@ add_library(
     src/dao/Data.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
+    src/dao/CameraMoves.cpp
     src/dao/GameModes.cpp
     src/dao/Gda.cpp
     src/dao/Gui.cpp
