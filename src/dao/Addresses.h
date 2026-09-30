@@ -249,6 +249,21 @@ DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
 DAO_ADDRESS(kGUIScene_Constructor, "GUI::GUIScene::GUIScene", 0x00A55AC0)
 DAO_ADDRESS(kGUISystem_SceneIdByName, "GUI::GUISystem::SceneIdByName", 0x00523ED0)
 DAO_ADDRESS(kGUISystem_Scene, "GUI::GUISystem::Scene", 0x00523FD0)
+// A scene's registration, read 2026-09-30: the GUI system's constructor
+// makes 61 scenes, 0xC0 bytes each from operator new, and adds each with
+// AddScene, __thiscall (id, scene), `ret 8`: the ids are 0-0x3F; a new id
+// goes into the map, the scene's +0xB8 gets the GUI system, and the scene's
+// slot 2 runs; an id already there is ignored. The GUI system is the
+// application's +0x158 (SetGUISystem, 0x005D4F20, from the start-up that
+// makes it, 0x278 bytes). By name, from its vtable: slot 17 OpenScreen
+// (above), slot 18 closes (the manager drops the record, and the cached
+// definition too if asked), slot 19 hides (the record deactivated and its
+// shown flag cleared, the movie kept), each __thiscall (const
+// std::wstring &name), `ret 4`.
+DAO_ADDRESS(kGUISystem_AddScene, "GUI::GUISystem::AddScene", 0x005240D0)
+DAO_ADDRESS(kGUISystem_CloseScreen, "GUI::GUISystem::CloseScreen", 0x00523FF0)
+DAO_ADDRESS(kGUISystem_HideScreen, "GUI::GUISystem::HideScreen", 0x00523CB0)
+DAO_ADDRESS(kCClientExoApp_SetGUISystem, "CClientExoApp::SetGUISystem", 0x005D4F20)
 
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no

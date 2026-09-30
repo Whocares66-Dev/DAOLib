@@ -236,6 +236,37 @@ void *FindOwner(std::wstring_view name);
 std::wstring_view NameOf(const void *owner);
 void *MovieOf(const void *owner);
 
+// A screen of a plugin's own, as the game has its 61: a GUI::GUIScene the
+// GUI system keeps by name, whose movie it opens on a layer when shown
+// (dev/GUI.md). The layer is the stacking order the game's scenes use;
+// the flags are theirs too (0x20 modal, 0x10 a loading screen).
+//
+//   dao::gui::AddScreen(L"TurnOrder", L"turnorder", dao::gui::kLayerHud);
+//   dao::gui::ShowScreen(L"TurnOrder");
+//
+// The movie is found as the game finds its own (the name's .swf becomes
+// .gfx; which folders and archives are searched is not read yet). Add a
+// screen once the game is up (the GUI system exists from the first frame
+// of the main menu: a frame callback will do); show, hide and close it
+// from the scripts' thread. Read 2026-09-30, not yet seen in play.
+inline constexpr std::int32_t kLayerFloaty = 0; // the floating combat text
+inline constexpr std::int32_t kLayerHud = 1;    // the HUD (GUIMain)
+inline constexpr std::int32_t kLayerMenu = 3;   // the in-game menus: map, journal, skills
+inline constexpr std::int32_t kLayerDialog = 5; // conversation, death, the main menu
+inline constexpr std::int32_t kLayerOptions = 6;
+inline constexpr std::int32_t kLayerPopup = 7;
+inline constexpr std::int32_t kLayerLoading = 8;
+inline constexpr std::uint32_t kScreenModal = 0x20;
+
+// False if the GUI system is not up yet, or the name is taken.
+bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t layer, std::uint32_t flags = 0);
+// Opens the screen's movie, loading it if need be, and shows it.
+bool ShowScreen(std::wstring_view name);
+// Hides it, keeping it loaded.
+bool HideScreen(std::wstring_view name);
+// Closes it: the movie is let go.
+bool CloseScreen(std::wstring_view name);
+
 // An FSCommand's answer, as the game's own handlers give theirs: an array
 // of ints in the calling movie's _root.fsc_retval, which the ActionScript
 // reads after its fscommand().

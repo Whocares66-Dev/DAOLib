@@ -1,9 +1,12 @@
 #include "dao/Gui.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/String.h"
+#include "dao/TypeName.h"
 #include "dao/core/Msvc8.h"
 
 #include <cstddef>
@@ -245,6 +248,98 @@ bool Movie::Invoke(const char *method, std::span<const Value> args)
     using Fn = bool(__fastcall *)(void *, int, const char *, Value *, const Value *, std::uint32_t);
     return view_ != nullptr &&
            Slot<Fn>(view_, 18)(view_, 0, method, nullptr, args.data(), static_cast<std::uint32_t>(args.size()));
+}
+
+namespace
+{
+
+// The application's GUI system, GUI::DragonAgeGUISystem, or null before
+// it is made.
+void *GuiSystem()
+{
+    const auto *app = CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return nullptr;
+    }
+    const auto system = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + 0x158);
+    if (!system || *system == 0)
+    {
+        return nullptr;
+    }
+    void *gui = reinterpret_cast<void *>(*system);
+    return TypeName(gui).rfind("GUI::", 0) == 0 ? gui : nullptr;
+}
+
+// The ids a plugin's screens take, past the game's 0-0x3F.
+std::uint32_t g_nextScreenId = 0x100;
+
+// The GUI system's by-name slots (17 open, 18 close, 19 hide), each
+// __thiscall (const std::wstring &name), `ret 4`.
+bool ByName(std::size_t slot, std::wstring_view name)
+{
+    void *gui = GuiSystem();
+    if (gui == nullptr)
+    {
+        return false;
+    }
+    WString text(name);
+    using Fn = void(__fastcall *)(void *, int, const core::WStringRep *);
+    Slot<Fn>(gui, slot)(gui, 0, text.Engine());
+    return true;
+}
+
+// The id the GUI system knows a scene by, or -1 (its slot 12).
+std::int32_t SceneId(void *gui, std::wstring_view name)
+{
+    WString text(name);
+    using Fn = std::int32_t(__fastcall *)(void *, int, const core::WStringRep *);
+    return Slot<Fn>(gui, 12)(gui, 0, text.Engine());
+}
+
+} // namespace
+
+bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t layer, std::uint32_t flags)
+{
+    void *gui = GuiSystem();
+    if (gui == nullptr || SceneId(gui, name) != -1)
+    {
+        return false;
+    }
+    // As the GUI system makes its own: 0xC0 bytes from the engine's
+    // allocator, GUIScene(name, filename, layer, b, flags), AddScene. The
+    // GUI system owns it from there.
+    using NewFn = void *(__cdecl *)(std::size_t);
+    void *scene = reinterpret_cast<NewFn>(Module::Address(addr::kOperatorNew))(0xC0);
+    if (scene == nullptr)
+    {
+        return false;
+    }
+    WString sceneName(name);
+    WString filename(movie);
+    using SceneFn = void *(__fastcall *)(void *, int, const core::WStringRep *, const core::WStringRep *, std::int32_t,
+                                         std::int32_t, std::uint32_t);
+    reinterpret_cast<SceneFn>(Module::Address(addr::kGUIScene_Constructor))(scene, 0, sceneName.Engine(),
+                                                                            filename.Engine(), layer, 0, flags);
+    const std::uint32_t id = g_nextScreenId++;
+    using AddFn = void(__fastcall *)(void *, int, std::uint32_t, void *);
+    reinterpret_cast<AddFn>(Module::Address(addr::kGUISystem_AddScene))(gui, 0, id, scene);
+    return SceneId(gui, name) == static_cast<std::int32_t>(id);
+}
+
+bool ShowScreen(std::wstring_view name)
+{
+    return ByName(17, name);
+}
+
+bool HideScreen(std::wstring_view name)
+{
+    return ByName(19, name);
+}
+
+bool CloseScreen(std::wstring_view name)
+{
+    return ByName(18, name);
 }
 
 bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)

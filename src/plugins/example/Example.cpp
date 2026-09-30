@@ -243,6 +243,15 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         }
         spdlog::info("{} movies: {}", owners.size(), names);
 
+        // A screen of the plugin's own, through the game's own registration
+        // and opening. Its movie is not in the game, so nothing appears:
+        // this checks the way in, and the probe logs the OpenMovie it makes.
+        const bool added = dao::gui::AddScreen(L"DAOLibExample", L"daolib_example", dao::gui::kLayerHud);
+        const bool shown = dao::gui::ShowScreen(L"DAOLibExample");
+        const bool closed = dao::gui::CloseScreen(L"DAOLibExample");
+        spdlog::info("screen DAOLibExample: added {}, shown {}, closed {}; its record now {}", added, shown, closed,
+                     dao::gui::FindOwner(L"daolib_example"));
+
         // A few of the data tree's values, as the UI's GetValue and
         // GetNumber give them.
         for (const wchar_t *path : {L"GUI.SelectedChar", L"Map.ShowAllLabels", L"CClientExoApp.GUIDialogResult"})

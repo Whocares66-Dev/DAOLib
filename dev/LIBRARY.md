@@ -163,6 +163,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Calling into a movie: GFxMovie's vtable (SetVariable, the array setters, Invoke), the FSCommand answer convention (`_root.fsc_retval`) | 2026-09-30 | not yet: the example plugin reads the first calling movie's `_root` and `_root.fsc_retval` |
 | The game's movies by name: the manager's set of records {name, movie}, walked with the engine's iterator | 2026-09-30 | not yet: the example plugin lists every movie's name once while exploring |
 | The data tree (SmartData): finding an attribute by path, its value as text and as a number, its type by class, setting a plain one (bool, int, unsigned, short, byte, float) | 2026-09-30 | not yet: the example plugin reads GUI.SelectedChar, Map.ShowAllLabels and CClientExoApp.GUIDialogResult once while exploring |
+| A plugin's own screen: a GUIScene registered as the game registers its 61, shown, hidden and closed through the GUI system | 2026-09-30 | not yet: the example plugin registers, shows and closes one whose movie is missing, and the probe logs the OpenMovie |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session
@@ -194,7 +195,7 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 ## What comes next
 
 - **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
-- **The Flash UI, from the game's side** (`dev/GUI.md`). Loading a movie of a plugin's own and showing it on a layer, once the probe shows what `OpenMovie`'s arguments mean; publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
+- **The Flash UI, from the game's side** (`dev/GUI.md`). Where the game looks for a movie's file, so a plugin can ship one; publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
 - **Messages.** 9 of the 296 message classes have a C++ struct; the rest, their fields' meanings. A plugin can send one and hook a handler, but not yet subscribe to a message class as it can a script event. Sending by name, as key bindings do (`SelectResponseMessage 0`), goes through a registry of factories (`0x0078D1A0`).
 - **Creatures.** Beyond the fields their getters give: attributes, health and mana or stamina, abilities, inventory, the party. From the constructors and NWN's namesakes.
 - **Talk tables.** A string by its string ref, from the engine; a plugin's own talk table beside the game's.
