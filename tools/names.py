@@ -92,14 +92,12 @@ def named_rows(path):
     """Rows of a CSV with function_va and name columns, the named ones."""
     if not os.path.exists(path):
         return []
-    out = []
     with open(path, encoding="utf-8", newline="") as f:
-        for row in csv.DictReader(f):
-            if row["name"]:
-                out.append(
-                    (row["name"], row["name"], int(row["function_va"], 16), "function")
-                )
-    return out
+        return [
+            (row["name"], row["name"], int(row["function_va"], 16), "function")
+            for row in csv.DictReader(f)
+            if row["name"]
+        ]
 
 
 def lookup_rows():

@@ -225,7 +225,7 @@ def analyse():
         sys.exit(
             f"no {os.path.normpath(probe_report.FUNCTIONS)}: export it from Ghidra first (dev/PROBE.md)"
         )
-    ends = dict(zip(functions.entries, functions.ends))
+    ends = dict(zip(functions.entries, functions.ends, strict=True))
     commands = collections.defaultdict(list)
     with open(COMMANDS, encoding="utf-8", newline="") as f:
         for row in csv.DictReader(f):
