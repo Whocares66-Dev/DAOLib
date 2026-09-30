@@ -155,9 +155,14 @@ def sole_callee(calls, excluded, callers_of, helper_callers=HELPER_CALLERS):
 
 
 def instructions_of(img, entry, end):
+    """Every instruction from entry to end, the function's whole body. A
+    count is given because without one the disassembler stops at the first
+    `ret`, which in a script command is usually the early return for a bad
+    argument, before any of the work: until 2026-09-30 that cut most bodies
+    short, and this tool and script_fields.py saw a fraction of them."""
     return [
         (i.mnemonic, i.op_str)
-        for i in img.disasm(entry, count=None, limit=end - entry + 1)
+        for i in img.disasm(entry, count=1 << 20, limit=end - entry + 1)
         if i.address <= end
     ]
 
@@ -218,32 +223,56 @@ def find_lookups(img, functions, candidates):
     return out
 
 
-def analyse():
-    img = daoexe.Image()
-    functions = probe_report.Functions()
-    if not functions.entries:
-        sys.exit(
-            f"no {os.path.normpath(probe_report.FUNCTIONS)}: export it from Ghidra first (dev/PROBE.md)"
-        )
-    ends = dict(zip(functions.entries, functions.ends, strict=True))
-    commands = collections.defaultdict(list)
-    with open(COMMANDS, encoding="utf-8", newline="") as f:
-        for row in csv.DictReader(f):
-            va = int(row["function_va"], 16)
-            if va:
-                commands[va].append(
-                    row["script_name"] or row["name"].removeprefix("COMMAND_")
-                )
+class Commands:
+    """The script commands' bodies and what they call, and the object
+    lookups among their callees: what this tool and tools/script_fields.py
+    both read."""
 
-    bodies = {fn: instructions_of(img, fn, ends.get(fn, fn + 0x400)) for fn in commands}
-    calls = {
-        fn: [int(o, 16) for m, o in body if m == "call" and o.startswith("0x")]
-        for fn, body in bodies.items()
-    }
-    callers_of = collections.Counter(c for cs in calls.values() for c in set(cs))
-    known = {va for _, _, va, _ in names.header_rows()}
-    vm = {va for va in known if 0x00A2D000 <= va < 0x00A30000}
-    lookups = find_lookups(img, functions, callers_of)
+    def __init__(self):
+        self.img = daoexe.Image()
+        self.functions = probe_report.Functions()
+        if not self.functions.entries:
+            sys.exit(
+                f"no {os.path.normpath(probe_report.FUNCTIONS)}: export it from Ghidra first (dev/PROBE.md)"
+            )
+        ends = dict(zip(self.functions.entries, self.functions.ends, strict=True))
+        # implementation address -> the commands implemented there, by script name
+        self.names = collections.defaultdict(list)
+        self.signatures = {}
+        with open(COMMANDS, encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                va = int(row["function_va"], 16)
+                if va:
+                    self.names[va].append(
+                        row["script_name"] or row["name"].removeprefix("COMMAND_")
+                    )
+                    self.signatures.setdefault(va, row["signature"])
+        self.bodies = {
+            fn: instructions_of(self.img, fn, ends.get(fn, fn + 0x400))
+            for fn in self.names
+        }
+        self.calls = {
+            fn: [int(o, 16) for m, o in body if m == "call" and o.startswith("0x")]
+            for fn, body in self.bodies.items()
+        }
+        self.callers_of = collections.Counter(
+            c for cs in self.calls.values() for c in set(cs)
+        )
+        self.known = {va for _, _, va, _ in names.header_rows()}
+        self.vm = {va for va in self.known if 0x00A2D000 <= va < 0x00A30000}
+        self.lookups = find_lookups(self.img, self.functions, self.callers_of)
+
+
+def analyse():
+    c = Commands()
+    img, functions, commands, bodies = c.img, c.functions, c.names, c.bodies
+    calls, callers_of, known, vm, lookups = (
+        c.calls,
+        c.callers_of,
+        c.known,
+        c.vm,
+        c.lookups,
+    )
 
     def trivial(fn):
         size = 0

@@ -1,96 +1,260 @@
 function_va,name,how,class,ghidra_name,commands
-0x0040d610,ScriptBackend::ForScript_GetItemVisualEffectsIDs,sole,,FUN_0040d610,GetItemVisualEffectsIDs
-0x0047d4d0,ScriptBackend::ForScript_SendOnlineTelemetry,sole,,FUN_0047d4d0,SendOnlineTelemetry
-0x0047f5f0,ScriptBackend::ForScript_UpdateOnlineStatistic,sole,,FUN_0047f5f0,UpdateOnlineStatistic
-0x00480980,ScriptBackend::ForScript_GetOnlineStatistic,sole,,FUN_00480980,GetOnlineStatistic
-0x004c0950,ScriptBackend::ForScript_StringToInt,sole,,FUN_004c0950,StringToInt | HexStringToInt
-0x004c09d0,ScriptBackend::ForScript_StringToFloat,sole,,FUN_004c09d0,StringToFloat
-0x004c0f70,ScriptBackend::ForScript_FindSubString,sole,,FUN_004c0f70,FindSubString
-0x004c1000,ScriptBackend::ForScript_SetEventScript,sole,,FUN_004c1000,SetEventScript
-0x004c25d0,ScriptBackend::ForScript_InsertString,sole,,FUN_004c25d0,InsertString
-0x004c2b10,ScriptBackend::ForScript_IntToString,sole,,FUN_004c2b10,IntToString | IntToChar
-0x004c3250,ScriptBackend::ForScript_SubString,sole,,FUN_004c3250,SubString
-0x004c38e0,ScriptBackend::ForScript_StringUpperCase,sole,,FUN_004c38e0,StringUpperCase
-0x004c3a50,ScriptBackend::ForScript_StringLowerCase,sole,,FUN_004c3a50,StringLowerCase
-0x004d1c70,ScriptBackend::ForScript_GetStringByStringId,sole,,FUN_004d1c70,GetStringByStringId
-0x004e4990,ScriptBackend::ForScript_GetTlkTableString,sole,,FUN_004e4990,GetTlkTableString
-0x0051b370,CCModule::ForScript_GetName,direct,CCModule,FUN_0051b370,GetName
-0x005b9020,ScriptBackend::ForScript_PlayMusic,sole,,FUN_005b9020,PlayMusic | StopMusic
-0x005d5c20,ScriptBackend::ForScript_GetItemPossessedBy,sole,,FUN_005d5c20,GetItemPossessedBy | CountItemsByTag
-0x005d5ca0,ScriptBackend::ForScript_GetMainControlled,sole,,FUN_005d5ca0,GetMainControlled | GetPCSpeaker
-0x005fbc10,ScriptBackend::ForScript_ISPACKAGELOADED,sole,,FUN_005fbc10,ISPACKAGELOADED
-0x005ff450,CCModule::ForScript_GetObjectByTag,direct,CCModule,FUN_005ff450,GetObjectByTag
+0x00451990,ScriptBackend::ForScript_GetDistanceBetween,sole,,FUN_00451990,GetDistanceBetween | IsLocationValid
+0x0047d4d0,ScriptBackend::ForScript_SendOnlineTelemetry,sole,,ScriptBackend::ForScript_SendOnlineTelemetry,SendOnlineTelemetry
+0x0047eb30,ScriptBackend::ForScript_IncrementAchievementCountByID,sole,,FUN_0047eb30,IncrementAchievementCountByID
+0x0047f5f0,ScriptBackend::ForScript_UpdateOnlineStatistic,sole,,ScriptBackend::ForScript_UpdateOnlineStatistic,UpdateOnlineStatistic
+0x00480980,ScriptBackend::ForScript_GetOnlineStatistic,sole,,ScriptBackend::ForScript_GetOnlineStatistic,GetOnlineStatistic
+0x004c0950,ScriptBackend::ForScript_StringToInt,sole,,ScriptBackend::ForScript_StringToInt,StringToInt | HexStringToInt
+0x004c09d0,ScriptBackend::ForScript_StringToFloat,sole,,ScriptBackend::ForScript_StringToFloat,StringToFloat
+0x004c0f70,ScriptBackend::ForScript_FindSubString,sole,,ScriptBackend::ForScript_FindSubString,FindSubString
+0x004c1000,ScriptBackend::ForScript_SetEventScript,sole,,ScriptBackend::ForScript_SetEventScript,SetEventScript
+0x004c25d0,ScriptBackend::ForScript_InsertString,sole,,ScriptBackend::ForScript_InsertString,InsertString
+0x004c2b10,ScriptBackend::ForScript_IntToString,sole,,ScriptBackend::ForScript_IntToString,IntToString | IntToChar
+0x004c3250,ScriptBackend::ForScript_SubString,sole,,ScriptBackend::ForScript_SubString,SubString
+0x004c38e0,ScriptBackend::ForScript_StringUpperCase,sole,,ScriptBackend::ForScript_StringUpperCase,StringUpperCase
+0x004c3a50,ScriptBackend::ForScript_StringLowerCase,sole,,ScriptBackend::ForScript_StringLowerCase,StringLowerCase
+0x004d4d10,ScriptBackend::ForScript_GetAngleBetweenObjects,sole,,FUN_004d4d10,GetAngleBetweenObjects
+0x004e4990,ScriptBackend::ForScript_GetTlkTableString,sole,,ScriptBackend::ForScript_GetTlkTableString,GetTlkTableString
+0x004eae30,ScriptBackend::ForScript_Location,sole,,FUN_004eae30,Location | SetLocationFacing | CommandTurn
+0x004ee570,ScriptBackend::ForScript_VectorToAngle,sole,,FUN_004ee570,VectorToAngle | GetFacing | GetFacingFromLocation
+0x0051b370,CCModule::ForScript_GetName,direct,CCModule,CCModule::ForScript_GetName,GetName
+0x005b6cd0,ScriptBackend::ForScript_SetMusicIntensity,sole,,FUN_005b6cd0,SetMusicIntensity
+0x005ba100,ScriptBackend::ForScript_StopSound,sole,,FUN_005ba100,StopSound
+0x005bc7f0,ScriptBackend::ForScript_PlaySound,sole,,FUN_005bc7f0,PlaySound
+0x005fbc10,ScriptBackend::ForScript_ISPACKAGELOADED,sole,,ScriptBackend::ForScript_ISPACKAGELOADED,ISPACKAGELOADED
+0x005fe470,CCModule::ForScript_GetTeam,direct,CCModule,FUN_005fe470,GetTeam
+0x005ff450,CCModule::ForScript_GetObjectByTag,direct,CCModule,CCModule::ForScript_GetObjectByTag,GetObjectByTag
 0x00600270,,direct,CCModule,FUN_00600270,SetTag
-0x00600a40,CCModule::ForScript_DoAreaTransition,direct,CCModule,FUN_00600a40,DoAreaTransition
-0x00601860,CCModule::ForScript_GETCREATURESINAOE,direct,CCModule,FUN_00601860,GETCREATURESINAOE | GetObjectsInArea
+0x00600a40,CCModule::ForScript_DoAreaTransition,direct,CCModule,CCModule::ForScript_DoAreaTransition,DoAreaTransition
+0x00601860,CCModule::ForScript_GETCREATURESINAOE,direct,CCModule,CCModule::ForScript_GETCREATURESINAOE,GETCREATURESINAOE | GetObjectsInArea
 0x00602650,,direct,CCModule,FUN_00602650,SetTag
-0x00602af0,CCModule::ForScript_LinkAreaMiniMaps,direct,CCModule,FUN_00602af0,LinkAreaMiniMaps
-0x00629360,ScriptBackend::ForScript_ShowAreaUnlockedNotification,sole,,FUN_00629360,ShowAreaUnlockedNotification
-0x0062ee20,CCModule::ForScript_SetFollowerState,direct,CCModule,FUN_0062ee20,SetFollowerState
-0x0062f390,ScriptBackend::ForScript_GetHero,sole,,FUN_0062f390,GetHero
-0x00640060,ScriptBackend::ForScript_GetGameMode,sole,,FUN_00640060,GetGameMode
-0x00643570,ScriptBackend::ForScript_SetCheatUsedFlag,sole,,FUN_00643570,SetCheatUsedFlag
-0x00643bf0,ScriptBackend::ForScript_LogStoryEvent,sole,,FUN_00643bf0,LogStoryEvent
+0x00602af0,CCModule::ForScript_LinkAreaMiniMaps,direct,CCModule,CCModule::ForScript_LinkAreaMiniMaps,LinkAreaMiniMaps
+0x0060ea60,ScriptBackend::ForScript_HighlightGuiElement,sole,,FUN_0060ea60,HighlightGuiElement
+0x00628e10,ScriptBackend::ForScript_ShowSpecUnlockedNotification,sole,,FUN_00628e10,ShowSpecUnlockedNotification
+0x00629360,ScriptBackend::ForScript_ShowAreaUnlockedNotification,sole,,ScriptBackend::ForScript_ShowAreaUnlockedNotification,ShowAreaUnlockedNotification
+0x0062eba0,ScriptBackend::ForScript_ShowDeathScreen,sole,,FUN_0062eba0,ShowDeathScreen
+0x0062ee20,CCModule::ForScript_SetFollowerState,direct,CCModule,CCModule::ForScript_SetFollowerState,SetFollowerState
+0x0062f390,ScriptBackend::ForScript_GetHero,sole,,ScriptBackend::ForScript_GetHero,GetHero
+0x0062f9d0,ScriptBackend::ForScript_GETPARTYSIZE,sole,,FUN_0062f9d0,GETPARTYSIZE
+0x0062fd10,ScriptBackend::ForScript_SetAtmosphere,sole,,FUN_0062fd10,SetAtmosphere | SetAtmosphereRGB
+0x00631290,ScriptBackend::ForScript_SetFollowerApprovalDescription,sole,,FUN_00631290,SetFollowerApprovalDescription
+0x006316d0,ScriptBackend::ForScript_IsControlled,sole,,FUN_006316d0,IsControlled
+0x006316f0,ScriptBackend::ForScript_GetCanDiePermanently,sole,,FUN_006316f0,GetCanDiePermanently
+0x00631830,ScriptBackend::ForScript_IsFollower,sole,,FUN_00631830,IsFollower
+0x00631e00,ScriptBackend::ForScript_RemoveNonPartyFollower,sole,,FUN_00631e00,RemoveNonPartyFollower
+0x00632810,ScriptBackend::ForScript_GetFollowerState,sole,,FUN_00632810,GetFollowerState
+0x00632880,ScriptBackend::ForScript_SetFollowerSubState,sole,,FUN_00632880,SetFollowerSubState
+0x006328e0,ScriptBackend::ForScript_GetFollowerSubState,sole,,FUN_006328e0,GetFollowerSubState
+0x00632950,ScriptBackend::ForScript_SetFollowerLocked,sole,,FUN_00632950,SetFollowerLocked
+0x006329b0,ScriptBackend::ForScript_IsFollowerLocked,sole,,FUN_006329b0,IsFollowerLocked
+0x00632a20,ScriptBackend::ForScript_SetFollowPartyLeader,sole,,FUN_00632a20,SetFollowPartyLeader
+0x00632a80,ScriptBackend::ForScript_GetFollowPartyLeader,sole,,FUN_00632a80,GetFollowPartyLeader
+0x006341c0,ScriptBackend::ForScript_GetFollowerApproval,sole,,FUN_006341c0,GetFollowerApproval
+0x006342e0,ScriptBackend::ForScript_AddNonPartyFollower,sole,,FUN_006342e0,AddNonPartyFollower
+0x00635960,ScriptBackend::ForScript_SetFollowerApprovalEnabled,sole,,FUN_00635960,SetFollowerApprovalEnabled
+0x00636180,ScriptBackend::ForScript_SetPartyLeader,sole,,FUN_00636180,SetPartyLeader
+0x00638d10,ScriptBackend::ForScript_StorePartyInventory,sole,,FUN_00638d10,StorePartyInventory
+0x00638eb0,ScriptBackend::ForScript_StoreFollowerInventory,sole,,FUN_00638eb0,StoreFollowerInventory
+0x00639070,ScriptBackend::ForScript_RestorePartyInventory,sole,,FUN_00639070,RestorePartyInventory
+0x00639290,ScriptBackend::ForScript_RestoreFollowerInventory,sole,,FUN_00639290,RestoreFollowerInventory
+0x0063b9a0,ScriptBackend::ForScript_ADDTOPARTY,sole,,FUN_0063b9a0,ADDTOPARTY | REMOVEFROMPARTY
+0x00640060,ScriptBackend::ForScript_GetGameMode,sole,,ScriptBackend::ForScript_GetGameMode,GetGameMode
+0x00642e20,ScriptBackend::ForScript_GetCreatureStamina,sole,,FUN_00642e20,GetCreatureStamina | GetCreatureMana | SetCreatureStamina | SetCreatureMana | GetCreatureMaxStamina | GetCreatureMaxMana | SetCreatureMaxStamina | SetCreatureMaxMana
+0x00643570,ScriptBackend::ForScript_SetCheatUsedFlag,sole,,ScriptBackend::ForScript_SetCheatUsedFlag,SetCheatUsedFlag
+0x00643bf0,ScriptBackend::ForScript_LogStoryEvent,sole,,ScriptBackend::ForScript_LogStoryEvent,LogStoryEvent
+0x0064ad80,ScriptBackend::ForScript_SignalEvent,sole,,FUN_0064ad80,SignalEvent
+0x0064b480,ScriptBackend::ForScript_SetAILevel,sole,,FUN_0064b480,SetAILevel
+0x0064b9a0,ScriptBackend::ForScript_GetGroupHostility,sole,,FUN_0064b9a0,GetGroupHostility
+0x0064bb40,ScriptBackend::ForScript_IsObjectHostile,sole,,FUN_0064bb40,IsObjectHostile
+0x0064c060,ScriptBackend::ForScript_SetGroupHostility,sole,,FUN_0064c060,SetGroupHostility
+0x0064dc00,GUI::ShowContainerGUIMessage::ForScript_OpenInventory,sole,,GUI::ShowContainerGUIMessage::ShowContainerGUIMessage,OpenInventory
+0x00651150,ScriptBackend::ForScript_CommandEquipItem,sole,,FUN_00651150,CommandEquipItem | CommandUnequipItem
 0x00652370,,direct,CCModule,FUN_00652370,SetPartyPickerStage
 0x006523d0,,direct,CCModule,FUN_006523d0,SetPartyPickerStage
-0x0066cf60,ScriptBackend::ForScript_GetCreatureProperty,sole,,FUN_0066cf60,GetCreatureProperty
-0x00684dd0,,direct,CGameObject,FUN_00684dd0,GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup
+0x00652730,ScriptBackend::ForScript_SetLoadHint,sole,,FUN_00652730,SetLoadHint
+0x00655170,ScriptBackend::ForScript_SetFacingPosition,sole,,FUN_00655170,SetFacingPosition | SetFacingObject
+0x0066c770,ScriptBackend::ForScript_GetCreaturePropertyType,sole,,FUN_0066c770,GetCreaturePropertyType
+0x0066cf60,ScriptBackend::ForScript_GetCreatureAttribute,sole,,ScriptBackend::ForScript_GetCreatureProperty,GetCreatureAttribute | GetCreatureProperty
+0x0066de30,ScriptBackend::ForScript_CommandStartConversation,sole,,FUN_0066de30,CommandStartConversation
+0x00670ba0,ScriptBackend::ForScript_ClearThreatTable,sole,,FUN_00670ba0,ClearThreatTable
+0x006741e0,ScriptBackend::ForScript_RemoveEffect,sole,,FUN_006741e0,RemoveEffect | RemoveAllItemVisualEffects
+0x0067c3f0,Math::CollisionOutputParameter::ForScript_CheckLineOfSightVector,sole,,Math::CollisionOutputParameter::CollisionOutputParameter_Constructor_or_Destructor,CheckLineOfSightVector | CheckLineOfSightObject
+0x006849c0,ScriptBackend::ForScript_UT_GetNearestObjectByTag,sole,,FUN_006849c0,UT_GetNearestObjectByTag
+0x00684dd0,CGameObject::ForScript_GetNearestObjectByHostility,direct,CGameObject,FUN_00684dd0,GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup
+0x00692e90,ScriptBackend::ForScript_SetTrainingMode,sole,,FUN_00692e90,SetTrainingMode
+0x00693190,ScriptBackend::ForScript_BeginTrainingStep,sole,,FUN_00693190,BeginTrainingStep
+0x00694ce0,ScriptBackend::ForScript_SetOrientation,sole,,FUN_00694ce0,SetOrientation | SetLocation
 0x00694e50,,direct,CCObject,FUN_00694e50,SetObjectActive
 0x00694fe0,,direct,CCObject,FUN_00694fe0,SetObjectActive
-0x00695180,CCObject::ForScript_UT_GetNearestObjectByTag,direct,CCObject,FUN_00695180,UT_GetNearestObjectByTag | GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup | GetClusterCenter
-0x00695300,,direct,CCObject,FUN_00695300,BeginConversation
+0x00695300,CCObject::ForScript_IsDead,direct,CCObject,FUN_00695300,IsDead | BeginConversation | FilterObjectsInShape | GetObjectsInShape
+0x00695540,,direct,CCObject,FUN_00695540,SetLocation
+0x006956b0,,direct,CCObject,FUN_006956b0,PlayAdditiveAnimation
+0x00695cd0,CCObject::ForScript_SetTeamId,virtual,CCObject,CCObject::vfunction41,SetTeamId
+0x00696a60,CCObject::ForScript_DestroyObject,virtual,CCObject,CCObject::vfunction103,DestroyObject
+0x00696b50,,direct,CCObject,FUN_00696b50,PlayAdditiveAnimation
+0x00696f90,,virtual,CCObject,CCObject::vfunction63,SetLocation
 0x006976b0,,direct,CCObject,FUN_006976b0,BeginConversation
 0x00698cd0,,virtual,CCObject,CCObject::vfunction81,SetObjectActive
-0x00699f80,CCObject::ForScript_SetLocName,virtual,CCObject,CCObject::vfunction77,SetLocName
+0x00699f80,CCObject::ForScript_SetLocName,virtual,CCObject,CCObject::ForScript_SetLocName,SetLocName
+0x00699fd0,CCObject::ForScript_SetPlot,virtual,CCObject,CCObject::vfunction90,SetPlot
+0x00699fe0,CCObject::ForScript_Engine_SetImmortal,virtual,CCObject,CCObject::vfunction92,Engine_SetImmortal | Engine_ApplyEffectOnObject
+0x00699ff0,CCObject::ForScript_SetGroupId,virtual,CCObject,CCObject::vfunction93,SetGroupId
 0x0069b3d0,,virtual,CCObject,CCObject::vfunction45,SetObjectActive
-0x0069ba70,CCObject::ForScript_SetObjectActive,direct,CCObject,FUN_0069ba70,SetObjectActive | CreateItemOnObject
-0x0069cf90,ScriptBackend::ForScript_SetEventResource,sole,,FUN_0069cf90,SetEventResource
-0x0069d340,ScriptBackend::ForScript_GetPlayTime,sole,,FUN_0069d340,GetPlayTime
-0x006a2cc0,CCCreature::ForScript_SetPartyPlotFlag,direct,CCCreature,FUN_006a2cc0,SetPartyPlotFlag | SETPARTYPLOTVAR | GetPartyPlotFlag | GETPARTYPLOTVAR
-0x006b5740,ScriptBackend::ForScript_PlaySoundSet,sole,,FUN_006b5740,PlaySoundSet
-0x006bd0e0,CCCreature::ForScript_SetSoundSet,direct,CCCreature,FUN_006bd0e0,SetSoundSet
-0x006c1400,CCCreature::ForScript_SetAppearanceType,direct,CCCreature,FUN_006c1400,SetAppearanceType
-0x006c1e30,CCCreature::ForScript_LoadItemsFromTemplate,direct,CCCreature,FUN_006c1e30,LoadItemsFromTemplate
-0x006dc680,ScriptBackend::ForScript_PlayMovie,sole,,FUN_006dc680,PlayMovie
-0x006fcf40,ScriptBackend::ForScript_SETPLOTACTIONCOOLDOWN,sole,,FUN_006fcf40,SETPLOTACTIONCOOLDOWN
-0x006fff40,ScriptBackend::ForScript_OpenPrimaryWorldMap,sole,,FUN_006fff40,OpenPrimaryWorldMap
-0x006ffff0,ScriptBackend::ForScript_ClosePrimaryWorldMap,sole,,FUN_006ffff0,ClosePrimaryWorldMap
-0x007000a0,ScriptBackend::ForScript_OpenFadeMap,sole,,FUN_007000a0,OpenFadeMap
-0x00700a60,ScriptBackend::ForScript_WorldMapCompleteRandomEncounter,sole,,FUN_00700a60,WorldMapCompleteRandomEncounter
-0x00702e90,ScriptBackend::ForScript_GetLocalInt,sole,,FUN_00702e90,GetLocalInt
-0x00702ec0,ScriptBackend::ForScript_GetLocalFloat,sole,,FUN_00702ec0,GetLocalFloat
-0x00702ef0,ScriptBackend::ForScript_GetLocalString,sole,,FUN_00702ef0,GetLocalString
-0x00702fb0,ScriptBackend::ForScript_GetLocalObject,sole,,FUN_00702fb0,GetLocalObject
-0x00702fe0,ScriptBackend::ForScript_GetLocalLocation,sole,,FUN_00702fe0,GetLocalLocation
-0x007030a0,ScriptBackend::ForScript_GetLocalPlayer,sole,,FUN_007030a0,GetLocalPlayer
-0x007030c0,ScriptBackend::ForScript_GetLocalEvent,sole,,FUN_007030c0,GetLocalEvent
-0x00703170,ScriptBackend::ForScript_GetLocalCommand,sole,,FUN_00703170,GetLocalCommand
-0x00703210,ScriptBackend::ForScript_GetLocalEffect,sole,,FUN_00703210,GetLocalEffect
-0x00703db0,ScriptBackend::ForScript_SetLocalInt,sole,,FUN_00703db0,SetLocalInt
-0x00703df0,ScriptBackend::ForScript_SetLocalFloat,sole,,FUN_00703df0,SetLocalFloat
-0x00703e30,ScriptBackend::ForScript_SetLocalString,sole,,FUN_00703e30,SetLocalString
-0x00703e70,ScriptBackend::ForScript_SetLocalObject,sole,,FUN_00703e70,SetLocalObject
-0x00703eb0,ScriptBackend::ForScript_SetLocalLocation,sole,,FUN_00703eb0,SetLocalLocation
-0x00703f50,ScriptBackend::ForScript_SetLocalPlayer,sole,,FUN_00703f50,SetLocalPlayer
-0x00703f80,ScriptBackend::ForScript_SetLocalEvent,sole,,FUN_00703f80,SetLocalEvent
-0x007040c0,ScriptBackend::ForScript_SetLocalEffect,sole,,FUN_007040c0,SetLocalEffect
-0x00704200,ScriptBackend::ForScript_SetLocalResource,sole,,FUN_00704200,SetLocalResource
-0x0071ce60,ScriptBackend::ForScript_GetRemainingCooldown,sole,,FUN_0071ce60,GetRemainingCooldown
-0x0071dce0,ScriptBackend::ForScript_SetCooldown,sole,,FUN_0071dce0,SetCooldown
-0x0072b690,ScriptBackend::ForScript_SetTournamentScoreboardEntry,sole,,FUN_0072b690,SetTournamentScoreboardEntry
-0x0072c210,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,sole,,FUN_0072c210,SetChampionshipScoreboardEntry
-0x0072d860,ScriptBackend::ForScript_AddGeneralScoreboardEntry,sole,,FUN_0072d860,AddGeneralScoreboardEntry
-0x0073c930,,direct,CCObject,FUN_0073c930,SetObjectActive
-0x0075cb30,ScriptBackend::ForScript_GetPlotGUID,sole,,FUN_0075cb30,GetPlotGUID
-0x0075f070,ScriptBackend::ForScript_GetPlotResRef,sole,,FUN_0075f070,GetPlotResRef
-0x0075f710,ScriptBackend::ForScript_GetPlotFlagRewardId,sole,,FUN_0075f710,GetPlotFlagRewardId
-0x00760250,ScriptBackend::ForScript_ShowAllCodexEntries,sole,,FUN_00760250,ShowAllCodexEntries
-0x007abd00,ScriptBackend::ForScript_GetVisualEffectLocation,sole,,FUN_007abd00,GetVisualEffectLocation | GetRoamLocation
-0x007adcf0,ScriptBackend::ForScript_GetTacticCommandItemTag,sole,,FUN_007adcf0,GetTacticCommandItemTag
-0x007c0480,ScriptBackend::ForScript_PreloadCharGen,sole,,FUN_007c0480,PreloadCharGen
-0x008e34f0,ScriptBackend::ForScript_GetTime,sole,,FUN_008e34f0,GetTime
-0x00a2d1e0,ScriptBackend::ForScript_PrintToLogAndFlush,sole,,FUN_00a2d1e0,PrintToLogAndFlush | PrintToLog
-0x00a2d230,ScriptBackend::ForScript_DebugSpawnScriptDebugger,sole,,FUN_00a2d230,DebugSpawnScriptDebugger
-0x00a2fd10,ScriptBackend::ForScript_COMMANDDOFUNCTION,sole,,FUN_00a2fd10,COMMANDDOFUNCTION
-0x00a31e70,ScriptBackend::ForScript_Deprecated_ExecuteScript,sole,,FUN_00a31e70,Deprecated_ExecuteScript
-0x00a5a2e0,ScriptBackend::ForScript_GetEventString,sole,,FUN_00a5a2e0,GetEventString
+0x0069ba70,CCObject::ForScript_SetObjectActive,direct,CCObject,CCObject::ForScript_SetObjectActive,SetObjectActive | CreateItemOnObject
+0x0069bac0,CScriptEvent::ForScript_Event,sole,,CScriptEvent::CScriptEvent,Event
+0x0069cb10,CScriptEvent::ForScript_SetProjectileImpactEvent,sole,,CScriptEvent::CScriptEvent,SetProjectileImpactEvent
+0x0069cf90,ScriptBackend::ForScript_SetEventResource,sole,,ScriptBackend::ForScript_SetEventResource,SetEventResource
+0x0069d340,ScriptBackend::ForScript_GetPlayTime,sole,,ScriptBackend::ForScript_GetPlayTime,GetPlayTime
+0x0069f360,CCCreature::ForScript_SetItemDroppable,direct,CCCreature,FUN_0069f360,SetItemDroppable | SetQuickslotBar | LockQuickslotBar | ClearCreatureProperties | SetAOEFlags | SetCreatureIsStatue | SetCreatureIsGhost | SetItemDamaged | SetObjectInteractive | SetBodybagDecayDelay | SetStealthEnabled | SetCreatureCanBeTracked | SetLookAtEnabled | SetCanUseItem | SetPhysicsController
+0x0069f440,ScriptBackend::ForScript_InitHeartbeat,sole,,FUN_0069f440,InitHeartbeat
+0x0069f460,CCCreature::ForScript_EndHeartbeat,direct,CCCreature,FUN_0069f460,EndHeartbeat
+0x0069fe20,CCCreature::ForScript_IsAbilityAvailable,direct,CCCreature,FUN_0069fe20,IsAbilityAvailable | GETABILITYLIST
+0x006a0160,,direct,CCCreature,FUN_006a0160,SetAttackResult
+0x006a0170,,direct,CCCreature,FUN_006a0170,SetAttackResult
+0x006a01b0,CCCreature::ForScript_EnableWeaponTrail,direct,CCCreature,FUN_006a01b0,EnableWeaponTrail
+0x006a25a0,ScriptBackend::ForScript_IsHumanoid,sole,,FUN_006a25a0,IsHumanoid
+0x006a2cc0,CCCreature::ForScript_SetPartyPlotFlag,direct,CCCreature,CCCreature::ForScript_SetPartyPlotFlag,SetPartyPlotFlag | SETPARTYPLOTVAR | GetPartyPlotFlag | GETPARTYPLOTVAR
+0x006a2ce0,,direct,CCCreature,FUN_006a2ce0,TriggerPerception
+0x006a3660,,virtual,CCCreature,CCCreature::vfunction117,SetPrimaryControlled
+0x006a5f40,CCCreature::ForScript_SetControllable,direct,CCCreature,FUN_006a5f40,SetControllable | SetPrimaryControlled
+0x006a7d90,ScriptBackend::ForScript_GetCreatureRacialType,sole,,FUN_006a7d90,GetCreatureRacialType
+0x006a8680,,direct,CCCreature,FUN_006a8680,GetWeaponAttackRating | GetWeaponBaseDamage | DEPRECATED_GetCreatureStrengthModifier | GetWeaponStrengthModifier | GetWeaponArmorPenetration
+0x006a86f0,,direct,CCCreature,FUN_006a86f0,GetWeaponAttackRating | GetWeaponBaseDamage | DEPRECATED_GetCreatureStrengthModifier | GetWeaponStrengthModifier | GetWeaponArmorPenetration
+0x006a8770,,direct,CCCreature,FUN_006a8770,GetWeaponAttackRating | GetWeaponBaseDamage | DEPRECATED_GetCreatureStrengthModifier | GetWeaponStrengthModifier | GetWeaponArmorPenetration
+0x006a88f0,ScriptBackend::ForScript_ScaleEquippedItems,sole,,FUN_006a88f0,ScaleEquippedItems
+0x006a8fa0,CCCreature::ForScript_SwitchWeaponSet,direct,CCCreature,FUN_006a8fa0,SwitchWeaponSet
+0x006a91e0,CCCreature::ForScript_SpawnBodyBag,direct,CCCreature,FUN_006a91e0,SpawnBodyBag
+0x006a9390,CCCreature::ForScript_InteractWithObject,direct,CCCreature,FUN_006a9390,InteractWithObject
+0x006ac9a0,CCCreature::ForScript_AddItemProperty,direct,CCCreature,FUN_006ac9a0,AddItemProperty
+0x006aca10,CCCreature::ForScript_SetCanLevelUp,direct,CCCreature,FUN_006aca10,SetCanLevelUp
+0x006ae8b0,CCCreature::ForScript_CanUseItem,direct,CCCreature,FUN_006ae8b0,CanUseItem
+0x006b1560,CCCreature::ForScript_GetClassRank,direct,CCCreature,FUN_006b1560,GetClassRank
+0x006b32a0,,direct,CCCreature,FUN_006b32a0,TriggerPerception
+0x006b3330,ScriptBackend::ForScript_GetPerceivedCreatureList,sole,,FUN_006b3330,GetPerceivedCreatureList
+0x006b3540,CCCreature::ForScript_RemoveItemProperty,direct,CCCreature,FUN_006b3540,RemoveItemProperty
+0x006b5740,ScriptBackend::ForScript_PlaySoundSet,sole,,ScriptBackend::ForScript_PlaySoundSet,PlaySoundSet
+0x006b6120,CCCreature::ForScript_SetClassRank,direct,CCCreature,FUN_006b6120,SetClassRank
+0x006b73c0,CCCreature::ForScript_SetCreatureGoreLevel,direct,CCCreature,FUN_006b73c0,SetCreatureGoreLevel
+0x006b7690,,direct,CCCreature,FUN_006b7690,EquipItem | UnequipItem
+0x006b8d20,CCCreature::ForScript_ClearPerceptionList,direct,CCCreature,FUN_006b8d20,ClearPerceptionList
+0x006bc7f0,,direct,CCCreature,FUN_006bc7f0,EquipItem | UnequipItem
+0x006bd0e0,CCCreature::ForScript_SetSoundSet,direct,CCCreature,CCCreature::ForScript_SetSoundSet,SetSoundSet
+0x006c1400,CCCreature::ForScript_SetItemHeraldry,direct,CCCreature,CCCreature::ForScript_SetAppearanceType,SetItemHeraldry | SetAppearanceType
+0x006c1e30,CCCreature::ForScript_LoadItemsFromTemplate,direct,CCCreature,CCCreature::ForScript_LoadItemsFromTemplate,LoadItemsFromTemplate
+0x006dc680,ScriptBackend::ForScript_PlayMovie,sole,,ScriptBackend::ForScript_PlayMovie,PlayMovie
+0x006fc450,ScriptBackend::ForScript_SetPlotActionsEnabled,sole,,FUN_006fc450,SetPlotActionsEnabled
+0x006fcf40,ScriptBackend::ForScript_SETPLOTACTIONCOOLDOWN,sole,,ScriptBackend::ForScript_SETPLOTACTIONCOOLDOWN,SETPLOTACTIONCOOLDOWN
+0x006fd020,ScriptBackend::ForScript_GetPlotActionState,sole,,FUN_006fd020,GetPlotActionState
+0x006fd050,ScriptBackend::ForScript_SetPlotActionCount,sole,,FUN_006fd050,SetPlotActionCount
+0x006fd080,ScriptBackend::ForScript_GetPlotActionCount,sole,,FUN_006fd080,GetPlotActionCount
+0x006fd150,ScriptBackend::ForScript_SetPlotActionState,sole,,FUN_006fd150,SetPlotActionState
+0x006fdb40,ScriptBackend::ForScript_SetPlotActionSet,sole,,FUN_006fdb40,SetPlotActionSet
+0x006ffb00,ScriptBackend::ForScript_SetWorldMapGuiStatus,sole,,FUN_006ffb00,SetWorldMapGuiStatus
+0x006fff40,ScriptBackend::ForScript_OpenPrimaryWorldMap,sole,,ScriptBackend::ForScript_OpenPrimaryWorldMap,OpenPrimaryWorldMap
+0x006ffff0,ScriptBackend::ForScript_ClosePrimaryWorldMap,sole,,ScriptBackend::ForScript_ClosePrimaryWorldMap,ClosePrimaryWorldMap
+0x007000a0,ScriptBackend::ForScript_OpenFadeMap,sole,,ScriptBackend::ForScript_OpenFadeMap,OpenFadeMap
+0x00700a60,ScriptBackend::ForScript_WorldMapCompleteRandomEncounter,sole,,ScriptBackend::ForScript_WorldMapCompleteRandomEncounter,WorldMapCompleteRandomEncounter
+0x00700d80,ScriptBackend::ForScript_SetWorldMapPrimary,sole,,FUN_00700d80,SetWorldMapPrimary
+0x00700db0,ScriptBackend::ForScript_SetWorldMapSecondary,sole,,FUN_00700db0,SetWorldMapSecondary
+0x00702e90,ScriptBackend::ForScript_GetLocalInt,sole,,ScriptBackend::ForScript_GetLocalInt,GetLocalInt
+0x00702ec0,ScriptBackend::ForScript_GetLocalFloat,sole,,ScriptBackend::ForScript_GetLocalFloat,GetLocalFloat
+0x00702ef0,ScriptBackend::ForScript_GetLocalString,sole,,ScriptBackend::ForScript_GetLocalString,GetLocalString
+0x00702fb0,ScriptBackend::ForScript_GetLocalObject,sole,,ScriptBackend::ForScript_GetLocalObject,GetLocalObject
+0x00702fe0,ScriptBackend::ForScript_GetLocalLocation,sole,,ScriptBackend::ForScript_GetLocalLocation,GetLocalLocation
+0x007030a0,ScriptBackend::ForScript_GetLocalPlayer,sole,,ScriptBackend::ForScript_GetLocalPlayer,GetLocalPlayer
+0x007030c0,ScriptBackend::ForScript_GetLocalEvent,sole,,ScriptBackend::ForScript_GetLocalEvent,GetLocalEvent
+0x00703170,ScriptBackend::ForScript_GetLocalCommand,sole,,ScriptBackend::ForScript_GetLocalCommand,GetLocalCommand
+0x00703210,ScriptBackend::ForScript_GetLocalEffect,sole,,ScriptBackend::ForScript_GetLocalEffect,GetLocalEffect
+0x00703db0,ScriptBackend::ForScript_SetLocalInt,sole,,ScriptBackend::ForScript_SetLocalInt,SetLocalInt
+0x00703df0,ScriptBackend::ForScript_SetLocalFloat,sole,,ScriptBackend::ForScript_SetLocalFloat,SetLocalFloat
+0x00703e30,ScriptBackend::ForScript_SetLocalString,sole,,ScriptBackend::ForScript_SetLocalString,SetLocalString
+0x00703e70,ScriptBackend::ForScript_SetLocalObject,sole,,ScriptBackend::ForScript_SetLocalObject,SetLocalObject
+0x00703eb0,ScriptBackend::ForScript_SetLocalLocation,sole,,ScriptBackend::ForScript_SetLocalLocation,SetLocalLocation
+0x00703f50,ScriptBackend::ForScript_SetLocalPlayer,sole,,ScriptBackend::ForScript_SetLocalPlayer,SetLocalPlayer
+0x00703f80,ScriptBackend::ForScript_SetLocalEvent,sole,,ScriptBackend::ForScript_SetLocalEvent,SetLocalEvent
+0x00704020,ScriptBackend::ForScript_SetLocalCommand,sole,,FUN_00704020,SetLocalCommand
+0x007040c0,ScriptBackend::ForScript_SetLocalEffect,sole,,ScriptBackend::ForScript_SetLocalEffect,SetLocalEffect
+0x00704200,ScriptBackend::ForScript_SetLocalResource,sole,,ScriptBackend::ForScript_SetLocalResource,SetLocalResource
+0x00719b10,ScriptBackend::ForScript_SetAutoLevelUp,sole,,FUN_00719b10,SetAutoLevelUp
+0x0071a1f0,ScriptBackend::ForScript_GetAutoLevelUp,sole,,FUN_0071a1f0,GetAutoLevelUp
+0x0071be90,ScriptBackend::ForScript_GetBackgroundDefaultsIndex,sole,,FUN_0071be90,GetBackgroundDefaultsIndex
+0x0071c310,ScriptBackend::ForScript_CanUseConditionedAbility,sole,,FUN_0071c310,CanUseConditionedAbility
+0x0071c620,ScriptBackend::ForScript_GetQuickslot,sole,,FUN_0071c620,GetQuickslot
+0x0071ce60,ScriptBackend::ForScript_GetRemainingCooldown,sole,,ScriptBackend::ForScript_GetRemainingCooldown,GetRemainingCooldown
+0x0071da90,ScriptBackend::ForScript_Engine_SetModalAbilityGUI,sole,,FUN_0071da90,Engine_SetModalAbilityGUI
+0x0071dce0,ScriptBackend::ForScript_SetCooldown,sole,,ScriptBackend::ForScript_SetCooldown,SetCooldown
+0x0071dd10,ScriptBackend::ForScript_GetConditionedAbilities,sole,,FUN_0071dd10,GetConditionedAbilities
+0x0071f160,ScriptBackend::ForScript_CharGen_ClearAbilityList,sole,,FUN_0071f160,CharGen_ClearAbilityList
+0x0072b690,ScriptBackend::ForScript_SetTournamentScoreboardEntry,sole,,ScriptBackend::ForScript_SetTournamentScoreboardEntry,SetTournamentScoreboardEntry
+0x0072c210,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,sole,,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,SetChampionshipScoreboardEntry
+0x0072d860,ScriptBackend::ForScript_AddGeneralScoreboardEntry,sole,,ScriptBackend::ForScript_AddGeneralScoreboardEntry,AddGeneralScoreboardEntry
+0x0073bf80,ScriptBackend::ForScript_SetGameCompletionPercentage,sole,,FUN_0073bf80,SetGameCompletionPercentage
+0x0073c5f0,CCObject::ForScript_GetCurrentCommand,direct,CCObject,FUN_0073c5f0,GetCurrentCommand | SetAttackResult
+0x0073c6d0,ScriptBackend::ForScript_GetCommandByIndex,sole,,FUN_0073c6d0,GetCommandByIndex
+0x0073c730,CCObject::ForScript_ClearCurrentCommand,direct,CCObject,FUN_0073c730,ClearCurrentCommand
+0x0073c7b0,CCCreature::ForScript_IsConjuring,direct,CCCreature,FUN_0073c7b0,IsConjuring
+0x0073c930,CCObject::ForScript_ClearAllCommands,direct,CCObject,FUN_0073c930,ClearAllCommands | SetObjectActive
+0x0073c9e0,CCObject::ForScript_RemoveCommand,direct,CCObject,FUN_0073c9e0,RemoveCommand
+0x0073ca90,CCObject::ForScript_RemoveCommandByIndex,direct,CCObject,FUN_0073ca90,RemoveCommandByIndex
+0x0073de70,CGameObject::ForScript_IsLocationSafe,direct,CGameObject,FUN_0073de70,IsLocationSafe
+0x0073e370,CGameObject::ForScript_GetSafeLocation,direct,CGameObject,FUN_0073e370,GetSafeLocation
+0x00740cc0,ScriptBackend::ForScript_GetThreatEnemy,sole,,FUN_00740cc0,GetThreatEnemy
+0x00740d10,ScriptBackend::ForScript_GetThreatValueByIndex,sole,,FUN_00740d10,GetThreatValueByIndex
+0x00740fa0,ScriptBackend::ForScript_GetThreatValueByObjectID,sole,,FUN_00740fa0,GetThreatValueByObjectID
+0x00741900,ScriptBackend::ForScript_ClearEnemyThreat,sole,,FUN_00741900,ClearEnemyThreat
+0x00741d80,ScriptBackend::ForScript_UpdateThreatTable,sole,,FUN_00741d80,UpdateThreatTable
+0x00748520,ScriptBackend::ForScript_GetCreatureGoreLevel,sole,,FUN_00748520,GetCreatureGoreLevel
+0x0074f9d0,CCPlaceable::ForScript_SetPlaceableState,direct,CCPlaceable,FUN_0074f9d0,SetPlaceableState
+0x0074fbd0,CCPlaceable::ForScript_SetTrapDetected,direct,CCPlaceable,FUN_0074fbd0,SetTrapDetected
+0x0074fc10,CCPlaceable::ForScript_SetPlaceableActionResult,direct,CCPlaceable,FUN_0074fc10,SetPlaceableActionResult
+0x00752bf0,ScriptBackend::ForScript_SetItemIrremovable,sole,,FUN_00752bf0,SetItemIrremovable
+0x00752c30,ScriptBackend::ForScript_SetItemIndestructible,sole,,FUN_00752c30,SetItemIndestructible
+0x00752d80,ScriptBackend::ForScript_SetItemAbilityId,sole,,FUN_00752d80,SetItemAbilityId
+0x00753ce0,ScriptBackend::ForScript_GetItemStat,sole,,FUN_00753ce0,GetItemStat
+0x007556d0,ScriptBackend::ForScript_GetItemPropertyPower,sole,,FUN_007556d0,GetItemPropertyPower
+0x00756540,ScriptBackend::ForScript_SetItemMaterialType,sole,,FUN_00756540,SetItemMaterialType
+0x00756950,ScriptBackend::ForScript_GetItemProperties,sole,,FUN_00756950,GetItemProperties
+0x00759b00,CCItem::ForScript_ADDITEMSUBITEM,sole,,CCItem::HandleMessage_AttachRuneToItemMessage,ADDITEMSUBITEM
+0x00759c60,CCItem::ForScript_REMOVEITEMSUBITEM,sole,,CCItem::HandleMessage_DetachRuneFromItemMessage,REMOVEITEMSUBITEM
+0x0075cb30,ScriptBackend::ForScript_GetPlotGUID,sole,,ScriptBackend::ForScript_GetPlotGUID,GetPlotGUID
+0x0075f070,ScriptBackend::ForScript_GetPlotResRef,sole,,ScriptBackend::ForScript_GetPlotResRef,GetPlotResRef
+0x0075f710,ScriptBackend::ForScript_GetPlotFlagRewardId,sole,,ScriptBackend::ForScript_GetPlotFlagRewardId,GetPlotFlagRewardId
+0x00760250,ScriptBackend::ForScript_ShowAllCodexEntries,sole,,ScriptBackend::ForScript_ShowAllCodexEntries,ShowAllCodexEntries
+0x007612e0,ScriptBackend::ForScript_GetItemEquipSlot,sole,,FUN_007612e0,GetItemEquipSlot
+0x00762100,ScriptBackend::ForScript_RemoveItem,sole,,FUN_00762100,RemoveItem
+0x007621e0,ScriptBackend::ForScript_RemoveItemsByTag,sole,,FUN_007621e0,RemoveItemsByTag
+0x007633f0,ScriptBackend::ForScript_MoveItem,sole,,FUN_007633f0,MoveItem
+0x00763570,ScriptBackend::ForScript_MoveAllItems,sole,,FUN_00763570,MoveAllItems
+0x00797410,ScriptBackend::ForScript_GetActiveWeaponSet,sole,,FUN_00797410,GetActiveWeaponSet
+0x007adab0,ScriptBackend::ForScript_GetTacticPresetID,sole,,FUN_007adab0,GetTacticPresetID
+0x007adb40,ScriptBackend::ForScript_SetTacticPresetID,sole,,FUN_007adb40,SetTacticPresetID
+0x007af4e0,ScriptBackend::ForScript_AddTacticPresetID,sole,,FUN_007af4e0,AddTacticPresetID
+0x007b0040,ScriptBackend::ForScript_SetTacticEntry,sole,,FUN_007b0040,SetTacticEntry
+0x007c0480,ScriptBackend::ForScript_PreloadCharGen,sole,,ScriptBackend::ForScript_PreloadCharGen,PreloadCharGen
+0x007c1ff0,ScriptBackend::ForScript_StopSoundObject,sole,,FUN_007c1ff0,StopSoundObject
+0x007c20f0,ScriptBackend::ForScript_PlaySoundObject,sole,,FUN_007c20f0,PlaySoundObject
+0x007c3770,ScriptBackend::ForScript_GetAttackImpactDamageEffect,sole,,FUN_007c3770,GetAttackImpactDamageEffect
+0x007c4930,CCWayPoint::ForScript_SetMapPinState,direct,CCWayPoint,FUN_007c4930,SetMapPinState
+0x007ca4f0,ScriptBackend::ForScript_SetMaxInventorySize,sole,,FUN_007ca4f0,SetMaxInventorySize
+0x007ccc30,ScriptBackend::ForScript_GetMeleeRingPosition,sole,,FUN_007ccc30,GetMeleeRingPosition
+0x008663a0,ScriptBackend::ForScript_IsInTrigger,sole,,FUN_008663a0,IsInTrigger | IsModalAbilityActive
+0x008e33e0,ScriptBackend::ForScript_log,sole,,FUN_008e33e0,log
+0x008e5ed0,ScriptBackend::ForScript_acos,sole,,FUN_008e5ed0,acos
+0x008e6020,ScriptBackend::ForScript_cos,sole,,FUN_008e6020,cos
+0x008e6240,ScriptBackend::ForScript_sqrt,sole,,FUN_008e6240,sqrt | GetVectorMagnitude | GetDistanceBetweenLocations
+0x008e6340,ScriptBackend::ForScript_tan,sole,,FUN_008e6340,tan
+0x008e8990,ScriptBackend::ForScript_sin,sole,,FUN_008e8990,sin
+0x008e8ac0,ScriptBackend::ForScript_asin,sole,,FUN_008e8ac0,asin
+0x008e8c50,ScriptBackend::ForScript_pow,sole,,FUN_008e8c50,pow
+0x008e9fd0,ScriptBackend::ForScript_atan,sole,,FUN_008e9fd0,atan
+0x00a29f60,ScriptBackend::ForScript_HasConversation,sole,,FUN_00a29f60,HasConversation
+0x00a2cc80,ScriptBackend::ForScript_GetItemAttackRating,sole,,FUN_00a2cc80,GetItemAttackRating
+0x00a2d230,ScriptBackend::ForScript_DebugSpawnScriptDebugger,sole,,ScriptBackend::ForScript_DebugSpawnScriptDebugger,DebugSpawnScriptDebugger
+0x00a2fd10,ScriptBackend::ForScript_ASSIGNFUNCTION,sole,,ScriptBackend::ForScript_COMMANDDOFUNCTION,ASSIGNFUNCTION | COMMANDDOFUNCTION
+0x00a31e70,ScriptBackend::ForScript_Deprecated_ExecuteScript,sole,,ScriptBackend::ForScript_Deprecated_ExecuteScript,Deprecated_ExecuteScript
+0x00a581f0,,direct,CCObject,FUN_00a581f0,FilterObjectsInShape | GetObjectsInShape
+0x00a59f10,ScriptBackend::ForScript_GetEventLocation,sole,,FUN_00a59f10,GetEventLocation | GetVisualEffectLocation
+0x00a5a250,ScriptBackend::ForScript_GetEventFloat,sole,,FUN_00a5a250,GetEventFloat | GetCommandFloat
+0x00a5a2e0,ScriptBackend::ForScript_GetEventString,sole,,ScriptBackend::ForScript_GetEventString,GetEventString
+0x00a64900,ScriptBackend::ForScript_AddItemVisualEffect,sole,,FUN_00a64900,AddItemVisualEffect
+0x00a65250,ScriptBackend::ForScript_SetEffectFlags,sole,,FUN_00a65250,SetEffectFlags | SetEffectAnimation | SetEffectCreator | SetEffectAbilityID
