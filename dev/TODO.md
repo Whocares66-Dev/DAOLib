@@ -20,6 +20,8 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 
 ## 2. Combat, at the scripts' boundary
 
+**Done in code, not yet seen in play (2026-09-30):** `CommandCall::SetInt`, `SetFloat` and `SetObject` change a command's arguments before it runs, and `examples/damage` halves the party's damage by intercepting `SetCreatureProperty`, which `effect_damage_h.nss` calls as the one place health drops. Left: seeing it in play; a killing blow, which the scripts turn into a death effect instead.
+
 - **Why native:** composable changes to combat without replacing `combat_h.nss`. The scripts apply damage and effects through script commands (`Engine_ApplyEffectOnObject`, `ApplyEffectOnObject`), which `dao::script::InterceptCommand` can already see and change. What is missing is reading and changing the effect in flight (its type, its floats: a damage effect's amount) and a worked example.
 - **Leads:** the effect getters and setters (`GetEffectFloat`, `SetEffectEngineFloat`); `dao/ScriptHooks.h`'s `CommandCall::Structure`; `effects_h.nss` and `combat_damage_h.nss` for which floats mean what.
 - **Done when:** `examples/damage` changes the damage the party takes in play, and composes with another plugin doing the same.

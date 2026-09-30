@@ -196,6 +196,57 @@ std::optional<ObjectId> CommandCall::Object(int n) const
     return word ? std::optional{static_cast<ObjectId>(*word)} : std::nullopt;
 }
 
+namespace
+{
+
+// The n-th argument's word on the VM's stack, to write, if its tag is
+// `tag`: VmStack's view, the values array being the VM's own.
+std::uint32_t *ArgumentWord(int n, core::VmTag tag)
+{
+    const core::VmStackView stack = VmStack();
+    const auto i = stack.Index(n);
+    if (!i || stack.tags[*i] != static_cast<std::int32_t>(tag))
+    {
+        return nullptr;
+    }
+    return const_cast<std::uint32_t *>(stack.values) + *i;
+}
+
+} // namespace
+
+bool CommandCall::SetInt(int n, std::int32_t value)
+{
+    std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Int);
+    if (word == nullptr)
+    {
+        return false;
+    }
+    *word = static_cast<std::uint32_t>(value);
+    return true;
+}
+
+bool CommandCall::SetFloat(int n, float value)
+{
+    std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Float);
+    if (word == nullptr)
+    {
+        return false;
+    }
+    std::memcpy(word, &value, sizeof value);
+    return true;
+}
+
+bool CommandCall::SetObject(int n, ObjectId value)
+{
+    std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Object);
+    if (word == nullptr)
+    {
+        return false;
+    }
+    *word = value;
+    return true;
+}
+
 std::optional<std::wstring_view> CommandCall::String(int n) const
 {
     const auto word = VmStack().Word(n, static_cast<std::int32_t>(core::VmTag::String));

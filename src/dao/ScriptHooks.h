@@ -75,6 +75,16 @@ class CommandCall
     const CScriptEvent *Event(int n) const;
     const ::dao::Command *Command(int n) const; // AddCommand's second argument, say
 
+    // Change the n-th argument before the command runs, as if the script had
+    // passed that: the value written in place on the VM's stack. Ints,
+    // floats and objects, one word each; false if the argument is of
+    // another type, the call has fewer, or Proceed has run (the arguments
+    // are gone by then). Any intercept later in the chain, and the engine,
+    // see the new value.
+    bool SetInt(int n, std::int32_t value);
+    bool SetFloat(int n, float value);
+    bool SetObject(int n, ObjectId value);
+
     // Runs the handler this intercept replaced: another plugin's intercept,
     // or the engine's command. Its result is the handler's.
     int Proceed();

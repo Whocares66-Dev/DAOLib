@@ -63,7 +63,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 |---|---|---|
 | Call any script command | `dao::script::api::GetTeamId(creature)` and 660 more, with the scripts' names and defaults | `dao/generated/ScriptApi.h` |
 | Call one by number, with its result or failure | `dao::script::Invoke<std::int32_t>(id, args...)` | `dao/Script.h` |
-| See, change or replace a command when scripts call it | `dao::script::InterceptCommand(id, fn)`, `CommandCall` | `dao/ScriptHooks.h` |
+| See, change or replace a command when scripts call it: its arguments before it runs (`SetFloat`), its answer after (`SetFloatAnswer`), or all of it | `dao::script::InterceptCommand(id, fn)`, `CommandCall`; `examples/damage/` changes the damage the party takes | `dao/ScriptHooks.h` |
 | Add a new command | `dao::script::Set(freeSlot, handler)`, plus a `script.ldf` declaration for the toolset's compiler | `dao/Script.h` |
 | Name a script constant | `dao::script::EventType::CommandComplete`, `dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE` | `dao/generated/ScriptConstants.h` |
 | Find an object by id | `CClientExoApp::Get()->GetCreatureById(id)` and kin | `dao/ClientExoApp.h` |

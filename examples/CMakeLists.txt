@@ -8,5 +8,8 @@
 add_daolib_plugin(example_camera SOURCES camera/Camera.cpp)
 dao_apply_warnings(example_camera)
 
+add_daolib_plugin(example_damage SOURCES damage/Damage.cpp)
+dao_apply_warnings(example_damage)
+
 add_daolib_plugin(example_saves SOURCES saves/Saves.cpp)
 dao_apply_warnings(example_saves)
