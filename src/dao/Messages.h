@@ -134,11 +134,13 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // the message. Once the ability may be used (0x0071CE90), it reads the
 // ability's row of abi_base (TargetType, UseType, AutoTarget) and uses
 // the ability (UseAbility, dao/Addresses.h) on, in order:
-// - the caster, if the ability targets only its user, or the self-cast
-//   key is down and it may target its user, or it is an active mode
-//   being turned off (UseType 2);
-// - the selected target (a global, 0x00C06794), if the ability may be
-//   used on it;
+// - the caster, if the ability targets only its user, or an input (its
+//   action 0x2F, taken for self-casting, not checked) is held and it may
+//   target its user, or it is an active mode being turned off (UseType 2);
+// - the selected target (a global, 0x00C06794, set through 0x0070D030 by
+//   the Select Next and Previous CreatureTarget, HostileTarget and
+//   UsableObject messages, the keys that cycle targets), if the ability
+//   may be used on it;
 // - the caster's attack target, if the ability's AutoTarget is set and it
 //   may be used on it;
 // and failing all of them it asks for a target (targeting mode, 0x0070BA30),

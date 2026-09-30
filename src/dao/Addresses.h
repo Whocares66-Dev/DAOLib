@@ -570,7 +570,8 @@ DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A
 // a position), `ret 0x14`, queues the ability's command;
 // BeginTargeting (ability, caster, target) asks the player for a target;
 // the attack target is what the caster fights (by id); a global holds the
-// selected target's id; ValidTarget (object, TargetType) says whether the
+// selected target's id, set only through 0x0070D030, which the messages
+// that cycle targets call; ValidTarget (object, TargetType) says whether the
 // ability may be used on it. The names are ours.
 DAO_ADDRESS(kGameModeExplore_UseAbility, "GameModeExplore::UseAbility", 0x00711680)
 DAO_ADDRESS(kGameModeExplore_BeginTargeting, "GameModeExplore::BeginTargeting", 0x0070BA30)
