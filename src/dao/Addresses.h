@@ -228,6 +228,27 @@ DAO_ADDRESS(kScaleformManager_OpenMovie, "GUI::ScaleformManager::OpenMovie", 0x0
 DAO_ADDRESS(kGuiMovie_Construct, "GuiMovie::GuiMovie", 0x0051A040)
 DAO_ADDRESS(kGUISystem_OpenScreen, "GUI::GUISystem::OpenScreen", 0x00523BF0)
 DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
+// Every screen is a GUI::GUIScene (the base of GUIMain, GUIInventory,
+// GUIPopupLayer and the rest, a SmartObject), made by
+// GUIScene(name, filename, layer, b, flags) and kept by the GUI system in
+// a map at +0x58, id to scene, found by name through its slot 12. Its own
+// fields from +0x4C: the filename, a SmartData string at +0x74 (member
+// "Filename"), layer +0x9C, b +0xA0, flags +0xA4, "Cached" +0xA8, bytes
+// +0xBC-0xBF. OpenScreen passes a scene's filename, layer and flags to
+// OpenMovie with the scene's id first. The layer is the stacking order,
+// by the values the game gives (read 2026-09-30, from the 42 scenes the
+// GUI system's constructor and the scenes' own make): 0 the floaty text,
+// 1 the HUD (GUIMain) and army control, 2-3 the in-game menus (map,
+// journal, skills, crafting, party picker), 4 item examine, 5
+// conversation, cutscene, death, main menu, save and load, 6 options,
+// login, credits, 7 popups and achievements, 8 the loading screens. Flags:
+// 0x20 on the modal ones (options, popups, main menu, credits), 0x10 on
+// loading screens, 0x04 on skills and spells, 0x02 on screenshots. b is 0
+// for most, 10 for the character record, journal, map, skills and spells.
+// PushGUIScreenMessage (a screen's name) pushes a scene by name.
+DAO_ADDRESS(kGUIScene_Constructor, "GUI::GUIScene::GUIScene", 0x00A55AC0)
+DAO_ADDRESS(kGUISystem_SceneIdByName, "GUI::GUISystem::SceneIdByName", 0x00523ED0)
+DAO_ADDRESS(kGUISystem_Scene, "GUI::GUISystem::Scene", 0x00523FD0)
 
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
