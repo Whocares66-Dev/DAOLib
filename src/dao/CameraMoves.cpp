@@ -4,12 +4,17 @@
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
+#include "dao/Guard.h"
+#include "dao/Hook.h"
 #include "dao/core/Angle.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <mutex>
+#include <utility>
+#include <vector>
 
 namespace dao::camera
 {
@@ -45,13 +50,6 @@ struct PanMove
 YawMove g_yaw;
 PanMove g_pan;
 Clock::time_point g_last;
-
-CameraController *Controller()
-{
-    auto *app = CClientExoApp::Get();
-    auto *modes = app != nullptr ? app->GameModes() : nullptr;
-    return modes != nullptr ? modes->Camera() : nullptr;
-}
 
 float Length(Vector v)
 {
@@ -100,6 +98,33 @@ void StepPan(CameraController &camera, float dt)
     g_pan.running = keep > 0;
 }
 
+// CameraControllerBase::SetTarget (dao/Addresses.h): __thiscall (id),
+// `ret 4`; the target it replaces at +0x08. It returns early for the id it
+// already follows.
+using SetTargetFn = void(__fastcall *)(CameraController *self, int edx, ObjectId id);
+Detour<SetTargetFn> g_setTarget;
+std::mutex g_targetLock;
+std::vector<std::function<void(ObjectId, ObjectId)>> g_targetChanged;
+
+void __fastcall SetTarget(CameraController *self, int edx, ObjectId id)
+{
+    const ObjectId before = self != nullptr ? self->Target() : kInvalidObject;
+    g_setTarget.Original()(self, edx, id);
+    if (self == nullptr || self->Target() == before)
+    {
+        return;
+    }
+    std::vector<std::function<void(ObjectId, ObjectId)>> callbacks;
+    {
+        const std::lock_guard lock(g_targetLock);
+        callbacks = g_targetChanged;
+    }
+    for (const auto &callback : callbacks)
+    {
+        detail::Guard("a camera target callback", [&] { callback(self->Target(), before); });
+    }
+}
+
 void Step()
 {
     const Clock::time_point now = Clock::now();
@@ -109,7 +134,7 @@ void Step()
     {
         return;
     }
-    CameraController *camera = Controller();
+    CameraController *camera = Current();
     if (camera == nullptr)
     {
         Stop();
@@ -142,6 +167,23 @@ float Tau(float seconds)
 
 } // namespace
 
+void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback)
+{
+    const std::lock_guard lock(g_targetLock);
+    g_targetChanged.push_back(std::move(callback));
+    if (g_setTarget.Original() == nullptr)
+    {
+        g_setTarget.Attach(addr::kCameraControllerBase_SetTarget, &SetTarget);
+    }
+}
+
+CameraController *Current()
+{
+    auto *app = CClientExoApp::Get();
+    auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    return modes != nullptr && modes->Explore() != nullptr ? modes->Camera() : nullptr;
+}
+
 void EaseYaw(float radians, float seconds)
 {
     Start();
@@ -151,7 +193,7 @@ void EaseYaw(float radians, float seconds)
 void PanTo(ObjectId object, float seconds)
 {
     Start();
-    CameraController *camera = Controller();
+    CameraController *camera = Current();
     if (camera == nullptr)
     {
         return;

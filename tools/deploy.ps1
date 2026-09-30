@@ -10,12 +10,18 @@
     so the crash logger can name the game's. The game must not be running: it holds
     those files open.
 
+    The examples (examples/, example_<part>.dll) go in only when named with -Examples,
+    since each changes the game in its own way (examples/camera moves the camera, and
+    would fight another plugin that does): -Examples camera,saves, or -Examples * for
+    all. An example not named is taken out of the game if it is there.
+
     -Remove deletes them again, and the whole bin_ship\daolib folder, which returns the
     game to stock: version.dll is ours alone, the system's stays in SysWOW64 untouched.
     The logs are elsewhere (Documents) and stay.
 
 .EXAMPLE
     .\tools\deploy.ps1                 # debug build into the GOG install
+    .\tools\deploy.ps1 -Examples saves  # and examples\saves
     .\tools\deploy.ps1 -Preset release
     .\tools\deploy.ps1 -Remove
 #>
@@ -24,6 +30,7 @@ param(
     [ValidateSet('debug', 'release')]
     [string] $Preset = 'debug',
     [switch] $Remove,
+    [string[]] $Examples = @(),
     [string] $Game = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins\bin_ship'
 )
 
@@ -57,6 +64,19 @@ $builtPdb = Join-Path $build 'version.pdb'
 if (Test-Path $builtPdb) { Copy-Item -Force $builtPdb $loaderPdb }
 Show-Ok "loader  -> $loader"
 foreach ($dll in Get-ChildItem -Path (Join-Path $build 'daolib\plugins') -Filter '*.dll') {
+    if ($dll.BaseName -like 'example_*') {
+        $part = $dll.BaseName.Substring('example_'.Length)
+        $wanted = $Examples | Where-Object { $part -like $_ }
+        if (-not $wanted) {
+            $there = Join-Path $plugins $dll.Name
+            if (Test-Path $there) {
+                Remove-Item -Force $there
+                Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($there, '.pdb'))
+                Show-Ok "example $part taken out (not named with -Examples)"
+            }
+            continue
+        }
+    }
     Copy-Item -Force $dll.FullName (Join-Path $plugins $dll.Name)
     $pdb = [IO.Path]::ChangeExtension($dll.FullName, '.pdb')
     if (Test-Path $pdb) { Copy-Item -Force $pdb $plugins }

@@ -25,12 +25,26 @@
 // player's and stop. Not yet seen in play.
 #pragma once
 
+#include "dao/Camera.h"
 #include "dao/ObjectId.h"
 
+#include <functional>
 #include <optional>
 
 namespace dao::camera
 {
+
+// The camera in explore or combat mode, the modes it moves in; null in any
+// other (a menu, a dialogue, a cutscene, loading) or before the game is up.
+CameraController *Current();
+
+// When the camera starts following something else: the player selecting
+// another party member, or a plugin's Follow or PanTo. `before` is what it
+// followed until now. After the game's own handling (in the tactical view
+// the camera has stayed where it was; close in, the game's pan has begun),
+// on the game's thread. A callback that follows something else in turn is
+// called again for that.
+void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback);
 
 // Turn the camera, close in, to a yaw (dao/Camera.h, SceneCamera::Yaw).
 void EaseYaw(float radians, float seconds);
