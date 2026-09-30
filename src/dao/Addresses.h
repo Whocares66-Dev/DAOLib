@@ -38,7 +38,10 @@ DAO_ADDRESS(kEntryPoint, "entry", 0x008E3024)
 // it is given the object (0x00A2D240, which keeps it at VM+0x1968), just
 // after the application stores it. Read 2026-09-30; until then this row
 // said the registrations began at 0x00674E90, which is ReadIniEntry's
-// handler, one of the functions registered.
+// handler, one of the functions registered. Seen in play 2026-09-30: the
+// probe's detour ran once, five seconds into start-up, on the commands
+// object the application keeps, and on the thread every script command
+// then ran on.
 DAO_ADDRESS(kCVirtualMachineCommands_InitializeCommands, "CVirtualMachineCommands::InitializeCommands", 0x00675210)
 // `table = this->[+0xC]; table[id] = fn`, `ret 0xC`, the name unused.
 DAO_ADDRESS(kCVirtualMachineCommands_Register, "CVirtualMachineCommands::Register", 0x0064DD40)
@@ -88,7 +91,10 @@ DAO_ADDRESS(kCClientExoApp_GetObject, "CClientExoApp::GetObjectById", 0x005D5BE0
 // (dev/object_lookups.csv): the same shape, then a cast through the virtual
 // slot that only the named class answers with `this`. Each __thiscall, the
 // id, `ret 4`. GetGameObjectById does not cast: the object as the array
-// holds it.
+// holds it. The creature, placeable and object lookups were checked in play
+// 2026-09-30 by the probe's script checks (dev/LIBRARY.md): each found the
+// object the engine's getters answered for, on every call. The waypoint's
+// was not called, and GetGameObjectById is not used by the checks.
 DAO_ADDRESS(kCClientExoApp_GetGameObjectById, "CClientExoApp::GetGameObjectById", 0x005D5840)
 DAO_ADDRESS(kCClientExoApp_GetCreatureById, "CClientExoApp::GetCreatureById", 0x005D58C0)
 DAO_ADDRESS(kCClientExoApp_GetPlaceableById, "CClientExoApp::GetPlaceableById", 0x005D5B40)
@@ -124,8 +130,11 @@ inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
 // VM call, against its return type (the pushes). Votes for the winner, of
 // all cast, beside each. The addresses run in NWN's declaration order --
 // integer, float, vector, string, then DAO's own resource and array types,
-// engine structure, object -- pops and pushes each together. Not yet
-// verified in play.
+// engine structure, object -- pops and pushes each together. The int and
+// object pops and pushes were verified in play 2026-09-30: the probe's
+// script checks popped and pushed back each getter's argument and answer
+// on about 2,200 calls, and the scripts ran on unchanged. The rest are not
+// yet exercised.
 DAO_DATA(kVirtualMachine, "g_pVirtualMachine", 0x00C1D080)
 DAO_ADDRESS(kCVirtualMachine_StackPopInteger, "CVirtualMachine::StackPopInteger", 0x00A2F3C0) // 453/464
 DAO_ADDRESS(kCVirtualMachine_StackPopFloat, "CVirtualMachine::StackPopFloat", 0x00A2F410)     // 72/74

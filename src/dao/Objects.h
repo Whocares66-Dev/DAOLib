@@ -11,6 +11,9 @@
 // Every field here is one a script command returns (the generated
 // descriptors in dao/generated/ScriptFields.h) and is checked against that
 // command's own answer by the probe in play (dev/PROBE.md, "Script checks").
+// In the first session, 2026-09-30, 14 of the 18 matched on every call:
+// all but BodyBag, AILevel, the placeable's State and MapPinState, which no
+// script called (dev/LIBRARY.md).
 // The functions are called exactly as the engine calls them; how each was
 // read is in dao/Addresses.h.
 #pragma once

@@ -48,11 +48,22 @@ A script calls it once a `script.ldf` the toolset compiles against declares `int
 |---|---|---|
 | `CClientExoApp`: pause, paused time, game mode | 2026-09-29 | seen, 2026-09-29/30 |
 | `CCObject::QueueCommand`, the command word | 2026-09-30 | seen, every action in several fights |
-| Lookups by id: game object, object, creature, placeable, waypoint | 2026-09-30, from the commands that call them | lookups by object seen through `QueueCommand`; the typed ones checked by the script checks, from the next session |
-| 18 fields on `CCObject`, `CCCreature`, `CCPlaceable`, `CCWayPoint` | 2026-09-30, from their getters | checked by the script checks, from the next session |
-| The command table and `InitializeCommands` | 2026-09-30 | from the next session |
-| The VM stack: int, float, object | 2026-09-30, voted across 665 commands | used by the script checks, from the next session |
+| Lookups by id: object, creature, placeable | 2026-09-30, from the commands that call them | checked 2026-09-30, on every getter call |
+| Lookups by id: game object, waypoint | 2026-09-30 | not exercised |
+| 14 fields: `CCObject`'s group and team, `CCCreature`'s packages, treasure category, combatant type and combat state, `CCPlaceable`'s lock level, key, auto-remove key, base type, action, treasure rank and category | 2026-09-30, from their getters | matched on every call, 2026-09-30 |
+| 4 fields: `CCCreature::BodyBag`, `CCObject::AILevel`, `CCPlaceable::State`, `CCWayPoint::MapPinState` | 2026-09-30, from their getters | not called in play yet |
+| The command table, `InitializeCommands`, setting a slot | 2026-09-30 | used 2026-09-30: 18 slots replaced, the game ran on |
+| The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
+| The VM stack: float | 2026-09-30 | not exercised |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
+
+## The first session
+
+2026-09-30, its first eight minutes: a fight, some chests, the world map. The probe's detour on `InitializeCommands` ran five seconds into start-up, on the commands object at `CClientExoApp+0x1E4`, and shadowed all 18 getters. Scripts then called 14 of them about 2,200 times; every answer matched our field, with no failed pop or push. `GetCombatState` alone ran 978 times, `GetCombatantType` 366, `GetPackageAI` 330, `GetPackage` 273. Once, `GetCombatantType` was asked about an id that named no creature, and the engine's handler still answered, as the getters do when their lookup fails (they push a default: `GetTeamId`'s body, `0x0065BCD0`); our lookup found nothing, as it should.
+
+The first matches included values other than 0, among them a package of 0x58, a team of -1, a group of 1, a placeable action of 0xB, a creature treasure category of 8 and a lock level of 1. Zero is the weak case: a wrong offset often reads 0 where the true field is 0 too. Since this session the probe also counts matches on values other than 0, and logs the first.
+
+Every script command ran on one thread, the same one `InitializeCommands` ran on: the script VM's, and so the thread a turn-based mode's script-facing work happens on. It is not the process's first thread, which ran the loader.
 
 ## What comes next
 
