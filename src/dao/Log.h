@@ -17,7 +17,9 @@ namespace dao
 std::filesystem::path LogDirectory();
 
 // Opens <name>.log, truncating the last run's, and makes it the default
-// logger. Safe to call once per DLL; a second call is ignored.
+// logger. A game started while another runs with DAOLib writes
+// <name>.<process id>.log instead, and leaves the running game's logs be.
+// Safe to call once per DLL; a second call is ignored.
 void OpenLog(std::string_view name);
 
 } // namespace dao
