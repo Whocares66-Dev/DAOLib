@@ -8,6 +8,8 @@
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 #include "dao/Script.h"
+#include "dao/String.h"
+#include "dao/Structures.h"
 #include "dao/core/ObjectType.h"
 #include "dao/generated/ObjectCasts.h"
 #include "dao/generated/ScriptFields.h"
@@ -193,7 +195,11 @@ void Compare(Check &check, dao::ObjectId object, std::uint32_t answer)
     void *target = app != nullptr ? Lookup(app, getter.objectClass, object) : nullptr;
     if (target == nullptr)
     {
-        ++check.noObject;
+        if (check.noObject++ < kMismatchesLogged)
+        {
+            spdlog::info("script check {} ({}): id {:#010x} names no object of its class", getter.name, getter.command,
+                         object);
+        }
         return;
     }
     CheckObject(check, app, object, target);
@@ -245,6 +251,238 @@ int __fastcall Shadow(void *commands, int edx, int id, int paramCount)
     return result;
 }
 
+// -- the value types (dao/Structures.h, dao/Script.h's Stack) --------------
+//
+// Commands whose answer is a string, a vector or a location: after the
+// engine's handler, the answer is popped with our wrapper, pushed back,
+// popped again and pushed back again, and the two pops compared. A round
+// trip through our code on live values, which leaves the script's answer
+// as the engine made it. For a location, its area must name an area.
+//
+// Commands whose argument is an effect: the effect is popped into a copy of
+// our own and pushed back before the engine's handler runs, and the
+// handler's answer compared with our accessor on the copy.
+
+enum class PeekKind : std::uint8_t
+{
+    StringAnswer,
+    VectorAnswer,
+    LocationAnswer,
+    EffectField,
+};
+
+struct PeekCommand
+{
+    int command = 0;
+    const char *name = nullptr;
+    PeekKind kind = PeekKind::StringAnswer;
+    bool returnsObject = false;                                 // EffectField: the answer is an object id
+    std::uint32_t (*field)(const dao::CGameEffect &) = nullptr; // EffectField: ours
+};
+
+constexpr PeekCommand kPeeks[] = {
+    {209, "GetTag", PeekKind::StringAnswer},
+    {275, "GetName", PeekKind::StringAnswer},
+    {21, "GetPosition", PeekKind::VectorAnswer},
+    {457, "GetLocation", PeekKind::LocationAnswer},
+    {604, "GetEffectType", PeekKind::EffectField, false,
+     [](const dao::CGameEffect &e) { return static_cast<std::uint32_t>(e.Type()); }},
+    {605, "GetEffectFlags", PeekKind::EffectField, false, [](const dao::CGameEffect &e) { return e.Flags(); }},
+    {607, "GetEffectAnimation", PeekKind::EffectField, false,
+     [](const dao::CGameEffect &e) { return static_cast<std::uint32_t>(e.Animation()); }},
+    {608, "GetEffectDurationType", PeekKind::EffectField, false,
+     [](const dao::CGameEffect &e) { return static_cast<std::uint32_t>(e.DurationType()); }},
+    {612, "GetEffectCreator", PeekKind::EffectField, true, [](const dao::CGameEffect &e) { return e.Creator(); }},
+    {614, "GetEffectID", PeekKind::EffectField, false, [](const dao::CGameEffect &e) { return e.Id(); }},
+    {620, "GetEffectAbilityID", PeekKind::EffectField, false,
+     [](const dao::CGameEffect &e) { return static_cast<std::uint32_t>(e.AbilityId()); }},
+};
+
+struct PeekState
+{
+    const PeekCommand *peek = nullptr;
+    dao::script::Handler previous = nullptr;
+    std::atomic<std::uint32_t> calls{0};
+    std::atomic<std::uint32_t> matched{0};
+    std::atomic<std::uint32_t> mismatched{0};
+    std::atomic<std::uint32_t> failed{0};
+};
+std::array<PeekState, dao::script::kSlots> g_peeks;
+
+constexpr std::uint32_t kValuesLogged = 3;
+
+void Matched(PeekState &state, const std::string &value)
+{
+    if (state.matched++ < kValuesLogged)
+    {
+        spdlog::info("script check {} ({}): {}", state.peek->name, state.peek->command, value);
+    }
+}
+
+void Mismatched(PeekState &state, const std::string &what)
+{
+    if (state.mismatched++ < kMismatchesLogged)
+    {
+        spdlog::warn("script check {} ({}): {}", state.peek->name, state.peek->command, what);
+    }
+}
+
+bool SameVector(const dao::Vector &a, const dao::Vector &b)
+{
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
+std::string Show(const dao::Vector &v)
+{
+    return fmt::format("({:.2f}, {:.2f}, {:.2f})", v.x, v.y, v.z);
+}
+
+void PeekString(PeekState &state)
+{
+    std::wstring first;
+    std::wstring second;
+    if (!dao::script::Stack::PopString(first) || !dao::script::Stack::PushString(first) ||
+        !dao::script::Stack::PopString(second) || !dao::script::Stack::PushString(second))
+    {
+        ++state.failed;
+        return;
+    }
+    if (first == second)
+    {
+        Matched(state, fmt::format("\"{}\", {} characters, round trip the same", dao::Utf8(first), first.size()));
+    }
+    else
+    {
+        Mismatched(state,
+                   fmt::format("popped \"{}\", then \"{}\" after our push", dao::Utf8(first), dao::Utf8(second)));
+    }
+}
+
+void PeekVector(PeekState &state)
+{
+    dao::Vector first;
+    dao::Vector second;
+    if (!dao::script::Stack::PopVector(first) || !dao::script::Stack::PushVector(first) ||
+        !dao::script::Stack::PopVector(second) || !dao::script::Stack::PushVector(second))
+    {
+        ++state.failed;
+        return;
+    }
+    if (SameVector(first, second))
+    {
+        Matched(state, Show(first) + ", round trip the same");
+    }
+    else
+    {
+        Mismatched(state, "popped " + Show(first) + ", then " + Show(second) + " after our push");
+    }
+}
+
+void PeekLocation(PeekState &state)
+{
+    dao::CScriptLocation first;
+    dao::CScriptLocation second;
+    if (!dao::script::Stack::PopLocation(first) || !dao::script::Stack::PushLocation(first) ||
+        !dao::script::Stack::PopLocation(second) || !dao::script::Stack::PushLocation(second))
+    {
+        ++state.failed;
+        return;
+    }
+    auto *app = dao::CClientExoApp::Get();
+    dao::CGameObject *area = app != nullptr ? app->GetGameObjectById(first.area) : nullptr;
+    const bool areaOk = area != nullptr && area->Type() == dao::core::ObjectType::Area;
+    const std::string shown = fmt::format("position {}, orientation {}, area {:#010x} ({})", Show(first.position),
+                                          Show(first.orientation), first.area, areaOk ? "an area" : "not an area");
+    if (SameVector(first.position, second.position) && SameVector(first.orientation, second.orientation) &&
+        first.area == second.area && areaOk)
+    {
+        Matched(state, shown + ", round trip the same");
+    }
+    else
+    {
+        Mismatched(state, shown + fmt::format("; after our push: position {}, area {:#010x}", Show(second.position),
+                                              second.area));
+    }
+}
+
+int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
+{
+    PeekState &state = g_peeks.at(static_cast<std::size_t>(id));
+    const PeekCommand &peek = *state.peek;
+    if (peek.kind == PeekKind::EffectField)
+    {
+        dao::script::OwnedEffect effect = dao::script::Stack::PopEffect();
+        const bool peeked = effect && dao::script::Stack::PushEffect(*effect.get());
+        const int result = state.previous(commands, edx, id, paramCount);
+        ++state.calls;
+        if (!peeked || result != dao::script::kOk)
+        {
+            ++state.failed;
+            return result;
+        }
+        const auto answer = PeekAnswer(peek.returnsObject);
+        if (!answer)
+        {
+            ++state.failed;
+            return result;
+        }
+        const std::uint32_t ours = peek.field(*effect.get());
+        if (ours == *answer)
+        {
+            Matched(state, fmt::format("effect {} of type {}, engine and field both {:#x}", effect->Id(),
+                                       effect->Type(), ours));
+        }
+        else
+        {
+            Mismatched(state, fmt::format("effect {} of type {}: engine said {:#x}, field reads {:#x}", effect->Id(),
+                                          effect->Type(), *answer, ours));
+        }
+        return result;
+    }
+    const int result = state.previous(commands, edx, id, paramCount);
+    ++state.calls;
+    if (result != dao::script::kOk)
+    {
+        ++state.failed;
+        return result;
+    }
+    switch (peek.kind)
+    {
+    case PeekKind::StringAnswer:
+        PeekString(state);
+        break;
+    case PeekKind::VectorAnswer:
+        PeekVector(state);
+        break;
+    case PeekKind::LocationAnswer:
+        PeekLocation(state);
+        break;
+    case PeekKind::EffectField:
+        break;
+    }
+    return result;
+}
+
+std::size_t InstallPeeks()
+{
+    std::size_t installed = 0;
+    for (const auto &peek : kPeeks)
+    {
+        PeekState &state = g_peeks.at(static_cast<std::size_t>(peek.command));
+        dao::script::Handler previous = dao::script::Get(peek.command);
+        if (previous == nullptr)
+        {
+            spdlog::warn("script check {} ({}): no handler in the table", peek.name, peek.command);
+            continue;
+        }
+        state.peek = &peek;
+        state.previous = previous;
+        dao::script::Set(peek.command, &PeekShadow);
+        ++installed;
+    }
+    return installed;
+}
+
 void Install(void *commands)
 {
     auto *app = dao::CClientExoApp::Get();
@@ -278,6 +516,8 @@ void Install(void *commands)
     }
     spdlog::info("script checks: {} of {} getters shadowed, table at {}", installed,
                  std::size(dao::generated::kScriptGetters), static_cast<void *>(dao::script::Table()));
+    spdlog::info("script checks: {} of {} value-type commands shadowed (strings, vectors, locations, effects)",
+                 InstallPeeks(), std::size(kPeeks));
 }
 
 // CVirtualMachineCommands::InitializeCommands: __thiscall, no arguments,
@@ -348,6 +588,16 @@ void ReportScriptChecks()
                      getter.name, getter.command, calls, matched, check.matchedNonZero.load(), mismatched,
                      check.noObject.load(), check.failed.load(), check.objectMatched.load(),
                      check.objectMismatched.load());
+    }
+    for (const auto &peek : kPeeks)
+    {
+        const PeekState &state = g_peeks.at(static_cast<std::size_t>(peek.command));
+        if (state.peek == nullptr || state.calls == 0)
+        {
+            continue;
+        }
+        spdlog::info("script check {} ({}): {} calls, {} matched, {} mismatched, {} failed", peek.name, peek.command,
+                     state.calls.load(), state.matched.load(), state.mismatched.load(), state.failed.load());
     }
     spdlog::info("script checks: {} of {} getters called, {} of those matched on every object", called,
                  std::size(dao::generated::kScriptGetters), clean);
