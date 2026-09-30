@@ -106,6 +106,7 @@ add_library(
     src/dao/core/Rtti.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
+    src/dao/GameModes.cpp
     src/dao/Gda.cpp
     src/dao/Log.cpp
     src/dao/Module.cpp

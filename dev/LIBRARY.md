@@ -146,9 +146,10 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Intercepting commands: `InterceptCommand`, `CommandCall`, chaining across plugins | 2026-09-30 | checked 2026-09-30: the example plugin's `GetCombatState` intercept, chained with the probe's shadow of the same command, read its argument and the engine's answer on 300 of 300 calls, 0 and 1 |
 | The frame callback and the scripts' thread | 2026-09-30 | checked 2026-09-30: the update and the scripts run on one thread, so a frame callback may call script commands; the update runs while paused too (26,849 paused frames in the session) |
 | The event queue: what it delivers | 2026-09-30 | seen 2026-09-30: 824 events, all script events (queue id 10) but two; `COMMAND_COMPLETE` among them (14), so the engine delivers some command completions another way |
-| The game mode controller's table of modes | 2026-09-30 | not confirmed: never seen non-empty where it was read; the probe logs the controller's words next session |
-| Script event callbacks, `dao::events::OnScriptEvent` | 2026-09-30, on the queue the probe watched in play | the example plugin uses it from the next session |
-| The data tables through `dao::gda` | 2026-09-30 | matched `GetM2DAInt` in play only on a row of zeros; the example reads a row with values next session |
+| The game mode controller: current and previous mode | 2026-09-30 | seen 2026-09-30: +0x78 the current mode (0, exploring) and +0x7C the one before (9, loading) |
+| The game mode controller's array of modes | 2026-09-30 | corrected 2026-09-30: +0x58 is a pointer to an array indexed by mode, not a vector (+0x5C lay below it); the probe maps numbers to classes next session |
+| Script event callbacks, `dao::events::OnScriptEvent` | 2026-09-30, on the queue the probe watched in play | checked 2026-09-30, sixth session: the module's load (20) and mode changes (60), and perception (25) for the player, the dog and Bryce's wife, each with its target |
+| The data tables through `dao::gda` | 2026-09-30 | checked 2026-09-30: Shield Pummel's AbilityType (1) and Cost (25.0) read the same straight from the table as through `GetM2DAInt` and `GetM2DAFloat` |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
 | Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |

@@ -173,42 +173,33 @@ class Recorder
         {
             return;
         }
-        const auto first = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesFirst);
-        const auto last = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesLast);
+        const auto modes = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModes);
         const auto current = dao::TryRead<std::int32_t>(*controller + dao::GameModeController::kMode);
-        if (!first || !last || *first == 0 || *last <= *first)
+        // Once a game is loaded, the array +0x58 points to (dao/GameModes.h),
+        // entry by entry, until one is not a GameMode: which class is which
+        // mode number.
+        if (!modes || *modes == 0 || !current || *current != static_cast<std::int32_t>(dao::GameMode::Explore))
         {
-            // Not the vector it was read as (2026-09-30: never logged in a
-            // session): once a game is loaded, the words around it, raw.
-            if (!rawModesLogged_ && current && *current == static_cast<std::int32_t>(dao::GameMode::Explore))
-            {
-                rawModesLogged_ = true;
-                std::string words;
-                for (std::uintptr_t off = 0x50; off < 0x80; off += 4)
-                {
-                    const auto w = dao::TryRead<std::uint32_t>(*controller + off);
-                    words += fmt::format(" +{:#x}={}", off, w ? fmt::format("{:#010x}", *w) : std::string("?"));
-                }
-                spdlog::info("game modes: the table at +0x58 is not a vector; the controller at {:#x}:{}", *controller,
-                             words);
-            }
             return;
         }
         modesLogged_ = true;
-        const auto count = (*last - *first) / 4;
         std::string line;
-        for (std::uintptr_t i = 0; i < count && i < 32; ++i)
+        std::uintptr_t i = 0;
+        for (; i < dao::GameModeController::kMaxModes; ++i)
         {
-            const auto mode = dao::TryRead<std::uintptr_t>(*first + 4 * i);
-            line += fmt::format(" {}={}", i,
-                                mode && *mode != 0 ? dao::TypeName(reinterpret_cast<const void *>(*mode))
-                                                   : std::string("-"));
+            const auto mode = dao::TryRead<std::uintptr_t>(*modes + 4 * i);
+            const std::string type =
+                mode && *mode != 0 ? dao::TypeName(reinterpret_cast<const void *>(*mode)) : std::string("-");
+            if (type != "-" && type.rfind("GameMode", 0) != 0)
+            {
+                break;
+            }
+            line += fmt::format(" {}={}", i, type);
         }
-        spdlog::info("game modes: {} in the controller's table:{}", count, line);
+        spdlog::info("game modes: {} entries in the controller's array:{}", i, line);
     }
 
     bool modesLogged_ = false;
-    bool rawModesLogged_ = false;
 
     void RefreshThreads()
     {

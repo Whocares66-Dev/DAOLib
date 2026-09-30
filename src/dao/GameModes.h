@@ -55,29 +55,26 @@ class GameModeController
             this, 0, static_cast<std::int32_t>(mode), 0, 0);
     }
 
-    // The mode object for a number (its class says which mode it is:
-    // dao::TypeName), or null past the table's end. Read as a std::vector
-    // whose first and last pointers are at +0x58 and +0x5C (the constructor
-    // zeroes +0x58 to +0x60 together; SetGameMode indexes +0x58 by mode).
-    // NOT CONFIRMED: in the session of 2026-09-30 the probe never saw a
-    // non-empty table there; do not rely on these two yet.
-    const void *ModeObject(GameMode mode) const
+    // The mode object for a number, as SetGameMode finds it: +0x58 points to
+    // an array of them indexed by the mode's number. Seen in play
+    // 2026-09-30: +0x58, +0x5C and +0x60 are three separate pointers (not a
+    // std::vector: +0x5C below +0x58), the current mode at +0x78 and, by
+    // its value after a load (9, loading), the previous one at +0x7C. The
+    // array's length is not beside it; an entry is returned only if its
+    // class is a GameMode (dao::TypeName), else null.
+    const void *ModeObject(GameMode mode) const;
+
+    // The mode before the current one, by the value seen after a load.
+    GameMode PreviousMode() const
     {
-        const auto *first = Read<const void *const *>(kModesFirst);
-        const auto *last = Read<const void *const *>(kModesLast);
-        const auto i = static_cast<std::ptrdiff_t>(mode);
-        return first != nullptr && i >= 0 && i < last - first ? first[i] : nullptr;
-    }
-    std::size_t ModeCount() const
-    {
-        const auto *first = Read<const void *const *>(kModesFirst);
-        const auto *last = Read<const void *const *>(kModesLast);
-        return first != nullptr && last >= first ? static_cast<std::size_t>(last - first) : 0;
+        return static_cast<GameMode>(Read<std::int32_t>(kPreviousMode));
     }
 
-    static constexpr std::size_t kModesFirst = 0x58;
-    static constexpr std::size_t kModesLast = 0x5C;
+    static constexpr std::size_t kModes = 0x58;
     static constexpr std::size_t kMode = 0x78;
+    static constexpr std::size_t kPreviousMode = 0x7C;
+    // Past this many entries nothing is read: the game has 13 GameMode classes.
+    static constexpr std::size_t kMaxModes = 32;
 
   private:
     template <class T> const T &Read(std::size_t offset) const
