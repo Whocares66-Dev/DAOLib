@@ -92,6 +92,11 @@ int Call(Handler handler, int id, int paramCount);
 // DestroyGameDefinedStructure), which frees it on the engine's heap.
 void DestroyStructure(EngineStructure type, void *structure);
 
+// A copy of an engine structure, made by the engine as the VM makes one on
+// every push and pop (the commands object's CopyGameDefinedStructure), the
+// caller's to destroy (DestroyStructure). Null if the engine made none.
+void *CopyStructure(EngineStructure type, const void *structure);
+
 // An engine structure popped off the stack: the VM's copy, which is the
 // popper's to destroy; this does it. Move-only.
 template <class T, EngineStructure Type> class Owned
@@ -137,7 +142,23 @@ template <class T, EngineStructure Type> class Owned
 };
 using OwnedEffect = Owned<CGameEffect, EngineStructure::Effect>;
 using OwnedCommand = Owned<::dao::Command, EngineStructure::Command>;
+
 using OwnedEvent = Owned<CScriptEvent, EngineStructure::Event>;
+
+// An owned copy of one, to keep past the call that lent it: a command an
+// AddCommand intercept holds back and queues later, say.
+inline OwnedEffect Copy(const CGameEffect &effect)
+{
+    return OwnedEffect{static_cast<CGameEffect *>(CopyStructure(EngineStructure::Effect, &effect))};
+}
+inline OwnedEvent Copy(const CScriptEvent &event)
+{
+    return OwnedEvent{static_cast<CScriptEvent *>(CopyStructure(EngineStructure::Event, &event))};
+}
+inline OwnedCommand Copy(const ::dao::Command &command)
+{
+    return OwnedCommand{static_cast<::dao::Command *>(CopyStructure(EngineStructure::Command, &command))};
+}
 
 // A script array popped off the stack (dao/core/ScriptArray.h): the
 // popper's copy, sharing the elements with the VM's, freed through the

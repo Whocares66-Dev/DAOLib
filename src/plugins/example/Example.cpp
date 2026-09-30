@@ -16,6 +16,7 @@
 #include "dao/Gda.h"
 #include "dao/Log.h"
 #include "dao/Messages.h"
+#include "dao/Objects.h"
 #include "dao/Plugin.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
@@ -85,6 +86,24 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     dao::script::InterceptCommand(dao::script::id::GetCombatState, &CheckCombatState);
+
+    // Every command a script queues (the AI's choices among them): a copy
+    // of it, made and destroyed through the engine, as a plugin that holds
+    // a creature's actions back would keep one. The command itself goes on.
+    dao::script::InterceptCommand(dao::script::id::AddCommand, [](dao::script::CommandCall &call) {
+        static std::atomic<std::uint32_t> seen{0};
+        const auto creature = call.Object(0);
+        const dao::Command *command = call.Command(1);
+        if (command != nullptr && seen < 8)
+        {
+            const dao::script::OwnedCommand copy = dao::script::Copy(*command);
+            ++seen;
+            spdlog::info("AddCommand for {:#010x}: command type {}, its copy {}", creature.value_or(0),
+                         static_cast<int>(command->Type()),
+                         copy ? std::to_string(static_cast<int>(copy->Type())) : std::string("none"));
+        }
+        return call.Proceed();
+    });
     spdlog::info("intercepting GetCombatState ({}); installed once the engine has its command table",
                  dao::script::id::GetCombatState);
     dao::script::OnCommandsReady([] { spdlog::info("command table ready; GetCombatState intercepted"); });

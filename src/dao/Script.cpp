@@ -62,6 +62,18 @@ void DestroyStructure(EngineStructure type, void *structure)
         app->Commands(), 0, static_cast<std::int32_t>(type), structure);
 }
 
+void *CopyStructure(EngineStructure type, const void *structure)
+{
+    const auto *app = CClientExoApp::Get();
+    if (app == nullptr || structure == nullptr)
+    {
+        return nullptr;
+    }
+    using Fn = void *(__fastcall *)(void *, int, std::int32_t, const void *);
+    return reinterpret_cast<Fn>(Module::Address(addr::kCVirtualMachineCommands_CopyGameDefinedStructure))(
+        app->Commands(), 0, static_cast<std::int32_t>(type), structure);
+}
+
 Handler *Table()
 {
     const auto *app = CClientExoApp::Get();
