@@ -88,7 +88,8 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
 | Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |
-| Events and arrays on the stack; the event's type, creator and target; `GetTeam`, `GetEffects`, `GetNearestObject` answers | 2026-09-30 | checked by the script checks, from the next session |
+| Events on the stack; the event's type, creator and target | 2026-09-30 | checked 2026-09-30, fourth session: 3,635 `GetCurrentEvent` round trips, 4,514 event getter calls, all matching |
+| Arrays on the stack: `object[]` and `effect[]` | 2026-09-30 | checked 2026-09-30: 5 `GetTeam` answers, every member on the team asked for; 493 `GetEffects` answers with the right tag, all empty, so an effect element is not yet read in play |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
 
 ## The first session
@@ -106,6 +107,10 @@ Every script command ran on one thread, the same one `InitializeCommands` ran on
 ## The third session
 
 2026-09-30, a fight, with the value types shadowed. `GetTag` ran 411 times and every answer came back the same through our pop and push, among them 21-character tags that live on the engine's heap (`bhn200cr_howe_landra1`). `GetName` gave `Dog` and `Lesser Lyrium Potion`. `GetLocation` ran 43 times: positions such as (-110.26, -79.82, 12.02), unit orientations, and an area id that named an area every time. With no spells in the party, the fight still put effects on its creatures: 46 `GetEffectType`, 19 `GetEffectCreator`, 16 `GetEffectAbilityID` and 14 `GetEffectDurationType` calls, each matching our accessor on the probe's own copy of the effect, the creators real creatures and the effect ids counting up (654, 655, 656).
+
+## The fourth session
+
+2026-09-30, a fight, with events and arrays shadowed. `GetCurrentEvent` ran 3,635 times and each answer was a `CScriptEvent` that round-tripped the same; `GetEventType` matched 3,400 times, `GetEventCreator` 1,099 and `GetEventTarget` 15. The types seen, read against the scripts' constants: 63 `EVENT_TYPE_MODULE_GETCHARSTAGE`, 94 `PLAYER_COMMAND_ADDED`, 78 `PLACEABLE_ONCLICK`, 11 `EQUIP`. `GetTeam` answered five times with two to four creatures, all on team 9 as asked. `GetEffects` answered 493 times, every array empty.
 
 ## What comes next
 
