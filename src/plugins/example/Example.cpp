@@ -12,6 +12,7 @@
 // The probe also takes GetCombatState's slot in the table, so the two
 // chain: whichever installed last runs first and Proceeds into the other.
 #include "dao/ClientExoApp.h"
+#include "dao/Events.h"
 #include "dao/Gda.h"
 #include "dao/Log.h"
 #include "dao/Messages.h"
@@ -87,5 +88,21 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     spdlog::info("intercepting GetCombatState ({}); installed once the engine has its command table",
                  dao::script::id::GetCombatState);
     dao::script::OnCommandsReady([] { spdlog::info("command table ready; GetCombatState intercepted"); });
+
+    // Script events as they are delivered: the first few of the kinds a
+    // plugin most often wants, with whom each is for.
+    using dao::script::EventType;
+    for (const EventType type :
+         {EventType::ModuleLoad, EventType::GamemodeChange, EventType::Damaged, EventType::PerceptionAppear})
+    {
+        dao::events::OnScriptEvent(type, [](dao::ObjectId target, const dao::CScriptEvent &event) {
+            static std::atomic<std::uint32_t> seen{0};
+            if (seen++ < 12)
+            {
+                spdlog::info("event {} for {:#010x} \"{}\", from {:#010x}", fmt::underlying(event.Type()), target,
+                             dao::Utf8(dao::script::api::GetTag(target)), event.Creator());
+            }
+        });
+    }
     return true;
 }

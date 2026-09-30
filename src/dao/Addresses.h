@@ -186,6 +186,9 @@ DAO_ADDRESS(kCVirtualMachineCommands_CopyGameDefinedStructure, "CVirtualMachineC
             0x00674AF0)
 // The structures' own constructors, from Create and Copy.
 DAO_ADDRESS(kCScriptEvent_Constructor, "CScriptEvent::CScriptEvent", 0x0069BAC0)
+// CScriptEvent's vtable, which its constructor stores (RTTI): how
+// dao/Events.h tells a script event's data without reading its RTTI.
+DAO_DATA(kCScriptEvent_Vftable, "CScriptEvent::vftable", 0x00B0F12C)
 DAO_ADDRESS(kCScriptEvent_CopyConstructor, "CScriptEvent::CScriptEvent_copy", 0x0069CB10)
 DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x007ABD00)
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)

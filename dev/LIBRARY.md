@@ -81,6 +81,10 @@ dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::C
 
 Which columns a table has is in `dev/gda_tables.csv`, read from the game's own files by `tools/gda.py` (GFF4 as xoreos reads it; tested on a file built in the test): all 749 files of `2da.erf`, 4,892 columns with their types, 4,830 of them named from xoreos's list. A numbered table is an M2DA, every file whose name starts with its prefix (`m2da_base.gda`: table 1, Abilities, is the `abi_*` files, whose columns include `TargetType`, `Range`, `Speed`, `Cooldown`). `python tools/gda.py --dump abi_base` prints a table's rows, and `--names` adds the text of each `*StrRef` column from the game's talk table (`tools/tlk.py`: 51,846 English strings; all 1,501 talk tables in the install, add-ons included, are GFF4 `TLK ` version 0.2), so ability 1 reads as Shield Pummel with its description.
 
+## Script events
+
+`dao/Events.h`: `dao::events::OnScriptEvent(callback)`, or `OnScriptEvent(EventType::Damaged, callback)`, runs a plugin's callback on each script event the engine's queue delivers, with its target, just before the target's scripts handle it. It detours `AIMaster::ProcessEvent`, which the fifth session saw deliver 824 events: damage, perception, attack impacts, ability casts, heartbeats, mode changes, module and area loads, and the scripts' own numbers. Most `COMMAND_COMPLETE`s go another way, so a callback sees only some of those. Callbacks run on the scripts' thread and only observe. The example plugin logs the first module loads, mode changes, damage and perception events it sees.
+
 ## Every frame
 
 `dao/Frame.h`: `dao::OnFrame(callback)` runs a plugin's code once per frame, just before the game's update, on the thread that runs it. The update is `EclipseGame::Update` (`0x00412EB0`), which `Eclipse::UpdateTask` calls each frame on the object in `g_eclipseGame`. Whether that thread is the scripts' own, and so whether a frame callback may call script commands, is `dao::FrameThreadId()` against `dao::script::ScriptThreadId()`; the probe logs the two from the next session, with frames counted paused and unpaused.
@@ -143,6 +147,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The frame callback and the scripts' thread | 2026-09-30 | checked 2026-09-30: the update and the scripts run on one thread, so a frame callback may call script commands; the update runs while paused too (26,849 paused frames in the session) |
 | The event queue: what it delivers | 2026-09-30 | seen 2026-09-30: 824 events, all script events (queue id 10) but two; `COMMAND_COMPLETE` among them (14), so the engine delivers some command completions another way |
 | The game mode controller's table of modes | 2026-09-30 | not confirmed: never seen non-empty where it was read; the probe logs the controller's words next session |
+| Script event callbacks, `dao::events::OnScriptEvent` | 2026-09-30, on the queue the probe watched in play | the example plugin uses it from the next session |
 | The data tables through `dao::gda` | 2026-09-30 | matched `GetM2DAInt` in play only on a row of zeros; the example reads a row with values next session |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
