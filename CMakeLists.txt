@@ -138,6 +138,46 @@ set_target_properties(version PROPERTIES PREFIX "" OUTPUT_NAME "version")
 target_link_libraries(version PRIVATE daolib dbghelp psapi)
 
 # ---------------------------------------------------------------------------
+# Plugins. Each is a DLL exporting DAOLib_Load (src/dao/Plugin.h); the build
+# puts them where the loader looks relative to itself, so build\<preset>\ is
+# a game folder's worth of files, and tools\deploy.ps1 copies it over.
+# ---------------------------------------------------------------------------
+#
+# The probe counts calls to every function the tables in dev/ name; its list
+# of them is generated from those tables at build time.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(DAO_PROBE_TARGETS "${CMAKE_BINARY_DIR}/generated/ProbeTargets.inc")
+add_custom_command(
+    OUTPUT "${DAO_PROBE_TARGETS}"
+    COMMAND
+        "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/probe_targets.py"
+        "${DAO_PROBE_TARGETS}"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/tools/probe_targets.py"
+        "${CMAKE_SOURCE_DIR}/dev/script_commands.csv"
+        "${CMAKE_SOURCE_DIR}/dev/message_handlers.csv"
+    COMMENT "Generating the probe's census targets from dev/*.csv"
+    VERBATIM
+)
+add_library(
+    probe
+    MODULE
+    src/plugins/probe/Census.cpp
+    src/plugins/probe/Probe.cpp
+    src/plugins/probe/Recorder.cpp
+    "${DAO_PROBE_TARGETS}"
+)
+dao_apply_warnings(probe)
+set_target_properties(
+    probe
+    PROPERTIES
+        PREFIX ""
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/daolib/plugins"
+)
+target_include_directories(probe PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_link_libraries(probe PRIVATE daolib)
+
+# ---------------------------------------------------------------------------
 # Tests, over dao/core: what can be checked without the game.
 # ---------------------------------------------------------------------------
 if(DAO_BUILD_TESTS)

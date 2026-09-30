@@ -1,0 +1,389 @@
+#include "Recorder.h"
+
+#include "Census.h"
+#include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
+#include "dao/Log.h"
+#include "dao/Module.h"
+#include "dao/SafeRead.h"
+#include "dao/core/CallSite.h"
+#include "dao/core/Pe.h"
+
+#include <Windows.h>
+
+#include <TlHelp32.h>
+#include <spdlog/spdlog.h>
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <ctime>
+#include <fstream>
+#include <map>
+#include <span>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace probe
+{
+
+namespace
+{
+
+constexpr ULONGLONG kCensusPeriodMs = 1000;
+constexpr ULONGLONG kWindowMs = 10000;
+constexpr ULONGLONG kThreadRefreshMs = 2000;
+constexpr ULONGLONG kHealthMs = 60000;
+constexpr DWORD kSampleSleepMs = 10; // the system timer makes this about 15
+constexpr std::size_t kStackWords =
+    4096; // 16 KiB: 2 KiB missed the game's own frames under the graphics driver's (2026-09-30)
+constexpr std::size_t kMaxReturnsPerSample = 128;
+
+struct Text
+{
+    std::uintptr_t begin = 0;
+    std::uintptr_t end = 0;
+    bool Contains(std::uintptr_t a) const
+    {
+        return a >= begin && a < end;
+    }
+};
+
+// What one sample copies while its thread is suspended: registers and stack
+// into storage made before, so nothing is allocated with the thread frozen.
+struct Capture
+{
+    DWORD tid = 0;
+    std::uint32_t eip = 0;
+    std::size_t words = 0;
+    std::array<std::uint32_t, kStackWords> stack{};
+};
+
+struct Window
+{
+    std::uint64_t samples = 0;
+    std::unordered_map<std::uint32_t, std::uint32_t> eip;
+    std::unordered_map<std::uint32_t, std::uint32_t> stack;
+    std::map<DWORD, std::uint32_t> inExe; // by thread id
+};
+
+std::string LocalTimeNow()
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm local{};
+    localtime_s(&local, &now);
+    std::array<char, 32> text{};
+    std::strftime(text.data(), text.size(), "%Y-%m-%d %H:%M:%S", &local);
+    return text.data();
+}
+
+// The preferred-base address of a runtime address, as every file writes it.
+std::uint32_t Preferred(std::uintptr_t runtime)
+{
+    return static_cast<std::uint32_t>(runtime - dao::Module::Base() + dao::core::kPreferredBase);
+}
+
+class Recorder
+{
+  public:
+    explicit Recorder(Text text) : text_(text), previous_(Targets().size(), 0)
+    {
+    }
+
+    bool Open()
+    {
+        const auto dir = dao::LogDirectory();
+        calls_.open(dir / "probe-calls.tsv", std::ios::trunc);
+        samples_.open(dir / "probe-samples.tsv", std::ios::trunc);
+        if (!calls_ || !samples_)
+        {
+            return false;
+        }
+        const std::string started = LocalTimeNow();
+        calls_ << "# probe-calls, ms since " << started << "; see src/plugins/probe/Recorder.h\n";
+        samples_ << "# probe-samples, ms since " << started << "; see src/plugins/probe/Recorder.h\n";
+        calls_.flush();
+        samples_.flush();
+        return true;
+    }
+
+    void Run()
+    {
+        const ULONGLONG start = GetTickCount64();
+        ULONGLONG lastCensus = 0;
+        ULONGLONG lastWindow = 0;
+        ULONGLONG lastRefresh = 0;
+        ULONGLONG lastHealth = 0;
+        bool first = true;
+        for (;;)
+        {
+            const ULONGLONG now = GetTickCount64() - start;
+            if (first || now - lastRefresh >= kThreadRefreshMs)
+            {
+                RefreshThreads();
+                lastRefresh = now;
+            }
+            SampleAll();
+            if (now - lastCensus >= kCensusPeriodMs)
+            {
+                WriteCensus(now);
+                lastCensus = now;
+            }
+            if (now - lastWindow >= kWindowMs)
+            {
+                WriteWindow(lastWindow, now);
+                lastWindow = now;
+            }
+            if (first || now - lastHealth >= kHealthMs)
+            {
+                spdlog::info("recorder: {} threads sampled, {} calls counted so far", threads_.size(), totalCalls_);
+                lastHealth = now;
+            }
+            first = false;
+            Sleep(kSampleSleepMs);
+        }
+    }
+
+  private:
+    void RefreshThreads()
+    {
+        const DWORD self = GetCurrentThreadId();
+        const DWORD pid = GetCurrentProcessId();
+        std::map<DWORD, HANDLE> seen;
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snapshot == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof entry;
+        for (BOOL ok = Thread32First(snapshot, &entry); ok; ok = Thread32Next(snapshot, &entry))
+        {
+            if (entry.th32OwnerProcessID != pid || entry.th32ThreadID == self)
+            {
+                continue;
+            }
+            const auto have = threads_.find(entry.th32ThreadID);
+            if (have != threads_.end())
+            {
+                seen.emplace(have->first, have->second);
+                threads_.erase(have);
+                continue;
+            }
+            HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
+                                  entry.th32ThreadID);
+            if (h != nullptr)
+            {
+                seen.emplace(entry.th32ThreadID, h);
+            }
+        }
+        CloseHandle(snapshot);
+        for (auto &[tid, h] : threads_) // the ones that are gone
+        {
+            CloseHandle(h);
+        }
+        threads_ = std::move(seen);
+    }
+
+    // Suspend, copy, resume: nothing in between allocates, locks or logs.
+    bool Take(DWORD tid, HANDLE h)
+    {
+        if (SuspendThread(h) == static_cast<DWORD>(-1))
+        {
+            return false;
+        }
+        CONTEXT context{};
+        context.ContextFlags = CONTEXT_CONTROL;
+        bool ok = GetThreadContext(h, &context) != FALSE;
+        if (ok)
+        {
+            capture_.tid = tid;
+            capture_.eip = context.Eip;
+            capture_.words = 0;
+            MEMORY_BASIC_INFORMATION region{};
+            if (VirtualQuery(reinterpret_cast<const void *>(context.Esp), &region, sizeof region) != 0)
+            {
+                const auto end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+                const std::size_t words = std::min<std::size_t>(kStackWords, (end - context.Esp) / 4);
+                if (dao::TryCopy(capture_.stack.data(), context.Esp, words * 4))
+                {
+                    capture_.words = words;
+                }
+            }
+        }
+        ResumeThread(h);
+        return ok;
+    }
+
+    void SampleAll()
+    {
+        for (const auto &[tid, h] : threads_)
+        {
+            if (!Take(tid, h))
+            {
+                continue;
+            }
+            ++window_.samples;
+            if (text_.Contains(capture_.eip))
+            {
+                ++window_.eip[Preferred(capture_.eip)];
+                ++window_.inExe[tid];
+            }
+            // Return addresses on the stack, each counted once per sample.
+            std::array<std::uint32_t, kMaxReturnsPerSample> found{};
+            std::size_t count = 0;
+            for (std::size_t i = 0; i < capture_.words && count < found.size(); ++i)
+            {
+                const std::uint32_t value = capture_.stack[i];
+                if (!text_.Contains(value) || value < text_.begin + 7)
+                {
+                    continue;
+                }
+                std::array<std::byte, 7> before{};
+                std::memcpy(before.data(), reinterpret_cast<const void *>(value - 7), before.size());
+                if (!dao::core::EndsWithCall(before))
+                {
+                    continue;
+                }
+                const auto seen = std::span(found.data(), count);
+                if (std::ranges::find(seen, value) == seen.end())
+                {
+                    found[count++] = value;
+                }
+            }
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                ++window_.stack[Preferred(found[i])];
+            }
+        }
+    }
+
+    void WriteCensus(ULONGLONG now)
+    {
+        // The application's state: -1 where it cannot be read (not made
+        // yet, or torn down).
+        int paused = -1;
+        int mode = -1;
+        int second = -1;
+        if (const auto app = dao::TryRead<std::uint32_t>(dao::Module::Address(dao::addr::kClientExoApp));
+            app && *app != 0)
+        {
+            using App = dao::CClientExoApp;
+            if (const auto v = dao::TryRead<std::uint8_t>(*app + App::kPausedFlag + App::kFlagValue))
+            {
+                paused = *v != 0 ? 1 : 0;
+            }
+            if (const auto v = dao::TryRead<std::uint8_t>(*app + App::kSecondFlag + App::kFlagValue))
+            {
+                second = *v != 0 ? 1 : 0;
+            }
+            if (const auto holder = dao::TryRead<std::uint32_t>(*app + App::kModeHolder); holder && *holder != 0)
+            {
+                if (const auto v = dao::TryRead<std::int32_t>(*holder + App::kModeValue))
+                {
+                    mode = *v;
+                }
+            }
+        }
+        calls_ << now << "\tstatus\t" << paused << '\t' << mode << '\t' << second << '\n';
+
+        const auto targets = Targets();
+        for (std::size_t i = 0; i < targets.size(); ++i)
+        {
+            if (!IsAttached(i))
+            {
+                continue;
+            }
+            const std::uint32_t count = CallCount(i);
+            const std::uint32_t delta = count - previous_[i];
+            previous_[i] = count;
+            if (delta == 0)
+            {
+                continue;
+            }
+            totalCalls_ += delta;
+            calls_ << now << "\tcall\t" << std::hex << "0x" << targets[i].address << std::dec << '\t' << delta << '\t'
+                   << targets[i].label << '\n';
+        }
+        calls_.flush();
+    }
+
+    void WriteWindow(ULONGLONG from, ULONGLONG to)
+    {
+        const std::string span = std::to_string(from) + '\t' + std::to_string(to) + '\t';
+        samples_ << span << "samples\t0\t" << window_.samples << '\n';
+        for (const auto &[tid, n] : window_.inExe)
+        {
+            samples_ << span << "thread\t" << tid << '\t' << n << '\n';
+        }
+        for (const auto &[address, n] : window_.eip)
+        {
+            samples_ << span << "eip\t0x" << std::hex << address << std::dec << '\t' << n << '\n';
+        }
+        for (const auto &[address, n] : window_.stack)
+        {
+            samples_ << span << "stack\t0x" << std::hex << address << std::dec << '\t' << n << '\n';
+        }
+        samples_.flush();
+        window_ = Window{};
+    }
+
+    Text text_;
+    std::vector<std::uint32_t> previous_;
+    std::uint64_t totalCalls_ = 0;
+    std::map<DWORD, HANDLE> threads_;
+    Capture capture_;
+    Window window_;
+    std::ofstream calls_;
+    std::ofstream samples_;
+};
+
+DWORD WINAPI RecorderThread(LPVOID parameter)
+{
+    auto *recorder = static_cast<Recorder *>(parameter);
+    recorder->Run();
+    return 0;
+}
+
+} // namespace
+
+bool StartRecorder()
+{
+    // The exe's code, from its section table as mapped.
+    constexpr std::size_t kHeaderBytes = 0x1000;
+    const auto *headers = reinterpret_cast<const std::byte *>(dao::Module::Base());
+    const auto text = dao::core::FindSection(std::span(headers, kHeaderBytes), ".text");
+    if (!text)
+    {
+        spdlog::error("recorder: no .text section in the exe's headers");
+        return false;
+    }
+    const Text range{.begin = dao::Module::Base() + text->rva,
+                     .end = dao::Module::Base() + text->rva + text->virtualSize};
+    // Lives as long as the process: the thread runs until the game exits,
+    // and the files are flushed as they are written, so nothing is lost
+    // when it is killed with the rest.
+    auto *recorder = new Recorder(range);
+    if (!recorder->Open())
+    {
+        spdlog::error("recorder: could not open probe-calls.tsv and probe-samples.tsv in {}",
+                      dao::LogDirectory().string());
+        delete recorder;
+        return false;
+    }
+    HANDLE thread = CreateThread(nullptr, 0, &RecorderThread, recorder, 0, nullptr);
+    if (thread == nullptr)
+    {
+        spdlog::error("recorder: could not start its thread, error {}", GetLastError());
+        delete recorder;
+        return false;
+    }
+    CloseHandle(thread);
+    spdlog::info("recorder: started; .text {:#010x}-{:#010x}; files in {}", Preferred(range.begin),
+                 Preferred(range.end), dao::LogDirectory().string());
+    return true;
+}
+
+} // namespace probe
