@@ -784,6 +784,36 @@ DAO_ADDRESS(kAIMaster_ClearEvents, "AIMaster::ClearEvents", 0x0064AC80)
 DAO_ADDRESS(kAIMaster_DeleteEventData, "AIMaster::DeleteEventData", 0x0064A520) // (id, data)
 DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
 DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
+
+// Conversations (dao/Dialogue.h), read 2026-09-30. The engine's
+// conversation has no vtable; its file (GFF4 "CONV") is at +0x20, its size
+// at +0x24, the line spoken last at +0x38, and each function below is
+// __thiscall on it with a line's index, `ret 4`. Start checks the file's
+// header and speaks the first line; IsLineAvailable is the test every
+// line offered passes; FirstAvailable (__thiscall (count, const int
+// *lines)) gives the first NPC line of a list to pass it; PlayLine speaks
+// an NPC line and offers its replies (OfferReplies, which keeps the
+// children that are replies and pass); Advance goes on from a chosen
+// reply; End frees the participants. Dialogue mode keeps the conversation
+// on the screen at +0x1C8, the NPC line at +0x2C0 and the replies shown
+// at +0x1A8 (a std::vector of line indices, in the order shown, a
+// fast-path reply first): ShowResponses (__thiscall (list, flag), `ret
+// 8`) fills it, AddResponse (__thiscall (line), `ret 4`) adds one to the
+// screen through ConversationData::AddResponse (__thiscall (text, icon),
+// `ret 8`), which makes a Response (0x90 bytes: Text, Icon) in the data
+// tree's Conversation.Responses. The names are ours.
+DAO_ADDRESS(kConversation_Start, "Conversation::Start", 0x007F2210)
+DAO_ADDRESS(kConversation_IsLineAvailable, "Conversation::IsLineAvailable", 0x007F0D30)
+DAO_ADDRESS(kConversation_FirstAvailable, "Conversation::FirstAvailable", 0x007F1100)
+DAO_ADDRESS(kConversation_PlayLine, "Conversation::PlayLine", 0x007F1EF0)
+DAO_ADDRESS(kConversation_OfferReplies, "Conversation::OfferReplies", 0x007F1A40)
+DAO_ADDRESS(kConversation_Advance, "Conversation::Advance", 0x007F1910)
+DAO_ADDRESS(kConversation_End, "Conversation::End", 0x007F0F50)
+DAO_ADDRESS(kGameModeDialog_ShowResponses, "GameModeDialog::ShowResponses", 0x00690B70)
+DAO_ADDRESS(kGameModeDialog_AddResponse, "GameModeDialog::AddResponse", 0x00690810)
+DAO_ADDRESS(kConversationData_Constructor, "ConversationData::ConversationData", 0x0068FF10)
+DAO_ADDRESS(kConversationData_AddResponse, "ConversationData::AddResponse", 0x00690670)
+DAO_ADDRESS(kResponse_Constructor, "Response::Response", 0x0068D2A0)
 DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
 
 // The game's data tables (dao/Gda.h), read 2026-09-30. The object in this

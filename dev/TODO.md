@@ -63,6 +63,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** scripts run inside a conversation's callbacks, and conversations are authored in the toolset. Changing a conversation at run time (a line, a choice, a condition) is out of their reach.
 - **Leads:** `GameModeDialog`; the dialogue's messages (`SelectResponseMessage`); the conversation resource, a GFF file (`tools/gff4.py` reads the format).
 - **Done when:** a plugin sees each line and choice as it is shown, and can add or hide a choice.
+- **Done in code, not yet seen in play (2026-09-30):** `dao/Dialogue.h`. The engine's conversation object holds its file (GFF4 `CONV`), and a line is offered only if `Conversation::IsLineAvailable` (`0x007F0D30`) passes it, so `OnLineAvailable` can hide any line or offer one whose condition fails. `OnNpcLine` (on `PlayLine`, `0x007F1EF0`) and `OnReplies` (after dialogue mode's `ShowResponses`, `0x00690B70`) see what is spoken and offered. The lines are read from the file by a GFF4 reader in `core/` (`Gff4.h`, `Conversation.h`), tested, and checked against `tools/gff4.py` on 104 of the game's conversations. `examples/dialogue` logs a conversation. Left: seeing it in play; choosing a reply from a plugin (`SelectResponseMessage`); adding a line the file does not have, which would mean giving the engine a changed file.
 
 ## 7. The engine's messages, typed
 

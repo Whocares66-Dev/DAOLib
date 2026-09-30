@@ -139,11 +139,14 @@ add_library(
     STATIC
     src/dao/core/CallSite.cpp
     src/dao/core/Exceptions.cpp
+    src/dao/core/Conversation.cpp
     src/dao/core/Fingerprint.cpp
     src/dao/core/FunctionTable.cpp
+    src/dao/core/Gff4.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
     src/dao/Data.cpp
+    src/dao/Dialogue.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp
