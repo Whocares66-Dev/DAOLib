@@ -75,6 +75,10 @@ dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::C
 
 `dao::script::id` has every command's number by its script name. The engine fills its command table after plugins load; an intercept made at load is installed as soon as it has (`OnCommandsReady`, a detour on `InitializeCommands`), one made later at once. `src/plugins/example` is a whole plugin doing this, and a test of it in play: it intercepts `GetCombatState` beside the probe's own shadow of it, compares the answer with `CCCreature::CombatState()`, and calls `api::GetTag` from inside the intercept.
 
+## The game's data tables
+
+`dao/Gda.h`: the GDA tables the engine has loaded (abilities, items, packages, ranges, 162 in all), read by table, row id and column name: `dao::gda::GetInt(Table::AbilitiesTalents, ability, "TargetType")`, and `GetFloat`. The tables are the scripts' `TABLE_*` numbers, now `dao::script::Table` (from `2da_constants_h.nss`); a column is found by the game's hash of its name, the CRC32 of the lowercased name as UTF-16LE (`dao/core/GdaHash.h`, tested against hashes the engine itself passes, and matching all 2,205 column names xoreos knows). These go straight to the engine's table getters, the ones `GetM2DAInt` and `GetM2DAFloat` use. The example plugin compares the two ways in play.
+
 ## Every frame
 
 `dao/Frame.h`: `dao::OnFrame(callback)` runs a plugin's code once per frame, just before the game's update, on the thread that runs it. The update is `EclipseGame::Update` (`0x00412EB0`), which `Eclipse::UpdateTask` calls each frame on the object in `g_eclipseGame`. Whether that thread is the scripts' own, and so whether a frame callback may call script commands, is `dao::FrameThreadId()` against `dao::script::ScriptThreadId()`; the probe logs the two from the next session, with frames counted paused and unpaused.

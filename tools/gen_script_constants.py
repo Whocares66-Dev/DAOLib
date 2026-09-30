@@ -33,6 +33,12 @@ OUT = os.path.join(ROOT, "src", "dao", "generated", "ScriptConstants.h")
 EFFECTS = os.path.join(
     ROOT, "toolset", "extract", "scripts", "_Game Effects", "effect_constants_h.nss"
 )
+# The game's data tables by number (TABLE_ABILITIES_TALENTS = 1, ...), what
+# dao/Gda.h and the scripts' GetM2DA* commands take; only the TABLE_
+# constants are taken from it.
+TABLES = os.path.join(
+    ROOT, "toolset", "extract", "scripts", "_Core Includes", "2da_constants_h.nss"
+)
 
 CONSTANT = re.compile(
     r"^\s*(?:const\s+)?(int|float)\s+([A-Z][A-Z0-9_]*)\s*=\s*([^;]+?)\s*;", re.M
@@ -42,6 +48,11 @@ RENAMES = {
     "OBJECT_TYPE_": "ObjectTypeFlags",  # the scripts' bitmask, not dao::core::ObjectType
 }
 MIN_GROUP = 3
+# Prefixes that make one enum whatever words follow, where grouping by the
+# first two words would split them: TABLE_AI_*, TABLE_ITEMS, ... are all
+# tables.
+FORCED = {"TABLE_"}
+RENAMES["TABLE_"] = "Table"
 # Names <Windows.h> defines as macros, which a C++ constant cannot share;
 # C++ has true and false.
 SKIPPED = {"TRUE", "FALSE"}
@@ -105,6 +116,10 @@ def groups(constants):
     for name, (kind, _, _) in constants.items():
         if kind != "int":
             continue
+        forced = next((p for p in FORCED if name.startswith(p)), None)
+        if forced:
+            by_two.setdefault(forced, []).append(name)
+            continue
         parts = name.split("_")
         if len(parts) < 3:
             continue
@@ -114,7 +129,7 @@ def groups(constants):
         names = by_two[key]
         if len(names) < MIN_GROUP:
             continue
-        prefix = common_prefix(names)
+        prefix = key if key in FORCED else common_prefix(names)
         enum = RENAMES.get(prefix) or pascal(prefix)
         members, used = [], set()
         for name in names:
@@ -176,9 +191,11 @@ def header(constants, sources):
 
 def main(argv):
     ldf, name = script_ldf()
-    have_effects = os.path.exists(EFFECTS)
+    have_effects = os.path.exists(EFFECTS) and os.path.exists(TABLES)
     if ldf is None or not have_effects:
-        missing = "the game's scripts.erf" if ldf is None else os.path.normpath(EFFECTS)
+        missing = (
+            "the game's scripts.erf" if ldf is None else "the extracted toolset scripts"
+        )
         if "--check" in argv:
             print(f"gen_script_constants: no {missing}, nothing to check")
             return 0
@@ -188,8 +205,14 @@ def main(argv):
     parse(ldf, name, raw)
     with open(EFFECTS, encoding="latin-1") as f:
         parse(f.read(), "effect_constants_h.nss", raw)
+    with open(TABLES, encoding="latin-1") as f:
+        tables = {}
+        parse(f.read(), "2da_constants_h.nss", tables)
+        for k, v in tables.items():
+            if k.startswith("TABLE_"):
+                raw.setdefault(k, v)
     constants = resolve(raw)
-    text = header(constants, [name, "effect_constants_h.nss"])
+    text = header(constants, [name, "effect_constants_h.nss", "2da_constants_h.nss"])
     if "--check" in argv:
         try:
             with open(OUT, encoding="utf-8") as f:

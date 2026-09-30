@@ -12,6 +12,7 @@
 // The probe also takes GetCombatState's slot in the table, so the two
 // chain: whichever installed last runs first and Proceeds into the other.
 #include "dao/ClientExoApp.h"
+#include "dao/Gda.h"
 #include "dao/Log.h"
 #include "dao/Messages.h"
 #include "dao/Plugin.h"
@@ -21,12 +22,26 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 
 namespace
 {
 
 std::atomic<std::uint32_t> g_calls{0};
 std::atomic<std::uint32_t> g_matched{0};
+
+// A cell of the ability table read two ways: straight from the table
+// (dao/Gda.h) and through the scripts' GetM2DAInt (dao::script::api).
+void CheckTables()
+{
+    using dao::script::Table;
+    constexpr auto kAbilities = static_cast<std::int32_t>(Table::AbilitiesTalents);
+    const std::int32_t row = dao::script::api::GetM2DARowIdFromRowIndex(kAbilities, 0);
+    const auto direct = dao::gda::GetInt(Table::AbilitiesTalents, row, "TargetType");
+    const std::int32_t script = dao::script::api::GetM2DAInt(kAbilities, L"TargetType", row);
+    spdlog::info("ability table, row {} TargetType: {} from the table, {} from GetM2DAInt", row,
+                 direct ? std::to_string(*direct) : std::string("nothing"), script);
+}
 
 int CheckCombatState(dao::script::CommandCall &call)
 {
@@ -49,6 +64,7 @@ int CheckCombatState(dao::script::CommandCall &call)
         const std::wstring tag = dao::script::api::GetTag(*creature);
         spdlog::info("GetCombatState({:#010x} \"{}\") = {}, the field says {}; {} of {} calls matched", *creature,
                      dao::Utf8(tag), *answer, object != nullptr ? object->CombatState() : -1, matched, n);
+        CheckTables();
     }
     return result;
 }

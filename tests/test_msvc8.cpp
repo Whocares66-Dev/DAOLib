@@ -1,3 +1,4 @@
+#include "dao/core/GdaHash.h"
 #include "dao/core/Msvc8.h"
 #include "dao/core/ScriptArray.h"
 #include "dao/core/VmStack.h"
@@ -113,4 +114,15 @@ TEST_CASE("the VM stack's n-th value counts down from the top", "[vmstack]")
     CHECK_FALSE(stack.Word(2, static_cast<std::int32_t>(VmTag::Object)).has_value()); // another type
     CHECK_FALSE(stack.Tag(3).has_value());                                            // past the bottom
     CHECK_FALSE(VmStackView{}.Tag(0).has_value());
+}
+
+TEST_CASE("a GDA column is the CRC32 of its lowercased UTF-16 name", "[gda]")
+{
+    using dao::core::GdaColumnHash;
+    // Hashes the engine's ability handler passes, and xoreos's names for them.
+    STATIC_REQUIRE(GdaColumnHash("TargetType") == 0x0F642429u);
+    CHECK(GdaColumnHash("UseType") == 0xACEFC4C2u);
+    CHECK(GdaColumnHash("AutoTarget") == 0x1C7CA631u);
+    CHECK(GdaColumnHash("AOE_Type") == 0x2EB7565Cu);
+    CHECK(GdaColumnHash("targettype") == GdaColumnHash("TARGETTYPE")); // case does not matter
 }

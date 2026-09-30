@@ -265,6 +265,17 @@ DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
 DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
 DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
 
+// The game's data tables (dao/Gda.h), read 2026-09-30. The object in this
+// global keeps them; +4 of it is its store, made on first use (0x00A2CBC0).
+// Its getters, __thiscall (table, row, column hash, out), `ret 0x10`, find
+// the table by number (0x004DF580 on the store) and call that table's
+// typed getter, C2DASource's slot 10 for an int (as GetM2DAInt does) and
+// slot 9 for a float (as GetM2DAFloat does); the ones beside them call
+// slots 8 and 11, strings and bools by position, not yet wrapped.
+DAO_DATA(kGdaTables, "g_gdaTables", 0x00C1D090)
+DAO_ADDRESS(kGdaTables_GetInt, "GdaTables::GetInt", 0x00A2CCC0)
+DAO_ADDRESS(kGdaTables_GetFloat, "GdaTables::GetFloat", 0x00A2CC80)
+
 // The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
 // application's array at +0xCC.

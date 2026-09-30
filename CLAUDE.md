@@ -31,7 +31,7 @@ src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detour
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
                 the engine's messages (Messages.h), the game's modes (GameModes.h), a callback per frame
-                (Frame.h),
+                (Frame.h), the game's data tables (Gda.h),
                 Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py),
                 the scripts' constants as enums (gen_script_constants.py), every script command as a
@@ -39,7 +39,7 @@ src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), 
                 (gen_message_handlers.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
                 CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray,
-                VmStack; tested
+                VmStack, GdaHash; tested
 src/plugins/    one folder per plugin: probe/ watches and checks, example/ shows how a plugin uses daolib
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
