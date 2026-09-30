@@ -1,6 +1,6 @@
 # Plan
 
-A CommonLibSSE-NG-style library for Dragon Age: Origins, plus the SKSE-style loader it needs: native plugins that hook the engine where the toolset's scripting cannot reach. The first use case is [a turn-based mode](TURN_BASED.md).
+A CommonLibSSE-NG-style library for Dragon Age: Origins, plus the SKSE-style loader it needs: native plugins that hook the engine where the toolset's scripting cannot reach. The first use case is a turn-based mode, built in its own repository, `DAOTurnBased`, on this one ([TURN_BASED.md](TURN_BASED.md) keeps the engine findings made for it).
 
 ## The shape
 
@@ -27,9 +27,9 @@ So addresses are fixed per build and there is only one build; there is no unpack
 
 1. **Loader and library skeleton.** Done 2026-09-29.
 2. **Prove the chain in play.** Done 2026-09-29. Deployed, the game started, `loader.log` showed the entry point detoured and the probe loaded, and the game ran as before.
-3. **First hook.** Partly done, 2026-09-29. The pause key's handler and `CClientExoApp::SetPaused` are found and hooked. The engine called the setter at startup, and the hook read the object's type through RTTI and the flag through `dao::CClientExoApp`. Still to see in `probe.log` during play: the pause key itself, and auto-pause on combat.
-4. **Read for the turn-based mode** ([TURN_BASED.md](TURN_BASED.md)).
-5. **Grow the library** as the reading does: a header per engine class that a plugin needs, each field with the evidence for its offset.
+3. **First hook.** Done 2026-09-29/30. The pause key's handler and `CClientExoApp::SetPaused` are hooked; the engine's call to the setter at startup was seen, with the object's type read through RTTI.
+4. **The engine's layers, verified in play.** Done 2026-09-30, in seven sessions ([LIBRARY.md](LIBRARY.md)): the script command table and the VM stack, calling and intercepting commands, the value types, objects and their fields, script events, the frame, the game modes, the data tables.
+5. **Grow the library** as plugins need it: a header per engine class, each field with the evidence for its offset. `DAOTurnBased` records where the library falls short; [LIBRARY.md](LIBRARY.md), "What comes next", is the list.
 
 ## Rules
 
