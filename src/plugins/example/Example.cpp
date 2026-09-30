@@ -155,7 +155,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
 
     // Sending a message as the engine does: once the player has explored
     // for ten seconds or so (600 frames), centre the camera on the creature
-    // the player controls, and log whether the mode handled it.
+    // the player controls, and log whether the mode handled it. In combat
+    // the same message goes to GameModeCombat, which inherits explore's
+    // handlers.
     dao::OnFrame([] {
         static std::uint32_t exploring = 0;
         static bool sent = false;

@@ -146,7 +146,11 @@ DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
 // receiver's handler setup calls, 314 handlers in all
 // (dev/MESSAGE_HANDLERS.md). Dispatch(receiver, message) asks the
 // receiver's +4 byte whether it takes messages, finds the handler (Find)
-// and returns its answer, false for none. Send is the free function around
+// and returns its answer, false for none. A class id is a record
+// {number, parent's record}, and Find walks the receiver's chain and the
+// message's, so a class inherits its bases' handlers: GameModeCombat,
+// which registers none, answers with GameModeExplore's (its slot 0,
+// 0x0076E7F0, gives a record whose parent is explore's, 0x00C06988). Send is the free function around
 // it that 74 places call, __cdecl (message, receiver), a no-op for a null
 // receiver: synchronous, on the caller's thread, and the message stays the
 // caller's. The names are ours.
