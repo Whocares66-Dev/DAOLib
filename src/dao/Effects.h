@@ -16,9 +16,9 @@
 // own figures are CGameEffect::Duration, Remaining and SetRemaining
 // (dao/Structures.h).
 //
-// What this does not reach: regeneration of health, mana and stamina, a
-// creature property ticked by its own update, and anything a script times
-// itself with DelayEvent. Only temporary effects age; permanent and
+// What this does not reach: regeneration of health, mana and stamina,
+// which dao/Clock.h holds and advances with the effects, and anything a
+// script times itself with DelayEvent. Only temporary effects age; permanent and
 // instant ones are not affected. Not yet seen in play.
 #pragma once
 

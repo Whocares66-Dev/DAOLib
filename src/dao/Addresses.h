@@ -578,6 +578,18 @@ DAO_ADDRESS(kCGameEffect_AddElapsed, "CGameEffect::AddElapsed", 0x0079F2A0)
 DAO_ADDRESS(kEffectsHolder_Update, "SEffectsHolder::Update", 0x007A1500)
 DAO_ADDRESS(kEffectsHolder_AgeEffect, "SEffectsHolder::AgeEffect", 0x007A0B10)
 DAO_ADDRESS(kCGameEffect_Prepare, "CGameEffect::Prepare", 0x0065C760)
+// Regeneration, read 2026-09-30 (dao/Clock.h). UpdateRegeneration,
+// __thiscall on the creature's stats (ms, bool in combat), `ret 8`, adds
+// the milliseconds to the stats' +0x58 and, each 3000 of them out of
+// combat or 2000 in combat, has every property regenerate (RegenerateAll,
+// 0x00795BA0), the living only. A depletable property's regeneration step
+// (CreaturePropertyDepletable's slot 13, 0x0079CAD0) skips if its +0x74
+// is set, else adds the total of the property its +0x64 (out of combat) or
+// +0x6C (in combat) names: properties.gda's NonCombatEffect and
+// CombatEffect. The names are ours.
+DAO_ADDRESS(kCCCreatureStats_UpdateRegeneration, "CCCreatureStats::UpdateRegeneration", 0x0071B0E0)
+DAO_ADDRESS(kCCCreatureStats_RegenerateAll, "CCCreatureStats::RegenerateAll", 0x00795BA0)
+DAO_ADDRESS(kCreaturePropertyDepletable_Regenerate, "CreaturePropertyDepletable::Regenerate", 0x0079CAD0)
 // The parameters by index of CDataArrays, the base CGameEffect and
 // CScriptEvent share at +0 (the RTTI's base class descriptors), from
 // GetEffectInteger and its three siblings (one body, 0x00651270) and
