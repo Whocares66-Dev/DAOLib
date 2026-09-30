@@ -1,9 +1,11 @@
 #include "dao/core/Msvc8.h"
 #include "dao/core/ScriptArray.h"
+#include "dao/core/VmStack.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -92,4 +94,23 @@ TEST_CASE("a script array's elements are its payload's vector", "[arrays]")
 
     const dao::core::ArrayRep empty{0x43, nullptr};
     CHECK(empty.Elements().empty());
+}
+
+TEST_CASE("the VM stack's n-th value counts down from the top", "[vmstack]")
+{
+    using dao::core::VmStackView;
+    using dao::core::VmTag;
+    // Bottom to top: an int 7, an object 0x82, a float 1.5 (a command's first argument on top).
+    const std::array<std::int32_t, 3> tags{3, 6, 4};
+    std::uint32_t oneAndAHalf = 0;
+    const float value = 1.5f;
+    std::memcpy(&oneAndAHalf, &value, sizeof value);
+    const std::array<std::uint32_t, 3> values{7, 0x82, oneAndAHalf};
+    const VmStackView stack{3, tags.data(), values.data()};
+    CHECK(stack.Tag(0) == static_cast<std::int32_t>(VmTag::Float));
+    CHECK(stack.Word(1, static_cast<std::int32_t>(VmTag::Object)) == 0x82u);
+    CHECK(stack.Word(2, static_cast<std::int32_t>(VmTag::Int)) == 7u);
+    CHECK_FALSE(stack.Word(2, static_cast<std::int32_t>(VmTag::Object)).has_value()); // another type
+    CHECK_FALSE(stack.Tag(3).has_value());                                            // past the bottom
+    CHECK_FALSE(VmStackView{}.Tag(0).has_value());
 }

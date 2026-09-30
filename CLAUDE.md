@@ -29,13 +29,15 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
-                the script's value types (Structures.h, String.h), Field.h; dev/LIBRARY.md says how they fit
+                the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
+                Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py),
                 the scripts' constants as enums (gen_script_constants.py), every script command as a
                 C++ function (gen_script_api.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
-                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray; tested
-src/plugins/    one folder per plugin; probe/ is the first
+                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray,
+                VmStack; tested
+src/plugins/    one folder per plugin: probe/ watches and checks, example/ shows how a plugin uses daolib
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,

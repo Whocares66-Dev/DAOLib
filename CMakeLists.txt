@@ -108,6 +108,7 @@ add_library(
     src/dao/Module.cpp
     src/dao/SafeRead.cpp
     src/dao/Script.cpp
+    src/dao/ScriptHooks.cpp
     src/dao/String.cpp
     src/dao/TypeName.cpp
 )
@@ -180,6 +181,17 @@ set_target_properties(
 )
 target_include_directories(probe PRIVATE "${CMAKE_BINARY_DIR}/generated")
 target_link_libraries(probe PRIVATE daolib)
+
+# The example plugin: how a plugin uses daolib, and a test of it in play.
+add_library(example MODULE src/plugins/example/Example.cpp)
+dao_apply_warnings(example)
+set_target_properties(
+    example
+    PROPERTIES
+        PREFIX ""
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/daolib/plugins"
+)
+target_link_libraries(example PRIVATE daolib)
 
 # ---------------------------------------------------------------------------
 # Tests, over dao/core: what can be checked without the game.

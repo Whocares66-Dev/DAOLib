@@ -59,6 +59,22 @@ const std::wstring tag = api::GetTag(creature);
 
 `OBJECT_SELF`, the object a command acts for when the script does not say, is `dao::script::Self()`, the commands object's +8; `ScopedSelf` sets it for a call. Calls belong on the scripts' thread (the game's logic thread, where a hook on a command or on the engine's update is called), since the VM is not made for two. A `resource` (a file by name, `R"gen00fl_dog.utc"` in a script) is `dao::Resource`: on the stack a string under a tag of its own. The four commands with a `player` or `any` argument are not wrapped; the header lists them, and `Array::Size()` does what `GetArraySize` does. The probe calls three commands this way from inside its shadows and compares their answers with what it knows (`dev/PROBE.md`).
 
+## Intercepting a script command
+
+`dao/ScriptHooks.h`: a plugin's function runs whenever a script calls a command, reads the call's arguments in place on the VM's stack, and decides what happens. `Proceed()` runs the handler the intercept replaced, the engine's command or another plugin's intercept, so intercepts from several plugins chain; the answer can then be read and replaced.
+
+```cpp
+dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::CommandCall &call) {
+    const auto creature = call.Object(0);   // the first argument
+    const int result = call.Proceed();       // the engine answers
+    if (result == dao::script::kOk && KeepCalm(creature))
+        call.SetIntAnswer(0);                // the script sees 0
+    return result;
+});
+```
+
+`dao::script::id` has every command's number by its script name. The engine fills its command table after plugins load; an intercept made at load is installed as soon as it has (`OnCommandsReady`, a detour on `InitializeCommands`), one made later at once. `src/plugins/example` is a whole plugin doing this, and a test of it in play: it intercepts `GetCombatState` beside the probe's own shadow of it, compares the answer with `CCCreature::CombatState()`, and calls `api::GetTag` from inside the intercept.
+
 ## The scripts' constants
 
 `dao/generated/ScriptConstants.h` (`tools/gen_script_constants.py`) has every constant the engine declares in `script.ldf` and the effect types the scripts declare in `effect_constants_h.nss`: 609, as 37 typed enums (`dao::script::EventType`, `EffectType`, `EffectDurationType`, `CommandResult`, `InventorySlot`, `ObjectTypeFlags`, ...) and again under their script names (`dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE`). The accessors return the enums where the constants name the field: `CScriptEvent::Type()` is an `EventType`, `CGameEffect::Type()` an `EffectType`. An enum is 32-bit, so a number no constant names, like a script's own event type, still fits.
@@ -107,6 +123,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
 | Calling commands from C++: `Invoke` and the 661 generated wrappers | 2026-09-30 | compiled; three checked by the probe from the next session |
+| Intercepting commands: `InterceptCommand`, `CommandCall`, chaining across plugins | 2026-09-30 | compiled; the example plugin uses it from the next session |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
 | Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |
