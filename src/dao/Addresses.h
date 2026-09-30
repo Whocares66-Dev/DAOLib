@@ -107,15 +107,70 @@ DAO_ADDRESS(kCClientExoApp_GetCreatureById, "CClientExoApp::GetCreatureById", 0x
 DAO_ADDRESS(kCClientExoApp_GetPlaceableById, "CClientExoApp::GetPlaceableById", 0x005D5B40)
 DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x005D5C60)
 // Queue a command on an object: __thiscall(command, addToFront, override),
-// `ret 0xC`, returns 1. Seen in play 2026-09-30 (dev/TURN_BASED.md): about
-// 200 commands in a fight, all on CCCreature, from the scripts'
-// AddCommand, from FUN_006A21C0 (the player's direct control, "drive"
-// commands) and from FUN_0073D000 (the engine's own, effects among them).
-// The command's first word is a global sequence number in its low 16 bits
-// and the command type in bits 16-23: the script's COMMAND_TYPE_* numbers.
-// addToFront is AddCommand's bAddToFront; override its nOverrideAddBehavior,
-// -1 by default.
+// `ret 0xC`. Seen in play 2026-09-30 (dev/TURN_BASED.md): about 200
+// commands in a fight, all on CCCreature. Read 2026-09-30: it returns 0
+// only for a null command; any other it puts in the queue, at the front
+// (0x0073CCD0) or the back (0x00698C30), and returns 1, so the queue always
+// takes the command and no caller frees one after. Before that: a
+// player-issued command (+0x10) signals EVENT_TYPE_PLAYER_COMMAND_ADDED
+// (94) to the object, with the command's type as int 0; an override of -1
+// is looked up in the commands table (TABLE_COMMANDS, commands.gda) by the
+// command's type, its AddBehaviorSelf column if the object's current
+// command has the same type, else AddBehavior; then 1 clears the queue
+// (ClearAllCommands, soft), 2 clears it hard, and 3 clears it, soft or hard
+// by whether the new command's object 0 is not the creature's current
+// target; 0 just adds. After, a UseAbility queued on a creature is passed
+// on with its ability (0x0071DEE0).
+//
+// Its ten calls, by the address they return to, as a hook on it sees them:
+//   0x0066E1B4  the scripts' AddCommand
+//   0x006DA2C4  the client command table's AddCommand (below)
+//   0x0073D054  QueueNewCommand, the engine's own: the player's orders
+//               (QueuePlayerCommand, player issued) and the engine's
+//               reactions (effects, weapon draws, animations, jumps, moves)
+//   0x006A22AE  drive, the player steering the character directly
+//               (player issued)
+//   0x006A23C5  turn
+//   0x006A3A19  interact, for CCCreature::InteractWithObject
+//   0x00661A7E, 0x00661B1B  the script command SetActive: an animation and
+//               a wait at the front, static
+//   0x006D694C, 0x006D69CC  the client table's SetActive, the same
+// So whose a command is shows in the command itself: Command::PlayerIssued.
 DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
+// The engine's way to make and queue a command: __thiscall(type, parameters
+// (a CDataArrays), addToFront, static, playerIssued, override, the +8
+// word). Called from 13 places: effects (ExecuteEffect, from CCObject and
+// CCCreature), drawing and sheathing weapons with their animation (from
+// SetCombatState among others), modal abilities' animations, jumps, moves
+// and conversations, and QueuePlayerCommand. The names are ours.
+DAO_ADDRESS(kCCObject_QueueNewCommand, "CCObject::QueueNewCommand", 0x0073D000)
+// QueueNewCommand with playerIssued 1, not static: the player's orders, as
+// explore mode's PerformUseObjectMessage handler and the functions beside
+// it (0x007F6410, 0x007F64C0, 0x007F6690) queue them.
+DAO_ADDRESS(kCCObject_QueuePlayerCommand, "CCObject::QueuePlayerCommand", 0x0073D060)
+// The object's queue, read 2026-09-30 from GetCurrentCommand,
+// GetCommandByIndex and GetCommandQueueSize: a list at +0x2CC, its count
+// at +0x2D4 (the list's +8), and at +0x2DC a pointer to the slot holding
+// the current command, the queue's head. GetCurrentCommand is that read,
+// __thiscall with no arguments; GetCommandByIndex walks the list,
+// __thiscall(index), `ret 4`, null past its end.
+DAO_ADDRESS(kCCObject_GetCurrentCommand, "CCObject::GetCurrentCommand", 0x0073C5F0)
+DAO_ADDRESS(kCCObject_GetCommandByIndex, "CCObject::GetCommandByIndex", 0x0073C6D0)
+
+// A second script command table, beside CVirtualMachineCommands: RTTI's
+// CClientVirtualMachineCommands, a CVirtualMachineCmdImplementer, made by
+// the same start-up function (0x005DB7F0). Its InitializeCommands
+// registers 103 handlers of its own, among them an AddCommand and a
+// SetActive that queue commands as the others do. dao::script's table and
+// intercepts are the other table's. Whether single-player runs a script on
+// this one is not known yet: the probe counts its AddCommand's calls.
+// Read 2026-09-30.
+DAO_ADDRESS(kCClientVirtualMachineCommands_Constructor, "CClientVirtualMachineCommands::CClientVirtualMachineCommands",
+            0x006D3A00)
+DAO_ADDRESS(kCClientVirtualMachineCommands_InitializeCommands, "CClientVirtualMachineCommands::InitializeCommands",
+            0x006DB420)
+DAO_ADDRESS(kCClientVirtualMachineCommands_AddCommand, "CClientVirtualMachineCommands::AddCommand", 0x006DA1F0)
+DAO_ADDRESS(kCClientVirtualMachineCommands_SetActive, "CClientVirtualMachineCommands::SetActive", 0x006D67A0)
 
 // The game's update, as a task on the engine's worker threads: from the
 // deliberate crash of 2026-09-30, whose stack ran CClientExoApp's start-up

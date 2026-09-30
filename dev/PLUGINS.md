@@ -67,7 +67,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Find an object by id | `CClientExoApp::Get()->GetCreatureById(id)` and kin | `dao/ClientExoApp.h` |
 | Read an object's fields | `creature->CombatState()`, `->TeamId()`, `->Id()`, `->Type()`, casts `AsCreature()` | `dao/Objects.h` |
 | Read an effect or an event | `dao::CGameEffect`, `dao::CScriptEvent`, `CCObject::CurrentEvent()` | `dao/Structures.h` |
-| Read, keep or change a queued command | in an `AddCommand` intercept, `call.Command(1)`; `->Type()`, `->Target()`, `->Position()`, `->Ability()`, every parameter through `->Parameters()`; `dao::script::Copy(*command)` to keep one | `dao/Objects.h`, `dao/Script.h`, `dao/ScriptHooks.h` |
+| Read, keep or change a queued command | an object's queue, `creature->CurrentCommand()`, `->CommandAt(i)`, `->CommandQueueSize()`; in an `AddCommand` intercept, `call.Command(1)`; `->Type()`, `->Target()`, `->Position()`, `->Ability()`, every parameter through `->Parameters()`; `dao::script::Copy(*command)` to keep one | `dao/Objects.h`, `dao/Script.h`, `dao/ScriptHooks.h` |
 | Use strings, locations, arrays | `dao::WString`, `dao::CScriptLocation`, `dao::script::Array` | `dao/String.h`, `dao/Structures.h`, `dao/Script.h` |
 | Read a data table | `dao::gda::GetInt(Table::AbilitiesTalents, ability, "Cooldown")`, `GetFloat`, `GetString`, `GetBool`, `Rows(table)`, `Columns(table)`; columns per table in `dev/gda_tables.csv` | `dao/Gda.h` |
 | Pause, or switch the game's mode | `CClientExoApp::SetPaused`, `GameModeController::SetMode` | `dao/ClientExoApp.h`, `dao/GameModes.h` |

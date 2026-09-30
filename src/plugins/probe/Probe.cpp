@@ -29,6 +29,7 @@
 #include "dao/Module.h"
 #include "dao/Plugin.h"
 #include "dao/SafeRead.h"
+#include "dao/Script.h"
 #include "dao/TypeName.h"
 #include "dao/core/CallSite.h"
 
@@ -37,6 +38,7 @@
 #include <intrin.h>
 
 #include <array>
+#include <atomic>
 
 namespace
 {
@@ -144,13 +146,31 @@ int __fastcall QueueCommand(void *self, int edx, void *command, int second, int 
 {
     const auto chain = CallerChain(_AddressOfReturnAddress());
     const int result = g_queueCommand.Original()(self, edx, command, second, third);
-    std::array<std::uint32_t, 4> words{};
+    // All five words: the last is player issued (dao::Command).
+    std::array<std::uint32_t, 5> words{};
     dao::TryCopy(words.data(), reinterpret_cast<std::uintptr_t>(command), sizeof words);
     spdlog::info("QueueCommand from {:#010x} via {:#010x} {:#010x} {:#010x}: object {} at {}, command {} at {} "
-                 "[{:08x} {:08x} {:08x} {:08x}], args {} {}, result {}",
+                 "[{:08x} {:08x} {:08x} {:08x} {:08x}], args {} {}, result {}",
                  chain[0], chain[1], chain[2], chain[3], dao::TypeName(self), self, dao::TypeName(command), command,
-                 words[0], words[1], words[2], words[3], second, third, result);
+                 words[0], words[1], words[2], words[3], words[4], second, third, result);
     return result;
+}
+
+// The client command table's AddCommand (dao/Addresses.h,
+// CClientVirtualMachineCommands): whether single-player runs a script on
+// that table at all. Counted, the first calls and every 100th logged.
+dao::Detour<dao::script::Handler> g_clientAddCommand;
+std::atomic<std::uint32_t> g_clientAddCommands{0};
+
+int __fastcall ClientAddCommand(void *commands, int edx, int id, int paramCount)
+{
+    const std::uint32_t n = ++g_clientAddCommands;
+    if (n <= 5 || n % 100 == 0)
+    {
+        spdlog::info("client AddCommand, call {}, thread {}: commands {} at {}, command {}, {} parameters", n,
+                     GetCurrentThreadId(), dao::TypeName(commands), commands, id, paramCount);
+    }
+    return g_clientAddCommand.Original()(commands, edx, id, paramCount);
 }
 
 template <class Fn> void Place(dao::Detour<Fn> &detour, std::uintptr_t address, Fn hook, const char *what)
@@ -192,6 +212,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
           "GameModeController::HandleMessage(UserTogglePauseMessage)");
     Place(g_setPaused, dao::addr::kCClientExoApp_SetPaused, &SetPaused, "CClientExoApp::SetPaused");
     Place(g_queueCommand, dao::addr::kCCObject_QueueCommand, &QueueCommand, "CCObject::QueueCommand");
+    Place(g_clientAddCommand, dao::addr::kCClientVirtualMachineCommands_AddCommand, &ClientAddCommand,
+          "CClientVirtualMachineCommands::AddCommand");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
 
@@ -200,6 +222,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         static_cast<std::uint32_t>(dao::addr::kGameModeController_HandleUserTogglePause),
         static_cast<std::uint32_t>(dao::addr::kCClientExoApp_SetPaused),
         static_cast<std::uint32_t>(dao::addr::kCCObject_QueueCommand),
+        static_cast<std::uint32_t>(dao::addr::kCClientVirtualMachineCommands_AddCommand),
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",

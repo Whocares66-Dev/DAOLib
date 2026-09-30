@@ -317,13 +317,35 @@ class CCObject : public CGameObject
 
     // Queue a command, as the scripts' AddCommand does: at the back, or at
     // the front; overrideBehaviour is AddCommand's nOverrideAddBehavior, -1
-    // for the default. Every queued action of every creature, the player's
-    // included, went through this in play (dev/TURN_BASED.md).
+    // for the commands table's (dao/Addresses.h). Every queued action of
+    // every creature, the player's included, went through this in play
+    // (dev/TURN_BASED.md). The queue takes the command, from any of its
+    // callers: a detour on this that refuses one frees it
+    // (dao::script::DestroyStructure(EngineStructure::Command, command)),
+    // since nobody else will.
     int QueueCommand(Command *command, bool addToFront, int overrideBehaviour = -1)
     {
         using Fn = int(__fastcall *)(CCObject *, int, Command *, int, int);
         return reinterpret_cast<Fn>(Module::Address(addr::kCCObject_QueueCommand))(this, 0, command, addToFront ? 1 : 0,
                                                                                    overrideBehaviour);
+    }
+
+    // The queue: the command at its head, the one being carried out; one by
+    // position, 0 the head; and how many there are. Commands the queue
+    // owns, valid until the object moves on from them.
+    const Command *CurrentCommand() const
+    {
+        using Fn = const Command *(__fastcall *)(const CCObject *, int);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCCObject_GetCurrentCommand))(this, 0);
+    }
+    const Command *CommandAt(std::uint16_t index) const
+    {
+        using Fn = const Command *(__fastcall *)(const CCObject *, int, std::uint32_t);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCCObject_GetCommandByIndex))(this, 0, index);
+    }
+    std::int32_t CommandQueueSize() const
+    {
+        return Read<std::int32_t>(0x2D4);
     }
 };
 

@@ -156,6 +156,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Events on the stack; the event's type, creator and target | 2026-09-30 | checked 2026-09-30, fourth session: 3,635 `GetCurrentEvent` round trips, 4,514 event getter calls, all matching |
 | Arrays on the stack: `object[]` and `effect[]` | 2026-09-30 | checked 2026-09-30: 5 `GetTeam` answers, every member on the team asked for; 493 `GetEffects` answers with the right tag, all empty, so an effect element is not yet read in play |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
+| An object's command queue: the current command, one by position, the count; `QueueCommand`'s callers, and that the queue always keeps the command | 2026-09-30 | not yet: the probe logs every queued command's five words, the player-issued flag among them |
 | Data tables' strings, bools, row and column counts | 2026-09-30 | not yet: the example plugin compares abilities' Label, rows and columns with `GetM2DAString`, `GetM2DARows` and `GetM2DAColumns` |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
@@ -192,4 +193,5 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 - **Creatures.** Beyond the fields their getters give: attributes, health and mana or stamina, abilities, inventory, the party. From the constructors and NWN's namesakes.
 - **Talk tables.** A string by its string ref, from the engine; a plugin's own talk table beside the game's.
 - **Setters.** `dev/script_backends.csv` names the engine functions the set-commands call; each is a wrapper once its argument types are read from the command body, as `SetCombatState` was.
-- **The rest of the command.** Its +8 and the top byte of its word; the queue an object keeps them in (`GetCurrentCommand`, `GetCommandByIndex`).
+- **The rest of the command.** Its +8 and the top byte of its word; an event when a command starts and when it ends.
+- **The client command table.** `CClientVirtualMachineCommands`, 103 handlers of its own; whether single-player runs anything on it (the probe counts its `AddCommand`).

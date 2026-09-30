@@ -12,34 +12,57 @@
 namespace dao::core
 {
 
-// script.ldf's COMMAND_TYPE_*, and the types the exe's own command
-// constructors set that script.ldf does not declare (39 and 41), read
-// 2026-09-30 from the constant each passes to Command::SetType
-// (dao/Addresses.h). 32 is queued by the engine in play and made by no
-// script command.
+// Every command type the game has: the commands table (TABLE_COMMANDS,
+// commands.gda, 43 rows, tools/gda.py --dump commands), which QueueCommand
+// reads each type's add behaviour from. Named as script.ldf's
+// COMMAND_TYPE_* where it declares one (20 of them), else after the
+// table's label. Two differ: script.ldf calls 22 RECOVER, but the table
+// calls it "Move to Multiple Points" and CommandMoveToMultiLocations makes
+// it; and CommandMoveAwayFromObject makes 21, not 16.
 enum class CommandType : std::uint8_t
 {
     Invalid = 0,
     Attack = 1,
+    Appear = 2,
+    Disappear = 3,
+    ForceFollowObject = 4,
+    RandomWalk = 5,
     DoFunction = 6,
+    GiveItem = 7,
+    TakeItem = 8,
     JumpToObject = 9,
-    JumpToLocation = 10,
+    JumpToLocation = 10, // "Jump To Point"
+    SpeakString = 11,
+    SpeakStrref = 12,
     Wait = 13,
     PlayAnimation = 14,
-    StartConversation = 18,
-    MoveToLocation = 20,
+    PlaySound = 15,
+    MoveAwayFromObject = 16,
+    MoveAwayFromPoint = 17,
+    StartConversation = 18, // "Initiate Dialog"
+    Examine = 19,
+    MoveToLocation = 20, // "Move To Point"
     MoveToObject = 21,
-    Recover = 22, // what CommandMoveToMultiLocations makes
+    MoveToMultipleLocations = 22,
+    Lock = 23,
+    Unlock = 24,
     UseAbility = 25,
+    UseItem = 26,
+    DropItem = 27,
+    PickupItem = 28,
     EquipItem = 29,
     UnequipItem = 30,
     UseObject = 31,
-    Drive = 33,
+    ExecuteEffect = 32, // the engine's, as effects apply
+    Drive = 33,         // the player steering the character
+    SellItem = 34,
+    BuyItem = 35,
+    DoEvent = 36,
     Interact = 37,
     Deathblow = 38,
-    SheatheWeapons = 39, // CommandSheatheWeapons and CommandUnsheatheWeapons; int 0 is 1 to draw
+    SheatheWeapons = 39, // "Sheathing": CommandSheatheWeapons and CommandUnsheatheWeapons
     SwitchWeaponSets = 40,
-    Turn = 41, // CommandTurn
+    Turn = 41,
     Fly = 42,
 };
 
