@@ -1,0 +1,8 @@
+function_va,name,class,cast_slot
+0x005d4fc0,CClientExoApp::GetModuleById,CCModule,0x1c
+0x005d5840,CClientExoApp::GetGameObjectById,CGameObject,
+0x005d58c0,CClientExoApp::GetCreatureById,CCCreature,0x10
+0x005d5910,CClientExoApp::GetModuleById,CCModule,0x1c
+0x005d5960,CClientExoApp::GetGameObjectById,CGameObject,
+0x005d5b40,CClientExoApp::GetPlaceableById,CCPlaceable,0x24
+0x005d5be0,CClientExoApp::GetObjectById,CCObject,0x18

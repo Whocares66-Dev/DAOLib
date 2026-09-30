@@ -37,3 +37,19 @@ So a registration number is a script function number. The table is verified agai
 - **Every function a script can call is named.** `tools/names.py` turns the rows into Ghidra names (`ScriptCommand::TOGGLEGAMEPAUSE` at `0x0066A7A0`), so the decompiler shows the engine's vocabulary instead of `FUN_0066a7a0`.
 - **Each implementation is a worked example of the engine's types.** A command reads its arguments off the script VM's stack, calls into the engine, and pushes a result. With the signature beside it, the argument reads are identified before the body is read.
 - **The registry is the natural place to add commands.** Registering our own number, name and function through `ScriptCommands::Register`, plus a matching declaration in a `script.ldf` the toolset compiles against, would put a new command in reach of scripts, as NWNX did for Neverwinter Nights. Not yet tried.
+
+## The engine behind the commands
+
+`tools/script_backends.py` follows each command's body one step down, into the engine functions it does its work with, and names them after the command. Run 2026-09-30:
+
+| Found | Count | How |
+|---|---|---|
+| Object lookups by id | 7 | The shape of NWN's `GetCreatureByGameObjectID`: the application's object array (`+0xCC`), `CGameObjectArray::GetGameObject`, a type byte at `+0x14`, and a cast through a virtual slot. A cast slot's class is the one whose implementation of it is `mov eax, ecx; ret`. So `0x005D58C0` is `CClientExoApp::GetCreatureById`, `0x005D5B40` `GetPlaceableById`, `0x005D5840` the uncast `GetGameObjectById`. |
+| Methods of a looked-up object | 12 | A direct call with the object as `this`, when it is the only method the command calls on it: `CCModule::ForScript_DoAreaTransition`, `CCCreature::ForScript_SetAppearanceType`. |
+| Methods through a vtable | 1 | The same, through the object's vtable. |
+| A command's sole callee | 70 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
+| Candidates, unnamed | 12 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
+
+The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py` puts their names into Ghidra, and a name set by hand wins.
+
+Most commands, about 430 of 600, have no engine function to name this way. They read or write the object's fields inline. `GetCombatState` reads `creature->[0xC60]->[0]` with no call at all. Those are field offsets, not functions, and they are the next thing to harvest: a getter command names the field it returns.

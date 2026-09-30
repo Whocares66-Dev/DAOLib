@@ -1,0 +1,96 @@
+function_va,name,how,class,ghidra_name,commands
+0x0040d610,ScriptBackend::ForScript_GetItemVisualEffectsIDs,sole,,FUN_0040d610,GetItemVisualEffectsIDs
+0x0047d4d0,ScriptBackend::ForScript_SendOnlineTelemetry,sole,,FUN_0047d4d0,SendOnlineTelemetry
+0x0047f5f0,ScriptBackend::ForScript_UpdateOnlineStatistic,sole,,FUN_0047f5f0,UpdateOnlineStatistic
+0x00480980,ScriptBackend::ForScript_GetOnlineStatistic,sole,,FUN_00480980,GetOnlineStatistic
+0x004c0950,ScriptBackend::ForScript_StringToInt,sole,,FUN_004c0950,StringToInt | HexStringToInt
+0x004c09d0,ScriptBackend::ForScript_StringToFloat,sole,,FUN_004c09d0,StringToFloat
+0x004c0f70,ScriptBackend::ForScript_FindSubString,sole,,FUN_004c0f70,FindSubString
+0x004c1000,ScriptBackend::ForScript_SetEventScript,sole,,FUN_004c1000,SetEventScript
+0x004c25d0,ScriptBackend::ForScript_InsertString,sole,,FUN_004c25d0,InsertString
+0x004c2b10,ScriptBackend::ForScript_IntToString,sole,,FUN_004c2b10,IntToString | IntToChar
+0x004c3250,ScriptBackend::ForScript_SubString,sole,,FUN_004c3250,SubString
+0x004c38e0,ScriptBackend::ForScript_StringUpperCase,sole,,FUN_004c38e0,StringUpperCase
+0x004c3a50,ScriptBackend::ForScript_StringLowerCase,sole,,FUN_004c3a50,StringLowerCase
+0x004d1c70,ScriptBackend::ForScript_GetStringByStringId,sole,,FUN_004d1c70,GetStringByStringId
+0x004e4990,ScriptBackend::ForScript_GetTlkTableString,sole,,FUN_004e4990,GetTlkTableString
+0x0051b370,CCModule::ForScript_GetName,direct,CCModule,FUN_0051b370,GetName
+0x005b9020,ScriptBackend::ForScript_PlayMusic,sole,,FUN_005b9020,PlayMusic | StopMusic
+0x005d5c20,ScriptBackend::ForScript_GetItemPossessedBy,sole,,FUN_005d5c20,GetItemPossessedBy | CountItemsByTag
+0x005d5ca0,ScriptBackend::ForScript_GetMainControlled,sole,,FUN_005d5ca0,GetMainControlled | GetPCSpeaker
+0x005fbc10,ScriptBackend::ForScript_ISPACKAGELOADED,sole,,FUN_005fbc10,ISPACKAGELOADED
+0x005ff450,CCModule::ForScript_GetObjectByTag,direct,CCModule,FUN_005ff450,GetObjectByTag
+0x00600270,,direct,CCModule,FUN_00600270,SetTag
+0x00600a40,CCModule::ForScript_DoAreaTransition,direct,CCModule,FUN_00600a40,DoAreaTransition
+0x00601860,CCModule::ForScript_GETCREATURESINAOE,direct,CCModule,FUN_00601860,GETCREATURESINAOE | GetObjectsInArea
+0x00602650,,direct,CCModule,FUN_00602650,SetTag
+0x00602af0,CCModule::ForScript_LinkAreaMiniMaps,direct,CCModule,FUN_00602af0,LinkAreaMiniMaps
+0x00629360,ScriptBackend::ForScript_ShowAreaUnlockedNotification,sole,,FUN_00629360,ShowAreaUnlockedNotification
+0x0062ee20,CCModule::ForScript_SetFollowerState,direct,CCModule,FUN_0062ee20,SetFollowerState
+0x0062f390,ScriptBackend::ForScript_GetHero,sole,,FUN_0062f390,GetHero
+0x00640060,ScriptBackend::ForScript_GetGameMode,sole,,FUN_00640060,GetGameMode
+0x00643570,ScriptBackend::ForScript_SetCheatUsedFlag,sole,,FUN_00643570,SetCheatUsedFlag
+0x00643bf0,ScriptBackend::ForScript_LogStoryEvent,sole,,FUN_00643bf0,LogStoryEvent
+0x00652370,,direct,CCModule,FUN_00652370,SetPartyPickerStage
+0x006523d0,,direct,CCModule,FUN_006523d0,SetPartyPickerStage
+0x0066cf60,ScriptBackend::ForScript_GetCreatureProperty,sole,,FUN_0066cf60,GetCreatureProperty
+0x00684dd0,,direct,CGameObject,FUN_00684dd0,GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup
+0x00694e50,,direct,CCObject,FUN_00694e50,SetObjectActive
+0x00694fe0,,direct,CCObject,FUN_00694fe0,SetObjectActive
+0x00695180,CCObject::ForScript_UT_GetNearestObjectByTag,direct,CCObject,FUN_00695180,UT_GetNearestObjectByTag | GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup | GetClusterCenter
+0x00695300,,direct,CCObject,FUN_00695300,BeginConversation
+0x006976b0,,direct,CCObject,FUN_006976b0,BeginConversation
+0x00698cd0,,virtual,CCObject,CCObject::vfunction81,SetObjectActive
+0x00699f80,CCObject::ForScript_SetLocName,virtual,CCObject,CCObject::vfunction77,SetLocName
+0x0069b3d0,,virtual,CCObject,CCObject::vfunction45,SetObjectActive
+0x0069ba70,CCObject::ForScript_SetObjectActive,direct,CCObject,FUN_0069ba70,SetObjectActive | CreateItemOnObject
+0x0069cf90,ScriptBackend::ForScript_SetEventResource,sole,,FUN_0069cf90,SetEventResource
+0x0069d340,ScriptBackend::ForScript_GetPlayTime,sole,,FUN_0069d340,GetPlayTime
+0x006a2cc0,CCCreature::ForScript_SetPartyPlotFlag,direct,CCCreature,FUN_006a2cc0,SetPartyPlotFlag | SETPARTYPLOTVAR | GetPartyPlotFlag | GETPARTYPLOTVAR
+0x006b5740,ScriptBackend::ForScript_PlaySoundSet,sole,,FUN_006b5740,PlaySoundSet
+0x006bd0e0,CCCreature::ForScript_SetSoundSet,direct,CCCreature,FUN_006bd0e0,SetSoundSet
+0x006c1400,CCCreature::ForScript_SetAppearanceType,direct,CCCreature,FUN_006c1400,SetAppearanceType
+0x006c1e30,CCCreature::ForScript_LoadItemsFromTemplate,direct,CCCreature,FUN_006c1e30,LoadItemsFromTemplate
+0x006dc680,ScriptBackend::ForScript_PlayMovie,sole,,FUN_006dc680,PlayMovie
+0x006fcf40,ScriptBackend::ForScript_SETPLOTACTIONCOOLDOWN,sole,,FUN_006fcf40,SETPLOTACTIONCOOLDOWN
+0x006fff40,ScriptBackend::ForScript_OpenPrimaryWorldMap,sole,,FUN_006fff40,OpenPrimaryWorldMap
+0x006ffff0,ScriptBackend::ForScript_ClosePrimaryWorldMap,sole,,FUN_006ffff0,ClosePrimaryWorldMap
+0x007000a0,ScriptBackend::ForScript_OpenFadeMap,sole,,FUN_007000a0,OpenFadeMap
+0x00700a60,ScriptBackend::ForScript_WorldMapCompleteRandomEncounter,sole,,FUN_00700a60,WorldMapCompleteRandomEncounter
+0x00702e90,ScriptBackend::ForScript_GetLocalInt,sole,,FUN_00702e90,GetLocalInt
+0x00702ec0,ScriptBackend::ForScript_GetLocalFloat,sole,,FUN_00702ec0,GetLocalFloat
+0x00702ef0,ScriptBackend::ForScript_GetLocalString,sole,,FUN_00702ef0,GetLocalString
+0x00702fb0,ScriptBackend::ForScript_GetLocalObject,sole,,FUN_00702fb0,GetLocalObject
+0x00702fe0,ScriptBackend::ForScript_GetLocalLocation,sole,,FUN_00702fe0,GetLocalLocation
+0x007030a0,ScriptBackend::ForScript_GetLocalPlayer,sole,,FUN_007030a0,GetLocalPlayer
+0x007030c0,ScriptBackend::ForScript_GetLocalEvent,sole,,FUN_007030c0,GetLocalEvent
+0x00703170,ScriptBackend::ForScript_GetLocalCommand,sole,,FUN_00703170,GetLocalCommand
+0x00703210,ScriptBackend::ForScript_GetLocalEffect,sole,,FUN_00703210,GetLocalEffect
+0x00703db0,ScriptBackend::ForScript_SetLocalInt,sole,,FUN_00703db0,SetLocalInt
+0x00703df0,ScriptBackend::ForScript_SetLocalFloat,sole,,FUN_00703df0,SetLocalFloat
+0x00703e30,ScriptBackend::ForScript_SetLocalString,sole,,FUN_00703e30,SetLocalString
+0x00703e70,ScriptBackend::ForScript_SetLocalObject,sole,,FUN_00703e70,SetLocalObject
+0x00703eb0,ScriptBackend::ForScript_SetLocalLocation,sole,,FUN_00703eb0,SetLocalLocation
+0x00703f50,ScriptBackend::ForScript_SetLocalPlayer,sole,,FUN_00703f50,SetLocalPlayer
+0x00703f80,ScriptBackend::ForScript_SetLocalEvent,sole,,FUN_00703f80,SetLocalEvent
+0x007040c0,ScriptBackend::ForScript_SetLocalEffect,sole,,FUN_007040c0,SetLocalEffect
+0x00704200,ScriptBackend::ForScript_SetLocalResource,sole,,FUN_00704200,SetLocalResource
+0x0071ce60,ScriptBackend::ForScript_GetRemainingCooldown,sole,,FUN_0071ce60,GetRemainingCooldown
+0x0071dce0,ScriptBackend::ForScript_SetCooldown,sole,,FUN_0071dce0,SetCooldown
+0x0072b690,ScriptBackend::ForScript_SetTournamentScoreboardEntry,sole,,FUN_0072b690,SetTournamentScoreboardEntry
+0x0072c210,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,sole,,FUN_0072c210,SetChampionshipScoreboardEntry
+0x0072d860,ScriptBackend::ForScript_AddGeneralScoreboardEntry,sole,,FUN_0072d860,AddGeneralScoreboardEntry
+0x0073c930,,direct,CCObject,FUN_0073c930,SetObjectActive
+0x0075cb30,ScriptBackend::ForScript_GetPlotGUID,sole,,FUN_0075cb30,GetPlotGUID
+0x0075f070,ScriptBackend::ForScript_GetPlotResRef,sole,,FUN_0075f070,GetPlotResRef
+0x0075f710,ScriptBackend::ForScript_GetPlotFlagRewardId,sole,,FUN_0075f710,GetPlotFlagRewardId
+0x00760250,ScriptBackend::ForScript_ShowAllCodexEntries,sole,,FUN_00760250,ShowAllCodexEntries
+0x007abd00,ScriptBackend::ForScript_GetVisualEffectLocation,sole,,FUN_007abd00,GetVisualEffectLocation | GetRoamLocation
+0x007adcf0,ScriptBackend::ForScript_GetTacticCommandItemTag,sole,,FUN_007adcf0,GetTacticCommandItemTag
+0x007c0480,ScriptBackend::ForScript_PreloadCharGen,sole,,FUN_007c0480,PreloadCharGen
+0x008e34f0,ScriptBackend::ForScript_GetTime,sole,,FUN_008e34f0,GetTime
+0x00a2d1e0,ScriptBackend::ForScript_PrintToLogAndFlush,sole,,FUN_00a2d1e0,PrintToLogAndFlush | PrintToLog
+0x00a2d230,ScriptBackend::ForScript_DebugSpawnScriptDebugger,sole,,FUN_00a2d230,DebugSpawnScriptDebugger
+0x00a2fd10,ScriptBackend::ForScript_COMMANDDOFUNCTION,sole,,FUN_00a2fd10,COMMANDDOFUNCTION
+0x00a31e70,ScriptBackend::ForScript_Deprecated_ExecuteScript,sole,,FUN_00a31e70,Deprecated_ExecuteScript
+0x00a5a2e0,ScriptBackend::ForScript_GetEventString,sole,,FUN_00a5a2e0,GetEventString

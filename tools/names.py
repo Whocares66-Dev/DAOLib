@@ -1,6 +1,6 @@
 """Names for what this project knows about the exe, for Ghidra.
 
-Four sources, in the order a name wins when two name one address:
+Six sources, in the order a name wins when two name one address:
 
 1. src/dao/Addresses.h: each `DAO_ADDRESS(kName, "Engine::Name", 0xVA)` row
    names a function and each `DAO_DATA(...)` row a global, by what the engine
@@ -8,9 +8,14 @@ Four sources, in the order a name wins when two name one address:
 2. dev/message_handlers.csv (tools/message_handlers.py): each message
    handler's method, as Owner::Method_Message, since the methods overload on
    the message type.
-3. dev/script_commands.csv (tools/script_commands.py): the function behind
+3. dev/object_lookups.csv (tools/script_backends.py): the application's
+   typed lookups by object id, as CClientExoApp::Get<Class>ById.
+4. dev/script_commands.csv (tools/script_commands.py): the function behind
    each script command, as ScriptCommand::NAME.
-4. The RTTI of game/DAOrigins.exe (tools/daoexe.py): every vftable, as
+5. dev/script_backends.csv (tools/script_backends.py): the engine function
+   a script command does its work with, as <Class>::ForScript_<Command>,
+   ScriptBackend where no class is known. Only the rows it names.
+6. The RTTI of game/DAOrigins.exe (tools/daoexe.py): every vftable, as
    Class::vftable, or Class::vftable_at_<offset> for a secondary one.
 
 tools/ghidra-mcp.ps1 feeds the `--tsv` output (rva, name, kind per line,
@@ -36,6 +41,8 @@ import msvc_names  # noqa: E402
 ADDRESSES = os.path.join(HERE, "..", "src", "dao", "Addresses.h")
 COMMANDS = os.path.join(HERE, "..", "dev", "script_commands.csv")
 HANDLERS = os.path.join(HERE, "..", "dev", "message_handlers.csv")
+LOOKUPS = os.path.join(HERE, "..", "dev", "object_lookups.csv")
+BACKENDS = os.path.join(HERE, "..", "dev", "script_backends.csv")
 PREFERRED_BASE = 0x00400000
 
 ROW = re.compile(
@@ -81,6 +88,28 @@ def handler_rows():
     return out
 
 
+def named_rows(path):
+    """Rows of a CSV with function_va and name columns, the named ones."""
+    if not os.path.exists(path):
+        return []
+    out = []
+    with open(path, encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            if row["name"]:
+                out.append(
+                    (row["name"], row["name"], int(row["function_va"], 16), "function")
+                )
+    return out
+
+
+def lookup_rows():
+    return named_rows(LOOKUPS)
+
+
+def backend_rows():
+    return named_rows(BACKENDS)
+
+
 def command_rows():
     """Every script command with an implementation; the 135 registered with
     none are left out."""
@@ -115,7 +144,14 @@ def rows():
     """Every name, one per address, the earlier source winning."""
     seen = set()
     out = []
-    for source in (header_rows, handler_rows, command_rows, vtable_rows):
+    for source in (
+        header_rows,
+        handler_rows,
+        lookup_rows,
+        command_rows,
+        backend_rows,
+        vtable_rows,
+    ):
         for ours, engine, va, kind in source():
             if va in seen:
                 continue
