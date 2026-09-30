@@ -12,6 +12,7 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
+#include "loader/CrashLog.h"
 #include "loader/Proxy.h"
 
 #include <Windows.h>
@@ -106,6 +107,8 @@ void __stdcall EntryHook()
 void Attach()
 {
     dao::OpenLog("loader");
+    // First, so a crash anywhere after this is logged, the loader's own included.
+    loader::crashlog::Install();
     const auto fingerprint = dao::Module::Fingerprint();
     if (fingerprint)
     {

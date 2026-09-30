@@ -99,7 +99,9 @@ add_library(
     daolib
     STATIC
     src/dao/core/CallSite.cpp
+    src/dao/core/Exceptions.cpp
     src/dao/core/Fingerprint.cpp
+    src/dao/core/FunctionTable.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
     src/dao/Log.cpp
@@ -126,12 +128,14 @@ target_compile_definitions(
 add_library(
     version
     SHARED
+    src/loader/CrashLog.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
 )
 dao_apply_warnings(version)
 set_target_properties(version PROPERTIES PREFIX "" OUTPUT_NAME "version")
-target_link_libraries(version PRIVATE daolib)
+# dbghelp names the frames of a crash log; psapi gives the process's memory.
+target_link_libraries(version PRIVATE daolib dbghelp psapi)
 
 # ---------------------------------------------------------------------------
 # Tests, over dao/core: what can be checked without the game.
