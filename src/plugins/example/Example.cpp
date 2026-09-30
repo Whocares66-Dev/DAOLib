@@ -239,6 +239,37 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::info("SetGameModeMessage: mode {}", m.mode);
     });
 
+    // What is under the cursor as a click arrives, before the mode acts on
+    // it: the object a primary click would act on, or the ground a move
+    // would go to, and where the move before this one went.
+    const auto cursor = [](const char *click) {
+        auto *app = dao::CClientExoApp::Get();
+        auto *modes = app != nullptr ? app->GameModes() : nullptr;
+        const auto *explore = modes != nullptr ? modes->Explore() : nullptr;
+        if (explore == nullptr)
+        {
+            spdlog::info("{}: not in explore or combat mode", click);
+            return;
+        }
+        const auto ground = explore->CursorGround();
+        const auto last = explore->LastMoveDestination();
+        const auto object = explore->CursorObject();
+        spdlog::info("{}: {} hits under the cursor; object {}, ground {} (walkable {}); the move before went to "
+                     "({:.2f}, {:.2f}, {:.2f})",
+                     click, explore->CursorHits().size(),
+                     object ? fmt::format("{:#010x} \"{}\"", *object, dao::Utf8(dao::script::api::GetTag(*object)))
+                            : std::string("none"),
+                     ground ? fmt::format("({:.2f}, {:.2f}, {:.2f})", ground->x, ground->y, ground->z)
+                            : std::string("none"),
+                     explore->CursorGroundWalkable(), last.x, last.y, last.z);
+    };
+    dao::messages::OnMessage<dao::messages::MoveCharacterToLocationMessage>(
+        [cursor](void *, const dao::messages::MoveCharacterToLocationMessage &) { cursor("move click"); });
+    dao::messages::OnMessage<dao::messages::PerformPrimaryActionOnTargetUnderCursorMessage>(
+        [cursor](void *, const dao::messages::PerformPrimaryActionOnTargetUnderCursorMessage &) {
+            cursor("primary click");
+        });
+
     // Sending a message as the engine does: once the player has explored
     // for five seconds or so in all (300 frames), centre the camera on the creature
     // the player controls, and log whether the mode handled it. In combat

@@ -86,6 +86,23 @@ DAO_ADDRESS(kCClientExoApp_SetPaused, "CClientExoApp::SetPaused", 0x005D6740)
 DAO_ADDRESS(kGameModeController_Constructor, "GameModeController::GameModeController", 0x00641370)
 DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 0x006414A0)
 
+// What is under the mouse cursor, read 2026-09-30 (dao/GameModes.h,
+// GameModeExplore, has the fields). The mode's update re-picks 15 times a
+// second: CastCursorRay asks the camera for the ray through the cursor
+// and collects up to 32 hits along it with the world's Raycast, nearest
+// first; UpdateCursor chooses the object or the ground among them, and
+// CanMoveTo judges the ground. A move click goes through MoveTo
+// (__thiscall (creature id, const Vector4 *point, -1), `ret 0xC`), which
+// records the point and has the creature walk. Raycast is __thiscall on
+// the application's +0x10C, (hits, max, const Vector4 *origin, const
+// Vector4 *direction, collision mask, flag, area or null for the
+// current), `ret 0x1C`, and returns the count. The names are ours.
+DAO_ADDRESS(kGameModeExplore_CastCursorRay, "GameModeExplore::CastCursorRay", 0x0070B590)
+DAO_ADDRESS(kGameModeExplore_UpdateCursor, "GameModeExplore::UpdateCursor", 0x0070F270)
+DAO_ADDRESS(kGameModeExplore_CanMoveTo, "GameModeExplore::CanMoveTo", 0x0070C840)
+DAO_ADDRESS(kGameModeExplore_MoveTo, "GameModeExplore::MoveTo", 0x0070BE80)
+DAO_ADDRESS(kWorld_Raycast, "World::Raycast", 0x006497A0)
+
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a
 // second in combat; not yet verified in play.

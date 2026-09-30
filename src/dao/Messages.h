@@ -139,12 +139,29 @@ static_assert(sizeof(PerformAbilityMessage) == 0x10);
 
 // The player clicks to move the selected creature. No fields (its clone
 // allocates 4 bytes, the vtable): the handler (0x0070C9A0) takes the place
-// from explore mode's own state. Read 2026-09-30.
+// from explore mode's own state, the ground under the cursor
+// (dao/GameModes.h, GameModeExplore). The right button going down sends
+// PreMove, whose handler (0x0070AAF0) only arms a flag the move needs;
+// going up sends the move. Read 2026-09-30.
+struct PreMoveCharacterToLocationMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1DA64;
+};
+static_assert(sizeof(PreMoveCharacterToLocationMessage) == 4);
 struct MoveCharacterToLocationMessage : Message
 {
     static constexpr std::uintptr_t kVftable = 0x00B1DA94;
 };
 static_assert(sizeof(MoveCharacterToLocationMessage) == 4);
+
+// The player's primary click on what is under the cursor: attack, talk,
+// open, pick up. No fields; the handler (0x007132B0) acts on explore
+// mode's object under the cursor (GameModeExplore::CursorObject).
+struct PerformPrimaryActionOnTargetUnderCursorMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B16190;
+};
+static_assert(sizeof(PerformPrimaryActionOnTargetUnderCursorMessage) == 4);
 
 // Centre the camera on an object: explore mode's handler (0x0070C140)
 // looks the object up by +4 and has the camera frame it. 8 bytes, from the

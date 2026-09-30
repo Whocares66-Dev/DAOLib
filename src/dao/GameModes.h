@@ -15,9 +15,13 @@
 
 #include "dao/Addresses.h"
 #include "dao/Module.h"
+#include "dao/ObjectId.h"
+#include "dao/Structures.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
 
 namespace dao
 {
@@ -41,6 +45,114 @@ enum class GameMode : std::int32_t
     Movie = 10,       // GameModeMovie
     CharGen = 11,     // GameModeCharGen: character creation, and the main menu
     PartyPicker = 12, // GameModePartyPicker
+};
+
+// One thing along the ray from the camera through the mouse cursor, as
+// explore mode's picking finds it (GameModeExplore below). 0x30 bytes, read
+// 2026-09-30 from its constructor (0x00648B10) and the raycast that fills
+// it (0x006497A0, which copies each from the physics' own hit): the point,
+// what was hit (0x00648B70 decides by the physics' collision flags), and
+// the object's id. The rest is the physics' flags and a float kept as is.
+struct PickHit
+{
+    enum class Kind : std::int32_t
+    {
+        Nothing = 0,
+        Ground = 1, // the area's walkmesh or terrain
+        Object = 2, // a creature, placeable or other object, `object` its id
+    };
+
+    Vector position;
+    std::uint32_t padding0 = 0;
+    Kind kind = Kind::Nothing;
+    ObjectId object = 0xFFFFFFFF;
+    // The physics' flag 0x01000000 clear; explore mode's walkable test
+    // requires it of a ground hit.
+    bool solid = false;
+    std::uint32_t unknown1c = 0;
+    float unknown20 = 0;
+    std::uint32_t collisionFlags = 0;
+    std::uint32_t unknown28 = 0;
+    std::uint32_t padding2c = 0;
+};
+static_assert(sizeof(PickHit) == 0x30);
+
+// Explore mode, and combat mode, which derives from it (dao::TypeName and
+// tools\daoexe.py --bases GameModeCombat): what is under the mouse cursor,
+// as a click would act on it. Read 2026-09-30.
+//
+// The mode's update (vtable slot 8, 0x00712F90) re-picks 15 times a second
+// (a timer at +0x6E4 reset to 1/15 s), or at once when the engine asks: it
+// casts a ray from the camera through the cursor (0x0070B590, up to 32
+// hits at +0xE0, their count at +0x6E0, sorted nearest first), then chooses
+// (0x0070F270): the object at +0xCC, or the ground hit at +0xD0 with its
+// verdict at +0xD4. An object the GUI names takes precedence (a global at
+// 0x00C35FF0, +0xC), and an object hit wins over the ground. What the click
+// handlers read: the primary action's (0x007132B0) target is +0xCC, and a
+// move (0x0070C9A0) goes to +0xD0's point if +0xD4 allows, recording it at
+// +0xA0 (0x0070BE80) before the creature walks. Each mode keeps its own;
+// the one current is the one updated. On the game's thread, as a frame
+// callback runs; not yet seen in play.
+class GameModeExplore
+{
+  public:
+    GameModeExplore() = delete;
+    GameModeExplore(const GameModeExplore &) = delete;
+    GameModeExplore &operator=(const GameModeExplore &) = delete;
+    ~GameModeExplore() = delete;
+
+    // The object a click would act on, if the cursor is over one.
+    std::optional<ObjectId> CursorObject() const
+    {
+        const auto id = Read<ObjectId>(kCursorObject);
+        return id == 0xFFFFFFFF || id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
+    }
+
+    // The point on the ground under the cursor, when the cursor is on the
+    // ground rather than an object.
+    std::optional<Vector> CursorGround() const
+    {
+        const auto *hit = Read<const PickHit *>(kCursorGround);
+        return hit != nullptr ? std::optional<Vector>(hit->position) : std::nullopt;
+    }
+
+    // Whether a move there would go: the engine's test (0x0070C840) that
+    // the point is on the area's walkmesh for the party's controlled
+    // creature (the area's check, 0x0073DE70). A move click refuses an
+    // unwalkable point.
+    bool CursorGroundWalkable() const
+    {
+        return CursorGround().has_value() && Read<bool>(kCursorWalkable);
+    }
+
+    // Everything along the ray, nearest first, from the latest pick; the
+    // cursor's choice is made among these.
+    std::span<const PickHit> CursorHits() const
+    {
+        const auto count = Read<std::int32_t>(kHitCount);
+        const auto *hits = reinterpret_cast<const PickHit *>(reinterpret_cast<const std::byte *>(this) + kHits);
+        return {hits, count > 0 && count <= kMaxHits ? static_cast<std::size_t>(count) : 0};
+    }
+
+    // Where the latest move click sent the controlled creature.
+    Vector LastMoveDestination() const
+    {
+        return Read<Vector>(kLastMoveDestination);
+    }
+
+    static constexpr std::size_t kLastMoveDestination = 0xA0;
+    static constexpr std::size_t kCursorObject = 0xCC;
+    static constexpr std::size_t kCursorGround = 0xD0;
+    static constexpr std::size_t kCursorWalkable = 0xD4;
+    static constexpr std::size_t kHits = 0xE0;
+    static constexpr std::size_t kHitCount = 0x6E0;
+    static constexpr std::int32_t kMaxHits = 32;
+
+  private:
+    template <class T> const T &Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
 };
 
 class GameModeController
@@ -76,6 +188,15 @@ class GameModeController
     void *CurrentModeObject() const
     {
         return ModeObject(Mode());
+    }
+
+    // The current mode as explore mode, if it is explore or combat (whose
+    // class derives from explore's); null in any other.
+    GameModeExplore *Explore() const
+    {
+        const GameMode mode = Mode();
+        return mode == GameMode::Explore || mode == GameMode::Combat ? static_cast<GameModeExplore *>(ModeObject(mode))
+                                                                     : nullptr;
     }
 
     // The mode before the current one, by the value seen after a load.
