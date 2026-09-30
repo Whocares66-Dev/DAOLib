@@ -30,6 +30,11 @@
 #include <cstddef>
 #include <cstdint>
 
+// C4624, "destructor was implicitly defined as deleted", is what Opaque is
+// for: every class below is one the engine makes and frees, never us.
+#pragma warning(push)
+#pragma warning(disable : 4624)
+
 namespace dao
 {
 
@@ -297,3 +302,5 @@ class ItemPossessor : Opaque
 };
 
 } // namespace dao
+
+#pragma warning(pop)
