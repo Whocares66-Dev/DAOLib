@@ -5,6 +5,7 @@ their vtables, the script commands, and disassembly of any address.
     python tools/daoexe.py --rtti [text]        classes (undecorated), those containing text
     python tools/daoexe.py --vtables [text]     vftables: address, slot count, class
     python tools/daoexe.py --class-of 0xVA      the class of the vftable at an address
+    python tools/daoexe.py --bases Class        a class's bases, each at its offset in the object
     python tools/daoexe.py --refs 0xVA          code holding the address as a 32-bit immediate
     python tools/daoexe.py --disasm 0xVA [n]    n instructions from an address (default: to ret)
     python tools/daoexe.py --commands [text]    the engine's COMMAND_* script command names
@@ -175,6 +176,32 @@ class Image:
                     self._before_vftables.add(off - raw + start)
         return self._before_vftables
 
+    def bases(self, decorated):
+        """[(decorated base, offset in the object, bases it contains)] from the
+        class hierarchy descriptor of the class's primary vftable, the class
+        itself first. A base descriptor is the base's type descriptor, the
+        number of bases below it, then its displacement (mdisp, pdisp, vdisp);
+        pdisp is -1 unless the base is virtual, which this does not resolve."""
+        for va, name, offset, _ in self.vtables:
+            if name != decorated or offset != 0:
+                continue
+            hierarchy = self.u32(self.u32(va - 4) + 16)
+            count, array = self.u32(hierarchy + 8), self.u32(hierarchy + 12)
+            out = []
+            for i in range(count):
+                descriptor = self.u32(array + 4 * i)
+                contained = self.u32(descriptor + 4)
+                mdisp = struct.unpack("<i", self.bytes_at(descriptor + 8, 4))[0]
+                out.append(
+                    (
+                        self.type_descriptors.get(self.u32(descriptor), "?"),
+                        mdisp,
+                        contained,
+                    )
+                )
+            return out
+        return None
+
     def class_of_vftable(self, va):
         for v, name, offset, slots in self.vtables:
             if v == va:
@@ -309,6 +336,20 @@ def main(argv):
         print(f"{undecorate(name)}  (offset {offset:#x}, {len(slots)} slots)")
         for i, f in enumerate(slots):
             print(f"    [{i:2d}] {f:#010x}")
+        return 0
+    if mode == "--bases":
+        if not rest:
+            print("--bases needs a class name, as --rtti prints it", file=sys.stderr)
+            return 2
+        decorated = next(
+            (n for n in img.rtti_names() if undecorate(n) == rest[0]), None
+        )
+        found = img.bases(decorated) if decorated else None
+        if not found:
+            print(f"no class {rest[0]} with a vftable of its own")
+            return 1
+        for name, offset, contained in found:
+            print(f"{offset:#06x}  {undecorate(name)}  ({contained} below)")
         return 0
     if mode == "--refs":
         for r in img.code_refs(int(rest[0], 16)):
