@@ -318,6 +318,13 @@ DAO_ADDRESS(kPortraitRenderer_Setup, "PortraitRenderer::Setup", 0x007F3E20)
 DAO_ADDRESS(kPortraitRenderer_Render, "PortraitRenderer::Render", 0x007F46E0)
 DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, "EclipseGFxImageLoader::LoadImage", 0x00516A20)
 
+// The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
+// engine's CTlkTable in this global; GetString, __thiscall (strref,
+// std::wstring &out, flag 0), `ret 0xC`, with the gender to use set at the
+// table's +0x1C first (0 male, 1 female).
+DAO_DATA(kTlkTable, "g_tlkTable", 0x00C1D08C)
+DAO_ADDRESS(kCTlkTable_GetString, "CTlkTable::GetString", 0x004E4990)
+
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
 // arguments, returns the root, SmartData::TokenManager, made on first use

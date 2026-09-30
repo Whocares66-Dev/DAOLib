@@ -150,6 +150,7 @@ add_library(
     src/dao/Script.cpp
     src/dao/ScriptHooks.cpp
     src/dao/String.cpp
+    src/dao/Tlk.cpp
     src/dao/TypeName.cpp
 )
 dao_apply_warnings(daolib)

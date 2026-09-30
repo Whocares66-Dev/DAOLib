@@ -25,6 +25,7 @@
 #include "dao/Plugin.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
+#include "dao/Tlk.h"
 #include "dao/TypeName.h"
 #include "dao/generated/ScriptApi.h"
 
@@ -55,6 +56,13 @@ void CheckTables()
                  "GetM2DAFloat",
                  type ? std::to_string(*type) : std::string("nothing"), typeScript,
                  cost ? std::to_string(*cost) : std::string("nothing"), costScript);
+
+    // The ability's name, from its NameStrRef through the talk tables.
+    if (const auto strref = dao::gda::GetInt(Table::AbilitiesTalents, kShieldPummel, "NameStrRef"))
+    {
+        spdlog::info("Shield Pummel's name ({}): \"{}\"", *strref,
+                     dao::Utf8(dao::tlk::String(static_cast<std::uint32_t>(*strref))));
+    }
 
     // A string column, and the table's size, the same way against the
     // scripts' own commands.
