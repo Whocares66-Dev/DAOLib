@@ -342,6 +342,20 @@ bool CloseScreen(std::wstring_view name)
     return ByName(18, name);
 }
 
+bool HasMovie(std::wstring_view file)
+{
+    // As GUI::ScaleformResourceFile opens a movie: a resource of type 3.
+    constexpr std::int32_t kMovieResource = 3;
+    WString name(file);
+    std::uintptr_t handle = 0;
+    using FindFn = std::uintptr_t *(__cdecl *)(std::uintptr_t *, const core::WStringRep *, std::int32_t);
+    reinterpret_cast<FindFn>(Module::Address(addr::kResources_Find))(&handle, name.Engine(), kMovieResource);
+    const bool found = handle != 0;
+    using ReleaseFn = void(__fastcall *)(std::uintptr_t *, int);
+    reinterpret_cast<ReleaseFn>(Module::Address(addr::kResources_Release))(&handle, 0);
+    return found;
+}
+
 bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)
 {
     return Movie{MovieOf(owner)}.SetArray("_root.fsc_retval", values);

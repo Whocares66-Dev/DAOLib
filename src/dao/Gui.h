@@ -257,8 +257,10 @@ void *MovieOf(const void *owner);
 //   dao::gui::AddScreen(L"TurnOrder", L"turnorder", dao::gui::kLayerHud);
 //   dao::gui::ShowScreen(L"TurnOrder");
 //
-// The movie is found as the game finds its own (the name's .swf becomes
-// .gfx; which folders and archives are searched is not read yet). Add a
+// The movie is found as the game finds its own: a scene "turnorder" is the
+// resource "turnorder.gfx", looked up by the engine's resource system in
+// the places it looks for every resource (its override folders and the
+// game's archives; HasMovie says whether it finds one). Add a
 // screen once the game is up (the GUI system exists from the first frame
 // of the main menu: a frame callback will do); show, hide and close it
 // from the scripts' thread. Read 2026-09-30, not yet seen in play.
@@ -279,6 +281,9 @@ bool ShowScreen(std::wstring_view name);
 bool HideScreen(std::wstring_view name);
 // Closes it: the movie is let go.
 bool CloseScreen(std::wstring_view name);
+// Whether the resource system has a movie file by this name
+// (L"turnorder.gfx"), as GFx would ask for it.
+bool HasMovie(std::wstring_view file);
 
 // An FSCommand's answer, as the game's own handlers give theirs: an array
 // of ints in the calling movie's _root.fsc_retval, which the ActionScript

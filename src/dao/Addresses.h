@@ -264,6 +264,20 @@ DAO_ADDRESS(kGUISystem_AddScene, "GUI::GUISystem::AddScene", 0x005240D0)
 DAO_ADDRESS(kGUISystem_CloseScreen, "GUI::GUISystem::CloseScreen", 0x00523FF0)
 DAO_ADDRESS(kGUISystem_HideScreen, "GUI::GUISystem::HideScreen", 0x00523CB0)
 DAO_ADDRESS(kCClientExoApp_SetGUISystem, "CClientExoApp::SetGUISystem", 0x005D4F20)
+// Where a movie's file comes from, read 2026-09-30. GetMovieDef gives GFx a
+// scene's filename with ".swf" put on a bare name; GFx asks the game's
+// EclipseGFxFileOpener, whose OpenFile (its slot 1) makes a
+// GUI::ScaleformResourceFile, a GFile over the engine's resource system:
+// it looks the name up as a resource of type 3 (FindResource, __cdecl
+// (out handle, const std::wstring &name, type), the handle one word, freed
+// by ReleaseResource, __thiscall on it), and failing a name ending ".swf"
+// tries it with ".gfx". So a scene "turnorder" is the resource
+// "turnorder.gfx", found wherever the resource system finds the game's
+// own (its override folders and archives; not read here).
+DAO_ADDRESS(kEclipseGFxFileOpener_OpenFile, "EclipseGFxFileOpener::OpenFile", 0x005113A0)
+DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::ScaleformResourceFile", 0x00523220)
+DAO_ADDRESS(kResources_Find, "Resources::Find", 0x004D5BA0)
+DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no

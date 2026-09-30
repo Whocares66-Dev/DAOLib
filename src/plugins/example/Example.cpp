@@ -242,6 +242,15 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                                  dao::gui::MovieOf(owner) != nullptr ? "loaded" : "no movie");
         }
         spdlog::info("{} movies: {}", owners.size(), names);
+        // The resource lookup a plugin's movie will go through, on the
+        // game's own movies' names and on one that is not there.
+        if (!owners.empty())
+        {
+            const std::wstring first(dao::gui::NameOf(owners.front()));
+            spdlog::info("resources: {}.gfx {}, {}.swf {}, daolib_example.gfx {}", dao::Utf8(first),
+                         dao::gui::HasMovie(first + L".gfx"), dao::Utf8(first), dao::gui::HasMovie(first + L".swf"),
+                         dao::gui::HasMovie(L"daolib_example.gfx"));
+        }
 
         // A screen of the plugin's own, through the game's own registration
         // and opening. Its movie is not in the game, so nothing appears:
