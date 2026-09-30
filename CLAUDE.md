@@ -2,7 +2,7 @@
 
 A native plugin loader and library for Dragon Age: Origins, in the spirit of SKSE plus CommonLibSSE-NG for Skyrim. Read `dev/PLAN.md` first: what the three pieces are (loader, library, plugins), the rules, and the order of work.
 
-`dev/TURN_BASED.md` is the first use case, what is read of pause so far, and the reading still needed. Two tables map the engine. `dev/SCRIPT_COMMANDS.md` covers the 827 script commands, cross-checked against the game's own `script.ldf` (`dev/script_commands.csv`). `dev/MESSAGE_HANDLERS.md` covers the 314 message handlers, the engine's event API (`dev/message_handlers.csv`). `dev/TOOLSET.md` is what the Dragon Age toolset installer holds that matters here. `dev/CRASHES.md` is the crash logger the loader installs, and the crashes it has explained. `dev/LINEAGE.md` is what Neverwinter Nights' community work (NWNX:EE, xoreos) can and cannot tell us about this engine. `dev/PROBE.md` is the probe plugin, which counts every script command and message handler and samples the game's threads during play, and how to read a session with `tools/probe_report.py`.
+`dev/TURN_BASED.md` is the first use case, what is read of pause so far, and the reading still needed. Two tables map the engine. `dev/SCRIPT_COMMANDS.md` covers the 827 script commands, cross-checked against the game's own `script.ldf` (`dev/script_commands.csv`). `dev/MESSAGE_HANDLERS.md` covers the 314 message handlers, the engine's event API (`dev/message_handlers.csv`). `dev/TOOLSET.md` is what the Dragon Age toolset installer holds that matters here. `dev/CRASHES.md` is the crash logger the loader installs, and the crashes it has explained. `dev/LINEAGE.md` is what Neverwinter Nights' community work (NWNX:EE, xoreos) can and cannot tell us about this engine. `dev/PROBE.md` is the probe plugin, which counts every script command and message handler and samples the game's threads during play, and how to read a session with `tools/probe_report.py`. `dev/LIBRARY.md` is the library as a plugin uses it: generated field descriptors, the classes over them, and the probe's checks of both in play.
 
 Markdown here is not hard-wrapped: one line per paragraph or list item.
 
@@ -28,13 +28,16 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 ```
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
-                and one header per engine class read so far (ClientExoApp.h)
-src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration; tested
+                the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
+                Field.h; dev/LIBRARY.md says how they fit
+src/dao/generated/  field descriptors written by tools/gen_script_fields.py from dev/*.csv; do not edit
+src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
+                CommandWord; tested
 src/plugins/    one folder per plugin; probe/ is the first
-tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py
+tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
-                message_handlers.py, script_backends.py, script_fields.py, names.py, probe_targets.py,
-                probe_report.py, ghidra/
+                message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, names.py,
+                probe_targets.py, probe_report.py, ghidra/
 dev/            plan, reading, tables
 game/           the exe and its Ghidra project (ignored)
 toolset/        the toolset installer and what is extracted from it (ignored)
@@ -98,7 +101,7 @@ It creates a function where analysis found none. A name set by hand in Ghidra wi
 
 **MSVC templates** have names like `MemberFunctionMessageHandler<GameModeController,UserTogglePauseMessage,&GameModeController::HandleMessage>`. `tools\msvc_names.py` undecorates them, and `names.py` writes their inner `::` as `.` and their spaces as `_` so Ghidra accepts them. The C++ `dao::TypeName` leaves a template's name decorated rather than guess.
 
-**Recording a finding.** An address goes into `src/dao/Addresses.h` with the engine's name for it, what it is, how it was found, and the date. A layout goes into a class header under `src/dao/`, like `ClientExoApp.h`, with the evidence per field. A hypothesis is tried in the probe plugin before anything relies on it: detour, log what arrives (`dao::TypeName` says what an object is), change nothing.
+**Recording a finding.** An address goes into `src/dao/Addresses.h` with the engine's name for it, what it is, how it was found, and the date. A layout goes into a class header under `src/dao/`, like `ClientExoApp.h`, with the evidence per field. A field a getter command returns goes through `dev/script_fields.csv` and `tools/gen_script_fields.py` instead, and gets its name in `Objects.h`. A hypothesis is tried in the probe plugin before anything relies on it: detour, log what arrives (`dao::TypeName` says what an object is), change nothing.
 
 ## Hooking on x86
 

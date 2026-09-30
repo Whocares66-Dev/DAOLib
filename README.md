@@ -3,7 +3,7 @@
 A native plugin loader and reverse-engineered library for **Dragon Age: Origins** (GOG Ultimate Edition, `DAOrigins.exe` 1.05.13263.0), in the spirit of SKSE and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) for Skyrim: for what the toolset's scripting cannot reach.
 
 - `src/loader` -- `version.dll`, loaded by the game in place of the system's, which loads plugins from `bin_ship\daolib\plugins\` before the game starts.
-- `src/dao` -- the library plugins are written against: addresses, the exe fingerprint, RTTI type names, detours, logging, and the first engine class (`CClientExoApp`: pause).
+- `src/dao` -- the library plugins are written against: addresses, the exe fingerprint, RTTI type names, detours, logging, and the engine's classes as plugins call them: `CClientExoApp` (pause, game mode, objects by id), creatures, placeables and waypoints with the fields their getters return, the script command table and the VM's stack (`dev/LIBRARY.md`).
 - `src/plugins/probe` -- the first plugin: hooks pause, logs every call and who made it, changes nothing.
 - `dev/` -- the plan, the reading so far, and two maps of the engine: its 827 script commands and its 314 message handlers.
 - `tools/` -- build, deploy, Ghidra analysis and MCP, exe readers.
