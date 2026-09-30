@@ -85,3 +85,37 @@ find_package(spdlog CONFIG REQUIRED)
 find_path(DETOURS_INCLUDE_DIRS "detours/detours.h" REQUIRED)
 find_library(DETOURS_LIBRARY detours REQUIRED)
 
+# ---------------------------------------------------------------------------
+# daolib -- the library plugins are written against: where the game's code
+# and data are (Addresses.h, relocated if the exe is ever loaded off its
+# preferred base), the exe fingerprint every address was read from, class
+# names from the engine's RTTI, a detour wrapper, and a log per DLL.
+#
+# `dao/core` is the part that never touches the running game -- pure
+# functions over bytes and numbers -- and is what tests/ covers. The rest
+# reads process memory and is verified in play.
+# ---------------------------------------------------------------------------
+add_library(
+    daolib
+    STATIC
+    src/dao/core/CallSite.cpp
+    src/dao/core/Fingerprint.cpp
+    src/dao/core/Pe.cpp
+    src/dao/core/Rtti.cpp
+)
+dao_apply_warnings(daolib)
+target_include_directories(daolib PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(daolib SYSTEM PUBLIC ${DETOURS_INCLUDE_DIRS})
+target_link_libraries(daolib PUBLIC spdlog::spdlog ${DETOURS_LIBRARY})
+target_compile_definitions(
+    daolib
+    PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX DAO_VERSION_STRING="${PROJECT_VERSION}"
+)
+
+# ---------------------------------------------------------------------------
+# Tests, over dao/core: what can be checked without the game.
+# ---------------------------------------------------------------------------
+if(DAO_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
