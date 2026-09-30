@@ -45,9 +45,17 @@
 // +0x18) is the direction from the focus to the camera, from +x toward +y,
 // in radians, and the update keeps it: SetYaw (0x006C2B90, __thiscall
 // (float), `ret 4`) turns the camera at once. The pitch at +0x20 is from
-// straight above: 45 degrees in the tactical view and about 80 close in,
-// seen in play. The camera's own position is at +0x80. Only the zoom and
-// the pitch are seen in play so far.
+// straight above, about the camera's own pivot, which sits above the
+// focus. The camera's own position is at +0x80.
+//
+// Seen in play, 2026-09-30, as the player zoomed, tilted and turned: the
+// yaw equal to the direction from the focus to the camera's position
+// within 0.02 in both views, running past 2 pi as the player turned (it
+// is not wrapped), and kept through a change of view; the pitch 45 degrees
+// in the tactical view whatever the turning, and 65 to 125 close in as the
+// player tilted; the camera 3.8 m from the focus close in and 21.3 m in
+// the tactical view. Following, SetYaw and the offset's setter are not yet
+// seen.
 #pragma once
 
 #include "dao/Addresses.h"
