@@ -4,6 +4,7 @@ toolset's templates.
 
     python tools/gff4.py --dump FILE [--depth N] [--items N]
     python tools/gff4.py --templates FILE
+    python tools/gff4.py --import-names [XOREOS]   rewrite dev/gff4_fields.csv
 
 A GFF4 file is a header, a table of struct templates (each a four-letter
 label, a size, and its fields: a numeric label, a type, flags and an
@@ -16,15 +17,17 @@ and flags and a value or an offset. Read 2026-09-30 against the game's
 files, with xoreos's reader (src/aurora/gff4file.cpp) as the account of
 the format.
 
-Field labels are numbers. xoreos names 2,494 of them for the Dragon Age
-games (src/aurora/gff4fields.h); with a clone of xoreos at
-C:\\Modding\\xoreos (or DAO_XOREOS), --dump shows those names. The table is
-xoreos's, GPL, so it is read from the clone, not copied here.
+Field labels are numbers. dev/gff4_fields.csv names them: xoreos's table
+(src/aurora/gff4fields.h, GPL version 3 or later, as DAOLib is), taken
+from a clone by --import-names with xoreos's notice kept at the file's
+head.
 """
 
+import csv
 import os
 import re
 import struct
+import subprocess
 import sys
 
 LIST, STRUCT, REFERENCE = 0x8000, 0x4000, 0x2000
@@ -53,17 +56,57 @@ TYPES = {
 GENERIC = 0xFFFF
 GENERIC_SIZE = 8
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+NAMES = os.path.join(HERE, "..", "dev", "gff4_fields.csv")
 XOREOS = os.environ.get("DAO_XOREOS", r"C:\Modding\xoreos")
 
 
-def field_names(path=None):
-    """{label: name} from xoreos's gff4fields.h, or {} without a clone."""
-    path = path or os.path.join(XOREOS, "src", "aurora", "gff4fields.h")
+def field_names(path=NAMES):
+    """{label: name} from dev/gff4_fields.csv, skipping its notice (# lines)."""
     try:
-        text = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8", newline="") as f:
+            rows = csv.reader(line for line in f if not line.startswith("#"))
+            next(rows, None)
+            return {int(label): name for label, name in rows}
     except OSError:
         return {}
-    return {int(n): name for name, n in re.findall(r"kGFF4(\w+)\s*=\s*(\d+)\s*,", text)}
+
+
+def parse_xoreos(text):
+    """[(label, name)] from xoreos's gff4fields.h."""
+    return [
+        (int(n), name) for name, n in re.findall(r"kGFF4(\w+)\s*=\s*(\d+)\s*,", text)
+    ]
+
+
+def import_names(xoreos=XOREOS, out=NAMES):
+    """Rewrite dev/gff4_fields.csv from a xoreos clone, its notice first."""
+    header = os.path.join(xoreos, "src", "aurora", "gff4fields.h")
+    text = open(header, encoding="utf-8").read()
+    notice = text[text.index("/*") + 2 : text.index("*/")]
+    rows = parse_xoreos(text)
+    try:
+        commit = subprocess.run(
+            ["git", "-C", xoreos, "log", "-1", "--format=%h %cs"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        commit = "unknown commit"
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "# GFF4 field labels and their names, from xoreos's src/aurora/gff4fields.h\n"
+        )
+        f.write(
+            f"# (https://github.com/xoreos/xoreos, {commit}), by tools/gff4.py --import-names. Its notice:\n"
+        )
+        for line in notice.strip().splitlines():
+            f.write("#" + line.lstrip(" *").rstrip().join(["  ", ""]).rstrip() + "\n")
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["label", "name"])
+        w.writerows(rows)
+    return len(rows)
 
 
 class Gff4:
@@ -273,6 +316,10 @@ def show(value, names, indent="", items=8, out=sys.stdout):
 
 
 def main(argv):
+    if argv[:1] == ["--import-names"]:
+        count = import_names(*argv[1:2])
+        print(f"wrote {os.path.normpath(NAMES)}: {count} names")
+        return 0
     if len(argv) < 2 or argv[0] not in ("--dump", "--templates"):
         print(__doc__)
         return 2

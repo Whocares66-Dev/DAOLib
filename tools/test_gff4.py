@@ -66,18 +66,31 @@ class Gff4Test(unittest.TestCase):
         top = gff4.Gff4(build()).walk(depth=0)
         self.assertEqual(top[5], "...")
 
-    def test_names_come_from_a_header(self):
+    def test_names_parse_from_xoreos_and_read_back(self):
         import os
         import tempfile
 
+        text = "/* notice */\n\tkGFF4Tag = 1,\n\tkGFF4SavegameCampaign = 16000,\n"
+        self.assertEqual(
+            gff4.parse_xoreos(text), [(1, "Tag"), (16000, "SavegameCampaign")]
+        )
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "gff4fields.h")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write("\tkGFF4Tag = 1,\n\tkGFF4SavegameCampaign = 16000,\n")
+            os.makedirs(os.path.join(d, "src", "aurora"))
+            with open(
+                os.path.join(d, "src", "aurora", "gff4fields.h"), "w", encoding="utf-8"
+            ) as f:
+                f.write(text)
+            out = os.path.join(d, "names.csv")
+            self.assertEqual(gff4.import_names(d, out), 2)
             self.assertEqual(
-                gff4.field_names(path), {1: "Tag", 16000: "SavegameCampaign"}
+                gff4.field_names(out), {1: "Tag", 16000: "SavegameCampaign"}
             )
-        self.assertEqual(gff4.field_names(os.path.join("no", "such", "file.h")), {})
+        self.assertEqual(gff4.field_names(os.path.join("no", "such", "file.csv")), {})
+
+    def test_the_committed_table_names_the_save_fields(self):
+        names = gff4.field_names()
+        self.assertEqual(names.get(16000), "SavegameCampaign")
+        self.assertGreater(len(names), 2000)
 
 
 if __name__ == "__main__":
