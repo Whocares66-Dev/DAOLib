@@ -27,6 +27,7 @@
 #include "dao/String.h"
 #include "dao/Tlk.h"
 #include "dao/TypeName.h"
+#include "dao/core/Msvc8.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <Windows.h>
@@ -226,6 +227,13 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             spdlog::info("message {} to {}", dao::TypeName(&message),
                          receiver != nullptr ? dao::TypeName(receiver) : std::string("nobody"));
         }
+    });
+    dao::messages::OnMessage<dao::messages::SaveGameMessage>([](void *, const dao::messages::SaveGameMessage &m) {
+        const auto &name = *reinterpret_cast<const dao::core::WStringRep *>(m.name);
+        spdlog::info("SaveGameMessage: slot {}, kind {}, name \"{}\"", m.slot, m.kind, dao::Utf8(name.View()));
+    });
+    dao::messages::OnMessage<dao::messages::LoadGameMessage>([](void *, const dao::messages::LoadGameMessage &m) {
+        spdlog::info("LoadGameMessage: slot {}, kind {}", m.slot, m.kind);
     });
     dao::messages::OnMessage<dao::messages::SetGameModeMessage>([](void *, const dao::messages::SetGameModeMessage &m) {
         spdlog::info("SetGameModeMessage: mode {}", m.mode);

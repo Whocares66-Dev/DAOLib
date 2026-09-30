@@ -38,7 +38,9 @@ Read 2026-09-30 (`src/dao/Addresses.h`, `SaveGame`):
 - **Writing.** `SaveGame::Write` writes `<name>.das` and `<name>.das.met` there, `savegame` if the name is empty.
 - **Loading.** `SaveGame::FindSave` finds the `.das` in a slot's folder for loading.
 
-The probe logs both calls with their arguments. Once a session shows them, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
+In play, 2026-09-30: `FindSave` was called for a load (character, slot 2, kind 0), but `Write` was not called for a quicksave that was written. Saves run in the loading game mode, whose worker (`GameModeLoading::Worker`) calls `Write` only when a check passes. Its step 10 writes the save's screenshot through `SaveGame::WriteScreenshot`, with the slot and kind resolved. The probe logs that too, and the example plugin logs every `SaveGameMessage` and `LoadGameMessage` with its slot, kind and name.
+
+Once a session shows them, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
 
 ## What it means for plugins
 

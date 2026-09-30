@@ -35,6 +35,7 @@
 #include "dao/ObjectId.h"
 #include "dao/generated/MessageHandlers.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 
@@ -154,6 +155,29 @@ struct CenterOnObjectMessage : Message
     ObjectId object;
 };
 static_assert(sizeof(CenterOnObjectMessage) == 8);
+
+// Asking for a save or a load: SaveLoadProxy's handlers read the slot at
+// +4 and the kind at +8 (0 a manual save, 1 an autosave, 2 the quicksave,
+// 3 a fourth; a slot of -1 lets the handler choose, as the quicksave's key
+// binding "SaveGameMessage -1 2" asks). A save's message is 0x28 bytes, a
+// name after (an engine std::wstring, which its clone copies). Read
+// 2026-09-30; the example plugin logs both in play.
+struct SaveGameMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B00098;
+    std::int32_t slot;
+    std::int32_t kind;
+    std::byte name[0x1C]; // an engine std::wstring (dao/core/Msvc8.h, WStringRep)
+};
+static_assert(sizeof(SaveGameMessage) == 0x28);
+
+struct LoadGameMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B03A14;
+    std::int32_t slot;
+    std::int32_t kind;
+};
+static_assert(sizeof(LoadGameMessage) == 0xC);
 
 // Switch the game's mode (dao/GameModes.h). 8 bytes; the controller's
 // handler (0x006416E0) passes +4 to SetGameMode.

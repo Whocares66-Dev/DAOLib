@@ -228,6 +228,25 @@ int __cdecl FindSave(void *out, const dao::core::WStringRep *character, std::int
     return g_findSave.Original()(out, character, slot, kind);
 }
 
+// The loading mode writing a save's screenshot (dao/Addresses.h,
+// SaveGame::WriteScreenshot): the slot and kind a save resolved to, as it
+// is written. Observe only.
+using WriteScreenshotFn = int(__fastcall *)(void *self, int edx, dao::core::WStringRep *out,
+                                            const dao::core::WStringRep *character, std::int32_t slot,
+                                            std::int32_t kind, std::int32_t fifth);
+dao::Detour<WriteScreenshotFn> g_writeScreenshot;
+
+int __fastcall WriteScreenshot(void *self, int edx, dao::core::WStringRep *out, const dao::core::WStringRep *character,
+                               std::int32_t slot, std::int32_t kind, std::int32_t fifth)
+{
+    const int result = g_writeScreenshot.Original()(self, edx, out, character, slot, kind, fifth);
+    spdlog::info("SaveGame::WriteScreenshot on {} ({}): character \"{}\", slot {}, kind {}, fifth {}, path \"{}\", "
+                 "result {:#x}",
+                 self, dao::TypeName(self), character != nullptr ? dao::Utf8(character->View()) : std::string("none"),
+                 slot, kind, fifth, out != nullptr ? dao::Utf8(out->View()) : std::string("none"), result);
+    return result;
+}
+
 template <class Fn> void Place(dao::Detour<Fn> &detour, std::uintptr_t address, Fn hook, const char *what)
 {
     if (detour.Attach(address, hook))
@@ -272,6 +291,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_openMovie, dao::addr::kScaleformManager_OpenMovie, &OpenMovie, "GUI::ScaleformManager::OpenMovie");
     Place(g_writeSave, dao::addr::kSaveGame_Write, &WriteSave, "SaveGame::Write");
     Place(g_findSave, dao::addr::kSaveGame_FindSave, &FindSave, "SaveGame::FindSave");
+    Place(g_writeScreenshot, dao::addr::kSaveGame_WriteScreenshot, &WriteScreenshot, "SaveGame::WriteScreenshot");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
 
@@ -284,6 +304,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         static_cast<std::uint32_t>(dao::addr::kScaleformManager_OpenMovie),
         static_cast<std::uint32_t>(dao::addr::kSaveGame_Write),
         static_cast<std::uint32_t>(dao::addr::kSaveGame_FindSave),
+        static_cast<std::uint32_t>(dao::addr::kSaveGame_WriteScreenshot),
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",
