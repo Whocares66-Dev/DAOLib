@@ -13,6 +13,7 @@
 #include "dao/TypeName.h"
 #include "dao/core/ObjectType.h"
 #include "dao/generated/ObjectCasts.h"
+#include "dao/generated/ScriptApi.h"
 #include "dao/generated/ScriptFields.h"
 
 #include <array>
@@ -34,6 +35,8 @@ using dao::generated::ScriptGetter;
 
 // Mismatches logged as they happen, per getter; the rest are counted.
 constexpr std::uint32_t kMismatchesLogged = 5;
+// Values logged as they come, per check, to show what was seen.
+constexpr std::uint32_t kValuesLogged = 3;
 
 struct Check
 {
@@ -164,6 +167,37 @@ Expected ExpectedOf(ObjectClass objectClass)
     return {CastSlot::CCObject, std::nullopt};
 }
 
+// -- calling commands from C++ (dao::script::Invoke, the generated API) -----
+//
+// From inside the shadows, on the scripts' thread and in the middle of a
+// script's command, the probe calls other commands through the library
+// and checks their answers against what it already knows. None of the
+// three is shadowed, so each call goes straight to the engine's handler.
+struct InvokeCheck
+{
+    const char *name;
+    std::atomic<std::uint32_t> matched{0};
+    std::atomic<std::uint32_t> mismatched{0};
+};
+InvokeCheck g_objectType{"api::GetObjectType"};
+InvokeCheck g_stringLength{"api::GetStringLength"};
+InvokeCheck g_positionFromLocation{"api::GetPositionFromLocation"};
+
+void InvokeResult(InvokeCheck &check, bool same, const std::string &shown)
+{
+    if (same)
+    {
+        if (check.matched++ < kValuesLogged)
+        {
+            spdlog::info("invoke check {}: {}", check.name, shown);
+        }
+    }
+    else if (check.mismatched++ < kMismatchesLogged)
+    {
+        spdlog::warn("invoke check {}: {}", check.name, shown);
+    }
+}
+
 void CheckObject(Check &check, dao::CClientExoApp *app, dao::ObjectId object, void *target)
 {
     const ScriptGetter &getter = *check.getter;
@@ -174,6 +208,15 @@ void CheckObject(Check &check, dao::CClientExoApp *app, dao::ObjectId object, vo
     dao::CGameObject *game = app->GetGameObjectById(object);
     void *cast = game != nullptr ? game->Cast(expected.cast) : nullptr;
     const bool typeOk = type && (!expected.type || *type == static_cast<std::uint8_t>(*expected.type));
+    if (type)
+    {
+        const std::int32_t answer = dao::script::api::GetObjectType(object);
+        const auto fromType =
+            static_cast<std::int32_t>(dao::core::ScriptObjectType(static_cast<dao::core::ObjectType>(*type)));
+        InvokeResult(
+            g_objectType, answer == fromType,
+            fmt::format("object {:#010x}: {} from the command, {} from its type byte", object, answer, fromType));
+    }
     if (id && *id == object && typeOk && game == target && cast == target)
     {
         ++check.objectMatched;
@@ -325,8 +368,6 @@ struct PeekState
 };
 std::array<PeekState, dao::script::kSlots> g_peeks;
 
-constexpr std::uint32_t kValuesLogged = 3;
-
 void Matched(PeekState &state, const std::string &value)
 {
     if (state.matched++ < kValuesLogged)
@@ -366,6 +407,9 @@ void PeekString(PeekState &state)
     if (first == second)
     {
         Matched(state, fmt::format("\"{}\", {} characters, round trip the same", dao::Utf8(first), first.size()));
+        const std::int32_t length = dao::script::api::GetStringLength(first);
+        InvokeResult(g_stringLength, length == static_cast<std::int32_t>(first.size()),
+                     fmt::format("\"{}\": {} from the command, {} characters", dao::Utf8(first), length, first.size()));
     }
     else
     {
@@ -413,6 +457,9 @@ void PeekLocation(PeekState &state)
         first.area == second.area && areaOk)
     {
         Matched(state, shown + ", round trip the same");
+        const dao::Vector position = dao::script::api::GetPositionFromLocation(first);
+        InvokeResult(g_positionFromLocation, SameVector(position, first.position),
+                     "from the command " + Show(position) + ", in the location " + Show(first.position));
     }
     else
     {
@@ -749,6 +796,14 @@ void ReportScriptChecks()
         }
         spdlog::info("script check {} ({}): {} calls, {} matched, {} mismatched, {} failed", peek.name, peek.command,
                      state.calls.load(), state.matched.load(), state.mismatched.load(), state.failed.load());
+    }
+    for (const InvokeCheck *check : {&g_objectType, &g_stringLength, &g_positionFromLocation})
+    {
+        if (check->matched + check->mismatched > 0)
+        {
+            spdlog::info("invoke check {}: {} matched, {} mismatched", check->name, check->matched.load(),
+                         check->mismatched.load());
+        }
     }
     spdlog::info("script checks: {} of {} getters called, {} of those matched on every object", called,
                  std::size(dao::generated::kScriptGetters), clean);

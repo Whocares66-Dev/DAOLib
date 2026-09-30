@@ -54,4 +54,6 @@ Since 2026-09-30 it also shadows commands of the other value types (`kPeeks` in 
 
 Since 2026-09-30 the probe also watches the engine's event queue (`Events.h`): a detour on `AIMaster::ProcessEvent` counts every event it delivers, by the queue's id and, for script events (id 10, a `CScriptEvent`), by `EVENT_TYPE_*`, and logs the first three of each kind with target and caller. The counts go out with the recorder's health line. The question it answers is whether `EVENT_TYPE_COMMAND_COMPLETE` goes through the queue, where a turn-based mode could hold it.
 
+The probe also calls commands through the library's `Invoke` (`dao/generated/ScriptApi.h`) from inside its shadows, on the scripts' thread: `api::GetObjectType` on every object a getter check finds, against the scripts' bit for its type byte; `api::GetStringLength` on every `GetTag` and `GetName` answer, against its length; `api::GetPositionFromLocation` on every `GetLocation` answer, against the location's position. Their counts go out with the rest as `invoke check` lines.
+
 A getter no script calls in a session stays unchecked. The census saw `GETCOMBATSTATE` run through every fight; the placeable getters want chests and locks, and `GetMapPinState` the world map.
