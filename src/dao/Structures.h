@@ -61,12 +61,57 @@ enum class EngineStructure : std::int32_t
     Player = 5,
 };
 
-// An effect, and an item property. Polymorphic (RTTI names the class) and
-// 0x7C bytes. The fields are the ones GetEffectType and its six siblings
-// read, one shared command body (0x0065C270) switching on the command's
-// number; the parameters are lists the effect's own getters index,
-// bounds-checked, with a default out of range.
-class CGameEffect
+// What CGameEffect and CScriptEvent both start with (the RTTI's base class
+// descriptors: CDataArrays at +0 of each): a vtable, then pointers to the
+// std::vectors of parameters a script reads by index with
+// GetEffectInteger, GetEventInteger and the like, which call the same four
+// functions for both. Ints at +0x4, floats at +0x8, objects at +0x10,
+// strings at +0x14; +0xC is not read yet. Out of range, each gives what the
+// engine gives: 0, 0.0, -1 and an empty string.
+class CDataArrays
+{
+  public:
+    CDataArrays() = delete;
+    CDataArrays(const CDataArrays &) = delete;
+    CDataArrays &operator=(const CDataArrays &) = delete;
+    ~CDataArrays() = delete;
+
+    std::int32_t Integer(std::int32_t index) const
+    {
+        using Fn = std::int32_t(__fastcall *)(const CDataArrays *, int, std::int32_t);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetInteger))(this, 0, index);
+    }
+    float Float(std::int32_t index) const
+    {
+        using Fn = float(__fastcall *)(const CDataArrays *, int, std::int32_t);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetFloat))(this, 0, index);
+    }
+    ObjectId Object(std::int32_t index) const
+    {
+        using Fn = ObjectId(__fastcall *)(const CDataArrays *, int, std::int32_t);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetObject))(this, 0, index);
+    }
+    // The engine's string, valid while the structure is.
+    std::wstring_view String(std::int32_t index) const
+    {
+        using Fn = const core::WStringRep *(__fastcall *)(const CDataArrays *, int, std::int32_t);
+        const auto *rep = reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetString))(this, 0, index);
+        return rep != nullptr ? rep->View() : std::wstring_view{};
+    }
+
+  protected:
+    template <class T> const T &Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+};
+
+// An effect, and an item property. Polymorphic and 0x7C bytes. The fields
+// are the ones GetEffectType and its six siblings read, one shared command
+// body (0x0065C270) switching on the command's number. Checked in play
+// 2026-09-30: type, duration type, creator and ability id matched the
+// engine's getters on every call of a fight.
+class CGameEffect : public CDataArrays
 {
   public:
     CGameEffect() = delete;
@@ -104,36 +149,33 @@ class CGameEffect
     {
         return Read<std::int32_t>(0x44);
     }
+};
 
-    // The parameters, by index: GetEffectInteger and its kin call these.
-    // Out of range: 0, 0.0, -1 and an empty string, as the engine gives.
-    std::int32_t Integer(std::int32_t index) const
-    {
-        using Fn = std::int32_t(__fastcall *)(const CGameEffect *, int, std::int32_t);
-        return reinterpret_cast<Fn>(Module::Address(addr::kCGameEffect_GetInteger))(this, 0, index);
-    }
-    float Float(std::int32_t index) const
-    {
-        using Fn = float(__fastcall *)(const CGameEffect *, int, std::int32_t);
-        return reinterpret_cast<Fn>(Module::Address(addr::kCGameEffect_GetFloat))(this, 0, index);
-    }
-    ObjectId Object(std::int32_t index) const
-    {
-        using Fn = ObjectId(__fastcall *)(const CGameEffect *, int, std::int32_t);
-        return reinterpret_cast<Fn>(Module::Address(addr::kCGameEffect_GetObject))(this, 0, index);
-    }
-    // The engine's string, valid while the effect is.
-    std::wstring_view String(std::int32_t index) const
-    {
-        using Fn = const core::WStringRep *(__fastcall *)(const CGameEffect *, int, std::int32_t);
-        const auto *rep = reinterpret_cast<Fn>(Module::Address(addr::kCGameEffect_GetString))(this, 0, index);
-        return rep != nullptr ? rep->View() : std::wstring_view{};
-    }
+// An event: what an event script gets from GetCurrentEvent, and what
+// SignalEvent sends. Polymorphic and 0x50 bytes. Its parameters are the
+// CDataArrays' (GetEventInteger calls the same getter as GetEffectInteger);
+// its own fields are the ones GetEventType (0x00658390), GetEventCreator
+// (0x006582A0) and GetEventTarget (0x00659030) read.
+class CScriptEvent : public CDataArrays
+{
+  public:
+    CScriptEvent() = delete;
+    CScriptEvent(const CScriptEvent &) = delete;
+    CScriptEvent &operator=(const CScriptEvent &) = delete;
+    ~CScriptEvent() = delete;
 
-  private:
-    template <class T> const T &Read(std::size_t offset) const
+    // EVENT_TYPE_* in script.ldf.
+    std::int32_t Type() const
     {
-        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+        return Read<std::int32_t>(0x20);
+    }
+    ObjectId Creator() const
+    {
+        return Read<ObjectId>(0x24);
+    }
+    ObjectId Target() const
+    {
+        return Read<ObjectId>(0x28);
     }
 };
 

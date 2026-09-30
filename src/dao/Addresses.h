@@ -130,7 +130,9 @@ inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
 // VM call, against its return type (the pushes). Votes for the winner, of
 // all cast, beside each. The addresses run in NWN's declaration order --
 // integer, float, vector, string, then DAO's own resource and array types,
-// engine structure, object -- pops and pushes each together. The int and
+// engine structure, object -- pops and pushes each together. Strings and
+// engine structures (locations, effects) were round-tripped in play too,
+// 2026-09-30, by the probe's value-type checks (dev/LIBRARY.md). The int and
 // object pops and pushes were verified in play 2026-09-30: the probe's
 // script checks popped and pushed back each getter's argument and answer
 // on about 2,200 calls, and the scripts ran on unchanged. The rest are not
@@ -175,15 +177,31 @@ DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
 DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
 DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
-// An effect's parameters by index, from GetEffectInteger and its three
-// siblings (one body, 0x00651270): __thiscall, the index, `ret 4`. Each
-// indexes a std::vector the effect points to (+0x4 ints, +0x8 floats,
-// +0x10 objects, +0x14 strings), bounds-checked; out of range, 0, 0.0, -1,
-// and a static empty string. GetString returns a pointer to the string.
-DAO_ADDRESS(kCGameEffect_GetInteger, "CGameEffect::GetInteger", 0x00A5A220)
-DAO_ADDRESS(kCGameEffect_GetFloat, "CGameEffect::GetFloat", 0x00A5A250)
-DAO_ADDRESS(kCGameEffect_GetObject, "CGameEffect::GetObject", 0x00A5A2B0)
-DAO_ADDRESS(kCGameEffect_GetString, "CGameEffect::GetString", 0x00A5A2E0)
+// The parameters by index of CDataArrays, the base CGameEffect and
+// CScriptEvent share at +0 (the RTTI's base class descriptors), from
+// GetEffectInteger and its three siblings (one body, 0x00651270) and
+// GetEventInteger and its kin, which call the same four: __thiscall, the
+// index, `ret 4`. Each indexes a std::vector the structure points to (+0x4
+// ints, +0x8 floats, +0x10 objects, +0x14 strings), bounds-checked; out of
+// range, 0, 0.0, -1, and a static empty string. GetString returns a
+// pointer to the string.
+DAO_ADDRESS(kCDataArrays_GetInteger, "CDataArrays::GetInteger", 0x00A5A220)
+DAO_ADDRESS(kCDataArrays_GetFloat, "CDataArrays::GetFloat", 0x00A5A250)
+DAO_ADDRESS(kCDataArrays_GetObject, "CDataArrays::GetObject", 0x00A5A2B0)
+DAO_ADDRESS(kCDataArrays_GetString, "CDataArrays::GetString", 0x00A5A2E0)
+
+// Script arrays (dao/core/ScriptArray.h), read 2026-09-30. The value is
+// the tag and a shared payload; these make, copy, measure and free one,
+// __thiscall each. StackPopArray (above) makes the popper a copy with
+// operator new and CopyConstructor; StackPushArray copies the one it is
+// given, so the caller keeps and frees its own, as GetTeam (0x0066E570)
+// does: Destructor, then operator delete. The engine's name for the class
+// is not in the exe.
+DAO_ADDRESS(kScriptArray_Constructor, "ScriptArray::ScriptArray", 0x00A2E920) // (tag): empty
+DAO_ADDRESS(kScriptArray_CopyConstructor, "ScriptArray::ScriptArray_copy", 0x00A2D260)
+DAO_ADDRESS(kScriptArray_Destructor, "ScriptArray::~ScriptArray", 0x00A2E830)
+DAO_ADDRESS(kScriptArray_Size, "ScriptArray::Size", 0x00A2DB80)
+DAO_ADDRESS(kCVirtualMachine_StackPushArray, "CVirtualMachine::StackPushArray", 0x00A2D7C0)
 
 // The engine's std::wstring, MSVC 2005's (dao/core/Msvc8.h), read
 // 2026-09-30 from GetStringLength (0x00657CC0), which makes one on its

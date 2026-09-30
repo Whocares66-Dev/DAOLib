@@ -1,4 +1,5 @@
 #include "dao/core/Msvc8.h"
+#include "dao/core/ScriptArray.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -61,4 +62,34 @@ TEST_CASE("an engine vector's elements run from first to last", "[msvc8]")
 
     const VectorRep<int> none{0, nullptr, nullptr, nullptr};
     CHECK(none.View().empty());
+}
+
+TEST_CASE("a script array's tag says what it holds", "[arrays]")
+{
+    using dao::core::ArrayStructure;
+    using dao::core::IsArrayTag;
+    CHECK(IsArrayTag(0x40));
+    CHECK(IsArrayTag(0x43));
+    CHECK(IsArrayTag(0x44));
+    CHECK_FALSE(IsArrayTag(0x45));
+    CHECK_FALSE(IsArrayTag(0x4F));
+    CHECK(IsArrayTag(0x53));
+    CHECK_FALSE(IsArrayTag(0x5A));
+    CHECK_FALSE(IsArrayTag(6));       // an object, not an array
+    CHECK(ArrayStructure(0x53) == 3); // effect[]
+    CHECK(ArrayStructure(0x43) == -1);
+}
+
+TEST_CASE("a script array's elements are its payload's vector", "[arrays]")
+{
+    std::array<std::uint32_t, 2> ids{0x82, 0x6a8};
+    VectorRep<std::uint32_t> vector{0, ids.data(), ids.data() + 2, ids.data() + 2};
+    std::int32_t references = 1;
+    dao::core::ArrayRep::Payload payload{&vector, &references};
+    const dao::core::ArrayRep array{0x43, &payload};
+    REQUIRE(array.Elements().size() == 2);
+    CHECK(array.Elements()[1] == 0x6a8);
+
+    const dao::core::ArrayRep empty{0x43, nullptr};
+    CHECK(empty.Elements().empty());
 }

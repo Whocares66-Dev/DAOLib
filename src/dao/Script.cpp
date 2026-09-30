@@ -9,6 +9,7 @@
 #include <Windows.h>
 
 #include <cstddef>
+#include <cstring>
 
 namespace dao::script
 {
@@ -165,6 +166,98 @@ OwnedEffect Stack::PopEffect()
     return OwnedEffect{static_cast<CGameEffect *>(PopStructure(EngineStructure::Effect))};
 }
 
+OwnedEvent Stack::PopEvent()
+{
+    return OwnedEvent{static_cast<CScriptEvent *>(PopStructure(EngineStructure::Event))};
+}
+
+Array Stack::PopArray()
+{
+    core::ArrayRep *popped = nullptr;
+    if (!CallVm<core::ArrayRep **>(addr::kCVirtualMachine_StackPopArray, &popped))
+    {
+        return Array{};
+    }
+    return Array{popped};
+}
+
+Array::~Array()
+{
+    if (array_ == nullptr)
+    {
+        return;
+    }
+    // As GetTeam frees its own: the destructor, which drops the payload's
+    // reference, then the engine's operator delete for the 8 bytes.
+    using Destructor = void(__fastcall *)(core::ArrayRep *, int);
+    reinterpret_cast<Destructor>(Module::Address(addr::kScriptArray_Destructor))(array_, 0);
+    using Delete = void(__cdecl *)(void *);
+    reinterpret_cast<Delete>(Module::Address(addr::kOperatorDelete))(array_);
+}
+
+std::uint32_t Array::Element(core::ArrayTag kind, std::size_t index) const
+{
+    if (array_ == nullptr || array_->tag != static_cast<std::int32_t>(kind))
+    {
+        return 0;
+    }
+    const auto elements = array_->Elements();
+    return index < elements.size() ? elements[index] : 0;
+}
+
+std::int32_t Array::Int(std::size_t index) const
+{
+    return static_cast<std::int32_t>(Element(core::ArrayTag::Int, index));
+}
+
+float Array::Float(std::size_t index) const
+{
+    const std::uint32_t bits = Element(core::ArrayTag::Float, index);
+    float value = 0;
+    std::memcpy(&value, &bits, sizeof value);
+    return value;
+}
+
+ObjectId Array::Object(std::size_t index) const
+{
+    if (array_ == nullptr || array_->tag != static_cast<std::int32_t>(core::ArrayTag::Object) ||
+        index >= array_->Elements().size())
+    {
+        return kInvalidObject;
+    }
+    return array_->Elements()[index];
+}
+
+std::wstring_view Array::String(std::size_t index) const
+{
+    const auto *string = reinterpret_cast<const core::WStringRep *>(Element(core::ArrayTag::String, index));
+    return string != nullptr ? string->View() : std::wstring_view{};
+}
+
+const void *Array::Structure(std::size_t index) const
+{
+    if (array_ == nullptr || core::ArrayStructure(array_->tag) < 0)
+    {
+        return nullptr;
+    }
+    const auto elements = array_->Elements();
+    return index < elements.size() ? reinterpret_cast<const void *>(elements[index]) : nullptr;
+}
+
+const CGameEffect *Array::Effect(std::size_t index) const
+{
+    return core::ArrayStructure(Tag()) == static_cast<std::int32_t>(EngineStructure::Effect)
+               ? static_cast<const CGameEffect *>(Structure(index))
+               : nullptr;
+}
+
+const CScriptEvent *Array::Event(std::size_t index) const
+{
+    return core::ArrayStructure(Tag()) == static_cast<std::int32_t>(EngineStructure::Event)
+               ? static_cast<const CScriptEvent *>(Structure(index))
+               : nullptr;
+}
+
 bool Stack::PushInt(std::int32_t value)
 {
     return CallVm<std::int32_t>(addr::kCVirtualMachine_StackPushInteger, value);
@@ -206,6 +299,16 @@ bool Stack::PushLocation(const CScriptLocation &value)
 bool Stack::PushEffect(const CGameEffect &value)
 {
     return PushStructure(EngineStructure::Effect, &value);
+}
+
+bool Stack::PushEvent(const CScriptEvent &value)
+{
+    return PushStructure(EngineStructure::Event, &value);
+}
+
+bool Stack::PushArray(const Array &value)
+{
+    return value.get() != nullptr && CallVm<const core::ArrayRep *>(addr::kCVirtualMachine_StackPushArray, value.get());
 }
 
 } // namespace dao::script

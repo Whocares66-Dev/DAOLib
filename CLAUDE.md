@@ -32,7 +32,7 @@ src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detour
                 the script's value types (Structures.h, String.h), Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
-                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector layouts); tested
+                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray; tested
 src/plugins/    one folder per plugin; probe/ is the first
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,

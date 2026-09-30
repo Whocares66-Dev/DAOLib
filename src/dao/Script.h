@@ -36,7 +36,9 @@
 
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
+#include "dao/core/ScriptArray.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -127,6 +129,62 @@ template <class T, EngineStructure Type> class Owned
     T *structure_ = nullptr;
 };
 using OwnedEffect = Owned<CGameEffect, EngineStructure::Effect>;
+using OwnedEvent = Owned<CScriptEvent, EngineStructure::Event>;
+
+// A script array popped off the stack (dao/core/ScriptArray.h): the
+// popper's copy, sharing the elements with the VM's, freed through the
+// engine. Move-only. The element getters read what the tag says the array
+// holds; an index out of range, or the wrong kind, gives the empty value.
+class Array
+{
+  public:
+    Array() = default;
+    explicit Array(core::ArrayRep *array) : array_(array)
+    {
+    }
+    ~Array();
+    Array(Array &&other) noexcept : array_(std::exchange(other.array_, nullptr))
+    {
+    }
+    Array &operator=(Array &&other) noexcept
+    {
+        std::swap(array_, other.array_);
+        return *this;
+    }
+    Array(const Array &) = delete;
+    Array &operator=(const Array &) = delete;
+
+    explicit operator bool() const
+    {
+        return array_ != nullptr;
+    }
+    core::ArrayRep *get() const
+    {
+        return array_;
+    }
+    std::int32_t Tag() const
+    {
+        return array_ != nullptr ? array_->tag : 0;
+    }
+    std::size_t Size() const
+    {
+        return array_ != nullptr ? array_->Elements().size() : 0;
+    }
+
+    std::int32_t Int(std::size_t index) const;
+    float Float(std::size_t index) const;
+    ObjectId Object(std::size_t index) const; // kInvalidObject out of range
+    std::wstring_view String(std::size_t index) const;
+    // An element of an array of engine structures, or null.
+    const void *Structure(std::size_t index) const;
+    const CGameEffect *Effect(std::size_t index) const;
+    const CScriptEvent *Event(std::size_t index) const;
+
+  private:
+    std::uint32_t Element(core::ArrayTag kind, std::size_t index) const;
+
+    core::ArrayRep *array_ = nullptr;
+};
 
 // The script VM's typed stack (dao/Addresses.h, voted across the exe's
 // commands against their script.ldf signatures). Each pop takes the next
@@ -135,8 +193,9 @@ using OwnedEffect = Owned<CGameEffect, EngineStructure::Effect>;
 // another type on top.
 //
 // Strings are the engine's std::wstring on the stack; these copy to and
-// from a plugin's own, through dao/String.h. A structure pushed is copied
-// by the VM, so the caller keeps its own; one popped is the VM's copy.
+// from a plugin's own, through dao/String.h. A structure or an array
+// pushed is copied by the VM, so the caller keeps its own; one popped is
+// the popper's copy, freed by the Owned or Array it comes in.
 struct Stack
 {
     static bool PopInt(std::int32_t &out);
@@ -146,6 +205,8 @@ struct Stack
     static bool PopVector(Vector &out);
     static bool PopLocation(CScriptLocation &out);
     static OwnedEffect PopEffect();
+    static OwnedEvent PopEvent();
+    static Array PopArray();
 
     static bool PushInt(std::int32_t value);
     static bool PushFloat(float value);
@@ -154,6 +215,9 @@ struct Stack
     static bool PushVector(const Vector &value);
     static bool PushLocation(const CScriptLocation &value);
     static bool PushEffect(const CGameEffect &value);
+    static bool PushEvent(const CScriptEvent &value);
+    // The VM makes a copy of its own, sharing the elements.
+    static bool PushArray(const Array &value);
 
     // Any engine structure: popped, the VM's copy, null if refused, the
     // caller's to destroy (DestroyStructure); pushed, copied.

@@ -66,7 +66,8 @@ What a script passes besides ints, floats and objects, read 2026-09-30 from the 
 | `vector` | three floats, pushed and popped one at a time | nobody: plain values |
 | `location` | 0x30 bytes, NWN's `CScriptLocation` shape: position at +0, orientation at +0x10, area id at +0x20 | plain data; a pop copies it out and frees the VM's copy |
 | `effect`, `itemproperty` | `CGameEffect`, 0x7C bytes, polymorphic: id, type, duration type, animation, flags, creator, ability id, and lists of int, float, object and string parameters | a pop is the VM's copy, the popper's to destroy: `Stack::PopEffect` returns it owned, destroyed through the engine |
-| `event` | `CScriptEvent`, 0x50 bytes, polymorphic | not read yet |
+| `event` | `CScriptEvent`, 0x50 bytes, polymorphic: type at +0x20, creator at +0x24, target at +0x28, and the same parameter lists as an effect (both are `CDataArrays` at +0) | as an effect: `Stack::PopEvent` returns it owned |
+| `T[]` | 8 bytes: a tag (0x40 int, 0x41 float, 0x42 string, 0x43 object, 0x44 resource, 0x50 plus a structure's number) and a payload shared between copies, a `std::vector` of 4-byte elements with a reference count (`dao/core/ScriptArray.h`) | a pop is the popper's 8 bytes, sharing the elements: `Stack::PopArray` returns a `dao::script::Array` that frees them through the engine |
 | `command` | from a pool the application keeps | not read yet |
 
 The engine structures are made, destroyed and copied by the commands object's slots 5, 6 and 8, which is also how the VM copies one on every push and pop.
@@ -85,7 +86,9 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
-| Strings, vectors, locations and effects on the stack; the effect's 7 fields | 2026-09-30 | round-tripped and compared by the script checks, from the next session |
+| Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
+| Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |
+| Events and arrays on the stack; the event's type, creator and target; `GetTeam`, `GetEffects`, `GetNearestObject` answers | 2026-09-30 | checked by the script checks, from the next session |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
 
 ## The first session
@@ -99,6 +102,10 @@ Every script command ran on one thread, the same one `InitializeCommands` ran on
 ## The second session
 
 2026-09-30, a fight. With the counts of matches on values other than 0: `GetCombatState` matched on a value other than 0 in 570 of its 632 calls, `GetPackageAI` in 224 of 292, `GetGroupId` in 33 of 41, so those fields read real, changing values. `GetCombatantType` only ever answered 0 in either session, so it stays the weakest of the 14. Every object looked up, 1,100 of them, had the id asked for at +0x10, its class's type byte at +0x14, and the engine's cast from the game object gave the typed lookup's pointer.
+
+## The third session
+
+2026-09-30, a fight, with the value types shadowed. `GetTag` ran 411 times and every answer came back the same through our pop and push, among them 21-character tags that live on the engine's heap (`bhn200cr_howe_landra1`). `GetName` gave `Dog` and `Lesser Lyrium Potion`. `GetLocation` ran 43 times: positions such as (-110.26, -79.82, 12.02), unit orientations, and an area id that named an area every time. With no spells in the party, the fight still put effects on its creatures: 46 `GetEffectType`, 19 `GetEffectCreator`, 16 `GetEffectAbilityID` and 14 `GetEffectDurationType` calls, each matching our accessor on the probe's own copy of the effect, the creators real creatures and the effect ids counting up (654, 655, 656).
 
 ## What comes next
 
