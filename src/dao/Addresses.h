@@ -206,6 +206,28 @@ DAO_ADDRESS(kScaleformManager_FindMovie, "GUI::ScaleformManager::FindMovie", 0x0
 DAO_ADDRESS(kGuiMovie_Invoke, "GuiMovie::Invoke", 0x00518850)
 DAO_ADDRESS(kDragonAgeGUISystem_IsMovieOnStage, "GUI::DragonAgeGUISystem::IsMovieOnStage", 0x0060C920)
 DAO_ADDRESS(kDragonAgeGUISystem_CallFunctionOnMovie, "GUI::DragonAgeGUISystem::CallFunctionOnMovie", 0x0060C990)
+// Loading a movie (dev/GUI.md), read 2026-09-30. GetMovieDef, __thiscall
+// (out GFxMovieDef*, const std::wstring &name), `ret 8`: the name's .swf
+// becomes .gfx, a definition already loaded comes from the manager's cache
+// at +0x18, and a new one from GFxLoader::CreateMovie (filename, flags).
+// CreateMovieView makes a view of it: an image visitor over the
+// definition, its slot 17 (GFx's CreateInstance), the view set up through
+// four of its slots, and cached at +0x44. OpenMovie, __thiscall (screen,
+// const std::wstring &name, layer, flags), `ret 0x10`: FindMovie, or a
+// view and a new 0x108-byte record (GuiMovie_Construct) with the third
+// argument at +0x2C, put in the set; then shown and activated. The GUI
+// system's OpenScreen (its slot 17) calls it with a screen's descriptor's
+// movie name (+0x74), +0x9C and +0xA4, and copies the descriptor's +0xBF
+// to the record's +0x100. What screen, layer and flags mean is for the
+// probe to show (it logs every call). The manager is made and its font
+// library loaded by Initialize, from the GUI system's slot 5.
+DAO_ADDRESS(kScaleformManager_Initialize, "GUI::ScaleformManager::Initialize", 0x00515FE0)
+DAO_ADDRESS(kScaleformManager_GetMovieDef, "GUI::ScaleformManager::GetMovieDef", 0x005146E0)
+DAO_ADDRESS(kScaleformManager_CreateMovieView, "GUI::ScaleformManager::CreateMovieView", 0x00514940)
+DAO_ADDRESS(kScaleformManager_OpenMovie, "GUI::ScaleformManager::OpenMovie", 0x00514B10)
+DAO_ADDRESS(kGuiMovie_Construct, "GuiMovie::GuiMovie", 0x0051A040)
+DAO_ADDRESS(kGUISystem_OpenScreen, "GUI::GUISystem::OpenScreen", 0x00523BF0)
+DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and

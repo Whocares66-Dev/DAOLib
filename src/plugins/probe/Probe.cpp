@@ -24,14 +24,17 @@
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Gui.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
 #include "dao/SafeRead.h"
 #include "dao/Script.h"
+#include "dao/String.h"
 #include "dao/TypeName.h"
 #include "dao/core/CallSite.h"
+#include "dao/core/Msvc8.h"
 
 #include <Windows.h>
 
@@ -39,6 +42,7 @@
 
 #include <array>
 #include <atomic>
+#include <string>
 
 namespace
 {
@@ -173,6 +177,27 @@ int __fastcall ClientAddCommand(void *commands, int edx, int id, int paramCount)
     return g_clientAddCommand.Original()(commands, edx, id, paramCount);
 }
 
+// The Scaleform manager's OpenMovie (dao/Addresses.h): every movie the
+// game opens, with what it passes, so the arguments' meanings are seen
+// before a plugin opens a movie of its own. Observe only.
+using OpenMovieFn = void(__fastcall *)(void *manager, int edx, void *screen, const dao::core::WStringRep *name,
+                                       std::int32_t layer, std::int32_t flags);
+dao::Detour<OpenMovieFn> g_openMovie;
+
+void __fastcall OpenMovie(void *manager, int edx, void *screen, const dao::core::WStringRep *name, std::int32_t layer,
+                          std::int32_t flags)
+{
+    const auto caller = dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    const std::wstring movie = name != nullptr ? std::wstring(name->View()) : std::wstring();
+    g_openMovie.Original()(manager, edx, screen, name, layer, flags);
+    void *record = dao::gui::FindOwner(movie);
+    spdlog::info("OpenMovie \"{}\" from {:#010x} on thread {}: screen {} at {}, layer {}, flags {:#x}; record {}, "
+                 "movie {}",
+                 dao::Utf8(movie), caller, GetCurrentThreadId(),
+                 screen != nullptr ? dao::TypeName(screen) : std::string("none"), screen, layer, flags, record,
+                 dao::gui::MovieOf(record));
+}
+
 template <class Fn> void Place(dao::Detour<Fn> &detour, std::uintptr_t address, Fn hook, const char *what)
 {
     if (detour.Attach(address, hook))
@@ -214,6 +239,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_queueCommand, dao::addr::kCCObject_QueueCommand, &QueueCommand, "CCObject::QueueCommand");
     Place(g_clientAddCommand, dao::addr::kCClientVirtualMachineCommands_AddCommand, &ClientAddCommand,
           "CClientVirtualMachineCommands::AddCommand");
+    Place(g_openMovie, dao::addr::kScaleformManager_OpenMovie, &OpenMovie, "GUI::ScaleformManager::OpenMovie");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
 
@@ -223,6 +249,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         static_cast<std::uint32_t>(dao::addr::kCClientExoApp_SetPaused),
         static_cast<std::uint32_t>(dao::addr::kCCObject_QueueCommand),
         static_cast<std::uint32_t>(dao::addr::kCClientVirtualMachineCommands_AddCommand),
+        static_cast<std::uint32_t>(dao::addr::kScaleformManager_OpenMovie),
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",

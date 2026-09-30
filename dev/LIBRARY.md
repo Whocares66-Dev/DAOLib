@@ -193,7 +193,7 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 ## What comes next
 
 - **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
-- **The Flash UI, from the game's side.** Loading a movie of a plugin's own and showing it on a layer; publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
+- **The Flash UI, from the game's side** (`dev/GUI.md`). Loading a movie of a plugin's own and showing it on a layer, once the probe shows what `OpenMovie`'s arguments mean; publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
 - **Messages.** 9 of the 296 message classes have a C++ struct; the rest, their fields' meanings. A plugin can send one and hook a handler, but not yet subscribe to a message class as it can a script event. Sending by name, as key bindings do (`SelectResponseMessage 0`), goes through a registry of factories (`0x0078D1A0`).
 - **Creatures.** Beyond the fields their getters give: attributes, health and mana or stamina, abilities, inventory, the party. From the constructors and NWN's namesakes.
 - **Talk tables.** A string by its string ref, from the engine; a plugin's own talk table beside the game's.
