@@ -102,7 +102,11 @@ So a turn-based mode has its gate: hold a creature's commands at `0x0073CD10` (o
 
 1. **A clock to stop and start**: the per-frame update pause halts (above).
 2. **Whose turn it is**: an initiative order over the combatants. The party and enemies are enumerable through script commands (`GETPARTYLIST`, `GETNEARESTOBJECT*`, `GETCOMBATANTTYPE`).
-3. **One action per turn**: let the current combatant's queued action run, then stop the clock. The player's side arrives as Explore-mode messages. The AI's side is still to find: the per-tick decision that queues an enemy's or a follower's action.
+3. **One action per turn**: let the current combatant's queued action run, then stop the clock. The player's side arrives as Explore-mode messages. The AI's side is the command-complete event (below): hold it for a creature until its turn, and the AI does not pick its next action until then.
+
+## The AI's loop, from the scripts' source (2026-09-30)
+
+The toolset's database holds the source of the game's scripts (`dev/TOOLSET.md`, `tools/toolset_scripts.py`), and it answers "what queues the AI's next action". Creatures run `rules_core.nss`, whose header calls it "the main entry point into combat AI, ability use and any event that is global to all creatures". When a creature's command finishes, the engine sends it `EVENT_TYPE_COMMAND_COMPLETE`, with the finished command's type, its status and a sub-command as the event's integers 0, 1 and 2, and a blocking object as object 2. `rules_core` handles that event by calling `AI_DetermineCombatRound` (`ai_main_h_2.nss`, the AI proper, 155 KB), for followers and for any creature in combat, which chooses the next action and queues it through `AddCommand`, the `QueueCommand` the probe watched. So combat is a chain of command-complete events, one per creature, and there is no round: a turn-based mode can hold a creature's next decision by holding its command-complete event (or its `AI_DetermineCombatRound`) until its turn, and release it then. The event is an engine structure the library now reads (`dao::CScriptEvent`), and events were checked in play the same day (`dev/LIBRARY.md`).
 
 ## Next readings
 
