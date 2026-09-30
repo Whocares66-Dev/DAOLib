@@ -14,6 +14,7 @@
 #pragma once
 
 #include "dao/Addresses.h"
+#include "dao/Camera.h"
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
@@ -199,6 +200,11 @@ class GameModeController
                                                                      : nullptr;
     }
 
+    // The camera's controller in explore and combat mode (dao/Camera.h):
+    // the controller's +0x60, if its class is CameraControllerExplore
+    // (dao::TypeName), else null.
+    CameraController *Camera() const;
+
     // The mode before the current one, by the value seen after a load.
     GameMode PreviousMode() const
     {
@@ -206,6 +212,7 @@ class GameModeController
     }
 
     static constexpr std::size_t kModes = 0x58;
+    static constexpr std::size_t kCamera = 0x60;
     static constexpr std::size_t kMode = 0x78;
     static constexpr std::size_t kPreviousMode = 0x7C;
     // The array's entries, one per GameMode.

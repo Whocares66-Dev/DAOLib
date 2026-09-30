@@ -25,4 +25,15 @@ void *GameModeController::ModeObject(GameMode mode) const
     return TypeName(object).rfind("GameMode", 0) == 0 ? object : nullptr;
 }
 
+CameraController *GameModeController::Camera() const
+{
+    const auto camera = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(this) + kCamera);
+    if (!camera || *camera == 0)
+    {
+        return nullptr;
+    }
+    auto *object = reinterpret_cast<CameraController *>(*camera);
+    return TypeName(object) == "CameraControllerExplore" ? object : nullptr;
+}
+
 } // namespace dao

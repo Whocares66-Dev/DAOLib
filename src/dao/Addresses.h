@@ -341,10 +341,16 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x00
 // 0x0076F890): the id of what it follows at +0x08 and its focus point at
 // +0x70. Its slot 8, SnapToTarget, copies the target's position (the
 // graphics object's +0x120) into the focus and hands the camera the new
-// state at once: no easing. How it follows between snaps, and whether it
-// eases, is still to read. The names are ours.
+// state at once: no easing. Between snaps the controller follows its
+// target rigidly, and eases only when the target changes (dao/Camera.h
+// has the whole reading): SetTarget, Zoom and Update below. The names are
+// ours.
 DAO_ADDRESS(kParty_Select, "Party::Select", 0x00639E50)
 DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, "CameraControllerExplore::SnapToTarget", 0x0076FCE0)
+DAO_ADDRESS(kCameraControllerExplore_Update, "CameraControllerExplore::Update", 0x007714B0)
+DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, "CameraControllerExplore::OnTargetChanged", 0x007709B0)
+DAO_ADDRESS(kCameraControllerBase_SetTarget, "CameraControllerBase::SetTarget", 0x007EE840)
+DAO_ADDRESS(kCameraControllerBase_Zoom, "CameraControllerBase::Zoom", 0x007EE7E0)
 
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature

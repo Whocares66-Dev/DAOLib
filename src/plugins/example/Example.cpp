@@ -33,6 +33,7 @@
 #include <Windows.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <set>
@@ -269,6 +270,42 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         [cursor](void *, const dao::messages::PerformPrimaryActionOnTargetUnderCursorMessage &) {
             cursor("primary click");
         });
+
+    // The camera as the player zooms and turns it (dao/Camera.h), to learn
+    // which of its numbers are the view, the distance, the yaw and the
+    // pitch: a line whenever one of them changes, checked every 15 frames.
+    dao::OnFrame([] {
+        static std::uint32_t frame = 0;
+        static std::string last;
+        if (++frame % 15 != 0)
+        {
+            return;
+        }
+        auto *app = dao::CClientExoApp::Get();
+        auto *modes = app != nullptr ? app->GameModes() : nullptr;
+        auto *camera = modes != nullptr ? modes->Camera() : nullptr;
+        if (camera == nullptr)
+        {
+            return;
+        }
+        const auto *self = reinterpret_cast<const std::byte *>(camera);
+        const auto *scene = static_cast<const std::byte *>(camera->SceneCamera());
+        const auto f = [](const std::byte *base, std::size_t offset) {
+            return base != nullptr ? *reinterpret_cast<const float *>(base + offset) : 0.0F;
+        };
+        const std::string now =
+            fmt::format("target {:#010x}, view flag {}, zoom {:.2f}; controller +0x48 {:.2f} +0x64 {:.2f} +0x68 {:.2f} "
+                        "+0x98 {:.2f}; scene camera {} +0x20 {:.3f} +0x24 {:.3f}",
+                        camera->Target(), camera->ViewFlag(), camera->Zoom(), f(self, 0x48), f(self, 0x64),
+                        f(self, 0x68), f(self, 0x98), scene != nullptr ? dao::TypeName(scene) : std::string("none"),
+                        f(scene, 0x20), f(scene, 0x24));
+        if (now != last)
+        {
+            last = now;
+            const auto focus = camera->Focus();
+            spdlog::info("camera: {}; focus ({:.1f}, {:.1f}, {:.1f})", now, focus.x, focus.y, focus.z);
+        }
+    });
 
     // Sending a message as the engine does: once the player has explored
     // for five seconds or so in all (300 frames), centre the camera on the creature
