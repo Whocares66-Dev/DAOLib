@@ -8,7 +8,7 @@ Three deliverables, all in this repository:
 
 1. **The loader**, `version.dll` (`src/loader`). Dropped beside `DAOrigins.exe` it is loaded in place of the system DLL of that name (the game imports three of its functions, forwarded to the real one), detours the exe's entry point, and from there loads every DLL in `daolib\plugins\` on the main thread before any game code runs. The SKSE half.
 2. **The library**, `daolib` (`src/dao`). What a plugin compiles against: the address of every known function and global (`Addresses.h`), relocated to where the exe actually is; the fingerprint of the one build those addresses were read from; the class of any engine object from its RTTI; a detour wrapper; a log per DLL. As it grows: class layouts (`struct` per engine class, with the fields at their offsets) and thin wrappers that call the engine's own functions. The CommonLib half. Nothing of the engine is reimplemented; everything is called.
-3. **Plugins** (`src/plugins`). The probe first, which hooks and logs and changes nothing; the turn-based mode when its reading is done.
+3. **Plugins** (`src/plugins`). The probe, which hooks and logs and changes nothing, and the example, a plugin to copy from. Plugins built on the library live in their own repos: the turn-based mode in `DAOTurnBased`, which records the library's shortcomings for this repo to fix.
 
 ## Why DAO is an easier target than Skyrim
 

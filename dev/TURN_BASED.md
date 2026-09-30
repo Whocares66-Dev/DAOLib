@@ -1,5 +1,7 @@
 # Turn-based mode: the first use case
 
+The mode itself is built in the sibling repo `DAOTurnBased`. This file keeps what was read of the engine for it, which is the library's to know: pause, the command queue, the AI's loop.
+
 The game is real time with pause. The idea is a mode in which time advances in turns: each combatant acts in an order, and the world waits between actions. Whether that is a mod of scripts, of engine hooks, or of both is what the first reading has to answer. This page is the plan for that reading and what it has found so far.
 
 ## Pause, as read 2026-09-29 (not yet verified in play)
