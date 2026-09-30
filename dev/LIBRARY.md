@@ -42,6 +42,23 @@ dao::script::Set(kIsTurnBasedCommand, &IsTurnBased);
 
 A script calls it once a `script.ldf` the toolset compiles against declares `int IsTurnBased() = <number>;`. About 150 of the 863 slots are empty. Replacing a command's handler works the same way: `Set` returns the handler it replaced, to call on.
 
+## Calling any script command
+
+Everything a script can do, a plugin can do through the same commands. `dao::script::Invoke` (`dao/Script.h`) calls one the way a script does: the arguments pushed on the VM's stack last first, the command's handler run from the table, the answer popped; a failed call cuts the stack back to where it was. `dao/generated/ScriptApi.h` (`tools/gen_script_api.py`) wraps each of the 641 commands whose types the library moves in a function with its `script.ldf` name, argument order and defaults:
+
+```cpp
+#include "dao/generated/ScriptApi.h"
+using namespace dao::script;
+
+const std::int32_t team = api::GetTeamId(creature);
+Array members = api::GetTeam(team);                     // object[]
+OwnedCommand attack = api::CommandAttack(enemy);
+api::AddCommand(creature, *attack.get(), /*bAddToFront=*/1);
+const std::wstring tag = api::GetTag(creature);
+```
+
+`OBJECT_SELF`, the object a command acts for when the script does not say, is `dao::script::Self()`, the commands object's +8; `ScopedSelf` sets it for a call. Calls belong on the scripts' thread (the game's logic thread, where a hook on a command or on the engine's update is called), since the VM is not made for two. The 24 commands with a `resource`, `player` or `any` argument or answer are not wrapped yet; the header lists them. The probe calls three commands this way from inside its shadows and compares their answers with what it knows (`dev/PROBE.md`).
+
 ## The scripts' constants
 
 `dao/generated/ScriptConstants.h` (`tools/gen_script_constants.py`) has every constant the engine declares in `script.ldf` and the effect types the scripts declare in `effect_constants_h.nss`: 609, as 37 typed enums (`dao::script::EventType`, `EffectType`, `EffectDurationType`, `CommandResult`, `InventorySlot`, `ObjectTypeFlags`, ...) and again under their script names (`dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE`). The accessors return the enums where the constants name the field: `CScriptEvent::Type()` is an `EventType`, `CGameEffect::Type()` an `EffectType`. An enum is 32-bit, so a number no constant names, like a script's own event type, still fits.
@@ -89,6 +106,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The command table, `InitializeCommands`, setting a slot | 2026-09-30 | used 2026-09-30: 18 slots replaced, the game ran on |
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
+| Calling commands from C++: `Invoke` and the 641 generated wrappers | 2026-09-30 | compiled; three checked by the probe from the next session |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
 | Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |

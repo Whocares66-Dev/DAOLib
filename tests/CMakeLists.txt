@@ -41,6 +41,13 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tools/gen_script_constants.py" --check
     )
+    # Every command's C++ wrapper is what script.ldf's signatures say.
+    add_test(
+        NAME script_api
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/gen_script_api.py" --check
+    )
     # CGameObject's cast slots are what the exe says (passes with no copy).
     add_test(
         NAME object_casts

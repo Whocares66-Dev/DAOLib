@@ -217,6 +217,14 @@ DAO_ADDRESS(kStdWString_AssignRange, "std::wstring::assign", 0x004C1270) // (oth
 DAO_ADDRESS(kOperatorNew, "operator_new", 0x00413660)
 DAO_ADDRESS(kOperatorDelete, "operator_delete", 0x004136C0)
 
+// The VM's stack as a whole, read 2026-09-30 for calling commands from C++
+// (dao/Script.h, Invoke): an object at VM+0x1738 whose first word is the
+// number of values on it, types at VM+0x1744 and values at VM+0x1748 (the
+// pops index both with it). Truncate, __thiscall on that object with the
+// new depth, `ret 4`, destroys every value above the depth and sets it;
+// each pop ends with it.
+DAO_ADDRESS(kCVirtualMachineStack_Truncate, "CVirtualMachineStack::Truncate", 0x00A2F390)
+
 // The engine's event queue, read 2026-09-30 from SignalEvent (0x00657E40).
 // The object at CClientExoApp+0x1AC keeps it; it has no vtable and so no
 // RTTI name, and plays the part of NWN's CServerAIMaster, whose calls these

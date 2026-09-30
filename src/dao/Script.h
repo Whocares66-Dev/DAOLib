@@ -40,9 +40,16 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+
+namespace dao
+{
+class Command; // dao/Objects.h: a command queued on an object, made by CommandAttack and its kin
+} // namespace dao
 
 namespace dao::script
 {
@@ -129,6 +136,7 @@ template <class T, EngineStructure Type> class Owned
     T *structure_ = nullptr;
 };
 using OwnedEffect = Owned<CGameEffect, EngineStructure::Effect>;
+using OwnedCommand = Owned<::dao::Command, EngineStructure::Command>;
 using OwnedEvent = Owned<CScriptEvent, EngineStructure::Event>;
 
 // A script array popped off the stack (dao/core/ScriptArray.h): the
@@ -224,5 +232,112 @@ struct Stack
     static void *PopStructure(EngineStructure type);
     static bool PushStructure(EngineStructure type, const void *value);
 };
+
+// -- calling a script command from C++ ------------------------------------
+//
+// The way a script calls one: its arguments pushed on the VM's stack last
+// first, the command's handler run from the table, its answer popped.
+// Everything a script can call, a plugin can then call too (NWNX does the
+// same for Neverwinter Nights); dao/generated/ScriptApi.h wraps each
+// command with its script.ldf signature, so this is rarely used directly.
+//
+// Run it on the thread scripts run on (the game's logic thread, where
+// hooks on the engine's update and on script commands are called): the VM
+// is not made for two threads. Calling while a script is running is fine,
+// the stack is left as it was found. A failed call cuts the stack back to
+// its depth before the call.
+
+// The object a command sees as OBJECT_SELF: the commands object keeps the
+// object the running script belongs to at +8, with +4 saying it is set
+// (NWN's CVirtualMachineCmdImplementer has the same two; GetCurrentEvent
+// and SignalEvent read +8).
+ObjectId Self();
+
+// Sets OBJECT_SELF for as long as it lives, then puts it back.
+class ScopedSelf
+{
+  public:
+    explicit ScopedSelf(ObjectId self);
+    ~ScopedSelf();
+    ScopedSelf(const ScopedSelf &) = delete;
+    ScopedSelf &operator=(const ScopedSelf &) = delete;
+
+  private:
+    std::int32_t hadSelf_ = 0;
+    ObjectId previous_ = kInvalidObject;
+};
+
+// The number of values on the VM's stack, and cutting it back to a depth
+// (the values above it destroyed as a pop destroys them).
+std::int32_t StackDepth();
+void TruncateStack(std::int32_t depth);
+
+namespace detail
+{
+bool Push(std::int32_t value);
+bool Push(float value);
+bool Push(ObjectId value);
+bool Push(std::wstring_view value);
+bool Push(const Vector &value);
+bool Push(const CScriptLocation &value);
+bool Push(const CGameEffect &value);
+bool Push(const CScriptEvent &value);
+bool Push(const Array &value);
+bool Push(const ::dao::Command &value);
+inline bool Push(const wchar_t *value)
+{
+    return Push(std::wstring_view{value});
+}
+inline bool Push(const std::wstring &value)
+{
+    return Push(std::wstring_view{value});
+}
+
+inline bool PushReversed()
+{
+    return true;
+}
+template <class First, class... Rest> bool PushReversed(const First &first, const Rest &...rest)
+{
+    return PushReversed(rest...) && Push(first);
+}
+
+template <class R> std::optional<R> Pop();
+
+// The command's handler, run as ExecuteCommand runs it.
+int Run(int command, int paramCount);
+} // namespace detail
+
+// Calls a script command: `Invoke<std::int32_t>(807, creature)` is
+// GetTeamId(creature). R is the answer's type (void for none); the answer
+// comes back in an optional, empty if the command failed, or a bool for a
+// command with none.
+template <class R = void, class... Args> auto Invoke(int command, const Args &...args)
+{
+    const std::int32_t depth = StackDepth();
+    const bool pushed = detail::PushReversed(args...);
+    const int result = pushed ? detail::Run(command, static_cast<int>(sizeof...(Args))) : kStackOverflow;
+    if constexpr (std::is_void_v<R>)
+    {
+        if (result != kOk)
+        {
+            TruncateStack(depth);
+        }
+        return result == kOk;
+    }
+    else
+    {
+        std::optional<R> answer;
+        if (result == kOk)
+        {
+            answer = detail::Pop<R>();
+        }
+        if (!answer)
+        {
+            TruncateStack(depth);
+        }
+        return answer;
+    }
+}
 
 } // namespace dao::script

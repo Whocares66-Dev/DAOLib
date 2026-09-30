@@ -311,4 +311,171 @@ bool Stack::PushArray(const Array &value)
     return value.get() != nullptr && CallVm<const core::ArrayRep *>(addr::kCVirtualMachine_StackPushArray, value.get());
 }
 
+namespace
+{
+
+// The commands object's OBJECT_SELF (+8) and whether it is set (+4).
+constexpr std::size_t kSelfValid = 4;
+constexpr std::size_t kSelf = 8;
+// The VM's stack object, whose first word is its depth.
+constexpr std::size_t kStack = 0x1738;
+
+std::byte *CommandsObject()
+{
+    auto *app = CClientExoApp::Get();
+    return app != nullptr ? static_cast<std::byte *>(app->Commands()) : nullptr;
+}
+
+} // namespace
+
+ObjectId Self()
+{
+    const std::byte *commands = CommandsObject();
+    return commands != nullptr ? *reinterpret_cast<const ObjectId *>(commands + kSelf) : kInvalidObject;
+}
+
+ScopedSelf::ScopedSelf(ObjectId self)
+{
+    std::byte *commands = CommandsObject();
+    if (commands == nullptr)
+    {
+        return;
+    }
+    hadSelf_ = *reinterpret_cast<std::int32_t *>(commands + kSelfValid);
+    previous_ = *reinterpret_cast<ObjectId *>(commands + kSelf);
+    *reinterpret_cast<std::int32_t *>(commands + kSelfValid) = 1;
+    *reinterpret_cast<ObjectId *>(commands + kSelf) = self;
+}
+
+ScopedSelf::~ScopedSelf()
+{
+    std::byte *commands = CommandsObject();
+    if (commands == nullptr)
+    {
+        return;
+    }
+    *reinterpret_cast<std::int32_t *>(commands + kSelfValid) = hadSelf_;
+    *reinterpret_cast<ObjectId *>(commands + kSelf) = previous_;
+}
+
+std::int32_t StackDepth()
+{
+    const auto *vm = static_cast<const std::byte *>(VirtualMachine());
+    return vm != nullptr ? *reinterpret_cast<const std::int32_t *>(vm + kStack) : 0;
+}
+
+void TruncateStack(std::int32_t depth)
+{
+    auto *vm = static_cast<std::byte *>(VirtualMachine());
+    if (vm == nullptr || depth < 0 || depth >= StackDepth())
+    {
+        return;
+    }
+    using Fn = void(__fastcall *)(void *, int, std::int32_t);
+    reinterpret_cast<Fn>(Module::Address(addr::kCVirtualMachineStack_Truncate))(vm + kStack, 0, depth);
+}
+
+namespace detail
+{
+
+bool Push(std::int32_t value)
+{
+    return Stack::PushInt(value);
+}
+bool Push(float value)
+{
+    return Stack::PushFloat(value);
+}
+bool Push(ObjectId value)
+{
+    return Stack::PushObject(value);
+}
+bool Push(std::wstring_view value)
+{
+    return Stack::PushString(value);
+}
+bool Push(const Vector &value)
+{
+    return Stack::PushVector(value);
+}
+bool Push(const CScriptLocation &value)
+{
+    return Stack::PushLocation(value);
+}
+bool Push(const CGameEffect &value)
+{
+    return Stack::PushEffect(value);
+}
+bool Push(const CScriptEvent &value)
+{
+    return Stack::PushEvent(value);
+}
+bool Push(const Array &value)
+{
+    return Stack::PushArray(value);
+}
+bool Push(const ::dao::Command &value)
+{
+    return Stack::PushStructure(EngineStructure::Command, &value);
+}
+
+template <> std::optional<std::int32_t> Pop<std::int32_t>()
+{
+    std::int32_t value = 0;
+    return Stack::PopInt(value) ? std::optional{value} : std::nullopt;
+}
+template <> std::optional<float> Pop<float>()
+{
+    float value = 0;
+    return Stack::PopFloat(value) ? std::optional{value} : std::nullopt;
+}
+template <> std::optional<ObjectId> Pop<ObjectId>()
+{
+    ObjectId value = kInvalidObject;
+    return Stack::PopObject(value) ? std::optional{value} : std::nullopt;
+}
+template <> std::optional<std::wstring> Pop<std::wstring>()
+{
+    std::wstring value;
+    return Stack::PopString(value) ? std::optional{std::move(value)} : std::nullopt;
+}
+template <> std::optional<Vector> Pop<Vector>()
+{
+    Vector value;
+    return Stack::PopVector(value) ? std::optional{value} : std::nullopt;
+}
+template <> std::optional<CScriptLocation> Pop<CScriptLocation>()
+{
+    CScriptLocation value;
+    return Stack::PopLocation(value) ? std::optional{value} : std::nullopt;
+}
+template <> std::optional<OwnedEffect> Pop<OwnedEffect>()
+{
+    OwnedEffect value = Stack::PopEffect();
+    return value ? std::optional{std::move(value)} : std::nullopt;
+}
+template <> std::optional<OwnedEvent> Pop<OwnedEvent>()
+{
+    OwnedEvent value = Stack::PopEvent();
+    return value ? std::optional{std::move(value)} : std::nullopt;
+}
+template <> std::optional<OwnedCommand> Pop<OwnedCommand>()
+{
+    OwnedCommand value{static_cast<::dao::Command *>(Stack::PopStructure(EngineStructure::Command))};
+    return value ? std::optional{std::move(value)} : std::nullopt;
+}
+template <> std::optional<Array> Pop<Array>()
+{
+    Array value = Stack::PopArray();
+    return value ? std::optional{std::move(value)} : std::nullopt;
+}
+
+int Run(int command, int paramCount)
+{
+    Handler handler = Get(command);
+    return handler != nullptr ? Call(handler, command, paramCount) : kInvalidCommand;
+}
+
+} // namespace detail
+
 } // namespace dao::script
