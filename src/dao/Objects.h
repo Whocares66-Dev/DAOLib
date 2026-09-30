@@ -418,6 +418,102 @@ class CCCreature : public CCObject
 
     static constexpr std::size_t kPortraitRenderer = 0x78C;
     static constexpr std::size_t kPortraitName = 0xD4C; // in the renderer
+
+    // A creature property by the scripts' PROPERTY_* id, as
+    // GetCreatureProperty reads it (dao/Addresses.h, CCCreatureStats):
+    // attributes, health and mana or stamina, level, experience, speed.
+    // Straight from the creature's stats, off the scripts' thread too.
+    // Nothing for a creature with no stats. Not yet seen in play.
+    std::optional<float> Property(std::int32_t property,
+                                  script::PropertyValue value = script::PropertyValue::Total) const
+    {
+        const void *stats = Stats();
+        if (stats == nullptr)
+        {
+            return std::nullopt;
+        }
+        using Fn = float(__fastcall *)(const void *, int, std::int32_t);
+        std::uintptr_t getter = addr::kCreatureStats_GetTotal;
+        switch (value)
+        {
+        case script::PropertyValue::Base:
+            getter = addr::kCreatureStats_GetBase;
+            break;
+        case script::PropertyValue::Current:
+            getter = addr::kCreatureStats_GetCurrent;
+            break;
+        case script::PropertyValue::Modifier:
+            getter = addr::kCreatureStats_GetModifier;
+            break;
+        default:
+            break;
+        }
+        return reinterpret_cast<Fn>(Module::Address(getter))(stats, 0, property);
+    }
+    std::optional<float> Property(script::PropertyAttribute property,
+                                  script::PropertyValue value = script::PropertyValue::Total) const
+    {
+        return Property(static_cast<std::int32_t>(property), value);
+    }
+    std::optional<float> Property(script::PropertySimple property,
+                                  script::PropertyValue value = script::PropertyValue::Total) const
+    {
+        return Property(static_cast<std::int32_t>(property), value);
+    }
+
+    // As SetCreatureProperty does: Total and Base both set the base.
+    // False for a creature with no stats. Not yet exercised in play.
+    bool SetProperty(std::int32_t property, float amount, script::PropertyValue value)
+    {
+        void *stats = Stats();
+        if (stats == nullptr)
+        {
+            return false;
+        }
+        std::uintptr_t setter = addr::kCreatureStats_SetBase;
+        if (value == script::PropertyValue::Current)
+        {
+            setter = addr::kCreatureStats_SetCurrent;
+        }
+        else if (value == script::PropertyValue::Modifier)
+        {
+            setter = addr::kCreatureStats_SetModifier;
+        }
+        using Fn = void(__fastcall *)(void *, int, std::int32_t, float, std::int32_t);
+        reinterpret_cast<Fn>(Module::Address(setter))(stats, 0, property, amount, 1);
+        return true;
+    }
+
+    // Health and mana or stamina now, and their most (the scripts'
+    // PROPERTY_DEPLETABLE_HEALTH and _MANA_STAMINA, current and total).
+    std::optional<float> Health() const
+    {
+        return Property(script::constants::PROPERTY_DEPLETABLE_HEALTH, script::PropertyValue::Current);
+    }
+    std::optional<float> MaxHealth() const
+    {
+        return Property(script::constants::PROPERTY_DEPLETABLE_HEALTH);
+    }
+    std::optional<float> ManaStamina() const
+    {
+        return Property(script::constants::PROPERTY_DEPLETABLE_MANA_STAMINA, script::PropertyValue::Current);
+    }
+    std::optional<float> MaxManaStamina() const
+    {
+        return Property(script::constants::PROPERTY_DEPLETABLE_MANA_STAMINA);
+    }
+    std::optional<float> Level() const
+    {
+        return Property(script::PropertySimple::Level);
+    }
+
+  private:
+    // The creature's CCCreatureStats: the value of its attribute at +0x7C4.
+    void *Stats() const
+    {
+        return Read<void *>(kStats);
+    }
+    static constexpr std::size_t kStats = 0x7D0;
 };
 
 class CCPlaceable : public CCObject

@@ -274,6 +274,20 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         if (auto *creature = app->GetCreatureById(message.object))
         {
             spdlog::info("portrait of {:#010x}: \"{}\"", message.object, dao::Utf8(creature->RenderPortrait()));
+            const auto show = [](std::optional<float> v) { return v ? fmt::format("{}", *v) : std::string("-"); };
+            spdlog::info(
+                "its health {} of {}, mana or stamina {} of {}, level {}, strength {} (base {}), against "
+                "GetCreatureProperty's {} and {}",
+                show(creature->Health()), show(creature->MaxHealth()), show(creature->ManaStamina()),
+                show(creature->MaxManaStamina()), show(creature->Level()),
+                show(creature->Property(dao::script::PropertyAttribute::Strength)),
+                show(creature->Property(dao::script::PropertyAttribute::Strength, dao::script::PropertyValue::Base)),
+                dao::script::api::GetCreatureProperty(message.object,
+                                                      dao::script::constants::PROPERTY_DEPLETABLE_HEALTH,
+                                                      dao::script::constants::PROPERTY_VALUE_CURRENT),
+                dao::script::api::GetCreatureProperty(message.object,
+                                                      dao::script::constants::PROPERTY_DEPLETABLE_HEALTH,
+                                                      dao::script::constants::PROPERTY_VALUE_TOTAL));
         }
 
         // A few of the data tree's values, as the UI's GetValue and

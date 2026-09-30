@@ -325,6 +325,22 @@ DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, "EclipseGFxImageLoader::LoadImage"
 DAO_DATA(kTlkTable, "g_tlkTable", 0x00C1D08C)
 DAO_ADDRESS(kCTlkTable_GetString, "CTlkTable::GetString", 0x004E4990)
 
+// A creature's properties, read 2026-09-30 from GetCreatureProperty and
+// SetCreatureProperty: the creature's +0x7C4 is a SmartData attribute
+// whose value (+0xC, so the creature's +0x7D0) is its CCCreatureStats, a
+// list of properties by id (a std::vector at +4, ids below 1000 there).
+// The getters, __thiscall (id), `ret 4`, a float, one per value: total,
+// base, current, modifier (PROPERTY_VALUE_* 1-4); the setters,
+// __thiscall (id, float value, 1), `ret 0xC`: base (for PROPERTY_VALUE_*
+// 1 and 2), current, modifier. The ids are the scripts' PROPERTY_*.
+DAO_ADDRESS(kCreatureStats_GetTotal, "CCCreatureStats::GetTotal", 0x006435C0)
+DAO_ADDRESS(kCreatureStats_GetBase, "CCCreatureStats::GetBase", 0x006436B0)
+DAO_ADDRESS(kCreatureStats_GetCurrent, "CCCreatureStats::GetCurrent", 0x006437A0)
+DAO_ADDRESS(kCreatureStats_GetModifier, "CCCreatureStats::GetModifier", 0x00643890)
+DAO_ADDRESS(kCreatureStats_SetBase, "CCCreatureStats::SetBase", 0x0071B230)
+DAO_ADDRESS(kCreatureStats_SetCurrent, "CCCreatureStats::SetCurrent", 0x0071B320)
+DAO_ADDRESS(kCreatureStats_SetModifier, "CCCreatureStats::SetModifier", 0x0071B280)
+
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
 // arguments, returns the root, SmartData::TokenManager, made on first use

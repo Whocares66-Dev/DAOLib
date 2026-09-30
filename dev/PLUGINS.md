@@ -66,6 +66,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Name a script constant | `dao::script::EventType::CommandComplete`, `dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE` | `dao/generated/ScriptConstants.h` |
 | Find an object by id | `CClientExoApp::Get()->GetCreatureById(id)` and kin | `dao/ClientExoApp.h` |
 | Read an object's fields | `creature->CombatState()`, `->TeamId()`, `->Id()`, `->Type()`, casts `AsCreature()` | `dao/Objects.h` |
+| A creature's stats: attributes, health, mana or stamina, level | `creature->Health()`, `MaxHealth()`, `Level()`, `Property(PropertyAttribute::Strength, PropertyValue::Base)`, `SetProperty(...)` | `dao/Objects.h` |
 | Read an effect or an event | `dao::CGameEffect`, `dao::CScriptEvent`, `CCObject::CurrentEvent()` | `dao/Structures.h` |
 | Read, keep or change a queued command | an object's queue, `creature->CurrentCommand()`, `->CommandAt(i)`, `->CommandQueueSize()`; in an `AddCommand` intercept, `call.Command(1)`; `->Type()`, `->Target()`, `->Position()`, `->Ability()`, every parameter through `->Parameters()`; `dao::script::Copy(*command)` to keep one | `dao/Objects.h`, `dao/Script.h`, `dao/ScriptHooks.h` |
 | Use strings, locations, arrays | `dao::WString`, `dao::CScriptLocation`, `dao::script::Array` | `dao/String.h`, `dao/Structures.h`, `dao/Script.h` |
