@@ -56,6 +56,21 @@ Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/
 
 `dao::CGameObject` gives the id, the type (`dao::core::ObjectType`, one bit off the scripts' `OBJECT_TYPE_*`) and the engine's casts, `AsCreature()` and the rest, virtual calls as the engine's own lookups make them. The probe checks all three on every object a script check looks up.
 
+## The value types
+
+What a script passes besides ints, floats and objects, read 2026-09-30 from the VM's pops and pushes and the commands that use each (`dao/Structures.h`, `dao/String.h`, `dao/Script.h`):
+
+| Script type | In the engine | Who frees it |
+|---|---|---|
+| `string` | MSVC 2005's `std::wstring`, 0x1C bytes, UTF-16 (`dao/core/Msvc8.h`) | the engine's heap: `dao::WString` frees through the engine's destructor; `Stack::PopString`/`PushString` copy to and from a plugin's own `std::wstring` |
+| `vector` | three floats, pushed and popped one at a time | nobody: plain values |
+| `location` | 0x30 bytes, NWN's `CScriptLocation` shape: position at +0, orientation at +0x10, area id at +0x20 | plain data; a pop copies it out and frees the VM's copy |
+| `effect`, `itemproperty` | `CGameEffect`, 0x7C bytes, polymorphic: id, type, duration type, animation, flags, creator, ability id, and lists of int, float, object and string parameters | a pop is the VM's copy, the popper's to destroy: `Stack::PopEffect` returns it owned, destroyed through the engine |
+| `event` | `CScriptEvent`, 0x50 bytes, polymorphic | not read yet |
+| `command` | from a pool the application keeps | not read yet |
+
+The engine structures are made, destroyed and copied by the commands object's slots 5, 6 and 8, which is also how the VM copies one on every push and pop.
+
 ## What is known how well
 
 | Piece | Read | In play |
@@ -69,7 +84,8 @@ Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/
 | The command table, `InitializeCommands`, setting a slot | 2026-09-30 | used 2026-09-30: 18 slots replaced, the game ran on |
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
-| `CGameObject`: id, type, the 19 casts | 2026-09-30, from the constructor and the vtables | checked by the script checks, from the next session |
+| `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
+| Strings, vectors, locations and effects on the stack; the effect's 7 fields | 2026-09-30 | round-tripped and compared by the script checks, from the next session |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
 
 ## The first session
@@ -79,6 +95,10 @@ Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/
 The first matches included values other than 0, among them a package of 0x58, a team of -1, a group of 1, a placeable action of 0xB, a creature treasure category of 8 and a lock level of 1. Zero is the weak case: a wrong offset often reads 0 where the true field is 0 too. Since this session the probe also counts matches on values other than 0, and logs the first.
 
 Every script command ran on one thread, the same one `InitializeCommands` ran on: the script VM's, and so the thread a turn-based mode's script-facing work happens on. It is not the process's first thread, which ran the loader.
+
+## The second session
+
+2026-09-30, a fight. With the counts of matches on values other than 0: `GetCombatState` matched on a value other than 0 in 570 of its 632 calls, `GetPackageAI` in 224 of 292, `GetGroupId` in 33 of 41, so those fields read real, changing values. `GetCombatantType` only ever answered 0 in either session, so it stays the weakest of the 14. Every object looked up, 1,100 of them, had the id asked for at +0x10, its class's type byte at +0x14, and the engine's cast from the game object gave the typed lookup's pointer.
 
 ## What comes next
 

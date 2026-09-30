@@ -152,6 +152,53 @@ DAO_ADDRESS(kCVirtualMachine_StackPushString, "CVirtualMachine::StackPushString"
 DAO_ADDRESS(kCVirtualMachine_StackPushEngineStructure, "CVirtualMachine::StackPushEngineStructure",
             0x00A2D920) // 31/31: command, effect, location, event
 DAO_ADDRESS(kCVirtualMachine_StackPushObject, "CVirtualMachine::StackPushObject", 0x00A2D980) // 3/3
+// The commands object's engine-structure functions (dao/Structures.h), read
+// 2026-09-30: each __thiscall on CVirtualMachineCommands with the
+// structure's number first (script.ldf's ENGINE_STRUCTURE_n), `ret 8`.
+// Create (slot 5) allocates each type: event 0x50 bytes, location 0x30,
+// command from a pool the application keeps, effect and item property 0x7C
+// each. Destroy (slot 6) deletes one: through its vtable, or for a location
+// with operator delete. Copy (slot 8) makes a new one from another; the
+// VM's StackPushEngineStructure and StackPopEngineStructure both call it,
+// so a pop hands the command a copy of its own to destroy, and a push
+// copies. NWN has the same three a slot later, after a GetEqual.
+DAO_ADDRESS(kCVirtualMachineCommands_CreateGameDefinedStructure, "CVirtualMachineCommands::CreateGameDefinedStructure",
+            0x00652D60)
+DAO_ADDRESS(kCVirtualMachineCommands_DestroyGameDefinedStructure,
+            "CVirtualMachineCommands::DestroyGameDefinedStructure", 0x0066DFB0)
+DAO_ADDRESS(kCVirtualMachineCommands_CopyGameDefinedStructure, "CVirtualMachineCommands::CopyGameDefinedStructure",
+            0x00674AF0)
+// The structures' own constructors, from Create and Copy.
+DAO_ADDRESS(kCScriptEvent_Constructor, "CScriptEvent::CScriptEvent", 0x0069BAC0)
+DAO_ADDRESS(kCScriptEvent_CopyConstructor, "CScriptEvent::CScriptEvent_copy", 0x0069CB10)
+DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x007ABD00)
+DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
+DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
+DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+// An effect's parameters by index, from GetEffectInteger and its three
+// siblings (one body, 0x00651270): __thiscall, the index, `ret 4`. Each
+// indexes a std::vector the effect points to (+0x4 ints, +0x8 floats,
+// +0x10 objects, +0x14 strings), bounds-checked; out of range, 0, 0.0, -1,
+// and a static empty string. GetString returns a pointer to the string.
+DAO_ADDRESS(kCGameEffect_GetInteger, "CGameEffect::GetInteger", 0x00A5A220)
+DAO_ADDRESS(kCGameEffect_GetFloat, "CGameEffect::GetFloat", 0x00A5A250)
+DAO_ADDRESS(kCGameEffect_GetObject, "CGameEffect::GetObject", 0x00A5A2B0)
+DAO_ADDRESS(kCGameEffect_GetString, "CGameEffect::GetString", 0x00A5A2E0)
+
+// The engine's std::wstring, MSVC 2005's (dao/core/Msvc8.h), read
+// 2026-09-30 from GetStringLength (0x00657CC0), which makes one on its
+// stack, pops into it and destroys it. __thiscall each. The C runtime is
+// linked into the exe, so these have no import names, and memory they
+// allocate is the engine's heap's: only the engine's destructor frees it.
+DAO_ADDRESS(kStdWString_Constructor, "std::wstring::wstring", 0x004C0D90)
+DAO_ADDRESS(kStdWString_Destructor, "std::wstring::~wstring", 0x004C0DB0)
+DAO_ADDRESS(kStdWString_Assign, "std::wstring::operator=", 0x004C2AB0)   // assign(other, 0, npos)
+DAO_ADDRESS(kStdWString_AssignRange, "std::wstring::assign", 0x004C1270) // (other, position, count)
+// The allocator every engine allocation above goes through: operator new
+// calls the engine's memory manager (0x004B92C0) with a tag of -1.
+DAO_ADDRESS(kOperatorNew, "operator_new", 0x00413660)
+DAO_ADDRESS(kOperatorDelete, "operator_delete", 0x004136C0)
+
 // The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
 // application's array at +0xCC.

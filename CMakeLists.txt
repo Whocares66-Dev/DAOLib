@@ -108,6 +108,7 @@ add_library(
     src/dao/Module.cpp
     src/dao/SafeRead.cpp
     src/dao/Script.cpp
+    src/dao/String.cpp
     src/dao/TypeName.cpp
 )
 dao_apply_warnings(daolib)
