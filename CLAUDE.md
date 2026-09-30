@@ -58,12 +58,13 @@ toolset/        the toolset installer and what is extracted from it (ignored)
 .\tools\build.ps1 -Preset debug -Test           # loader, library, plugins, tests. Seconds after the first run.
 .\tools\build.ps1 -Preset debug -Format -Lint   # rewrite with the formatters, then clang-tidy, ruff, PSScriptAnalyzer
 .\tools\build.ps1 -Preset debug-asan -Test      # the tests under AddressSanitizer
+.\tools\build.ps1 -Preset debug-analyze        # our own targets under MSVC's /analyze
 .\tools\build.ps1 -Preset release
 ```
 
 Output is `build\<preset>\version.dll` and `build\<preset>\daolib\plugins\*.dll`, a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `-Remove` returns the install to stock: `version.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
 
-The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x86, which takes a few minutes. Last verified green 2026-09-29: build, tests, format, lint.
+The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x86, which takes a few minutes, and so does the first of each other preset. Last verified green 2026-09-30: build, tests, format, lint, the tests under ASan, and /analyze.
 
 **Verified in the game 2026-09-29.** The game started with the probe deployed. `loader.log` showed the fingerprint matching, the entry point detoured and `probe.dll` loaded, and `probe.log` showed both pause hooks placed. The engine then called `CClientExoApp::SetPaused(false, false)` from `0x005DD34F`, a startup routine. The hook read the live object's RTTI as `CClientExoApp`, and the game played on. That call came on a different thread from the one the entry point ran on, so the game loop is not on the process's first thread. The install was put back to stock afterwards with `deploy.ps1 -Remove`.
 
@@ -71,9 +72,17 @@ The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x8
 
 ```powershell
 .\tools\build.ps1 -Preset debug -Test -Format -Lint
+.\tools\build.ps1 -Preset debug-asan -Test
+.\tools\build.ps1 -Preset debug-analyze
 ```
 
-Tests first, then the formatters rewrite in place, then the linters. A clang-tidy finding fails the run (`WarningsAsErrors`). `.clang-tidy` says which checks are off and why: each is either style, or fires on what a hook or an address cast is by nature. The stamp per file under `build\debug\tidy\` means only changed files are re-checked.
+Tests first, then the formatters (clang-format, ruff format, gersemi for CMake) rewrite in place, then the linters. The `format-check` target fails instead of rewriting. Every one of these fails the run on a finding:
+
+- MSVC at `/W4 /WX` on our own targets; third-party headers are `/external:W0`.
+- clang-tidy (`WarningsAsErrors`). `.clang-tidy` says which checks are off and why: each is either style, or fires on what a hook or an address cast is by nature. The stamp per file under `build\debug\tidy\` means only changed files are re-checked.
+- ruff check over the Python, PSScriptAnalyzer over the PowerShell.
+- AddressSanitizer over the tests (`debug-asan`). Only the tests: a sanitized DLL in the game would need the ASan runtime beside the exe. The STL's container annotations are off there, since vcpkg's libraries are built without them.
+- MSVC's static analyser (`debug-analyze`), in its own tree because clang-tidy reads the debug tree's compile database and clang rejects `/analyze`. A finding is fixed, not suppressed, unless the code is a hook doing what hooks do; then the suppression says why.
 
 ## Reading the executable
 

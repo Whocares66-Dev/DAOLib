@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace
 {
@@ -21,8 +22,9 @@ std::uintptr_t FreedPage()
 {
     void *page = VirtualAlloc(nullptr, 0x1000, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     REQUIRE(page != nullptr);
+    const auto address = reinterpret_cast<std::uintptr_t>(page);
     REQUIRE(VirtualFree(page, 0, MEM_RELEASE));
-    return reinterpret_cast<std::uintptr_t>(page);
+    return address;
 }
 
 } // namespace
@@ -42,7 +44,7 @@ TEST_CASE("a large copy that runs off the end of memory fails instead of faultin
     auto *base = static_cast<std::byte *>(VirtualAlloc(nullptr, 0x2000, MEM_RESERVE, PAGE_NOACCESS));
     REQUIRE(base != nullptr);
     REQUIRE(VirtualAlloc(base, 0x1000, MEM_COMMIT, PAGE_READWRITE) != nullptr);
-    std::array<std::byte, 0x4000> big{};
+    std::vector<std::byte> big(0x4000);
     CHECK_FALSE(dao::TryCopy(big.data(), reinterpret_cast<std::uintptr_t>(base + 0x800), big.size()));
     CHECK(dao::TryCopy(big.data(), reinterpret_cast<std::uintptr_t>(base), 0x1000));
     VirtualFree(base, 0, MEM_RELEASE);

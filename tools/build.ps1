@@ -15,6 +15,11 @@
     release     same, optimized.
     debug-asan  same, under AddressSanitizer; for -Test. The DLLs it makes are
                 not for the game (they need the ASan runtime beside the exe).
+    debug-analyze
+                same, our own targets under MSVC's static analyser (/analyze),
+                a warning failing the build. Its own tree, so the debug tree's
+                compile database, which clang-tidy reads, never holds /analyze
+                (clang rejects it). Not for -Lint.
 
 .PARAMETER Format
     After building, rewrite every source in place with its formatter: the
@@ -25,10 +30,6 @@
     every C++ file, ruff over the Python, PSScriptAnalyzer over the PowerShell.
     The `tidy` target; a finding fails the run.
 
-.PARAMETER Analyze
-    Compile our own targets under MSVC's static analyser (/analyze). The flag is
-    cached, so this run and the next plain run each recompile our sources.
-
 .PARAMETER Jobs
     How many compilations to run at once. The default leaves two of the
     machine's cores to everything else. Also exported as
@@ -38,22 +39,25 @@
 .EXAMPLE
     .\tools\build.ps1 -Preset debug -Test
     .\tools\build.ps1 -Preset debug-asan -Test
+    .\tools\build.ps1 -Preset debug-analyze
     .\tools\build.ps1 -Preset release
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('debug', 'release', 'debug-asan')]
+    [ValidateSet('debug', 'release', 'debug-asan', 'debug-analyze')]
     [string] $Preset = 'debug',
     [switch] $Test,
     [switch] $Format,
     [switch] $Lint,
     [switch] $Fresh,
-    [switch] $Analyze,
     [int] $Jobs = 0
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
+if ($Lint -and $Preset -eq 'debug-analyze') {
+    throw 'clang-tidy cannot read a compile database holding /analyze; lint with -Preset debug.'
+}
 $repo = Split-Path -Parent $PSScriptRoot
 
 function Get-VcVarsAllPath {
@@ -144,8 +148,7 @@ Show-Line "  jobs   $parallel of $cores cores, below normal priority"
 Push-Location $repo
 try {
     Show-Line "`n== configure ($Preset) ==" -Colour Cyan
-    $analyzeFlag = if ($Analyze) { 'ON' } else { 'OFF' }
-    cmake --preset $Preset "-DDAO_ANALYZE=$analyzeFlag"
+    cmake --preset $Preset
     if ($LASTEXITCODE -ne 0) { throw "configure failed ($LASTEXITCODE)" }
 
     Show-Line "`n== build ($Preset) ==" -Colour Cyan

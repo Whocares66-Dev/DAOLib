@@ -308,8 +308,9 @@ class Report
     {
         w.Line("SYSTEM:");
         using RtlGetVersionFn = LONG(WINAPI *)(OSVERSIONINFOW *);
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
         if (const auto get =
-                reinterpret_cast<RtlGetVersionFn>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion")))
+                ntdll != nullptr ? reinterpret_cast<RtlGetVersionFn>(GetProcAddress(ntdll, "RtlGetVersion")) : nullptr)
         {
             OSVERSIONINFOW os{};
             os.dwOSVersionInfoSize = sizeof os;
@@ -620,7 +621,9 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
             WriteLog();
         }
     }
-    return g_chained != nullptr ? g_chained(pointers) : EXCEPTION_CONTINUE_SEARCH;
+    // The filter the game set, if any, sees the same exception; with none
+    // to see there is nothing to hand on.
+    return g_chained != nullptr && pointers != nullptr ? g_chained(pointers) : EXCEPTION_CONTINUE_SEARCH;
 }
 
 } // namespace
@@ -628,8 +631,10 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
 void Install()
 {
     g_chained = SetUnhandledExceptionFilter(&Filter);
-    g_setFilter =
-        reinterpret_cast<SetFilterFn>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "SetUnhandledExceptionFilter"));
+    const HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    g_setFilter = kernel32 != nullptr
+                      ? reinterpret_cast<SetFilterFn>(GetProcAddress(kernel32, "SetUnhandledExceptionFilter"))
+                      : nullptr;
     if (g_setFilter == nullptr || DetourTransactionBegin() != NO_ERROR)
     {
         spdlog::warn("crash logger: installed, but not kept: the game can replace it");

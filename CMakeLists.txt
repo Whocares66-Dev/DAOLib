@@ -18,6 +18,8 @@ endif()
 
 option(DAO_BUILD_TESTS "Build the unit tests (no game required)" ON)
 option(DAO_SANITIZE "Build with AddressSanitizer" OFF)
+# The debug-analyze preset; its own build tree, as clang-tidy reads the
+# debug tree's compile database and clang rejects /analyze.
 option(DAO_ANALYZE "MSVC static analysis (/analyze) on our own targets" OFF)
 
 # ---------------------------------------------------------------------------
@@ -26,7 +28,9 @@ option(DAO_ANALYZE "MSVC static analysis (/analyze) on our own targets" OFF)
 # ---------------------------------------------------------------------------
 function(dao_apply_warnings target)
     if(MSVC)
-        target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
+        # /WX: a warning in our own code fails the build (third-party
+        # headers are kept at /external:W0 below).
+        target_compile_options(${target} PRIVATE /W4 /WX /permissive- /utf-8)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
             target_compile_options(${target} PRIVATE /Zc:preprocessor)
             target_compile_options(
@@ -61,6 +65,14 @@ endfunction()
 if(DAO_SANITIZE)
     if(MSVC)
         add_compile_options(/fsanitize=address /Oy-)
+        # vcpkg's spdlog, fmt and Catch2 are built without ASan, so the STL's
+        # container annotations, on under /fsanitize=address, would differ
+        # between them and us: LNK2038 on annotate_string and annotate_vector.
+        # Microsoft's advice for linking such libraries is to turn them off.
+        add_compile_definitions(
+            _DISABLE_STRING_ANNOTATION
+            _DISABLE_VECTOR_ANNOTATION
+        )
         add_link_options(/INCREMENTAL:NO)
         string(
             REPLACE "/RTC1"
