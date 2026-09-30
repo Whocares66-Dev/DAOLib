@@ -2,7 +2,7 @@
 
 A native plugin loader and library for Dragon Age: Origins, in the spirit of SKSE plus CommonLibSSE-NG for Skyrim. Read `dev/PLAN.md` first: what the three pieces are (loader, library, plugins), the rules, and the order of work.
 
-`dev/TURN_BASED.md` is the first use case, what is read of pause so far, and the reading still needed. Two tables map the engine. `dev/SCRIPT_COMMANDS.md` covers the 827 script commands, cross-checked against the game's own `script.ldf` (`dev/script_commands.csv`). `dev/MESSAGE_HANDLERS.md` covers the 314 message handlers, the engine's event API (`dev/message_handlers.csv`). `dev/TOOLSET.md` is what the Dragon Age toolset installer holds that matters here. `dev/CRASHES.md` is the crash logger the loader installs, and the crashes it has explained. `dev/LINEAGE.md` is what Neverwinter Nights' community work (NWNX:EE, xoreos) can and cannot tell us about this engine. `dev/PROBE.md` is the probe plugin, which counts every script command and message handler and samples the game's threads during play, and how to read a session with `tools/probe_report.py`. `dev/LIBRARY.md` is the library as a plugin uses it: generated field descriptors, the classes over them, and the probe's checks of both in play.
+`dev/TURN_BASED.md` is the first use case, what is read of pause so far, and the reading still needed. Two tables map the engine. `dev/SCRIPT_COMMANDS.md` covers the 827 script commands, cross-checked against the game's own `script.ldf` (`dev/script_commands.csv`). `dev/MESSAGE_HANDLERS.md` covers the 314 message handlers, the engine's event API (`dev/message_handlers.csv`). `dev/TOOLSET.md` is what the Dragon Age toolset installer holds that matters here, the source of the game's 2,101 scripts among it (`tools/toolset_scripts.py` extracts them to `toolset\extract\scripts\`). `dev/CRASHES.md` is the crash logger the loader installs, and the crashes it has explained. `dev/LINEAGE.md` is what Neverwinter Nights' community work (NWNX:EE, xoreos) can and cannot tell us about this engine. `dev/PROBE.md` is the probe plugin, which counts every script command and message handler and samples the game's threads during play, and how to read a session with `tools/probe_report.py`. `dev/LIBRARY.md` is the library as a plugin uses it: generated field descriptors, the classes over them, and the probe's checks of both in play.
 
 Markdown here is not hard-wrapped: one line per paragraph or list item.
 
@@ -37,7 +37,7 @@ src/plugins/    one folder per plugin; probe/ is the first
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
-                names.py, probe_targets.py, probe_report.py, ghidra/
+                names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, ghidra/
 dev/            plan, reading, tables
 game/           the exe and its Ghidra project (ignored)
 toolset/        the toolset installer and what is extracted from it (ignored)
