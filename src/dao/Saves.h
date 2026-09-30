@@ -1,37 +1,56 @@
 // A plugin's own data with the game's saves, as SKSE's co-saves keep a
-// plugin's beside a Skyrim save: the plugin hears when the game has
-// written a save and when it is about to load one, with the save's slot,
-// and keeps a file of its own in the slot's folder.
+// plugin's beside a Skyrim save: a file of the plugin's own in each save's
+// folder, written when the game saves and read when a playthrough is
+// loaded.
 //
-//   dao::saves::OnSaved([](const dao::saves::Slot &slot) {
-//       std::ofstream(slot.File("myplugin")) << state;
+//   std::string g_notes;   // the plugin's state, for the playthrough loaded now
+//
+//   dao::saves::OnGameLoaded([](const std::optional<dao::saves::Slot> &save) {
+//       // Nothing for a new game, or a save from before the plugin.
+//       g_notes = save ? save->Read("myplugin").value_or("") : "";
 //   });
-//   dao::saves::OnLoading([](const dao::saves::Slot &slot) {
-//       std::ifstream in(slot.File("myplugin"));   // may not exist
-//       ...
-//   });
+//   dao::saves::OnSaved([](const dao::saves::Slot &save) { save.Write("myplugin", g_notes); });
 //
-// Read 2026-09-30 (dev/SAVES.md). A save is written by SaveGame::Write
-// (dao/Addresses.h), with the character, the slot and the kind resolved;
-// in play the same day a quicksave asked for "any slot" and Write was
-// called for slot 1, kind 2, and returned 1. OnSaved runs after Write
-// returns and has succeeded, so the slot's folder holds the new save. A
-// load looks for its file with SaveGame::FindSave, with the same three, in
-// play once per load; OnLoading runs then, before the game reads the save.
-// The world is not built yet: read the file there, and apply what it says
-// once the module's load event arrives (dao/Events.h,
-// EVENT_TYPE_MODULE_LOAD). Both run on the game's thread.
+// examples/saves/ is a whole plugin that does this.
 //
-// Two gaps. One quicksave in play (the eighth session) wrote its files
-// without Write being called, for a reason not read, and such a save
-// would not be heard. And a save deleted from the game's menu takes the
-// slot's folder with it (a recursive walk over it, 0x004C9B10), a
-// plugin's file too, which is as it should be. Not yet seen in play.
+// What goes in the file is the plugin's own: text, JSON, binary. Each
+// plugin has its own file per save, <slot folder>\<plugin>.daolib, so
+// there is nothing to share and no framing; a plugin that may change its
+// format keeps a version in it. Both callbacks run on the game's thread,
+// one at a time, as the game's own saving and loading do, so plugin state
+// they share needs no lock. They must not throw: an exception has no way
+// back through the game's code.
+//
+// Read 2026-09-30 (dev/SAVES.md):
+//
+// - Saving. SaveGame::Write (dao/Addresses.h) writes a save with the
+//   character, the slot and the kind resolved; in play a quicksave asked
+//   for "any slot" and Write was called for slot 1, kind 2, and returned
+//   1. OnSaved runs after Write returns and has succeeded.
+// - Loading. A load looks for its file with SaveGame::FindSave, with the
+//   same three (in play once per load), before the game reads the save;
+//   the world is built after. OnGameLoaded runs at the module's load
+//   event (EVENT_TYPE_MODULE_LOAD) that follows, with the save's slot, the
+//   world there. The event alone is not enough: BioWare's module_core.nss
+//   says it "can fire more than once for a single module", so a load
+//   event with no save found before it is not a load and calls nothing.
+// - A new game. module_core.nss: EVENT_TYPE_MODULE_START happens "only
+//   once for a single game instance". OnGameLoaded runs there with no
+//   slot, so a plugin starts a new playthrough from nothing rather than
+//   from the one loaded before it.
+//
+// Seen in play: Write and FindSave with their slots, and the load event
+// once per load. Not yet seen: the module's start event for a new game,
+// and this file's callbacks themselves. One gap: an early quicksave in
+// play wrote its files without Write being called, for a reason not read,
+// and such a save would not be heard. A save deleted from the game's menu
+// takes its folder with it, and the plugin's file too.
 #pragma once
 
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -70,19 +89,29 @@ struct Slot
     std::int32_t number = 0;
     Kind kind = Kind::Manual;
 
-    // The slot's folder, as the game makes it (SaveGame::SlotFolder):
+    // The plugin's data in this save, the whole file; nothing if it has
+    // none (a save from before the plugin, or one it never wrote to).
+    std::optional<std::string> Read(std::string_view plugin) const;
+    // Writes the plugin's data for this save, replacing any. The file is
+    // written beside and then moved into place, so a save never holds half
+    // of one. False if it could not be written.
+    bool Write(std::string_view plugin, std::string_view data) const;
+
+    // The file itself, <slot folder>\<plugin>.daolib, for a plugin that
+    // would rather stream it.
+    std::filesystem::path File(std::string_view plugin) const;
+    // The slot's folder, as the game names it (SaveGame::SlotFolder):
     // <documents>\BioWare\Dragon Age\Characters\<character>\Saves\
     // <Slot_|AutoSave_|QuickSave_><n>. The engine's own answer, so it
-    // follows where the game keeps its saves.
+    // follows wherever the game keeps its saves.
     std::filesystem::path Folder() const;
-
-    // A plugin's file in it: <folder>\<plugin>.daolib.
-    std::filesystem::path File(std::string_view plugin) const;
 };
 
-using Observer = std::function<void(const Slot &slot)>;
+// After the game has written a save, with its slot.
+void OnSaved(std::function<void(const Slot &saved)> callback);
 
-void OnSaved(Observer observer);
-void OnLoading(Observer observer);
+// When a playthrough is in the world: after a save has loaded, with the
+// slot it came from, or when a new game starts, with none.
+void OnGameLoaded(std::function<void(const std::optional<Slot> &loaded)> callback);
 
 } // namespace dao::saves

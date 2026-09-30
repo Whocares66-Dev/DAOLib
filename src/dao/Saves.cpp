@@ -1,13 +1,17 @@
 #include "dao/Saves.h"
 
 #include "dao/Addresses.h"
+#include "dao/Events.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/String.h"
 #include "dao/core/Msvc8.h"
 
 #include <cstddef>
+#include <fstream>
+#include <iterator>
 #include <mutex>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -17,14 +21,20 @@ namespace dao::saves
 namespace
 {
 
-std::mutex g_lock;
-std::vector<Observer> g_saved;
-std::vector<Observer> g_loading;
+using SavedCallback = std::function<void(const Slot &)>;
+using LoadedCallback = std::function<void(const std::optional<Slot> &)>;
 
-std::vector<Observer> Copy(const std::vector<Observer> &observers)
+std::mutex g_lock;
+std::vector<SavedCallback> g_saved;
+std::vector<LoadedCallback> g_loaded;
+// The save a load found, until the module's load event says the world is
+// there. Only the game's thread touches it.
+std::optional<Slot> g_loading;
+
+template <class T> std::vector<T> Copy(const std::vector<T> &callbacks)
 {
     const std::lock_guard lock(g_lock);
-    return observers;
+    return callbacks;
 }
 
 // SaveGame::Write: __thiscall (slot, kind, const std::wstring &name, ?),
@@ -43,9 +53,9 @@ int __fastcall Write(void *self, int edx, std::int32_t slot, std::int32_t kind, 
         const auto &character =
             *reinterpret_cast<const core::WStringRep *>(static_cast<std::byte *>(self) + kCharacter);
         const Slot saved{std::wstring(character.View()), slot, static_cast<Kind>(kind)};
-        for (const auto &observer : Copy(g_saved))
+        for (const auto &callback : Copy(g_saved))
         {
-            observer(saved);
+            callback(saved);
         }
     }
     return written;
@@ -60,24 +70,42 @@ int __cdecl Find(void *out, const core::WStringRep *character, std::int32_t slot
 {
     if (character != nullptr)
     {
-        const Slot loading{std::wstring(character->View()), slot, static_cast<Kind>(kind)};
-        for (const auto &observer : Copy(g_loading))
-        {
-            observer(loading);
-        }
+        g_loading = Slot{std::wstring(character->View()), slot, static_cast<Kind>(kind)};
     }
     return g_find.Original()(out, character, slot, kind);
 }
 
-void Add(std::vector<Observer> &observers, Observer observer)
+void Loaded(const std::optional<Slot> &loaded)
 {
-    const std::lock_guard lock(g_lock);
-    observers.push_back(std::move(observer));
-    if (g_write.Original() == nullptr)
+    for (const auto &callback : Copy(g_loaded))
     {
-        g_write.Attach(addr::kSaveGame_Write, &Write);
-        g_find.Attach(addr::kSaveGame_FindSave, &Find);
+        callback(loaded);
     }
+}
+
+void AttachSaving()
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_write.Attach(addr::kSaveGame_Write, &Write); });
+}
+
+void AttachLoading()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_find.Attach(addr::kSaveGame_FindSave, &Find);
+        events::OnScriptEvent(script::EventType::ModuleStart, [](ObjectId, const CScriptEvent &) {
+            g_loading.reset();
+            Loaded(std::nullopt);
+        });
+        events::OnScriptEvent(script::EventType::ModuleLoad, [](ObjectId, const CScriptEvent &) {
+            if (g_loading)
+            {
+                const Slot loaded = *std::exchange(g_loading, std::nullopt);
+                Loaded(loaded);
+            }
+        });
+    });
 }
 
 } // namespace
@@ -99,14 +127,49 @@ std::filesystem::path Slot::File(std::string_view plugin) const
     return Folder() / std::filesystem::path(std::string(plugin) + ".daolib");
 }
 
-void OnSaved(Observer observer)
+std::optional<std::string> Slot::Read(std::string_view plugin) const
 {
-    Add(g_saved, std::move(observer));
+    std::ifstream in(File(plugin), std::ios::binary);
+    if (!in)
+    {
+        return std::nullopt;
+    }
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-void OnLoading(Observer observer)
+bool Slot::Write(std::string_view plugin, std::string_view data) const
 {
-    Add(g_loading, std::move(observer));
+    const auto file = File(plugin);
+    auto partial = file;
+    partial += ".partial";
+    {
+        std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+        if (!out.write(data.data(), static_cast<std::streamsize>(data.size())))
+        {
+            return false;
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(partial, file, error); // replaces the old one
+    return !error;
+}
+
+void OnSaved(std::function<void(const Slot &saved)> callback)
+{
+    {
+        const std::lock_guard lock(g_lock);
+        g_saved.push_back(std::move(callback));
+    }
+    AttachSaving();
+}
+
+void OnGameLoaded(std::function<void(const std::optional<Slot> &loaded)> callback)
+{
+    {
+        const std::lock_guard lock(g_lock);
+        g_loaded.push_back(std::move(callback));
+    }
+    AttachLoading();
 }
 
 } // namespace dao::saves

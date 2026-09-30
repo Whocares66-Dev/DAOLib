@@ -47,7 +47,7 @@ Seen in play, 2026-09-30:
 
 So a plugin's save data can hang on `Write` returning: it has the character, the slot and the kind, which name the folder. It can hang on `FindSave` or `LoadGameMessage` for a load. The unread check is the gap: a save that skips `Write` would be missed.
 
-`dao/Saves.h` does that: `OnSaved` after `Write` succeeds, `OnLoading` at `FindSave`, and `Slot::File("myplugin")`, the plugin's own file in the slot's folder, which the game's own `SlotFolder` names. The check that can skip `Write` turned out to be a recursive walk over the slot's folder (`0x004C9B10`) that the worker requires to succeed; why one quicksave wrote its files without `Write` is still not read.
+`dao/Saves.h` does that. `OnSaved` runs after `Write` succeeds. `OnGameLoaded` runs when a playthrough is in the world: at the module's load event after a `FindSave`, with that save's slot, or at the module's start event for a new game, with none, so a plugin never carries one playthrough's state into another. `Slot::Read` and `Slot::Write` take the plugin's own file in the slot's folder, which the game's own `SlotFolder` names. The check that can skip `Write` turned out to be a recursive walk over the slot's folder (`0x004C9B10`) that the worker requires to succeed; why one quicksave wrote its files without `Write` is still not read.
 
 Once that is read, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
 
