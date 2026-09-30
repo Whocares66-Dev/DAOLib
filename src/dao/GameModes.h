@@ -56,8 +56,11 @@ class GameModeController
     }
 
     // The mode object for a number (its class says which mode it is:
-    // dao::TypeName), or null past the table's end. The table is a
-    // std::vector whose first and last pointers are at +0x58 and +0x5C.
+    // dao::TypeName), or null past the table's end. Read as a std::vector
+    // whose first and last pointers are at +0x58 and +0x5C (the constructor
+    // zeroes +0x58 to +0x60 together; SetGameMode indexes +0x58 by mode).
+    // NOT CONFIRMED: in the session of 2026-09-30 the probe never saw a
+    // non-empty table there; do not rely on these two yet.
     const void *ModeObject(GameMode mode) const
     {
         const auto *first = Read<const void *const *>(kModesFirst);

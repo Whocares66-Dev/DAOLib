@@ -138,8 +138,12 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The command table, `InitializeCommands`, setting a slot | 2026-09-30 | used 2026-09-30: 18 slots replaced, the game ran on |
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
-| Calling commands from C++: `Invoke` and the 661 generated wrappers | 2026-09-30 | compiled; three checked by the probe from the next session |
-| Intercepting commands: `InterceptCommand`, `CommandCall`, chaining across plugins | 2026-09-30 | compiled; the example plugin uses it from the next session |
+| Calling commands from C++: `Invoke` and the generated wrappers | 2026-09-30 | checked 2026-09-30, fifth session: 700 `GetObjectType`, 528 `GetStringLength` and 73 `GetPositionFromLocation` calls from inside script commands, every answer right; `GetTag` and `GetM2DAInt` from the example plugin |
+| Intercepting commands: `InterceptCommand`, `CommandCall`, chaining across plugins | 2026-09-30 | checked 2026-09-30: the example plugin's `GetCombatState` intercept, chained with the probe's shadow of the same command, read its argument and the engine's answer on 300 of 300 calls, 0 and 1 |
+| The frame callback and the scripts' thread | 2026-09-30 | checked 2026-09-30: the update and the scripts run on one thread, so a frame callback may call script commands; the update runs while paused too (26,849 paused frames in the session) |
+| The event queue: what it delivers | 2026-09-30 | seen 2026-09-30: 824 events, all script events (queue id 10) but two; `COMMAND_COMPLETE` among them (14), so the engine delivers some command completions another way |
+| The game mode controller's table of modes | 2026-09-30 | not confirmed: never seen non-empty where it was read; the probe logs the controller's words next session |
+| The data tables through `dao::gda` | 2026-09-30 | matched `GetM2DAInt` in play only on a row of zeros; the example reads a row with values next session |
 | `CGameObject`: id, type, the casts to object, creature and placeable | 2026-09-30, from the constructor and the vtables | checked 2026-09-30, on all 1,100 objects the second session's script checks looked up |
 | Strings, locations and effects on the stack; the effect's type, duration type, creator and ability id | 2026-09-30 | checked 2026-09-30, third session: 411 `GetTag` and 43 `GetLocation` round trips, 95 effect getter calls, all matching |
 | Vectors; the effect's flags and animation | 2026-09-30 | not called in play yet |
@@ -166,6 +170,12 @@ Every script command ran on one thread, the same one `InitializeCommands` ran on
 ## The fourth session
 
 2026-09-30, a fight, with events and arrays shadowed. `GetCurrentEvent` ran 3,635 times and each answer was a `CScriptEvent` that round-tripped the same; `GetEventType` matched 3,400 times, `GetEventCreator` 1,099 and `GetEventTarget` 15. The types seen, read against the scripts' constants: 63 `EVENT_TYPE_MODULE_GETCHARSTAGE`, 94 `PLAYER_COMMAND_ADDED`, 78 `PLACEABLE_ONCLICK`, 11 `EQUIP`. `GetTeam` answered five times with two to four creatures, all on team 9 as asked. `GetEffects` answered 493 times, every array empty.
+
+## The fifth session
+
+2026-09-30, one fight, with the example plugin beside the probe. Calling commands from C++ held on every call: from inside the probe's shadows, on the scripts' thread and in the middle of a script's own command, `api::GetObjectType` agreed with the type byte 700 times, `api::GetStringLength` with the string's length 528 times, `api::GetPositionFromLocation` with the location 73 times. The example plugin's intercept of `GetCombatState` sat in the table in front of the probe's shadow of the same command, the two chaining, and read the creature and the engine's answer right on all 300 calls, calling `api::GetTag` from inside it (`bhn100cr_mother`, `bhn200cr_howe_landra3`). The frame callback runs on the scripts' own thread (one thread id for both) and runs while the game is paused (2,736 frames running, 26,849 paused), which is what a turn-based mode's clock needs.
+
+The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE_*`, most of them `EQUIP` (444), `HEARTBEAT2` (99), `PERCEPTION_APPEAR` (61), `ATTACK_IMPACT` (32), and the scripts' own numbers above 1000. `COMMAND_COMPLETE` came through 14 times, fewer than the fight's commands, so the engine delivers it another way too; the turn-based design holds the AI at `AddCommand` instead (`dev/TURN_BASED.md`).
 
 ## What comes next
 

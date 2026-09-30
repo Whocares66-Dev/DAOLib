@@ -36,11 +36,15 @@ void CheckTables()
 {
     using dao::script::Table;
     constexpr auto kAbilities = static_cast<std::int32_t>(Table::AbilitiesTalents);
-    const std::int32_t row = dao::script::api::GetM2DARowIdFromRowIndex(kAbilities, 0);
-    const auto direct = dao::gda::GetInt(Table::AbilitiesTalents, row, "TargetType");
-    const std::int32_t script = dao::script::api::GetM2DAInt(kAbilities, L"TargetType", row);
-    spdlog::info("ability table, row {} TargetType: {} from the table, {} from GetM2DAInt", row,
-                 direct ? std::to_string(*direct) : std::string("nothing"), script);
+    constexpr std::int32_t kShieldPummel = 1; // abi_base's row 1 (tools/gda.py --dump abi_base --names)
+    const auto type = dao::gda::GetInt(Table::AbilitiesTalents, kShieldPummel, "AbilityType");
+    const std::int32_t typeScript = dao::script::api::GetM2DAInt(kAbilities, L"AbilityType", kShieldPummel);
+    const auto cost = dao::gda::GetFloat(Table::AbilitiesTalents, kShieldPummel, "Cost");
+    const float costScript = dao::script::api::GetM2DAFloat(kAbilities, L"Cost", kShieldPummel);
+    spdlog::info("Shield Pummel: AbilityType {} from the table, {} from GetM2DAInt; Cost {} from the table, {} from "
+                 "GetM2DAFloat",
+                 type ? std::to_string(*type) : std::string("nothing"), typeScript,
+                 cost ? std::to_string(*cost) : std::string("nothing"), costScript);
 }
 
 int CheckCombatState(dao::script::CommandCall &call)

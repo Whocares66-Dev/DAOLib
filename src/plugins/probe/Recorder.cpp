@@ -175,8 +175,23 @@ class Recorder
         }
         const auto first = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesFirst);
         const auto last = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesLast);
+        const auto current = dao::TryRead<std::int32_t>(*controller + dao::GameModeController::kMode);
         if (!first || !last || *first == 0 || *last <= *first)
         {
+            // Not the vector it was read as (2026-09-30: never logged in a
+            // session): once a game is loaded, the words around it, raw.
+            if (!rawModesLogged_ && current && *current == static_cast<std::int32_t>(dao::GameMode::Explore))
+            {
+                rawModesLogged_ = true;
+                std::string words;
+                for (std::uintptr_t off = 0x50; off < 0x80; off += 4)
+                {
+                    const auto w = dao::TryRead<std::uint32_t>(*controller + off);
+                    words += fmt::format(" +{:#x}={}", off, w ? fmt::format("{:#010x}", *w) : std::string("?"));
+                }
+                spdlog::info("game modes: the table at +0x58 is not a vector; the controller at {:#x}:{}", *controller,
+                             words);
+            }
             return;
         }
         modesLogged_ = true;
@@ -193,6 +208,7 @@ class Recorder
     }
 
     bool modesLogged_ = false;
+    bool rawModesLogged_ = false;
 
     void RefreshThreads()
     {
