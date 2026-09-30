@@ -10,6 +10,7 @@
 #include "dao/Script.h"
 #include "dao/String.h"
 #include "dao/Structures.h"
+#include "dao/TypeName.h"
 #include "dao/core/ObjectType.h"
 #include "dao/generated/ObjectCasts.h"
 #include "dao/generated/ScriptFields.h"
@@ -269,6 +270,11 @@ enum class PeekKind : std::uint8_t
     VectorAnswer,
     LocationAnswer,
     EffectField,
+    EventField,
+    EventAnswer,
+    TeamArray,   // object[]: every element on the team the script asked for
+    EffectArray, // effect[]: every element a CGameEffect
+    ObjectArray, // object[]: every element a live object
 };
 
 struct PeekCommand
@@ -276,8 +282,9 @@ struct PeekCommand
     int command = 0;
     const char *name = nullptr;
     PeekKind kind = PeekKind::StringAnswer;
-    bool returnsObject = false;                                 // EffectField: the answer is an object id
-    std::uint32_t (*field)(const dao::CGameEffect &) = nullptr; // EffectField: ours
+    bool returnsObject = false;                                       // EffectField: the answer is an object id
+    std::uint32_t (*field)(const dao::CGameEffect &) = nullptr;       // EffectField: ours
+    std::uint32_t (*eventField)(const dao::CScriptEvent &) = nullptr; // EventField: ours
 };
 
 constexpr PeekCommand kPeeks[] = {
@@ -296,6 +303,15 @@ constexpr PeekCommand kPeeks[] = {
     {614, "GetEffectID", PeekKind::EffectField, false, [](const dao::CGameEffect &e) { return e.Id(); }},
     {620, "GetEffectAbilityID", PeekKind::EffectField, false,
      [](const dao::CGameEffect &e) { return static_cast<std::uint32_t>(e.AbilityId()); }},
+    {111, "GetEventType", PeekKind::EventField, false, nullptr,
+     [](const dao::CScriptEvent &e) { return static_cast<std::uint32_t>(e.Type()); }},
+    {109, "GetEventCreator", PeekKind::EventField, true, nullptr,
+     [](const dao::CScriptEvent &e) { return e.Creator(); }},
+    {126, "GetEventTarget", PeekKind::EventField, true, nullptr, [](const dao::CScriptEvent &e) { return e.Target(); }},
+    {108, "GetCurrentEvent", PeekKind::EventAnswer},
+    {808, "GetTeam", PeekKind::TeamArray},
+    {712, "GetEffects", PeekKind::EffectArray},
+    {433, "GetNearestObject", PeekKind::ObjectArray},
 };
 
 struct PeekState
@@ -405,10 +421,134 @@ void PeekLocation(PeekState &state)
     }
 }
 
+void PeekEvent(PeekState &state)
+{
+    dao::script::OwnedEvent first = dao::script::Stack::PopEvent();
+    if (!first || !dao::script::Stack::PushEvent(*first.get()))
+    {
+        ++state.failed;
+        return;
+    }
+    dao::script::OwnedEvent second = dao::script::Stack::PopEvent();
+    if (!second || !dao::script::Stack::PushEvent(*second.get()))
+    {
+        ++state.failed;
+        return;
+    }
+    const std::string type = dao::TypeName(first.get());
+    const std::string shown = fmt::format("{} of type {}, creator {:#010x}, target {:#010x}", type, first->Type(),
+                                          first->Creator(), first->Target());
+    if (type == "CScriptEvent" && first->Type() == second->Type() && first->Creator() == second->Creator() &&
+        first->Target() == second->Target())
+    {
+        Matched(state, shown + ", round trip the same");
+    }
+    else
+    {
+        Mismatched(state, shown + fmt::format("; after our push: type {}, creator {:#010x}", second->Type(),
+                                              second->Creator()));
+    }
+}
+
+// An array answer: popped with the library's wrapper, its elements checked,
+// pushed back (the VM makes its own copy; ours is freed on return).
+void PeekArray(PeekState &state, std::optional<std::int32_t> team)
+{
+    dao::script::Array array = dao::script::Stack::PopArray();
+    if (!array || !dao::script::Stack::PushArray(array))
+    {
+        ++state.failed;
+        return;
+    }
+    const PeekKind kind = state.peek->kind;
+    auto *app = dao::CClientExoApp::Get();
+    std::size_t good = 0;
+    std::string first;
+    for (std::size_t i = 0; i < array.Size(); ++i)
+    {
+        if (kind == PeekKind::EffectArray)
+        {
+            const std::string type = dao::TypeName(array.Effect(i));
+            good += type == "CGameEffect" ? 1 : 0;
+            if (i == 0)
+            {
+                first = fmt::format(", the first {} of type {}", type,
+                                    array.Effect(0) != nullptr ? array.Effect(0)->Type() : -1);
+            }
+            continue;
+        }
+        const dao::ObjectId id = array.Object(i);
+        dao::CGameObject *object = app != nullptr ? app->GetGameObjectById(id) : nullptr;
+        dao::CCObject *asObject = object != nullptr ? object->AsObject() : nullptr;
+        if (kind == PeekKind::TeamArray)
+        {
+            good += asObject != nullptr && team && asObject->TeamId() == *team ? 1 : 0;
+        }
+        else
+        {
+            good += object != nullptr ? 1 : 0;
+        }
+        if (i == 0)
+        {
+            first =
+                fmt::format(", the first {:#010x} ({})", id, object != nullptr ? static_cast<int>(object->Type()) : -1);
+        }
+    }
+    const std::string shown = fmt::format("tag {:#x}, {} elements, {} as expected{}{}", array.Tag(), array.Size(), good,
+                                          team ? fmt::format(", team {}", *team) : std::string(), first);
+    const std::int32_t wantTag = kind == PeekKind::EffectArray ? 0x53 : 0x43;
+    if (array.Tag() == wantTag && good == array.Size())
+    {
+        Matched(state, shown);
+    }
+    else
+    {
+        Mismatched(state, shown);
+    }
+}
+
 int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
 {
     PeekState &state = g_peeks.at(static_cast<std::size_t>(id));
     const PeekCommand &peek = *state.peek;
+    if (peek.kind == PeekKind::EventField)
+    {
+        dao::script::OwnedEvent event = dao::script::Stack::PopEvent();
+        const bool peeked = event && dao::script::Stack::PushEvent(*event.get());
+        const int result = state.previous(commands, edx, id, paramCount);
+        ++state.calls;
+        if (!peeked || result != dao::script::kOk)
+        {
+            ++state.failed;
+            return result;
+        }
+        const auto answer = PeekAnswer(peek.returnsObject);
+        if (!answer)
+        {
+            ++state.failed;
+            return result;
+        }
+        const std::uint32_t ours = peek.eventField(*event.get());
+        if (ours == *answer)
+        {
+            Matched(state, fmt::format("event of type {}, engine and field both {:#x}", event->Type(), ours));
+        }
+        else
+        {
+            Mismatched(state, fmt::format("event of type {}: engine said {:#x}, field reads {:#x}", event->Type(),
+                                          *answer, ours));
+        }
+        return result;
+    }
+    std::optional<std::int32_t> team;
+    if (peek.kind == PeekKind::TeamArray)
+    {
+        std::int32_t value = 0;
+        if (dao::script::Stack::PopInt(value) && dao::script::Stack::PushInt(value))
+        {
+            team = value;
+        }
+    }
     if (peek.kind == PeekKind::EffectField)
     {
         dao::script::OwnedEffect effect = dao::script::Stack::PopEffect();
@@ -457,7 +597,16 @@ int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
     case PeekKind::LocationAnswer:
         PeekLocation(state);
         break;
+    case PeekKind::EventAnswer:
+        PeekEvent(state);
+        break;
+    case PeekKind::TeamArray:
+    case PeekKind::EffectArray:
+    case PeekKind::ObjectArray:
+        PeekArray(state, team);
+        break;
     case PeekKind::EffectField:
+    case PeekKind::EventField:
         break;
     }
     return result;
@@ -516,8 +665,9 @@ void Install(void *commands)
     }
     spdlog::info("script checks: {} of {} getters shadowed, table at {}", installed,
                  std::size(dao::generated::kScriptGetters), static_cast<void *>(dao::script::Table()));
-    spdlog::info("script checks: {} of {} value-type commands shadowed (strings, vectors, locations, effects)",
-                 InstallPeeks(), std::size(kPeeks));
+    spdlog::info(
+        "script checks: {} of {} value-type commands shadowed (strings, vectors, locations, effects, events, arrays)",
+        InstallPeeks(), std::size(kPeeks));
 }
 
 // CVirtualMachineCommands::InitializeCommands: __thiscall, no arguments,
