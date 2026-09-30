@@ -202,6 +202,10 @@ DAO_ADDRESS(kScriptArray_CopyConstructor, "ScriptArray::ScriptArray_copy", 0x00A
 DAO_ADDRESS(kScriptArray_Destructor, "ScriptArray::~ScriptArray", 0x00A2E830)
 DAO_ADDRESS(kScriptArray_Size, "ScriptArray::Size", 0x00A2DB80)
 DAO_ADDRESS(kCVirtualMachine_StackPushArray, "CVirtualMachine::StackPushArray", 0x00A2D7C0)
+// A resource on the stack is a std::wstring under tag 0x60 (StackPopResource
+// copies it out with the string's operator=): this pushes one, as
+// StackPushString does a string under tag 5. Read 2026-09-30.
+DAO_ADDRESS(kCVirtualMachine_StackPushResource, "CVirtualMachine::StackPushResource", 0x00A2D890)
 
 // The engine's std::wstring, MSVC 2005's (dao/core/Msvc8.h), read
 // 2026-09-30 from GetStringLength (0x00657CC0), which makes one on its

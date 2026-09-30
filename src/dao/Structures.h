@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace dao
@@ -50,6 +51,15 @@ struct CScriptLocation
 };
 static_assert(sizeof(CScriptLocation) == 0x30, "the engine allocates 0x30 bytes for a location");
 static_assert(offsetof(CScriptLocation, orientation) == 0x10 && offsetof(CScriptLocation, area) == 0x20);
+
+// A script's `resource`: a file the game loads by name, as a script writes
+// R"gen00fl_dog.utc". On the VM's stack it is a string under a tag of its
+// own (0x60), so it has a type of its own here, to keep it apart from a
+// string argument.
+struct Resource
+{
+    std::wstring name;
+};
 
 // The engine structures, by the number script.ldf gives each.
 enum class EngineStructure : std::int32_t

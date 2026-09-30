@@ -47,6 +47,7 @@ TYPES = {
     "effect": ("const ::dao::CGameEffect &", "::dao::script::OwnedEffect", "{}"),
     "event": ("const ::dao::CScriptEvent &", "::dao::script::OwnedEvent", "{}"),
     "command": ("const ::dao::Command &", "::dao::script::OwnedCommand", "{}"),
+    "resource": ("const ::dao::Resource &", "::dao::Resource", "{}"),
 }
 KEYWORDS = {
     "default",
@@ -118,6 +119,8 @@ def default(value, t, constants, generated):
         return "::dao::kInvalidObject"
     if v in ("TRUE", "FALSE") and t == "int":
         return "1" if v == "TRUE" else "0"
+    if t == "resource" and re.fullmatch(r'R"[^"\\]*"', v):
+        return f"::dao::Resource{{L{v[1:]}}}" if v != 'R""' else "::dao::Resource{}"
     if t == "string" and re.fullmatch(r'"[^"\\]*"', v):
         return "L" + v
     if t == "float" and re.fullmatch(r"-?\d+(\.\d*)?f?", v):

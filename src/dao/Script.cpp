@@ -133,6 +133,17 @@ bool Stack::PopString(std::wstring &out)
     return true;
 }
 
+bool Stack::PopResource(Resource &out)
+{
+    WString popped;
+    if (!CallVm<core::WStringRep *>(addr::kCVirtualMachine_StackPopResource, popped.Engine()))
+    {
+        return false;
+    }
+    out.name.assign(popped.View());
+    return true;
+}
+
 bool Stack::PopVector(Vector &out)
 {
     return CallVm<Vector *>(addr::kCVirtualMachine_StackPopVector, &out);
@@ -280,6 +291,12 @@ bool Stack::PushString(std::wstring_view value)
     return CallVm<const core::WStringRep *>(addr::kCVirtualMachine_StackPushString, &borrowed);
 }
 
+bool Stack::PushResource(const Resource &value)
+{
+    const core::WStringRep borrowed = core::WStringRep::Borrow(value.name);
+    return CallVm<const core::WStringRep *>(addr::kCVirtualMachine_StackPushResource, &borrowed);
+}
+
 bool Stack::PushVector(const Vector &value)
 {
     return CallVm<const Vector *>(addr::kCVirtualMachine_StackPushVector, &value);
@@ -414,6 +431,10 @@ bool Push(const Array &value)
 {
     return Stack::PushArray(value);
 }
+bool Push(const Resource &value)
+{
+    return Stack::PushResource(value);
+}
 bool Push(const ::dao::Command &value)
 {
     return Stack::PushStructure(EngineStructure::Command, &value);
@@ -438,6 +459,11 @@ template <> std::optional<std::wstring> Pop<std::wstring>()
 {
     std::wstring value;
     return Stack::PopString(value) ? std::optional{std::move(value)} : std::nullopt;
+}
+template <> std::optional<Resource> Pop<Resource>()
+{
+    Resource value;
+    return Stack::PopResource(value) ? std::optional{std::move(value)} : std::nullopt;
 }
 template <> std::optional<Vector> Pop<Vector>()
 {

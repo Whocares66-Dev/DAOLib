@@ -210,6 +210,7 @@ struct Stack
     static bool PopFloat(float &out);
     static bool PopObject(ObjectId &out);
     static bool PopString(std::wstring &out);
+    static bool PopResource(Resource &out);
     static bool PopVector(Vector &out);
     static bool PopLocation(CScriptLocation &out);
     static OwnedEffect PopEffect();
@@ -220,6 +221,7 @@ struct Stack
     static bool PushFloat(float value);
     static bool PushObject(ObjectId value);
     static bool PushString(std::wstring_view value);
+    static bool PushResource(const Resource &value);
     static bool PushVector(const Vector &value);
     static bool PushLocation(const CScriptLocation &value);
     static bool PushEffect(const CGameEffect &value);
@@ -284,6 +286,7 @@ bool Push(const CGameEffect &value);
 bool Push(const CScriptEvent &value);
 bool Push(const Array &value);
 bool Push(const ::dao::Command &value);
+bool Push(const Resource &value);
 inline bool Push(const wchar_t *value)
 {
     return Push(std::wstring_view{value});

@@ -59,6 +59,12 @@ inline void PrintToLog(std::wstring_view sMessage)
     Invoke(5, sMessage);
 }
 
+// void Deprecated_ExecuteScript(resource rScript, object oTarget) = 8;
+inline void Deprecated_ExecuteScript(const ::dao::Resource & rScript, ::dao::ObjectId oTarget)
+{
+    Invoke(8, rScript, oTarget);
+}
+
 // string GetM2DAString(int n2DA, string sColumn, int nRow, string s2DA = "") = 9;
 inline std::wstring GetM2DAString(std::int32_t n2DA, std::wstring_view sColumn, std::int32_t nRow, std::wstring_view s2DA = L"")
 {
@@ -75,6 +81,12 @@ inline std::int32_t GetM2DARows(std::int32_t n2DA, std::wstring_view s2DA = L"")
 inline std::int32_t GetM2DAColumns(std::int32_t n2DA)
 {
     return Invoke<std::int32_t>(12, n2DA).value_or(0);
+}
+
+// resource GetM2DAResource(int n2DA, string sColumn, int nRow, string s2da = "") = 13;
+inline ::dao::Resource GetM2DAResource(std::int32_t n2DA, std::wstring_view sColumn, std::int32_t nRow, std::wstring_view s2da = L"")
+{
+    return Invoke<::dao::Resource>(13, n2DA, sColumn, nRow, s2da).value_or(::dao::Resource{});
 }
 
 // string GetTlkTableString(int nStrRef, int nGender = GENDER_MALE) = 14;
@@ -635,6 +647,18 @@ inline ::dao::script::OwnedEvent SetEventString(const ::dao::CScriptEvent & evEv
     return Invoke<::dao::script::OwnedEvent>(120, evEvent, nIndex, sValue).value_or(::dao::script::OwnedEvent{});
 }
 
+// void HandleEvent(event evEvent, resource rScriptName=R"") = 121;
+inline void HandleEvent(const ::dao::CScriptEvent & evEvent, const ::dao::Resource & rScriptName = ::dao::Resource{})
+{
+    Invoke(121, evEvent, rScriptName);
+}
+
+// void SetEventScript(object oObject, resource rScriptName) = 122;
+inline void SetEventScript(::dao::ObjectId oObject, const ::dao::Resource & rScriptName)
+{
+    Invoke(122, oObject, rScriptName);
+}
+
 // void EnablevEvent(object oObject, int bEnable, int nEventType) = 123;
 inline void EnablevEvent(::dao::ObjectId oObject, std::int32_t bEnable, std::int32_t nEventType)
 {
@@ -917,6 +941,12 @@ inline void SetItemHeraldry(::dao::ObjectId oItem, std::int32_t nHeraldry)
     Invoke(172, oItem, nHeraldry);
 }
 
+// void PlayMovie(resource rMovie) = 173;
+inline void PlayMovie(const ::dao::Resource & rMovie)
+{
+    Invoke(173, rMovie);
+}
+
 // void SendToRunDatabase(string sString) = 174;
 inline void SendToRunDatabase(std::wstring_view sString)
 {
@@ -1143,6 +1173,18 @@ inline void SetTag(::dao::ObjectId oObject, std::wstring_view sTag)
 inline ::dao::ObjectId GetObjectByTag(std::wstring_view sTag, std::int32_t nNth = 0)
 {
     return Invoke<::dao::ObjectId>(211, sTag, nNth).value_or(::dao::kInvalidObject);
+}
+
+// object CreateItemOnObject(resource rItemFileName, object oTarget, int nStackSize = 1, string sTag = "", int bSuppressNotification = FALSE, int bDroppable = TRUE) = 212;
+inline ::dao::ObjectId CreateItemOnObject(const ::dao::Resource & rItemFileName, ::dao::ObjectId oTarget, std::int32_t nStackSize = 1, std::wstring_view sTag = L"", std::int32_t bSuppressNotification = 0, std::int32_t bDroppable = 1)
+{
+    return Invoke<::dao::ObjectId>(212, rItemFileName, oTarget, nStackSize, sTag, bSuppressNotification, bDroppable).value_or(::dao::kInvalidObject);
+}
+
+// int CreatePool(resource rTemplate, int nPoolSize) = 213;
+inline std::int32_t CreatePool(const ::dao::Resource & rTemplate, std::int32_t nPoolSize)
+{
+    return Invoke<std::int32_t>(213, rTemplate, nPoolSize).value_or(0);
 }
 
 // void DestroyObject(object oObject, int nDelay = 0) = 214;
@@ -1427,10 +1469,22 @@ inline float GetItemStat(::dao::ObjectId oItem, std::int32_t nStatType)
     return Invoke<float>(305, oItem, nStatType).value_or(0.0f);
 }
 
+// object CreateObject(int nObjectType, resource rTemplate, location lLoc, string sOverrideScript = "", int bSpawnActive = TRUE, int bNoPermDeath = FALSE) = 306;
+inline ::dao::ObjectId CreateObject(std::int32_t nObjectType, const ::dao::Resource & rTemplate, const ::dao::CScriptLocation & lLoc, std::wstring_view sOverrideScript = L"", std::int32_t bSpawnActive = 1, std::int32_t bNoPermDeath = 0)
+{
+    return Invoke<::dao::ObjectId>(306, nObjectType, rTemplate, lLoc, sOverrideScript, bSpawnActive, bNoPermDeath).value_or(::dao::kInvalidObject);
+}
+
 // void SetLocName(object oObject, int nStringIndex) = 307;
 inline void SetLocName(::dao::ObjectId oObject, std::int32_t nStringIndex)
 {
     Invoke(307, oObject, nStringIndex);
+}
+
+// resource GetCurrentScriptResource() = 308;
+inline ::dao::Resource GetCurrentScriptResource()
+{
+    return Invoke<::dao::Resource>(308).value_or(::dao::Resource{});
 }
 
 // void OpenFadeMap() = 309;
@@ -2051,6 +2105,12 @@ inline ::dao::ObjectId GetPCSpeaker()
     return Invoke<::dao::ObjectId>(438).value_or(::dao::kInvalidObject);
 }
 
+// int BeginConversation(object oInitiator, object oTarget, resource rDialogFile = R"") = 440;
+inline std::int32_t BeginConversation(::dao::ObjectId oInitiator, ::dao::ObjectId oTarget, const ::dao::Resource & rDialogFile = ::dao::Resource{})
+{
+    return Invoke<std::int32_t>(440, oInitiator, oTarget, rDialogFile).value_or(0);
+}
+
 // int HasConversation(object oObject) = 444;
 inline std::int32_t HasConversation(::dao::ObjectId oObject)
 {
@@ -2453,6 +2513,12 @@ inline ::dao::script::OwnedCommand CommandWait(float fSeconds)
     return Invoke<::dao::script::OwnedCommand>(578, fSeconds).value_or(::dao::script::OwnedCommand{});
 }
 
+// command CommandStartConversation(object oTarget, resource rDialogFile = R"") = 579;
+inline ::dao::script::OwnedCommand CommandStartConversation(::dao::ObjectId oTarget, const ::dao::Resource & rDialogFile = ::dao::Resource{})
+{
+    return Invoke<::dao::script::OwnedCommand>(579, oTarget, rDialogFile).value_or(::dao::script::OwnedCommand{});
+}
+
 // command CommandJumpToObject(object oTarget) = 580;
 inline ::dao::script::OwnedCommand CommandJumpToObject(::dao::ObjectId oTarget)
 {
@@ -2717,10 +2783,22 @@ inline void SendOnlineScreenShot(std::wstring_view sFileName, std::wstring_view 
     Invoke(631, sFileName, sShortDescription, sLongDescription);
 }
 
+// void BeginSlideshow(resource rConversation) = 632;
+inline void BeginSlideshow(const ::dao::Resource & rConversation)
+{
+    Invoke(632, rConversation);
+}
+
 // int GetCanLevelUp(object oCreature) = 633;
 inline std::int32_t GetCanLevelUp(::dao::ObjectId oCreature)
 {
     return Invoke<std::int32_t>(633, oCreature).value_or(0);
+}
+
+// effect EffectAreaOfEffect(int nId, resource rScript, int nAoEVfx=0) = 634;
+inline ::dao::script::OwnedEffect EffectAreaOfEffect(std::int32_t nId, const ::dao::Resource & rScript, std::int32_t nAoEVfx = 0)
+{
+    return Invoke<::dao::script::OwnedEffect>(634, nId, rScript, nAoEVfx).value_or(::dao::script::OwnedEffect{});
 }
 
 // void ApplyEffectVisualEffect(object oCreator, object oTarget, int nVFXId, int nDurationType, float fDuration, int nAbilityId = ABILITY_INVALID) = 635;
@@ -2793,6 +2871,12 @@ inline void SetItemDamaged(::dao::ObjectId oObject, std::int32_t value)
 inline std::int32_t GetItemDamaged(::dao::ObjectId oObject)
 {
     return Invoke<std::int32_t>(646, oObject).value_or(0);
+}
+
+// void LoadCutscene(resource rCutscene, object oPlayer, int bPlayImmediately, string[] aTargetTagsToReplace, object[] aReplacementObjects, int bActorsHaveWeapons) = 647;
+inline void LoadCutscene(const ::dao::Resource & rCutscene, ::dao::ObjectId oPlayer, std::int32_t bPlayImmediately, const ::dao::script::Array & aTargetTagsToReplace, const ::dao::script::Array & aReplacementObjects, std::int32_t bActorsHaveWeapons)
+{
+    Invoke(647, rCutscene, oPlayer, bPlayImmediately, aTargetTagsToReplace, aReplacementObjects, bActorsHaveWeapons);
 }
 
 // void PlayCutscene(object oPlayer = OBJECT_INVALID) = 648;
@@ -3165,6 +3249,42 @@ inline std::int32_t GetCommandPriority(const ::dao::Command & cCommand)
 inline std::int32_t IsConjuring(::dao::ObjectId oObject)
 {
     return Invoke<std::int32_t>(731, oObject).value_or(0);
+}
+
+// string ResourceToString(resource rRes) = 732;
+inline std::wstring ResourceToString(const ::dao::Resource & rRes)
+{
+    return Invoke<std::wstring>(732, rRes).value_or(std::wstring{});
+}
+
+// void PrintResource(resource rResource, int bPrepend = FALSE) = 733;
+inline void PrintResource(const ::dao::Resource & rResource, std::int32_t bPrepend = 0)
+{
+    Invoke(733, rResource, bPrepend);
+}
+
+// event SetEventResource(event evEvent, int nIndex, resource rValue) = 734;
+inline ::dao::script::OwnedEvent SetEventResource(const ::dao::CScriptEvent & evEvent, std::int32_t nIndex, const ::dao::Resource & rValue)
+{
+    return Invoke<::dao::script::OwnedEvent>(734, evEvent, nIndex, rValue).value_or(::dao::script::OwnedEvent{});
+}
+
+// resource GetEventResource(event evEvent, int nIndex) = 735;
+inline ::dao::Resource GetEventResource(const ::dao::CScriptEvent & evEvent, std::int32_t nIndex)
+{
+    return Invoke<::dao::Resource>(735, evEvent, nIndex).value_or(::dao::Resource{});
+}
+
+// resource GetLocalResource(object oObject, string sVarName) = 736;
+inline ::dao::Resource GetLocalResource(::dao::ObjectId oObject, std::wstring_view sVarName)
+{
+    return Invoke<::dao::Resource>(736, oObject, sVarName).value_or(::dao::Resource{});
+}
+
+// void SetLocalResource(object oObject, string sVarName, resource sResource) = 737;
+inline void SetLocalResource(::dao::ObjectId oObject, std::wstring_view sVarName, const ::dao::Resource & sResource)
+{
+    Invoke(737, oObject, sVarName, sResource);
 }
 
 // float GetCreatureProperty(object oCreature, int nProperty, int nValueType = PROPERTY_VALUE_TOTAL) = 738;
@@ -3869,31 +3989,11 @@ inline void SetPartyPickerStage(std::wstring_view sAreaName, std::wstring_view s
     Invoke(858, sAreaName, s2DAName);
 }
 
-// Not wrapped: 24 commands with a type the library does not move yet.
-//   void Deprecated_ExecuteScript(resource rScript, object oTarget) = 8;
-//   resource GetM2DAResource(int n2DA, string sColumn, int nRow, string s2da = "") = 13;
+// Not wrapped: 4 commands with a type the library does not move yet.
 //   player GetLocalPlayer(object oObject, string sVarName) = 78;
 //   void SetLocalPlayer(object oObject, string sVarName, player pPlayer) = 79;
-//   void HandleEvent(event evEvent, resource rScriptName=R"") = 121;
-//   void SetEventScript(object oObject, resource rScriptName) = 122;
 //   string ToString(any anyData) = 149;
-//   void PlayMovie(resource rMovie) = 173;
-//   object CreateItemOnObject(resource rItemFileName, object oTarget, int nStackSize = 1, string sTag = "", int bSuppressNotification = FALSE, int bDroppable = TRUE) = 212;
-//   int CreatePool(resource rTemplate, int nPoolSize) = 213;
-//   object CreateObject(int nObjectType, resource rTemplate, location lLoc, string sOverrideScript = "", int bSpawnActive = TRUE, int bNoPermDeath = FALSE) = 306;
-//   resource GetCurrentScriptResource() = 308;
-//   int BeginConversation(object oInitiator, object oTarget, resource rDialogFile = R"") = 440;
-//   command CommandStartConversation(object oTarget, resource rDialogFile = R"") = 579;
-//   void BeginSlideshow(resource rConversation) = 632;
-//   effect EffectAreaOfEffect(int nId, resource rScript, int nAoEVfx=0) = 634;
-//   void LoadCutscene(resource rCutscene, object oPlayer, int bPlayImmediately, string[] aTargetTagsToReplace, object[] aReplacementObjects, int bActorsHaveWeapons) = 647;
 //   int GetArraySize(any array) = 708;
-//   string ResourceToString(resource rRes) = 732;
-//   void PrintResource(resource rResource, int bPrepend = FALSE) = 733;
-//   event SetEventResource(event evEvent, int nIndex, resource rValue) = 734;
-//   resource GetEventResource(event evEvent, int nIndex) = 735;
-//   resource GetLocalResource(object oObject, string sVarName) = 736;
-//   void SetLocalResource(object oObject, string sVarName, resource sResource) = 737;
 
 } // namespace dao::script::api
 
