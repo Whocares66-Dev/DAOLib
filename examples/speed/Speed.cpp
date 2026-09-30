@@ -1,10 +1,11 @@
-// Example: the world's speed (dao/Clock.h).
+// Example: the game's speed (dao/Clock.h).
 //
-// Fights run in slow motion: when the game enters combat mode the world
-// runs at half speed, and at full speed again when the fight ends. The
-// world's speed is the world timer's own scale, which every object's update
-// takes its time from, so the AI, movement, effects and regeneration all
-// slow together.
+// Fights run at another speed: when the game enters combat mode the game
+// runs at kFightSpeed (2, twice as fast; 0.5 would be slow motion), and at
+// its own speed again when the fight ends. dao::clock::SetSpeed scales both
+// of the game's clocks, the world timer its rules run on and the frame
+// timer its animation runs on, so what the player sees keeps pace with the
+// AI, effects and regeneration.
 //
 // The game's mode is read each frame (a frame callback is cheap, and the
 // mode changes on the frame the engine switches it); the speed is set only
@@ -23,7 +24,7 @@
 namespace
 {
 
-constexpr float kFightSpeed = 0.5F;
+constexpr float kFightSpeed = 2.0F; // of the game's own speed
 
 void Frame()
 {
