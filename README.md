@@ -24,6 +24,8 @@ Visual Studio 2022 with the C++ workload, CMake and Ninja (both come with it), [
 
 Logs land in `Documents\BioWare\Dragon Age\daolib\`; `DAOLIB_LOG_LEVEL=debug` in the environment turns them up.
 
+DAOLib is free software under the GNU General Public License, version 3 (`LICENSE`).
+
 A plugin in a repository of its own brings DAOLib in as a submodule, `add_subdirectory(extern/DAOLib EXCLUDE_FROM_ALL)`, and declares itself with `add_daolib_plugin(name SOURCES ...)`, as Skyrim plugins do with CommonLibSSE (`dev/PLUGINS.md`).
 
 ## Reading the executable
