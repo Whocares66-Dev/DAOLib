@@ -261,6 +261,13 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::info("screen DAOLibExample: added {}, shown {}, closed {}; its record now {}", added, shown, closed,
                      dao::gui::FindOwner(L"daolib_example"));
 
+        // The portrait of the creature the player controls, rendered as the
+        // party bar's are: the URL a movie would load.
+        if (auto *creature = app->GetCreatureById(message.object))
+        {
+            spdlog::info("portrait of {:#010x}: \"{}\"", message.object, dao::Utf8(creature->RenderPortrait()));
+        }
+
         // A few of the data tree's values, as the UI's GetValue and
         // GetNumber give them.
         for (const wchar_t *path : {L"GUI.SelectedChar", L"Map.ShowAllLabels", L"CClientExoApp.GUIDialogResult"})

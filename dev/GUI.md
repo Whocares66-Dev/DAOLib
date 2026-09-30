@@ -43,5 +43,5 @@ Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's p
 ## Still to read
 
 - The data tree movies bind to. Reading it is `dao/Data.h`: `SmartData::TokenManager` is the root, and its `Find(path)` walks a dotted path to an attribute, which gives its value as text or a number. A plain attribute can be set (`Attribute::Set`, its class's slot 21, which notifies observers when the value changes). Still to read are making one, and the token observers `AddTokenObserver` registers, through which the game pushes a changed value to a movie. All three are needed for a plugin to publish values a movie shows.
-- Portraits: `UpdatePortraitMessage`, `GUI::GUIPaperdoll`, `EclipseGFxImageLoader`.
+- Portraits, read 2026-09-30. A creature's portrait is rendered live into a texture of its own (`CCCreature::UpdatePortrait`, `dao/Addresses.h`). A movie shows it as `img://portrait_<n>`, the texture's name. `creature->RenderPortrait()` renders it and returns that URL, for any creature. Not yet seen in play; `UpdatePortraitMessage` and the paperdoll are still to read.
 - Releasing a GFx value a movie hands out, to read variables and `Invoke`'s results.

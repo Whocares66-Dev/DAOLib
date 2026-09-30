@@ -164,6 +164,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | The game's movies by name: the manager's set of records {name, movie}, walked with the engine's iterator | 2026-09-30 | not yet: the example plugin lists every movie's name once while exploring |
 | The data tree (SmartData): finding an attribute by path, its value as text and as a number, its type by class, setting a plain one (bool, int, unsigned, short, byte, float) | 2026-09-30 | not yet: the example plugin reads GUI.SelectedChar, Map.ShowAllLabels and CClientExoApp.GUIDialogResult once while exploring |
 | A plugin's own screen: a GUIScene registered as the game registers its 61, shown, hidden and closed through the GUI system | 2026-09-30 | not yet: the example plugin registers, shows and closes one whose movie is missing, and the probe logs the OpenMovie |
+| Portraits: any creature's, rendered as the party's are, and the `img://` name a movie loads it by | 2026-09-30 | not yet: the example plugin renders the player's creature's once while exploring |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session

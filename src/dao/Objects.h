@@ -24,6 +24,7 @@
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
 #include "dao/core/CommandWord.h"
+#include "dao/core/Msvc8.h"
 #include "dao/core/ObjectType.h"
 #include "dao/generated/ObjectCasts.h"
 #include "dao/generated/ScriptFields.h"
@@ -31,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 // C4624, "destructor was implicitly defined as deleted", is what Opaque is
 // for: every class below is one the engine makes and frees, never us.
@@ -387,6 +389,35 @@ class CCCreature : public CCObject
         using Fn = void(__fastcall *)(CCCreature *, int, std::int32_t);
         reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_SetCombatState))(this, 0, state);
     }
+
+    // The creature's portrait, rendered as the party's are, any creature
+    // (dao/Addresses.h, UpdatePortrait): the first call makes its portrait
+    // renderer, and every call renders it again. The answer is the URL a
+    // movie loads it by, "img://portrait_<n>" (loadMovie, or an image
+    // control), empty if the engine made no portrait. From the scripts'
+    // thread (a frame callback); rendering is not free, so once per change
+    // rather than per frame. Read 2026-09-30, not yet seen in play.
+    std::wstring RenderPortrait()
+    {
+        using Fn = int(__fastcall *)(CCCreature *, int);
+        reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_UpdatePortrait))(this, 0);
+        return PortraitImage();
+    }
+    // The URL of the portrait last rendered, without rendering; empty if
+    // there is none.
+    std::wstring PortraitImage() const
+    {
+        const auto *renderer = Read<const std::byte *>(kPortraitRenderer);
+        if (renderer == nullptr)
+        {
+            return {};
+        }
+        const auto &name = *reinterpret_cast<const core::WStringRep *>(renderer + kPortraitName);
+        return name.View().empty() ? std::wstring{} : L"img://" + std::wstring(name.View());
+    }
+
+    static constexpr std::size_t kPortraitRenderer = 0x78C;
+    static constexpr std::size_t kPortraitName = 0xD4C; // in the renderer
 };
 
 class CCPlaceable : public CCObject

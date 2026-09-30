@@ -295,6 +295,29 @@ DAO_ADDRESS(kSaveGame_SlotFolder, "SaveGame::SlotFolder", 0x00643DD0)
 DAO_ADDRESS(kSaveGame_Write, "SaveGame::Write", 0x00646280)
 DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
 
+// Portraits, read 2026-09-30. A creature's portrait is rendered live into
+// a texture of its own, as the party's are. UpdatePortrait, a CCCreature
+// method with no arguments (the creature in ecx), makes the creature's
+// portrait renderer if it has none (0xD70 bytes, its constructor
+// PortraitRenderer, kept at the creature's +0x78C), then renders it
+// (Render, __thiscall (bool, bool, bool), called with 1, 1, 1) and returns
+// 1. It is what the party, the paperdoll and character creation call.
+// The renderer holds a CCCreature of its own at +0x20 (built with id -1,
+// the model the portrait shows), the source creature at +0xD40, a set-up
+// flag at +0xD44, and the texture's name at +0xD4C, an engine
+// std::wstring: "portrait_" and a counter, made on its first render
+// (Setup: a 146x146 render target, a SceneCamera, the lights
+// "portrait_lightrig" and "el_lr_new_day2"; the camera from table 7, by
+// the creature's appearance). A movie shows a texture as "img://<name>"
+// (EclipseGFxImageLoader, whose slot 1 ends in LoadImage: "img://" or
+// "imgps://", then the engine's texture of that name, else a file; the
+// URL may add ?Width=, &Height= and ?Async=). The names are ours.
+DAO_ADDRESS(kCCCreature_UpdatePortrait, "CCCreature::UpdatePortrait", 0x006AE2D0)
+DAO_ADDRESS(kPortraitRenderer_Constructor, "PortraitRenderer::PortraitRenderer", 0x007F3D80)
+DAO_ADDRESS(kPortraitRenderer_Setup, "PortraitRenderer::Setup", 0x007F3E20)
+DAO_ADDRESS(kPortraitRenderer_Render, "PortraitRenderer::Render", 0x007F46E0)
+DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, "EclipseGFxImageLoader::LoadImage", 0x00516A20)
+
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
 // arguments, returns the root, SmartData::TokenManager, made on first use
