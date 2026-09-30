@@ -279,6 +279,22 @@ DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::Sca
 DAO_ADDRESS(kResources_Find, "Resources::Find", 0x004D5BA0)
 DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 
+// Saving and loading (dev/SAVES.md), read 2026-09-30. SaveLoadProxy's
+// SaveGameMessage and LoadGameMessage handlers take a slot and a kind (0 a
+// manual save, slots to 500; 1 an autosave, 1-4; 2 the quicksave; 3 one
+// more, by the checks). SlotFolder, __cdecl (out, const std::wstring
+// &character, slot, kind), formats "%ls%ls\\Saves\\%ls%d": the documents
+// root, the character, the kind's prefix (Slot_, AutoSave_, QuickSave_)
+// and the slot. Write, __thiscall (slot, kind, const std::wstring &name,
+// ?), `ret 0x10`, on an object whose +0x18 is the character's name: the
+// slot's folder, then <name>.das and <name>.das.met opened with
+// ECFileAccess and written ("savegame" for an empty name). FindSave,
+// __cdecl, looks for "*.das" in a slot's folder, for loading. The probe
+// logs Write and FindSave with their arguments. The names are ours.
+DAO_ADDRESS(kSaveGame_SlotFolder, "SaveGame::SlotFolder", 0x00643DD0)
+DAO_ADDRESS(kSaveGame_Write, "SaveGame::Write", 0x00646280)
+DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
+
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
 // arguments, returns the root, SmartData::TokenManager, made on first use

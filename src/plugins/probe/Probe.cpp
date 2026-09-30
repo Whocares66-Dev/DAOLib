@@ -198,6 +198,36 @@ void __fastcall OpenMovie(void *manager, int edx, void *screen, const dao::core:
                  dao::gui::MovieOf(record));
 }
 
+// The game writing a save and finding one to load (dao/Addresses.h,
+// SaveGame): their arguments, so a plugin's own data can be kept beside a
+// save once what they mean is seen. Observe only.
+using WriteSaveFn = int(__fastcall *)(void *self, int edx, std::int32_t slot, std::int32_t kind,
+                                      const dao::core::WStringRep *name, std::int32_t fourth);
+dao::Detour<WriteSaveFn> g_writeSave;
+
+int __fastcall WriteSave(void *self, int edx, std::int32_t slot, std::int32_t kind, const dao::core::WStringRep *name,
+                         std::int32_t fourth)
+{
+    const int result = g_writeSave.Original()(self, edx, slot, kind, name, fourth);
+    const auto *character = reinterpret_cast<const dao::core::WStringRep *>(static_cast<std::byte *>(self) + 0x18);
+    spdlog::info("SaveGame::Write on {} ({}): character \"{}\", slot {}, kind {}, name \"{}\", fourth {}, result {:#x}",
+                 self, dao::TypeName(self), dao::Utf8(character->View()), slot, kind,
+                 name != nullptr ? dao::Utf8(name->View()) : std::string("none"), fourth, result);
+    return result;
+}
+
+using FindSaveFn = int(__cdecl *)(void *out, const dao::core::WStringRep *character, std::int32_t slot,
+                                  std::int32_t kind);
+dao::Detour<FindSaveFn> g_findSave;
+
+int __cdecl FindSave(void *out, const dao::core::WStringRep *character, std::int32_t slot, std::int32_t kind)
+{
+    spdlog::info("SaveGame::FindSave: character \"{}\", slot {}, kind {}, from {:#010x}",
+                 character != nullptr ? dao::Utf8(character->View()) : std::string("none"), slot, kind,
+                 dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress())));
+    return g_findSave.Original()(out, character, slot, kind);
+}
+
 template <class Fn> void Place(dao::Detour<Fn> &detour, std::uintptr_t address, Fn hook, const char *what)
 {
     if (detour.Attach(address, hook))
@@ -240,6 +270,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_clientAddCommand, dao::addr::kCClientVirtualMachineCommands_AddCommand, &ClientAddCommand,
           "CClientVirtualMachineCommands::AddCommand");
     Place(g_openMovie, dao::addr::kScaleformManager_OpenMovie, &OpenMovie, "GUI::ScaleformManager::OpenMovie");
+    Place(g_writeSave, dao::addr::kSaveGame_Write, &WriteSave, "SaveGame::Write");
+    Place(g_findSave, dao::addr::kSaveGame_FindSave, &FindSave, "SaveGame::FindSave");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
 
@@ -250,6 +282,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         static_cast<std::uint32_t>(dao::addr::kCCObject_QueueCommand),
         static_cast<std::uint32_t>(dao::addr::kCClientVirtualMachineCommands_AddCommand),
         static_cast<std::uint32_t>(dao::addr::kScaleformManager_OpenMovie),
+        static_cast<std::uint32_t>(dao::addr::kSaveGame_Write),
+        static_cast<std::uint32_t>(dao::addr::kSaveGame_FindSave),
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",
