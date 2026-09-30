@@ -82,6 +82,11 @@ class CommandCall
     {
         return proceeded_;
     }
+    // What Proceed answered, once it has run.
+    int ProceededResult() const
+    {
+        return result_;
+    }
 
     // After Proceed: the answer the command left on top of the stack.
     std::optional<std::int32_t> IntAnswer() const;
@@ -99,6 +104,7 @@ class CommandCall
     int paramCount_;
     int link_; // this intercept's place in the command's chain within this module
     bool proceeded_ = false;
+    int result_ = 0;
 };
 
 using Intercept = std::function<int(CommandCall &)>;

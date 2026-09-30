@@ -2,6 +2,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
@@ -53,11 +54,11 @@ void __fastcall DispatchFSCommand(void *registry, int edx, void *owner, const ch
     }
     for (const auto &observer : observers)
     {
-        observer(owner, name, text);
+        detail::Guard("an FSCommand observer", [&] { observer(owner, name, text); });
     }
     if (handler)
     {
-        handler(owner, text);
+        detail::Guard("an FSCommand handler", [&] { handler(owner, text); });
         return;
     }
     g_dispatchFSCommand.Original()(registry, edx, owner, command, args);
@@ -80,11 +81,11 @@ void __fastcall DispatchExternal(void *registry, int edx, void *owner, const cha
     }
     for (const auto &observer : observers)
     {
-        observer(call);
+        detail::Guard("an ExternalInterface observer", [&] { observer(call); });
     }
     if (handler)
     {
-        handler(call);
+        detail::Guard("an ExternalInterface handler", [&] { handler(call); });
         return;
     }
     g_dispatchExternal.Original()(registry, edx, owner, method, args, count);

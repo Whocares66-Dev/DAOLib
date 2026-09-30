@@ -1,6 +1,7 @@
 #include "dao/Events.h"
 
 #include "dao/Addresses.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
@@ -63,7 +64,7 @@ void __fastcall ProcessEvent(void *master, int edx, void *nodeSlot)
         {
             if (!entry.type || *entry.type == event.Type())
             {
-                entry.callback(node.target, event);
+                detail::Guard("a script event callback", [&] { entry.callback(node.target, event); });
             }
         }
     }

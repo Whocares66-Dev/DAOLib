@@ -1,6 +1,7 @@
 #include "dao/Messages.h"
 
 #include "dao/Addresses.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 
@@ -90,11 +91,12 @@ bool __fastcall Dispatch(void *registry, int edx, void *receiver, const Message 
         }
         if (s.observe)
         {
-            s.observe(receiver, *message);
+            detail::Guard("a message observer", [&] { s.observe(receiver, *message); });
         }
-        else if (!taken && s.intercept && s.intercept(receiver, *message))
+        else if (!taken && s.intercept)
         {
-            taken = true;
+            // A throw counts as not taking it.
+            detail::Guard("a message interceptor", [&] { taken = s.intercept(receiver, *message); });
         }
     }
     if (taken)

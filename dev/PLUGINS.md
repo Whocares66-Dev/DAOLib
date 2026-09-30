@@ -97,6 +97,20 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 
 Every address and layout was read from the one supported exe, with a note in `dao/Addresses.h` or the class's header saying how and when. `dev/LIBRARY.md` keeps a table of what has been checked in play and what has only been read. As of 2026-09-30: object lookups, 14 fields, the object layout and casts, strings, locations, effects, events and object arrays have all matched the engine's own answers on thousands of calls. Calling commands from C++, intercepting them, the frame callback, the event queue, the game mode controller's table, the data tables and the messages' layouts are built but not yet seen in play. A plugin that relies on those should expect to be the one that finds out.
 
+## Exceptions
+
+A plugin's code runs on the game's own stack, and an exception has no safe way back through the game's code: it ends the process, or unwinds the game half-way through a change. The library catches around every callback it calls (frame, script events, messages, the Flash UI, saves, command intercepts), logs what was thrown and where, and lets the game go on as it would have without that callback: a message interceptor that throws has not taken the message, and a command intercept that throws leaves the game's own command to answer. A plugin's own Detours hooks are its own to guard the same way, since the library never sees those calls:
+
+```cpp
+void __fastcall SetPaused(dao::CClientExoApp *self, int edx, bool paused, bool second)
+{
+    try { MyPauseLogic(paused); } catch (...) { spdlog::error("pause hook threw"); }
+    g_setPaused.Original()(self, edx, paused, second);
+}
+```
+
+Prefer calls that cannot throw where a failure is expected: `std::from_chars` over `std::stoi` for data read from a file.
+
 ## Hooking by hand
 
 An engine member function is `__thiscall`: `this` in ecx, arguments on the stack, the callee cleans up. A hook on one is written `__fastcall` with `this` first and an unused `int` (edx) second, and `dao::Detour<Fn>`'s `Fn` the same way:

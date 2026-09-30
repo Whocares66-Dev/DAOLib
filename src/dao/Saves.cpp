@@ -2,6 +2,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/Events.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/String.h"
@@ -55,7 +56,7 @@ int __fastcall Write(void *self, int edx, std::int32_t slot, std::int32_t kind, 
         const Slot saved{std::wstring(character.View()), slot, static_cast<Kind>(kind)};
         for (const auto &callback : Copy(g_saved))
         {
-            callback(saved);
+            detail::Guard("a save callback", [&] { callback(saved); });
         }
     }
     return written;
@@ -79,7 +80,7 @@ void Loaded(const std::optional<Slot> &loaded)
 {
     for (const auto &callback : Copy(g_loaded))
     {
-        callback(loaded);
+        detail::Guard("a game-loaded callback", [&] { callback(loaded); });
     }
 }
 

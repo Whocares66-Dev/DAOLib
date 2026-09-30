@@ -2,6 +2,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/core/Msvc8.h"
@@ -62,7 +63,7 @@ void __fastcall InitializeCommands(void *self, int edx)
     }
     for (auto &ready : run)
     {
-        ready();
+        ::dao::detail::Guard("a commands-ready callback", ready);
     }
 }
 
@@ -95,7 +96,17 @@ int RunLink(int command, int paramCount, int link, void *commands, int edx)
     if (link < static_cast<int>(chain.intercepts.size()))
     {
         CommandCall call(command, paramCount, link);
-        return chain.intercepts.at(static_cast<std::size_t>(link))(call);
+        int result = kInvalidCommand;
+        if (::dao::detail::Guard("a command intercept",
+                                 [&] { result = chain.intercepts.at(static_cast<std::size_t>(link))(call); }))
+        {
+            return result;
+        }
+        // It threw: the game's own command answers, run now if the
+        // intercept had not run it yet, else as it answered then. The
+        // arguments are still on the stack until then: an intercept reads
+        // them without popping.
+        return call.Proceeded() ? call.ProceededResult() : call.Proceed();
     }
     return chain.previous != nullptr ? chain.previous(commands, edx, command, paramCount) : kInvalidCommand;
 }
@@ -229,7 +240,8 @@ int CommandCall::Proceed()
 {
     proceeded_ = true;
     auto *app = CClientExoApp::Get();
-    return RunLink(command_, paramCount_, link_ + 1, app != nullptr ? app->Commands() : nullptr, 0);
+    result_ = RunLink(command_, paramCount_, link_ + 1, app != nullptr ? app->Commands() : nullptr, 0);
+    return result_;
 }
 
 std::optional<std::int32_t> CommandCall::IntAnswer() const

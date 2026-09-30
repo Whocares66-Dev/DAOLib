@@ -1,6 +1,7 @@
 #include "dao/Frame.h"
 
 #include "dao/Addresses.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 
 #include <Windows.h>
@@ -36,7 +37,7 @@ bool __fastcall Update(void *game, int edx)
     }
     for (auto &callback : callbacks)
     {
-        callback();
+        detail::Guard("a frame callback", callback);
     }
     return g_update.Original()(game, edx);
 }
