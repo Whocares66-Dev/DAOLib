@@ -288,22 +288,24 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         {
             return;
         }
-        const auto *self = reinterpret_cast<const std::byte *>(camera);
-        const auto *scene = static_cast<const std::byte *>(camera->SceneCamera());
-        const auto f = [](const std::byte *base, std::size_t offset) {
-            return base != nullptr ? *reinterpret_cast<const float *>(base + offset) : 0.0F;
-        };
-        const std::string now =
-            fmt::format("target {:#010x}, view flag {}, zoom {:.2f}; controller +0x48 {:.2f} +0x64 {:.2f} +0x68 {:.2f} "
-                        "+0x98 {:.2f}; scene camera {} +0x20 {:.3f} +0x24 {:.3f}",
-                        camera->Target(), camera->ViewFlag(), camera->Zoom(), f(self, 0x48), f(self, 0x64),
-                        f(self, 0x68), f(self, 0x98), scene != nullptr ? dao::TypeName(scene) : std::string("none"),
-                        f(scene, 0x20), f(scene, 0x24));
+        const auto *scene = camera->Scene();
+        if (scene == nullptr)
+        {
+            return;
+        }
+        const auto offset = camera->FocusOffset();
+        const std::string now = fmt::format(
+            "target {:#010x}, {} view, zoom {:.2f}; yaw {:.2f}, pitch {:.2f}, scene zoom {:.2f}; focus offset "
+            "({:.1f}, {:.1f}, {:.1f})",
+            camera->Target(), camera->Tactical() ? "tactical" : "close", camera->Zoom(), scene->Yaw(), scene->Pitch(),
+            scene->Zoom(), offset.x, offset.y, offset.z);
         if (now != last)
         {
             last = now;
             const auto focus = camera->Focus();
-            spdlog::info("camera: {}; focus ({:.1f}, {:.1f}, {:.1f})", now, focus.x, focus.y, focus.z);
+            const auto at = scene->Position();
+            spdlog::info("camera: {}; focus ({:.1f}, {:.1f}, {:.1f}), camera at ({:.1f}, {:.1f}, {:.1f})", now, focus.x,
+                         focus.y, focus.z, at.x, at.y, at.z);
         }
     });
 

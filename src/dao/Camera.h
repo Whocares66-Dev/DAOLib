@@ -26,12 +26,28 @@
 // (below). Selecting a party member is what normally calls SetTarget;
 // Follow does it for any object, an enemy too, without selecting it.
 //
-// Not yet read: which view +0x90 names (the update sets it to 1 when the
-// zoom is under 0.5 and to 0 otherwise, so it is the zoom's half), what
-// the zoom measures (0x007EE7E0: a blend of +0x64 and +0x68 by the scene
-// camera's +0x24), and where the yaw and pitch are (the scene camera's
-// +0x20 is read as an angle in radians). The example plugin logs them as
-// they change, to settle it in play. None of this is seen in play yet.
+// The two views, read 2026-09-30 and matched to a session of zooming the
+// same day. The scene camera (below) keeps a zoom from 1, close behind the
+// creature, to 0, the tactical view high above; the controller's view
+// flag at +0x90 is 1 in the tactical view (its Zoom, 0x007EE7E0, maps the
+// scene camera's to -1..1, and the update sets the flag below 0.5). In the
+// tactical view a change of target does not move the camera: the
+// controller keeps the old focus's offset from the new target at +0x100
+// (OnTargetChanged, slot 0), and the focus is the target's position plus
+// that and +0xF0 (0x0076EBB0). Easing the offset to nothing pans to the
+// target without turning the camera. In the close view it pans itself, as
+// above.
+//
+// The scene camera, the controller's +0x04 (no RTTI), places itself about
+// the focus in spherical coordinates each frame (0x006C2C20; the
+// conversions 0x004D4990 and 0x004D4A40: x = r sin(pitch) cos(yaw),
+// y = r sin(pitch) sin(yaw), z = r cos(pitch)). The yaw at +0x1C (and
+// +0x18) is the direction from the focus to the camera, from +x toward +y,
+// in radians, and the update keeps it: SetYaw (0x006C2B90, __thiscall
+// (float), `ret 4`) turns the camera at once. The pitch at +0x20 is from
+// straight above: 45 degrees in the tactical view and about 80 close in,
+// seen in play. The camera's own position is at +0x80. Only the zoom and
+// the pitch are seen in play so far.
 #pragma once
 
 #include "dao/Addresses.h"
@@ -44,6 +60,57 @@
 
 namespace dao
 {
+
+// The scene's camera (the header above): where it is, the angles it keeps
+// about the focus, and its zoom.
+class SceneCamera
+{
+  public:
+    SceneCamera() = delete;
+    SceneCamera(const SceneCamera &) = delete;
+    SceneCamera &operator=(const SceneCamera &) = delete;
+    ~SceneCamera() = delete;
+
+    // The direction from the focus to the camera, from +x toward +y, in
+    // radians. A camera behind a creature facing angle a (the same
+    // measure) has the yaw a + pi.
+    float Yaw() const
+    {
+        return Read<float>(kYaw);
+    }
+    // Turn the camera about its focus at once; ease by calling it each
+    // frame. On the game's thread.
+    void SetYaw(float radians)
+    {
+        using Fn = void(__fastcall *)(SceneCamera *, int, float);
+        reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetYaw))(this, 0, radians);
+    }
+    // From straight above, in radians.
+    float Pitch() const
+    {
+        return Read<float>(kPitch);
+    }
+    // 1 close behind the creature, 0 the tactical view.
+    float Zoom() const
+    {
+        return Read<float>(kZoom);
+    }
+    Vector Position() const
+    {
+        return Read<Vector>(kPosition);
+    }
+
+    static constexpr std::size_t kYaw = 0x1C;
+    static constexpr std::size_t kPitch = 0x20;
+    static constexpr std::size_t kZoom = 0x24;
+    static constexpr std::size_t kPosition = 0x80;
+
+  private:
+    template <class T> const T &Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+};
 
 class CameraController
 {
@@ -83,33 +150,54 @@ class CameraController
         reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerExplore_SnapToTarget))(this, 0);
     }
 
-    // The raw view flag and zoom (the header above says what is and is not
-    // known of them).
-    std::int32_t ViewFlag() const
+    // The tactical view, high above, rather than the close one.
+    bool Tactical() const
     {
-        return Read<std::int32_t>(kViewFlag);
+        return Read<std::int32_t>(kViewFlag) == 1;
     }
+    // The controller's zoom, -1 in the tactical view to 1 close in.
     float Zoom() const
     {
         using Fn = float(__fastcall *)(const CameraController *, int);
         return reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_Zoom))(this, 0);
     }
 
-    // The scene's camera the controller drives.
-    void *SceneCamera() const
+    // How far the focus is from the followed object: in the tactical view,
+    // where it was left when the target changed. Setting it moves the
+    // focus from the next frame; easing it to nothing pans to the target.
+    Vector FocusOffset() const
     {
-        return Read<void *>(kSceneCamera);
+        const auto kept = Read<Vector>(kKeptOffset);
+        const auto other = Read<Vector>(kOtherOffset);
+        return {kept.x + other.x, kept.y + other.y, kept.z + other.z};
+    }
+    void SetFocusOffset(Vector offset)
+    {
+        Write(kKeptOffset, offset);
+        Write(kOtherOffset, Vector{});
+    }
+
+    // The scene's camera the controller drives.
+    SceneCamera *Scene() const
+    {
+        return Read<SceneCamera *>(kSceneCamera);
     }
 
     static constexpr std::size_t kSceneCamera = 0x04;
     static constexpr std::size_t kTarget = 0x08;
     static constexpr std::size_t kFocus = 0x70;
     static constexpr std::size_t kViewFlag = 0x90;
+    static constexpr std::size_t kOtherOffset = 0xF0;
+    static constexpr std::size_t kKeptOffset = 0x100;
 
   private:
     template <class T> const T &Read(std::size_t offset) const
     {
         return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+    template <class T> void Write(std::size_t offset, const T &value)
+    {
+        *reinterpret_cast<T *>(reinterpret_cast<std::byte *>(this) + offset) = value;
     }
 };
 

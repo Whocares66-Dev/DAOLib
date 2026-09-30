@@ -351,6 +351,8 @@ DAO_ADDRESS(kCameraControllerExplore_Update, "CameraControllerExplore::Update", 
 DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, "CameraControllerExplore::OnTargetChanged", 0x007709B0)
 DAO_ADDRESS(kCameraControllerBase_SetTarget, "CameraControllerBase::SetTarget", 0x007EE840)
 DAO_ADDRESS(kCameraControllerBase_Zoom, "CameraControllerBase::Zoom", 0x007EE7E0)
+DAO_ADDRESS(kSceneCamera_Update, "SceneCamera::Update", 0x006C2C20)
+DAO_ADDRESS(kSceneCamera_SetYaw, "SceneCamera::SetYaw", 0x006C2B90)
 
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature
