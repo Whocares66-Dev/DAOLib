@@ -1,0 +1,828 @@
+id,name,function_va,registered_at_va,script_name,signature
+0,COMMAND_PRINTINTEGER,0x0064df50,0x00675244,PrintInteger,"void PrintInteger(int nInteger, int bPrepend = FALSE)"
+1,COMMAND_PRINTFLOAT,0x0064dfa0,0x00675257,PrintFloat,"void PrintFloat(float fFloat, int nWidth = 18, int nDecimals = 9, int bPrepend = FALSE)"
+2,COMMAND_PRINTSTRING,0x0064e0f0,0x0067526a,PrintString,"void PrintString(string sString, int bPrepend = FALSE)"
+3,COMMAND_PRINTOBJECT,0x0064e1a0,0x0067527d,PrintObject,"void PrintObject(object oObject, int bPrepend = FALSE)"
+4,COMMAND_PRINTVECTOR,0x0064e1f0,0x00675290,PrintVector,"void PrintVector(vector vVector, int bPrepend = FALSE)"
+5,COMMAND_PRINTTOLOG,0x00668820,0x006752a3,PrintToLog,void PrintToLog(string sMessage)
+6,COMMAND_ASSIGNFUNCTION,0x00653c90,0x006753e4,,
+7,COMMAND_DELAYFUNCTION,0x00653d20,0x006753f7,,
+8,COMMAND_EXECUTESCRIPT,0x00653de0,0x0067540a,Deprecated_ExecuteScript,"void Deprecated_ExecuteScript(resource rScript, object oTarget)"
+9,COMMAND_GETM2DASTRING,0x00653ef0,0x0067541d,GetM2DAString,"string GetM2DAString(int n2DA, string sColumn, int nRow, string s2DA = """")"
+11,COMMAND_GETM2DAROWS,0x006549d0,0x0067546f,GetM2DARows,"int GetM2DARows(int n2DA, string s2DA = """")"
+12,COMMAND_GETM2DACOLUMNS,0x00654ae0,0x00675482,GetM2DAColumns,int GetM2DAColumns(int n2DA)
+13,COMMAND_GETM2DARESOURCE,0x00654150,0x00675430,GetM2DAResource,"resource GetM2DAResource(int n2DA, string sColumn, int nRow, string s2da = """")"
+14,COMMAND_GETTLKTABLESTRING,0x00654b50,0x00675495,GetTlkTableString,"string GetTlkTableString(int nStrRef, int nGender = GENDER_MALE)"
+15,COMMAND_GETGAMEDIFFICULTY,0x00654cb0,0x006754a8,GetGameDifficulty,int GetGameDifficulty()
+16,COMMAND_DEBUGSPAWNDEBUGGER,0x00654d10,0x006754d1,DebugSpawnScriptDebugger,void DebugSpawnScriptDebugger()
+17,COMMAND_GETFACING,0x00655090,0x00675568,GetFacing,"float GetFacing(object oTarget, int bMirrorYAxis = TRUE)"
+18,COMMAND_SETFACING,0x006551d0,0x0067557b,SetFacing,"void SetFacing(object oTarget, float fFacing, int bMirrorYAxis = TRUE)"
+19,COMMAND_EFFECT,0x0065c460,0x00678919,Effect,effect Effect(int nType = EFFECT_TYPE_INVALID)
+20,COMMAND_GETPREVIOUSCOMMAND,0x0065be80,0x00678398,GetPreviousCommand,command GetPreviousCommand(object oObject)
+21,COMMAND_GETPOSITION,0x00655400,0x006755ba,GetPosition,vector GetPosition(object oTarget)
+22,COMMAND_SETPOSITION,0x006554b0,0x006755cd,SetPosition,"void SetPosition(object oObject, vector vPosition, int bSafePosition = TRUE)"
+23,COMMAND_SETFACINGPOSITION,0x006556b0,0x006755e0,SetFacingPosition,"void SetFacingPosition(object oObject, vector vPosition)"
+24,COMMAND_SETFACINGOBJECT,0x00655790,0x006755f3,SetFacingObject,"void SetFacingObject(object oObject, object oTarget, int bInvert = TRUE)"
+25,COMMAND_RANDOM,0x0064eab0,0x0067561c,Random,int Random(int nMaxInteger)
+26,COMMAND_ABS,0x0064eb80,0x00675645,abs,int abs(int nValue)
+27,COMMAND_FABS,0x0064ebd0,0x00675658,fabs,float fabs(float fValue)
+28,COMMAND_COS,0x0064ec30,0x0067566b,cos,float cos(float fValue)
+29,COMMAND_SIN,0x0064ec90,0x0067567e,sin,float sin(float fValue)
+30,COMMAND_TAN,0x0064ecf0,0x00675691,tan,float tan(float fValue)
+31,COMMAND_ACOS,0x0064ed50,0x006756a4,acos,float acos(float fValue)
+32,COMMAND_ASIN,0x0064edb0,0x006756b7,asin,float asin(float fValue)
+33,COMMAND_ATAN,0x0064ee20,0x006756ca,atan,float atan(float fValue)
+34,COMMAND_LOG,0x0064ee90,0x006756dd,log,float log(float fValue)
+35,COMMAND_POW,0x0064ef00,0x006756f0,pow,"float pow(float fValue, float fExponent)"
+36,COMMAND_SQRT,0x0064efa0,0x00675703,sqrt,float sqrt(float fValue)
+37,COMMAND_GETDISTANCEBETWEENOBJECTS,0x00655a50,0x00675716,GetDistanceBetween,"float GetDistanceBetween(object oObjectA, object oObjectB)"
+38,COMMAND_GETDISTANCEBETWEENLOCATIONS,0x00655b70,0x00675729,GetDistanceBetweenLocations,"float GetDistanceBetweenLocations(location lLocationA, location lLocationB)"
+39,COMMAND_INTRIGGER,0x0066da90,0x0067573c,IsInTrigger,"int IsInTrigger(object oObject, object oTrigger)"
+40,COMMAND_ISVECTOREMPTY,0x0064f010,0x0067574f,IsVectorEmpty,int IsVectorEmpty(vector vVector)
+41,COMMAND_VECTOR,0x0064f0a0,0x00675762,Vector,"vector Vector(float x = 0.0f, float y = 0.0f, float z = 0.0f)"
+42,COMMAND_GETVECTORMAGNITUDE,0x0064f120,0x00675775,GetVectorMagnitude,float GetVectorMagnitude(vector vVector)
+43,COMMAND_GETVECTORNORMALIZE,0x0064f1b0,0x00675788,GetVectorNormalize,vector GetVectorNormalize(vector vVector)
+44,COMMAND_ANGLETOVECTOR,0x0064f260,0x0067579b,AngleToVector,vector AngleToVector(float fAngle)
+45,COMMAND_VECTORTOANGLE,0x0064f310,0x006757ae,VectorToAngle,float VectorToAngle(vector vVector)
+46,COMMAND_CHECKLINEOFSIGHTOBJECT,0x00668db0,0x006757c1,CheckLineOfSightObject,"int CheckLineOfSightObject(object oSource, object oTarget)"
+47,COMMAND_CHECKLINEOFSIGHTPOSITION,0x00655ca0,0x006757d4,CheckLineOfSightVector,"int CheckLineOfSightVector(vector vSource, vector vTarget)"
+48,COMMAND_INTTOFLOAT,0x0064f3a0,0x006757e7,IntToFloat,float IntToFloat(int nInteger)
+49,COMMAND_FLOATTOINT,0x0064f3f0,0x006757fa,FloatToInt,int FloatToInt(float fFloat)
+50,COMMAND_INTTOSTRING,0x0064f440,0x0067580d,IntToString,string IntToString(int nInteger)
+51,COMMAND_STRINGTOINT,0x0064f510,0x00675836,StringToInt,int StringToInt(string sNumber)
+52,COMMAND_FLOATTOSTRING,0x00669100,0x00675849,FloatToString,"string FloatToString(float fFloat, int nWidth = 18, int nDecimals = 9)"
+53,COMMAND_STRINGTOFLOAT,0x0064f7c0,0x0067585c,StringToFloat,float StringToFloat(string sNumber)
+54,COMMAND_OBJECTTOSTRING,0x0064f890,0x0067586f,ObjectToString,string ObjectToString(object oObject)
+55,COMMAND_VECTORTOSTRING,0x0064f9d0,0x00675882,VectorToString,string VectorToString(vector vVector)
+56,COMMAND_STRINGTOVECTOR,0x0064fad0,0x00675895,StringToVector,vector StringToVector(string sString)
+57,COMMAND_INTTOHEXSTRING,0x0064fbc0,0x006758a8,IntToHexString,string IntToHexString(int nInteger)
+58,COMMAND_HEXSTRINGTOINT,0x0064f510,0x006758bb,HexStringToInt,int HexStringToInt(string sString)
+59,COMMAND_CHARTOINT,0x006692a0,0x006758ce,CharToInt,int CharToInt(string sString)
+60,COMMAND_INTTOCHAR,0x0064fca0,0x006758e1,IntToChar,string IntToChar(int nInteger)
+61,COMMAND_FEETTOMETERS,0x0064fd70,0x006758f4,FeetToMeters,float FeetToMeters(float fFeet)
+62,COMMAND_YARDSTOMETERS,0x0064fdd0,0x00675907,YardsToMeters,float YardsToMeters(float fYards)
+63,COMMAND_GETLOCALINT,0x00655fa0,0x00675946,GetLocalInt,"int GetLocalInt(object oObject, string sVarName)"
+64,COMMAND_SETLOCALINT,0x00656120,0x00675959,SetLocalInt,"void SetLocalInt(object oObject, string sVarName, int nValue)"
+66,COMMAND_GETLOCALFLOAT,0x00656290,0x0067596c,GetLocalFloat,"float GetLocalFloat(object oObject, string sVarName)"
+67,COMMAND_SETLOCALFLOAT,0x00656420,0x0067597f,SetLocalFloat,"void SetLocalFloat(object oObject, string sVarName, float fValue)"
+69,COMMAND_GETLOCALSTRING,0x00656590,0x00675992,GetLocalString,"string GetLocalString(object oObject, string sVarName)"
+70,COMMAND_SETLOCALSTRING,0x00656750,0x006759a5,SetLocalString,"void SetLocalString(object oObject, string sVarName, string sValue)"
+72,COMMAND_GETLOCALOBJECT,0x006568d0,0x006759b8,GetLocalObject,"object GetLocalObject(object oObject, string sVarName)"
+73,COMMAND_SETLOCALOBJECT,0x00656a50,0x006759cb,SetLocalObject,"void SetLocalObject(object oObject, string sVarName, object oValue)"
+75,COMMAND_GETLOCALLOCATION,0x00656bc0,0x006759de,GetLocalLocation,"location GetLocalLocation(object oObject, string sVarName)"
+76,COMMAND_SETLOCALLOCATION,0x00656d60,0x006759f1,SetLocalLocation,"void SetLocalLocation(object oObject, string sVarName, location lValue)"
+78,COMMAND_GETLOCALPLAYER,0x00656ef0,0x00675a04,GetLocalPlayer,"player GetLocalPlayer(object oObject, string sVarName)"
+79,COMMAND_SETLOCALPLAYER,0x00657070,0x00675a17,SetLocalPlayer,"void SetLocalPlayer(object oObject, string sVarName, player pPlayer)"
+81,COMMAND_PRINTTOSCREEN,0x0064e290,0x0067533a,DEBUG_PrintToScreen,"void DEBUG_PrintToScreen(string sString, int nPosFromTop = 10, float fLife = 10.0)"
+82,COMMAND_PRINTTOLOGWINDOW,0x0064e370,0x0067534d,PrintToLogWindow,"void PrintToLogWindow(string sString, string sLogType = ""LogWindow"")"
+83,COMMAND_GETPARTY,0x00651610,0x00677e18,GetParty,object GetParty(object oCreature)
+84,COMMAND_GETLOCALEVENT,0x006571f0,0x00675a2a,GetLocalEvent,"event GetLocalEvent(object oObject, string sVarName)"
+85,COMMAND_SETLOCALEVENT,0x00657380,0x00675a3d,SetLocalEvent,"void SetLocalEvent(object oObject, string sVarName, event evEvent)"
+87,COMMAND_GETLOCALCOMMAND,0x00657500,0x00675a50,GetLocalCommand,"command GetLocalCommand(object oObject, string sVarName)"
+88,COMMAND_SETLOCALCOMMAND,0x0066e3f0,0x00675a63,SetLocalCommand,"void SetLocalCommand(object oObject, string sVarName, command cCommand)"
+90,COMMAND_GETLOCALEFFECT,0x00657670,0x00675a76,GetLocalEffect,"effect GetLocalEffect(object oObject, string sVarName)"
+91,COMMAND_SETLOCALEFFECT,0x00657800,0x00675a89,SetLocalEffect,"void SetLocalEffect(object oObject, string sVarName, effect eEffect)"
+93,COMMAND_GETLOCALITEMPROPERTY,0x00000000,0x00675a9c,GetLocalItemProperty,"itemproperty GetLocalItemProperty(object oObject, string sVarName)"
+94,COMMAND_SETLOCALITEMPROPERTY,0x00000000,0x00675aac,SetLocalItemProperty,"void SetLocalItemProperty(object oObject, string sVarName, itemproperty iItemProperty)"
+96,COMMAND_GETSTRINGLENGTH,0x00657cc0,0x00675ae8,GetStringLength,int GetStringLength(string sString)
+97,COMMAND_STRINGUPPERCASE,0x0064fe30,0x00675afb,StringUpperCase,string StringUpperCase(string sString)
+98,COMMAND_STRINGLOWERCASE,0x0064ff30,0x00675b0e,StringLowerCase,string StringLowerCase(string sString)
+99,COMMAND_STRINGRIGHT,0x00650030,0x00675b21,StringRight,"string StringRight(string sString, int nCount)"
+100,COMMAND_STRINGLEFT,0x00650170,0x00675b34,StringLeft,"string StringLeft(string sString, int nCount)"
+101,COMMAND_INSERTSTRING,0x006502b0,0x00675b47,InsertString,"string InsertString(string sDestination, string sString, int nPosition)"
+102,COMMAND_SUBSTRING,0x006503f0,0x00675b5a,SubString,"string SubString(string sString, int nStart, int nCount)"
+103,COMMAND_FINDSUBSTRING,0x00650550,0x00675b6d,FindSubString,"int FindSubString(string sString, string sSubString, int nStart = 0)"
+104,COMMAND_ISSTRINGEMPTY,0x00657d80,0x00675b80,IsStringEmpty,int IsStringEmpty(string sString)
+105,COMMAND_SIGNALEVENT,0x00657e40,0x00675ba9,SignalEvent,"void SignalEvent(object oObject, event evEvent, int bProcessImmediate = 0)"
+106,COMMAND_EVENT,0x006580d0,0x00675bbc,Event,event Event(int nEventType)
+107,COMMAND_ISEVENTVALID,0x006581b0,0x00675bcf,IsEventValid,int IsEventValid(event evEvent)
+108,COMMAND_GETCURRENTEVENT,0x00658210,0x00675be2,GetCurrentEvent,event GetCurrentEvent()
+109,COMMAND_GETEVENTCREATOR,0x006582a0,0x00675bf5,GetEventCreator,object GetEventCreator(event evEvent)
+110,COMMAND_SETEVENTCREATOR,0x00658310,0x00675c08,SetEventCreator,"event SetEventCreator(event evEvent, object oCreator)"
+111,COMMAND_GETEVENTTYPE,0x00658390,0x00675c1b,GetEventType,int GetEventType(event evEvent)
+112,COMMAND_SETEVENTTYPE,0x006583f0,0x00675c2e,SetEventType,"event SetEventType(event evEvent, int nType)"
+113,COMMAND_GETEVENTINTEGER,0x00650740,0x00675c41,GetEventInteger,"int GetEventInteger(event evEvent, int nIndex)"
+114,COMMAND_SETEVENTINTEGER,0x006507c0,0x00675c54,SetEventInteger,"event SetEventInteger(event evEvent, int nIndex, int nValue)"
+115,COMMAND_GETEVENTFLOAT,0x00650860,0x00675c67,GetEventFloat,"float GetEventFloat(event evEvent, int nIndex)"
+116,COMMAND_SETEVENTFLOAT,0x006508f0,0x00675c7a,SetEventFloat,"event SetEventFloat(event evEvent, int nIndex, float fValue)"
+117,COMMAND_GETEVENTOBJECT,0x00650990,0x00675c8d,GetEventObject,"object GetEventObject(event evEvent, int nIndex)"
+118,COMMAND_SETEVENTOBJECT,0x00650a10,0x00675ca0,SetEventObject,"event SetEventObject(event evEvent, int nIndex, object oValue)"
+119,COMMAND_GETEVENTSTRING,0x00650ab0,0x00675cb3,GetEventString,"string GetEventString(event evEvent, int nIndex)"
+120,COMMAND_SETEVENTSTRING,0x00650bc0,0x00675cc6,SetEventString,"event SetEventString(event evEvent, int nIndex, string sValue)"
+121,COMMAND_HANDLEEVENT,0x006586d0,0x00675d31,HandleEvent,"void HandleEvent(event evEvent, resource rScriptName=R"""")"
+122,COMMAND_SETEVENTSCRIPT,0x00658aa0,0x00675d44,SetEventScript,"void SetEventScript(object oObject, resource rScriptName)"
+123,COMMAND_ENABLEEVENT,0x00658cc0,0x00675d57,EnablevEvent,"void EnablevEvent(object oObject, int bEnable, int nEventType)"
+124,COMMAND_REGISTEREVENTLISTENER,0x00658db0,0x00675d6a,RegisterEventListener,"void RegisterEventListener(object oTarget, object oListener, int nEventType)"
+125,COMMAND_UNREGISTEREVENTLISTENER,0x00658f20,0x00675d7d,UnregisterEventListener,"void UnregisterEventListener(object oTarget, object oListener, int nEventType)"
+126,COMMAND_GETEVENTTARGET,0x00659030,0x00675d90,GetEventTarget,object GetEventTarget(event evEvent)
+127,COMMAND_GETNEARESTOBJECTBYHOSTILITY,0x00671510,0x006776d3,GetNearestObjectByHostility,"object[] GetNearestObjectByHostility(object oObject, int nHostility, int nObjectType = OBJECT_TYPE_ALL, int nNumberOfObjects = 1, int nCheckLiving = 0, int nCheckPerceived = 0, int nIncludeSelf = 0)"
+128,COMMAND_DELAYEVENT,0x00657f30,0x00675da3,DelayEvent,"void DelayEvent(float fSeconds, object oObject, event evEvent, string scriptname = """")"
+129,COMMAND_ISFOLLOWER,0x00660cf0,0x00676fae,IsFollower,int IsFollower(object oCreature)
+130,COMMAND_PRINTTOLOGANDFLUSH,0x0064e250,0x006752cc,PrintToLogAndFlush,void PrintToLogAndFlush(string sLogEntry)
+131,COMMAND_GETEVENTLOCATION,0x00658470,0x00675cd9,GetEventLocation,"location GetEventLocation(event evEvent, int nIndex)"
+132,COMMAND_SETEVENTLOCATION,0x006585f0,0x00675cef,SetEventLocation,"event SetEventLocation(event evEvent, int nIndex, location lLocation)"
+133,COMMAND_HANDLEEVENT_STRING,0x006588e0,0x00675db9,HandleEvent_String,"void HandleEvent_String(event evEvent, string sName = """")"
+134,COMMAND_GETITEMATTACKRATING,0x0065e230,0x00676c28,GetItemAttackRating,float GetItemAttackRating(object oItem)
+135,COMMAND_GETBASEITEMTYPE,0x0065e2c0,0x00676c3e,GetBaseItemType,int GetBaseItemType(object oItem)
+136,COMMAND_GETITEMMATERIALTYPE,0x00669f20,0x00676c54,GetItemMaterialType,int GetItemMaterialType(object oItem)
+137,COMMAND_SETITEMMATERIALTYPE,0x00669f90,0x00676c6a,SetItemMaterialType,"void SetItemMaterialType(object oItem, int nMaterialType)"
+138,COMMAND_GETM2DAFLOAT,0x006547c0,0x00675459,GetM2DAFloat,"float GetM2DAFloat(int n2DA, string sColumn, int nRow, string s2DA = """")"
+139,COMMAND_REMOVEEFFECTSBYCREATOR,0x00674690,0x006789c6,RemoveEffectsByCreator,"void RemoveEffectsByCreator(object oCreator, int nAbilityID = ABILITY_INVALID)"
+140,COMMAND_SETACTIVE,0x006618b0,0x00676063,SetObjectActive,"void SetObjectActive(object oObject, int nActive, int nAnimation = 0, int nVFX = 0)"
+141,COMMAND_GETACTIVE,0x00668a20,0x0067604d,GetObjectActive,int GetObjectActive(object oObject)
+143,COMMAND_LOGTRACE,0x006688a0,0x006752b6,LogTrace,"void LogTrace(int nChannel = LOG_CHANNEL_GENERAL, string sLogEntry="""", object oTarget = OBJECT_INVALID)"
+144,COMMAND_SETFOLLOWERSUBSTATE,0x0065ea50,0x00676f40,SetFollowerSubState,"void SetFollowerSubState(object oCreature, int nSubState)"
+145,COMMAND_GETCURRENTSCRIPTNAME,0x00654d40,0x006754fa,GetCurrentScriptName,string GetCurrentScriptName()
+146,COMMAND_ISFOLLOWERLOCKED,0x0065ead0,0x00676f56,IsFollowerLocked,int IsFollowerLocked(object oCreature)
+147,COMMAND_SETFOLLOWERLOCKED,0x0065eb40,0x00676f6c,SetFollowerLocked,"void SetFollowerLocked(object oCreature, int bLocked)"
+148,COMMAND_APPLYEFFECTONPARTY,0x00672200,0x0067896e,Engine_ApplyEffectOnParty,"void Engine_ApplyEffectOnParty(int nDurationType, effect eEffect, float fDuration=0.0f, object oCreator = OBJECT_SELF, int nAbilityId = 0, int bExcludeCreator = FALSE)"
+149,COMMAND_TOSTRING,0x00668f30,0x00675820,ToString,string ToString(any anyData)
+150,COMMAND_GETAPPEARANCETYPE,0x0065d6d0,0x0067678e,GetAppearanceType,int GetAppearanceType(object oCreature)
+151,COMMAND_SETPLACEABLEACTIONRESULT,0x0065eec0,0x00676a2d,SetPlaceableActionResult,"void SetPlaceableActionResult(object oPlaceable, int nAction, int bSuccess, int bVariation = FALSE)"
+152,COMMAND_GETPLACEABLEACTION,0x0065ef60,0x00676a43,GetPlaceableAction,int GetPlaceableAction(object oPlaceable)
+153,COMMAND_GETPLACEABLEBASETYPE,0x0065efc0,0x00676a59,GetPlaceableBaseType,int GetPlaceableBaseType(object oPlaceable)
+154,COMMAND_GETPLACEABLEAUTOREMOVEKEY,0x0065f020,0x00676a6f,GetPlaceableAutoRemoveKey,int GetPlaceableAutoRemoveKey(object oPlaceable)
+155,COMMAND_GETPLACEABLEKEYREQUIRED,0x0065f080,0x00676a85,GetPlaceableKeyRequired,int GetPlaceableKeyRequired(object oPlaceable)
+156,COMMAND_GETPLACEABLEKEYTAG,0x0065f0e0,0x00676a9b,GetPlaceableKeyTag,string GetPlaceableKeyTag(object oPlaceable)
+157,COMMAND_GETPLACEABLEPICKLOCKLEVEL,0x0065f1c0,0x00676ab1,GetPlaceablePickLockLevel,int GetPlaceablePickLockLevel(object oPlaceable)
+158,COMMAND_COMMANDSHEATHEWEAPONS,0x0066fb30,0x0067861e,CommandSheatheWeapons,command CommandSheatheWeapons()
+159,COMMAND_COMMANDUNSHEATHEWEAPONS,0x0066fb30,0x00678634,CommandUnsheatheWeapons,command CommandUnsheatheWeapons()
+160,COMMAND_GETWEAPONSUNSHEATHEDSTATUS,0x00668a20,0x006773f4,GetWeaponsUnsheathedStatus,int GetWeaponsUnsheathedStatus(object oCreature)
+161,COMMAND_GETANGLEBETWEENOBJECTS,0x00655910,0x00675606,GetAngleBetweenObjects,"float GetAngleBetweenObjects(object oObjectA, object oObjectB)"
+162,COMMAND_COMMANDSWITCHWEAPONSET,0x0066fa20,0x0067864a,CommandSwitchWeaponSet,command CommandSwitchWeaponSet(int nWeaponSet = INVALID_WEAPON_SET)
+164,COMMAND_ISPERCEIVINGHOSTILE,0x00668a20,0x006776fc,IsPerceivingHostiles,int IsPerceivingHostiles(object oCreature)
+165,COMMAND_ISPARTYPERCEIVINGHOSTILE,0x00668a20,0x00677712,IsPartyPerceivingHostiles,int IsPartyPerceivingHostiles(object oCreature)
+166,COMMAND_TRIGGERPERCEPTION,0x0065a7b0,0x00677728,TriggerPerception,"int TriggerPerception(object oPerceivingCreature, object oPerceivedCreature)"
+167,COMMAND_GETACTIVEWEAPONSET,0x0065cd20,0x006773b2,GetActiveWeaponSet,int GetActiveWeaponSet(object oObject)
+168,COMMAND_GETCONTROLLED,0x00660ae0,0x00677def,GetMainControlled,object GetMainControlled()
+169,COMMAND_GETPERCEIVEDCREATURELIST,0x00670d40,0x0067773e,GetPerceivedCreatureList,"object[] GetPerceivedCreatureList(object oCreature, int bHostile = 0)"
+170,COMMAND_ISPERCEIVING,0x0066e040,0x00677754,IsPerceiving,"int IsPerceiving(object oidA, object oidB)"
+171,COMMAND_GETITEMHERALDRY,0x0065d770,0x006767ba,GetItemHeraldry,int GetItemHeraldry(object oItem)
+172,COMMAND_SETITEMHERALDRY,0x0065d7d0,0x006767d0,SetItemHeraldry,"void SetItemHeraldry(object oItem, int nHeraldry)"
+173,COMMAND_PLAYMOVIE,0x0065ecb0,0x00678dba,PlayMovie,void PlayMovie(resource rMovie)
+174,COMMAND_SENDTORUNDB,0x0064e450,0x00675376,SendToRunDatabase,void SendToRunDatabase(string sString)
+175,COMMAND_SENDGAMEEVENTTORUNDB,0x0064e4e0,0x0067538c,SendGameEventRunDatabase,"void SendGameEventRunDatabase(int nEventId, object oidObject = OBJECT_SELF, object oidTarget = OBJECT_INVALID, int nParam1 = 0, int nParam2 = 0, string sParam1 = """", string sParam2= """", string sType = ""xE"")"
+176,COMMAND_GETLOWRESTIMER,0x0064e960,0x00675324,GetLowResTimer,int GetLowResTimer()
+177,COMMAND_GETHASEFFECT,0x00673d70,0x00678bd6,GetHasEffects,"int GetHasEffects(object oObject, int nEffectType=EFFECT_TYPE_INVALID, int nAbilityId = -1)"
+178,COMMAND_SETAPPEARANCETYPE,0x00674c80,0x006767a4,SetAppearanceType,"void SetAppearanceType(object oCreature, int nApperanceId, int bSetAsOriginal = FALSE)"
+179,COMMAND_GETSTRINGBYSTRID,0x00650680,0x00675b93,GetStringByStringId,string GetStringByStringId(int nId)
+180,COMMAND_GETITEMSININVENTORY,0x00672410,0x00676c96,GetItemsInInventory,"object[] GetItemsInInventory(object oObject, int nGetItemsOptions = GET_ITEMS_OPTION_ALL, int nBaseItemType = 0, string sTagFilter = """", int bIgnorePlotItems = FALSE)"
+181,COMMAND_GETPLOTREWARDID,0x00660100,0x00678e96,GetPlotFlagRewardId,"int GetPlotFlagRewardId(string strPlot, int nFlag)"
+182,COMMAND_SETSOUNDSET,0x00664350,0x00677d25,SetSoundSet,"void SetSoundSet(object oTarget, string sSoundSet)"
+183,COMMAND_GETCREATURERANK,0x0066bb30,0x0067656a,GetCreatureRank,int GetCreatureRank(object oCreature)
+184,COMMAND_GETCANDIEPERMANENTLY,0x006645a0,0x00676596,GetCanDiePermanently,int GetCanDiePermanently(object oidCreature)
+185,COMMAND_ENABLEWEAPONTRAIL,0x0065e420,0x006781e9,EnableWeaponTrail,"void EnableWeaponTrail(object oCreature, int bEnable)"
+186,COMMAND_GETVISUALEFFECTLOCATION,0x006646b0,0x00678c02,GetVisualEffectLocation,location GetVisualEffectLocation(effect eVFX)
+187,COMMAND_SETFORCEVISIBLE,0x00661c00,0x00676113,SetObjectAlwaysVisible,"void SetObjectAlwaysVisible(object oObject, int bAlwaysVisible)"
+188,COMMAND_TOGGLEGAMEPAUSE,0x0066a7a0,0x006782c5,ToggleGamePause,void ToggleGamePause(int bPause = TRUE)
+189,COMMAND_GETAUTOPAUSECOMBATSTATUS,0x0065e520,0x006782db,GetAutoPauseCombatStatus,int GetAutoPauseCombatStatus()
+190,COMMAND_GETITEMABILITYID,0x00668a20,0x00676cac,GetItemAbilityId,int GetItemAbilityId(object oItem)
+191,COMMAND_SETITEMABILITYID,0x0065e330,0x00676cc2,SetItemAbilityId,"void SetItemAbilityId(object oItem, int nAbilityId, int nPower = 1)"
+192,COMMAND_GETEFFECTSFLAGS,0x00668a20,0x00678bc0,GetEffectsFlags,int GetEffectsFlags(object oOwner)
+193,COMMAND_FIREPROJECTILE,0x00661c70,0x00676129,FireProjectile,"object FireProjectile(int nType, vector vSourcePosition, vector vTargetPosition, int nCrustEffectId = 0, int bWideAngle = FALSE, object oEventTarget = OBJECT_INVALID)"
+194,COMMAND_SETCOOLDOWN,0x0066a150,0x006781ff,SetCooldown,"void SetCooldown(object oCreature, int nAbilityId, float fCooldownTime, string sSourceItemTag = """")"
+195,COMMAND_GETREMAININGCOOLDOWN,0x0066a280,0x00678215,GetRemainingCooldown,"float GetRemainingCooldown(object oCreature, int nAbilityId, string sSourceItemTag = """")"
+196,COMMAND_PLAYOVERLAYANIMATION,0x00659300,0x006760fd,PlayAdditiveAnimation,"void PlayAdditiveAnimation(object nObjectId, int nAnimation, int bForceRestart = FALSE)"
+197,COMMAND_FILTEROBJECTSINSHAPE,0x00670eb0,0x006760bb,FilterObjectsInShape,"object[] FilterObjectsInShape(object[] aObjects, int nObjectTypeMask, int nShapeId, location lLocation, float fA, float fB = 0.0f, float fC = 0.0f, int bExcludeDead = FALSE)"
+198,COMMAND_GETTHREATVALUEBYOBJECTID,0x0065a140,0x0067625d,GetThreatValueByObjectID,"float GetThreatValueByObjectID(object oCreature, object oEnemy)"
+199,COMMAND_GETTHREATVALUEBYINDEX,0x0065a0a0,0x00676247,GetThreatValueByIndex,"float GetThreatValueByIndex(object oCreature, int i)"
+200,COMMAND_GETTHREATENEMY,0x0065a000,0x00676231,GetThreatEnemy,"object GetThreatEnemy(object oCreature, int i)"
+201,COMMAND_GETTHREATTABLESIZE,0x0066cba0,0x0067621b,GetThreatTableSize,int GetThreatTableSize(object oCreature)
+202,COMMAND_CLEARTHREATTABLE,0x00673030,0x00676205,ClearThreatTable,void ClearThreatTable(object oCreature)
+203,COMMAND_CLEARENEMYTHREAT,0x00659f80,0x006761ef,ClearEnemyThreat,"void ClearEnemyThreat(object oCreature, object oEnemy)"
+204,COMMAND_UPDATETHREATTABLE,0x00659ee0,0x006761d9,UpdateThreatTable,"void UpdateThreatTable(object oCreature, object oEnemy, float fThreatChange)"
+205,COMMAND_GETCREATURESINMELEERING,0x006712f0,0x006760d1,GetCreaturesInMeleeRing,"object[] GetCreaturesInMeleeRing(object nRingOwnerId, float fStartAngle, float fEndAngle, int bOnlyHostiles = FALSE, int nRingIndex = 0)"
+206,COMMAND_ISOBJECTVALID,0x006593c0,0x00675dcf,IsObjectValid,int IsObjectValid(object oObject)
+207,COMMAND_GETOBJECTTYPE,0x00659470,0x00675de5,GetObjectType,int GetObjectType(object oObject)
+208,COMMAND_GETRESREF,0x006594e0,0x00675dfb,GetResRef,string GetResRef(object oObject)
+209,COMMAND_GETTAG,0x006596a0,0x00675e27,GetTag,string GetTag(object oObject)
+210,COMMAND_SETTAG,0x006693e0,0x00675e3d,SetTag,"void SetTag(object oObject, string sTag)"
+211,COMMAND_GETOBJECTBYTAG,0x006597e0,0x00675e69,GetObjectByTag,"object GetObjectByTag(string sTag, int nNth = 0)"
+212,COMMAND_CREATEITEMONOBJECT,0x00673630,0x00675e7f,CreateItemOnObject,"object CreateItemOnObject(resource rItemFileName, object oTarget, int nStackSize = 1, string sTag = """", int bSuppressNotification = FALSE, int bDroppable = TRUE)"
+213,COMMAND_CREATEPOOL,0x006598d0,0x00675e95,CreatePool,"int CreatePool(resource rTemplate, int nPoolSize)"
+214,COMMAND_DESTROYOBJECT,0x006599e0,0x00675eab,DestroyObject,"void DestroyObject(object oObject, int nDelay = 0)"
+215,COMMAND_ISDESTROYABLE,0x00659a50,0x00675ec1,IsDestroyable,int IsDestroyable(object oObject)
+216,COMMAND_SETDESTROYABLE,0x00659ab0,0x00675ed7,SetDestroyable,"void SetDestroyable(object oObject, int bDestroyable)"
+217,COMMAND_ISPLOT,0x00659b10,0x00675eed,IsPlot,int IsPlot(object oObject)
+218,COMMAND_SETPLOT,0x00659b70,0x00675f03,SetPlot,"void SetPlot(object oObject, int bPlot)"
+219,COMMAND_ISIMMORTAL,0x00659be0,0x00675f19,IsImmortal,int IsImmortal(object oObject)
+220,COMMAND_SETIMMORTAL,0x00659c50,0x00675f2f,Engine_SetImmortal,"void Engine_SetImmortal(object oObject, int bImmortal)"
+221,COMMAND_GETAILEVEL,0x00659de0,0x00675f45,GetAILevel,int GetAILevel(object oObject)
+222,COMMAND_SETAILEVEL,0x00659e40,0x00675f5b,SetAILevel,"void SetAILevel(object oObject, int nAILevel)"
+223,COMMAND_GETAREA,0x00655000,0x00675f71,GetArea,object GetArea(object oObject)
+224,COMMAND_GETMODULE,0x00669850,0x00675f87,GetModule,object GetModule()
+226,COMMAND_ISITEMIDENTIFIED,0x00a21f90,0x00675f9d,,
+227,COMMAND_SETITEMIDENTIFIED,0x00a21f90,0x00675fb3,,
+228,COMMAND_GETITEMIDENTIFYLOREDIFFICULTY,0x00a21f90,0x00675fc9,,
+229,COMMAND_SETITEMIDENTIFYLOREDIFFICULTY,0x00a21f90,0x00675fdf,,
+230,COMMAND_RESTOREOBJECT,0x00a21f90,0x00675ff5,,
+231,COMMAND_GETCREATURESTEALTHMODE,0x00a21f90,0x0067600b,,
+232,COMMAND_ISCREATURESKILLSUCCESSFUL,0x00a21f90,0x00676021,,
+233,COMMAND_GETHEALTH,0x0065a1e0,0x00676273,GetHealth,int GetHealth(object oObject)
+234,COMMAND_SETHEALTH,0x0065a250,0x00676289,SetPlaceableHealth,"void SetPlaceableHealth(object oPlc, int nHealth)"
+235,COMMAND_GETMAXHEALTH,0x0065a2c0,0x0067629f,Deprecated_GetMaxHealth,int Deprecated_GetMaxHealth(object oObject)
+236,COMMAND_SETMAXHEALTH,0x0065a330,0x006762b5,SetMaxHealth,"void SetMaxHealth(object oObject, int nHealth)"
+237,COMMAND_ISDEAD,0x0065a3a0,0x006762cb,IsDead,int IsDead(object oObject=OBJECT_SELF)
+238,COMMAND_GETCREATURESTAMINA,0x0066cc30,0x006762f7,GetCreatureStamina,int GetCreatureStamina(object oCreature)
+239,COMMAND_SETCREATURESTAMINA,0x0066cd00,0x0067630d,SetCreatureStamina,"void SetCreatureStamina(object oCreature, int nStamina)"
+240,COMMAND_GETCREATUREMAXSTAMINA,0x0066cdc0,0x00676323,GetCreatureMaxStamina,int GetCreatureMaxStamina(object oCreature)
+241,COMMAND_SETCREATUREMAXSTAMINA,0x0066ce90,0x00676339,SetCreatureMaxStamina,"void SetCreatureMaxStamina(object oCreature, int nMaxStamina)"
+242,COMMAND_GETCREATUREMANA,0x0066cc30,0x0067634f,GetCreatureMana,int GetCreatureMana(object oCreature)
+243,COMMAND_SETCREATUREMANA,0x0066cd00,0x00676365,SetCreatureMana,"void SetCreatureMana(object oCreature, int nMana)"
+244,COMMAND_GETCREATUREMAXMANA,0x0066cdc0,0x0067637b,GetCreatureMaxMana,int GetCreatureMaxMana(object oCreature)
+245,COMMAND_SETCREATUREMAXMANA,0x0066ce90,0x00676391,SetCreatureMaxMana,"void SetCreatureMaxMana(object oCreature, int nMaxMana)"
+246,COMMAND_COMMANDDEATHBLOW,0x0066e860,0x00678895,CommandDeathBlow,"command CommandDeathBlow(object oTarget, int nDeathType = 0)"
+248,COMMAND_GETCREATUREATTRIBUTE,0x0066d0a0,0x006763a7,GetCreatureAttribute,"int GetCreatureAttribute(object oCreature, int nAttribute, int nValueType = PROPERTY_VALUE_TOTAL)"
+249,COMMAND_HASSPELL,0x00000000,0x00676415,,
+250,COMMAND_ADDSPELL,0x00000000,0x00676428,,
+251,COMMAND_REMOVESPELL,0x00000000,0x0067643b,,
+252,COMMAND_GETHASABILITY,0x00669ab0,0x0067644e,HasAbility,"int HasAbility(object oCreature, int nAbility)"
+253,COMMAND_ADDABILITY,0x00669ab0,0x0067647a,AddAbility,"void AddAbility(object oObject, int nAbility, int bSendNotification = FALSE)"
+254,COMMAND_REMOVEABILITY,0x00669ab0,0x00676490,RemoveAbility,"void RemoveAbility(object oObject, int nAbility)"
+255,COMMAND_GETCREATURESKILLRANK,0x00000000,0x006764d2,,
+256,COMMAND_SETCREATURESKILLRANK,0x00000000,0x006764e5,,
+257,COMMAND_SETCREATUREXP,0x00000000,0x006764f8,,
+258,COMMAND_GETCREATUREXP,0x00000000,0x0067650b,,
+259,COMMAND_ADDCREATUREXP,0x00000000,0x0067651e,,
+260,COMMAND_REMOVECREATUREXP,0x00000000,0x00676531,,
+261,COMMAND_GETCREATUREALIGNMENT,0x00000000,0x00676544,,
+262,COMMAND_SETCREATUREALIGNMENT,0x00000000,0x00676557,,
+263,COMMAND_GETCREATUREGENDER,0x0065a400,0x00676630,GetCreatureGender,int GetCreatureGender(object oCreature)
+264,COMMAND_SETCREATUREGENDER,0x0065a470,0x00676646,SetCreatureGender,"void SetCreatureGender(object oCreature, int nGender)"
+265,COMMAND_GETCREATURESIZE,0x00000000,0x0067665c,,
+266,COMMAND_SETCREATURESIZE,0x00000000,0x0067666f,,
+267,COMMAND_GETCREATURESPEED,0x00000000,0x00676682,,
+268,COMMAND_SETCREATURESPEED,0x00000000,0x00676695,,
+269,COMMAND_GETCREATURERACIALTYPE,0x0065a590,0x006766a8,GetCreatureRacialType,int GetCreatureRacialType(object oCreature)
+270,COMMAND_SETCREATURERACIALTYPE,0x0065a600,0x006766be,SetCreatureRacialType,"void SetCreatureRacialType(object oCreature, int nRacialType)"
+271,COMMAND_GETCREATUREAGE,0x00000000,0x006766d4,,
+272,COMMAND_SETCREATUREAGE,0x00000000,0x006766e7,,
+273,COMMAND_SWITCHWEAPONSET,0x0065ccc0,0x0067739c,SwitchWeaponSet,"void SwitchWeaponSet(object oObject, int nWeaponSet = INVALID_WEAPON_SET)"
+274,COMMAND_SETCREATUREAPPEARANCE,0x00000000,0x006766fa,,
+275,COMMAND_GETNAME,0x0066bba0,0x0067670d,GetName,string GetName(object oidObject)
+276,COMMAND_SETNAME,0x0066ba00,0x00676723,SetName,"void SetName(object oObject, string sName)"
+277,COMMAND_GETRANDOMNAME,0x00000000,0x0067674f,,
+278,COMMAND_GETAREAPROPERTIES,0x00000000,0x0067683e,,
+280,COMMAND_GETAREAOFEFFECTCREATOR,0x00000000,0x006768bc,,
+281,COMMAND_GETOPENSTATE,0x00000000,0x00676969,,
+282,COMMAND_ISUSEABLE,0x00000000,0x0067697c,,
+283,COMMAND_SETUSEABLE,0x00000000,0x0067698f,,
+284,COMMAND_ISCONTAINER,0x00000000,0x006769a2,,
+285,COMMAND_SETCONTAINER,0x00000000,0x006769b5,,
+286,COMMAND_GETPLACEABLESTATE,0x0065f590,0x006769c8,GetPlaceableState,int GetPlaceableState(object oPlaceable)
+287,COMMAND_SETPLACEABLESTATE,0x0065ee60,0x006769de,SetPlaceableState,"void SetPlaceableState(object oPlaceable, int nState)"
+288,COMMAND_GETTRANSITIONTARGET,0x00000000,0x006769f4,,
+289,COMMAND_SETTRANSITIONTARGET,0x00000000,0x00676a07,,
+290,COMMAND_ISDOORCOMMANDPOSSIBLE,0x00000000,0x00676a1a,,
+291,COMMAND_GETITEMVALUE,0x0066bd00,0x00676b1f,GetItemValue,int GetItemValue(object oItem)
+292,COMMAND_GETITEMTYPE,0x00000000,0x00676b35,,
+293,COMMAND_GETITEMDEFENSEVALUE,0x00000000,0x00676b48,,
+294,COMMAND_ISWEAPONRANGED,0x00000000,0x00676b5b,,
+295,COMMAND_ISITEMDROPPABLE,0x00668a20,0x00676b6e,IsItemDroppable,int IsItemDroppable(object oItem)
+296,COMMAND_SETITEMDROPPABLE,0x0066be50,0x00676b84,SetItemDroppable,"void SetItemDroppable(object oItem, int bDroppable)"
+297,COMMAND_ISITEMSTOLEN,0x00000000,0x00676b9a,,
+298,COMMAND_SETITEMSTOLEN,0x00000000,0x00676bad,,
+299,COMMAND_GETMAXITEMSTACKSIZE,0x0066a810,0x00676bc0,GetMaxItemStackSize,int GetMaxItemStackSize(object oItem)
+300,COMMAND_GETITEMSTACKSIZE,0x0066a810,0x00676be9,GetItemStackSize,int GetItemStackSize(object oItem)
+301,COMMAND_SETITEMSTACKSIZE,0x0066a8a0,0x00676bff,SetItemStackSize,"void SetItemStackSize(object oItem, int nStackSize)"
+302,COMMAND_HASITEMPROPERTY,0x00000000,0x00676c15,,
+303,COMMAND_ADDITEMPROPERTY,0x00665290,0x00676e38,AddItemProperty,"void AddItemProperty(object oItem, int nProperty, int nPower)"
+304,COMMAND_REMOVEITEMPROPERTY,0x00665370,0x00676e4e,RemoveItemProperty,"void RemoveItemProperty(object oItem, int nProperty)"
+305,COMMAND_GETITEMSTAT,0x00665670,0x00676cd8,GetItemStat,"float GetItemStat(object oItem, int nStatType)"
+306,COMMAND_CREATEOBJECT,0x00669550,0x00675e53,CreateObject,"object CreateObject(int nObjectType, resource rTemplate, location lLoc, string sOverrideScript = """", int bSpawnActive = TRUE, int bNoPermDeath = FALSE)"
+307,COMMAND_SETLOCNAME,0x00664440,0x00676739,SetLocName,"void SetLocName(object oObject, int nStringIndex)"
+308,COMMAND_GETCURRENTSCRIPTRESOURCE,0x00654d70,0x00675510,GetCurrentScriptResource,resource GetCurrentScriptResource()
+309,COMMAND_OPENFADEMAP,0x00665010,0x00678021,OpenFadeMap,void OpenFadeMap()
+310,COMMAND_SHOWTUTORIAL,0x00651780,0x006791be,ShowTutorial,void ShowTutorial(int nTutorialID)
+311,COMMAND_SETPARTYPICKERGUISTATUS,0x00663660,0x00679192,SetPartyPickerGUIStatus,void SetPartyPickerGUIStatus(int nStatus)
+312,COMMAND_GETPARTYPICKERGUISTATUS,0x006636b0,0x006791a8,GetPartyPickerGUIStatus,int GetPartyPickerGUIStatus()
+313,COMMAND_STOREGETMARKDOWN,0x0065ab50,0x00677900,GetStoreMarkDown,int GetStoreMarkDown(object oStore)
+314,COMMAND_STORESETMARKDOWN,0x0065abc0,0x00677916,SetStoreMarkDown,"void SetStoreMarkDown(object oStore, int nMarkDown)"
+315,COMMAND_GETCREATURETREASURECATEGORY,0x0065f430,0x006765c2,GetCreatureTreasureCategory,int GetCreatureTreasureCategory(object oCreature)
+316,COMMAND_GETITEMPROPERTIES,0x00674260,0x00676e64,GetItemProperties,"int[] GetItemProperties(object oItem, int bIncludeSubItems)"
+317,COMMAND_GETPACKAGE,0x00661430,0x0067713a,GetPackage,int GetPackage(object oCreature)
+318,COMMAND_GETPACKAGEAI,0x00661490,0x00677150,GetPackageAI,int GetPackageAI(object oCreature)
+319,COMMAND_SETTACTICENTRY,0x006615f0,0x00677258,SetTacticEntry,"void SetTacticEntry(object oCreature, int nIndex, int nEnabled, int nTargetType, int nCondition, int nCommandType, int nCommandParam = 0)"
+320,COMMAND_CLEARABILITYLIST,0x0066a0d0,0x00678257,CharGen_ClearAbilityList,"void CharGen_ClearAbilityList(object oCreature, int nAbilityType = 0)"
+321,COMMAND_SETDEATHHINT,0x00660dc0,0x00676ff0,SetDeathHint,"void SetDeathHint(int nDeathHint, int n2DAReference = 205)"
+322,COMMAND_SETLOADHINT,0x00660ee0,0x00677006,SetLoadHint,"void SetLoadHint(int nLoadHint, int n2DAReference = 206)"
+323,COMMAND_SHOWPOPUP,0x00663810,0x00679200,ShowPopup,"void ShowPopup(int nMessageStrRef, int nPopupType, object oOwner = OBJECT_INVALID, int bShowInputField = FALSE, int nDefaultInputStrRef = 0)"
+324,COMMAND_ADJUSTFOLLOWERAPPROVAL,0x006610d0,0x0067705e,AdjustFollowerApproval,"void AdjustFollowerApproval(object oFollower, int nAmount, int bNotify = FALSE)"
+325,COMMAND_SETCLASSRANK,0x0065f490,0x006765d8,SetClassRank,"void SetClassRank(object oCreature, int nClass, int nRank)"
+326,COMMAND_HASDEATHEFFECT,0x00668a20,0x006762e1,HasDeathEffect,"int HasDeathEffect(object oObject=OBJECT_SELF, int bCheckForDeathEvent = FALSE)"
+327,COMMAND_COMMANDTURN,0x0066e9d0,0x006788ab,CommandTurn,command CommandTurn(float fFacingDirection)
+328,COMMAND_SETQUICKSLOTBAR,0x0066be50,0x0067901c,SetQuickslotBar,"void SetQuickslotBar(object oCreature, int nBarNumber)"
+329,COMMAND_LOCKQUICKSLOTBAR,0x0066be50,0x00679032,LockQuickslotBar,"void LockQuickslotBar(object oCreature, int bLock)"
+330,COMMAND_GETQUICKSLOT,0x0066b800,0x00679006,GetQuickslot,"int GetQuickslot(object oCreature, int nSlot)"
+331,COMMAND_GETDEBUGHELPERSENABLED,0x00653c30,0x006753ce,GetDebugHelpersEnabled,int GetDebugHelpersEnabled()
+332,COMMAND_REVEALCURRENTMAP,0x00665030,0x00678037,RevealCurrentMap,void RevealCurrentMap()
+333,COMMAND_CLEARPROPERTIES,0x0066be50,0x006790cc,ClearCreatureProperties,void ClearCreatureProperties(object oCreature)
+334,COMMAND_GETAOEFLAGS,0x00668a20,0x006768e5,GetAOEFlags,int GetAOEFlags(object oAOE)
+335,COMMAND_SETAOEFLAGS,0x0066be50,0x006768fb,SetAOEFlags,"void SetAOEFlags(object oAOE, int nFlags)"
+336,COMMAND_ISINAOE,0x0066e040,0x00676911,IsInAOE,"int IsInAOE(object oCreature, object oAOE)"
+337,COMMAND_GETCREATURESINAOE,0x00672cc0,0x00676927,,
+338,COMMAND_DEBUGSENDRAWINPUTEVENT,0x00651ad0,0x0067947e,DEBUG_SendRawInputEvent,"void DEBUG_SendRawInputEvent(int nFrameNumber, string sRawEventName)"
+339,COMMAND_DEBUGSETCURSORPOSITION,0x00651b90,0x00679494,DEBUG_SetCursorPosition,"void DEBUG_SetCursorPosition(int x, int y)"
+340,COMMAND_LOADITEMSFROMTEMPLATE,0x0065d8a0,0x00676db4,LoadItemsFromTemplate,"void LoadItemsFromTemplate(object oCreature, string sTemplate, int bReplaceInventory = FALSE)"
+341,COMMAND_GETAUTOLEVELFOLLOWERS,0x00666300,0x006794aa,GetAutoLevelFollowers,int GetAutoLevelFollowers()
+342,COMMAND_INITHEARTBEAT,0x00666380,0x006794d6,InitHeartbeat,"void InitHeartbeat(object oCreature, float fInterval)"
+343,COMMAND_ENDHEARTBEAT,0x00666400,0x006794ec,EndHeartbeat,void EndHeartbeat(object oCreature)
+344,COMMAND_DIALOGISAMBIENT,0x0065dc00,0x00677824,DialogIsAmbient,int DialogIsAmbient()
+345,COMMAND_STOREPARTYINVENTORY,0x00665cf0,0x0067744c,StorePartyInventory,void StorePartyInventory(object oPlaceable)
+346,COMMAND_STOREFOLLOWERINVENTORY,0x00665d50,0x00677462,StoreFollowerInventory,"void StoreFollowerInventory(object oFollower, object oTarget)"
+347,COMMAND_RESTOREPARTYINVENTORY,0x00665df0,0x00677478,RestorePartyInventory,void RestorePartyInventory(object oPlaceable)
+348,COMMAND_RESTOREFOLLOWERINVENTORY,0x00665e50,0x0067748e,RestoreFollowerInventory,"void RestoreFollowerInventory(object oFollower, object oPlaceable)"
+349,COMMAND_MOVEITEM,0x00665ef0,0x006774a4,MoveItem,"void MoveItem(object oSource, object oTarget, object oItem)"
+350,COMMAND_MOVEALLITEMS,0x00666020,0x006774ba,MoveAllItems,"void MoveAllItems(object oSource, object oTarget)"
+351,COMMAND_ADDNONPARTYFOLLOWER,0x00661370,0x006770e2,AddNonPartyFollower,int AddNonPartyFollower(object oFollower)
+352,COMMAND_REMOVENONPARTYFOLLOWER,0x006613e0,0x006770f8,RemoveNonPartyFollower,void RemoveNonPartyFollower(object oFollower)
+353,COMMAND_SETATTACKDURATION,0x00659d30,0x0067608f,SetAttackDuration,"void SetAttackDuration(object oObject, float fDuration_s)"
+354,COMMAND_GETWEAPONSTYLE,0x00668a20,0x0067826d,GetWeaponStyle,int GetWeaponStyle(object oCreature)
+355,COMMAND_SHOWCRAFTINGGUI,0x00663ab0,0x00679216,ShowCraftingGUI,void ShowCraftingGUI(int nCraftingSkillID)
+356,COMMAND_GETPLACEABLEPOPUPTEXT,0x0065f2e0,0x00676af3,GetPlaceablePopupText,string GetPlaceablePopupText(object oPlaceable)
+357,COMMAND_LINKAREAMINIMAPS,0x0065f7c0,0x00676890,LinkAreaMiniMaps,"int LinkAreaMiniMaps(string sFirstArea, string sSecondArea)"
+358,COMMAND_GETITEMEQUIPSLOT,0x00665410,0x00676dca,GetItemEquipSlot,int GetItemEquipSlot(object oItem)
+359,COMMAND_SIGNALDAMAGE,0x00662310,0x00678f98,SignalDamage,"void SignalDamage(object oSource, object oTarget)"
+360,COMMAND_GETSINGLENEARESTOBJECTBYTAG,0x0066db20,0x006776e6,UT_GetNearestObjectByTag,"object UT_GetNearestObjectByTag(object oObject, string sTag, int nIncludeSelf = 0)"
+361,COMMAND_SETLOADIMAGE,0x0064e450,0x0067701c,SetLoadImage,void SetLoadImage(string sLoadImage)
+362,COMMAND_SHOWSTARTMENU,0x0066a5a0,0x006782af,ShowStartMenu,void ShowStartMenu(int bShowCredits = FALSE)
+363,COMMAND_GETISHUMANOID,0x00666450,0x00676197,IsHumanoid,int IsHumanoid(object oObject)
+364,COMMAND_SHOWASALLYONMAP,0x006665c0,0x00676604,ShowAsAllyOnMap,"void ShowAsAllyOnMap(object oCreature, int bEnable)"
+365,COMMAND_GETTACTICPRESETID,0x00651650,0x0067726e,GetTacticPresetID,int GetTacticPresetID(object oCreature)
+366,COMMAND_SETTACTICPRESETID,0x006516b0,0x00677284,SetTacticPresetID,"void SetTacticPresetID(object oCreature, int nPresetID)"
+367,COMMAND_ADDTACTICPRESETID,0x00651710,0x0067729a,AddTacticPresetID,"void AddTacticPresetID(object oCreature, int nPresetID)"
+368,COMMAND_GETITEMUNIQUE,0x00668a20,0x00676d5c,GetItemUnique,int GetItemUnique(object oObject)
+369,COMMAND_GETITEMMATERIALPROGRESSION,0x0066a060,0x00676c80,GetItemMaterialProgression,int GetItemMaterialProgression(object oObject)
+370,COMMAND_FIREHOMINGPROJECTILE,0x00661c70,0x0067613f,FireHomingProjectile,"object FireHomingProjectile(int nType, vector vSourcePosition, object oTarget, int nCrustEffectId = 0, object oEventTarget = OBJECT_INVALID)"
+371,COMMAND_SETPROJECTILEIMPACTEVENT,0x00661e50,0x00676155,SetProjectileImpactEvent,"void SetProjectileImpactEvent(object oProjectile, event eCustom)"
+372,COMMAND_GETTACTICTARGETOBJECT,0x0066ae10,0x006771d4,GetTacticTargetObject,"object GetTacticTargetObject(object oCreature, int nIndex)"
+373,COMMAND_GETTACTICCONDITIONOBJECT,0x0066af30,0x00677200,GetTacticConditionObject,"object GetTacticConditionObject(object oCreature, int nIndex)"
+374,COMMAND_GETTACTICCOMMANDITEM,0x006614f0,0x00677242,GetTacticCommandItemTag,"string GetTacticCommandItemTag(object oCreature, int nIndex)"
+375,COMMAND_SETITEMIRREMOVABLE,0x006654b0,0x00676de0,SetItemIrremovable,"void SetItemIrremovable(object oItem, int bIrremovable)"
+376,COMMAND_ISITEMIRREMOVABLE,0x0066bd70,0x00676df6,IsItemIrremovable,int IsItemIrremovable(object oItem)
+377,COMMAND_SETITEMINDESTRUCTIBLE,0x00665510,0x00676e0c,SetItemIndestructible,"void SetItemIndestructible(object oItem, int bIndestructible)"
+378,COMMAND_ISITEMINDESTRUCTIBLE,0x0066bde0,0x00676e22,IsItemIndestructible,int IsItemIndestructible(object oItem)
+379,COMMAND_REMOVEITEMSBYTAG,0x006660c0,0x006772ef,RemoveItemsByTag,"void RemoveItemsByTag(object oPossessor, string sTag, int nNumItems = -1)"
+380,COMMAND_COUNTITEMSBYTAG,0x00666210,0x00677305,CountItemsByTag,"int CountItemsByTag(object oPossessor, string sTag)"
+381,COMMAND_GETPLOTSUMMARY,0x006640b0,0x00678ed8,GetPlotSummary,"string GetPlotSummary(string sPlot, int nFlag)"
+382,COMMAND_SETFOLLOWERAPPROVALENABLED,0x006611f0,0x0067708a,SetFollowerApprovalEnabled,"void SetFollowerApprovalEnabled(object oFollower, int bEnabled)"
+383,COMMAND_SPLITSTRING,0x00672ea0,0x00675930,ECSplitString,string[] ECSplitString(string sString)
+384,COMMAND_GETAUTOLEVELUP,0x0066b980,0x006790a0,GetAutoLevelUp,int GetAutoLevelUp(object oPartyMember)
+385,COMMAND_SETAUTOLEVELUP,0x0066b900,0x0067908a,SetAutoLevelUp,"void SetAutoLevelUp(object oPartyMember, int nAutoLevelUp)"
+386,COMMAND_SCALEEQUIPPEDITEMS,0x006664d0,0x006761ad,ScaleEquippedItems,"void ScaleEquippedItems(object oCreature, int nTargetLevel)"
+387,COMMAND_CLOSEPRIMARYWORLDMAP,0x00664ff0,0x0067800b,ClosePrimaryWorldMap,void ClosePrimaryWorldMap()
+388,COMMAND_ISMOVING,0x00666550,0x006761c3,IsMoving,int IsMoving(object oCreature)
+389,COMMAND_GETABILITIESDUETOAOES,0x006734b0,0x0067693d,,
+390,COMMAND_PRELOADCHARGEN,0x00651770,0x00678fc4,PreloadCharGen,void PreloadCharGen()
+391,COMMAND_SETCANCHANGEEQUIPMENT,0x00665c80,0x0067740a,SetCanChangeEquipment,"void SetCanChangeEquipment(object oCreature, int bCanChange)"
+392,COMMAND_EQUIPITEM,0x0065cda0,0x006773c8,EquipItem,"int EquipItem(object oObject, object oItem, int nEquipSlot = INVENTORY_SLOT_INVALID, int nWeaponSet = INVALID_WEAPON_SET)"
+393,COMMAND_UNEQUIPITEM,0x0065cda0,0x006773de,UnequipItem,"int UnequipItem(object oObject, object oItem)"
+394,COMMAND_SETAIMLOOPDURATION,0x00659d30,0x00676079,SetAimLoopDuration,"void SetAimLoopDuration(object oObject, float fDuration)"
+395,COMMAND_GETPARTYPOOLLIST,0x00672ac0,0x00676e90,GetPartyPoolList,object[] GetPartyPoolList()
+396,COMMAND_ADDTOPARTY,0x0065e560,0x00676ea6,,
+397,COMMAND_REMOVEFROMPARTY,0x0065e5c0,0x00676ebc,,
+398,COMMAND_GETPARTYSIZE,0x0065e610,0x00676ed2,,
+399,COMMAND_GETFOLLOWERSTATE,0x0065e670,0x00676efe,GetFollowerState,int GetFollowerState(object oCreature)
+400,COMMAND_GETFOLLOWERSUBSTATE,0x0065e9e0,0x00676f2a,GetFollowerSubState,int GetFollowerSubState(object oCreature)
+401,COMMAND_GETITEMINEQUIPSLOT,0x00669c70,0x006772b0,GetItemInEquipSlot,"object GetItemInEquipSlot(int nSlot, object oCreature=OBJECT_SELF, int nWeaponSet = INVALID_WEAPON_SET)"
+402,COMMAND_ADDITEMTOINVENTORY,0x00000000,0x006772c6,,
+403,COMMAND_REMOVEITEMFROMINVENTORY,0x0066c400,0x006772d9,RemoveItem,"void RemoveItem(object oItem, int nNumItems = -1)"
+404,COMMAND_GETMAXINVENTORYSIZE,0x0066c2a0,0x00677420,GetMaxInventorySize,int GetMaxInventorySize(object oCreature = OBJECT_INVALID)
+405,COMMAND_SETMAXINVENTORYSIZE,0x0066c340,0x00677436,SetMaxInventorySize,"void SetMaxInventorySize(int nMaxSize, object oCreature = OBJECT_INVALID)"
+406,COMMAND_ADDGOLD,0x0066ab30,0x0067731b,AddCreatureMoney,"void AddCreatureMoney(int nCoppers, object oCreature=OBJECT_SELF, int bNotify=TRUE)"
+407,COMMAND_REMOVEGOLD,0x00000000,0x00677331,,
+408,COMMAND_GETGOLD,0x0066a980,0x00677344,GetCreatureMoney,int GetCreatureMoney(object oCreature=OBJECT_SELF)
+409,COMMAND_SETGOLD,0x0066aa00,0x0067735a,SetCreatureMoney,"void SetCreatureMoney(int nCoppers, object oCreature=OBJECT_SELF, int bNotify=TRUE)"
+410,COMMAND_OPENINVENTORY,0x0065fa40,0x00677370,OpenInventory,"void OpenInventory(object oObject, object oPlayer, int bCanAddItems=FALSE)"
+411,COMMAND_GETTRAPDETECTIONDIFFICULTY,0x00668a20,0x006774d0,GetTrapDetectionDifficulty,int GetTrapDetectionDifficulty(object oTrap)
+412,COMMAND_SETTRAPDETECTIONDIFFICULTY,0x00000000,0x006774e6,,
+413,COMMAND_GETTRAPDISARMDIFFICULTY,0x00668a20,0x006774f9,GetTrapDisarmDifficulty,int GetTrapDisarmDifficulty(object oTrap)
+414,COMMAND_SETTRAPDISARMDIFFICULTY,0x00000000,0x0067750f,,
+415,COMMAND_ISTRAPDETECTED,0x00000000,0x00677522,,
+416,COMMAND_SETTRAPDETECTED,0x0065a740,0x00677535,SetTrapDetected,"void SetTrapDetected(object oTrap, int bDetected)"
+417,COMMAND_ISTRAPDISARMED,0x00000000,0x0067754b,,
+418,COMMAND_SETTRAPDISARMED,0x00000000,0x0067755e,,
+419,COMMAND_ISTRAPPED,0x00000000,0x00677571,,
+420,COMMAND_SETTRAPPED,0x00000000,0x00677584,,
+421,COMMAND_ISLOCKED,0x00000000,0x00677597,,
+422,COMMAND_SETLOCKED,0x00000000,0x006775aa,,
+423,COMMAND_GETUNLOCKDIFFICULTY,0x00000000,0x006775bd,,
+424,COMMAND_SETUNLOCKDIFFICULTY,0x00000000,0x006775d0,,
+425,COMMAND_ISKEYREQUIRED,0x00000000,0x006775e3,,
+426,COMMAND_SETKEYREQUIRED,0x00000000,0x006775f6,,
+427,COMMAND_ISREMOVEKEYAFTERUSE,0x00000000,0x00677609,,
+428,COMMAND_SETREMOVEKEYAFTERUSE,0x00000000,0x0067761c,,
+429,COMMAND_GETUNLOCKKEYTAG,0x00000000,0x0067762f,,
+430,COMMAND_SETUNLOCKKEYTAG,0x00000000,0x00677642,,
+431,COMMAND_GETTRAPCREATOR,0x00000000,0x00677655,,
+432,COMMAND_SETTRAPCREATOR,0x00000000,0x00677668,,
+433,COMMAND_GETNEARESTOBJECT,0x00671510,0x0067767b,GetNearestObject,"object[] GetNearestObject(object oObject, int nObjectType = OBJECT_TYPE_ALL, int nNumberOfObjects = 1, int nCheckLiving = 0, int nCheckPerceived = 0, int nIncludeSelf = 0)"
+434,COMMAND_GETNEARESTOBJECTTOLOCATION,0x00671510,0x00677691,GetNearestObjectToLocation,"object[] GetNearestObjectToLocation(location lLocation, int nObjectType = OBJECT_TYPE_ALL, int nNumberOfObjects = 1)"
+435,COMMAND_GETNEARESTOBJECTBYTAG,0x00671510,0x006776a7,GetNearestObjectByTag,"object[] GetNearestObjectByTag(object oObject, string sTag, int nObjectType = OBJECT_TYPE_ALL, int nNumberOfObjects = 1, int nCheckLiving = 0, int nCheckPerceived = 0, int nIncludeSelf = 0)"
+436,COMMAND_GETNEARESTOBJECTBYGROUP,0x00671510,0x006776bd,GetNearestObjectByGroup,"object[] GetNearestObjectByGroup(object oObject, int nGroupId, int nObjectType = OBJECT_TYPE_ALL, int nNumberOfObjects = 1, int nCheckLiving = 0, int nCheckPerceived = 0, int nIncludeSelf = 0)"
+437,COMMAND_SPEAKONELINERCONVERSATION,0x00000000,0x00677780,,
+438,COMMAND_GETPCSPEAKER,0x00661870,0x00677793,GetPCSpeaker,object GetPCSpeaker()
+439,COMMAND_GETLASTSPEAKER,0x00000000,0x006777a9,,
+440,COMMAND_BEGINCONVERSATION,0x0065d9a0,0x006777bc,BeginConversation,"int BeginConversation(object oInitiator, object oTarget, resource rDialogFile = R"""")"
+441,COMMAND_SETCUSTOMTOKEN,0x00000000,0x006777d2,,
+442,COMMAND_INCONVERSATION,0x00000000,0x006777e5,,
+443,COMMAND_GETCONVERSATIONENTRYPARAMETER,0x0065dbd0,0x006777f8,,
+444,COMMAND_HASCONVERSATION,0x0065db60,0x0067780e,HasConversation,int HasConversation(object oObject)
+445,COMMAND_GETCLUSTERCENTER,0x00671980,0x006768cf,GetClusterCenter,"location GetClusterCenter(object oCreator, int nAbilityId, int nClusterSize, int nAllyFailChance, int bReturnFirstMatch)"
+446,COMMAND_CLEARPERCEPTIONLIST,0x0065a870,0x0067776a,ClearPerceptionList,void ClearPerceptionList(object oPerceiver)
+447,COMMAND_OPENSTORE,0x0065a8b0,0x00677866,OpenStore,void OpenStore(object oStore)
+448,COMMAND_STOREGETMONEY,0x0065a980,0x0067787c,GetStoreMoney,int GetStoreMoney(object oStore)
+449,COMMAND_STORESETMONEY,0x0065a980,0x00677892,SetStoreMoney,"void SetStoreMoney(object oStore, int nMoney)"
+450,COMMAND_STOREGETMAXBUYPRICE,0x0065a9f0,0x006778a8,GetStoreMaxBuyPrice,int GetStoreMaxBuyPrice(object oStore)
+451,COMMAND_STORESETMAXBUYPRICE,0x0065aa60,0x006778be,SetStoreMaxBuyPrice,"void SetStoreMaxBuyPrice(object oStore, int nMaxBuyPrice)"
+452,COMMAND_STOREGETMARKUP,0x0065ab50,0x006778d4,GetStoreMarkUp,int GetStoreMarkUp(object oStore)
+453,COMMAND_STORESETMARKUP,0x0065aad0,0x006778ea,SetStoreMarkUp,"void SetStoreMarkUp(object oStore, int nMoney)"
+454,COMMAND_LOCATION,0x0065ace0,0x00677942,Location,"location Location(object oArea, vector vPosition, float fAngle)"
+455,COMMAND_ISLOCATIONVALID,0x0065ae20,0x00677958,IsLocationValid,int IsLocationValid(location lLocation)
+456,COMMAND_ISLOCATIONSAFE,0x0065af40,0x0067796e,IsLocationSafe,int IsLocationSafe(location lLocation)
+457,COMMAND_GETLOCATION,0x0065b2a0,0x0067799a,GetLocation,location GetLocation(object oObject)
+458,COMMAND_SETLOCATION,0x0065b3b0,0x006779b0,SetLocation,"void SetLocation(object oObject, location lLocation)"
+459,COMMAND_GETPOSITIONFROMLOCATION,0x0065b4d0,0x006779c6,GetPositionFromLocation,vector GetPositionFromLocation(location lLocation)
+460,COMMAND_SETLOCATIONPOSITION,0x0065b580,0x006779dc,SetLocationPosition,"location SetLocationPosition(location lLocation, vector vPosition)"
+461,COMMAND_GETAREAFROMLOCATION,0x00650f90,0x006779f2,GetAreaFromLocation,object GetAreaFromLocation(location lLocation)
+462,COMMAND_SETLOCATIONAREA,0x00651000,0x00677a08,SetLocationArea,"location SetLocationArea(location lLocation, object oArea)"
+463,COMMAND_GETFACINGFROMLOCATION,0x0065b630,0x00677a1e,GetFacingFromLocation,float GetFacingFromLocation(location lLocation)
+464,COMMAND_GETORIENTATIONFROMLOCATION,0x0065b7b0,0x00677a4a,GetOrientationFromLocation,vector GetOrientationFromLocation(location lLocation)
+465,COMMAND_SETLOCATIONORIENTATION,0x0065b860,0x00677a60,SetLocationOrientation,"location SetLocationOrientation(location lLocation, vector vOrientation)"
+466,COMMAND_GETGROUPHOSTILITY,0x0065b920,0x00677a76,GetGroupHostility,"int GetGroupHostility(int nGroupA, int nGroupB)"
+467,COMMAND_SETGROUPHOSTILITY,0x0065b9a0,0x00677a8c,SetGroupHostility,"void SetGroupHostility(int nGroupA, int nGroupB, int bHostile)"
+468,COMMAND_ISHOSTILE,0x0065ba20,0x00677aa2,IsObjectHostile,"int IsObjectHostile(object oSource, object oTarget)"
+469,COMMAND_GETGROUPID,0x0065baa0,0x00677ab8,GetGroupId,int GetGroupId(object oObject)
+470,COMMAND_SETGROUPID,0x0065bb00,0x00677ace,SetGroupId,"void SetGroupId(object oObject, int nGroupId)"
+471,COMMAND_SETREACTIONOVERRIDE,0x0065bb70,0x00677ae4,SetReactionOverride,"void SetReactionOverride(object oObject, int bHostile)"
+472,COMMAND_SENDMESSAGETOPLAYER,0x00000000,0x00677b52,,
+473,COMMAND_SENDMESSAGETOPLAYERBYSTRREF,0x00000000,0x00677b65,,
+474,COMMAND_SENDMESSAGETOGM,0x00000000,0x00677b78,,
+475,COMMAND_SENDFEEDBACKTOPLAYER,0x00000000,0x00677b8b,,
+476,COMMAND_SENDFEEDBACKTOPLAYERBYSTRREF,0x00000000,0x00677b9e,,
+477,COMMAND_PLAYSOUND,0x0065ceb0,0x00677bb1,PlaySound,"void PlaySound(object oTarget, string sSoundEventName)"
+478,COMMAND_STOPSOUND,0x00651190,0x00677bc7,StopSound,void StopSound(string sSoundEventName)
+479,COMMAND_PLAYSOUNDSET,0x006624c0,0x00677bdd,PlaySoundSet,"void PlaySoundSet(object oTarget, int nSoundSetEntry, float fProbabilityOverride = 0.0f)"
+480,COMMAND_SOUNDOBJECTPLAY,0x0065bd40,0x00677bf3,PlaySoundObject,void PlaySoundObject(object oSound)
+481,COMMAND_SOUNDOBJECTSTOP,0x0065bd90,0x00677c09,StopSoundObject,void StopSoundObject(object oSound)
+482,COMMAND_SOUND_NOTUSED1,0x00000000,0x00677c1f,,
+483,COMMAND_SOUND_NOTUSED2,0x00000000,0x00677c32,,
+484,COMMAND_PLAYMUSIC,0x0065cfd0,0x00677c45,PlayMusic,void PlayMusic(string sMusicName)
+485,COMMAND_STOPMUSIC,0x0065cfd0,0x00677c5b,StopMusic,void StopMusic(string sMusicName)
+486,COMMAND_MUSIC_SETINTENSITY,0x0065d070,0x00677c71,SetMusicIntensity,void SetMusicIntensity(int nIntensity)
+487,COMMAND_ACTIVATE_SOUND_BY_TAG,0x0065d0c0,0x00677c87,ActivateSoundByTag,"void ActivateSoundByTag(string sSoundTag, int nActivate)"
+488,COMMAND_SET_MUSIC_VOLUME_STATE_BY_TAG,0x0065d1b0,0x00677c9d,SetMusicVolumeStateByTag,"void SetMusicVolumeStateByTag(string sMusicVolumeTag, int nMusicState)"
+489,COMMAND_SOUND_NOTUSED5,0x00000000,0x00677cb3,,
+490,COMMAND_SOUND_NOTUSED6,0x00000000,0x00677cc6,,
+491,COMMAND_SOUND_NOTUSED7,0x00000000,0x00677cd9,,
+492,COMMAND_SOUND_NOTUSED8,0x00000000,0x00677cec,,
+493,COMMAND_SOUND_NOTUSED9,0x00000000,0x00677cff,,
+494,COMMAND_SOUND_NOTUSED10,0x00000000,0x00677d12,,
+495,COMMAND_SETTIME,0x00000000,0x00677d3b,,
+496,COMMAND_GETTIMEHOUR,0x00000000,0x00677d4e,,
+497,COMMAND_GETTIMEMINUTE,0x00000000,0x00677d61,,
+498,COMMAND_GETTIMESECOND,0x00000000,0x00677d74,,
+499,COMMAND_GETTIMEMILLISECOND,0x00000000,0x00677d87,,
+500,COMMAND_ISHERO,0x00660a20,0x00677db0,IsHero,int IsHero(object oCreature)
+501,COMMAND_ISGM,0x00000000,0x00677dc6,,
+502,COMMAND_GETHERO,0x00660aa0,0x00677dd9,GetHero,object GetHero()
+503,COMMAND_ISPLAYERVALID,0x00000000,0x00677e05,,
+504,COMMAND_GETPARTYLIST,0x00672ba0,0x00676ee8,GetPartyList,object[] GetPartyList(object oCreature=-1)
+505,COMMAND_GETPLAYERPUBLICCDKEY,0x00000000,0x00677e2b,,
+506,COMMAND_GETPLAYERIPADDRESS,0x00000000,0x00677e3e,,
+507,COMMAND_GETPLAYERNAME,0x00000000,0x00677e51,,
+508,COMMAND_GETSTARTLOCATION,0x00000000,0x00677e64,,
+509,COMMAND_KICKPLAYER,0x00000000,0x00677e77,,
+510,COMMAND_BANPLAYER,0x00000000,0x00677e8a,,
+511,COMMAND_UNBANPLAYER,0x00000000,0x00677e9d,,
+512,COMMAND_ENDGAME,0x00000000,0x00677eb0,,
+513,COMMAND_AUTOSAVE,0x00660b20,0x00677ec3,DoAutoSave,void DoAutoSave()
+514,COMMAND_SAVEGAME,0x00000000,0x00677ed9,,
+515,COMMAND_EXPORTCHARACTER,0x00000000,0x00677eec,,
+516,COMMAND_EXPORTALLCHARACTERS,0x00000000,0x00677eff,,
+517,COMMAND_EXPLOREAREA,0x00000000,0x00677f12,,
+518,COMMAND_UNEXPLOREAREA,0x00000000,0x00677f25,,
+519,COMMAND_DISABLEMINIMAP,0x00000000,0x00677f38,,
+520,COMMAND_EXPLOREOBJECTRADIUS,0x00000000,0x00677f4b,,
+521,COMMAND_UNEXPLOREOBJECTRADIUS,0x00000000,0x00677f5e,,
+522,COMMAND_GETATTACKTARGET,0x00655000,0x006780b5,GetAttackTarget,object GetAttackTarget(object oCreature)
+523,COMMAND_GETSPELLTARGETOBJECT,0x00000000,0x0067808f,,
+524,COMMAND_GETSPELLTARGETLOCATION,0x00000000,0x006780a2,,
+525,COMMAND_SETCOMBATSTATE,0x0065dd60,0x006780cb,SetCombatState,"void SetCombatState(object oCreature, int nCombatState)"
+526,COMMAND_GETCOMBATSTATE,0x0065ddd0,0x006780e1,GetCombatState,int GetCombatState(object oCreature)
+529,COMMAND_GETGAMEMODE,0x0065e490,0x00678283,GetGameMode,int GetGameMode()
+530,COMMAND_SETGAMEMODE,0x0065e4e0,0x00678299,SetGameMode,void SetGameMode(int nMode)
+531,COMMAND_COMMAND,0x00000000,0x006782f1,,
+532,COMMAND_ISCOMMANDVALID,0x00000000,0x00678304,,
+533,COMMAND_ADDCOMMAND,0x0066e0e0,0x00678317,AddCommand,"int AddCommand(object oObject, command cCommand, int bAddToFront = FALSE, int bStatic = FALSE, int nOverrideAddBehavior = -1)"
+534,COMMAND_REMOVECOMMANDBYINDEX,0x0065c040,0x00678343,RemoveCommandByIndex,"void RemoveCommandByIndex(object oObject, int nIndex)"
+535,COMMAND_REMOVECOMMAND,0x0066eb20,0x00678359,RemoveCommand,"void RemoveCommand(object oObject, command cCommand)"
+536,COMMAND_GETCOMMANDBYINDEX,0x0065bfa0,0x006783d7,GetCommandByIndex,"command GetCommandByIndex(object oObject, int nIndex)"
+537,COMMAND_INSERTCOMMAND,0x00000000,0x0067836f,,
+538,COMMAND_CLEARALLCOMMANDS,0x0065bde0,0x00678382,ClearAllCommands,"int ClearAllCommands(object oObject, int nHardClear = TRUE)"
+539,COMMAND_GETCURRENTCOMMAND,0x0065bef0,0x006783ab,GetCurrentCommand,command GetCurrentCommand(object oObject)
+540,COMMAND_CLEARCURRENTCOMMAND,0x0065bf50,0x006783c1,ClearCurrentCommand,void ClearCurrentCommand(object oObject)
+541,COMMAND_GETCOMMANDTYPE,0x0066eba0,0x00678403,GetCommandType,int GetCommandType(command cCommand)
+542,COMMAND_SETCOMMANDTYPE,0x00000000,0x00678419,,
+543,COMMAND_GETCOMMANDID,0x00000000,0x00678442,,
+544,COMMAND_GETCOMMANDINT,0x0066ec70,0x00678455,GetCommandInt,"int GetCommandInt(command cCommand, int nIndex = 0)"
+545,COMMAND_SETCOMMANDINT,0x0066ed10,0x0067846b,SetCommandInt,"void SetCommandInt(command cCommand, int nCommandInt, int nIndex = 0)"
+546,COMMAND_GETCOMMANDFLOAT,0x0066edb0,0x00678481,GetCommandFloat,"float GetCommandFloat(command cCommand, int nIndex = 0)"
+547,COMMAND_SETCOMMANDFLOAT,0x0066ee60,0x00678497,SetCommandFloat,"command SetCommandFloat(command cCommand, float nCommandFloat, int nIndex = 0)"
+548,COMMAND_GETCOMMANDBOOL,0x00000000,0x006784ad,,
+549,COMMAND_SETCOMMANDBOOL,0x00000000,0x006784c0,,
+550,COMMAND_GETCOMMANDOBJECT,0x0066ef20,0x006784d3,,
+551,COMMAND_SETCOMMANDOBJECT,0x0066efc0,0x006784e9,,
+552,COMMAND_GETCOMMANDSTRING,0x00000000,0x006784ff,,
+553,COMMAND_SETCOMMANDSTRING,0x00000000,0x00678512,,
+554,COMMAND_GETCOMMANDVECTOR,0x00000000,0x00678525,,
+555,COMMAND_SETCOMMANDVECTOR,0x00000000,0x00678538,,
+558,COMMAND_COMMANDRANDOMWALK,0x00000000,0x0067854b,,
+559,COMMAND_COMMANDMOVETOLOCATION,0x0066f080,0x0067855e,CommandMoveToLocation,"command CommandMoveToLocation(location lLocation, int bRunToLocation = TRUE, int bDeactivateAtEnd = FALSE)"
+560,COMMAND_COMMANDMOVETOOBJECT,0x0066f260,0x0067858a,CommandMoveToObject,"command CommandMoveToObject(object oTarget, int bRunToLocation = TRUE, float fMinRange = 0.0f, int bUseOriginalPosition = FALSE, float fMaxRange = 0.0f)"
+561,COMMAND_COMMANDMOVEAWAYFROMOBJECT,0x0066f430,0x006785a0,CommandMoveAwayFromObject,"command CommandMoveAwayFromObject(object oTarget, float fAwayDistance, int bRunToLocation = TRUE)"
+562,COMMAND_COMMANDEQUIPITEM,0x0066f8b0,0x006785cc,CommandEquipItem,"command CommandEquipItem(object oItem, int nEquipSlot = INVENTORY_SLOT_INVALID, int nWeaponSet = INVALID_WEAPON_SET)"
+563,COMMAND_COMMANDUNEQUIPITEM,0x0066f8b0,0x006785e2,CommandUnequipItem,command CommandUnequipItem(object oItem)
+564,COMMAND_COMMANDPICKUPITEM,0x00000000,0x006785f8,,
+565,COMMAND_COMMANDPUTDOWNITEM,0x00000000,0x0067860b,,
+566,COMMAND_COMMANDATTACK,0x0066e710,0x00678660,CommandAttack,"command CommandAttack(object oTarget, int nForcedResult = COMBAT_RESULT_INVALID)"
+567,COMMAND_COMMANDSPEAKSTRING,0x00000000,0x00678676,,
+568,COMMAND_COMMANDSPEAKSTRINGBYSTRREF,0x00000000,0x00678689,,
+569,COMMAND_COMMANDPLAYANIMATION,0x0066fc20,0x0067869c,CommandPlayAnimation,"command CommandPlayAnimation(int nAnimation, int nLoops = 0, int bPlayNext = 0, int bBlendIn = 1)"
+570,COMMAND_COMMANDOPENDOOR,0x00000000,0x006786b2,,
+571,COMMAND_COMMANDCLOSEDOOR,0x00000000,0x006786c5,,
+572,COMMAND_COMMANDUNLOCK,0x00000000,0x006786d8,,
+573,COMMAND_COMMANDLOCK,0x00000000,0x006786eb,,
+574,COMMAND_COMMANDCASTSPELLATOBJECT,0x00000000,0x006786fe,,
+575,COMMAND_COMMANDCASTSPELLATLOCATION,0x00000000,0x00678711,,
+576,COMMAND_COMMANDGIVEITEM,0x00000000,0x00678724,,
+577,COMMAND_COMMANDTAKEITEM,0x00000000,0x00678737,,
+578,COMMAND_COMMANDWAIT,0x0066fdb0,0x0067874a,CommandWait,command CommandWait(float fSeconds)
+579,COMMAND_COMMANDSTARTCONVERSATION,0x0066e1f0,0x00678760,CommandStartConversation,"command CommandStartConversation(object oTarget, resource rDialogFile = R"""")"
+580,COMMAND_COMMANDJUMPTOOBJECT,0x0066fef0,0x00678776,CommandJumpToObject,command CommandJumpToObject(object oTarget)
+581,COMMAND_COMMANDJUMPTOLOCATION,0x00670010,0x0067878c,CommandJumpToLocation,command CommandJumpToLocation(location lLocation)
+582,COMMAND_COMMANDUSEABILITY,0x006701b0,0x006787a2,CommandUseAbility,"command CommandUseAbility(int nAbilityId, object oTarget=OBJECT_INVALID, vector vTarget=[0.0,0.0,0.0], float nConjureTime = -1.0, string sAbilitySourceItemTag="""")"
+583,COMMAND_COMMANDUSESKILL,0x00000000,0x006787b8,,
+584,COMMAND_COMMANDUSEITEM,0x00000000,0x006787cb,,
+585,COMMAND_COMMANDDOFUNCTION,0x006703c0,0x006787de,,
+586,COMMAND_COMMANDUSEOBJECT,0x0066f770,0x006787f4,CommandUseObject,"command CommandUseObject(object oTarget, int nAction)"
+587,COMMAND_INTERACTWITHOBJECT,0x0065c110,0x00678903,InteractWithObject,"void InteractWithObject(object oCreature, object oTarget, int nInteractionId, int nPose = 1, int nLoops = 0, int bPlayExit = 1, int bSkipReposition = 0)"
+588,COMMAND_COMMANDMOVEAWAYFROMLOCATION,0x00000000,0x0067880a,,
+589,COMMAND_COMMANDFORCEMOVETOLOCATION,0x00000000,0x0067881d,,
+590,COMMAND_COMMANDFORCEMOVETOOBJECT,0x00000000,0x00678830,,
+591,COMMAND_COMMANDFORCEFOLLOWOBJECT,0x00000000,0x00678843,,
+592,COMMAND_COMMANDEXAMINE,0x00000000,0x00678856,,
+593,COMMAND_REMOVEEFFECTSBYPARAMETERS,0x00673940,0x0067899a,RemoveEffectsByParameters,"void RemoveEffectsByParameters(object oTarget, int nType = EFFECT_TYPE_INVALID, int nAbilityId = ABILITY_INVALID, object oCreator = OBJECT_INVALID)"
+594,COMMAND_REMOVEALLEFFECTS,0x00673ab0,0x006789b0,RemoveAllEffects,"void RemoveAllEffects(object oTarget, int bIgnoreInjuries = TRUE, int bDeath = FALSE)"
+595,COMMAND_GETEFFECTVALID,0x0065d290,0x0067892c,IsEffectValid,int IsEffectValid(effect eEffect)
+596,COMMAND_APPLYEFFECTATLOCATION,0x0065c830,0x00678942,Engine_ApplyEffectAtLocation,"void Engine_ApplyEffectAtLocation(int nDurationType, effect eEffect, location lLocation, float fDuration=0.0f, object oCreator = OBJECT_SELF, int nAbilityId = 0)"
+597,COMMAND_APPLYEFFECTONOBJECT,0x0065ca20,0x00678958,Engine_ApplyEffectOnObject,"void Engine_ApplyEffectOnObject(int nDurationType, effect eEffect, object oTarget, float fDuration=0.0f, object oCreator = OBJECT_SELF, int nAbilityId = 0)"
+598,COMMAND_REMOVEEFFECT,0x00674590,0x00678984,RemoveEffect,"void RemoveEffect(object oTarget, effect eEffect)"
+599,COMMAND_TAKESCREENSHOT,0x00653700,0x006753a2,TakeScreenshot,"void TakeScreenshot(int bHideInterface = 0, int nTitleStrRef = 0, int nDescriptionStrRef = 0, int nType = 0, string sId = """")"
+600,COMMAND_SETWORLDMAPLOCATIONLOCNAME,0x006651c0,0x00678079,SetWorldMapLocationLocName,"void SetWorldMapLocationLocName(object oLocation, int nStringID)"
+601,COMMAND_GETSHOWSPECIALMOVEFLOATIES,0x00666340,0x006794c0,GetShowSpecialMoveFloaties,int GetShowSpecialMoveFloaties()
+602,COMMAND_GETGAMEPLOTASSIST,0x00666b10,0x00675526,GetGamePlotAssist,int GetGamePlotAssist()
+603,COMMAND_GETHASACHIEVEMENTBYID,0x00651cf0,0x00679544,GetHasAchievementByID,int GetHasAchievementByID(int nID)
+604,COMMAND_GETEFFECTTYPE,0x0065c270,0x006789dc,GetEffectType,int GetEffectType(effect eEffect)
+605,COMMAND_GETEFFECTFLAGS,0x0065c270,0x00678a4a,GetEffectFlags,int GetEffectFlags(effect efEffect)
+606,COMMAND_GETMELEERINGPOSITION,0x0066cac0,0x006760e7,GetMeleeRingPosition,"vector GetMeleeRingPosition(object nRingOwnerId, int nRingIndex = 0)"
+607,COMMAND_GETEFFECTANIMATION,0x0065c270,0x00678a60,GetEffectAnimation,int GetEffectAnimation(effect efEffect)
+608,COMMAND_GETEFFECTDURATIONTYPE,0x0065c270,0x006789f2,GetEffectDurationType,int GetEffectDurationType(effect eEffect)
+609,COMMAND_SETEFFECTFLAGS,0x0065c360,0x00678aa2,SetEffectFlags,"effect SetEffectFlags(effect efEffect, int nFlags)"
+610,COMMAND_ISABILITYAVAILABLE,0x0065a690,0x00676464,IsAbilityAvailable,"int IsAbilityAvailable(object oCreature, int nAbility)"
+611,COMMAND_SETEFFECTANIMATION,0x0065c360,0x00678ab8,SetEffectAnimation,"effect SetEffectAnimation(effect efEffect, int nAnimation)"
+612,COMMAND_GETEFFECTCREATOR,0x0065c270,0x00678a08,GetEffectCreator,object GetEffectCreator(effect eEffect)
+613,COMMAND_SETEFFECTCREATOR,0x0065c360,0x00678a1e,SetEffectCreator,"effect SetEffectCreator(effect eEffect, object oCreator)"
+614,COMMAND_GETEFFECTID,0x0065c270,0x00678a34,GetEffectID,int GetEffectID(effect eEffect)
+615,COMMAND_GETABILITYCOUNT,0x00668a20,0x006764a6,GetAbilityCount,"int GetAbilityCount(object oCreature, int nType = 0, int nGUIType = 0)"
+616,COMMAND_UNLOCKACHIEVEMENTBYID,0x00651be0,0x00679518,UnlockAchievementByID,void UnlockAchievementByID(int nID)
+617,COMMAND_INCREMENTACHIEVEMENTCOUNT,0x00651e20,0x00679570,IncrementAchievementCountByID,"int IncrementAchievementCountByID(int nID, int nIncrement = 1)"
+618,COMMAND_GETACHIEVEMENTCOUNT,0x00666810,0x0067955a,GetAchievementCountByID,int GetAchievementCountByID(int nID)
+619,COMMAND_SHOWALLCODEXENTRIES,0x006658b0,0x0067938c,ShowAllCodexEntries,void ShowAllCodexEntries()
+620,COMMAND_GETEFFECTABILITYID,0x0065c270,0x00678a76,GetEffectAbilityID,int GetEffectAbilityID(effect efEffect)
+621,COMMAND_SETEFFECTABILITYID,0x0065c360,0x00678a8c,SetEffectAbilityID,"effect SetEffectAbilityID(effect efEffect, int nAbilityId)"
+622,COMMAND_GETFOLLOWERAPPROVAL,0x00661190,0x00677074,GetFollowerApproval,int GetFollowerApproval(object oFollower)
+623,COMMAND_GETCLASSRANK,0x0065f510,0x006765ee,GetClassRank,"int GetClassRank(object oCreature, int nClass)"
+624,COMMAND_GETPARTYLEADER,0x0066ac20,0x006770b6,GetPartyLeader,object GetPartyLeader()
+625,COMMAND_SETPARTYLEADER,0x00661320,0x006770cc,SetPartyLeader,void SetPartyLeader(object oLeader)
+626,COMMAND_CLEARAMBIENTDIALOGS,0x006510f0,0x00677850,ClearAmbientDialogs,int ClearAmbientDialogs(object oObject = OBJECT_INVALID)
+627,COMMAND_SETCHEATUSEDFLAG,0x00665890,0x00679376,SetCheatUsedFlag,void SetCheatUsedFlag()
+628,COMMAND_ISCOMMANDPLAYERISSUED,0x00651090,0x0067832d,GetCommandIsPlayerIssued,int GetCommandIsPlayerIssued(command oNode)
+629,COMMAND_GETHASACHIEVEMENT,0x00651cf0,0x0067952e,GetHasAchievement,int GetHasAchievement(string sAchievementID)
+630,COMMAND_SENDTELEMTRY,0x00652170,0x006795b2,SendOnlineTelemetry,"void SendOnlineTelemetry(int nModuleID, int nGroupID, string sTelemetryText)"
+631,COMMAND_UPLOADSCREENSHOT,0x0066c580,0x006795c8,SendOnlineScreenShot,"void SendOnlineScreenShot(string sFileName, string sShortDescription, string sLongDescription)"
+632,COMMAND_BEGINSLIDESHOW,0x0065dc30,0x0067783a,BeginSlideshow,void BeginSlideshow(resource rConversation)
+633,COMMAND_GETCANLEVELUP,0x0066b8a0,0x00679074,GetCanLevelUp,int GetCanLevelUp(object oCreature)
+634,COMMAND_EFFECTAREAOFEFFECT,0x00662610,0x00678c70,EffectAreaOfEffect,"effect EffectAreaOfEffect(int nId, resource rScript, int nAoEVfx=0)"
+635,COMMAND_EFFECTVISUALEFFECT,0x0065d300,0x00678c86,ApplyEffectVisualEffect,"void ApplyEffectVisualEffect(object oCreator, object oTarget, int nVFXId, int nDurationType, float fDuration, int nAbilityId = ABILITY_INVALID)"
+636,COMMAND_OPENITEMUPGRADEGUI,0x0065ac40,0x0067792c,OpenItemUpgradeGUI,void OpenItemUpgradeGUI()
+637,COMMAND_BACKGROUNDDEFAULTSINDEX,0x0066c500,0x0067661a,GetBackgroundDefaultsIndex,int GetBackgroundDefaultsIndex(object oCreature)
+638,COMMAND_UNLOCKACHIEVEMENT,0x00651be0,0x00679502,UnlockAchievement,void UnlockAchievement(string sAchievementID)
+639,COMMAND_UPDATESTAT,0x00651ec0,0x00679586,UpdateOnlineStatistic,"void UpdateOnlineStatistic(string sStatName, int nUpdateType, int nUpdatePeriod, float fStatValue, string sStatText)"
+640,COMMAND_GETSTAT,0x00652050,0x0067959c,GetOnlineStatistic,"float GetOnlineStatistic(string sStatName, int nPeriodType)"
+641,COMMAND_ISITEMSTEALABLE,0x00668a20,0x00676d46,IsItemStealable,int IsItemStealable(object oItem)
+642,COMMAND_SETCREATUREISSTATUE,0x0066be50,0x006767fc,SetCreatureIsStatue,"void SetCreatureIsStatue(object oObject, int value)"
+643,COMMAND_SETCREATUREISGHOST,0x0066be50,0x006767e6,SetCreatureIsGhost,"void SetCreatureIsGhost(object oObject, int value)"
+644,COMMAND_COMMANDMOVETOMULTILOCATIONS,0x00673280,0x00678574,CommandMoveToMultiLocations,"command CommandMoveToMultiLocations(location [] lLocations, int bRunToLocation = TRUE , int nStartingWP = 0, int bLoop = FALSE)"
+645,COMMAND_SETITEMDAMAGED,0x0066be50,0x00676d1a,SetItemDamaged,"void SetItemDamaged(object oObject, int value)"
+646,COMMAND_GETITEMDAMAGED,0x00668a20,0x00676d30,GetItemDamaged,int GetItemDamaged(object oObject)
+647,COMMAND_LOADCUTSCENE,0x0066d230,0x00678d8e,LoadCutscene,"void LoadCutscene(resource rCutscene, object oPlayer, int bPlayImmediately, string[] aTargetTagsToReplace, object[] aReplacementObjects, int bActorsHaveWeapons)"
+648,COMMAND_PLAYCUTSCENE,0x00651240,0x00678da4,PlayCutscene,void PlayCutscene(object oPlayer = OBJECT_INVALID)
+649,COMMAND_SETAREAPROPERTIES,0x00000000,0x00676851,SetMapPatchState,"void SetMapPatchState(object oMapPatch, int nState)"
+650,COMMAND_SETMAXITEMSTACKSIZE,0x00000000,0x00676bd6,GetMapPatchState,int GetMapPatchState(object oMapPatch)
+652,COMMAND_SETMAPPINSTATE,0x0065ed90,0x00678dd0,SetMapPinState,"void SetMapPinState(object oMapPin, int nEnable)"
+653,COMMAND_GETMAPPINSTATE,0x0065ee00,0x00678de6,GetMapPinState,int GetMapPinState(object oMapPin)
+655,COMMAND_SETEFFECTENGINEINTEGER,0x00660650,0x00678c2e,SetEffectEngineInteger,"effect SetEffectEngineInteger(effect efEffect, int nIndex, int nValue)"
+656,COMMAND_GETORIENTATION,0x00655290,0x0067558e,GetOrientation,vector GetOrientation(object oTarget)
+657,COMMAND_SETORIENTATION,0x00655340,0x006755a4,SetOrientation,"void SetOrientation(object oTarget, vector vOrientation)"
+658,COMMAND_SETLOCATIONFACING,0x0065b6f0,0x00677a34,SetLocationFacing,"location SetLocationFacing(location lLocation, float fAngle)"
+659,COMMAND_GETSAFELOCATION,0x0065b0d0,0x00677984,GetSafeLocation,location GetSafeLocation(location lLocation)
+660,COMMAND_GETPARTYPLOTFLAG,0x00660200,0x00678dfc,GetPartyPlotFlag,"int GetPartyPlotFlag(object oParty, string strPlot, int nFlag, int nCallScript = FALSE)"
+661,COMMAND_SETPARTYPLOTFLAG,0x0065fb90,0x00678e12,SetPartyPlotFlag,"void SetPartyPlotFlag(object oParty, string strPlot, int nFlag, int nValue, int nCallScript = FALSE)"
+662,COMMAND_GETPARTYPLOTVAR,0x00660200,0x00678e28,,
+663,COMMAND_SETPARTYPLOTVAR,0x0065fb90,0x00678e3e,,
+664,COMMAND_GETPLOTENTRY2DA,0x00000000,0x00678eee,,
+665,COMMAND_GETPLOTNAME,0x00660390,0x00678f01,GetPlotEntryName,int GetPlotEntryName(string strPlot)
+666,COMMAND_GETPLOTPRIORITY,0x00000000,0x00678f17,,
+667,COMMAND_GETM2DAINT,0x006544f0,0x00675443,GetM2DAInt,"int GetM2DAInt(int n2DA, string sColumn, int nRow, string s2da = """")"
+669,COMMAND_RESETREACTION,0x0065bbe0,0x00677afa,ResetReaction,void ResetReaction(object oObject)
+672,COMMAND_SPAWNBODYBAG,0x0065e3a0,0x006781d3,SpawnBodyBag,"void SpawnBodyBag(object oCreature,int bForce = FALSE)"
+673,COMMAND_GETALLOBJECTSINSHAPE,0x00670eb0,0x006760a5,GetObjectsInShape,"object[] GetObjectsInShape(int nObjectTypeMask, int nShapeId, location lLocation, float fA, float fB = 0.0f, float fC = 0.0f, int bExcludeDead = FALSE)"
+674,COMMAND_WARNING,0x0064e450,0x006752e2,Warning,void Warning(string sWarning)
+675,COMMAND_GETITEMPOSSESSEDBY,0x0065cba0,0x00677386,GetItemPossessedBy,"object GetItemPossessedBy(object oObject, string sTag)"
+676,COMMAND_SETINTERACTIVE,0x0066be50,0x0067616b,SetObjectInteractive,"void SetObjectInteractive(object oObject, int value)"
+677,COMMAND_GETINTERACTIVE,0x00668a20,0x00676181,GetObjectInteractive,int GetObjectInteractive(object oObject)
+680,COMMAND_PROBE,0x0064e8b0,0x006752f8,Probe,"void Probe(string sOutput, float fValue = 0)"
+681,COMMAND_GETCURRENTEFFECT,0x006604d0,0x00678ace,GetCurrentEffect,effect GetCurrentEffect()
+682,COMMAND_SETISCURRENTEFFECTVALID,0x00660580,0x00678ae4,SetIsCurrentEffectValid,void SetIsCurrentEffectValid(int nValid=TRUE)
+683,COMMAND_GETEFFECTINTEGER,0x00651270,0x00678afa,GetEffectInteger,"int GetEffectInteger(effect efEffect, int nIndex)"
+684,COMMAND_SETEFFECTINTEGER,0x00651430,0x00678b52,SetEffectInteger,"effect SetEffectInteger(effect efEffect, int nIndex, int nValue)"
+685,COMMAND_GETEFFECTFLOAT,0x00651270,0x00678b10,GetEffectFloat,"float GetEffectFloat(effect efEffect, int nIndex)"
+686,COMMAND_SETEFFECTFLOAT,0x00651430,0x00678b68,SetEffectFloat,"effect SetEffectFloat(effect efEffect, int nIndex, float fValue)"
+687,COMMAND_GETEFFECTOBJECT,0x00651270,0x00678b26,GetEffectObject,"object GetEffectObject(effect efEffect, int nIndex)"
+688,COMMAND_SETEFFECTOBJECT,0x00651430,0x00678b7e,SetEffectObject,"effect SetEffectObject(effect efEffect, int nIndex, object oValue)"
+689,COMMAND_GETEFFECTSTRING,0x00651270,0x00678b3c,GetEffectString,"string GetEffectString(effect efEffect, int nIndex)"
+690,COMMAND_SETEFFECTSTRING,0x00651430,0x00678b94,SetEffectString,"effect SetEffectString(effect efEffect, int nIndex, string sValue)"
+691,COMMAND_SETATTACKRESULT,0x0065de40,0x00678191,SetAttackResult,"void SetAttackResult(object oAttacker, int nResult1, effect eDamageEffect1, int nResult2, effect eDamageEffect2)"
+693,COMMAND_GETWEAPONATTACKRATING,0x0066a3b0,0x00678123,GetWeaponAttackRating,"float GetWeaponAttackRating(object oAttacker, int nRightHandWeapon = TRUE)"
+694,COMMAND_GETPLATFORM,0x00651ab0,0x00679360,GetPlatform,int GetPlatform()
+695,COMMAND_RETRIEVEATTACKIMPACTDAMAGEEFFECT,0x0065e180,0x006781bd,GetAttackImpactDamageEffect,"effect GetAttackImpactDamageEffect(object oAttacker, int nDamageEffectId)"
+696,COMMAND_WORLDMAPSTARTTRAVELLING,0x00665060,0x0067804d,WorldMapStartTravelling,"void WorldMapStartTravelling(string sRandomEncounterArea="""", string sRandomEncounterWaypointTag="""", object oSourceLocationOverride = OBJECT_INVALID)"
+697,COMMAND_WORLDMAPCOMPLETERANDOMENCOUNTER,0x006651a0,0x00678063,WorldMapCompleteRandomEncounter,void WorldMapCompleteRandomEncounter()
+698,COMMAND_SETBODYBAG_DECAY_DELAY,0x0066be50,0x00676828,SetBodybagDecayDelay,"void SetBodybagDecayDelay(object oBodybag, int nMilliSec)"
+699,COMMAND_GETWEAPONBASEDAMAGE,0x0066a3b0,0x00678139,GetWeaponBaseDamage,"int GetWeaponBaseDamage(object oAttacker, int nRightHandWeapon = TRUE)"
+700,COMMAND_GETCREATURESTRENGTHMODIFIER,0x0066a3b0,0x0067814f,DEPRECATED_GetCreatureStrengthModifier,int DEPRECATED_GetCreatureStrengthModifier(object oAttacker)
+701,COMMAND_GETWEAPONSTRENGTHMODIFIER,0x0066a3b0,0x00678165,GetWeaponStrengthModifier,"float GetWeaponStrengthModifier(object oAttacker, int nRightHandWeapon = TRUE)"
+702,COMMAND_SETCREATURES_TIME_BEFORE_DECAY,0x00665630,0x00676812,SetCreaturesGlobalMaxTimeBeforeDecay,void SetCreaturesGlobalMaxTimeBeforeDecay(int nMilliSec)
+703,COMMAND_GETWEAPONARMOURPENETRATION,0x0066a3b0,0x0067817b,GetWeaponArmorPenetration,"float GetWeaponArmorPenetration(object oAttacker, object oTarget, int nRightHandWeapon = TRUE)"
+704,COMMAND_CONSOLECOMMAND,0x0064e990,0x006754e4,DEBUG_ConsoleCommand,string DEBUG_ConsoleCommand(string sArg)
+705,COMMAND_GETTIME,0x00653c50,0x0067530e,GetTime,int GetTime()
+706,COMMAND_SETFOLLOWERSTATE,0x0065e6e0,0x00676f14,SetFollowerState,"void SetFollowerState(object oCreature, int nState)"
+707,COMMAND_GETOBJECTSINAREA,0x00672cc0,0x00676864,GetObjectsInArea,"object[] GetObjectsInArea(object oArea, string sTag = """")"
+708,COMMAND_GETARRAYSIZE,0x006608f0,0x00678f56,GetArraySize,int GetArraySize(any array)
+712,COMMAND_GETEFFECTS,0x00673d70,0x00678baa,GetEffects,"effect[] GetEffects(object oObject, int nEffectType = EFFECT_TYPE_INVALID, int nAbilityId = 0, object oCreator = OBJECT_INVALID, int nDurationType = EFFECT_DURATION_TYPE_INVALID, int nEffectId = -1)"
+713,COMMAND_GETEFFECTSBYCREATOR,0x00673fb0,0x00678bec,GetEffectsByCreator,"effect[] GetEffectsByCreator(object oCreator, int nAbilityID = ABILITY_INVALID, int nType = 0)"
+714,COMMAND_ISCONTROLLED,0x00660c90,0x00676fc4,IsControlled,int IsControlled(object oObject)
+715,COMMAND_SETABILITYRESULT,0x0065e050,0x006781a7,SetAbilityResult,"void SetAbilityResult(object oUser, int nResistanceCheckResult = RESISTANCE_CHECK_INVALID, int nProjectileTarget = PROJECTILE_TARGET_INVALID)"
+716,COMMAND_SETCOMMANDRESULT,0x0065c0b0,0x00678869,SetCommandResult,"void SetCommandResult(object oObject, int nResult)"
+719,COMMAND_GETCREATUREGORELEVEL,0x0065d5d0,0x00676762,GetCreatureGoreLevel,float GetCreatureGoreLevel(object oCreature)
+720,COMMAND_SETCREATUREGORELEVEL,0x0065d650,0x00676778,SetCreatureGoreLevel,"void SetCreatureGoreLevel(object oCreature, float fGoreLevel)"
+721,COMMAND_COMMANDDOEVENT,0x006704d0,0x0067887f,,
+722,COMMAND_SHOWSPECUNLOCKEDNOTIFICATION,0x00663b80,0x0067922c,ShowSpecUnlockedNotification,void ShowSpecUnlockedNotification(int nSpecID)
+723,COMMAND_SHOWAREAUNLOCKEDNOTIFICATION,0x00663bd0,0x00679242,ShowAreaUnlockedNotification,"void ShowAreaUnlockedNotification(string sAreaName, string sImage = """")"
+724,COMMAND_GETCOMMANDQUEUESIZE,0x0066d1c0,0x006783ed,GetCommandQueueSize,int GetCommandQueueSize(object oObject)
+725,COMMAND_SETMODALABILITY,0x00669e80,0x006780f7,Engine_SetModalAbilityGUI,"void Engine_SetModalAbilityGUI(object oCreature, int nAbilityId, int nStatus)"
+726,COMMAND_ISMODALABILITYACTIVE,0x0066dd80,0x0067810d,IsModalAbilityActive,"int IsModalAbilityActive(object oCreature, int nAbilityId)"
+727,COMMAND_SETEFFECTENGINEVECTOR,0x00660650,0x00678c5a,SetEffectEngineVector,"effect SetEffectEngineVector(effect efEffect, int nIndex, vector vVector)"
+728,COMMAND_GETFOLLOWERWOULDBELOCATION,0x00666650,0x0067710e,GetFollowerWouldBeLocation,location GetFollowerWouldBeLocation(object oObject)
+730,COMMAND_GETCOMMANDPRIORITY,0x0066ec10,0x0067842c,GetCommandPriority,int GetCommandPriority(command cCommand)
+731,COMMAND_ISCONJURING,0x00659cc0,0x00676037,IsConjuring,int IsConjuring(object oObject)
+732,COMMAND_RESOURCETOSTRING,0x00655e90,0x0067591a,ResourceToString,string ResourceToString(resource rRes)
+733,COMMAND_PRINTRESOURCE,0x00653650,0x00675360,PrintResource,"void PrintResource(resource rResource, int bPrepend = FALSE)"
+734,COMMAND_SETEVENTRESOURCE,0x006591d0,0x00675d1b,SetEventResource,"event SetEventResource(event evEvent, int nIndex, resource rValue)"
+735,COMMAND_GETEVENTRESOURCE,0x00659090,0x00675d05,GetEventResource,"resource GetEventResource(event evEvent, int nIndex)"
+736,COMMAND_GETLOCALRESOURCE,0x00657980,0x00675abc,GetLocalResource,"resource GetLocalResource(object oObject, string sVarName)"
+737,COMMAND_SETLOCALRESOURCE,0x00657b40,0x00675ad2,SetLocalResource,"void SetLocalResource(object oObject, string sVarName, resource sResource)"
+738,COMMAND_GETCREATUREPROPERTY,0x0066d0e0,0x006763bd,GetCreatureProperty,"float GetCreatureProperty(object oCreature, int nProperty, int nValueType = PROPERTY_VALUE_TOTAL)"
+739,COMMAND_GETCREATUREPROPERTYTYPE,0x0066d120,0x006763d3,GetCreaturePropertyType,"int GetCreaturePropertyType(object oCreature, int nProperty)"
+740,COMMAND_SETCREATUREPROPERTY,0x00669890,0x006763e9,SetCreatureProperty,"void SetCreatureProperty(object oCreature, int nProperty, float fNewValue, int nValueType = PROPERTY_VALUE_BASE)"
+741,COMMAND_UPDATECREATUREPROPERTY,0x006699c0,0x006763ff,UpdateCreatureProperty,"void UpdateCreatureProperty(object oCreature, int nProperty, float fNewValue, int nValueType)"
+742,COMMAND_GETPLOTRESREF,0x0065fd30,0x00678e54,GetPlotResRef,string GetPlotResRef(string strPlot)
+743,COMMAND_GETPLOTFLAGNAME,0x0065ffb0,0x00678e80,GetPlotFlagName,"string GetPlotFlagName(string strPlot, int nFlag)"
+744,COMMAND_DISPLAYFLOATYMESSAGE,0x00662180,0x00678f82,DisplayFloatyMessage,"void DisplayFloatyMessage(object oCreature, string sMessage, int nStyle = FLOATY_MESSAGE, int nColour = 16777215, float nDuration = 0.5)"
+745,COMMAND_DOAREATRANSITION,0x0065f5f0,0x0067687a,DoAreaTransition,"int DoAreaTransition(string sArea, string sWaypointTag)"
+746,COMMAND_STARTCHARGEN,0x0066b0e0,0x00678fae,StartCharGen,"void StartCharGen(object oCreature, int nMode = 0, int nImportEnabled = FALSE)"
+747,COMMAND_DISPLAYSTATUSMESSAGE,0x006623e0,0x00678fda,DisplayStatusMessage,"void DisplayStatusMessage(string sMessage, int nColour = 16777215)"
+748,COMMAND_SETQUICKSLOT,0x0066b690,0x00678ff0,SetQuickslot,"void SetQuickslot(object oCreature, int nSlot, int nAbilityID, string sItemTag = """")"
+749,COMMAND_SHOWFLOATYICON,0x00662db0,0x00679048,ShowFloatyIcon,"void ShowFloatyIcon(object oCreature, string sIconName)"
+750,COMMAND_SETSTORYPLOT,0x00663da0,0x00678eac,SetStoryPlot,void SetStoryPlot(string sPlot)
+751,COMMAND_SETPLOTGIVER,0x00663e90,0x00678ec2,SetPlotGiver,"void SetPlotGiver(object oid, int bIsPlotGiver)"
+752,COMMAND_SETWORLDMAPGUISTATUS,0x00664eb0,0x00677f87,SetWorldMapGuiStatus,void SetWorldMapGuiStatus(int nStatus)
+753,COMMAND_SETWORLDMAPLOCATIONSTATUS,0x0066dc90,0x00677f9d,SetWorldMapLocationStatus,"void SetWorldMapLocationStatus(object oLocation, int nStatusId, int bSuppressActiveFlash = FALSE)"
+754,COMMAND_SETWORLDMAPPLAYERLOCATION,0x00664ef0,0x00677fb3,SetWorldMapPlayerLocation,"void SetWorldMapPlayerLocation(object oMap, object oLocation)"
+755,COMMAND_SETWORLDMAPPRIMARY,0x00664f50,0x00677fc9,SetWorldMapPrimary,void SetWorldMapPrimary(object oMapId)
+756,COMMAND_SETWORLDMAPSECONDARY,0x00664f90,0x00677fdf,SetWorldMapSecondary,void SetWorldMapSecondary(object oMapId)
+757,COMMAND_OPENPRIMARYWORLDMAP,0x00664fd0,0x00677ff5,OpenPrimaryWorldMap,void OpenPrimaryWorldMap()
+758,COMMAND_SETSTEALTHENABLED,0x0066be50,0x0067931e,SetStealthEnabled,"void SetStealthEnabled(object oCreature, int nEnabled)"
+759,COMMAND_GETSTEALTHENABLED,0x00668a20,0x00679334,GetStealthEnabled,int GetStealthEnabled(object oCreature)
+760,COMMAND_SETCANLEVELUP,0x00662ea0,0x0067905e,SetCanLevelUp,"void SetCanLevelUp(object oPartyMember, int bCanLevelUp = 0)"
+761,COMMAND_SETEFFECTENGINEFLOAT,0x00660650,0x00678c18,SetEffectEngineFloat,"effect SetEffectEngineFloat(effect efEffect, int nIndex, float fValue)"
+762,COMMAND_SETEFFECTENGINEOBJECT,0x00660650,0x00678c44,SetEffectEngineObject,"effect SetEffectEngineObject(effect efEffect, int nIndex, object oValue)"
+763,COMMAND_GETCOMBATANTTYPE,0x00664640,0x006765ac,GetCombatantType,int GetCombatantType(object oidCreature)
+764,COMMAND_SETCREATURECANBETRACKED,0x0066be50,0x006793b8,SetCreatureCanBeTracked,"void SetCreatureCanBeTracked(object oCreature, int nEnabled)"
+765,COMMAND_GETCREATURECANBETRACKED,0x00668a20,0x006793ce,GetCreatureCanBeTracked,int GetCreatureCanBeTracked(object oCreature)
+766,COMMAND_SETCREATURERANK,0x00664520,0x00676580,SetCreatureRank,"void SetCreatureRank(object oCreature, int nRank)"
+767,COMMAND_RANDOMFLOAT,0x0064eb20,0x0067562f,RandomFloat,float RandomFloat()
+768,COMMAND_GETFOLLOWPARTYLEADER,0x0065ebc0,0x00676f82,GetFollowPartyLeader,int GetFollowPartyLeader(object oCreature)
+769,COMMAND_SETFOLLOWPARTYLEADER,0x0065ec30,0x00676f98,SetFollowPartyLeader,"void SetFollowPartyLeader(object oCreature, int bFollow)"
+770,COMMAND_DISPLAYPORTRAITMESSAGE,0x00661f40,0x00678f6c,DisplayPortraitMessage,"void DisplayPortraitMessage(object oPlayerCreature, string sMessage, int nColour = 16777215)"
+771,COMMAND_SHOWDEATHSCREEN,0x00660d60,0x00676fda,ShowDeathScreen,void ShowDeathScreen(int bCaptured)
+772,COMMAND_GETNUMTACTICS,0x0066d580,0x0067717c,GetNumTactics,int GetNumTactics(object oCreature)
+773,COMMAND_SETNUMTACTICS,0x0066d600,0x00677192,SetNumTactics,"void SetNumTactics(object oCreature, int nNumTactics, int bSendNotification = FALSE)"
+774,COMMAND_ISTACTICENABLED,0x0066acc0,0x006771a8,IsTacticEnabled,"int IsTacticEnabled(object oCreature, int nIndex)"
+775,COMMAND_GETTACTICTARGETTYPE,0x0066ad80,0x006771be,GetTacticTargetType,"int GetTacticTargetType(object oCreature, int nIndex)"
+776,COMMAND_GETTACTICCONDITION,0x0066aea0,0x006771ea,GetTacticCondition,"int GetTacticCondition(object oCreature, int nIndex)"
+777,COMMAND_GETTACTICCOMMAND,0x0066afc0,0x00677216,GetTacticCommand,"int GetTacticCommand(object oCreature, int nIndex)"
+778,COMMAND_GETTACTICCOMMANDPARAM,0x0066b050,0x0067722c,GetTacticCommandParam,"int GetTacticCommandParam(object oCreature, int nIndex)"
+779,COMMAND_OPENCHANTERSGUI,0x00662f40,0x006790e2,ShowChantersGUI,void ShowChantersGUI(int nBoardID)
+780,COMMAND_ADDITEMVFX,0x0065d4a0,0x00678c9c,AddItemVisualEffect,"void AddItemVisualEffect(object oTarget, int nVFXId)"
+781,COMMAND_GETITEMVFXS,0x00673be0,0x00678cb2,GetItemVisualEffectsIDs,int[] GetItemVisualEffectsIDs(object oTarget)
+782,COMMAND_REMOVEITEMVFX,0x006747f0,0x00678cc8,RemoveItemVisualEffect,"void RemoveItemVisualEffect(object oTarget, int nId)"
+783,COMMAND_REMOVEALLITEMVFXS,0x006748e0,0x00678cde,RemoveAllItemVisualEffects,void RemoveAllItemVisualEffects(object oTarget)
+784,COMMAND_GETITEMPROPERTYPOWER,0x00665570,0x00676e7a,GetItemPropertyPower,"int GetItemPropertyPower(object oItem, int nPropertyId, int bIncludeSubItems)"
+787,COMMAND_ISPARTYAIENABLED,0x0066ac60,0x00677166,IsPartyAIEnabled,int IsPartyAIEnabled(object oCreature)
+788,COMMAND_SHOWGENERALSCOREBOARDGUI,0x00663030,0x006790f8,ShowGeneralScoreboardGUI,void ShowGeneralScoreboardGUI()
+789,COMMAND_SHOWCHAMPIONSHIPSCOREBOARDGUI,0x006630d0,0x0067910e,ShowChampionshipScoreboardGUI,void ShowChampionshipScoreboardGUI()
+790,COMMAND_SHOWTOURNAMENTSCOREBOARDGUI,0x00663170,0x00679124,ShowTournamentScoreboardGUI,void ShowTournamentScoreboardGUI()
+791,COMMAND_ADDGENERALSCOREBOARDENTRY,0x00663210,0x0067913a,AddGeneralScoreboardEntry,"void AddGeneralScoreboardEntry(string sName, int nVictories, int nDefeats, int nFatalities, int bQualified, int bDead)"
+792,COMMAND_SETCHAMPIONSHIPSCOREBOARDENTRY,0x00663380,0x00679150,SetChampionshipScoreboardEntry,"void SetChampionshipScoreboardEntry(int nEntryID, string sName, int bWinner, int bIsPlayer)"
+793,COMMAND_SETTOURNAMENTSCOREBOARDENTRY,0x006634b0,0x00679166,SetTournamentScoreboardEntry,"void SetTournamentScoreboardEntry(int nEntryID, string sName, int bDefeated, int bIsPlayer)"
+794,COMMAND_SHOWPARTYPICKERGUI,0x006635e0,0x0067917c,ShowPartyPickerGUI,void ShowPartyPickerGUI()
+795,COMMAND_SETPLOTACTIONSENABLED,0x00665930,0x006793fa,SetPlotActionsEnabled,void SetPlotActionsEnabled(int nEnabled)
+796,COMMAND_SETPLOTACTIONSTATE,0x00665980,0x00679410,SetPlotActionState,"void SetPlotActionState(int nPlotActionId, int nPlotActionState)"
+797,COMMAND_GETPLOTACTIONSTATE,0x006659e0,0x00679426,GetPlotActionState,int GetPlotActionState(int nPlotActionId)
+798,COMMAND_SETPLOTACTIONCOUNT,0x00665a50,0x0067943c,SetPlotActionCount,"void SetPlotActionCount(int nPlotActionId, int nPlotActionCount)"
+799,COMMAND_GETPLOTACTIONCOUNT,0x00665ab0,0x00679452,GetPlotActionCount,int GetPlotActionCount(int nPlotActionId)
+800,COMMAND_SETATMOSPHERE,0x00664a10,0x0067929a,SetAtmosphere,"void SetAtmosphere(int nParamId, float fParamValue)"
+801,COMMAND_SETATMOSPHERE_RGB,0x00664d60,0x006792b0,SetAtmosphereRGB,"void SetAtmosphereRGB(int nParamId, float fRedValue, float fGreenValue, float fBlueValue)"
+802,COMMAND_RESETATMOSPHERE,0x00664e80,0x006792c6,ResetAtmosphere,void ResetAtmosphere()
+803,COMMAND_FB_SETEFFECTRESOURCE,0x00651880,0x006792dc,FB_SetEffectResource,"void FB_SetEffectResource(string sEID, string sResID, float fResValue)"
+804,COMMAND_FB_SETEFFECTENABLED,0x006519b0,0x006792f2,FB_SetEffectEnabled,"void FB_SetEffectEnabled(string sEID, int nEnabled)"
+805,COMMAND_SETLOOKATENABLED,0x0066be50,0x00679308,SetLookAtEnabled,"void SetLookAtEnabled(object oCreature, int nEnabled)"
+806,COMMAND_SETTEAMID,0x0065bc30,0x00677b10,SetTeamId,"void SetTeamId(object oObject, int nTeamId)"
+807,COMMAND_GETTEAMID,0x0065bcd0,0x00677b26,GetTeamId,int GetTeamId(object oObject)
+808,COMMAND_GETTEAM,0x0066e570,0x00677b3c,GetTeam,"object[] GetTeam(int nTeamId, int nMembersType = OBJECT_TYPE_CREATURE)"
+809,COMMAND_READINIENTRY,0x00674e90,0x0067934a,ReadIniEntry,"string ReadIniEntry(string sHeadingLabel,string sValueLabel)"
+810,COMMAND_SETPLOTACTIONSET,0x006658e0,0x006793e4,SetPlotActionSet,void SetPlotActionSet(int nPlotActionSet)
+811,COMMAND_COMMANDFLY,0x0066f5c0,0x006785b6,CommandFly,command CommandFly(location lLocation)
+812,COMMAND_CANUSEITEM,0x00665710,0x00676cee,CanUseItem,"int CanUseItem(object oCreature, object oItem)"
+813,COMMAND_SETCRREATURECANUSEITEM,0x0066be50,0x00676d04,SetCanUseItem,"void SetCanUseItem(object oCreature, int value)"
+814,COMMAND_SETCONTROLLABLE,0x00660ff0,0x00677032,SetControllable,"void SetControllable(object oFollower, int nIsControllable)"
+815,COMMAND_SETPRIMARYCONTROLLED,0x00661050,0x00677048,SetPrimaryControlled,void SetPrimaryControlled(object oFollower)
+816,COMMAND_GETCONDITIONEDABILITIES,0x006743a0,0x0067822b,GetConditionedAbilities,"int[] GetConditionedAbilities(object oCreature, int nConditions)"
+817,COMMAND_GETPLACEABLETREASURECATEGORY,0x0065f280,0x00676add,GetPlaceableTreasureCategory,int GetPlaceableTreasureCategory(object oPlaceable)
+818,COMMAND_GETPLACEABLETREASURERANK,0x0065f220,0x00676ac7,GetPlaceableTreasureRank,int GetPlaceableTreasureRank(object oPlaceable)
+819,COMMAND_CANUSECONDITIONEDABILITY,0x0066c1f0,0x00678241,CanUseConditionedAbility,"int CanUseConditionedAbility(object oCreature, int nAbility, int nConditions = 4294967295)"
+820,COMMAND_SCREENSHOT,0x0064e7b0,0x006753b8,Screenshot,"void Screenshot(string sFileName = """", string sPath = """", int bHideConsole = FALSE)"
+821,COMMAND_GETITEMSUBITEMS,0x00670be0,0x00676d72,GetItemSubItems,object[] GetItemSubItems(object oItem)
+822,COMMAND_ADDITEMSUBITEM,0x00654e40,0x00676d88,,
+823,COMMAND_REMOVEITEMSUBITEM,0x00654f30,0x00676d9e,,
+824,COMMAND_SETROAMLOCATION,0x00666a10,0x006788c1,SetRoamLocation,"void SetRoamLocation(object oCreature, location lLocation)"
+825,COMMAND_SETROAMRADIUS,0x00666ab0,0x006788d7,SetRoamRadius,"void SetRoamRadius(object oCreature, float fRadius)"
+826,COMMAND_GETROAMLOCATION,0x006668d0,0x006788ed,GetRoamLocation,location GetRoamLocation(object oCreature)
+827,COMMAND_GETCREATUREBODYBAG,0x0065f3d0,0x00676b09,GetCreatureBodyBag,object GetCreatureBodyBag(object oCreature)
+828,COMMAND_GETPRCENABLED,0x0066d6d0,0x006795f4,GetPRCEnabled,"int GetPRCEnabled(string sPRCName = """")"
+829,COMMAND_SETFOLLOWERAPPROVALDESCRIPTION,0x00661250,0x006770a0,SetFollowerApprovalDescription,"void SetFollowerApprovalDescription(object oFollower, int nDescStrRef)"
+830,COMMAND_GETTIMEPLAYEDSECOND,0x00666b40,0x00677d9a,GetPlayTime,int GetPlayTime()
+831,COMMAND_BUYDOWNLOAD,0x00666b80,0x0067960a,BuyDownload,"int BuyDownload(string sOfferId = """")"
+832,COMMAND_SAVEGAMEPOSTCAMPAIGN,0x00660be0,0x00677f71,SaveGamePostCampaign,void SaveGamePostCampaign()
+833,COMMAND_EFFECTDAMAGE,0x00662870,0x00678cf4,EffectDamage,"effect EffectDamage(float fValue, int nDamageType = 1, int nFlags = 0, int nImpactVFX = 0)"
+834,COMMAND_EFFECTIMPACT,0x00662a00,0x00678d0a,EffectImpact,"effect EffectImpact(float fDamage, object oWeapon, int nVfx = 0, int nAbi = 0, int nDamageType = 1)"
+835,COMMAND_EFFECTMODIFYPROPERTY,0x00662bb0,0x00678d20,EffectModifyProperty,"effect EffectModifyProperty(int nProperty0, float fChange0, int nProperty1=0, float fChange1=0.0, int nProperty2=0, float fChange2=0.0)"
+836,COMMAND_ISPRCAVAILABLE,0x0066d930,0x00679620,IsPRCAvailable,int IsPRCAvailable()
+837,COMMAND_LOGSTORYEVENT,0x00666da0,0x006795de,LogStoryEvent,void LogStoryEvent(int nEventID)
+838,COMMAND_GETNAMESTRREF,0x00669370,0x00675e11,GetNameStrref,int GetNameStrref(object oObject)
+839,COMMAND_SETPHYSICSCONTROLLER,0x0066be50,0x00678d36,SetPhysicsController,"void SetPhysicsController(object oCreature, int bEnable)"
+840,COMMAND_GETMAXLEVEL,0x00662f00,0x006790b6,GetMaxLevel,int GetMaxLevel()
+841,COMMAND_GETHASHEDM2DAINT,0x00654700,0x0067553c,GetHashedM2DAInt,"int GetHashedM2DAInt(int n2DA, int nColumnHash, int nRow)"
+842,COMMAND_SETTRAININGMODE,0x006636f0,0x006791d4,SetTrainingMode,void SetTrainingMode(int nTrainingMode)
+843,COMMAND_BEGINTRAININGSTEP,0x00663760,0x006791ea,BeginTrainingStep,"void BeginTrainingStep(int nStepID, int nExpectedTrainingEvent, int nTrainingEventArg = 0)"
+844,COMMAND_SETGAMECOMPLETIONPERCENTAGE,0x00663cd0,0x00679258,SetGameCompletionPercentage,void SetGameCompletionPercentage(float fPercentage)
+845,COMMAND_SETINDIVIDUALIMPACTAOEEVENT,0x0065c580,0x00676953,SetIndividualImpactAOEEvent,"void SetIndividualImpactAOEEvent(object oCaster, object oTarget, int nAbility, location lTarget, int nBaseDelay = 0)"
+846,COMMAND_CLOSEQUESTGROUP,0x00663f00,0x00678f2a,CloseQuestGroup,void CloseQuestGroup(string sGroupOrPlotResRef)
+847,COMMAND_EFFECTMODIFYPROPERTYHOSTILE,0x00662bb0,0x00678d4c,EffectModifyPropertyHostile,"effect EffectModifyPropertyHostile(int nProperty0, float fChange0, int nProperty1=0, float fChange1=0.0, int nProperty2=0, float fChange2=0.0)"
+848,COMMAND_HIGHLIGHTGUIELEMENT,0x00663d30,0x0067926e,HighlightGuiElement,"void HighlightGuiElement(int nGuiElement, int nHighlightArg = 0)"
+849,COMMAND_SETCAMERAZOOM,0x00666790,0x00677124,SetZoomLevel,void SetZoomLevel(float fZoomLevel)
+850,COMMAND_REMOVEQUEST,0x00663fe0,0x00678f40,RemoveQuest,void RemoveQuest(string sPlotResRef)
+851,COMMAND_GETGRAPHICSDETAILLEVEL,0x00654ce0,0x006754bb,GetGraphicsDetailLevel,int GetGraphicsDetailLevel()
+852,COMMAND_OPENJOURNALPRCTAB,0x00666cb0,0x00679636,OpenJournalPRCTab,"void OpenJournalPRCTab(string sOfferId = """")"
+853,COMMAND_GETPLOTGUID,0x0065fe60,0x00678e6a,GetPlotGUID,string GetPlotGUID(string strPlotResRef)
+854,COMMAND_APPLYEFFECTMODIFYPROPERTY,0x0066b3c0,0x00678d62,ApplyEffectModifyProperty,void ApplyEffectModifyProperty(effect eModifyPropertyEffect)
+855,COMMAND_REMOVEEFFECTMODIFYPROPERTY,0x0066b3c0,0x00678d78,RemoveEffectModifyProperty,void RemoveEffectModifyProperty(effect eModifyPropertyEffect)
+856,COMMAND_GETM2DAROWIDFROMROWINDEX,0x006543b0,0x00675552,GetM2DARowIdFromRowIndex,"int GetM2DARowIdFromRowIndex(int n2DA, int nRowIndex, string s2DA = """")"
+857,COMMAND_ISPRC,0x00652260,0x0067964c,IsPRC,"int IsPRC(string sDeprecated, int nDeprecated)"
+858,COMMAND_SETSHAREDCHARAREANAME,0x0065f8f0,0x006768a6,SetPartyPickerStage,"void SetPartyPickerStage(string sAreaName, string s2DAName)"
+859,COMMAND_GETABILITYLIST,0x00673080,0x006764bc,,
+860,COMMAND_REQUESTTARGET,0x00664840,0x00679284,,
+861,COMMAND_SETPLOTACTIONCOOLDOWN,0x00665b20,0x00679468,,
+862,COMMAND_ISPACKAGELOADED,0x006657b0,0x006793a2,,
