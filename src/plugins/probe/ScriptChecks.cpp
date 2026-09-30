@@ -34,6 +34,9 @@ struct Check
     dao::script::Handler previous = nullptr;
     std::atomic<std::uint32_t> calls{0};
     std::atomic<std::uint32_t> matched{0};
+    // Of those, on a value other than 0: a field at a wrong offset often
+    // reads 0 where the true one is 0 too, so these are the stronger matches.
+    std::atomic<std::uint32_t> matchedNonZero{0};
     std::atomic<std::uint32_t> mismatched{0};
     std::atomic<std::uint32_t> noObject{0}; // the id named no object of the getter's class
     std::atomic<std::uint32_t> failed{0};   // the engine's handler, or a peek, failed
@@ -142,6 +145,11 @@ void Compare(Check &check, dao::ObjectId object, std::uint32_t answer)
         {
             spdlog::info("script check {} ({}): first call, object {:#010x} at {}, engine and field both {:#x}",
                          getter.name, getter.command, object, target, answer);
+        }
+        if (answer != 0 && check.matchedNonZero++ == 0)
+        {
+            spdlog::info("script check {} ({}): first match on a value other than 0, object {:#010x}, {:#x}",
+                         getter.name, getter.command, object, answer);
         }
         return;
     }
@@ -276,9 +284,10 @@ void ReportScriptChecks()
         {
             ++clean;
         }
-        spdlog::info("script check {} ({}): {} calls, {} matched, {} mismatched, {} on no object, {} failed",
-                     getter.name, getter.command, calls, matched, mismatched, check.noObject.load(),
-                     check.failed.load());
+        spdlog::info("script check {} ({}): {} calls, {} matched ({} on a value other than 0), {} mismatched, {} on no "
+                     "object, {} failed",
+                     getter.name, getter.command, calls, matched, check.matchedNonZero.load(), mismatched,
+                     check.noObject.load(), check.failed.load());
     }
     spdlog::info("script checks: {} of {} getters called, {} of those matched on every object", called,
                  std::size(dao::generated::kScriptGetters), clean);
