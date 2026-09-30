@@ -206,6 +206,38 @@ DAO_ADDRESS(kCDataArrays_GetInteger, "CDataArrays::GetInteger", 0x00A5A220)
 DAO_ADDRESS(kCDataArrays_GetFloat, "CDataArrays::GetFloat", 0x00A5A250)
 DAO_ADDRESS(kCDataArrays_GetObject, "CDataArrays::GetObject", 0x00A5A2B0)
 DAO_ADDRESS(kCDataArrays_GetString, "CDataArrays::GetString", 0x00A5A2E0)
+// A fifth list at +0xC, read 2026-09-30 from the script commands that build
+// commands (CommandMoveToLocation and its kin), which store their
+// booleans in it: the getter has the other four's shape and answers 0 out
+// of range. No script command reads it. The name is ours.
+DAO_ADDRESS(kCDataArrays_GetFlag, "CDataArrays::GetFlag", 0x00A5A280)
+// The setters the same constructors call, __thiscall (index, value),
+// `ret 8`: each makes its list if there is none, grows it to the index and
+// stores. The vector setter takes a pointer to 16 bytes, three floats and
+// padding, copied with movaps; its list at +0x18 is not a std::vector but
+// {data, size, capacity} of 16-byte elements (its accessor, 0x005728B0,
+// is data + index * 16). The string setter takes a pointer to the engine's
+// std::wstring.
+DAO_ADDRESS(kCDataArrays_SetInteger, "CDataArrays::SetInteger", 0x00A5B710)
+DAO_ADDRESS(kCDataArrays_SetFloat, "CDataArrays::SetFloat", 0x00A5B7D0)
+DAO_ADDRESS(kCDataArrays_SetFlag, "CDataArrays::SetFlag", 0x00A5B890)
+DAO_ADDRESS(kCDataArrays_SetObject, "CDataArrays::SetObject", 0x00A5B950)
+DAO_ADDRESS(kCDataArrays_SetString, "CDataArrays::SetString", 0x00A5BA10)
+DAO_ADDRESS(kCDataArrays_SetVector, "CDataArrays::SetVector", 0x00A5A9B0)
+
+// Commands (dao/Objects.h, Command), read 2026-09-30 from the 17 script
+// commands that build one and from AddCommand. Each takes a command from
+// a pool the AI master keeps (the object at AIMaster+0x6C) with New, which
+// numbers it (the counter at the pool's +0x48), makes a CDataArrays for its
+// parameters, fills it and sets the type. The copy the VM makes on a push
+// or pop (CopyGameDefinedStructure, structure 2) is a new command from the
+// pool with the fields copied by CopyFrom, not a shared reference; destroy
+// (structure 2) is Release, which puts it back. The names are ours.
+DAO_ADDRESS(kCommandPool_New, "CommandPool::New", 0x007468C0)
+DAO_ADDRESS(kCommandPool_Release, "CommandPool::Release", 0x0066DE30)
+DAO_ADDRESS(kCommand_Constructor, "Command::Command", 0x00741F10)
+DAO_ADDRESS(kCommand_CopyFrom, "Command::CopyFrom", 0x00741FC0)
+DAO_ADDRESS(kCommand_SetType, "Command::SetType", 0x00742090)
 
 // Script arrays (dao/core/ScriptArray.h), read 2026-09-30. The value is
 // the tag and a shared payload; these make, copy, measure and free one,

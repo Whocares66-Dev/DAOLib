@@ -87,20 +87,33 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     }
     dao::script::InterceptCommand(dao::script::id::GetCombatState, &CheckCombatState);
 
-    // Every command a script queues (the AI's choices among them): a copy
-    // of it, made and destroyed through the engine, as a plugin that holds
-    // a creature's actions back would keep one. The command itself goes on.
+    // Every command a script queues (the AI's choices among them): what it
+    // is and what it acts on, and a copy of it, made and destroyed through
+    // the engine, as a plugin that holds a creature's actions back would
+    // keep one. The command itself goes on.
     dao::script::InterceptCommand(dao::script::id::AddCommand, [](dao::script::CommandCall &call) {
         static std::atomic<std::uint32_t> seen{0};
         const auto creature = call.Object(0);
         const dao::Command *command = call.Command(1);
-        if (command != nullptr && seen < 8)
+        if (command != nullptr && seen < 40)
         {
             const dao::script::OwnedCommand copy = dao::script::Copy(*command);
             ++seen;
-            spdlog::info("AddCommand for {:#010x}: command type {}, its copy {}", creature.value_or(0),
-                         static_cast<int>(command->Type()),
-                         copy ? std::to_string(static_cast<int>(copy->Type())) : std::string("none"));
+            const auto show = [](const auto &value) { return value ? fmt::format("{}", *value) : std::string("-"); };
+            const auto target = command->Target();
+            const auto position = command->Position();
+            const bool copyAgrees = copy && copy->Type() == command->Type() && copy->Target() == target &&
+                                    copy->Ability() == command->Ability();
+            // Not Static(): AddCommand stores its bStatic in the copy it
+            // pops, after this runs.
+            spdlog::info("AddCommand for {:#010x}: type {}, target {}, position {}, ability {}, wait {} ms, "
+                         "player issued {}; copy {}",
+                         creature.value_or(0), static_cast<int>(command->Type()),
+                         target ? fmt::format("{:#010x}", *target) : std::string("-"),
+                         position ? fmt::format("({:.2f}, {:.2f}, {:.2f})", position->x, position->y, position->z)
+                                  : std::string("-"),
+                         show(command->Ability()), show(command->WaitMilliseconds()), command->PlayerIssued(),
+                         copy ? (copyAgrees ? "agrees" : "DIFFERS") : "none");
         }
         return call.Proceed();
     });

@@ -194,6 +194,11 @@ OwnedEvent Stack::PopEvent()
     return OwnedEvent{static_cast<CScriptEvent *>(PopStructure(EngineStructure::Event))};
 }
 
+OwnedCommand Stack::PopCommand()
+{
+    return OwnedCommand{static_cast<::dao::Command *>(PopStructure(EngineStructure::Command))};
+}
+
 Array Stack::PopArray()
 {
     core::ArrayRep *popped = nullptr;
@@ -335,6 +340,11 @@ bool Stack::PushEvent(const CScriptEvent &value)
     return PushStructure(EngineStructure::Event, &value);
 }
 
+bool Stack::PushCommand(const ::dao::Command &value)
+{
+    return PushStructure(EngineStructure::Command, &value);
+}
+
 bool Stack::PushArray(const Array &value)
 {
     return value.get() != nullptr && CallVm<const core::ArrayRep *>(addr::kCVirtualMachine_StackPushArray, value.get());
@@ -449,7 +459,7 @@ bool Push(const Resource &value)
 }
 bool Push(const ::dao::Command &value)
 {
-    return Stack::PushStructure(EngineStructure::Command, &value);
+    return Stack::PushCommand(value);
 }
 
 template <> std::optional<std::int32_t> Pop<std::int32_t>()
@@ -499,7 +509,7 @@ template <> std::optional<OwnedEvent> Pop<OwnedEvent>()
 }
 template <> std::optional<OwnedCommand> Pop<OwnedCommand>()
 {
-    OwnedCommand value{static_cast<::dao::Command *>(Stack::PopStructure(EngineStructure::Command))};
+    OwnedCommand value = Stack::PopCommand();
     return value ? std::optional{std::move(value)} : std::nullopt;
 }
 template <> std::optional<Array> Pop<Array>()

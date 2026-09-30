@@ -73,12 +73,14 @@ enum class EngineStructure : std::int32_t
 };
 
 // What CGameEffect and CScriptEvent both start with (the RTTI's base class
-// descriptors: CDataArrays at +0 of each): a vtable, then pointers to the
-// std::vectors of parameters a script reads by index with
-// GetEffectInteger, GetEventInteger and the like, which call the same four
-// functions for both. Ints at +0x4, floats at +0x8, objects at +0x10,
-// strings at +0x14; +0xC is not read yet. Out of range, each gives what the
-// engine gives: 0, 0.0, -1 and an empty string.
+// descriptors: CDataArrays at +0 of each), and what a command's parameters
+// are (dao/Objects.h, Command): a vtable, then pointers to the lists of
+// parameters a script reads by index with GetEffectInteger,
+// GetEventInteger, GetCommandInt and the like, which call the same
+// functions for all three. 0x20 bytes: ints at +0x4, floats at +0x8, flags
+// at +0xC, objects at +0x10, strings at +0x14, vectors at +0x18. Out of
+// range, each gives what the engine gives: 0, 0.0, 0, -1, an empty string
+// and, for a vector, nothing.
 class CDataArrays
 {
   public:
@@ -109,8 +111,65 @@ class CDataArrays
         const auto *rep = reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetString))(this, 0, index);
         return rep != nullptr ? rep->View() : std::wstring_view{};
     }
+    // What the command constructors store their scripts' booleans in
+    // (bRunToLocation, bPlayNext and the like), 4 bytes each.
+    std::int32_t Flag(std::int32_t index) const
+    {
+        using Fn = std::int32_t(__fastcall *)(const CDataArrays *, int, std::int32_t);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_GetFlag))(this, 0, index);
+    }
+    // Read from the list directly, as the engine's accessor does: no
+    // getter was found, and the list is plain data.
+    std::optional<::dao::Vector> Vector(std::int32_t index) const
+    {
+        const auto *list = Read<const VectorList *>(0x18);
+        if (list == nullptr || list->data == nullptr || index < 0 || static_cast<std::uint32_t>(index) >= list->size)
+        {
+            return std::nullopt;
+        }
+        return *reinterpret_cast<const ::dao::Vector *>(list->data + static_cast<std::size_t>(index) * 16);
+    }
+
+    // The engine's own setters: each makes its list if there is none and
+    // grows it to the index. What a changed parameter does depends on who
+    // reads it: a command not yet started takes it as if its script had
+    // passed it.
+    void SetInteger(std::int32_t index, std::int32_t value)
+    {
+        using Fn = void(__fastcall *)(CDataArrays *, int, std::int32_t, std::int32_t);
+        reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_SetInteger))(this, 0, index, value);
+    }
+    void SetFloat(std::int32_t index, float value)
+    {
+        using Fn = void(__fastcall *)(CDataArrays *, int, std::int32_t, float);
+        reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_SetFloat))(this, 0, index, value);
+    }
+    void SetFlag(std::int32_t index, std::int32_t value)
+    {
+        using Fn = void(__fastcall *)(CDataArrays *, int, std::int32_t, std::int32_t);
+        reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_SetFlag))(this, 0, index, value);
+    }
+    void SetObject(std::int32_t index, ObjectId value)
+    {
+        using Fn = void(__fastcall *)(CDataArrays *, int, std::int32_t, ObjectId);
+        reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_SetObject))(this, 0, index, value);
+    }
+    void SetVector(std::int32_t index, const ::dao::Vector &value)
+    {
+        // The setter copies 16 bytes with movaps, so the source is aligned.
+        alignas(16) const float padded[4] = {value.x, value.y, value.z, 0.0F};
+        using Fn = void(__fastcall *)(CDataArrays *, int, std::int32_t, const float *);
+        reinterpret_cast<Fn>(Module::Address(addr::kCDataArrays_SetVector))(this, 0, index, padded);
+    }
 
   protected:
+    struct VectorList
+    {
+        const std::byte *data;
+        std::uint32_t size;
+        std::uint32_t capacity;
+    };
+
     template <class T> const T &Read(std::size_t offset) const
     {
         return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);

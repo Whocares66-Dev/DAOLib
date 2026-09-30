@@ -91,7 +91,7 @@ Three callers, three roles:
 |---|---|---|
 | `AddCommand`, `0x0066E1B4` | attack 75, wait 22, use ability 8, move to object 6, play animation 2, switch weapons 1 | the scripts: the AI and the tactics choosing each creature's next action |
 | `FUN_006A21C0`, `0x006A22AE` | drive 18, all on the player's character | the player's direct control: moving the character yourself |
-| `FUN_0073D000`, `0x0073D054` | 32 (22), 39 (5), and attack, move, ability, animation, use object | the engine's own queueing, to the front as often as not. The crash of 2026-09-30 had it under `SEffectsHolder` and `CCCreature`, so effects (a knockdown, a stun) queue here. Types 32 and 39 are not in `script.ldf`: the engine's own. The player's orders given while paused are likely here too, still to confirm by the caller's caller. |
+| `FUN_0073D000`, `0x0073D054` | 32 (22), 39 (5), and attack, move, ability, animation, use object | the engine's own queueing, to the front as often as not. The crash of 2026-09-30 had it under `SEffectsHolder` and `CCCreature`, so effects (a knockdown, a stun) queue here. Types 32 and 39 are not in `script.ldf`. 39 is sheathing or drawing weapons, which `CommandSheatheWeapons` and `CommandUnsheatheWeapons` make (read 2026-09-30); 32 no script command makes, so it is the engine's own. The player's orders given while paused are likely here too, still to confirm by the caller's caller. |
 
 So a turn-based mode has its gate: hold a creature's commands at `0x0073CD10` (or let them queue, and hold the start of the head of the queue) until its turn. The AI's rhythm is visible too: in combat, a creature re-decides after each attack or wait, about once a second each.
 

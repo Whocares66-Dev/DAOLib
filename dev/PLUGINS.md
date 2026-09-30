@@ -53,7 +53,7 @@ Its own `vcpkg.json` lists DAOLib's dependencies (`detours`, `spdlog`), since a 
 
 ## Threads
 
-The game runs on several threads. Scripts run on one, the thread that filled the command table (`dao::script::ScriptThreadId()`). Calling a script command (`dao::script::Invoke`, `dao::script::api::*`) belongs on that thread: inside a command intercept, or inside a hook on something the scripts' thread runs. Whether the frame callback runs on that thread too is `dao::FrameThreadId()` against `ScriptThreadId()`; the probe logs the answer, not yet seen in play. A detour on an engine function runs on whichever thread calls it: never assume, and never block in one.
+The game runs on several threads. Scripts run on one, the thread that filled the command table (`dao::script::ScriptThreadId()`). Calling a script command (`dao::script::Invoke`, `dao::script::api::*`) belongs on that thread: inside a command intercept, or inside a hook on something the scripts' thread runs. The frame callback runs on that thread too: `dao::FrameThreadId()` equalled `ScriptThreadId()` in play (2026-09-30), so a frame callback may call script commands. A detour on an engine function runs on whichever thread calls it: never assume, and never block in one.
 
 ## The API, by what a plugin wants to do
 
@@ -67,6 +67,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Find an object by id | `CClientExoApp::Get()->GetCreatureById(id)` and kin | `dao/ClientExoApp.h` |
 | Read an object's fields | `creature->CombatState()`, `->TeamId()`, `->Id()`, `->Type()`, casts `AsCreature()` | `dao/Objects.h` |
 | Read an effect or an event | `dao::CGameEffect`, `dao::CScriptEvent`, `CCObject::CurrentEvent()` | `dao/Structures.h` |
+| Read, keep or change a queued command | in an `AddCommand` intercept, `call.Command(1)`; `->Type()`, `->Target()`, `->Position()`, `->Ability()`, every parameter through `->Parameters()`; `dao::script::Copy(*command)` to keep one | `dao/Objects.h`, `dao/Script.h`, `dao/ScriptHooks.h` |
 | Use strings, locations, arrays | `dao::WString`, `dao::CScriptLocation`, `dao::script::Array` | `dao/String.h`, `dao/Structures.h`, `dao/Script.h` |
 | Read a data table | `dao::gda::GetInt(Table::AbilitiesTalents, ability, "Cooldown")`; columns per table in `dev/gda_tables.csv` | `dao/Gda.h` |
 | Pause, or switch the game's mode | `CClientExoApp::SetPaused`, `GameModeController::SetMode` | `dao/ClientExoApp.h`, `dao/GameModes.h` |

@@ -30,6 +30,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 // C4624, "destructor was implicitly defined as deleted", is what Opaque is
 // for: every class below is one the engine makes and frees, never us.
@@ -50,7 +51,48 @@ struct Opaque
 };
 
 // A command queued on an object (CCObject::QueueCommand): the scripts'
-// `command`, made by CommandAttack, CommandWait and the rest.
+// `command`, made by CommandAttack, CommandWait and the rest. 0x14 bytes
+// from the AI's pool (dao/Addresses.h, CommandPool), read 2026-09-30 from
+// its constructor (0x00741F10), the 17 script commands that build one, and
+// AddCommand, GetCommandType and GetCommandIsPlayerIssued:
+//
+//   +0x0   the word: sequence (bits 0-15), type (+2, the byte SetType
+//          writes and GetCommandType reads); +3 not read
+//   +0x4   the parameters, a CDataArrays of its own (dao/Structures.h)
+//   +0x8   1 from the constructor; not read yet
+//   +0xC   static: AddCommand stores its bStatic here before queueing
+//   +0x10  player issued: what GetCommandIsPlayerIssued answers
+//
+// What each constructor puts in the parameters, by type (int, float, flag,
+// object, string, vector; the index after each):
+//
+//   Attack             object 0 target, int 2 forced result (COMBAT_RESULT_*)
+//   JumpToObject       object 0 target
+//   JumpToLocation     vector 0 position, vector 1 orientation, object 0 area
+//   Wait               int 0 milliseconds (the seconds times 1000, at least 0)
+//   PlayAnimation      int 0 animation, int 2 loops, int 7 0 to blend in else 2,
+//                      flag 4 play next
+//   StartConversation  object 0 target, string 0 dialog file
+//   MoveToLocation     vector 0 position, vector 1 orientation, flag 1 run,
+//                      flag 10 deactivate at end
+//   MoveToObject       object 0 target, float 0 max range (at least the min),
+//                      float 1 min range, flag 1 run, flag 5 use original
+//                      position; CommandMoveAwayFromObject makes the same
+//                      type with float 4 the distance
+//   UseAbility         int 0 ability, object 0 target (OBJECT_INVALID for a
+//                      point), vector 0 target point, float 0 conjure time,
+//                      string 0 ability source, object 1 OBJECT_INVALID
+//   EquipItem          object 0 item, int 0 slot, int 1 weapon set
+//   UnequipItem        object 0 item
+//   UseObject          object 0 target, int 0 action
+//   Deathblow          object 0 target, int 0 death type
+//   SheatheWeapons     int 0 1 to draw, 0 to sheathe
+//   SwitchWeaponSets   int 0 weapon set
+//   Turn               vector 0 facing
+//   Fly                vector 0 position, vector 1 orientation
+//
+// Not yet checked in play: the example plugin logs these for the commands
+// AddCommand queues.
 class Command : Opaque
 {
   public:
@@ -66,6 +108,83 @@ class Command : Opaque
     std::uint16_t Sequence() const
     {
         return core::SequenceOf(Word());
+    }
+
+    // Null only for a command the pool could not fill.
+    const CDataArrays *Parameters() const
+    {
+        return Read<const CDataArrays *>(0x4);
+    }
+    CDataArrays *Parameters()
+    {
+        return Read<CDataArrays *>(0x4);
+    }
+    bool Static() const
+    {
+        return Read<std::int32_t>(0xC) != 0;
+    }
+    bool PlayerIssued() const
+    {
+        return Read<std::int32_t>(0x10) != 0;
+    }
+
+    // The object a command acts on, for the types whose object 0 is one
+    // (above); nothing for the rest, and for a command with no parameters.
+    std::optional<ObjectId> Target() const
+    {
+        using enum core::CommandType;
+        switch (Type())
+        {
+        case Attack:
+        case JumpToObject:
+        case StartConversation:
+        case MoveToObject:
+        case UseAbility:
+        case UseObject:
+        case Deathblow:
+            return Object(0);
+        default:
+            return std::nullopt;
+        }
+    }
+    // The point a command goes to or aims at: a move's, a jump's or a
+    // flight's position, an ability's target point.
+    std::optional<Vector> Position() const
+    {
+        using enum core::CommandType;
+        switch (Type())
+        {
+        case JumpToLocation:
+        case MoveToLocation:
+        case UseAbility:
+        case Fly:
+            return Parameters() != nullptr ? Parameters()->Vector(0) : std::nullopt;
+        default:
+            return std::nullopt;
+        }
+    }
+    // A UseAbility's ability (ABILITY_*, the ABI_base table's row).
+    std::optional<std::int32_t> Ability() const
+    {
+        return Type() == core::CommandType::UseAbility ? Integer(0) : std::nullopt;
+    }
+    std::optional<std::int32_t> WaitMilliseconds() const
+    {
+        return Type() == core::CommandType::Wait ? Integer(0) : std::nullopt;
+    }
+
+  private:
+    template <class T> T Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+    std::optional<ObjectId> Object(std::int32_t index) const
+    {
+        return Parameters() != nullptr ? std::optional<ObjectId>(Parameters()->Object(index)) : std::nullopt;
+    }
+    std::optional<std::int32_t> Integer(std::int32_t index) const
+    {
+        return Parameters() != nullptr ? std::optional<std::int32_t>(Parameters()->Integer(index)) : std::nullopt;
     }
 };
 

@@ -236,6 +236,7 @@ struct Stack
     static bool PopLocation(CScriptLocation &out);
     static OwnedEffect PopEffect();
     static OwnedEvent PopEvent();
+    static OwnedCommand PopCommand();
     static Array PopArray();
 
     static bool PushInt(std::int32_t value);
@@ -247,6 +248,7 @@ struct Stack
     static bool PushLocation(const CScriptLocation &value);
     static bool PushEffect(const CGameEffect &value);
     static bool PushEvent(const CScriptEvent &value);
+    static bool PushCommand(const ::dao::Command &value);
     // The VM makes a copy of its own, sharing the elements.
     static bool PushArray(const Array &value);
 

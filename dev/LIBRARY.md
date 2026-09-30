@@ -125,7 +125,7 @@ What a script passes besides ints, floats and objects, read 2026-09-30 from the 
 | `effect`, `itemproperty` | `CGameEffect`, 0x7C bytes, polymorphic: id, type, duration type, animation, flags, creator, ability id, and lists of int, float, object and string parameters | a pop is the VM's copy, the popper's to destroy: `Stack::PopEffect` returns it owned, destroyed through the engine |
 | `event` | `CScriptEvent`, 0x50 bytes, polymorphic: type at +0x20, creator at +0x24, target at +0x28, and the same parameter lists as an effect (both are `CDataArrays` at +0) | as an effect: `Stack::PopEvent` returns it owned |
 | `T[]` | 8 bytes: a tag (0x40 int, 0x41 float, 0x42 string, 0x43 object, 0x44 resource, 0x50 plus a structure's number) and a payload shared between copies, a `std::vector` of 4-byte elements with a reference count (`dao/core/ScriptArray.h`) | a pop is the popper's 8 bytes, sharing the elements: `Stack::PopArray` returns a `dao::script::Array` that frees them through the engine |
-| `command` | from a pool the application keeps | not read yet |
+| `command` | 0x14 bytes from a pool the AI master keeps: the word (sequence and type), a `CDataArrays` of parameters of its own, the static and player-issued flags (`dao::Command`, whose comment tables each type's parameters) | a pop is the popper's copy, a real one from the pool; `Stack::PopCommand` and `dao::script::Copy` return it owned, released to the pool |
 
 The engine structures are made, destroyed and copied by the commands object's slots 5, 6 and 8, which is also how the VM copies one on every push and pop.
 
@@ -156,6 +156,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Events on the stack; the event's type, creator and target | 2026-09-30 | checked 2026-09-30, fourth session: 3,635 `GetCurrentEvent` round trips, 4,514 event getter calls, all matching |
 | Arrays on the stack: `object[]` and `effect[]` | 2026-09-30 | checked 2026-09-30: 5 `GetTeam` answers, every member on the team asked for; 493 `GetEffects` answers with the right tag, all empty, so an effect element is not yet read in play |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
+| Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session
 
@@ -185,6 +186,9 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 
 ## What comes next
 
+- **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
+- **Messages.** 8 of the 296 message classes have a C++ struct. A plugin cannot yet subscribe to a message or send one, as it can a script event.
+- **Creatures.** Beyond the fields their getters give: attributes, health and mana or stamina, abilities, inventory, the party. From the constructors and NWN's namesakes.
+- **Talk tables and data tables.** A string by its string ref, from the engine; the tables' strings and row counts, beside their ints and floats.
 - **Setters.** `dev/script_backends.csv` names the engine functions the set-commands call; each is a wrapper once its argument types are read from the command body, as `SetCombatState` was.
-- **Strings, locations, effects.** The VM's pops and pushes for these are named (`dao/Addresses.h`), but their types are not yet: `CExoString` and the engine structures. NWN:EE's headers give the likely shapes.
-- **Fields with no getter.** The harvest only finds fields a getter returns. The rest come from reading the engine's own code, a class at a time, into a header like `ClientExoApp.h`.
+- **The rest of the command.** Its +8 and the top byte of its word; the queue an object keeps them in (`GetCurrentCommand`, `GetCommandByIndex`).
