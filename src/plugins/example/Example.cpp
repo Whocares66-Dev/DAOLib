@@ -232,7 +232,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     });
 
     // Sending a message as the engine does: once the player has explored
-    // for ten seconds or so (600 frames), centre the camera on the creature
+    // for five seconds or so in all (300 frames), centre the camera on the creature
     // the player controls, and log whether the mode handled it. In combat
     // the same message goes to GameModeCombat, which inherits explore's
     // handlers.
@@ -245,8 +245,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         {
             return;
         }
-        exploring = modes->Mode() == dao::GameMode::Explore ? exploring + 1 : 0;
-        if (exploring < 600)
+        // Explore frames in total, a menu opened between them or not.
+        exploring += modes->Mode() == dao::GameMode::Explore ? 1 : 0;
+        if (exploring < 300)
         {
             return;
         }

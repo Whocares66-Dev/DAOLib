@@ -289,8 +289,10 @@ DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 // ?), `ret 0x10`, on an object whose +0x18 is the character's name: the
 // slot's folder, then <name>.das and <name>.das.met opened with
 // ECFileAccess and written ("savegame" for an empty name). FindSave,
-// __cdecl, looks for "*.das" in a slot's folder, for loading. The probe
-// logs Write and FindSave with their arguments. The names are ours.
+// __cdecl, looks for "*.das" in a slot's folder, for loading. In play,
+// 2026-09-30: FindSave was called for a load (character, slot 2, kind 0),
+// but Write was not for a quicksave, though its savegame.das was written:
+// the quicksave writes another way, still to read. The names are ours.
 DAO_ADDRESS(kSaveGame_SlotFolder, "SaveGame::SlotFolder", 0x00643DD0)
 DAO_ADDRESS(kSaveGame_Write, "SaveGame::Write", 0x00646280)
 DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
