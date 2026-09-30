@@ -7,7 +7,10 @@
 #include "dao/core/Msvc8.h"
 #include "dao/core/VmStack.h"
 
+#include <Windows.h>
+
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <mutex>
@@ -42,6 +45,7 @@ core::VmStackView VmStack()
 std::mutex g_readyMutex;
 std::vector<std::function<void()>> g_waiting;
 bool g_ready = false;
+std::atomic<std::uint32_t> g_scriptThread{0};
 
 using InitializeCommandsFn = void(__fastcall *)(void *self, int edx);
 Detour<InitializeCommandsFn> g_initializeCommands;
@@ -49,6 +53,7 @@ Detour<InitializeCommandsFn> g_initializeCommands;
 void __fastcall InitializeCommands(void *self, int edx)
 {
     g_initializeCommands.Original()(self, edx);
+    g_scriptThread = GetCurrentThreadId();
     std::vector<std::function<void()>> run;
     {
         const std::lock_guard lock(g_readyMutex);
@@ -135,6 +140,11 @@ bool CommandsReady()
 {
     const std::lock_guard lock(g_readyMutex);
     return g_ready;
+}
+
+std::uint32_t ScriptThreadId()
+{
+    return g_scriptThread;
 }
 
 bool InterceptCommand(int command, Intercept intercept)

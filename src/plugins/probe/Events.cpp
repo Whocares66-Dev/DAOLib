@@ -2,9 +2,11 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Frame.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/SafeRead.h"
+#include "dao/ScriptHooks.h"
 #include "dao/Structures.h"
 #include "dao/TypeName.h"
 
@@ -92,10 +94,44 @@ void __fastcall ProcessEvent(void *master, int edx, void *nodeSlot)
     g_processEvent.Original()(master, edx, nodeSlot);
 }
 
+// -- frames (dao/Frame.h) --------------------------------------------------
+//
+// dao::OnFrame's callback counts frames, paused and not, and once both are
+// known says whether the frame's thread is the scripts' thread: whether a
+// plugin can call script commands from its frame callback.
+std::atomic<std::uint64_t> g_framesPaused{0};
+std::atomic<std::uint64_t> g_framesRunning{0};
+std::atomic<bool> g_threadsLogged{false};
+
+void Frame()
+{
+    auto *app = dao::CClientExoApp::Get();
+    if (app != nullptr && app->IsPaused())
+    {
+        ++g_framesPaused;
+    }
+    else
+    {
+        ++g_framesRunning;
+    }
+    const std::uint32_t script = dao::script::ScriptThreadId();
+    if (script != 0 && !g_threadsLogged.exchange(true))
+    {
+        const std::uint32_t frame = dao::FrameThreadId();
+        spdlog::info("frames: the update runs on thread {}, scripts on thread {}: {}", frame, script,
+                     frame == script ? "the same, so a frame callback may call script commands"
+                                     : "different, so a frame callback must not call script commands");
+    }
+}
+
 } // namespace
 
 void AttachEventWatch()
 {
+    dao::script::OnCommandsReady([] {}); // to learn the scripts' thread
+    dao::OnFrame(&Frame);
+    spdlog::info("frame watch: detoured the per-frame update at {:#010x}", dao::addr::kEclipseGame_Update);
+
     if (g_processEvent.Attach(dao::addr::kAIMaster_ProcessEvent, &ProcessEvent))
     {
         spdlog::info("event watch: detoured AIMaster::ProcessEvent at {:#010x}", dao::addr::kAIMaster_ProcessEvent);
@@ -116,6 +152,7 @@ void ReportEventWatch()
     }
     if (counts.empty())
     {
+        spdlog::info("frames: {} running, {} paused", g_framesRunning.load(), g_framesPaused.load());
         return;
     }
     std::string line;
@@ -125,6 +162,7 @@ void ReportEventWatch()
                                 : fmt::format(" {}:{}", key.first, count);
     }
     spdlog::info("event queue: {} events, by id/script event type:{}", g_total.load(), line);
+    spdlog::info("frames: {} running, {} paused", g_framesRunning.load(), g_framesPaused.load());
 }
 
 } // namespace probe

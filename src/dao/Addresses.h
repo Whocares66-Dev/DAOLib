@@ -124,6 +124,13 @@ DAO_ADDRESS(kObject_QueueCommand, "GameObject::QueueCommand", 0x0073CD10)
 // The probe counts a stack sample as game logic when this function's frame
 // is on it; the range is Ghidra's.
 DAO_ADDRESS(kEclipseUpdateTask_Execute, "Eclipse::UpdateTask::vfunction3", 0x00413310)
+// What that slot calls each frame (dao/Frame.h), read 2026-09-30:
+// __thiscall, no arguments, true to go on running, on the object in the
+// global below (0x280 bytes, made by 0x0040DCB0 at start-up; no vtable, so
+// no RTTI name: named here for what it runs). It returns false at once if
+// its byte at +0xCD is set, a quit flag by how the task uses the answer.
+DAO_DATA(kEclipseGame, "g_eclipseGame", 0x00C1D0A0)
+DAO_ADDRESS(kEclipseGame_Update, "EclipseGame::Update", 0x00412EB0)
 inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
 
 // The script machine's typed stack, named after Neverwinter Nights: NWN:EE's

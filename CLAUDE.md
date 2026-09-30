@@ -30,7 +30,8 @@ src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that 
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
-                the engine's messages (Messages.h), the game's modes (GameModes.h),
+                the engine's messages (Messages.h), the game's modes (GameModes.h), a callback per frame
+                (Frame.h),
                 Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py),
                 the scripts' constants as enums (gen_script_constants.py), every script command as a

@@ -104,6 +104,7 @@ add_library(
     src/dao/core/FunctionTable.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
+    src/dao/Frame.cpp
     src/dao/Log.cpp
     src/dao/Module.cpp
     src/dao/SafeRead.cpp

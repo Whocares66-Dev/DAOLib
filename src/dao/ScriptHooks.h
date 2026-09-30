@@ -41,6 +41,11 @@ void OnCommandsReady(std::function<void()> ready);
 // True once the table is there.
 bool CommandsReady();
 
+// The thread that filled the command table, which is the one scripts run
+// on (seen in play 2026-09-30: every script command on the thread that ran
+// InitializeCommands); 0 until then. dao::script::Invoke belongs on it.
+std::uint32_t ScriptThreadId();
+
 // A call of a script command, as an intercept gets it.
 class CommandCall
 {
