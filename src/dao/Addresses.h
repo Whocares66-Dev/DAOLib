@@ -568,7 +568,13 @@ DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A
 // PerformAbilityMessage's handler (dao/Messages.h says how it chooses a
 // target). UseAbility (ability, caster, the message's target, the target chosen,
 // a position), `ret 0x14`, queues the ability's command;
-// BeginTargeting (ability, caster, target) asks the player for a target;
+// BeginTargeting, __thiscall on the mode (ability, caster, target), `ret
+// 0xC`, asks the player for a target: unless an input check fails (then a
+// "Target Required" floaty), it keeps the ability, its TargetType, the
+// caster and the target in globals from 0x00C35FA0, turns on the targeting
+// cursor, and in explore or combat mode enters targeting (the mode's slot
+// 28). RequestTargetMessage has no handler: only its factory (0x00776070)
+// and clone build one, so sending it does nothing;
 // the attack target is what the caster fights (by id); a global holds the
 // selected target's id, set only through 0x0070D030, which the messages
 // that cycle targets call; ValidTarget (object, TargetType) says whether the

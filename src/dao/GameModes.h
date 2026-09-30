@@ -135,6 +135,18 @@ class GameModeExplore
         return {hits, count > 0 && count <= kMaxHits ? static_cast<std::size_t>(count) : 0};
     }
 
+    // Ask the player for an ability's target, as the quickbar's handler does
+    // when it finds none (dao/Messages.h, PerformAbilityMessage): the
+    // targeting cursor, and the ability used on what the player clicks,
+    // through PerformAbilityOnTargetUnderCursorMessage. BeginTargeting
+    // (dao/Addresses.h) shows "Target Required" instead when its input
+    // check fails. On the game's thread. Not yet seen in play.
+    void RequestTarget(std::int32_t ability, ObjectId caster)
+    {
+        using Fn = void(__fastcall *)(GameModeExplore *, int, std::int32_t, ObjectId, ObjectId);
+        reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
+    }
+
     // Where the latest move click sent the controlled creature.
     Vector LastMoveDestination() const
     {
