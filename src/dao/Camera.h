@@ -54,8 +54,12 @@
 // is not wrapped), and kept through a change of view; the pitch 45 degrees
 // in the tactical view whatever the turning, and 65 to 125 close in as the
 // player tilted; the camera 3.8 m from the focus close in and 21.3 m in
-// the tactical view. Following, SetYaw and the offset's setter are not yet
-// seen.
+// the tactical view. The turn-based mod, the same day: Follow and SetYaw
+// put the camera behind the creature whose turn it was, the yaw set to
+// radians(GetFacing) + pi (Eleanor facing 173 degrees, yaw 6.16; Aedan
+// facing -176, yaw 0.08), and a screenshot showed the view from behind
+// her; so the scripts' facing is measured from the same axis, the same
+// way round, as the yaw. The offset's setter is not yet seen.
 #pragma once
 
 #include "dao/Addresses.h"
@@ -80,8 +84,8 @@ class SceneCamera
     ~SceneCamera() = delete;
 
     // The direction from the focus to the camera, from +x toward +y, in
-    // radians. A camera behind a creature facing angle a (the same
-    // measure) has the yaw a + pi.
+    // radians. A camera behind a creature has the yaw of its facing plus
+    // pi: radians(GetFacing(creature)) + pi, seen in play.
     float Yaw() const
     {
         return Read<float>(kYaw);
