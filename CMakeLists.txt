@@ -142,6 +142,7 @@ add_library(
     src/dao/Frame.cpp
     src/dao/GameModes.cpp
     src/dao/Gda.cpp
+    src/dao/Gui.cpp
     src/dao/Log.cpp
     src/dao/Module.cpp
     src/dao/SafeRead.cpp

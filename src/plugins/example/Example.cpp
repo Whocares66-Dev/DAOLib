@@ -16,14 +16,18 @@
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
 #include "dao/Gda.h"
+#include "dao/Gui.h"
 #include "dao/Log.h"
 #include "dao/Messages.h"
+#include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/Plugin.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
 #include "dao/generated/ScriptApi.h"
+
+#include <Windows.h>
 
 #include <atomic>
 #include <cstdint>
@@ -152,6 +156,45 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             }
         });
     }
+
+    // The Flash UI's calls into the game: the first few of each kind, with
+    // the screen that made them, the thread they came on, and the object
+    // that routes them.
+    dao::gui::OnAnyFSCommand([](void *owner, std::string_view name, std::string_view args) {
+        static std::atomic<std::uint32_t> seen{0};
+        if (seen++ < 40)
+        {
+            void *const *manager = dao::At<void *>(dao::addr::kGuiManager);
+            spdlog::info("FSCommand {}({}) from {} at {}, thread {}, manager {}", name, args,
+                         owner != nullptr ? dao::TypeName(owner) : std::string("nothing"), owner, GetCurrentThreadId(),
+                         *manager != nullptr ? dao::TypeName(*manager) : std::string("none"));
+        }
+    });
+    dao::gui::OnAnyExternalInterface([](const dao::gui::Call &call) {
+        static std::atomic<std::uint32_t> seen{0};
+        if (seen++ < 40)
+        {
+            std::string args;
+            for (const auto &arg : call.args)
+            {
+                if (const auto n = arg.AsNumber())
+                {
+                    args += fmt::format("{} ", *n);
+                }
+                else if (const auto text = arg.AsString())
+                {
+                    args += fmt::format("\"{}\" ", *text);
+                }
+                else
+                {
+                    args += fmt::format("<type {:#x}> ", arg.type);
+                }
+            }
+            spdlog::info("ExternalInterface {}({}) from {} at {}, thread {}", call.name, args,
+                         call.owner != nullptr ? dao::TypeName(call.owner) : std::string("nothing"), call.owner,
+                         GetCurrentThreadId());
+        }
+    });
 
     // Sending a message as the engine does: once the player has explored
     // for ten seconds or so (600 frames), centre the camera on the creature

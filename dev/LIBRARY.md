@@ -159,6 +159,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | An object's command queue: the current command, one by position, the count; `QueueCommand`'s callers, and that the queue always keeps the command | 2026-09-30 | not yet: the probe logs every queued command's five words, the player-issued flag among them |
 | Data tables' strings, bools, row and column counts | 2026-09-30 | not yet: the example plugin compares abilities' Label, rows and columns with `GetM2DAString`, `GetM2DARows` and `GetM2DAColumns` |
 | Sending a message: `dao::messages::Send`, the registry and its dispatch | 2026-09-30 | not yet: the example plugin centres the camera on the player's creature after ten seconds of exploring, and logs whether explore mode handled it |
+| The Flash UI's calls into the game: FSCommands and ExternalInterface calls by name, `GFxValue`, answering | 2026-09-30 | not yet: the example plugin logs the first 40 of each, with the owning screen's class and the thread |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session
@@ -190,6 +191,7 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 ## What comes next
 
 - **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
+- **The Flash UI, from the game's side.** Loading a movie of a plugin's own and showing it on a layer; setting variables and invoking functions in a movie (GFx's `SetVariable`, `Invoke`); publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
 - **Messages.** 9 of the 296 message classes have a C++ struct; the rest, their fields' meanings. A plugin can send one and hook a handler, but not yet subscribe to a message class as it can a script event. Sending by name, as key bindings do (`SelectResponseMessage 0`), goes through a registry of factories (`0x0078D1A0`).
 - **Creatures.** Beyond the fields their getters give: attributes, health and mana or stamina, abilities, inventory, the party. From the constructors and NWN's namesakes.
 - **Talk tables.** A string by its string ref, from the engine; a plugin's own talk table beside the game's.

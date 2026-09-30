@@ -160,6 +160,34 @@ DAO_DATA(kMessageRegistry, "g_messageRegistry", 0x00C2C09C)
 DAO_ADDRESS(kMessageRegistry_Dispatch, "MessageRegistry::Dispatch", 0x004D8330)
 DAO_ADDRESS(kMessageRegistry_Find, "MessageRegistry::Find", 0x004D82A0)
 DAO_ADDRESS(kMessageRegistry_Register, "MessageRegistry::Register", 0x004D9190)
+
+// The Flash UI's calls into the game (dao/Gui.h), read 2026-09-30. GFx
+// calls the game's FSCommand handler and ExternalInterface handler, slot 1
+// of each: __thiscall (movie, command, args), `ret 0xC`, and (movie,
+// method, args, count), `ret 0x10`. Each passes the call on to the object
+// in this global, most likely GUI::ScaleformManager by where its methods
+// are (0x005166C0 is one; to confirm by its RTTI in play), which takes the
+// movie's user data (GFxMovie's slot 43), the game's object owning the
+// movie, and hands owner, name and arguments to a registry at its +0xA8:
+// a map at +0 of FSCommand handlers, __cdecl (owner, args), and one at
+// +0x14 of ExternalInterface handlers, __cdecl (owner, args, count), each
+// keyed by the name's CRC-32 (0x004CA960: the standard CRC-32 of the
+// name's bytes, case-sensitive). The two Dispatch functions look the name
+// up (Find) and call the handler; the two Register functions, __thiscall
+// (const std::wstring &name, handler), `ret 8`, add one, as the game does
+// 67 FSCommands and 17 ExternalInterface calls at start-up (0x00521AF0,
+// 0x00716540). An ExternalInterface handler answers through the movie,
+// its owner's +0x1C, slot 42 (GFx's SetExternalInterfaceRetVal). The
+// names are ours but for the GFx classes'.
+DAO_DATA(kGuiManager, "g_scaleformManager", 0x00C31264)
+DAO_ADDRESS(kEclipseGFxFSCommandHandler_Callback, "EclipseGFxFSCommandHandler::Callback", 0x00511030)
+DAO_ADDRESS(kEclipseGFxExternalInterface_Callback, "EclipseGFxExternalInterface::Callback", 0x00511050)
+DAO_ADDRESS(kGuiCommands_DispatchFSCommand, "GuiCommands::DispatchFSCommand", 0x0051F5F0)
+DAO_ADDRESS(kGuiCommands_DispatchExternalInterface, "GuiCommands::DispatchExternalInterface", 0x0051F640)
+DAO_ADDRESS(kGuiCommands_Find, "GuiCommands::Find", 0x0051F4F0)
+DAO_ADDRESS(kGuiCommands_RegisterFSCommand, "GuiCommands::RegisterFSCommand", 0x005201C0)
+DAO_ADDRESS(kGuiCommands_RegisterExternalInterface, "GuiCommands::RegisterExternalInterface", 0x00520280)
+DAO_ADDRESS(kCrc32, "Crc32", 0x004CA960)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and
