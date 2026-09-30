@@ -165,9 +165,17 @@ struct PerformPrimaryActionOnTargetUnderCursorMessage : Message
 };
 static_assert(sizeof(PerformPrimaryActionOnTargetUnderCursorMessage) == 4);
 
-// Centre the camera on an object: explore mode's handler (0x0070C140)
-// looks the object up by +4 and has the camera frame it. 8 bytes, from the
-// clone (0x0077D9A0). Read 2026-09-30.
+// Centre the camera on an object, as the game means it: on a party member.
+// 8 bytes, from the clone (0x0077D9A0). Explore mode's handler (0x0070C140,
+// combat mode's too), read 2026-09-30, does two things. It selects the
+// object (dao/Addresses.h, Party::Select), which for a controllable
+// creature (its +0x7F9, the scripts' SetControllable) makes it the one
+// selected and signals it EVENT_TYPE_ON_SELECT, and for anything else does
+// nothing. Then it has the camera controller snap to its target
+// (CameraControllerExplore, slot 8): the creature it follows, which the
+// selection sets. So for an enemy the camera snaps back to whoever it was
+// following, not to the enemy, and for a party member it is a selection
+// with its event, and a snap rather than a pan.
 struct CenterOnObjectMessage : Message
 {
     static constexpr std::uintptr_t kVftable = 0x00B1E754;

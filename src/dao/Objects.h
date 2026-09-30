@@ -403,6 +403,17 @@ class CCCreature : public CCObject
         reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_UpdatePortrait))(this, 0);
         return PortraitImage();
     }
+    // Releases the portrait renderer, as the engine's own screens do when
+    // they close (dao/Addresses.h, ReleasePortrait): the renderer and its
+    // clone of the creature go, and the next RenderPortrait makes a new
+    // one. A movie showing the image should
+    // let it go first. Nothing if there is none. Not yet seen in play.
+    void ReleasePortrait()
+    {
+        using Fn = bool(__fastcall *)(CCCreature *, int);
+        reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_ReleasePortrait))(this, 0);
+    }
+
     // The URL of the portrait last rendered, without rendering; empty if
     // there is none.
     std::wstring PortraitImage() const

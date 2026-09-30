@@ -327,6 +327,25 @@ DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
 DAO_ADDRESS(kGameModeLoading_Worker, "GameModeLoading::Worker", 0x006C6520)
 DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x006CB7A0)
 
+// The camera and the party's selection, read 2026-09-30 from
+// CenterOnObjectMessage's handler (dao/Messages.h). Party::Select,
+// __thiscall (id, int), on the application's +0xD0's +0x58 (0x005D57C0
+// returns it; its class is not read, and Party is our guess from the
+// selection it keeps). With 0 for the int, as the handler passes it: for a
+// creature whose +0x7F9 (controllable) is
+// set and that passes its vtable's check at +0x1D0, it puts it in the
+// selection (a vector of ids at +0x184; 0x006368F0) and signals it
+// EVENT_TYPE_ON_SELECT (89); for anything else, nothing. The game mode
+// controller's +0x60 is the explore camera's controller
+// (CameraControllerExplore, vftable 0x00B1D954, 25 slots, built by
+// 0x0076F890): the id of what it follows at +0x08 and its focus point at
+// +0x70. Its slot 8, SnapToTarget, copies the target's position (the
+// graphics object's +0x120) into the focus and hands the camera the new
+// state at once: no easing. How it follows between snaps, and whether it
+// eases, is still to read. The names are ours.
+DAO_ADDRESS(kParty_Select, "Party::Select", 0x00639E50)
+DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, "CameraControllerExplore::SnapToTarget", 0x0076FCE0)
+
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature
 // method with no arguments (the creature in ecx), makes the creature's
@@ -345,6 +364,14 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x00
 // "imgps://", then the engine's texture of that name, else a file; the
 // URL may add ?Width=, &Height= and ?Async=). The names are ours.
 DAO_ADDRESS(kCCCreature_UpdatePortrait, "CCCreature::UpdatePortrait", 0x006AE2D0)
+// Its pair, read 2026-09-30: ReleasePortrait, a CCCreature method with no
+// arguments that returns 1, destroys the renderer (0x007F3D00, which
+// destroys the clone at +0x20 with ~CCCreature), frees it and clears the
+// creature's +0x78C. The engine calls it in four places, each beside one
+// of UpdatePortrait's callers: a screen that shows a portrait renders it
+// and releases it again. Otherwise ~CCCreature destroys a renderer still
+// held, when the creature goes with its area.
+DAO_ADDRESS(kCCCreature_ReleasePortrait, "CCCreature::ReleasePortrait", 0x0069F470)
 DAO_ADDRESS(kPortraitRenderer_Constructor, "PortraitRenderer::PortraitRenderer", 0x007F3D80)
 DAO_ADDRESS(kPortraitRenderer_Setup, "PortraitRenderer::Setup", 0x007F3E20)
 DAO_ADDRESS(kPortraitRenderer_Render, "PortraitRenderer::Render", 0x007F46E0)

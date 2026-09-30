@@ -220,6 +220,8 @@ From the turn-based mod's side, in the same sessions (DAOTurnBased's `dev/DAOLIB
 
 2026-09-30, about six minutes of play with the turn-based mod: a load, a fight in Highever, a quicksave and a quickload. The creature properties that crashed the ninth session read right, and so did the cursor's pick (the table above). The save flow was seen whole (`dev/SAVES.md`): the quicksave's message, `SaveGame::Write` with the slot it chose, then the screenshot's path. What had been taken for writing the screenshot turned out to be the save screen's path lookup, and is renamed `SaveLoadProxy::ScreenshotPath`. Every click's message reached the example plugin's observer four times, and the fix is to show observers only the receiver with a handler.
 
+The session ended in a crash, not yet explained: an area was loading 60 ms after its loading screen opened, and the engine built a graphics object from a blueprint whose `+0x44`, the part its destructor deletes, was null (`0x0059669E`, in the graphics structures manager; no plugin on the stack). The lead is the turn-based mod's portrait renderers for six enemies, each holding a clone of its creature, destroyed with the old area: a path the engine's own screens avoid by releasing a portrait when they close. `CCCreature::ReleasePortrait` now lets a plugin do the same, and whether that stops it is for the next session.
+
 ## What comes next
 
 - **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
