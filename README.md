@@ -3,12 +3,13 @@
 A native plugin loader and reverse-engineered library for **Dragon Age: Origins** (GOG Ultimate Edition, `DAOrigins.exe` 1.05.13263.0), in the spirit of SKSE and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) for Skyrim: for what the toolset's scripting cannot reach.
 
 - `src/loader` -- `version.dll`, loaded by the game in place of the system's, which loads plugins from `bin_ship\daolib\plugins\` before the game starts.
-- `src/dao` -- the library plugins are written against: addresses, the exe fingerprint, RTTI type names, detours, logging, and the engine's classes as plugins call them: `CClientExoApp` (pause, game mode, objects by id), creatures, placeables and waypoints with the fields their getters return, the script command table and the VM's stack (`dev/LIBRARY.md`).
-- `src/plugins/probe` -- the first plugin: hooks pause, logs every call and who made it, changes nothing.
+- `src/dao` -- the library plugins are written against: every script command callable from C++ (661 of them, generated from the game's own declarations) and interceptable, the engine's objects, effects, events, strings, arrays and data tables as C++ types, its messages and game modes, a per-frame callback, and the addresses, detours and RTTI type names underneath (`dev/LIBRARY.md`).
+- `src/plugins/example` -- a whole plugin to copy from; `dev/PLUGINS.md` is the guide to writing one.
+- `src/plugins/probe` -- watches the game and checks the library against it in play, changing nothing.
 - `dev/` -- the plan, the reading so far, and two maps of the engine: its 827 script commands and its 314 message handlers.
 - `tools/` -- build, deploy, Ghidra analysis and MCP, exe readers.
 
-Early, but the chain works. On 2026-09-29 the loader ran inside the game and loaded the probe before any game code. The probe's hooks on the engine's pause then saw the engine call them.
+The loader, the probe and much of the library have been checked inside the game: object lookups, fields, the object layout, strings, locations, effects, events and arrays matched the engine's own answers on thousands of calls in play. `dev/LIBRARY.md` says what is checked and what is only read so far.
 
 ## Building
 
