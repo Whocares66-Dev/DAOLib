@@ -45,4 +45,17 @@ bool Held();
 // next update. Works while held.
 void Advance(float seconds);
 
+// How fast the world runs: 1 as the game plays, 0.5 half speed, 2 twice.
+// The world timer's own scale, read 2026-09-30: every object's update
+// takes its time from the world timer (EC::WorldTimer, the application's
+// +0xD4; an object's timer, 0x006FA1D0, asks it for the world time), and
+// the timer's update (0x00A358F0) multiplies each frame's seconds by the
+// float at its +0x54. The timer's constructor sets that to 1 and nothing
+// else writes it: a speed the engine carries and never uses. So the AI,
+// commands, effects and regeneration all follow it; what else does
+// (animation, sound, the Flash UI, which keeps its own clock) is not yet
+// seen in play. Nothing while there is no world timer; 1 then.
+void SetSpeed(float scale);
+float Speed();
+
 } // namespace dao::clock

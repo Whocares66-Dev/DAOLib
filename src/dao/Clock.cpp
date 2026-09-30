@@ -1,8 +1,11 @@
 #include "dao/Clock.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Effects.h"
 #include "dao/Hook.h"
+#include "dao/SafeRead.h"
+#include "dao/TypeName.h"
 
 #include <atomic>
 #include <cstdint>
@@ -70,7 +73,40 @@ void Attach()
                    [] { g_updateRegeneration.Attach(addr::kCCCreatureStats_UpdateRegeneration, &UpdateRegeneration); });
 }
 
+// The world timer (EC::WorldTimer) and its scale.
+constexpr std::size_t kWorldTimer = 0xD4; // in the application
+constexpr std::size_t kScale = 0x54;      // in the timer
+
+float *Scale()
+{
+    auto *app = CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return nullptr;
+    }
+    const auto timer = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + kWorldTimer);
+    if (!timer || *timer == 0 || TypeName(reinterpret_cast<const void *>(*timer)) != "EC::WorldTimer")
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<float *>(*timer + kScale);
+}
+
 } // namespace
+
+void SetSpeed(float scale)
+{
+    if (float *speed = Scale(); speed != nullptr && scale > 0)
+    {
+        *speed = scale;
+    }
+}
+
+float Speed()
+{
+    const float *speed = Scale();
+    return speed != nullptr ? *speed : 1.0F;
+}
 
 void Hold(bool held)
 {

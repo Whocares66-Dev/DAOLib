@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace dao
 {
@@ -94,9 +95,17 @@ class CClientExoApp
     {
         return Read<GameModeController *>(kModeHolder);
     }
-    GameMode Mode() const
+    // The game's mode, or nothing before the controller is made.
+    std::optional<GameMode> Mode() const
     {
-        return GameModes()->Mode();
+        const GameModeController *modes = GameModes();
+        return modes != nullptr ? std::optional<GameMode>(modes->Mode()) : std::nullopt;
+    }
+    // The same from anywhere: nothing before the application is up either.
+    static std::optional<GameMode> CurrentMode()
+    {
+        const CClientExoApp *app = Get();
+        return app != nullptr ? app->Mode() : std::nullopt;
     }
 
     // The script commands object (dao/Script.h), made in the application's

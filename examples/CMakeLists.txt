@@ -13,3 +13,6 @@ dao_apply_warnings(example_damage)
 
 add_daolib_plugin(example_saves SOURCES saves/Saves.cpp)
 dao_apply_warnings(example_saves)
+
+add_daolib_plugin(example_speed SOURCES speed/Speed.cpp)
+dao_apply_warnings(example_speed)

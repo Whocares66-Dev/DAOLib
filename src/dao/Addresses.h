@@ -572,6 +572,23 @@ DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A
 // reads through a jump. Which clock gives the world its frame time is not
 // yet pinned. The names are ours.
 DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
+// The world's time (dao/Clock.h, SetSpeed): EC::WorldTimer (vftable
+// 0x00B58C44), the application's +0xD4, over EC::ITimer. Its update (slot
+// 6) takes the microsecond clock's seconds since the last, times its scale
+// at +0x54; its slot 4 gives the seconds since the update, times the same;
+// both give 0 while its byte at +0x58 is set (its slot 7 sets it). Its
+// constructor sets the scale to 1, and nothing else writes it. An object's
+// timer (ObjectTimer::Update, 0x006FA1D0, the object's +0x2B8 a record
+// whose +0x08 is the milliseconds since its last update) asks it for the
+// world time (0x00A35AF0), and CCCreature's update (slot 87, 0x006BE4B0)
+// hands those milliseconds to regeneration and its effects. The names are
+// ours.
+DAO_ADDRESS(kWorldTimer_Constructor, "EC::WorldTimer::WorldTimer", 0x00A35F30)
+DAO_ADDRESS(kWorldTimer_Update, "EC::WorldTimer::Update", 0x00A358F0)
+DAO_ADDRESS(kWorldTimer_SinceUpdate, "EC::WorldTimer::SinceUpdate", 0x00A35980)
+DAO_ADDRESS(kWorldTimer_WorldTime, "EC::WorldTimer::WorldTime", 0x00A35AF0)
+DAO_ADDRESS(kObjectTimer_Update, "ObjectTimer::Update", 0x006FA1D0)
+DAO_ADDRESS(kCCCreature_Update, "CCCreature::Update", 0x006BE4B0)
 DAO_DATA(kClock_Timer, "g_clockTimer", 0x00C2BDF8)
 DAO_DATA(kGTimer_Clock, "GTimer::g_clock", 0x00C1DAA8)
 
