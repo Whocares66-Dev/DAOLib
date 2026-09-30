@@ -93,7 +93,7 @@ DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 
 // An object by its id, on the application: the script command AddCommand
 // pops an object id and passes it here, `mov ecx, [g_clientExoApp]`, one
 // argument, and gets the object back in eax.
-DAO_ADDRESS(kCClientExoApp_GetObject, "CClientExoApp::GetObjectById", 0x005D5BE0)
+DAO_ADDRESS(kCClientExoApp_GetObjectById, "CClientExoApp::GetObjectById", 0x005D5BE0)
 // The typed lookups beside it, found 2026-09-30 by tools/script_backends.py
 // (dev/object_lookups.csv): the same shape, then a cast through the virtual
 // slot that only the named class answers with `this`. Each __thiscall, the
@@ -115,7 +115,7 @@ DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x
 // and the command type in bits 16-23: the script's COMMAND_TYPE_* numbers.
 // addToFront is AddCommand's bAddToFront; override its nOverrideAddBehavior,
 // -1 by default.
-DAO_ADDRESS(kObject_QueueCommand, "GameObject::QueueCommand", 0x0073CD10)
+DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
 
 // The game's update, as a task on the engine's worker threads: from the
 // deliberate crash of 2026-09-30, whose stack ran CClientExoApp's start-up

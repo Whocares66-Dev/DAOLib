@@ -96,7 +96,7 @@ void __fastcall SetPaused(dao::CClientExoApp *self, int edx, bool paused, bool s
                  static_cast<void *>(self));
 }
 
-// The command queue's entry (dao/Addresses.h, kObject_QueueCommand):
+// The command queue's entry (dao/Addresses.h, kCCObject_QueueCommand):
 // __thiscall, three arguments, `ret 0xC`, the command first, returning a
 // value AddCommand hands back to its script. What the object and the
 // command are, and what the two other arguments mean, is what this logs:
@@ -191,7 +191,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_handleTogglePause, dao::addr::kGameModeController_HandleUserTogglePause, &HandleTogglePause,
           "GameModeController::HandleMessage(UserTogglePauseMessage)");
     Place(g_setPaused, dao::addr::kCClientExoApp_SetPaused, &SetPaused, "CClientExoApp::SetPaused");
-    Place(g_queueCommand, dao::addr::kObject_QueueCommand, &QueueCommand, "GameObject::QueueCommand");
+    Place(g_queueCommand, dao::addr::kCCObject_QueueCommand, &QueueCommand, "CCObject::QueueCommand");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
 
@@ -199,7 +199,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     const std::uint32_t hookedAbove[] = {
         static_cast<std::uint32_t>(dao::addr::kGameModeController_HandleUserTogglePause),
         static_cast<std::uint32_t>(dao::addr::kCClientExoApp_SetPaused),
-        static_cast<std::uint32_t>(dao::addr::kObject_QueueCommand),
+        static_cast<std::uint32_t>(dao::addr::kCCObject_QueueCommand),
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",

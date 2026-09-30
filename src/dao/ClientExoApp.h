@@ -47,7 +47,7 @@ class CClientExoApp
     }
     CCObject *GetObjectById(ObjectId id)
     {
-        return Lookup<CCObject>(addr::kCClientExoApp_GetObject, id);
+        return Lookup<CCObject>(addr::kCClientExoApp_GetObjectById, id);
     }
     CCCreature *GetCreatureById(ObjectId id)
     {

@@ -203,8 +203,8 @@ class CCObject : public CGameObject
     int QueueCommand(Command *command, bool addToFront, int overrideBehaviour = -1)
     {
         using Fn = int(__fastcall *)(CCObject *, int, Command *, int, int);
-        return reinterpret_cast<Fn>(Module::Address(addr::kObject_QueueCommand))(this, 0, command, addToFront ? 1 : 0,
-                                                                                 overrideBehaviour);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCCObject_QueueCommand))(this, 0, command, addToFront ? 1 : 0,
+                                                                                   overrideBehaviour);
     }
 };
 
