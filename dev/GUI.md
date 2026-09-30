@@ -29,6 +29,17 @@ GFx calls the game's one FSCommand handler and one ExternalInterface handler. Bo
 
 Every screen is a `GUI::GUIScene`, built as `GUIScene(name, filename, layer, b, flags)` and kept by the GUI system by id and name. `OpenMovie`'s first argument is the scene's id. The layer is the stacking order, going by the values the game's 42 scenes use: 0 floaty text, 1 the HUD (`GUIMain`), 2–3 in-game menus, 4 item examine, 5 conversation, death and the main menu, 6 options and login, 7 popups, 8 loading screens. Flag `0x20` marks the modal screens, `0x10` loading screens. `b` is 10 for the character record, journal, map, skills and spells, and 0 for most others; its meaning is not read. So a plugin's HUD-like movie belongs on layer 1. The GUI system (the application's +0x158) registers its scenes with `AddScene(id, scene)`, ids 0–0x3F, each scene 0xC0 bytes from the engine's allocator. `dao::gui::AddScreen` does the same with an id from 0x100, and `ShowScreen`, `HideScreen` and `CloseScreen` are the GUI system's own by-name slots 17, 19 and 18. The probe logs every `OpenMovie` to confirm the ids and values in play. Where the game finds a movie's file (`guiexport.erf`, an add-in's resources, an override folder) is the other: GFx asks `EclipseGFxFileOpener`.
 
+## What Scaleform's own documentation adds
+
+Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's pages on its GFx 3 integration describe the same interface a generation later. They're good for what things mean, not for names or layouts. They confirmed four points, 2026-09-30:
+
+- The FSCommand callback is `(movie, command, args)` and returns nothing.
+- The ExternalInterface callback is `(movie, method, args, count)`, the shapes read from the game.
+- GFx runs both kinds of handler during a movie's `Advance` or an `Invoke` on it.
+- `SetVariable`'s sticky mode is the default and waits for a variable not yet there.
+
+`SetArrayType` is the same in 4.x: 0 int, 1 double, 2 float, 3 string, 4 wide string, 5 value, which matches what the game passes. The value type numbers are not the same: 4.x inserted `VT_Int` and `VT_UInt` at 3 and 4, and the game's code uses 3.x's numbering (3 number, 4 string, 5 wide string). A managed value (a string or object GFx hands out) must be released before its movie goes.
+
 ## Still to read
 
 - The data tree movies bind to. Reading it is `dao/Data.h`: `SmartData::TokenManager` is the root, and its `Find(path)` walks a dotted path to an attribute, which gives its value as text or a number. A plain attribute can be set (`Attribute::Set`, its class's slot 21, which notifies observers when the value changes). Still to read are making one, and the token observers `AddTokenObserver` registers, through which the game pushes a changed value to a movie. All three are needed for a plugin to publish values a movie shows.

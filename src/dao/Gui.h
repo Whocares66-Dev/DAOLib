@@ -33,6 +33,12 @@
 // two lookups, so it sees every call with its name, and a plugin's
 // handler for a name runs in place of the game's.
 //
+// GFx runs FSCommand and ExternalInterface handlers while it advances a
+// movie or runs an Invoke on it (Scaleform's documentation, and the game's
+// own handlers are shaped for it): a handler runs on the thread that
+// advances the movie, and a plugin's Movie::Invoke can have a handler run
+// before it returns. Handlers should return quickly.
+//
 // Not yet seen in play: the example plugin logs the first calls, their
 // movies' names and the thread they come on, and every movie's name.
 #pragma once
@@ -52,7 +58,13 @@ namespace dao::gui
 // take their answer: 16 bytes, the type at +0 and the value at +8 (the
 // game's handlers read argument i at 16 * i + 8, and answer a number as
 // type 3, the value a double at +8). Only the types a call passes by value
-// are read here; objects, arrays and display objects are GFx's own.
+// are read here; objects, arrays and display objects are GFx's own. The
+// numbering is GFx 3.x's, and the game's code agrees on three of them (3
+// a number, 4 a string argument, 5 a wide string answer); Scaleform 4
+// inserted Int and UInt at 3 and 4, so its documentation's numbers do not
+// apply here. A string or object GFx hands out is managed (0x40 beside the
+// type) and must be released through GFx before its movie goes; how is not
+// read yet, which is why nothing here reads a movie's values back.
 struct Value
 {
     enum class Type : std::uint32_t
@@ -165,7 +177,8 @@ class Movie
     }
 
     // How a set variable holds (GFx's SetVarType). The game sets with
-    // Sticky: kept for a clip not loaded yet, and set on it when it is.
+    // Sticky, GFx's default: kept for a clip not loaded yet, and set on it
+    // when it is. Normal is cheaper, for a variable already there.
     enum class SetType : std::int32_t
     {
         Normal = 0,
