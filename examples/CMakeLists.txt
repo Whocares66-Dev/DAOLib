@@ -16,3 +16,6 @@ dao_apply_warnings(example_saves)
 
 add_daolib_plugin(example_speed SOURCES speed/Speed.cpp)
 dao_apply_warnings(example_speed)
+
+add_daolib_plugin(example_world SOURCES world/World.cpp)
+dao_apply_warnings(example_world)
