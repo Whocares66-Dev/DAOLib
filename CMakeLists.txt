@@ -145,6 +145,7 @@ add_library(
     src/dao/Gda.cpp
     src/dao/Gui.cpp
     src/dao/Log.cpp
+    src/dao/Messages.cpp
     src/dao/Module.cpp
     src/dao/SafeRead.cpp
     src/dao/Script.cpp

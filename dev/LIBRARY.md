@@ -167,6 +167,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Portraits: any creature's, rendered as the party's are, and the `img://` name a movie loads it by | 2026-09-30 | not yet: the example plugin renders the player's creature's once while exploring |
 | Talk tables: a string by its reference through the engine's CTlkTable | 2026-09-30 | not yet: the example plugin reads Shield Pummel's name by its NameStrRef |
 | A creature's properties: every PROPERTY_* by value type, read and set through its CCCreatureStats | 2026-09-30 | not yet: the example plugin reads the player's health, mana or stamina, level and strength once while exploring, beside GetCreatureProperty's answers |
+| Watching and taking messages: a detour on the registry's Dispatch, which every delivery goes through | 2026-09-30 | not yet: the example plugin logs each message class the first time it comes, with its receiver, and every mode change |
 | Commands: the parameters of each type, the target, position, ability and wait; the static and player-issued flags; `CDataArrays`' flags and vectors and its setters | 2026-09-30, from the 17 script commands that build one | not yet: the example plugin logs every field for the first 40 commands `AddCommand` queues, and whether a copy agrees |
 
 ## The first session
@@ -199,7 +200,7 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 
 - **Save and load.** Hooks on both, and somewhere a plugin keeps its own data with a save, as SKSE's co-saves do.
 - **The Flash UI, from the game's side** (`dev/GUI.md`). Where the game looks for a movie's file, so a plugin can ship one; publishing values to the GUI's data tree (SmartData) that movies bind to; portraits.
-- **Messages.** 9 of the 296 message classes have a C++ struct; the rest, their fields' meanings. A plugin can send one and hook a handler, but not yet subscribe to a message class as it can a script event. Sending by name, as key bindings do (`SelectResponseMessage 0`), goes through a registry of factories (`0x0078D1A0`).
+- **Messages.** 9 of the 296 message classes have a C++ struct; the rest, their fields' meanings. A plugin can send one, hook a handler, and watch or take any message by class (`OnMessage`, `InterceptMessage`). Sending by name, as key bindings do (`SelectResponseMessage 0`), goes through a registry of factories (`0x0078D1A0`).
 - **Creatures.** Beyond the fields and properties read: abilities, inventory, the party. From the constructors and NWN's namesakes.
 - **Talk tables.** A plugin's own talk table beside the game's (`dao::tlk::String` reads the game's).
 - **Setters.** `dev/script_backends.csv` names the engine functions the set-commands call; each is a wrapper once its argument types are read from the command body, as `SetCombatState` was.

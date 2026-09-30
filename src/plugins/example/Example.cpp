@@ -33,6 +33,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
+#include <set>
 #include <string>
 
 namespace
@@ -211,6 +213,22 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                              movie.ArraySize("_root.fsc_retval"));
             }
         }
+    });
+
+    // The engine's messages as it delivers them: each class the first time
+    // it comes, with its receiver, and every mode change.
+    dao::messages::OnAnyMessage([](void *receiver, const dao::messages::Message &message) {
+        static std::mutex seen_lock;
+        static std::set<const void *> seen;
+        const std::lock_guard lock(seen_lock);
+        if (seen.size() < 120 && seen.insert(message.vtable).second)
+        {
+            spdlog::info("message {} to {}", dao::TypeName(&message),
+                         receiver != nullptr ? dao::TypeName(receiver) : std::string("nobody"));
+        }
+    });
+    dao::messages::OnMessage<dao::messages::SetGameModeMessage>([](void *, const dao::messages::SetGameModeMessage &m) {
+        spdlog::info("SetGameModeMessage: mode {}", m.mode);
     });
 
     // Sending a message as the engine does: once the player has explored

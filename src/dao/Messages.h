@@ -36,6 +36,7 @@
 #include "dao/generated/MessageHandlers.h"
 
 #include <cstdint>
+#include <functional>
 
 namespace dao::messages
 {
@@ -78,6 +79,43 @@ inline bool Send(void *receiver, const Message &message)
 {
     using Fn = bool(__cdecl *)(const Message *, void *);
     return reinterpret_cast<Fn>(Module::Address(addr::kMessages_Send))(&message, receiver);
+}
+
+// Every message the engine delivers, as it delivers it: a plugin's
+// observer sees the receiver and the message just before the receiver's
+// handler; an interceptor may take the message instead (return true), and
+// then no handler runs and the sender hears it was handled.
+//
+//   dao::messages::OnMessage<dao::messages::SetGameModeMessage>(
+//       [](void *, const dao::messages::SetGameModeMessage &m) { spdlog::info("mode {}", m.mode); });
+//   dao::messages::InterceptMessage<dao::messages::PerformAbilityMessage>(
+//       [](void *, const dao::messages::PerformAbilityMessage &m) { return !MyTurn(m.caster); });
+//
+// Read 2026-09-30: every delivery, sent or posted, goes through the
+// registry's Dispatch (dao/Addresses.h), which only Send calls; posted
+// messages are queued and sent later. This detours Dispatch. It runs for
+// every message (the cursor's moves too), so keep observers quick; a
+// class without a struct here is subscribed to by its vftable
+// (dev/messages.csv), its name by dao::TypeName. Delivery is on the
+// engine's thread that runs the game (the scripts'); not yet seen in play.
+using MessageObserver = std::function<void(void *receiver, const Message &message)>;
+using MessageInterceptor = std::function<bool(void *receiver, const Message &message)>;
+
+void OnAnyMessage(MessageObserver observer);
+void OnMessage(std::uintptr_t vftable, MessageObserver observer);
+void InterceptMessage(std::uintptr_t vftable, MessageInterceptor interceptor);
+
+template <class M> void OnMessage(std::function<void(void *receiver, const M &message)> observer)
+{
+    OnMessage(M::kVftable, [observer = std::move(observer)](void *receiver, const Message &message) {
+        observer(receiver, static_cast<const M &>(message));
+    });
+}
+template <class M> void InterceptMessage(std::function<bool(void *receiver, const M &message)> interceptor)
+{
+    InterceptMessage(M::kVftable, [interceptor = std::move(interceptor)](void *receiver, const Message &message) {
+        return interceptor(receiver, static_cast<const M &>(message));
+    });
 }
 
 // All message classes, their sizes and fields, are in dev/messages.csv
