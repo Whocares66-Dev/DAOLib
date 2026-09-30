@@ -5,4 +5,5 @@
 # vcpkg's tree, so the warning about an unknown command is off.
 definitions:
   - CMakeLists.txt
+  - cmake/DAOLib.cmake
 warn_about_unknown_commands: false

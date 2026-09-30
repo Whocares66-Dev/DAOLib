@@ -16,7 +16,22 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     )
 endif()
 
-option(DAO_BUILD_TESTS "Build the unit tests (no game required)" ON)
+# DAOLib is built two ways: on its own, and inside a plugin's repository
+# that brings it in with add_subdirectory (extern/DAOLib, as Skyrim plugins
+# bring in CommonLibSSE). Inside another, it gives the library and
+# add_daolib_plugin (cmake/DAOLib.cmake) and leaves its own plugins, tests
+# and quality targets out; the loader is declared either way, for a build
+# that asks for it by name.
+option(
+    DAO_BUILD_TESTS
+    "Build the unit tests (no game required)"
+    ${PROJECT_IS_TOP_LEVEL}
+)
+option(
+    DAO_BUILD_PLUGINS
+    "Build the probe and example plugins"
+    ${PROJECT_IS_TOP_LEVEL}
+)
 option(DAO_SANITIZE "Build with AddressSanitizer" OFF)
 # The debug-analyze preset; its own build tree, as clang-tidy reads the
 # debug tree's compile database and clang rejects /analyze.
@@ -90,8 +105,15 @@ if(DAO_SANITIZE)
     )
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-include(Quality)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+# The format and lint targets cover the top-level tree's own sources, so they
+# are the including repository's to define when DAOLib is not the top level.
+if(PROJECT_IS_TOP_LEVEL)
+    include(Quality)
+endif()
+# add_daolib_plugin. A function is global once defined, so a repository that
+# adds this directory can call it afterwards.
+include(DAOLib)
 
 find_package(spdlog CONFIG REQUIRED)
 find_path(DETOURS_INCLUDE_DIRS "detours/detours.h" REQUIRED)
@@ -129,13 +151,16 @@ add_library(
     src/dao/TypeName.cpp
 )
 dao_apply_warnings(daolib)
-target_include_directories(daolib PUBLIC "${CMAKE_SOURCE_DIR}/src")
+# The headers are C++20 (std::span among them), so whatever links daolib is.
+target_compile_features(daolib PUBLIC cxx_std_20)
+target_include_directories(daolib PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_include_directories(daolib SYSTEM PUBLIC ${DETOURS_INCLUDE_DIRS})
 target_link_libraries(daolib PUBLIC spdlog::spdlog ${DETOURS_LIBRARY})
 target_compile_definitions(
     daolib
     PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX DAO_VERSION_STRING="${PROJECT_VERSION}"
 )
+add_library(DAOLib::daolib ALIAS daolib)
 
 # ---------------------------------------------------------------------------
 # version.dll -- the loader. Dropped beside DAOrigins.exe it is loaded in
@@ -152,7 +177,15 @@ add_library(
     src/loader/Proxy.cpp
 )
 dao_apply_warnings(version)
-set_target_properties(version PROPERTIES PREFIX "" OUTPUT_NAME "version")
+# At the top of the build tree, where the game folder's layout starts, when
+# DAOLib is built inside another repository too.
+set_target_properties(
+    version
+    PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "version"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
 # dbghelp names the frames of a crash log; psapi gives the process's memory.
 target_link_libraries(version PRIVATE daolib dbghelp psapi)
 
@@ -164,50 +197,44 @@ target_link_libraries(version PRIVATE daolib dbghelp psapi)
 #
 # The probe counts calls to every function the tables in dev/ name; its list
 # of them is generated from those tables at build time.
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
-set(DAO_PROBE_TARGETS "${CMAKE_BINARY_DIR}/generated/ProbeTargets.inc")
-add_custom_command(
-    OUTPUT "${DAO_PROBE_TARGETS}"
-    COMMAND
-        "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/probe_targets.py"
-        "${DAO_PROBE_TARGETS}"
-    DEPENDS
-        "${CMAKE_SOURCE_DIR}/tools/probe_targets.py"
-        "${CMAKE_SOURCE_DIR}/dev/script_commands.csv"
-        "${CMAKE_SOURCE_DIR}/dev/message_handlers.csv"
-    COMMENT "Generating the probe's census targets from dev/*.csv"
-    VERBATIM
-)
-add_library(
-    probe
-    MODULE
-    src/plugins/probe/Census.cpp
-    src/plugins/probe/Events.cpp
-    src/plugins/probe/Probe.cpp
-    src/plugins/probe/Recorder.cpp
-    src/plugins/probe/ScriptChecks.cpp
-    "${DAO_PROBE_TARGETS}"
-)
-dao_apply_warnings(probe)
-set_target_properties(
-    probe
-    PROPERTIES
-        PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/daolib/plugins"
-)
-target_include_directories(probe PRIVATE "${CMAKE_BINARY_DIR}/generated")
-target_link_libraries(probe PRIVATE daolib)
+if(DAO_BUILD_PLUGINS)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    set(DAO_PROBE_TARGETS
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/ProbeTargets.inc"
+    )
+    add_custom_command(
+        OUTPUT "${DAO_PROBE_TARGETS}"
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tools/probe_targets.py"
+            "${DAO_PROBE_TARGETS}"
+        DEPENDS
+            "${PROJECT_SOURCE_DIR}/tools/probe_targets.py"
+            "${PROJECT_SOURCE_DIR}/dev/script_commands.csv"
+            "${PROJECT_SOURCE_DIR}/dev/message_handlers.csv"
+        COMMENT "Generating the probe's census targets from dev/*.csv"
+        VERBATIM
+    )
+    add_daolib_plugin(
+        probe
+        SOURCES
+            src/plugins/probe/Census.cpp
+            src/plugins/probe/Events.cpp
+            src/plugins/probe/Probe.cpp
+            src/plugins/probe/Recorder.cpp
+            src/plugins/probe/ScriptChecks.cpp
+            "${DAO_PROBE_TARGETS}"
+    )
+    dao_apply_warnings(probe)
+    target_include_directories(
+        probe
+        PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    )
 
-# The example plugin: how a plugin uses daolib, and a test of it in play.
-add_library(example MODULE src/plugins/example/Example.cpp)
-dao_apply_warnings(example)
-set_target_properties(
-    example
-    PROPERTIES
-        PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/daolib/plugins"
-)
-target_link_libraries(example PRIVATE daolib)
+    # The example plugin: how a plugin uses daolib, and a test of it in play.
+    add_daolib_plugin(example SOURCES src/plugins/example/Example.cpp)
+    dao_apply_warnings(example)
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests, over dao/core: what can be checked without the game.

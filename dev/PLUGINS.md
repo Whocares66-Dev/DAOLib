@@ -25,7 +25,18 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
 }
 ```
 
-Add it to `CMakeLists.txt` as the example is (`add_library(name MODULE ...)`, output to `daolib/plugins`, `target_link_libraries(name PRIVATE daolib)`), build with `.\tools\build.ps1`, and `.\tools\deploy.ps1` copies every plugin into the game (with the game closed).
+Declare it with `add_daolib_plugin(name SOURCES ...)` (`cmake/DAOLib.cmake`), as the example is: a DLL named `name.dll`, linked to `DAOLib::daolib`, written to `daolib/plugins` in the build tree. Build with `.\tools\build.ps1`, and `.\tools\deploy.ps1` copies every plugin into the game (with the game closed).
+
+## A plugin in its own repository
+
+A plugin need not live in this tree. Its repository brings DAOLib in the way a Skyrim plugin brings in CommonLibSSE, as a git submodule built with it:
+
+```cmake
+add_subdirectory(extern/DAOLib EXCLUDE_FROM_ALL)
+add_daolib_plugin(myplugin SOURCES src/Plugin.cpp)
+```
+
+Its own `vcpkg.json` lists DAOLib's dependencies (`detours`, `spdlog`), since a manifest build reads only the top-level manifest, and its presets target x86 with the `x86-windows-static-md` triplet as `CMakePresets.json` here does. Inside another repository DAOLib builds the library and declares the loader (`version`, built only when asked for by name), and leaves out its own plugins, tests, and format and lint targets (`DAO_BUILD_PLUGINS` and `DAO_BUILD_TESTS` are on only at the top level). The game still needs the loader beside the exe, from this repository's `deploy.ps1` or the plugin's own.
 
 ## When things exist
 
