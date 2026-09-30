@@ -564,6 +564,20 @@ DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
 DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
 DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+// How a temporary effect runs out, read 2026-09-30 (dao/Effects.h). Each
+// object's update ages its effects through its effects holder (a virtual
+// on every object class, 0x007A1800, calling Update, 0x007A1500), which
+// walks them (0x0079F5D0) with AgeEffect (0x007A0B10) for each. For a
+// temporary effect that has been applied, AgeEffect asks the owner (its
+// vtable slot 11) for this update's figures and passes their +0x08, the
+// milliseconds since the last, to AddElapsed (__thiscall (ms), `ret 4`),
+// which adds them to the effect's +0x30, never past its duration at +0x2C.
+// Then, if the duration less the elapsed is nothing, it ends the effect.
+// AddElapsed has no other caller. The names are ours.
+DAO_ADDRESS(kCGameEffect_AddElapsed, "CGameEffect::AddElapsed", 0x0079F2A0)
+DAO_ADDRESS(kEffectsHolder_Update, "SEffectsHolder::Update", 0x007A1500)
+DAO_ADDRESS(kEffectsHolder_AgeEffect, "SEffectsHolder::AgeEffect", 0x007A0B10)
+DAO_ADDRESS(kCGameEffect_Prepare, "CGameEffect::Prepare", 0x0065C760)
 // The parameters by index of CDataArrays, the base CGameEffect and
 // CScriptEvent share at +0 (the RTTI's base class descriptors), from
 // GetEffectInteger and its three siblings (one body, 0x00651270) and

@@ -12,6 +12,8 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 
 ## 1. Effects: duration and time left
 
+**Read, not yet seen in play (2026-09-30):** `CGameEffect::Duration`, `Remaining`, `SetRemaining`, and the clock every temporary effect ages on, `dao/Effects.h` (`Hold`, `Advance`, `OnAgeing`), through one engine function, `AddElapsed`. Left: seeing it in play; regeneration, which ticks elsewhere; giving `OnAgeing` the object the effect is on (AgeEffect, `0x007A0B10`, has it as its first argument, and AddElapsed does not); an example.
+
 - **Why native:** scripts read an effect's type, flags, creator, ability and duration type, but no command gives its duration or how long it has left. Buff and debuff displays, and the turn-based mod's conversion of durations to rounds, need both. Cooldowns are not on this list: `GetRemainingCooldown` and `SetCooldown` are script commands, callable through `dao::script::api`.
 - **Leads:** `CGameEffect` (`dao/Structures.h`, fields from the effect getter commands); `Engine_ApplyEffectOnObject`'s handler, which takes the duration; the object's effect list (`SEffectsHolder`); whatever expires effects each frame.
 - **Done when:** `CGameEffect::Duration()` and `Remaining()` read in play agree with what the effect was applied with, and fall as the game runs.

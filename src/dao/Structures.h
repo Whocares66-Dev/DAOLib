@@ -174,6 +174,10 @@ class CDataArrays
     {
         return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
     }
+    template <class T> void Write(std::size_t offset, const T &value)
+    {
+        *reinterpret_cast<T *>(reinterpret_cast<std::byte *>(this) + offset) = value;
+    }
 };
 
 // An effect, and an item property. Polymorphic and 0x7C bytes. The fields
@@ -219,6 +223,41 @@ class CGameEffect : public CDataArrays
     {
         return Read<std::int32_t>(0x44);
     }
+
+    // A temporary effect's time (EFFECT_DURATION_TYPE_TEMPORARY), read
+    // 2026-09-30: how long it lasts and how long it has lasted, in
+    // milliseconds. Engine_ApplyEffectOnObject stores the duration it is
+    // given, times 1000, at +0x2C (0x0065C760); AddElapsed (0x0079F2A0)
+    // adds each update's time to +0x30, never past the duration; the
+    // effect ends when nothing is left (dao/Effects.h). Zero for effects
+    // of other duration types. Not yet seen in play.
+    std::int32_t DurationMs() const
+    {
+        return Read<std::int32_t>(kDuration);
+    }
+    std::int32_t ElapsedMs() const
+    {
+        return Read<std::int32_t>(kElapsed);
+    }
+    float Duration() const
+    {
+        return static_cast<float>(DurationMs()) / 1000;
+    }
+    float Remaining() const
+    {
+        return static_cast<float>(DurationMs() - ElapsedMs()) / 1000;
+    }
+    // Sets the time it has left, within its duration; zero or less ends it
+    // on its owner's next update.
+    void SetRemaining(float seconds)
+    {
+        const auto left = static_cast<std::int32_t>(seconds * 1000);
+        const std::int32_t duration = DurationMs();
+        Write(kElapsed, left <= 0 ? duration : (left >= duration ? 0 : duration - left));
+    }
+
+    static constexpr std::size_t kDuration = 0x2C;
+    static constexpr std::size_t kElapsed = 0x30;
 };
 
 // An event: what an event script gets from GetCurrentEvent, and what
