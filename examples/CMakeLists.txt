@@ -19,3 +19,6 @@ dao_apply_warnings(example_speed)
 
 add_daolib_plugin(example_world SOURCES world/World.cpp)
 dao_apply_warnings(example_world)
+
+add_daolib_plugin(example_dialogue SOURCES dialogue/Dialogue.cpp)
+dao_apply_warnings(example_dialogue)
