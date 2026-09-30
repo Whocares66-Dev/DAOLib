@@ -6,7 +6,10 @@
 //   const auto range = dao::gda::GetFloat(Table::Ranges, row, "PrimaryRange");
 //
 // A table is one of the scripts' TABLE_* numbers (dao::script::Table, from
-// 2da_constants_h.nss); a row is the row's id, as scripts pass it to
+// 2da_constants_h.nss): an M2DA, every file of the game's 2da.erf whose
+// name starts with the table's prefix (m2da_base.gda: 1 is "ABI_", 6
+// "BITM_"). dev/gda_tables.csv lists each file's table and columns with
+// their types (tools/gda.py). A row is the row's id, as scripts pass it to
 // GetM2DAInt; a column is its name, hashed as the game does
 // (dao/core/GdaHash.h). Nothing comes back for a table, row or column the
 // engine does not have. The same values are the scripts' GetM2DAInt and
