@@ -564,6 +564,17 @@ DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
 DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
 DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+// The clocks, read 2026-09-30 (dev/TODO.md, item 4). The engine's
+// microsecond clock (the performance counter over its frequency) on a
+// global timer, read through a thunk from 31 places, world code among
+// them; Scaleform's GTimer keeps its clock function in a global (the
+// performance counter's in milliseconds, or GetTickCount's) that the UI
+// reads through a jump. Which clock gives the world its frame time is not
+// yet pinned. The names are ours.
+DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
+DAO_DATA(kClock_Timer, "g_clockTimer", 0x00C2BDF8)
+DAO_DATA(kGTimer_Clock, "GTimer::g_clock", 0x00C1DAA8)
+
 // Input, read 2026-09-30 (dev/TODO.md, item 3). The key bindings' actions
 // name a message as text per game mode, registered at start-up by
 // RegisterInputMessages (one large function), and a key's message is built

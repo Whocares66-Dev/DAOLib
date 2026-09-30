@@ -43,6 +43,12 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** scripts cannot change how fast the game runs. The turn-based mod wants fast AI turns, and other plugins want slow motion.
 - **Leads:** the update's frame time (`Eclipse::UpdateTask`, `EclipseGame::Update`, `dao/Frame.h`); `GetLowResTimer`. The Flash UI's `SetTimeScale` scales only the menus' animations (read 2026-09-30, `dev/GUI.md`), and `GetCreatureSpeed` and `SetCreatureSpeed` are empty in this build.
 - **Done when:** `dao::SetTimeScale(0.5)` slows animation, movement and effect timers together in play.
+- **Read so far (2026-09-30):** three clocks, and which one the world's frame time comes from is not yet pinned.
+  - Scaleform's `GTimer`, the Flash UI's time: its initialiser (`0x00444C00`) puts the clock function in a global (`0x00C1DAA8`), the performance counter's in milliseconds (`0x004449C0`) or `GetTickCount`'s (`0x0041E870`), and the UI reads it through a jump (`0x004449F0`) from 31 places in Scaleform's code. Swapping that pointer would change the UI's time alone.
+  - The engine's microsecond clock: the performance counter times a million over its frequency (`0x004BFF40`), on a global timer (`0x00C2BDF8`), read through `0x004BFFF0` from 31 places, among them world code (`0x0064AE30`, `0x0064B010`), the camera (`0x007E4AF0`) and more. The likeliest source of the world's frame time.
+  - `timeGetTime` times a thousand (`0x0041A9D0`), 12 callers.
+  - The update itself (`Eclipse::UpdateTask`'s slot 3, then `EclipseGame::Update`, `dao/Frame.h`) passes no time: the world's objects take it from a clock.
+- **Next:** find where the world turns the microsecond clock into a frame's elapsed time (the AI master's and the objects' updates, which hand effects and regeneration their milliseconds: `dao/Clock.h`), and scale it there; or, as a probe experiment, scale the microsecond clock and see what slows. Scaling a clock blindly would slow timeouts and fades with it.
 
 ## 5. World queries
 
