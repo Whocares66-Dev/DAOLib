@@ -228,6 +228,26 @@ DAO_ADDRESS(kScaleformManager_OpenMovie, "GUI::ScaleformManager::OpenMovie", 0x0
 DAO_ADDRESS(kGuiMovie_Construct, "GuiMovie::GuiMovie", 0x0051A040)
 DAO_ADDRESS(kGUISystem_OpenScreen, "GUI::GUISystem::OpenScreen", 0x00523BF0)
 DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
+
+// The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
+// ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
+// arguments, returns the root, SmartData::TokenManager, made on first use
+// (0xA8 bytes, its constructor 0x005C7470) and kept in the global. Find,
+// __thiscall (const std::wstring &path, flag), `ret 8`, splits the path on
+// '.' and walks it to an IAttribute; with none there it answers the shared
+// null attribute, which GetValue compares with. An attribute's slot 12
+// returns its value as a std::wstring by value, its slot 13 as a double;
+// GetValue passes flag 0. AddTokenObserver registers a movie's interest in
+// a path (three strings, answering an id). The handlers' names are the
+// game's registered ones; the rest ours.
+DAO_ADDRESS(kTokenManager_Get, "SmartData::TokenManager::Get", 0x00455BF0)
+DAO_DATA(kTokenManager, "g_tokenManager", 0x00C325B0)
+DAO_ADDRESS(kTokenManager_Find, "SmartData::TokenManager::Find", 0x005C6E80)
+DAO_DATA(kNullAttribute, "SmartData::g_nullAttribute", 0x00BF99E0)
+DAO_ADDRESS(kGuiExternal_GetValue, "GuiExternal::GetValue", 0x0051EC60)
+DAO_ADDRESS(kGuiExternal_GetNumber, "GuiExternal::GetNumber", 0x0051CFD0)
+DAO_ADDRESS(kGuiExternal_AddTokenObserver, "GuiExternal::AddTokenObserver", 0x0051CD50)
+DAO_ADDRESS(kGuiExternal_SendMessage, "GuiExternal::SendMessage", 0x0051C800)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and

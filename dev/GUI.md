@@ -31,6 +31,6 @@ What `screen`, `layer` and `flags` are is the open question before a plugin can 
 
 ## Still to read
 
-- The data tree movies bind to (SmartData: `GUI.SelectedChar.Attributes`, the token observers `AddTokenObserver` registers), for a plugin to publish values a movie shows.
+- The data tree movies bind to. Reading it is `dao/Data.h`: `SmartData::TokenManager` is the root, and its `Find(path)` walks a dotted path to an attribute, which gives its value as text or a number. Still to read are an attribute's setters, making one, and the token observers `AddTokenObserver` registers, through which the game pushes a changed value to a movie. All three are needed for a plugin to publish values a movie shows.
 - Portraits: `UpdatePortraitMessage`, `GUI::GUIPaperdoll`, `EclipseGFxImageLoader`.
 - Releasing a GFx value a movie hands out, to read variables and `Invoke`'s results.

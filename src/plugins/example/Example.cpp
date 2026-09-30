@@ -12,6 +12,7 @@
 // The probe also takes GetCombatState's slot in the table, so the two
 // chain: whichever installed last runs first and Proceeds into the other.
 #include "dao/ClientExoApp.h"
+#include "dao/Data.h"
 #include "dao/Events.h"
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
@@ -241,6 +242,17 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                                  dao::gui::MovieOf(owner) != nullptr ? "loaded" : "no movie");
         }
         spdlog::info("{} movies: {}", owners.size(), names);
+
+        // A few of the data tree's values, as the UI's GetValue and
+        // GetNumber give them.
+        for (const wchar_t *path : {L"GUI.SelectedChar", L"Map.ShowAllLabels", L"CClientExoApp.GUIDialogResult"})
+        {
+            const dao::data::Attribute *attribute = dao::data::Find(path);
+            spdlog::info("data {}: {}", dao::Utf8(path),
+                         attribute != nullptr
+                             ? fmt::format("\"{}\", {}", dao::Utf8(attribute->Text()), attribute->Number())
+                             : std::string("none"));
+        }
     });
     return true;
 }
