@@ -78,7 +78,7 @@ class GameModeExplore
     std::optional<ObjectId> CursorObject() const
     {
         const auto id = Read<ObjectId>(kCursorObject);
-        return id == 0xFFFFFFFF || id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
+        return id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
     }
 
     // The point on the ground under the cursor, when the cursor is on the

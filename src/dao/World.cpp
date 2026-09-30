@@ -67,8 +67,8 @@ Sight Ask(CCArea *area, const Vector &from, const Vector &to, ObjectId ignore)
     const Vector4 a(from);
     const Vector4 b(to);
     Vector4 blocked;
-    const bool clear = reinterpret_cast<Fn>(Module::Address(addr::kCCArea_LineOfSight))(
-        area, 0, &a, &b, &blocked, ignore == kInvalidObject ? 0xFFFFFFFF : ignore, groups::kSight);
+    const bool clear = reinterpret_cast<Fn>(Module::Address(addr::kCCArea_LineOfSight))(area, 0, &a, &b, &blocked,
+                                                                                        ignore, groups::kSight);
     Sight sight;
     sight.clear = clear;
     if (!clear)

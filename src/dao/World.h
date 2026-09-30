@@ -79,7 +79,7 @@ struct Hit
     Vector position;
     std::uint32_t padding0 = 0;
     Kind kind = Kind::Nothing;
-    ObjectId object = 0xFFFFFFFF;
+    ObjectId object = kInvalidObject;
     // groups::kNotWalkable clear: explore mode's walkable test requires it
     // of a ground hit.
     bool walkable = false;
