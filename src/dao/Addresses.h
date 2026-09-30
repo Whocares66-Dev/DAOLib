@@ -340,16 +340,21 @@ DAO_ADDRESS(kCTlkTable_GetString, "CTlkTable::GetString", 0x004E4990)
 
 // A creature's properties, read 2026-09-30 from GetCreatureProperty and
 // SetCreatureProperty: the creature's +0x7C4 is a SmartData attribute
-// whose value (+0xC, so the creature's +0x7D0) is its CCCreatureStats, a
-// list of properties by id (a std::vector at +4, ids below 1000 there).
-// The getters, __thiscall (id), `ret 4`, a float, one per value: total,
-// base, current, modifier (PROPERTY_VALUE_* 1-4); the setters,
-// __thiscall (id, float value, 1), `ret 0xC`: base (for PROPERTY_VALUE_*
-// 1 and 2), current, modifier. The ids are the scripts' PROPERTY_*.
-DAO_ADDRESS(kCreatureStats_GetTotal, "CCCreatureStats::GetTotal", 0x006435C0)
-DAO_ADDRESS(kCreatureStats_GetBase, "CCCreatureStats::GetBase", 0x006436B0)
-DAO_ADDRESS(kCreatureStats_GetCurrent, "CCCreatureStats::GetCurrent", 0x006437A0)
-DAO_ADDRESS(kCreatureStats_GetModifier, "CCCreatureStats::GetModifier", 0x00643890)
+// whose value (+0xC, so the creature's +0x7D0) is its CCCreatureStats.
+// The stats' +0x190 is the properties by id (a std::vector at its +4, ids
+// below 1000 there). The getters are on that list, not on the stats:
+// GetCreatureProperty passes the stats plus 0x190 (0x0066D002), and a
+// getter called on the stats themselves reads the wrong vector and
+// crashed the game in play, 2026-09-30. They are __thiscall (id), `ret 4`,
+// a float, one per value: total, base, current, modifier
+// (PROPERTY_VALUE_* 1-4). The setters are on the stats, and add 0x190
+// themselves (0x0071B239): __thiscall (id, float value, 1), `ret 0xC`,
+// base (for PROPERTY_VALUE_* 1 and 2), current, modifier. The ids are the
+// scripts' PROPERTY_*. The names are ours.
+DAO_ADDRESS(kCreatureProperties_GetTotal, "CreatureProperties::GetTotal", 0x006435C0)
+DAO_ADDRESS(kCreatureProperties_GetBase, "CreatureProperties::GetBase", 0x006436B0)
+DAO_ADDRESS(kCreatureProperties_GetCurrent, "CreatureProperties::GetCurrent", 0x006437A0)
+DAO_ADDRESS(kCreatureProperties_GetModifier, "CreatureProperties::GetModifier", 0x00643890)
 DAO_ADDRESS(kCreatureStats_SetBase, "CCCreatureStats::SetBase", 0x0071B230)
 DAO_ADDRESS(kCreatureStats_SetCurrent, "CCCreatureStats::SetCurrent", 0x0071B320)
 DAO_ADDRESS(kCreatureStats_SetModifier, "CCCreatureStats::SetModifier", 0x0071B280)

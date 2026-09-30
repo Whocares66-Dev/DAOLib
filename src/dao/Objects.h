@@ -423,32 +423,34 @@ class CCCreature : public CCObject
     // GetCreatureProperty reads it (dao/Addresses.h, CCCreatureStats):
     // attributes, health and mana or stamina, level, experience, speed.
     // Straight from the creature's stats, off the scripts' thread too.
-    // Nothing for a creature with no stats. Not yet seen in play.
+    // Nothing for a creature with no stats. The first try passed the
+    // getters the stats rather than their property list and crashed the
+    // game in play, 2026-09-30 (dao/Addresses.h); this form not yet seen.
     std::optional<float> Property(std::int32_t property,
                                   script::PropertyValue value = script::PropertyValue::Total) const
     {
-        const void *stats = Stats();
+        const auto *stats = static_cast<const std::byte *>(Stats());
         if (stats == nullptr)
         {
             return std::nullopt;
         }
         using Fn = float(__fastcall *)(const void *, int, std::int32_t);
-        std::uintptr_t getter = addr::kCreatureStats_GetTotal;
+        std::uintptr_t getter = addr::kCreatureProperties_GetTotal;
         switch (value)
         {
         case script::PropertyValue::Base:
-            getter = addr::kCreatureStats_GetBase;
+            getter = addr::kCreatureProperties_GetBase;
             break;
         case script::PropertyValue::Current:
-            getter = addr::kCreatureStats_GetCurrent;
+            getter = addr::kCreatureProperties_GetCurrent;
             break;
         case script::PropertyValue::Modifier:
-            getter = addr::kCreatureStats_GetModifier;
+            getter = addr::kCreatureProperties_GetModifier;
             break;
         default:
             break;
         }
-        return reinterpret_cast<Fn>(Module::Address(getter))(stats, 0, property);
+        return reinterpret_cast<Fn>(Module::Address(getter))(stats + kProperties, 0, property);
     }
     std::optional<float> Property(script::PropertyAttribute property,
                                   script::PropertyValue value = script::PropertyValue::Total) const
@@ -509,11 +511,13 @@ class CCCreature : public CCObject
 
   private:
     // The creature's CCCreatureStats: the value of its attribute at +0x7C4.
+    // The setters take it; the getters take its property list, +0x190.
     void *Stats() const
     {
         return Read<void *>(kStats);
     }
     static constexpr std::size_t kStats = 0x7D0;
+    static constexpr std::size_t kProperties = 0x190;
 };
 
 class CCPlaceable : public CCObject
