@@ -564,6 +564,14 @@ DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x
 DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
 DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
 DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+// Input, read 2026-09-30 (dev/TODO.md, item 3). The key bindings' actions
+// name a message as text per game mode, registered at start-up by
+// RegisterInputMessages (one large function), and a key's message is built
+// by name and delivered. RawInputMessage's handler in the input mappings
+// runs while the controls screen captures a key. The names are ours.
+DAO_ADDRESS(kInput_RegisterInputMessages, "Input::RegisterInputMessages", 0x006DC900)
+DAO_ADDRESS(kGroupedInputMappings_HandleRawInput, "Eclipse::GroupedInputMappings::HandleRawInput", 0x00894ED0)
+
 // Using an ability from the quickbar, read 2026-09-30 from
 // PerformAbilityMessage's handler (dao/Messages.h says how it chooses a
 // target). UseAbility (ability, caster, the message's target, the target chosen,

@@ -31,6 +31,12 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** scripts cannot read keys. A plugin polls `GetAsyncKeyState` today (the turn-based mod does), which ignores the game's own bindings and the controls screen.
 - **Leads:** `GameModeController`'s `RawInputMessage` handler (`0x0063FE70`); `KeyBindings.ini`, whose bindings name messages ("SaveGameMessage -1 2"), sent through the engine's registry of message factories (`0x0078D1A0`); the data tree's `InputMappings`.
 - **Done when:** a plugin registers an action, the player binds it in the controls screen, and a callback runs on the key.
+- **Read so far (2026-09-30):**
+  - How a key reaches the game. `KeyBindings.ini` gives each action its two keys (`TogglePause_0=Keyboard::Button_Space`). `Eclipse::GroupedInputMappings` turns a key into its action, and the action, in the current game mode, names a message as text: `SaveGameMessage -1 2`, `UserTogglePauseMessage`, `SelectPartyMemberIndexMessage 0 1`. The texts and their modes (by class name, `GameModeExplore`, `GameModeFixed`) are registered at start-up by one large function (`0x006DC900`, through `0x00891010`, `0x00890C60` and `0x0088F810`), and the message is built by name through the registry's factories and delivered.
+  - What a plugin can do now. It can react to any action the player has bound by watching the message the action sends (`dao::messages::OnMessage`); the pause key's `UserTogglePauseMessage` was seen in play.
+  - `RawInputMessage` is no key feed. It carries a raw input's code at `+4`, and is sent while the controls screen is capturing a key to bind (its handler, `0x00894ED0`, compares the code with Escape, Enter and the mouse buttons). It was never seen in play otherwise.
+  - The actions' names in the controls screen are `inputmap.gda`, 188 rows of an id and a string reference.
+- **Left:** a plugin's own action. Either register one (a row of `inputmap.gda` for its name, the registration call for its keys and message, and a message the plugin can take: an existing class it intercepts), or have a binding name a message only the plugin knows and catch it where the registry's factory is asked for it by name (`0x0078D1A0`).
 
 ## 4. Time: game speed and the clock
 
