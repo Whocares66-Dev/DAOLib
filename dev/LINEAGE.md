@@ -26,6 +26,20 @@ Eclipse was substantially re-architected. It has no NWN counterpart for its mess
 - **xoreos** (<https://xoreos.org/>, <https://github.com/xoreos/xoreos>): an open reimplementation of the Aurora family, Dragon Age: Origins included. It loads DAO campaigns and areas, and documents and reads DAO's resource formats. For DAO it has engine function stubs taken from `script.ldf`, but, by its own account, no working script system. Use it for the file formats and resource handling, not for the engine's internals.
 - **NWN2 and KotOR.** Electron (NWN2, with NWNX4) and Odyssey (KotOR, with a large reverse-engineering community) are Aurora's other descendants. They are later than NWN and so sometimes closer to Eclipse, but they are further afield.
 
+## Matched so far against NWN:EE's headers (2026-09-30, `C:\Modding\unified`)
+
+| NWN:EE | DAO | How it was matched |
+|---|---|---|
+| `CVirtualMachine::StackPopInteger(int32_t*)` | `0x00A2F3C0` | `ToggleGamePause(int)` pops its one argument with it |
+| `CVirtualMachine::StackPopObject(OBJECT_ID*)` | `0x00A2F6D0` | `GetCombatState(object)` pops its one argument with it |
+| `CVirtualMachine::StackPushInteger(int32_t)` | `0x00A2D650` | `GetCombatState` returns its int with it |
+| the VM itself, `g_pVirtualMachine` | `0x00C1D080` | `this` for all of the above, in every command |
+| `CGameObjectArray::GetGameObject(OBJECT_ID, CGameObject**)` returning `uint8_t` | `0x00A58190` | the same arguments and a byte result, on the application's array at `+0xCC` |
+| `CNWSObjectActionNode` (action id, twelve parameters, 16-bit group id) | the command queued at `0x0073CD10` (type, sequence number in 16 bits) | the same role, and a 16-bit id beside the type |
+| `CNWSCombatRound`, NWN's 6-second rounds | none | no round class in DAO's RTTI: Eclipse dropped rounds for continuous combat, which a turn-based mode would have to put back |
+
+Each is in `src/dao/Addresses.h` with its evidence.
+
 ## How to use it
 
 1. When a DAO class has an NWN name, read the NWN:EE header for it first. It says what the class is for and what members to expect.

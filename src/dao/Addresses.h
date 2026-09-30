@@ -85,4 +85,37 @@ DAO_ADDRESS(kCClientExoApp_GetObject, "CClientExoApp::GetObjectById", 0x005D5BE0
 // -1 by default.
 DAO_ADDRESS(kObject_QueueCommand, "GameObject::QueueCommand", 0x0073CD10)
 
+// The game's update, as a task on the engine's worker threads: from the
+// deliberate crash of 2026-09-30, whose stack ran CClientExoApp's start-up
+// through the message dispatch down to Eclipse::UpdateTask's slot 3, which
+// calls the per-frame update at 0x00412EB0, on a Multithreading::Thread.
+// The probe counts a stack sample as game logic when this function's frame
+// is on it; the range is Ghidra's.
+DAO_ADDRESS(kEclipseUpdateTask_Execute, "Eclipse::UpdateTask::vfunction3", 0x00413310)
+inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
+
+// The script machine, named after Neverwinter Nights: NWN:EE's headers
+// (C:\Modding\unified, NWNXLib/API/API/CVirtualMachine.hpp) declare
+// `BOOL StackPopInteger(int32_t*)` and its kin on CVirtualMachine, and every
+// script command here calls the same shapes on the object at kVirtualMachine:
+// `mov ecx, [0x00C1D080]; lea eax, [esp]; push eax; call`. Which is which
+// was read 2026-09-30 from commands whose script.ldf signature is known:
+// ToggleGamePause(int) pops with 0x00A2F3C0, GetCombatState(object) pops
+// with 0x00A2F6D0 and answers with 0x00A2D650, SetCombatState(object, int)
+// pops with 0x00A2F6D0 then 0x00A2F3C0, AddCommand pops its command with
+// 0x00A2F650. Not yet verified in play.
+DAO_DATA(kVirtualMachine, "g_pVirtualMachine", 0x00C1D080)
+DAO_ADDRESS(kCVirtualMachine_StackPopInteger, "CVirtualMachine::StackPopInteger", 0x00A2F3C0)
+DAO_ADDRESS(kCVirtualMachine_StackPopObject, "CVirtualMachine::StackPopObject", 0x00A2F6D0)
+DAO_ADDRESS(kCVirtualMachine_StackPopEngineStructure, "CVirtualMachine::StackPopEngineStructure", 0x00A2F650)
+DAO_ADDRESS(kCVirtualMachine_StackPushInteger, "CVirtualMachine::StackPushInteger", 0x00A2D650)
+// The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
+// OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
+// application's array at +0xCC.
+DAO_ADDRESS(kCGameObjectArray_GetGameObject, "CGameObjectArray::GetGameObject", 0x00A58190)
+// SetCombatState's engine side: the script command looks the creature up
+// (0x005D58C0) and calls this on it with the state. How a creature enters
+// and leaves combat, for a turn-based mode.
+DAO_ADDRESS(kCCCreature_SetCombatState, "CCCreature::SetCombatState", 0x006AE0A0)
+
 } // namespace dao::addr
