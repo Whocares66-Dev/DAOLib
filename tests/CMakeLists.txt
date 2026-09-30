@@ -6,6 +6,7 @@ add_executable(
     test_fingerprint.cpp
     test_range.cpp
     test_relocate.cpp
+    test_saferead.cpp
 )
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)

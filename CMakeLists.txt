@@ -102,6 +102,10 @@ add_library(
     src/dao/core/Fingerprint.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
+    src/dao/Log.cpp
+    src/dao/Module.cpp
+    src/dao/SafeRead.cpp
+    src/dao/TypeName.cpp
 )
 dao_apply_warnings(daolib)
 target_include_directories(daolib PUBLIC "${CMAKE_SOURCE_DIR}/src")
