@@ -78,6 +78,13 @@ DAO_ADDRESS(kCClientExoApp_Constructor, "CClientExoApp::CClientExoApp", 0x005DC5
 // name is not in the exe. What `second` means is not yet read: the pause
 // key passes 1.
 DAO_ADDRESS(kCClientExoApp_SetPaused, "CClientExoApp::SetPaused", 0x005D6740)
+// The game mode controller, CClientExoApp+0x114 (dao/GameModes.h), read
+// 2026-09-30: its constructor, from the application's initialisation
+// (0x005DC052), and SetGameMode(mode, 0, 0), __thiscall, which its
+// handler for SetGameModeMessage (0x006416E0) calls with the message's
+// field.
+DAO_ADDRESS(kGameModeController_Constructor, "GameModeController::GameModeController", 0x00641370)
+DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 0x006414A0)
 
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a

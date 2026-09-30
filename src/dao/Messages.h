@@ -17,9 +17,12 @@
 // A message class derives from Messages::GameMessage and Messages::Message
 // (RTTI), polymorphic, with 11 virtual functions; slot 1 clones it, and the
 // clone copies exactly its fields. The layouts below are read from the
-// clone and the handler that uses them; the rest of the ~300 are not yet.
+// clone and the handler that uses them; every class's size and field
+// offsets are in dev/messages.csv (tools/messages.py), their meanings not
+// yet.
 #pragma once
 
+#include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/generated/MessageHandlers.h"
 
@@ -36,6 +39,18 @@ struct Message
 
 template <class M> using TypedHandlerFn = bool(__fastcall *)(void *owner, int edx, const M *message);
 
+// The message as class M if it is one (its vtable is M's), else null. Each
+// typed message below has its class's vtable address as kVftable.
+template <class M> const M *As(const Message *message)
+{
+    return message != nullptr && message->vtable == reinterpret_cast<const void *>(Module::Address(M::kVftable))
+               ? static_cast<const M *>(message)
+               : nullptr;
+}
+
+// All message classes, their sizes and fields, are in dev/messages.csv
+// (tools/messages.py, from each class's clone).
+
 // The player orders a creature to use an ability, on a target (the
 // quickbar, a radial menu). 0x10 bytes, from its clone (0x0077B210); the
 // fields from GameModeExplore's handler (0x00711B50), which looks the
@@ -44,6 +59,7 @@ template <class M> using TypedHandlerFn = bool(__fastcall *)(void *owner, int ed
 // 2026-09-30, not yet seen in play.
 struct PerformAbilityMessage : Message
 {
+    static constexpr std::uintptr_t kVftable = 0x00B1DEE4;
     std::int32_t ability;
     ObjectId caster;
     ObjectId target;
@@ -55,7 +71,32 @@ static_assert(sizeof(PerformAbilityMessage) == 0x10);
 // from explore mode's own state. Read 2026-09-30.
 struct MoveCharacterToLocationMessage : Message
 {
+    static constexpr std::uintptr_t kVftable = 0x00B1DA94;
 };
 static_assert(sizeof(MoveCharacterToLocationMessage) == 4);
+
+// Switch the game's mode (dao/GameModes.h). 8 bytes; the controller's
+// handler (0x006416E0) passes +4 to SetGameMode.
+struct SetGameModeMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1D9D4;
+    std::int32_t mode;
+};
+static_assert(sizeof(SetGameModeMessage) == 8);
+
+// The pause key (the controller's handler toggles the application's pause,
+// dao/Addresses.h), and pause and unpause as such. No fields, 4 bytes each.
+struct UserTogglePauseMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E904;
+};
+struct PauseMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E8A4;
+};
+struct UnpauseMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E8D4;
+};
 
 } // namespace dao::messages

@@ -8,6 +8,7 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/TypeName.h"
 #include "dao/core/CallSite.h"
 #include "dao/core/Pe.h"
 
@@ -132,6 +133,7 @@ class Recorder
                 lastRefresh = now;
             }
             SampleAll();
+            LogGameModesOnce();
             if (now - lastCensus >= kCensusPeriodMs)
             {
                 WriteCensus(now);
@@ -155,6 +157,43 @@ class Recorder
     }
 
   private:
+    // Which GameMode class is at each number of the controller's table
+    // (dao/GameModes.h), once, as soon as the table is there: what the
+    // mode numbers mean.
+    void LogGameModesOnce()
+    {
+        if (modesLogged_)
+        {
+            return;
+        }
+        const auto app = dao::TryRead<std::uintptr_t>(dao::Module::Address(dao::addr::kClientExoApp));
+        const auto controller =
+            app && *app != 0 ? dao::TryRead<std::uintptr_t>(*app + dao::CClientExoApp::kModeHolder) : std::nullopt;
+        if (!controller || *controller == 0)
+        {
+            return;
+        }
+        const auto first = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesFirst);
+        const auto last = dao::TryRead<std::uintptr_t>(*controller + dao::GameModeController::kModesLast);
+        if (!first || !last || *first == 0 || *last <= *first)
+        {
+            return;
+        }
+        modesLogged_ = true;
+        const auto count = (*last - *first) / 4;
+        std::string line;
+        for (std::uintptr_t i = 0; i < count && i < 32; ++i)
+        {
+            const auto mode = dao::TryRead<std::uintptr_t>(*first + 4 * i);
+            line += fmt::format(" {}={}", i,
+                                mode && *mode != 0 ? dao::TypeName(reinterpret_cast<const void *>(*mode))
+                                                   : std::string("-"));
+        }
+        spdlog::info("game modes: {} in the controller's table:{}", count, line);
+    }
+
+    bool modesLogged_ = false;
+
     void RefreshThreads()
     {
         const DWORD self = GetCurrentThreadId();

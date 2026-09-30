@@ -12,6 +12,7 @@
 #pragma once
 
 #include "dao/Addresses.h"
+#include "dao/GameModes.h"
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/Objects.h"
@@ -87,21 +88,17 @@ class CClientExoApp
 
     // -- game mode
 
-    // Seen in play 2026-09-29/30 (dev/TURN_BASED.md): 0 exploring, 1 combat,
-    // 3 a menu screen, 4 dialogue, 9 loading, 11 the main menu.
-    enum class GameMode : std::int32_t
+    using GameMode = dao::GameMode;
+
+    // The game mode controller (dao/GameModes.h), made in the application's
+    // initialisation; null before.
+    GameModeController *GameModes() const
     {
-        Explore = 0,
-        Combat = 1,
-        MenuScreen = 3,
-        Dialogue = 4,
-        Loading = 9,
-        MainMenu = 11,
-    };
+        return Read<GameModeController *>(kModeHolder);
+    }
     GameMode Mode() const
     {
-        const auto *holder = Read<const std::byte *>(kModeHolder);
-        return static_cast<GameMode>(*reinterpret_cast<const std::int32_t *>(holder + kModeValue));
+        return GameModes()->Mode();
     }
 
     // The script commands object (dao/Script.h), made in the application's
@@ -116,10 +113,10 @@ class CClientExoApp
     static constexpr std::size_t kFlagValue = 0xC;
     static constexpr std::size_t kPausedSince = 0xF8;
     static constexpr std::size_t kPausedTotal = 0xFC;
-    // A pointer to an object holding the game mode, an int at +0x78 of it.
-    // What the object is, is not yet read.
+    // The GameModeController (dao/GameModes.h), whose current mode is the
+    // int at +0x78 of it.
     static constexpr std::size_t kModeHolder = 0x114;
-    static constexpr std::size_t kModeValue = 0x78;
+    static constexpr std::size_t kModeValue = GameModeController::kMode;
     // `app->[+0x1E4] = new CVirtualMachineCommands` in the application's
     // initialisation (0x005DBE22), the object then handed to the VM.
     static constexpr std::size_t kCommands = 0x1E4;

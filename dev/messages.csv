@@ -1,0 +1,297 @@
+class,vftable,size,fields,calls,handled_by
+AcceptChantersQuestMessage,0x00b1e784,0x8,0x4:4,0,Journal
+AcceptTOSMessage,0x00b03d24,0x4,,0,GUI::GUILogin
+AcquireAllItemsMessage,0x00b1e3f4,0x8,0x4:4,0,CCCreature
+AcquireItemMessage,0x00b1e3c4,0x8,0x4:4,0,CCCreature | CCPlaceable
+ActivateAnalogTargetModeMessage,0x00b1de24,0x4,,0,GameModeExplore
+ActivateLinearTargetModeMessage,0x00b1ddf4,0x4,,0,GameModeExplore
+AddInDetailsMessage,0x00b17cb8,0x20,,1,GUI::GUIContentManager
+AddInDisableMessage,0x00b17c98,0x8,0x4:4,0,GUI::GUIContentManager
+AddInEnableMessage,0x00b17c78,0x8,0x4:4,0,GUI::GUIContentManager
+AddInStatusMessage,0x00b17cd8,0x20,,1,GUI::GUIContentManager
+ApplyPartyPickerChangesMessage,0x00b1e7e4,0x4,,0,CCParty
+AreaTransitionMessage,0x00b17118,0x24,,1,GameModeGUI
+AttachRuneToItemMessage,0x00b023a8,0xc,0x4:4 0x8:4,0,CCItem
+AutoLevelUpMessage,0x00b07be0,0x8,0x4:4,0,GUI::GUICharGenBase
+BeginAccountCreationFlowMessage,0x00b03c84,0x4,,0,GUI::GUILogin
+BuyDownloadMessage,0x00aee5e0,0x20,,1,PRCGUIShared
+BuyItemMessage,0x00b240d4,0x10,0x4:4 0x8:4 0xc:4,0,Store
+CameraZoomInMessage,0x00b1e9f4,0x4,,0,GameModeExplore
+CameraZoomOutMessage,0x00b1ea24,0x4,,0,GameModeExplore
+CancelAbilityTargetingMessage,0x00b1ea84,0x4,,0,GameModeExplore
+CancelAccountCreationMessage,0x00b03cc4,0x4,,0,GUI::GUILogin
+CancelPurchaseMessage,0x00b18038,0x4,,0,GUI::GUIPurchaseConfirm
+CancelTOSMessage,0x00b03d04,0x4,,0,GUI::GUILogin
+CenterOnMainPartyMemberMessage,0x00b1e724,0x4,,0,GameModeExplore
+CenterOnObjectMessage,0x00b1e754,0x8,0x4:4,0,GameModeExplore
+CenterOnObjectUnderCursorMessage,0x00b1e6f4,0x4,,0,GameModeExplore
+CharGenAssignAbilityMessage,0x00b24c90,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUICharGenBase | GUI::GUIPaperdoll
+CharGenAssignAttributeMessage,0x00b24c24,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUICharGenBase | GUI::GUIPaperdoll
+CharGenEndMessage,0x00b24bd0,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUICharGenBase
+CharGenGoBackMessage,0x00b1ede4,0x4,,0,GameModeCharGen
+CharGenResetCreatureMessage,0x00b1abcc,0x4,,0,GUI::GUICharGen
+CharGenSaveInfoMessage,0x00b1b010,0x4,,0,GUI::GUICharGen
+CharGenSelectAppearanceAndSoundSetMessage,0x00b1aec4,0x28,,1,GUI::GUICharGen
+CharGenSelectBackgroundMessage,0x00b1addc,0x14,0x4:4 0x8:4 0xc:4 0x10:4,0,GUI::GUICharGen
+CharGenSelectClassMessage,0x00b1ad00,0x14,0x4:4 0x8:4 0xc:4 0x10:4,0,GUI::GUICharGen
+CharGenSelectGenderMessage,0x00b1ac34,0x14,0x4:4 0x8:4 0xc:4 0x10:4,0,GUI::GUICharGen
+CharGenSelectLevelupClassMessage,0x00b1aa1c,0xc,0x4:4 0x8:4,0,GUI::GUILevelUp
+CharGenSelectNameMessage,0x00b1af48,0x8,0x4:4,0,GUI::GUICharGen
+CharGenSelectRaceMessage,0x00b1ac9c,0x14,0x4:4 0x8:4 0xc:4 0x10:4,0,GUI::GUICharGen
+CharGenSelectSpecializationMessage,0x00b1ad64,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUICharGen
+CharGenStartAppearanceSceneMessage,0x00b1ae4c,0xc,0x4:4 0x8:4,0,GUI::GUICharGen
+CharGenStartMessage,0x00b24b78,0xc,0x4:4 0x8:4,0,GUI::GUICharGen | GUI::GUILevelUp
+CharGenUpdateBeardMessage,0x00b1ab84,0x8,,0,GUI::GUICharGen
+CharGenUploadInfoMessage,0x00b1afac,0x4,,0,GUI::GUICharGen
+ClearAchievementStatusMessage,0x00b04744,0x8,0x4:4,0,GUI::GUICommunityFeatures
+ClearChanterBoardMessage,0x00b1e7b4,0x4,,0,Journal
+ClearNewlyAcquiredFlagMessage,0x00b1a370,0x8,0x4:4,0,GUI::GUIInventory
+ClearPartyPickerMessage,0x00b1ef64,0x4,,0,GameModePartyPicker
+CloseStoreMessage,0x00b18d64,0x4,,0,Store
+CommitOptionsMessage,0x00ae00ec,0x4,,0,CClientOptions
+ConfirmPurchaseMessage,0x00b18018,0x4,,0,GUI::GUIPurchaseConfirm
+ConsumeTutorialMessage,0x00b1e154,0x8,0x4:1,0,TutorialControl
+ContainerChangedMessage,0x00b1a2f0,0x4,,0,GUI::GUIInventory
+CountIngredientsMessage,0x00b1841c,0x4,,0,GUI::GUICrafting
+CraftItemMessage,0x00b1843c,0xc,0x4:4 0x8:4,0,GUI::GUICrafting
+CursorMovedMessage,0x00b1db24,0x4,,0,
+CycleFullScreenGUILeftMessage,0x00b1e184,0x4,,0,GUI::DragonAgeGUISystem
+CycleFullScreenGUIRightMessage,0x00b1e1b4,0x4,,0,GUI::DragonAgeGUISystem
+DeathResurrectPartyMessage,0x00b1ed24,0x4,,0,GameModeDead
+DeleteHeroMessage,0x00b1e304,0x8,0x4:4,0,SaveLoadProxy
+DeleteSaveGameMessage,0x00b1e214,0xc,0x4:4 0x8:4,0,SaveLoadProxy
+DeleteScreenshotsMessage,0x00b179a0,0x4,,0,GUI::GUIScreenshots
+DeleteSelectedScreenshotsMessage,0x00b047c4,0x4,,0,GUI::GUICommunityFeatures
+DetachRuneFromItemMessage,0x00b023d8,0x8,0x4:4,0,CCItem
+DirtyPresetMessage,0x00b2124c,0x4,,0,PartyTactics
+DisableKeyRemappingMessage,0x00b1ef04,0x4,,0,Eclipse::GroupedInputMappings
+DisableObjectGlowMessage,0x00b16220,0x4,,0,GameModeExplore
+DisplayContextMenuMessage,0x00b1e4e4,0x4,,0,GUI::DragonAgeGUISystem
+DisplayFloatyMessage,0x00b07d5c,0x30,,1,CCCreature | CCPlaceable
+DisplayInformationDialogMessage,0x00aee620,0x8,0x4:4,0,PRCGUIShared
+DisplayLastFullScreenGUIMessage,0x00b1e0c4,0x4,,0,GUI::DragonAgeGUISystem
+DoCancelLoginMessage,0x00b03c64,0x4,,0,GUI::GUILogin
+DoCreateAccountMessage,0x00b03ca4,0x4,,0,GUI::GUILogin
+DoLoginMessage,0x00b03c24,0x4,,0,GUI::GUILogin
+DoLogoutMessage,0x00b03c44,0x4,,0,GUI::GUILogin
+DropItemMessage,0x00b1e424,0x8,0x4:4,0,CCCreature
+EnableKeyRemappingMessage,0x00b1eed4,0x24,,1,Eclipse::GroupedInputMappings
+EnableObjectGlowMessage,0x00b161f0,0x4,,0,GameModeExplore
+EquipItemMessage,0x00b1e454,0xc,0x4:4 0x8:4,0,CCCreature
+EquipmentChangedMessage,0x00b217f8,0x4,,0,GUI::GUIPaperdoll
+ErrorResultMessage,0x00b03d84,0x24,,1,GUI::GUILogin
+ExitPartyPickerMessage,0x00b1d0f0,0x4,,0,GameModePartyPicker
+ExitToStartMenuMessage,0x00b1ed54,0x4,,0,GameModeCharGen | GameModeGUI
+FadeCompleteMessage,0x00b18a54,0x4,,0,GUI::GUIFadeToBlackLoading
+FilterScreenshotListMessage,0x00b04844,0x8,0x4:4,0,GUI::GUICommunityFeatures
+FindAbilityChainsMessage,0x00b170e8,0x10,0x4:4 0x8:4 0xc:4,0,GameModeCharGen | GameModeGUI
+FocusCameraOnObject,0x00b05784,0x8,0x4:4,0,GameModeExplore
+GiftItemMessage,0x00b1df14,0xc,0x4:4 0x8:4,0,GameModeGUI
+GoToRedeemCodeMessage,0x00b17c58,0x4,,0,GUI::GUIContentManager
+GUI::DialogBoxClosedMessage,0x00aee580,0x4,,0,GUI::DragonAgeGUISystem
+GUI::ForceInventoryRefreshMessage,0x00b024a8,0x4,,0,GUI::DragonAgeGUISystem | GUI::GUIInventory
+GUI::GoToCodexMessage,0x00b02078,0x20,,1,GUI::DragonAgeGUISystem
+GUI::GoToForgotPasswordMessage,0x00b02178,0x4,,0,GUI::DragonAgeGUISystem
+GUI::GoToForumsMessage,0x00b02138,0x4,,0,GUI::DragonAgeGUISystem
+GUI::GoToGuiWithFollowerMessage,0x00b020f8,0x24,,1,GUI::DragonAgeGUISystem
+GUI::GoToItemMessage,0x00b020b8,0x8,0x4:4,0,GUI::DragonAgeGUISystem
+GUI::GoToJournalPRCTabMessage,0x00b02098,0x20,,1,GUI::DragonAgeGUISystem
+GUI::GoToLevelUpMessage,0x00b020d8,0xc,0x4:4 0x8:1,0,GUI::DragonAgeGUISystem
+GUI::GoToOnlineProfileMessage,0x00b02158,0x4,,0,GUI::DragonAgeGUISystem
+GUI::GoToQuestMessage,0x00b02058,0x24,,1,GUI::DragonAgeGUISystem
+GUI::GoToStoreMessage,0x00b02118,0x4,,0,GUI::DragonAgeGUISystem
+GUI::HideCharGenGUIMessage,0x00b01fd8,0x4,,0,GUI::DragonAgeGUISystem
+GUI::HideContainerGUIMessage,0x00b02018,0x4,,0,GUI::DragonAgeGUISystem
+GUI::HideConversationGUIMessage,0x00b01f98,0x4,,0,
+GUI::HideInventoryGUIMessage,0x00b01f18,0x4,,0,GUI::DragonAgeGUISystem
+GUI::HideJournalGUIMessage,0x00b01f58,0x4,,0,GUI::DragonAgeGUISystem
+GUI::InvokeCallbackMessage,0x00b024c8,0x58,,1,GUI::DragonAgeGUISystem
+GUI::PrintToConsoleMessage,0x00af68b4,0x28,,1,
+GUI::PrintToLogMessage,0x00af68d0,0x24,,1,
+GUI::PrintToLogWindowMessage,0x00af56b8,0x40,,1,
+GUI::RunClientScriptMessage,0x00af6908,0x20,,1,
+GUI::RunConsoleCommandMessage,0x00af68ec,0x20,,1,
+GUI::RunScriptMessage,0x00af6924,0x20,,1,
+GUI::SetCursorMessage,0x00af6940,0x20,,1,GUI::GUISystem
+GUI::ShowCharGenGUIMessage,0x00b01fb8,0x8,0x4:4,0,GUI::DragonAgeGUISystem
+GUI::ShowContainerGUIMessage,0x00b01ff8,0xc,0x4:4 0x8:1,0,GUI::DragonAgeGUISystem
+GUI::ShowConversationGUIMessage,0x00b01f78,0x4,,0,
+GUI::ShowDialogBoxMessage,0x00b02198,0x4,,0,GUI::DragonAgeGUISystem
+GUI::ShowInventoryGUIMessage,0x00b01ef8,0x10,0x4:1 0x8:4 0xc:1,0,GUI::DragonAgeGUISystem
+GUI::ShowItemSplitDialogMessage,0x00b021b8,0x4,,0,GUI::DragonAgeGUISystem
+GUI::ShowJournalGUIMessage,0x00b01f38,0x4,,0,GUI::DragonAgeGUISystem
+GUI::StartDraggingMessage,0x00b021f8,0xc,,0,GUI::DragonAgeGUISystem
+GUI::StopDraggingMessage,0x00b02218,0x8,0x4:1,0,GUI::DragonAgeGUISystem
+GUI::TestSoundSetMessage,0x00b021d8,0x8,0x4:4,0,GUI::DragonAgeGUISystem
+GUI::UpdateFloatyLayerStageSizeMessage,0x00b02038,0xc,0x4:4 0x8:4,0,GUI::DragonAgeGUISystem
+GUICanDeleteSSMessage,0x00b04824,0x8,0x4:1,0,GUI::GUICommunityFeatures
+GUICursorLeftButtonDblClickMessage,0x00b1dc14,0x4,,0,GUI::ScaleformManager
+GUICursorLeftButtonDownMessage,0x00b1dbb4,0x4,,0,GUI::ScaleformManager
+GUICursorLeftButtonUpMessage,0x00b1dbe4,0x4,,0,GUI::ScaleformManager
+GUICursorMiddleButtonDblClickMessage,0x00b1dca4,0x4,,0,GUI::ScaleformManager
+GUICursorMiddleButtonDownMessage,0x00b1dc44,0x4,,0,GUI::ScaleformManager
+GUICursorMiddleButtonUpMessage,0x00b1dc74,0x4,,0,GUI::ScaleformManager
+GUICursorMovedMessage,0x00b1dd64,0x4,,0,
+GUICursorRightButtonDblClickMessage,0x00b1dd34,0x4,,0,GUI::ScaleformManager
+GUICursorRightButtonDownMessage,0x00b1dcd4,0x4,,0,GUI::ScaleformManager
+GUICursorRightButtonUpMessage,0x00b1dd04,0x4,,0,GUI::ScaleformManager
+GUICursorScrollDownMessage,0x00b1ddc4,0x4,,0,GUI::ScaleformManager
+GUICursorScrollUpMessage,0x00b1dd94,0x4,,0,GUI::ScaleformManager
+GUIDialogResultMessage,0x00b00218,0x24,,1,CClientExoApp
+GUIPRCDialogResultMessage,0x00b17cf8,0xc,0x4:4 0x8:4,0,GUI::GUIContentManager
+HandleOptionChangesMessage,0x00b03da4,0x4,,0,GUI::GUILogin
+HideAbilityHeaderMessage,0x00b1ee14,0x8,0x4:2 0x6:1,0,CCCreature
+HideAlertMessage,0x00b057b4,0x8,0x4:4,0,CCParty
+HideAllFloatiesMessage,0x00b1ebd4,0x4,,0,GameModeExplore
+HideBookBackMessage,0x00b16ee8,0x4,,0,GUI::GUIBookback
+HideBookFrontMessage,0x00b16ec8,0x4,,0,GUI::GUIBookback
+HideContextMenuMessage,0x00b1e514,0x4,,0,GUI::DragonAgeGUISystem
+HideCraftingGUIMessage,0x00b02348,0x4,,0,GUI::DragonAgeGUISystem
+HideFloatyMessage,0x00b1eb74,0x4,,0,
+HideFullScreenGUIMessage,0x00b022e8,0x4,,0,GUI::DragonAgeGUISystem
+HideGUIScreenMessage,0x00b152e8,0x20,,1,GUI::DragonAgeGUISystem
+HideUberAlertMessage,0x00b057d4,0x4,,0,CCParty
+ImportHeroMessage,0x00b1e364,0xc,0x4:4 0x8:4,0,GUI::GUICharGen
+InstallContentMessage,0x00aee600,0x8,0x4:1,0,PRCGUIShared
+InventoryClosedMessage,0x00b1e574,0x4,,0,CCPlaceable
+IsValidTargetMessage,0x00b1df44,0x8,0x4:1,0,
+LeftThumbstickMessage,0x00b1ec94,0x4,,0,
+LoadExternalSaveMessage,0x00b000f8,0x20,,1,SaveLoadProxy
+LoadGameMessage,0x00b03a14,0xc,0x4:4 0x8:4,0,GameModeController | SaveLoadProxy
+LoadModuleSkipUnauthorizedMessage,0x00b00238,0x4,,0,CClientExoApp
+LoadPresetMessage,0x00b2127c,0xc,0x4:4 0x8:4,0,PartyTactics
+LoadScreenshotInfoMessage,0x00b04864,0x8,0x4:4,0,GUI::GUICommunityFeatures
+LoadSeededCharactersMessage,0x00b24aa8,0x4,,0,GUI::GUIPaperdoll
+MakeDonationMessage,0x00b1e814,0x8,0x4:4,0,
+MarkAllCodexAsReadMessage,0x00b1e874,0x4,,0,Journal
+MarkCodexAsReadMessage,0x00b1e844,0x20,,1,Journal
+MoveCharacterToLocationMessage,0x00b1da94,0x4,,0,GameModeExplore
+NextPageMessage,0x00b1db54,0x4,,0,GameMode
+OnMinimapScaleChangedMessage,0x00b0d994,0x8,,0,CCArea
+OpenConsoleMessage,0x00b1ef94,0x4,,0,GameModeController
+OpenStoreMessage,0x00b07c10,0x4,,0,Store
+OpenTechnicalHelpMessage,0x00aee5c0,0x4,,0,PRCGUIShared
+PartyBackpackChangedMessage,0x00b18d24,0x4,,0,GUI::GUIInventory | GUI::GUIStore
+PartyPlotItemsChangedMessage,0x00b1a2d0,0x4,,0,GUI::GUIInventory
+PauseMessage,0x00b1e8a4,0x4,,0,GameModeController
+PerformAbilityMessage,0x00b1dee4,0x10,0x4:4 0x8:4 0xc:4,0,GameModeExplore | GameModeGUI
+PerformAbilityOnPlayerMessage,0x00b1eb14,0x8,0x4:4,0,GameModeExplore
+PerformAbilityOnSelectedTargetMessage,0x00b1eae4,0x4,,0,GameModeExplore
+PerformAbilityOnTargetUnderCursorMessage,0x00b1ea54,0x4,,0,GameModeExplore
+PerformDefaultActionOnTargetMessage,0x00b1da04,0x4,,0,GameModeExplore
+PerformPrimaryActionOnTargetUnderCursorMessage,0x00b16190,0x4,,0,GameModeExplore
+PerformSecondaryActionOnTargetMessage,0x00b1da34,0x4,,0,GameModeExplore
+PerformSecondaryActionOnTargetUnderCursorMessage,0x00b1eab4,0x4,,0,GameModeExplore
+PerformUseObjectMessage,0x00b1e544,0x10,0x4:4 0x8:4 0xc:4,0,GameModeExplore
+PlayMovieMessage,0x00af5898,0x20,,1,GUI::ScaleformManager
+PlaySoundSetEntryMessage,0x00b02438,0x8,0x4:4,0,CCCreature
+PopGUIScreenMessage,0x00b1e124,0x4,,0,GUI::DragonAgeGUISystem
+PreMoveCharacterToLocationMessage,0x00b1da64,0x4,,0,GameModeExplore
+PrevPageMessage,0x00b1db84,0x4,,0,GameMode
+PushGUIScreenMessage,0x00af58d8,0x20,,1,GUI::DragonAgeGUISystem
+RawInputMessage,0x00b1eea4,0x8,0x4:4,0,Eclipse::GroupedInputMappings | GameModeController
+ReConnectMessage,0x00ae891c,0x4,,0,OnlineFeatures
+RefreshBalanceAndEntitlementsMessage,0x00aee5a0,0x4,,0,PRCGUIShared
+RefreshCreditEntriesMessage,0x00b1e934,0x4,,0,GameModePregame
+RefreshHeroesForImportMessage,0x00b1e2a4,0x4,,0,SaveLoadProxy
+RefreshHeroesMessage,0x00b1e274,0x4,,0,SaveLoadProxy
+RefreshTacticsDataMessage,0x00b2130c,0x8,0x4:4,0,PartyTactics
+RepairItemMessage,0x00b02378,0x4,,0,CCItem
+RequestTargetMessage,0x00b1deb4,0xc,0x4:4 0x8:4,0,
+ResetMessage,0x00b24cf8,0x4,,0,GUI::GUICharGenBase
+RestoreDefaultsMessage,0x00b1edb4,0x8,0x4:4,0,CClientOptions
+ResumeGameMessage,0x00b000c8,0x4,,0,SaveLoadProxy
+RetrieveAchievementInfoMessage,0x00b04724,0x8,0x4:4,0,GUI::GUICommunityFeatures
+RetrieveAchievementListMessage,0x00b04704,0x4,,0,GUI::GUICommunityFeatures
+RetrieveScreenshotListMessage,0x00b04764,0x4,,0,GUI::GUICommunityFeatures
+RetryDownloadOrInstallMessage,0x00aee640,0x8,0x4:4,0,PRCGUIShared
+RightThumbstickMessage,0x00b1ecc4,0x4,,0,
+RimLoadedMessage,0x00b1e994,0x20,,1,CTlkTable
+RimUnloadedMessage,0x00b1e9c4,0x20,,1,CTlkTable
+RotatePaperdollCameraMessage,0x00b02278,0xc,,0,GUI::GUIPaperdoll
+RotatePaperdollLeftMessage,0x00b02238,0x8,,0,GUI::GUIPaperdoll
+RotatePaperdollRightMessage,0x00b02258,0x8,,0,GUI::GUIPaperdoll
+SaveGameMessage,0x00b00098,0x28,,1,GameModeController | SaveLoadProxy
+SaveKeyFrameMessage,0x00b1e244,0x4,,0,SaveLoadProxy
+SavePresetMessage,0x00b212ac,0x8,0x4:4,0,PartyTactics
+ScreenshotInfoChangedMessage,0x00b04804,0x8,0x4:4,0,GUI::GUICommunityFeatures
+ScriptDialogResultMessage,0x00b15de4,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUIPopupLayer
+SelectCharacterMessage,0x00b1e5a4,0x8,0x4:4,0,CCParty
+SelectedGUICharacterChangedMessage,0x00b1a350,0x4,,0,GUI::GUIInventory
+SelectHeroMessage,0x00b1e2d4,0x8,0x4:4,0,SaveLoadProxy
+SelectHostileUnderCursorMessage,0x00b1e6c4,0x4,,0,GameModeExplore
+SelectNextCharacterMessage,0x00b1e5d4,0x4,,0,CCParty | GUI::DragonAgeGUISystem | GameModeController | GameModeExplore
+SelectNextCreatureTargetMessage,0x00b1e034,0x4,,0,GameModeExplore
+SelectNextHostileTargetMessage,0x00b1df74,0x4,,0,GameModeExplore
+SelectNextUsableObjectMessage,0x00b1dfd4,0x4,,0,GameModeExplore
+SelectNoneAllScreenshotsMessage,0x00b179e0,0x4,,0,GUI::GUIScreenshots
+SelectPartyMemberIndexMessage,0x00b16160,0x8,0x4:2 0x6:1,0,CCParty | GameModeExplore
+SelectPartyMemberUnderCursorMessage,0x00b1e694,0x8,0x4:1,0,GameModeExplore | GameModePartyPicker
+SelectPreviousCharacterMessage,0x00b1e604,0x4,,0,CCParty | GUI::DragonAgeGUISystem | GameModeController | GameModeExplore
+SelectPreviousCreatureTargetMessage,0x00b1e064,0x4,,0,GameModeExplore
+SelectPreviousHostileTargetMessage,0x00b1dfa4,0x4,,0,GameModeExplore
+SelectPreviousUsableObjectMessage,0x00b1e004,0x4,,0,GameModeExplore
+SelectResponseMessage,0x00b1de84,0x8,0x4:4,0,ConversationData | GameModeDialog
+SelectScreenshotMessage,0x00b04784,0xc,0x4:4 0x8:1,0,GUI::GUICommunityFeatures
+SellItemMessage,0x00b240f4,0x10,0x4:4 0x8:4 0xc:4,0,Store
+SetActiveQuestMessage,0x00b13ad4,0x20,,1,Journal
+SetAddInSeenMessage,0x00aee680,0x8,0x4:4,0,PRCGUIShared
+SetBackpackSortMessage,0x00b1a330,0x8,0x4:4,0,GUI::GUIInventory | GUI::GUIStore
+SetBehaviourMessage,0x00b212dc,0x8,0x4:4,0,PartyTactics
+SetCameraPresetMessage,0x00b21818,0x8,0x4:4,0,GUI::GUIPaperdoll
+SetClientOptionMessage,0x00b1ed84,0x3c,,1,CClientOptions
+SetForwardingIdMessage,0x00b03dc4,0x20,,1,GUI::GUILogin
+SetFullScreenGUIMessage,0x00b022b8,0x20,,1,GUI::DragonAgeGUISystem
+SetGameModeMessage,0x00b1d9d4,0x8,0x4:4,0,GameModeController
+SetItemListFilterMessage,0x00b1a310,0x8,0x4:4,0,GUI::GUIInventory | GUI::GUIStore
+SetOfferSeenMessage,0x00aee660,0x8,0x4:4,0,PRCGUIShared
+SetQuickslotMessage,0x00b161c0,0x48,,1,CCCreature | GameModeExplore
+SetSaveLoadModeMessage,0x00b1e1e4,0x8,0x4:4,0,SaveLoadProxy
+SetSoundSetMessage,0x00b02408,0x20,,1,CCCreature | GUI::DragonAgeGUISystem
+ShowAbilityHeaderMessage,0x00b1ee44,0x8,0x4:2 0x6:1,0,CCCreature
+ShowAllFloatiesMessage,0x00b1eba4,0x8,0x4:4,0,GameModeExplore
+ShowAllGuiLabelsMessage,0x00b1ee74,0x8,0x4:4,0,GameModeGUI
+ShowBookContentsMessage,0x00b16e88,0x4,,0,GUI::GUIBookback
+ShowBookFrontMessage,0x00b16ea8,0x4,,0,GUI::GUIBookback
+ShowCraftingGUIMessage,0x00b02318,0x8,0x4:4,0,GUI::DragonAgeGUISystem
+ShowCreditsMessage,0x00b1e964,0x8,0x4:4,0,GameModePregame
+ShowFloatyMessage,0x00b1eb44,0x8,0x4:4,0,
+ShowItemExamineMessage,0x00b1781c,0x24,,1,GUI::GUIItemExamine
+ShowPartyPickerMessage,0x00b07c64,0x4,,0,GameModeExplore | GameModeGUI
+ShutDownToStartMenuMessage,0x00b1ec64,0x4,,0,GameModeController
+SkipCutsceneMessage,0x00b1ec04,0x4,,0,GameModeCutscene
+SkipDialogMessage,0x00b1de54,0x4,,0,GameModeDialog
+SkipMovieMessage,0x00b1ec34,0x4,,0,GameModeMovie
+StopMovieMessage,0x00af58b8,0x20,,1,GUI::ScaleformManager
+StoreChangedMessage,0x00b18d44,0x4,,0,GUI::GUIStore
+SubmitPartyChangesMessage,0x00b1ef34,0x4,,0,GameModePartyPicker
+SwitchWeaponSetMessage,0x00b0f2c0,0x8,0x4:4,0,CCCreature
+SwitchWeaponSetNowMessage,0x00b1e4b4,0x8,0x4:4,0,CCCreature
+TakeScreenshotMessage,0x00b07dac,0x78,,1,GameModeController
+TeleportPlayerMessage,0x00b1ecf4,0x4,,0,GameModeExplore
+TestMessage,0x00b18ffc,0x8,0x4:4,0,GUI::GUIDebugOptions
+ToggleFullPartySelectMessage,0x00b1e634,0x4,,0,CCParty | GameModeExplore
+ToggleFullScreenGUIMessage,0x00b1e094,0x20,,1,GUI::DragonAgeGUISystem
+ToggleHoldPartyMessage,0x00b1e664,0x4,,0,CCParty | GameModeExplore
+ToggleMainInterfaceMessage,0x00b1e0f4,0x4,,0,GUI::DragonAgeGUISystem
+ToggleRunWalkMessage,0x00b1dac4,0x4,,0,CCParty | GameModeExplore
+ToggleTacticalCameraMessage,0x00b1daf4,0x4,,0,GameModeExplore
+UnequipItemMessage,0x00b1e484,0x8,0x4:4,0,CCCreature
+UnpauseMessage,0x00b1e8d4,0x4,,0,GameModeController
+UnselectAllScreenshotsMessage,0x00b047e4,0x4,,0,GUI::GUICommunityFeatures
+UnselectPartyMemberMessage,0x00b1d120,0x8,0x4:1,0,GameModePartyPicker
+UpdateCountrySelectionMessage,0x00b03d44,0x8,0x4:4,0,GUI::GUILogin
+UpdateGameMessage,0x00aee6a0,0x4,,0,PRCGUIShared
+UpdateHeroAppearanceMessage,0x00b1e334,0x10,0x4:4 0x8:4 0xc:4,0,GUI::GUICharGen
+UpdateLanguageSelectionMessage,0x00b03d64,0x8,0x4:4,0,GUI::GUILogin
+UpdatePaperDollFromSeededCharacterMessage,0x00b24ac8,0x8,0x4:4,0,GUI::GUIPaperdoll
+UpdatePortraitMessage,0x00b02298,0x4,,0,GUI::GUIPaperdoll
+UploadScreenshotsMessage,0x00b179c0,0x4,,0,GUI::GUIScreenshots
+UploadSelectedScreenshotsMessage,0x00b047a4,0x4,,0,GUI::GUICommunityFeatures
+UsePlotActionMessage,0x00b1e394,0x8,0x4:4,0,ArmyControl
+UserTogglePauseMessage,0x00b1e904,0x4,,0,GameModeController
+ValidateActionMessage,0x00b2133c,0x8,0x4:4,0,PartyTactics
+ViewTOSMessage,0x00b03ce4,0x4,,0,GUI::GUILogin
+WorldMapClosedMessage,0x00b15318,0x8,0x4:4,0,WorldMap
+WorldMapPreTransitionMessage,0x00b15348,0x4,,0,WorldMap
+WorldMapSwapMapsMessage,0x00b15378,0x4,,0,WorldMap
