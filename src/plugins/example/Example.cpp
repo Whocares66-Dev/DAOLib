@@ -13,6 +13,8 @@
 // chain: whichever installed last runs first and Proceeds into the other.
 #include "dao/ClientExoApp.h"
 #include "dao/Events.h"
+#include "dao/Frame.h"
+#include "dao/GameModes.h"
 #include "dao/Gda.h"
 #include "dao/Log.h"
 #include "dao/Messages.h"
@@ -20,6 +22,7 @@
 #include "dao/Plugin.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
+#include "dao/TypeName.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <atomic>
@@ -149,5 +152,32 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             }
         });
     }
+
+    // Sending a message as the engine does: once the player has explored
+    // for ten seconds or so (600 frames), centre the camera on the creature
+    // the player controls, and log whether the mode handled it.
+    dao::OnFrame([] {
+        static std::uint32_t exploring = 0;
+        static bool sent = false;
+        auto *app = dao::CClientExoApp::Get();
+        auto *modes = app != nullptr ? app->GameModes() : nullptr;
+        if (sent || modes == nullptr)
+        {
+            return;
+        }
+        exploring = modes->Mode() == dao::GameMode::Explore ? exploring + 1 : 0;
+        if (exploring < 600)
+        {
+            return;
+        }
+        sent = true;
+        auto message = dao::messages::Make<dao::messages::CenterOnObjectMessage>();
+        message.object = dao::script::api::GetMainControlled();
+        void *explore = modes->CurrentModeObject();
+        const bool handled = dao::messages::Send(explore, message);
+        spdlog::info("sent CenterOnObjectMessage for {:#010x} to {} at {}: {}", message.object,
+                     explore != nullptr ? dao::TypeName(explore) : std::string("no mode"), explore,
+                     handled ? "handled" : "not handled");
+    });
     return true;
 }

@@ -137,6 +137,25 @@ DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x
 //   0x006D694C, 0x006D69CC  the client table's SetActive, the same
 // So whose a command is shows in the command itself: Command::PlayerIssued.
 DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
+
+// Sending a message (dao/Messages.h), read 2026-09-30. Handlers are kept by
+// a registry, a singleton of 0x28 bytes made on first use (Get), in a table
+// indexed by the receiver's class id (its vtable slot 0, a number given to
+// each class on its first registration) and then the message's type id
+// (the message's slot 0): Register(&classId, &typeId, handler), which every
+// receiver's handler setup calls, 314 handlers in all
+// (dev/MESSAGE_HANDLERS.md). Dispatch(receiver, message) asks the
+// receiver's +4 byte whether it takes messages, finds the handler (Find)
+// and returns its answer, false for none. Send is the free function around
+// it that 74 places call, __cdecl (message, receiver), a no-op for a null
+// receiver: synchronous, on the caller's thread, and the message stays the
+// caller's. The names are ours.
+DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
+DAO_ADDRESS(kMessageRegistry_Get, "MessageRegistry::Get", 0x004740B0)
+DAO_DATA(kMessageRegistry, "g_messageRegistry", 0x00C2C09C)
+DAO_ADDRESS(kMessageRegistry_Dispatch, "MessageRegistry::Dispatch", 0x004D8330)
+DAO_ADDRESS(kMessageRegistry_Find, "MessageRegistry::Find", 0x004D82A0)
+DAO_ADDRESS(kMessageRegistry_Register, "MessageRegistry::Register", 0x004D9190)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and

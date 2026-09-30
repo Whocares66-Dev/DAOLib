@@ -70,8 +70,13 @@ class GameModeController
     // std::vector: +0x5C and +0x60 are other pointers. The current mode is
     // at +0x78 and, by its value after a load (9, loading), the previous one
     // at +0x7C. An entry is returned only if its class is a GameMode
-    // (dao::TypeName), else null.
-    const void *ModeObject(GameMode mode) const;
+    // (dao::TypeName), else null. What a plugin sends a mode's messages to
+    // (dao/Messages.h).
+    void *ModeObject(GameMode mode) const;
+    void *CurrentModeObject() const
+    {
+        return ModeObject(Mode());
+    }
 
     // The mode before the current one, by the value seen after a load.
     GameMode PreviousMode() const

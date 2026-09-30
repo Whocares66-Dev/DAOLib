@@ -8,7 +8,7 @@
 namespace dao
 {
 
-const void *GameModeController::ModeObject(GameMode mode) const
+void *GameModeController::ModeObject(GameMode mode) const
 {
     const auto index = static_cast<std::size_t>(mode);
     const auto modes = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(this) + kModes);
@@ -21,7 +21,7 @@ const void *GameModeController::ModeObject(GameMode mode) const
     {
         return nullptr;
     }
-    const auto *object = reinterpret_cast<const void *>(*entry);
+    auto *object = reinterpret_cast<void *>(*entry);
     return TypeName(object).rfind("GameMode", 0) == 0 ? object : nullptr;
 }
 

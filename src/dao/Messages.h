@@ -14,14 +14,23 @@
 //   }
 //   g_performAbility.Attach(dao::messages::handler::GameModeExplore_PerformAbilityMessage, &PerformAbility);
 //
+// And a plugin sends one as the engine does, to the object that handles it
+// (a game mode, the mode controller):
+//
+//   auto *modes = dao::CClientExoApp::Get()->GameModes();
+//   auto message = dao::messages::Make<dao::messages::CenterOnObjectMessage>();
+//   message.object = creature;
+//   const bool handled = dao::messages::Send(modes->CurrentModeObject(), message);
+//
 // A message class derives from Messages::GameMessage and Messages::Message
-// (RTTI), polymorphic, with 11 virtual functions; slot 1 clones it, and the
-// clone copies exactly its fields. The layouts below are read from the
+// (RTTI), polymorphic, with 11 virtual functions; slot 0 answers its type
+// id, slot 1 clones it, and the clone copies exactly its fields. The layouts below are read from the
 // clone and the handler that uses them; every class's size and field
 // offsets are in dev/messages.csv (tools/messages.py), their meanings not
 // yet.
 #pragma once
 
+#include "dao/Addresses.h"
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/generated/MessageHandlers.h"
@@ -46,6 +55,29 @@ template <class M> const M *As(const Message *message)
     return message != nullptr && message->vtable == reinterpret_cast<const void *>(Module::Address(M::kVftable))
                ? static_cast<const M *>(message)
                : nullptr;
+}
+
+// A message of class M, ready to send: its vtable set, its fields zero. The
+// classes below with a kVftable have only plain fields, so one made here
+// needs nothing freed.
+template <class M> M Make()
+{
+    M message{};
+    message.vtable = reinterpret_cast<const void *>(Module::Address(M::kVftable));
+    return message;
+}
+
+// Send a message to the object that handles it, as the engine sends its
+// own (dao/Addresses.h, Messages::Send): the receiver's handler for the
+// message's class runs now, on this thread, and its answer comes back:
+// true if it handled it, false if the receiver has no handler for it or is
+// not taking messages. The message stays the caller's. Send from the
+// scripts' thread (a frame callback, a command intercept), where the
+// engine's own handlers run.
+inline bool Send(void *receiver, const Message &message)
+{
+    using Fn = bool(__cdecl *)(const Message *, void *);
+    return reinterpret_cast<Fn>(Module::Address(addr::kMessages_Send))(&message, receiver);
 }
 
 // All message classes, their sizes and fields, are in dev/messages.csv
@@ -74,6 +106,16 @@ struct MoveCharacterToLocationMessage : Message
     static constexpr std::uintptr_t kVftable = 0x00B1DA94;
 };
 static_assert(sizeof(MoveCharacterToLocationMessage) == 4);
+
+// Centre the camera on an object: explore mode's handler (0x0070C140)
+// looks the object up by +4 and has the camera frame it. 8 bytes, from the
+// clone (0x0077D9A0). Read 2026-09-30.
+struct CenterOnObjectMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E754;
+    ObjectId object;
+};
+static_assert(sizeof(CenterOnObjectMessage) == 8);
 
 // Switch the game's mode (dao/GameModes.h). 8 bytes; the controller's
 // handler (0x006416E0) passes +4 to SetGameMode.

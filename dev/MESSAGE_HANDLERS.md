@@ -30,4 +30,4 @@ Why it matters:
 
 - **It is the engine's event API.** Hooking a handler is how a plugin sees or intercepts a player action (`GameModeExplore::HandleMessage_PerformAbilityMessage`), a mode change (`GameModeController::HandleMessage_SetGameModeMessage`), or input.
 - **It maps the game modes.** `GameModeExplore`, `GameModeDialog`, `GameModeCutscene`, `GameModeDead`, `GameModeCharGen`, ... each with the messages it takes.
-- **Sending a message is probably the cleanest way to act.** The engine would route it as it routes its own. How a message is posted (the queue, the type ids from `0x0063FF40`) is not yet read.
+- **Sending a message is how a plugin acts as the engine does.** Read 2026-09-30: the handlers are kept by a registry (a singleton, `0x004740B0`), in a table by the receiver's class id and the message's type id, each the object's own vtable slot 0. `Messages::Send(message, receiver)` (`0x004D20C0`, 74 callers) looks the handler up and runs it at once, if the receiver's +4 byte says it takes messages, and returns its answer. `dao::messages::Send` calls it (`dao/Messages.h`); not yet seen in play.

@@ -72,6 +72,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Read a data table | `dao::gda::GetInt(Table::AbilitiesTalents, ability, "Cooldown")`, `GetFloat`, `GetString`, `GetBool`, `Rows(table)`, `Columns(table)`; columns per table in `dev/gda_tables.csv` | `dao/Gda.h` |
 | Pause, or switch the game's mode | `CClientExoApp::SetPaused`, `GameModeController::SetMode` | `dao/ClientExoApp.h`, `dao/GameModes.h` |
 | Hook an engine message (the player's orders, pause, mode changes) | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn`, `As<M>()` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
+| Send an engine message, as the engine does (move the camera, pause, switch mode) | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h`, `dao/GameModes.h` |
 | React to the game's script events (damage, perception, mode changes, loads) | `dao::events::OnScriptEvent(EventType::Damaged, fn)` | `dao/Events.h` |
 | Run code every frame | `dao::OnFrame(fn)` | `dao/Frame.h` |
 | Hook any engine function | `dao::Detour<Fn>` on an address from `dao/Addresses.h` | `dao/Hook.h` |
