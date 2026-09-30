@@ -30,9 +30,7 @@ Eclipse was substantially re-architected. It has no NWN counterpart for its mess
 
 | NWN:EE | DAO | How it was matched |
 |---|---|---|
-| `CVirtualMachine::StackPopInteger(int32_t*)` | `0x00A2F3C0` | `ToggleGamePause(int)` pops its one argument with it |
-| `CVirtualMachine::StackPopObject(OBJECT_ID*)` | `0x00A2F6D0` | `GetCombatState(object)` pops its one argument with it |
-| `CVirtualMachine::StackPushInteger(int32_t)` | `0x00A2D650` | `GetCombatState` returns its int with it |
+| `CVirtualMachine::StackPop*`, `StackPush*`: the whole typed stack, 8 pops and 6 pushes | `0x00A2F3C0`-`0x00A2F6D0`, `0x00A2D650`-`0x00A2D980` | voted across 665 script commands, each command's VM calls against its `script.ldf` argument and return types (`src/dao/Addresses.h` has every one with its votes). They run in NWN's declaration order: integer, float, vector, string, engine structure, object, with DAO's own resource and array types slotted in. |
 | the VM itself, `g_pVirtualMachine` | `0x00C1D080` | `this` for all of the above, in every command |
 | `CGameObjectArray::GetGameObject(OBJECT_ID, CGameObject**)` returning `uint8_t` | `0x00A58190` | the same arguments and a byte result, on the application's array at `+0xCC` |
 | `CNWSObjectActionNode` (action id, twelve parameters, 16-bit group id) | the command queued at `0x0073CD10` (type, sequence number in 16 bits) | the same role, and a 16-bit id beside the type |
