@@ -148,6 +148,8 @@ file(
     "${CMAKE_SOURCE_DIR}/src/*.h"
     "${CMAKE_SOURCE_DIR}/tests/*.cpp"
     "${CMAKE_SOURCE_DIR}/tests/*.h"
+    "${CMAKE_SOURCE_DIR}/examples/*.cpp"
+    "${CMAKE_SOURCE_DIR}/examples/*.h"
 )
 
 set(DAO_FORMAT_COMMANDS "")
@@ -245,14 +247,23 @@ if(DAO_CLANG_TIDY)
         )
         list(APPEND DAO_TIDY_SOURCES ${DAO_TIDY_TESTS})
     endif()
+    if(DAO_BUILD_EXAMPLES)
+        file(
+            GLOB_RECURSE DAO_TIDY_EXAMPLES
+            CONFIGURE_DEPENDS
+            "${CMAKE_SOURCE_DIR}/examples/*.cpp"
+        )
+        list(APPEND DAO_TIDY_SOURCES ${DAO_TIDY_EXAMPLES})
+    endif()
     file(
         GLOB_RECURSE DAO_TIDY_HEADERS
         CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/src/*.h"
         "${CMAKE_SOURCE_DIR}/tests/*.h"
+        "${CMAKE_SOURCE_DIR}/examples/*.h"
     )
 
-    # Reports from any header under this tree's src/ or tests/, by absolute
+    # Reports from any header under this tree's src/, tests/ or examples/, by absolute
     # path, so a vendored library's src/ never matches. clang-tidy prints
     # mixed separators (src\dao/Log.h), hence either slash.
     set(DAO_TIDY_HEADER_FILTER "${CMAKE_SOURCE_DIR}")
@@ -278,7 +289,7 @@ if(DAO_CLANG_TIDY)
             "${DAO_TIDY_HEADER_FILTER}"
         )
     endforeach()
-    string(APPEND DAO_TIDY_HEADER_FILTER "/(src|tests)/")
+    string(APPEND DAO_TIDY_HEADER_FILTER "/(src|tests|examples)/")
     string(
         REPLACE "/"
         "[/\\]"

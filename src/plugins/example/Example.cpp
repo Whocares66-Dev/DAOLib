@@ -23,7 +23,6 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/Plugin.h"
-#include "dao/Saves.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
 #include "dao/Tlk.h"
@@ -36,7 +35,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <fstream>
 #include <mutex>
 #include <set>
 #include <string>
@@ -272,25 +270,6 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         [cursor](void *, const dao::messages::PerformPrimaryActionOnTargetUnderCursorMessage &) {
             cursor("primary click");
         });
-
-    // A plugin's own data with the game's saves (dao/Saves.h): a line in
-    // the slot's folder at each save, read back at each load.
-    dao::saves::OnSaved([](const dao::saves::Slot &slot) {
-        static int saves = 0;
-        const auto file = slot.File("example");
-        std::ofstream(file) << "save " << ++saves << " of this session, slot " << slot.number << ", kind "
-                            << static_cast<int>(slot.kind) << "\n";
-        spdlog::info("saved {} slot {}, kind {}: wrote {}", dao::Utf8(slot.character), slot.number,
-                     static_cast<int>(slot.kind), dao::Utf8(file.wstring()));
-    });
-    dao::saves::OnLoading([](const dao::saves::Slot &slot) {
-        const auto file = slot.File("example");
-        std::ifstream in(file);
-        std::string line;
-        std::getline(in, line);
-        spdlog::info("loading {} slot {}, kind {}: {} says \"{}\"", dao::Utf8(slot.character), slot.number,
-                     static_cast<int>(slot.kind), dao::Utf8(file.wstring()), in ? line : std::string("(no file)"));
-    });
 
     // The camera as the player zooms and turns it (dao/Camera.h), to learn
     // which of its numbers are the view, the distance, the yaw and the

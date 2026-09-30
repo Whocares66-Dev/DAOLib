@@ -2,6 +2,8 @@
 
 A plugin is a 32-bit DLL in the game's `bin_ship\daolib\plugins\` that exports `DAOLib_Load`. The loader (`version.dll`) loads every such DLL when the game starts, before any game code runs, and calls `DAOLib_Load` once. A plugin links `daolib`, the library in `src/dao`, which gives it the engine as C++. `src/plugins/example/Example.cpp` is a whole plugin to copy from; `src/plugins/probe` is a larger one.
 
+Worked examples are in `examples/`, one small plugin per part of the library, each a whole plugin to read and copy from (`examples/README.md` lists them).
+
 ## The shape of one
 
 ```cpp
@@ -75,7 +77,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Pause, or switch the game's mode | `CClientExoApp::SetPaused`, `GameModeController::SetMode` | `dao/ClientExoApp.h`, `dao/GameModes.h` |
 | Hook an engine message (the player's orders, pause, mode changes) | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn`, `As<M>()` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
 | Send an engine message, as the engine does (move the camera, pause, switch mode) | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h`, `dao/GameModes.h` |
-| Keep data with the game's saves, as SKSE's co-saves do | `dao::saves::OnSaved`, `OnLoading`; `slot.File("myplugin")` is `<slot folder>\\myplugin.daolib` | `dao/Saves.h` |
+| Keep data with the game's saves, as SKSE's co-saves do | `dao::saves::OnSaved`, `OnLoading`; `slot.File("myplugin")` is `<slot folder>\myplugin.daolib`; `examples/saves/` | `dao/Saves.h` |
 | Move the camera: follow any creature, an enemy too, with the game's own pan (within 15 m) and without selecting it; where it looks; snap | `modes->Camera()->Follow(id)`, `Target()`, `Focus()`, `SnapToTarget()`; `Tactical()`, `FocusOffset()`/`SetFocusOffset()` to pan in the tactical view; `Scene()->Yaw()`/`SetYaw()`, `Pitch()`, `Zoom()` | `dao/Camera.h`, `dao/GameModes.h` |
 | What is under the mouse cursor: the object a click would act on, the ground point and whether it is walkable, every hit along the ray | `modes->Explore()->CursorObject()`, `CursorGround()`, `CursorGroundWalkable()`, `CursorHits()`, `LastMoveDestination()` | `dao/GameModes.h` |
 | Watch or take any engine message by class, as it is delivered | `dao::messages::OnMessage<SetGameModeMessage>(fn)`, `InterceptMessage<PerformAbilityMessage>(fn)`, `OnAnyMessage(fn)` | `dao/Messages.h` |

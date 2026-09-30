@@ -48,6 +48,22 @@ enum class Kind : std::int32_t
     Other = 3,  // a fourth kind the checks allow, not seen
 };
 
+// "manual", "auto", "quick" or "other", for logs.
+constexpr std::string_view Name(Kind kind)
+{
+    switch (kind)
+    {
+    case Kind::Manual:
+        return "manual";
+    case Kind::Auto:
+        return "auto";
+    case Kind::Quick:
+        return "quick";
+    default:
+        return "other";
+    }
+}
+
 struct Slot
 {
     std::wstring character; // the character's folder, "Aedan"

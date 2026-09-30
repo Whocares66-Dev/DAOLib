@@ -40,7 +40,8 @@ src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), 
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
                 CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray,
                 VmStack, GdaHash; tested
-src/plugins/    one folder per plugin: probe/ watches and checks, example/ shows how a plugin uses daolib
+src/plugins/    one folder per plugin: probe/ watches and checks, example/ checks many parts of daolib in play
+examples/       small plugins, one per part of daolib, to read and copy from and to check it in play (examples/README.md)
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,

@@ -32,6 +32,11 @@ option(
     "Build the probe and example plugins"
     ${PROJECT_IS_TOP_LEVEL}
 )
+option(
+    DAO_BUILD_EXAMPLES
+    "Build the example plugins in examples/"
+    ${PROJECT_IS_TOP_LEVEL}
+)
 option(DAO_SANITIZE "Build with AddressSanitizer" OFF)
 # The debug-analyze preset; its own build tree, as clang-tidy reads the
 # debug tree's compile database and clang rejects /analyze.
@@ -247,4 +252,9 @@ endif()
 if(DAO_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# The examples: a small plugin per part of the library (examples/README.md).
+if(DAO_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
