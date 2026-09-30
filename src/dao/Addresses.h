@@ -188,6 +188,24 @@ DAO_ADDRESS(kGuiCommands_Find, "GuiCommands::Find", 0x0051F4F0)
 DAO_ADDRESS(kGuiCommands_RegisterFSCommand, "GuiCommands::RegisterFSCommand", 0x005201C0)
 DAO_ADDRESS(kGuiCommands_RegisterExternalInterface, "GuiCommands::RegisterExternalInterface", 0x00520280)
 DAO_ADDRESS(kCrc32, "Crc32", 0x004CA960)
+// The game's movies, read 2026-09-30. The owner the calls above carry is
+// the manager's record of a movie: its name, an engine std::wstring at +0
+// (0x1C bytes), then the movie at +0x1C, GFx's GFxMovieView. The manager
+// keeps its records in a std::set at +0x70 (MSVC 2005's tree: the head at
+// +4, the count at +8, the record's pointer at a node's +0xC), walked by
+// the engine's own checked iterator: Begin and Next, each __thiscall
+// (set, iterator {set, node, valid}), `ret 4`. FindMovie, __thiscall
+// (const std::wstring &name), `ret 4`, walks it for a record of that name;
+// DragonAgeGUISystem, which holds the manager at +0x120, finds a movie so
+// for its slots 80 and 81 (IsMovieOnStage and CallFunctionOnMovie, run by
+// the ActionScript of MovieUtils). InvokeOnRecord is a record's own
+// Invoke: a jump to its movie's slot 18. The names are ours.
+DAO_ADDRESS(kGuiMovieSet_Begin, "GuiMovieSet::Begin", 0x006AD480)
+DAO_ADDRESS(kGuiMovieSet_Next, "GuiMovieSet::Next", 0x006AD4D0)
+DAO_ADDRESS(kScaleformManager_FindMovie, "GUI::ScaleformManager::FindMovie", 0x00511730)
+DAO_ADDRESS(kGuiMovie_Invoke, "GuiMovie::Invoke", 0x00518850)
+DAO_ADDRESS(kDragonAgeGUISystem_IsMovieOnStage, "GUI::DragonAgeGUISystem::IsMovieOnStage", 0x0060C920)
+DAO_ADDRESS(kDragonAgeGUISystem_CallFunctionOnMovie, "GUI::DragonAgeGUISystem::CallFunctionOnMovie", 0x0060C990)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and

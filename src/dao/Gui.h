@@ -34,7 +34,7 @@
 // handler for a name runs in place of the game's.
 //
 // Not yet seen in play: the example plugin logs the first calls, their
-// owners and the thread they come on.
+// movies' names and the thread they come on, and every movie's name.
 #pragma once
 
 #include <cstdint>
@@ -43,6 +43,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::gui
 {
@@ -226,7 +227,13 @@ void OnExternalInterface(std::string name, ExternalInterfaceHandler handler);
 void OnAnyFSCommand(std::function<void(void *owner, std::string_view name, std::string_view args)> observer);
 void OnAnyExternalInterface(ExternalInterfaceHandler observer);
 
-// The movie a UI object owns (+0x1C), GFx's GFxMovieView; null for none.
+// The game's movies. Each is a record the manager keeps (dao/Addresses.h),
+// the `owner` a call above carries: its name at +0, its movie at +0x1C.
+// All of them, as the manager has them now; the one of a name; a record's
+// name; and its movie, GFx's GFxMovieView (null for none).
+std::vector<void *> Owners();
+void *FindOwner(std::wstring_view name);
+std::wstring_view NameOf(const void *owner);
 void *MovieOf(const void *owner);
 
 // An FSCommand's answer, as the game's own handlers give theirs: an array

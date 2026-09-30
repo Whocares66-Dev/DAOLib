@@ -4,6 +4,7 @@
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/core/Msvc8.h"
 
 #include <cstddef>
 #include <map>
@@ -100,6 +101,64 @@ void AttachLocked()
 }
 
 } // namespace
+
+namespace
+{
+
+// The engine's iterator over its set of movies (dao/Addresses.h).
+struct SetIterator
+{
+    void *set = nullptr;
+    std::byte *node = nullptr;
+    bool valid = false;
+};
+
+void *Manager()
+{
+    return *At<void *>(addr::kGuiManager);
+}
+
+} // namespace
+
+std::vector<void *> Owners()
+{
+    std::vector<void *> owners;
+    void *manager = Manager();
+    if (manager == nullptr)
+    {
+        return owners;
+    }
+    void *set = static_cast<std::byte *>(manager) + 0x70;
+    using StepFn = void *(__fastcall *)(void *, int, SetIterator *);
+    const auto begin = reinterpret_cast<StepFn>(Module::Address(addr::kGuiMovieSet_Begin));
+    const auto next = reinterpret_cast<StepFn>(Module::Address(addr::kGuiMovieSet_Next));
+    SetIterator it;
+    begin(set, 0, &it);
+    // Past this many, something is wrong: the game has a few dozen.
+    for (int guard = 0; it.valid && it.node != nullptr && guard < 1024; ++guard)
+    {
+        owners.push_back(*reinterpret_cast<void **>(it.node + 0xC));
+        next(set, 0, &it);
+    }
+    return owners;
+}
+
+std::wstring_view NameOf(const void *owner)
+{
+    return owner != nullptr ? static_cast<const core::WStringRep *>(owner)->View() : std::wstring_view{};
+}
+
+void *FindOwner(std::wstring_view name)
+{
+    for (void *owner : Owners())
+    {
+        if (NameOf(owner) == name)
+        {
+            return owner;
+        }
+    }
+    return nullptr;
+}
 
 void *MovieOf(const void *owner)
 {

@@ -165,8 +165,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         if (seen++ < 40)
         {
             void *const *manager = dao::At<void *>(dao::addr::kGuiManager);
-            spdlog::info("FSCommand {}({}) from {} at {}, thread {}, manager {}", name, args,
-                         owner != nullptr ? dao::TypeName(owner) : std::string("nothing"), owner, GetCurrentThreadId(),
+            spdlog::info("FSCommand {}({}) from movie \"{}\" at {}, thread {}, manager {}", name, args,
+                         dao::Utf8(dao::gui::NameOf(owner)), owner, GetCurrentThreadId(),
                          *manager != nullptr ? dao::TypeName(*manager) : std::string("none"));
         }
     });
@@ -190,9 +190,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                     args += fmt::format("<type {:#x}> ", arg.type);
                 }
             }
-            spdlog::info("ExternalInterface {}({}) from {} at {}, thread {}", call.name, args,
-                         call.owner != nullptr ? dao::TypeName(call.owner) : std::string("nothing"), call.owner,
-                         GetCurrentThreadId());
+            spdlog::info("ExternalInterface {}({}) from movie \"{}\" at {}, thread {}", call.name, args,
+                         dao::Utf8(dao::gui::NameOf(call.owner)), call.owner, GetCurrentThreadId());
             // The calling movie, read and left as it is: its root is there,
             // and the FSCommand answer array's size reads.
             if (seen == 1)
@@ -232,6 +231,16 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::info("sent CenterOnObjectMessage for {:#010x} to {} at {}: {}", message.object,
                      explore != nullptr ? dao::TypeName(explore) : std::string("no mode"), explore,
                      handled ? "handled" : "not handled");
+
+        // The game's movies by name, once, while exploring.
+        std::string names;
+        const auto owners = dao::gui::Owners();
+        for (void *owner : owners)
+        {
+            names += fmt::format("{} ({}), ", dao::Utf8(dao::gui::NameOf(owner)),
+                                 dao::gui::MovieOf(owner) != nullptr ? "loaded" : "no movie");
+        }
+        spdlog::info("{} movies: {}", owners.size(), names);
     });
     return true;
 }
