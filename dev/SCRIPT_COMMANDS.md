@@ -44,12 +44,32 @@ So a registration number is a script function number. The table is verified agai
 
 | Found | Count | How |
 |---|---|---|
-| Object lookups by id | 7 | The shape of NWN's `GetCreatureByGameObjectID`: the application's object array (`+0xCC`), `CGameObjectArray::GetGameObject`, a type byte at `+0x14`, and a cast through a virtual slot. A cast slot's class is the one whose implementation of it is `mov eax, ecx; ret`. So `0x005D58C0` is `CClientExoApp::GetCreatureById`, `0x005D5B40` `GetPlaceableById`, `0x005D5840` the uncast `GetGameObjectById`. |
-| Methods of a looked-up object | 12 | A direct call with the object as `this`, when it is the only method the command calls on it: `CCModule::ForScript_DoAreaTransition`, `CCCreature::ForScript_SetAppearanceType`. |
-| Methods through a vtable | 1 | The same, through the object's vtable. |
-| A command's sole callee | 70 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
-| Candidates, unnamed | 12 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
+| Object lookups by id | 9 | The shape of NWN's `GetCreatureByGameObjectID`: the application's object array (`+0xCC`), `CGameObjectArray::GetGameObject`, a type byte at `+0x14`, and a cast through a virtual slot. A cast slot's class is the one whose implementation of it is `mov eax, ecx; ret`. So `0x005D58C0` is `CClientExoApp::GetCreatureById`, and there are lookups for placeables, modules, projectiles and waypoints, the uncast `GetGameObjectById`, and `GetObjectById` for any object. |
+| Methods of a looked-up object | 42 | A direct call with the object as `this`, when it is the only method the command calls on it: `CCModule::ForScript_DoAreaTransition`, `CCCreature::ForScript_EndHeartbeat`, `CCObject::ForScript_IsDead`. |
+| Methods through a vtable | 6 | The same, through the object's vtable. |
+| A command's sole callee | 187 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
+| Candidates, unnamed | 24 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
 
-The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py` puts their names into Ghidra, and a name set by hand wins.
+The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py` puts their names into Ghidra, and a name set by hand wins. `ForScript_X` means the engine function behind script command X. It says what the function does for scripts, not the engine's own name for it.
 
-Most commands, about 430 of 600, have no engine function to name this way. They read or write the object's fields inline. `GetCombatState` reads `creature->[0xC60]->[0]` with no call at all. Those are field offsets, not functions, and they are the next thing to harvest: a getter command names the field it returns.
+## Fields
+
+Most commands call no engine function at all: they look the object up and read or write its fields inline. `tools/script_fields.py` follows the looked-up object through registers and x87 loads, and records every field read or written through it, and every field whose value the command pushes back to the script. That last gives the field its meaning and its script type. Run 2026-09-30: 61 fields over 7 classes, 18 of them returned to a script (`dev/script_fields.csv`).
+
+| Class | Offset | Width | What, by the command that returns it | Script type |
+|---|---|---|---|---|
+| `CCCreature` | `+0x790` | 4 | `GetCreatureBodyBag` | object |
+| `CCCreature` | `+0x7E8` | 4 | `GetPackage` | int |
+| `CCCreature` | `+0x7EC` | 4 | `GetPackageAI` | int |
+| `CCCreature` | `+0xBD0` | 4 | `GetCreatureTreasureCategory` | int |
+| `CCCreature` | `+0xBD4` | 4 | `GetCombatantType` | int |
+| `CCCreature` | `+0xC60`, then `+0x0` | 4 | `GetCombatState` | int |
+| `CCObject` | `+0x2B0` | 4 | `GetAILevel` | int |
+| `CCObject` | `+0x3C0` | 4 | `GetGroupId` | int |
+| `CCObject` | `+0x3C4` | 4 | `GetTeamId`, written by `SetTeamId` | int |
+| `CCPlaceable` | `+0x5E0` to `+0x6C0` | 1-4 | pick-lock level, key required, auto-remove key, base type, state, action, treasure rank and category | int |
+| `CCWayPoint` | `+0x444` | 4 | `GetMapPinState` | int |
+
+Fields only written are leads too. `CCCreature+0xC60` points to the creature's combat data: combat state at `+0x0`, and at `+0x60` what `SetAttackDuration` and `SetAimLoopDuration` write, the attack timing a turn-based mode will want. `CCObject` has `+0x2BC` destroyable, `+0x2C6` always visible, `+0x3D4` the command result `SetCommandResult` writes, and `+0x421` active.
+
+A field read is a byte range the engine reads, not yet a type: a pointer followed further is marked by its path (`+0xc60 +0x60`), and the width is what the instruction read. Each one still wants the probe's eyes in play before a class header relies on it.

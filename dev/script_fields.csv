@@ -1,0 +1,62 @@
+class,path,width,returned_as,returned_by,read_by,written_by
+CCCreature,+0x70,4,,,SetAppearanceType,
+CCCreature,+0x70 +0x60,4,,,SetAppearanceType,
+CCCreature,+0xcc,4,,,SetFollowerState,
+CCCreature,+0x150,4,,,TriggerPerception,
+CCCreature,+0x254,4,,,GetRoamLocation,
+CCCreature,+0x790,4,object,GetCreatureBodyBag,GetCreatureBodyBag,
+CCCreature,+0x7b0,4,,,GetCreatureGoreLevel | SetCreatureGoreLevel | SetItemHeraldry | SetAppearanceType,
+CCCreature,+0x7b0 +0x58,2,,,SetAppearanceType,
+CCCreature,+0x7b0 +0x5a,2,,,SetAppearanceType,
+CCCreature,+0x7b4,1,,,SetAppearanceType,
+CCCreature,+0x7e8,4,int,GetPackage,GetPackage,
+CCCreature,+0x7ec,4,int,GetPackageAI,GetPackageAI,
+CCCreature,+0x7f9,1,,,SetPrimaryControlled,
+CCCreature,+0xb20,4,,,IsMoving,
+CCCreature,+0xb48,4,,,GetMeleeRingPosition,
+CCCreature,+0xbd0,4,int,GetCreatureTreasureCategory,GetCreatureTreasureCategory,
+CCCreature,+0xbd4,4,int,GetCombatantType,GetCombatantType,
+CCCreature,+0xbd8,4,,,GetCanDiePermanently,
+CCCreature,+0xc60,4,,,SetAttackDuration | SetAimLoopDuration | UpdateThreatTable | ClearEnemyThreat | GetThreatEnemy | GetThreatValueByIndex | GetThreatValueByObjectID | GetCombatState | SetAttackResult | GetAttackImpactDamageEffect | GetThreatTableSize | ClearThreatTable,
+CCCreature,+0xc60 +0x0,4,int,GetCombatState,GetCombatState,
+CCCreature,+0xc60 +0x10,4,,,GetThreatTableSize,
+CCCreature,+0xc60 +0x60,4,,,,SetAttackDuration | SetAimLoopDuration
+CCCreature,+0xcd0,4,,,GetRoamLocation,
+CCCreature,+0xcd4,4,,,GetRoamLocation,
+CCCreature,+0xcd8,4,,,GetRoamLocation,
+CCModule,+0x194,1,,,DebugSpawnScriptDebugger,
+CCModule,+0x494,4,,,SetPlotActionSet | SetPlotActionsEnabled | SetPlotActionState | GetPlotActionState | SetPlotActionCount | GetPlotActionCount | SETPLOTACTIONCOOLDOWN,
+CCModule,+0x498,4,,,SetTrainingMode | BeginTrainingStep,
+CCObject,+0x14,1,,,Engine_ApplyEffectOnObject,
+CCObject,+0x70,4,,,BeginConversation | GetObjectActive | GetWeaponsUnsheathedStatus | IsPerceivingHostiles | IsPartyPerceivingHostiles | GetItemAbilityId | GetEffectsFlags | IsItemDroppable | HasDeathEffect | GetAOEFlags | GetWeaponStyle | GetItemUnique | GetTrapDetectionDifficulty | GetTrapDisarmDifficulty | GetAbilityCount | IsItemStealable | GetItemDamaged | GetObjectInteractive | GetStealthEnabled | GetCreatureCanBeTracked | FilterObjectsInShape | GetObjectsInShape,
+CCObject,+0x70 +0x6c,4,,,BeginConversation | GetObjectActive | GetWeaponsUnsheathedStatus | IsPerceivingHostiles | IsPartyPerceivingHostiles | GetItemAbilityId | GetEffectsFlags | IsItemDroppable | HasDeathEffect | GetAOEFlags | GetWeaponStyle | GetItemUnique | GetTrapDetectionDifficulty | GetTrapDisarmDifficulty | GetAbilityCount | IsItemStealable | GetItemDamaged | GetObjectInteractive | GetStealthEnabled | GetCreatureCanBeTracked | FilterObjectsInShape | GetObjectsInShape,
+CCObject,+0x120,4,,,GetAngleBetweenObjects | PlaySound,
+CCObject,+0x124,4,,,GetAngleBetweenObjects | PlaySound,
+CCObject,+0x128,4,,,GetAngleBetweenObjects | PlaySound,
+CCObject,+0x130,4,,,GetFacing | GetAngleBetweenObjects,
+CCObject,+0x134,4,,,GetFacing | GetAngleBetweenObjects,
+CCObject,+0x138,4,,,GetFacing | GetAngleBetweenObjects,
+CCObject,+0x254,4,,,GetArea | GetAttackTarget | GetEventLocation | GetLocation | SetLocation | RemoveEffectsByCreator,
+CCObject,+0x2b0,4,int,GetAILevel,GetAILevel,
+CCObject,+0x2b4,4,,,,SetAILevel
+CCObject,+0x2bc,1,,,IsDestroyable,SetDestroyable
+CCObject,+0x2c4,1,,,IsPlot,
+CCObject,+0x2c6,1,,,,SetObjectAlwaysVisible
+CCObject,+0x3b8,4,,,,SetReactionOverride | ResetReaction
+CCObject,+0x3bc,4,,,,SetReactionOverride | ResetReaction
+CCObject,+0x3c0,4,int,GetGroupId,GetGroupId,
+CCObject,+0x3c4,4,int,GetTeamId,SetTeamId | GetTeamId,SetTeamId
+CCObject,+0x3d4,4,,,,SetCommandResult
+CCObject,+0x421,1,,,SetObjectActive,SetObjectActive
+CCObject,+0x42c,1,,,GetObjectActive | GetWeaponsUnsheathedStatus | IsPerceivingHostiles | IsPartyPerceivingHostiles | GetItemAbilityId | GetEffectsFlags | IsItemDroppable | HasDeathEffect | GetAOEFlags | GetWeaponStyle | GetItemUnique | GetTrapDetectionDifficulty | GetTrapDisarmDifficulty | GetAbilityCount | IsItemStealable | GetItemDamaged | GetObjectInteractive | GetStealthEnabled | GetCreatureCanBeTracked,
+CCPlaceable,+0x5e0,4,int,GetPlaceablePickLockLevel,GetPlaceablePickLockLevel,
+CCPlaceable,+0x5e4,4,int,GetPlaceableKeyRequired,GetPlaceableKeyRequired,
+CCPlaceable,+0x5e8,4,int,GetPlaceableAutoRemoveKey,GetPlaceableAutoRemoveKey,
+CCPlaceable,+0x638,1,int,GetPlaceableBaseType,GetPlaceableBaseType,
+CCPlaceable,+0x658,2,int,GetPlaceableState,GetPlaceableState,
+CCPlaceable,+0x68c,2,int,GetPlaceableAction,GetPlaceableAction,
+CCPlaceable,+0x6bc,4,int,GetPlaceableTreasureRank,GetPlaceableTreasureRank,
+CCPlaceable,+0x6c0,4,int,GetPlaceableTreasureCategory,GetPlaceableTreasureCategory,
+CCWayPoint,+0x444,4,int,GetMapPinState,GetMapPinState,
+CGameObject,+0x14,1,,,GetLocalInt | SetLocalInt | GetLocalFloat | SetLocalFloat | GetLocalString | SetLocalString | GetLocalObject | SetLocalObject | GetLocalLocation | SetLocalLocation | GetLocalPlayer | SetLocalPlayer | GetLocalEvent | SetLocalEvent | GetLocalCommand | GetLocalEffect | SetLocalEffect | GetLocalResource | SetLocalResource | GetCurrentEvent | IsObjectValid | GetObjectType | GetResRef | GetTag | GetAppearanceType | SetLocalCommand | GetItemsInInventory,
+CProjectile,+0x4f4,4,,,,SetProjectileImpactEvent

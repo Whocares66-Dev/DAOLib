@@ -33,7 +33,8 @@ src/dao/core/   the part that never touches the process: Fingerprint, Relocate, 
 src/plugins/    one folder per plugin; probe/ is the first
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
-                message_handlers.py, script_backends.py, names.py, probe_targets.py, probe_report.py, ghidra/
+                message_handlers.py, script_backends.py, script_fields.py, names.py, probe_targets.py,
+                probe_report.py, ghidra/
 dev/            plan, reading, tables
 game/           the exe and its Ghidra project (ignored)
 toolset/        the toolset installer and what is extracted from it (ignored)
