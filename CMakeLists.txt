@@ -117,6 +117,23 @@ target_compile_definitions(
 )
 
 # ---------------------------------------------------------------------------
+# version.dll -- the loader. Dropped beside DAOrigins.exe it is loaded in
+# place of the system's version.dll (the game imports three of its functions,
+# which are forwarded to the real one), detours the exe's entry point, and
+# from there loads every DLL in daolib\plugins\ on the game's main thread
+# before any game code runs.
+# ---------------------------------------------------------------------------
+add_library(
+    version
+    SHARED
+    src/loader/Loader.cpp
+    src/loader/Proxy.cpp
+)
+dao_apply_warnings(version)
+set_target_properties(version PROPERTIES PREFIX "" OUTPUT_NAME "version")
+target_link_libraries(version PRIVATE daolib)
+
+# ---------------------------------------------------------------------------
 # Tests, over dao/core: what can be checked without the game.
 # ---------------------------------------------------------------------------
 if(DAO_BUILD_TESTS)
