@@ -350,7 +350,7 @@ class Recorder
             }
             if (const auto holder = dao::TryRead<std::uint32_t>(*app + App::kModeHolder); holder && *holder != 0)
             {
-                if (const auto v = dao::TryRead<std::int32_t>(*holder + App::kModeValue))
+                if (const auto v = dao::TryRead<std::int32_t>(*holder + dao::GameModeController::kMode))
                 {
                     mode = *v;
                 }

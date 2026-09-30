@@ -22,16 +22,25 @@
 namespace dao
 {
 
-// The modes seen in play, 2026-09-29/30. Others exist; the probe lists the
-// table's classes by number (dev/PROBE.md).
+// The game's modes by number: the scripts' GM_* constants (script.ldf,
+// GetGameMode's answers), and the class at each number of the controller's
+// array, as the probe listed them in play 2026-09-30 -- the two agree on all
+// 13. The main menu runs in CharGen, the character creator's mode.
 enum class GameMode : std::int32_t
 {
-    Explore = 0,
-    Combat = 1,
-    MenuScreen = 3,
-    Dialogue = 4,
-    Loading = 9,
-    MainMenu = 11,
+    Explore = 0,      // GameModeExplore
+    Combat = 1,       // GameModeCombat
+    Dead = 2,         // GameModeDead
+    Gui = 3,          // GameModeGUI: a menu screen over the game
+    Dialog = 4,       // GameModeDialog
+    Cutscene = 5,     // GameModeCutscene
+    FlyCam = 6,       // GameModeFlyCam
+    Fixed = 7,        // GameModeFixed
+    Pregame = 8,      // GameModePregame
+    Loading = 9,      // GameModeLoading
+    Movie = 10,       // GameModeMovie
+    CharGen = 11,     // GameModeCharGen: character creation, and the main menu
+    PartyPicker = 12, // GameModePartyPicker
 };
 
 class GameModeController
@@ -56,12 +65,12 @@ class GameModeController
     }
 
     // The mode object for a number, as SetGameMode finds it: +0x58 points to
-    // an array of them indexed by the mode's number. Seen in play
-    // 2026-09-30: +0x58, +0x5C and +0x60 are three separate pointers (not a
-    // std::vector: +0x5C below +0x58), the current mode at +0x78 and, by
-    // its value after a load (9, loading), the previous one at +0x7C. The
-    // array's length is not beside it; an entry is returned only if its
-    // class is a GameMode (dao::TypeName), else null.
+    // an array of them indexed by the mode's number, 13 entries (seen in
+    // play 2026-09-30, one GameMode class per number: dao::GameMode). Not a
+    // std::vector: +0x5C and +0x60 are other pointers. The current mode is
+    // at +0x78 and, by its value after a load (9, loading), the previous one
+    // at +0x7C. An entry is returned only if its class is a GameMode
+    // (dao::TypeName), else null.
     const void *ModeObject(GameMode mode) const;
 
     // The mode before the current one, by the value seen after a load.
@@ -73,8 +82,8 @@ class GameModeController
     static constexpr std::size_t kModes = 0x58;
     static constexpr std::size_t kMode = 0x78;
     static constexpr std::size_t kPreviousMode = 0x7C;
-    // Past this many entries nothing is read: the game has 13 GameMode classes.
-    static constexpr std::size_t kMaxModes = 32;
+    // The array's entries, one per GameMode.
+    static constexpr std::size_t kMaxModes = 13;
 
   private:
     template <class T> const T &Read(std::size_t offset) const

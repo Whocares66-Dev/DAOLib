@@ -88,8 +88,6 @@ class CClientExoApp
 
     // -- game mode
 
-    using GameMode = dao::GameMode;
-
     // The game mode controller (dao/GameModes.h), made in the application's
     // initialisation; null before.
     GameModeController *GameModes() const
@@ -113,10 +111,8 @@ class CClientExoApp
     static constexpr std::size_t kFlagValue = 0xC;
     static constexpr std::size_t kPausedSince = 0xF8;
     static constexpr std::size_t kPausedTotal = 0xFC;
-    // The GameModeController (dao/GameModes.h), whose current mode is the
-    // int at +0x78 of it.
+    // The GameModeController (dao/GameModes.h).
     static constexpr std::size_t kModeHolder = 0x114;
-    static constexpr std::size_t kModeValue = GameModeController::kMode;
     // `app->[+0x1E4] = new CVirtualMachineCommands` in the application's
     // initialisation (0x005DBE22), the object then handed to the VM.
     static constexpr std::size_t kCommands = 0x1E4;
