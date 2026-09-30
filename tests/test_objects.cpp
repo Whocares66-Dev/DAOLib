@@ -1,5 +1,6 @@
 #include "dao/core/CommandWord.h"
 #include "dao/core/FieldPath.h"
+#include "dao/core/ObjectType.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -78,4 +79,23 @@ TEST_CASE("a command's first word holds its type and its sequence number")
     CHECK(TypeOf(0x000d0076) == CommandType::Wait);
     CHECK(TypeOf(0x18210073) == CommandType::Drive);
     CHECK(SequenceOf(0x18210073) == 0x73);
+}
+
+TEST_CASE("an object's type gives the scripts' OBJECT_TYPE_ number", "[objects]")
+{
+    using dao::core::ObjectType;
+    using dao::core::ScriptObjectType;
+    // script.ldf's constants.
+    CHECK(ScriptObjectType(ObjectType::Gui) == 1);
+    CHECK(ScriptObjectType(ObjectType::Module) == 4);
+    CHECK(ScriptObjectType(ObjectType::Area) == 8);
+    CHECK(ScriptObjectType(ObjectType::Store) == 16);
+    CHECK(ScriptObjectType(ObjectType::Creature) == 32);
+    CHECK(ScriptObjectType(ObjectType::Item) == 64);
+    CHECK(ScriptObjectType(ObjectType::Placeable) == 512);
+    CHECK(ScriptObjectType(ObjectType::AreaOfEffect) == 2048);
+    CHECK(ScriptObjectType(ObjectType::Waypoint) == 4096);
+    CHECK(ScriptObjectType(ObjectType::Party) == 32768);
+    CHECK(ScriptObjectType(ObjectType::Map) == 262144);
+    CHECK(ScriptObjectType(static_cast<ObjectType>(0)) == 0);
 }

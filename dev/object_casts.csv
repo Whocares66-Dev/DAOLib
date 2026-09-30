@@ -1,0 +1,20 @@
+slot,cast_to,answered_by
+2,CCArea,CCArea@0x0 SharedCharacterStage@0x0
+3,CCAreaOfEffectObject,CCAreaOfEffectObject@0x0
+4,CCCreature,CCCreature@0x0
+5,CCItem,CCItem@0x0
+6,CCObject,CCAreaOfEffectObject@0x0 CCCreature@0x0 CCItem@0x0 CCObject@0x0 CCPlaceable@0x0 CCSoundObject@0x0 CCSoundObjectPannable@0x0 CCTrigger@0x0 CCTriggerAreaTransition@0x0 CCTriggerAudioMusicVolume@0x0 CCTriggerAudioReverb@0x0 CCTriggerAudioVolume@0x0 CCTriggerTrap@0x0 CCVisualEffect@0x0 CCWayPoint@0x0 CProjectile@0x0 Store@0x0
+7,CCModule,CCModule@0x0
+8,CProjectile,CProjectile@0x0
+9,CCPlaceable,CCPlaceable@0x0
+10,CCTrigger,CCTrigger@0x0 CCTriggerAreaTransition@0x0 CCTriggerAudioMusicVolume@0x0 CCTriggerAudioReverb@0x0 CCTriggerAudioVolume@0x0 CCTriggerTrap@0x0
+11,CCVisualEffect,CCVisualEffect@0x0
+12,CCWayPoint,CCWayPoint@0x0
+13,ItemPossessor,CCCreature@0x440 CCParty@0x70 CCPlaceable@0x440 Store@0x440
+14,,
+15,SEffectsHolder,CCArea@0xcc CCAreaOfEffectObject@0x70 CCCreature@0x70 CCItem@0x70 CCObject@0x70 CCPlaceable@0x70 CCSoundObject@0x70 CCSoundObjectPannable@0x70 CCTrigger@0x70 CCTriggerAreaTransition@0x70 CCTriggerAudioMusicVolume@0x70 CCTriggerAudioReverb@0x70 CCTriggerAudioVolume@0x70 CCTriggerTrap@0x70 CCVisualEffect@0x70 CCWayPoint@0x70 CProjectile@0x70 SharedCharacterStage@0xcc Store@0x70
+16,CCSoundObject,CCSoundObject@0x0 CCSoundObjectPannable@0x0
+17,CCSoundObjectPannable,CCSoundObjectPannable@0x0
+18,MapObject,MapObject@0x0
+19,MapLocation,MapLocation@0x0
+20,Store,Store@0x0

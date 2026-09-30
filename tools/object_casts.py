@@ -1,0 +1,194 @@
+"""CGameObject's casts, read out of game/DAOrigins.exe.
+
+Every game object's vtable begins with CGameObject's 29 slots, and slots 2
+to 20 of those are casts, the shape Neverwinter Nights gave CGameObject
+(NWN:EE's CGameObject.hpp: AsNWCObject, AsNWCCreature, ... after the
+destructor, SetId and ResetUpdateTimes). CGameObject answers every cast
+with null (`xor eax, eax; ret`); a class answers the casts to itself and
+its bases with `this`, or with `this` plus the offset of a base that is
+not at the start of it (`test ecx, ecx; je; lea eax, [ecx + 0x70]; ret`).
+The engine's lookups by id use them: GetCreatureById checks the type byte
+and calls slot 4, GetObjectById calls slot 6.
+
+This reads every primary vftable that starts with CGameObject's slots,
+sees which casts each class answers and at what offset, and names each
+slot after the class the answers have in common: the most derived base
+that every class answering the slot has at the offset it returns. It
+writes
+
+    dev/object_casts.csv                  slot, class, the classes answering, offsets
+    src/dao/generated/ObjectCasts.h       the slots as an enum, for dao/Objects.h
+
+    python tools/object_casts.py            rewrite both, report the table
+    python tools/object_casts.py --check    exit 1 if either differs from the exe;
+                                            0, with a note, when there is no exe copy
+"""
+
+import csv
+import io
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import daoexe  # noqa: E402
+import msvc_names  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CSV_OUT = os.path.join(HERE, "..", "dev", "object_casts.csv")
+HEADER_OUT = os.path.join(HERE, "..", "src", "dao", "generated", "ObjectCasts.h")
+
+GAME_OBJECT = ".?AVCGameObject@@"
+FIRST_CAST, LAST_CAST = 2, 20
+SLOTS = 29
+
+
+def cast_offset(img, function):
+    """The offset a cast returns `this` at, or None if it is not a cast to
+    `this`. The null cast is None as well."""
+    ins = [(i.mnemonic, i.op_str) for i in img.disasm(function, 5)]
+    ins += [("", "")] * (3 - len(ins))  # bytes that do not decode as code
+    if ins[:2] == [("mov", "eax, ecx"), ("ret", "")]:
+        return 0
+    lea = None
+    if ins[0][0] == "lea" and ins[1] == ("ret", ""):
+        lea = ins[0][1]
+    elif ins[0] == ("test", "ecx, ecx") and ins[1][0] == "je" and ins[2][0] == "lea":
+        lea = ins[2][1]
+    if lea is None or not lea.startswith("eax, [ecx"):
+        return None
+    rest = lea[len("eax, [ecx") : -1].replace(" ", "")
+    return int(rest[1:], 16) if rest.startswith("+") else 0 if not rest else None
+
+
+def name(decorated):
+    return msvc_names.undecorate(decorated)
+
+
+def read(img):
+    """{slot: (cast-to class, [(answering class, offset)])}, and the classes
+    derived from CGameObject: [(class, vftable)]."""
+    game_object = next(v for v in img.vtables if v[1] == GAME_OBJECT)
+    null = game_object[3][FIRST_CAST]
+    answers = {}
+    classes = []
+    for va, decorated, offset, slots in img.vtables:
+        if offset != 0 or len(slots) < SLOTS:
+            continue
+        casts = slots[FIRST_CAST : LAST_CAST + 1]
+        offsets = [None if f == null else cast_offset(img, f) for f in casts]
+        if any(f != null and o is None for f, o in zip(casts, offsets, strict=True)):
+            continue
+        bases = img.bases(decorated) or []
+        if not any(b == GAME_OBJECT and at == 0 for b, at, _ in bases):
+            continue
+        classes.append((decorated, va))
+        for slot, o in enumerate(offsets, FIRST_CAST):
+            if o is not None:
+                answers.setdefault(slot, []).append((decorated, o, bases))
+    table = {}
+    for slot in range(FIRST_CAST, LAST_CAST + 1):
+        got = answers.get(slot, [])
+        if not got:
+            table[slot] = (None, [])
+            continue
+        # The bases every answering class has at the offset it returns.
+        common = None
+        for _, o, bases in got:
+            here = {b: below for b, at, below in bases if at == o and b != GAME_OBJECT}
+            common = (
+                here if common is None else {b: common[b] for b in common if b in here}
+            )
+        best = max(common, key=lambda b: common[b]) if common else None
+        table[slot] = (best, [(d, o) for d, o, _ in got])
+    return table, classes
+
+
+def csv_text(table):
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["slot", "cast_to", "answered_by"])
+    for slot, (to, got) in sorted(table.items()):
+        w.writerow(
+            [
+                slot,
+                name(to) if to else "",
+                " ".join(
+                    f"{name(d)}@{o:#x}"
+                    for d, o in sorted(got, key=lambda g: name(g[0]))
+                ),
+            ]
+        )
+    return out.getvalue()
+
+
+def header_text(table):
+    lines = [
+        "// Generated by tools/object_casts.py from game/DAOrigins.exe. Do not edit:",
+        "// run the tool again (dev/object_casts.csv is the same table).",
+        "//",
+        "// The slots of CGameObject's vtable that cast an object to a class: null",
+        "// from an object that is not one, else the object as that class, which",
+        "// for a base not at the start of it is a pointer into it. dao/Objects.h",
+        "// calls them.",
+        "#pragma once",
+        "",
+        "#include <cstdint>",
+        "",
+        "namespace dao::generated",
+        "{",
+        "",
+        "enum class CastSlot : std::uint8_t",
+        "{",
+    ]
+    for slot, (to, got) in sorted(table.items()):
+        if not to:
+            lines.append(f"    // slot {slot}: no class in this exe answers it")
+            continue
+        answered = sorted({name(d) for d, _ in got})
+        offsets = sorted({o for _, o in got})
+        where = ", ".join(f"+{o:#x}" for o in offsets)
+        shown = ", ".join(answered[:4]) + (
+            f" and {len(answered) - 4} more" if len(answered) > 4 else ""
+        )
+        lines.append(f"    // {shown}; at {where}")
+        enum_name = name(to).split("::")[-1]
+        lines.append(f"    {enum_name} = {slot},")
+    lines += ["};", "", "} // namespace dao::generated", ""]
+    return "\n".join(lines)
+
+
+def main(argv):
+    if not os.path.exists(daoexe.EXE):
+        if "--check" in argv:
+            print("object_casts: no game/DAOrigins.exe, nothing to check")
+            return 0
+        print("no game/DAOrigins.exe", file=sys.stderr)
+        return 2
+    table, classes = read(daoexe.Image())
+    outputs = [(CSV_OUT, csv_text(table)), (HEADER_OUT, header_text(table))]
+    if "--check" in argv:
+        stale = []
+        for path, text in outputs:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    have = f.read()
+            except FileNotFoundError:
+                have = None
+            if have is None or have.split() != text.split():
+                stale.append(os.path.normpath(path))
+        for path in stale:
+            print(
+                f"object_casts: {path} differs from the exe; run tools/object_casts.py"
+            )
+        return 1 if stale else 0
+    for path, text in outputs:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+    for slot, (to, got) in sorted(table.items()):
+        print(f"{slot:2d}  {name(to) if to else '-':24s} {len(got)} classes")
+    print(f"{len(classes)} classes derived from CGameObject", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

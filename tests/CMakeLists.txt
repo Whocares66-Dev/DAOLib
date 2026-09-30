@@ -32,4 +32,11 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tools/gen_script_fields.py" --check
     )
+    # CGameObject's cast slots are what the exe says (passes with no copy).
+    add_test(
+        NAME object_casts
+        COMMAND
+            "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/object_casts.py"
+            --check
+    )
 endif()

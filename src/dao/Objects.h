@@ -4,9 +4,10 @@
 // wrappers for the engine functions whose signatures are known.
 //
 // The hierarchy is the RTTI's: CCCreature, CCPlaceable and CCWayPoint are
-// CCObjects (the cast every game object answers, dev/SCRIPT_COMMANDS.md),
-// and CCObject is a CGameObject. The lookups return the same pointer for
-// every level, so these classes add no adjustment.
+// CCObjects, and CCObject is a CGameObject, each at the start of the class
+// derived from it, so these classes add no adjustment. The engine's casts
+// between them are CGameObject's virtual As* slots (tools/object_casts.py,
+// dev/object_casts.csv), which the lookups by id call.
 //
 // Every field here is one a script command returns (the generated
 // descriptors in dao/generated/ScriptFields.h) and is checked against that
@@ -22,8 +23,11 @@
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/core/CommandWord.h"
+#include "dao/core/ObjectType.h"
+#include "dao/generated/ObjectCasts.h"
 #include "dao/generated/ScriptFields.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace dao
@@ -59,9 +63,106 @@ class Command : Opaque
     }
 };
 
-// What the object array holds; every game object is one.
+class CCObject;
+class CCCreature;
+class CCPlaceable;
+class CCWayPoint;
+class CCItem;
+class CCArea;
+class CCModule;
+class SEffectsHolder;
+class ItemPossessor;
+
+// What the object array holds. Every game object is one, at its start: the
+// RTTI's base class descriptors put CGameObject at +0 of every class here
+// (tools/daoexe.py --bases CCCreature), so a pointer to one is a pointer to
+// the other, as the lookups by id assume.
 class CGameObject : Opaque
 {
+  public:
+    // The object's id, what the lookups by id take. CGameObject's
+    // constructor (0x00A58240, 2026-09-30) makes a
+    // SmartData::Attribute<unsigned int> at +4 and sets it to the id through
+    // the attribute's slot 21; an attribute keeps its value at +0xC, as the
+    // application's paused flag does (dao/ClientExoApp.h). Checked against
+    // the id asked for by the probe's script checks.
+    ObjectId Id() const
+    {
+        return Read<ObjectId>(kId);
+    }
+
+    // The byte the constructor stores from its first argument, which the
+    // typed lookups compare before they cast (dao/core/ObjectType.h).
+    core::ObjectType Type() const
+    {
+        return static_cast<core::ObjectType>(Read<std::uint8_t>(kType));
+    }
+
+    // The engine's casts (dao/generated/ObjectCasts.h): the object as that
+    // class, or null if it is not one. A virtual call each, as the engine's
+    // lookups make them.
+    CCObject *AsObject()
+    {
+        return As<CCObject>(generated::CastSlot::CCObject);
+    }
+    CCCreature *AsCreature()
+    {
+        return As<CCCreature>(generated::CastSlot::CCCreature);
+    }
+    CCPlaceable *AsPlaceable()
+    {
+        return As<CCPlaceable>(generated::CastSlot::CCPlaceable);
+    }
+    CCWayPoint *AsWayPoint()
+    {
+        return As<CCWayPoint>(generated::CastSlot::CCWayPoint);
+    }
+    CCItem *AsItem()
+    {
+        return As<CCItem>(generated::CastSlot::CCItem);
+    }
+    CCArea *AsArea()
+    {
+        return As<CCArea>(generated::CastSlot::CCArea);
+    }
+    CCModule *AsModule()
+    {
+        return As<CCModule>(generated::CastSlot::CCModule);
+    }
+    // The effects on the object: a base inside it, at +0x70 of every
+    // CCObject and +0xCC of an area. Its layout is not read yet.
+    SEffectsHolder *AsEffectsHolder()
+    {
+        return As<SEffectsHolder>(generated::CastSlot::SEffectsHolder);
+    }
+    // Its inventory: at +0x440 of a creature, placeable or store, +0x70 of
+    // the party. Not read yet either.
+    ItemPossessor *AsItemPossessor()
+    {
+        return As<ItemPossessor>(generated::CastSlot::ItemPossessor);
+    }
+
+    // Any cast, for the classes with no wrapper here.
+    void *Cast(generated::CastSlot slot)
+    {
+        using Fn = void *(__fastcall *)(CGameObject *, int);
+        const Fn *vtable = *reinterpret_cast<const Fn *const *>(this);
+        return vtable[static_cast<std::size_t>(slot)](this, 0);
+    }
+
+    static constexpr std::size_t kId = 0x10;
+    static constexpr std::size_t kType = 0x14;
+
+  private:
+    template <class T> T *As(generated::CastSlot slot)
+    {
+        return static_cast<T *>(Cast(slot));
+    }
+
+    template <class T> const T &Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
 };
 
 class CCObject : public CGameObject
@@ -176,6 +277,23 @@ class CCWayPoint : public CCObject
     {
         return generated::CCWayPoint_MapPinState.Get(this);
     }
+};
+
+// Classes the casts reach that have no fields read yet.
+class CCItem : public CCObject
+{
+};
+class CCArea : public CGameObject
+{
+};
+class CCModule : public CGameObject
+{
+};
+class SEffectsHolder : Opaque
+{
+};
+class ItemPossessor : Opaque
+{
 };
 
 } // namespace dao

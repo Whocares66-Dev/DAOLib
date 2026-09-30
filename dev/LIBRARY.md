@@ -42,6 +42,20 @@ dao::script::Set(kIsTurnBasedCommand, &IsTurnBased);
 
 A script calls it once a `script.ldf` the toolset compiles against declares `int IsTurnBased() = <number>;`. About 150 of the 863 slots are empty. Replacing a command's handler works the same way: `Set` returns the handler it replaced, to call on.
 
+## The game object
+
+Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/daoexe.py --bases CCCreature`, from the RTTI's class hierarchy descriptors):
+
+| Offset | Base | What it is |
+|---|---|---|
+| +0x00 | `CGameObject` | the vtable of 29 slots NWN's shape begins with; the id at +0x10, the type byte at +0x14 |
+| +0x04 | `SmartData::Attribute<unsigned int>` | the id, as an observable attribute: its value at +0xC of it |
+| +0x18 | `SmartData::SmartObject` | DAO's attribute and message system: a message receiver and observer, a hash map of named attributes |
+| +0x70 | `SEffectsHolder` | the effects on the object (+0xCC in an area) |
+| +0x440 | `ItemPossessor` | the inventory, in creatures, placeables and stores (+0x70 in the party) |
+
+`dao::CGameObject` gives the id, the type (`dao::core::ObjectType`, one bit off the scripts' `OBJECT_TYPE_*`) and the engine's casts, `AsCreature()` and the rest, virtual calls as the engine's own lookups make them. The probe checks all three on every object a script check looks up.
+
 ## What is known how well
 
 | Piece | Read | In play |
@@ -55,6 +69,7 @@ A script calls it once a `script.ldf` the toolset compiles against declares `int
 | The command table, `InitializeCommands`, setting a slot | 2026-09-30 | used 2026-09-30: 18 slots replaced, the game ran on |
 | The VM stack: int and object | 2026-09-30, voted across 665 commands | used 2026-09-30: on each of about 2,200 calls, the argument and the answer each popped and pushed back |
 | The VM stack: float | 2026-09-30 | not exercised |
+| `CGameObject`: id, type, the 19 casts | 2026-09-30, from the constructor and the vtables | checked by the script checks, from the next session |
 | `CCCreature::SetCombatState` | 2026-09-30 | not exercised |
 
 ## The first session

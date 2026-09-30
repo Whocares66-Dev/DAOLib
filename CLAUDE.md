@@ -30,14 +30,14 @@ src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that 
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
                 Field.h; dev/LIBRARY.md says how they fit
-src/dao/generated/  field descriptors written by tools/gen_script_fields.py from dev/*.csv; do not edit
+src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
-                CommandWord; tested
+                CommandWord, ObjectType; tested
 src/plugins/    one folder per plugin; probe/ is the first
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
-                message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, names.py,
-                probe_targets.py, probe_report.py, ghidra/
+                message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
+                names.py, probe_targets.py, probe_report.py, ghidra/
 dev/            plan, reading, tables
 game/           the exe and its Ghidra project (ignored)
 toolset/        the toolset installer and what is extracted from it (ignored)
@@ -72,7 +72,7 @@ Tests first, then the formatters rewrite in place, then the linters. A clang-tid
 
 The exe is the authority. The wiki, the toolset's `dascript.chm` and memory are leads. There are three ways in, cheapest first:
 
-1. **`tools\daoexe.py`**: `--rtti`/`--vtables <text>` for the classes and their vtables (its own walk of the RTTI, 2,990 vtables), `--class-of 0xVA`, `--refs 0xVA` for code holding an address, `--disasm 0xVA [n]`, `--commands`, `--strings`, `--imports`. It needs no Ghidra and answers in seconds, the cheapest way to follow a call chain.
+1. **`tools\daoexe.py`**: `--rtti`/`--vtables <text>` for the classes and their vtables (its own walk of the RTTI, 2,990 vtables), `--class-of 0xVA`, `--bases Class` for a class's bases at their offsets in the object, `--refs 0xVA` for code holding an address, `--disasm 0xVA [n]`, `--commands`, `--strings`, `--imports`. It needs no Ghidra and answers in seconds, the cheapest way to follow a call chain.
 2. **`.\tools\ghidra-mcp.ps1 -Query "..."`** from a shell: `vtable <class>`, `string <text>`, `refs <0xaddr>`, `decompile <0xaddr>`, `symbols <text>`, `analyzers`, `info`. It opens the project read-only for the question, with a minute of Ghidra start-up each time.
 3. **The MCP server**: run `.\tools\ghidra-mcp.ps1` in its own window, then use the `ghidra-dao` tools in Claude Code (`.mcp.json`). Stop it with `-Stop` so Ghidra saves what was renamed over MCP. The project is locked while any of these has it open, so run one at a time. Start the server before Claude Code, which connects at session start. If the server came up later, `/mcp` reconnects without a restart. It takes about a minute to report "Headless MCP server ready".
 
