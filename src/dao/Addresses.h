@@ -305,11 +305,22 @@ DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
 // Its getters, __thiscall (table, row, column hash, out), `ret 0x10`, find
 // the table by number (0x004DF580 on the store) and call that table's
 // typed getter, C2DASource's slot 10 for an int (as GetM2DAInt does) and
-// slot 9 for a float (as GetM2DAFloat does); the ones beside them call
-// slots 8 and 11, strings and bools by position, not yet wrapped.
+// slot 9 for a float (as GetM2DAFloat does). Beside them, the same shape:
+// slot 8 for a string, which GetM2DAString calls itself on the table
+// (0x0065404D-0x00654088: the column trimmed of " \t", lowercased and
+// hashed, the out a std::wstring), and slot 11 for a bool, whose cell
+// reader (M2DA's slot 15, 0x004EC4D0) writes one byte. Read 2026-09-30.
 DAO_DATA(kGdaTables, "g_gdaTables", 0x00C1D090)
 DAO_ADDRESS(kGdaTables_GetInt, "GdaTables::GetInt", 0x00A2CCC0)
 DAO_ADDRESS(kGdaTables_GetFloat, "GdaTables::GetFloat", 0x00A2CC80)
+DAO_ADDRESS(kGdaTables_GetString, "GdaTables::GetString", 0x00A2CC40)
+DAO_ADDRESS(kGdaTables_GetBool, "GdaTables::GetBool", 0x00A2CD00)
+// The store's lookup of a table by number, __thiscall, `ret 4`, null if it
+// has none: what every getter above starts with. A table's row count is
+// its slot 5 and its column count its slot 4, no arguments, as
+// GetM2DARows and GetM2DAColumns call them (M2DA's +0x44 and +0x40, G2DA's
+// +0x30 and +0x2C). The name is ours.
+DAO_ADDRESS(kGdaStore_FindTable, "GdaStore::FindTable", 0x004DF580)
 
 // The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the

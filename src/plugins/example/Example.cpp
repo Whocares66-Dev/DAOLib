@@ -47,6 +47,19 @@ void CheckTables()
                  "GetM2DAFloat",
                  type ? std::to_string(*type) : std::string("nothing"), typeScript,
                  cost ? std::to_string(*cost) : std::string("nothing"), costScript);
+
+    // A string column, and the table's size, the same way against the
+    // scripts' own commands.
+    const auto label = dao::gda::GetString(Table::AbilitiesTalents, kShieldPummel, "Label");
+    const std::wstring labelScript = dao::script::api::GetM2DAString(kAbilities, L"Label", kShieldPummel);
+    const auto rows = dao::gda::Rows(Table::AbilitiesTalents);
+    const auto columns = dao::gda::Columns(Table::AbilitiesTalents);
+    spdlog::info("abilities: Label \"{}\" from the table, \"{}\" from GetM2DAString; {} rows and {} columns from the "
+                 "table, {} and {} from GetM2DARows and GetM2DAColumns",
+                 label ? dao::Utf8(*label) : std::string("nothing"), dao::Utf8(labelScript),
+                 rows ? std::to_string(*rows) : std::string("nothing"),
+                 columns ? std::to_string(*columns) : std::string("nothing"), dao::script::api::GetM2DARows(kAbilities),
+                 dao::script::api::GetM2DAColumns(kAbilities));
 }
 
 int CheckCombatState(dao::script::CommandCall &call)
