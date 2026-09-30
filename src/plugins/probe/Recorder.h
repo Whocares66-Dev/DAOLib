@@ -13,6 +13,11 @@
 //   <from>  <to>  thread   <tid>      <samples with the thread in the exe's code>
 //   <from>  <to>  eip      <address>  <samples with a thread there>
 //   <from>  <to>  stack    <address>  <samples with it on a thread's stack>
+//   <from>  <to>  usamples 0          <samples with the game's update on the stack>
+//   <from>  <to>  ueip     <address>  <those samples with a thread there>
+//   <from>  <to>  ustack   <address>  <those samples with it on the stack>
+// The u-rows are the game's logic alone: samples of the threads while they
+// ran Eclipse::UpdateTask (dao/Addresses.h), not while they idled or drew.
 // Every thread of the process but the recorder's own is sampled about every
 // 15 ms: suspended, its registers and up to 16 KiB of stack copied, resumed.
 // An eip row says where threads were, the leaves; a stack row is a return

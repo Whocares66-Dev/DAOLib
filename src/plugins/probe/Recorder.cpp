@@ -41,15 +41,19 @@ constexpr std::size_t kStackWords =
     4096; // 16 KiB: 2 KiB missed the game's own frames under the graphics driver's (2026-09-30)
 constexpr std::size_t kMaxReturnsPerSample = 128;
 
-struct Text
+using Text = dao::Module::CodeRange;
+
+// A sample is of the game's logic when the update task's frame is on its
+// stack (dao/Addresses.h, kEclipseUpdateTask_Execute): the game's worker
+// threads run it, among everything else they run. Its samples are also
+// counted apart, so a comparison of them is not drowned by the fifty-odd
+// other threads the process has (2026-09-30: the logic thread was under 2%
+// of all samples).
+bool IsUpdate(std::uint32_t preferredReturn)
 {
-    std::uintptr_t begin = 0;
-    std::uintptr_t end = 0;
-    bool Contains(std::uintptr_t a) const
-    {
-        return a >= begin && a < end;
-    }
-};
+    return preferredReturn >= dao::addr::kEclipseUpdateTask_Execute &&
+           preferredReturn <= dao::addr::kEclipseUpdateTask_ExecuteEnd;
+}
 
 // What one sample copies while its thread is suspended: registers and stack
 // into storage made before, so nothing is allocated with the thread frozen.
@@ -67,6 +71,10 @@ struct Window
     std::unordered_map<std::uint32_t, std::uint32_t> eip;
     std::unordered_map<std::uint32_t, std::uint32_t> stack;
     std::map<DWORD, std::uint32_t> inExe; // by thread id
+    // The same, for the samples with the game's update on the stack.
+    std::uint64_t updateSamples = 0;
+    std::unordered_map<std::uint32_t, std::uint32_t> updateEip;
+    std::unordered_map<std::uint32_t, std::uint32_t> updateStack;
 };
 
 std::string LocalTimeNow()
@@ -79,11 +87,7 @@ std::string LocalTimeNow()
     return text.data();
 }
 
-// The preferred-base address of a runtime address, as every file writes it.
-std::uint32_t Preferred(std::uintptr_t runtime)
-{
-    return static_cast<std::uint32_t>(runtime - dao::Module::Base() + dao::core::kPreferredBase);
-}
+using dao::Module::Preferred;
 
 class Recorder
 {
@@ -253,9 +257,24 @@ class Recorder
                     found[count++] = value;
                 }
             }
+            bool update = false;
             for (std::size_t i = 0; i < count; ++i)
             {
-                ++window_.stack[Preferred(found[i])];
+                const std::uint32_t at = Preferred(found[i]);
+                ++window_.stack[at];
+                update = update || IsUpdate(at);
+            }
+            if (update)
+            {
+                ++window_.updateSamples;
+                if (text_.Contains(capture_.eip))
+                {
+                    ++window_.updateEip[Preferred(capture_.eip)];
+                }
+                for (std::size_t i = 0; i < count; ++i)
+                {
+                    ++window_.updateStack[Preferred(found[i])];
+                }
             }
         }
     }
@@ -326,6 +345,15 @@ class Recorder
         {
             samples_ << span << "stack\t0x" << std::hex << address << std::dec << '\t' << n << '\n';
         }
+        samples_ << span << "usamples\t0\t" << window_.updateSamples << '\n';
+        for (const auto &[address, n] : window_.updateEip)
+        {
+            samples_ << span << "ueip\t0x" << std::hex << address << std::dec << '\t' << n << '\n';
+        }
+        for (const auto &[address, n] : window_.updateStack)
+        {
+            samples_ << span << "ustack\t0x" << std::hex << address << std::dec << '\t' << n << '\n';
+        }
         samples_.flush();
         window_ = Window{};
     }
@@ -351,17 +379,13 @@ DWORD WINAPI RecorderThread(LPVOID parameter)
 
 bool StartRecorder()
 {
-    // The exe's code, from its section table as mapped.
-    constexpr std::size_t kHeaderBytes = 0x1000;
-    const auto *headers = reinterpret_cast<const std::byte *>(dao::Module::Base());
-    const auto text = dao::core::FindSection(std::span(headers, kHeaderBytes), ".text");
-    if (!text)
+    const auto code = dao::Module::Code();
+    if (!code)
     {
         spdlog::error("recorder: no .text section in the exe's headers");
         return false;
     }
-    const Text range{.begin = dao::Module::Base() + text->rva,
-                     .end = dao::Module::Base() + text->rva + text->virtualSize};
+    const Text range = *code;
     // Lives as long as the process: the thread runs until the game exits,
     // and the files are flushed as they are written, so nothing is lost
     // when it is killed with the rest.

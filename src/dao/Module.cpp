@@ -1,5 +1,7 @@
 #include "dao/Module.h"
 
+#include "dao/core/Pe.h"
+
 #include <Windows.h>
 
 #include <array>
@@ -35,6 +37,18 @@ bool IsExpectedExecutable()
 {
     const auto have = Fingerprint();
     return have && *have == core::kExpected;
+}
+
+std::optional<CodeRange> Code()
+{
+    constexpr std::size_t kHeaderBytes = 0x1000;
+    const auto *bytes = reinterpret_cast<const std::byte *>(Base());
+    const auto text = core::FindSection(std::span<const std::byte>(bytes, kHeaderBytes), ".text");
+    if (!text)
+    {
+        return std::nullopt;
+    }
+    return CodeRange{.begin = Base() + text->rva, .end = Base() + text->rva + text->virtualSize};
 }
 
 } // namespace dao::Module

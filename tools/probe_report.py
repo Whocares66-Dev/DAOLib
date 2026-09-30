@@ -3,7 +3,7 @@
     python tools/probe_report.py timeline
     python tools/probe_report.py pauses
     python tools/probe_report.py calls FROM-TO [--top N]
-    python tools/probe_report.py compare FROM-TO FROM-TO [--top N]
+    python tools/probe_report.py compare FROM-TO FROM-TO [--top N] [--update]
 
 Times are seconds since the probe loaded, as the timeline prints them.
 
@@ -119,10 +119,19 @@ def read_samples(logs):
                 continue
             t0, t1, kind, key, n = line.rstrip("\n").split("\t")
             w = windows.setdefault(
-                (int(t0), int(t1)), {"samples": 0, "thread": {}, "eip": {}, "stack": {}}
+                (int(t0), int(t1)),
+                {
+                    "samples": 0,
+                    "usamples": 0,
+                    "thread": {},
+                    "eip": {},
+                    "stack": {},
+                    "ueip": {},
+                    "ustack": {},
+                },
             )
-            if kind == "samples":
-                w["samples"] = int(n)
+            if kind in ("samples", "usamples"):
+                w[kind] = int(n)
             elif kind == "thread":
                 w["thread"][int(key)] = int(n)
             else:
@@ -203,17 +212,22 @@ def calls_in(logs, span, top):
         print(f"{n:>8}  {address:#010x}  {labels[address]}")
 
 
-def compare(logs, functions, first, second, top):
+def compare(logs, functions, first, second, top, update=False):
+    """With update, only the samples taken with the game's update on the
+    stack (the probe's u-rows): the game's logic, not every thread's idling."""
     windows = read_samples(logs)
+    prefix = "u" if update else ""
 
     def presence(ranges):
         per_function = collections.Counter()
         total = 0
         for (t0, t1), w in windows.items():
             if in_ranges(t0, t1, ranges):
-                total += w["samples"]
+                total += w[prefix + "samples"]
                 seen = collections.Counter()
-                for address, n in list(w["stack"].items()) + list(w["eip"].items()):
+                for address, n in list(w[prefix + "stack"].items()) + list(
+                    w[prefix + "eip"].items()
+                ):
                     entry, _ = functions.containing(address)
                     if entry is not None:
                         seen[entry] = max(seen[entry], n)
@@ -256,6 +270,11 @@ def main(argv):
     p = sub.add_parser("compare", parents=[common])
     p.add_argument("first")
     p.add_argument("second")
+    p.add_argument(
+        "--update",
+        action="store_true",
+        help="only samples with the game's update on the stack (probes from 2026-09-30 on)",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "timeline":
@@ -279,6 +298,7 @@ def main(argv):
         parse_ranges(args.first),
         parse_ranges(args.second),
         max(args.top, 40),
+        args.update,
     )
 
 

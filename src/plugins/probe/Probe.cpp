@@ -25,6 +25,7 @@
 #include "dao/Plugin.h"
 #include "dao/SafeRead.h"
 #include "dao/TypeName.h"
+#include "dao/core/CallSite.h"
 
 #include <Windows.h>
 
@@ -98,17 +99,52 @@ void __fastcall SetPaused(dao::CClientExoApp *self, int edx, bool paused, bool s
 using QueueCommandFn = int(__fastcall *)(void *self, int edx, void *command, int second, int third);
 dao::Detour<QueueCommandFn> g_queueCommand;
 
+// The return addresses into the game's code above a hook's frame, innermost
+// first, as preferred-base addresses: its caller, that one's caller, and on.
+// Read by scanning up the stack from the hook's own return-address slot and
+// keeping values just after a call instruction (dao/core/CallSite.h); the
+// game has no frame data to walk instead. A stale value can slip in.
+std::array<std::uint32_t, 4> CallerChain(const void *returnSlot)
+{
+    std::array<std::uint32_t, 4> chain{};
+    static const auto code = dao::Module::Code();
+    if (!code)
+    {
+        return chain;
+    }
+    std::size_t found = 0;
+    auto at = reinterpret_cast<std::uintptr_t>(returnSlot);
+    for (std::size_t i = 0; i < 1024 && found < chain.size(); ++i, at += 4)
+    {
+        const auto value = dao::TryRead<std::uint32_t>(at);
+        if (!value)
+        {
+            break;
+        }
+        if (!code->Contains(*value) || *value < code->begin + 7)
+        {
+            continue;
+        }
+        std::array<std::byte, 7> before{};
+        if (!dao::TryCopy(before.data(), *value - 7, before.size()) || !dao::core::EndsWithCall(before))
+        {
+            continue;
+        }
+        chain[found++] = dao::Module::Preferred(*value);
+    }
+    return chain;
+}
+
 int __fastcall QueueCommand(void *self, int edx, void *command, int second, int third)
 {
-    const auto caller =
-        reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - dao::Module::Base() + dao::core::kPreferredBase;
+    const auto chain = CallerChain(_AddressOfReturnAddress());
     const int result = g_queueCommand.Original()(self, edx, command, second, third);
     std::array<std::uint32_t, 4> words{};
     dao::TryCopy(words.data(), reinterpret_cast<std::uintptr_t>(command), sizeof words);
-    spdlog::info("QueueCommand from {:#010x}: object {} at {}, command {} at {} [{:08x} {:08x} {:08x} {:08x}], "
-                 "args {} {}, result {}",
-                 caller, dao::TypeName(self), self, dao::TypeName(command), command, words[0], words[1], words[2],
-                 words[3], second, third, result);
+    spdlog::info("QueueCommand from {:#010x} via {:#010x} {:#010x} {:#010x}: object {} at {}, command {} at {} "
+                 "[{:08x} {:08x} {:08x} {:08x}], args {} {}, result {}",
+                 chain[0], chain[1], chain[2], chain[3], dao::TypeName(self), self, dao::TypeName(command), command,
+                 words[0], words[1], words[2], words[3], second, third, result);
     return result;
 }
 

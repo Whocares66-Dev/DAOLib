@@ -34,6 +34,26 @@ std::optional<core::Fingerprint> Fingerprint();
 // knows. Every hook and every read of the game is conditional on this.
 bool IsExpectedExecutable();
 
+// The exe's code, its .text section, as runtime addresses [begin, end).
+// Nothing if the section table cannot be read.
+struct CodeRange
+{
+    std::uintptr_t begin = 0;
+    std::uintptr_t end = 0;
+    bool Contains(std::uintptr_t address) const
+    {
+        return address >= begin && address < end;
+    }
+};
+std::optional<CodeRange> Code();
+
+// The preferred-base address of a runtime address in the exe: what Ghidra,
+// the logs and dao/Addresses.h write.
+inline std::uint32_t Preferred(std::uintptr_t runtime)
+{
+    return static_cast<std::uint32_t>(runtime - Base() + core::kPreferredBase);
+}
+
 } // namespace Module
 
 // A pointer into the game at a preferred-base address.
