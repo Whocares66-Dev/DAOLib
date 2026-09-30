@@ -13,6 +13,7 @@
 // chain: whichever installed last runs first and Proceeds into the other.
 #include "dao/ClientExoApp.h"
 #include "dao/Log.h"
+#include "dao/Messages.h"
 #include "dao/Plugin.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"

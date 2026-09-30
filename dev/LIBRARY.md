@@ -75,6 +75,10 @@ dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::C
 
 `dao::script::id` has every command's number by its script name. The engine fills its command table after plugins load; an intercept made at load is installed as soon as it has (`OnCommandsReady`, a detour on `InitializeCommands`), one made later at once. `src/plugins/example` is a whole plugin doing this, and a test of it in play: it intercepts `GetCombatState` beside the probe's own shadow of it, compares the answer with `CCCreature::CombatState()`, and calls `api::GetTag` from inside the intercept.
 
+## The engine's messages
+
+The engine's classes send each other messages, and 314 handlers answer them (`dev/MESSAGE_HANDLERS.md`), each `bool Owner::HandleMessage(const Message &)`. `dao/generated/MessageHandlers.h` (`tools/gen_message_handlers.py`) names the 308 non-trivial ones as addresses to detour, `dao::messages::handler::GameModeExplore_PerformAbilityMessage` and so on, with a table of all of them; 281 have their one argument confirmed by their `ret 4`. `dao/Messages.h` has the typed handler signature and the message layouts read so far: `PerformAbilityMessage` (ability, caster, target: the player's ability orders, which a turn-based mode would gate) and `MoveCharacterToLocationMessage` (no fields: a click to move). A message class's clone, slot 1 of its vtable, allocates its size and copies its fields, which is how the rest can be read.
+
 ## The scripts' constants
 
 `dao/generated/ScriptConstants.h` (`tools/gen_script_constants.py`) has every constant the engine declares in `script.ldf` and the effect types the scripts declare in `effect_constants_h.nss`: 609, as 37 typed enums (`dao::script::EventType`, `EffectType`, `EffectDurationType`, `CommandResult`, `InventorySlot`, `ObjectTypeFlags`, ...) and again under their script names (`dao::script::constants::EVENT_TYPE_COMMAND_COMPLETE`). The accessors return the enums where the constants name the field: `CScriptEvent::Type()` is an `EventType`, `CGameEffect::Type()` an `EffectType`. An enum is 32-bit, so a number no constant names, like a script's own event type, still fits.

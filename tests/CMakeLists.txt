@@ -48,6 +48,13 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tools/gen_script_api.py" --check
     )
+    # The message handlers' hook points are what the table and the exe say.
+    add_test(
+        NAME message_handlers
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/gen_message_handlers.py" --check
+    )
     # CGameObject's cast slots are what the exe says (passes with no copy).
     add_test(
         NAME object_casts

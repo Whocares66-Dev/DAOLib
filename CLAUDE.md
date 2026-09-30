@@ -30,10 +30,12 @@ src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that 
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
+                the engine's messages (Messages.h),
                 Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py),
                 the scripts' constants as enums (gen_script_constants.py), every script command as a
-                C++ function (gen_script_api.py); do not edit
+                C++ function (gen_script_api.py), message handlers as hook points
+                (gen_message_handlers.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
                 CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray,
                 VmStack; tested
@@ -41,7 +43,7 @@ src/plugins/    one folder per plugin: probe/ watches and checks, example/ shows
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
-                names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, ghidra/
+                names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, gen_message_handlers.py, ghidra/
 dev/            plan, reading, tables
 game/           the exe and its Ghidra project (ignored)
 toolset/        the toolset installer and what is extracted from it (ignored)
