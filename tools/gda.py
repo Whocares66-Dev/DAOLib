@@ -161,6 +161,21 @@ class Gff4:
             return None
         return struct.unpack_from(fmt, self.d, at)[0]
 
+    def scalars(self, base, field):
+        """The values of a list-of-numbers field (a talk table's Huffman tree
+        and bit stream are lists of 32-bit words): the list's offset, from
+        the data's start, then its count and the values one after another."""
+        t, flags, off = field
+        if not flags & 0x8000:
+            raise ValueError("not a list field")
+        loff = self.u32(base + off)
+        if loff == 0xFFFFFFFF:
+            return ()
+        at = self.data_offset + loff
+        count = self.u32(at)
+        _, fmt = TYPES[t]
+        return struct.unpack_from(f"<{count}{fmt[1]}", self.d, at + 4)
+
 
 def read_gda(data):
     """(columns [(hash, type name)], rows [[values]])."""
@@ -204,9 +219,17 @@ def main(argv):
         want = argv[argv.index("--dump") + 1].lower()
         want = want if want.endswith(".gda") else want + ".gda"
         columns, rows = read_gda(entries[want])
+        heads = [column_name(h, names) for h, _ in columns]
+        text = []
+        if "--names" in argv:
+            import tlk  # noqa: PLC0415
+
+            talk = tlk.TalkTable.open()
+            text = [i for i, h in enumerate(heads) if h.lower().endswith("strref")]
         w = csv.writer(sys.stdout, lineterminator="\n")
-        w.writerow([column_name(h, names) for h, _ in columns])
-        w.writerows(rows)
+        w.writerow(heads + [heads[i][: -len("StrRef")] + "Text" for i in text])
+        for row in rows:
+            w.writerow(list(row) + [talk.get(row[i]) or "" for i in text])
         return 0
     # m2da_base: the tables by number, each a worksheet prefix.
     base_cols, base_rows = read_gda(entries["m2da_base.gda"])
