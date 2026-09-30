@@ -14,3 +14,14 @@ target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)
 
 include(Catch)
 catch_discover_tests(dao_tests)
+
+# The Python tools' own tests (tools/test_*.py), where there is a Python.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME python_tools
+        COMMAND
+            "${Python3_EXECUTABLE}" -m unittest discover -s
+            "${CMAKE_SOURCE_DIR}/tools" -p "test_*.py"
+    )
+endif()
