@@ -1,6 +1,7 @@
 #include "Recorder.h"
 
 #include "Census.h"
+#include "ScriptChecks.h"
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Log.h"
@@ -143,6 +144,7 @@ class Recorder
             if (first || now - lastHealth >= kHealthMs)
             {
                 spdlog::info("recorder: {} threads sampled, {} calls counted so far", threads_.size(), totalCalls_);
+                ReportScriptChecks();
                 lastHealth = now;
             }
             first = false;

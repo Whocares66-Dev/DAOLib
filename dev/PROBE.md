@@ -37,3 +37,16 @@ python tools\probe_report.py compare 400-520 60-300 --update   # the same, over 
 ```
 
 The timeline shows the stretches. A fight shows up as a burst of combat script commands (`GETCOMBATSTATE`, ability and AI commands) and, with auto-pause on, a `SetPaused` from a new caller. `compare` with the fight first and exploring second ranks functions by how much more often they were on a stack while fighting. The top of that list is combat code, most of it unnamed until then. Each name found goes into `src/dao/Addresses.h` like any other.
+
+## Script checks
+
+Since 2026-09-30 the probe also checks the library's fields against the game (`ScriptChecks.h`, `dev/LIBRARY.md`). It detours `CVirtualMachineCommands::InitializeCommands`, and as soon as the engine has filled the command table, it puts one shadow handler in the slot of each getter in `dao/generated/ScriptFields.h`. When a script calls one, the shadow peeks at the object argument (pops it and pushes it back), calls the engine's handler, peeks at the answer the same way, looks the object up as the getter does, and reads our field from it. The script gets exactly what the engine gave it. `DAOLIB_PROBE_SCRIPT_CHECKS=0` turns this off.
+
+In `probe.log`:
+
+- `script checks: 18 of 18 getters shadowed` once at start-up, or why not.
+- `script check GetTeamId (807): first call, ...` the first time a getter's answer and our field agree.
+- A warning with both values for each of the first five mismatches of a getter.
+- Every minute, with the recorder's health line: per getter called so far, its calls, matches, mismatches, calls on an id that named no object of its class, and calls where the engine's handler failed. Then how many getters were called and how many matched every time.
+
+A getter no script calls in a session stays unchecked. The census saw `GETCOMBATSTATE` run through every fight; the placeable getters want chests and locks, and `GetMapPinState` the world map.

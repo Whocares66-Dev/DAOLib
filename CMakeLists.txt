@@ -166,6 +166,7 @@ add_library(
     src/plugins/probe/Census.cpp
     src/plugins/probe/Probe.cpp
     src/plugins/probe/Recorder.cpp
+    src/plugins/probe/ScriptChecks.cpp
     "${DAO_PROBE_TARGETS}"
 )
 dao_apply_warnings(probe)
