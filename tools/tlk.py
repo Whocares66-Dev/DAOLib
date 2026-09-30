@@ -3,7 +3,7 @@
 Every name and description the game shows is a string reference (a
 StrRef, like abi_base's NameStrRef) into a talk table:
 packages\\core\\data\\talktables\\core_en-us.tlk, its languages, and one per
-add-on. A talk table is a GFF4 file of type "TLK " (tools/gda.py reads
+add-on. A talk table is a GFF4 file of type "TLK " (tools/gff4.py reads
 GFF4), and all 1,501 in the GOG install are version 0.2 (checked
 2026-09-30): the top struct's string list (field 19001), each string's id
 (19002) and its text (19003), as xoreos reads them
@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import gda  # noqa: E402
+import gff4  # noqa: E402
 import script_commands  # noqa: E402
 
 TABLES = os.path.join(script_commands.GAME, "packages", "core", "data", "talktables")
@@ -29,7 +29,7 @@ STRING_LIST, STRING_ID, STRING_TEXT = 19001, 19002, 19003
 
 class TalkTable:
     def __init__(self, data):
-        g = gda.Gff4(data)
+        g = gff4.Gff4(data)
         if g.type != "TLK ":
             raise ValueError(f"a {g.type!r}, not a talk table")
         top = g.fields(0)

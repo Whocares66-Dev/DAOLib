@@ -34,13 +34,13 @@ import csv
 import io
 import os
 import re
-import struct
 import sys
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import script_commands  # noqa: E402
+from gff4 import TYPES, Gff4  # noqa: E402,F401
 
 ROOT = os.path.join(HERE, "..")
 OUT = os.path.join(ROOT, "dev", "gda_tables.csv")
@@ -48,19 +48,6 @@ ARCHIVE = os.path.join(script_commands.GAME, "packages", "core", "data", "2da.er
 XOREOS_NAMES = r"C:\Modding\xoreos\src\aurora\gdaheaders.cpp"
 
 COLUMN_LIST, ROW_LIST, COLUMN_HASH, COLUMN1 = 10002, 10003, 10001, 10005
-TYPES = {
-    0: ("u8", "<B"),
-    1: ("s8", "<b"),
-    2: ("u16", "<H"),
-    3: ("s16", "<h"),
-    4: ("u32", "<I"),
-    5: ("s32", "<i"),
-    6: ("u64", "<Q"),
-    7: ("s64", "<q"),
-    8: ("f32", "<f"),
-    9: ("f64", "<d"),
-    14: ("string", None),
-}
 
 
 def column_hash(name):
@@ -74,107 +61,6 @@ def known_names():
         return {
             int(h): n for h, n in re.findall(r'\{\s*(\d+)U,\s*"([^"]+)"\s*\}', f.read())
         }
-
-
-class Gff4:
-    def __init__(self, data):
-        if data[:4] != b"GFF " or data[4:8] not in (b"V4.0", b"V4.1"):
-            raise ValueError("not a GFF4 file")
-        if data[8:12] != b"PC  ":
-            raise ValueError("not a PC (little-endian) GFF4 file")
-        self.d = data
-        self.type = data[12:16].decode()
-        count = struct.unpack_from("<I", data, 20)[0]
-        at = 24
-        self.shared = []
-        if data[4:8] == b"V4.1":
-            scount, soffset = struct.unpack_from("<II", data, 24)
-            at = 32
-            if scount:
-                raise ValueError(
-                    "shared strings: not needed for the game's GDAs, not read"
-                )
-        self.data_offset = struct.unpack_from("<I", data, at)[0]
-        at += 4
-        self.templates = []
-        for i in range(count):
-            label, fcount, foffset, size = struct.unpack_from(
-                "<4sIII", data, at + 16 * i
-            )
-            fields = []
-            if foffset != 0xFFFFFFFF:
-                for j in range(fcount):
-                    flabel, tf, off = struct.unpack_from("<III", data, foffset + 12 * j)
-                    fields.append((flabel, tf & 0xFFFF, tf >> 16, off))
-            self.templates.append((label[::-1].decode(errors="replace"), fields, size))
-
-    def u32(self, at):
-        return struct.unpack_from("<I", self.d, at)[0]
-
-    def fields(self, template):
-        return {
-            label: (t, flags, off)
-            for label, t, flags, off in self.templates[template][1]
-        }
-
-    def list_of_structs(self, base, field):
-        """[(template, struct offset)] of a struct-list field of the struct at base."""
-        t, flags, off = field
-        if not flags & 0x4000:
-            raise ValueError("not a struct field")
-        template = t
-        at = base + off
-        count = 1
-        if flags & 0x8000:
-            loff = self.u32(at)
-            if loff == 0xFFFFFFFF:
-                return []
-            at = self.data_offset + loff
-            count = self.u32(at)
-            at += 4
-        size = 4 if flags & 0x2000 else self.templates[template][2]
-        out = []
-        for i in range(count):
-            p = at + i * size
-            if flags & 0x2000:
-                ref = self.u32(p)
-                if ref == 0xFFFFFFFF:
-                    continue
-                p = self.data_offset + ref
-            out.append((template, p))
-        return out
-
-    def value(self, base, field):
-        t, flags, off = field
-        at = base + off
-        if t == 14:
-            soff = self.u32(at)
-            if soff == 0xFFFFFFFF:
-                return ""
-            p = self.data_offset + soff
-            n = self.u32(p)
-            # The game's strings end in a NUL, counted in the length.
-            text = self.d[p + 4 : p + 4 + 2 * n].decode("utf-16-le", errors="replace")
-            return text.rstrip(chr(0))
-        name, fmt = TYPES.get(t, (None, None))
-        if fmt is None:
-            return None
-        return struct.unpack_from(fmt, self.d, at)[0]
-
-    def scalars(self, base, field):
-        """The values of a list-of-numbers field (a talk table's Huffman tree
-        and bit stream are lists of 32-bit words): the list's offset, from
-        the data's start, then its count and the values one after another."""
-        t, flags, off = field
-        if not flags & 0x8000:
-            raise ValueError("not a list field")
-        loff = self.u32(base + off)
-        if loff == 0xFFFFFFFF:
-            return ()
-        at = self.data_offset + loff
-        count = self.u32(at)
-        _, fmt = TYPES[t]
-        return struct.unpack_from(f"<{count}{fmt[1]}", self.d, at + 4)
 
 
 def read_gda(data):
