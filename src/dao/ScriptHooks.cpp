@@ -220,6 +220,11 @@ const CScriptEvent *CommandCall::Event(int n) const
     return static_cast<const CScriptEvent *>(StructureArgument(n, EngineStructure::Event));
 }
 
+const ::dao::Command *CommandCall::Command(int n) const
+{
+    return static_cast<const ::dao::Command *>(StructureArgument(n, EngineStructure::Command));
+}
+
 int CommandCall::Proceed()
 {
     proceeded_ = true;

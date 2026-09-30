@@ -108,6 +108,20 @@ So a turn-based mode has its gate: hold a creature's commands at `0x0073CD10` (o
 
 The toolset's database holds the source of the game's scripts (`dev/TOOLSET.md`, `tools/toolset_scripts.py`), and it answers "what queues the AI's next action". Creatures run `rules_core.nss`, whose header calls it "the main entry point into combat AI, ability use and any event that is global to all creatures". When a creature's command finishes, the engine sends it `EVENT_TYPE_COMMAND_COMPLETE`, with the finished command's type, its status and a sub-command as the event's integers 0, 1 and 2, and a blocking object as object 2. `rules_core` handles that event by calling `AI_DetermineCombatRound` (`ai_main_h_2.nss`, the AI proper, 155 KB), for followers and for any creature in combat, which chooses the next action and queues it through `AddCommand`, the `QueueCommand` the probe watched. So combat is a chain of command-complete events, one per creature, and there is no round: a turn-based mode can hold a creature's next decision by holding its command-complete event (or its `AI_DetermineCombatRound`) until its turn, and release it then. The event is an engine structure the library now reads (`dao::CScriptEvent`), and events were checked in play the same day (`dev/LIBRARY.md`).
 
+## A design from the AI's source (2026-09-30)
+
+What `ai_main_h_2.nss` does, read for where a turn-based mode takes hold:
+
+- `AI_DetermineCombatRound` returns at once if the creature is a non-combatant, if the game is in neither combat nor explore mode (then it queues a wait), if the creature has a current command or anything queued (`GetCurrentCommand`, `GetCommandQueueSize`), or if its AI is off. Otherwise it runs the creature's tactics (`_AI_ExecuteTactic` over its package's table) and queues what they choose.
+- Every choice is queued through `WR_AddCommand` (27 places in `ai_main_h_2`), which checks its arguments and calls the script command `AddCommand` (`dao::script::id::AddCommand`).
+- The next choice comes when that command completes: the engine sends `EVENT_TYPE_COMMAND_COMPLETE`, and `rules_core` calls `AI_DetermineCombatRound` again.
+
+So one intercept holds the whole AI side. Intercepting `AddCommand` (`dao/ScriptHooks.h`), a mode can keep the command of any combatant whose turn it is not (a copy, `OwnedCommand`, taken from the call's argument) and answer the script as though it were queued. The creature then does nothing and gets no `COMMAND_COMPLETE`, so it decides nothing more. When its turn comes, the mode queues the kept command (`dao::script::api::AddCommand`); when that completes, the AI decides again, and the intercept keeps that too. The player's side is the explore mode's messages (`dao/Messages.h`: `PerformAbilityMessage` and its kin, `MoveCharacterToLocationMessage`), held the same way through their handlers.
+
+The mode's own clock is `dao::OnFrame`, which runs on the scripts' thread and keeps running while the game is paused (both seen 2026-09-30), so it may call script commands directly: whose turn it is, `GetCombatState`, `GetTeam`, and `AddCommand` for the kept command.
+
+Still to read: what else queues commands without `AddCommand` (effects, the engine's own reactions: `QueueCommand`'s other callers, `dev/TURN_BASED.md` above), and whether a command kept past a pause or an area change stays valid.
+
 ## Next readings
 
 1. A fight with the next probe (queue hook, deeper stacks): what `0x0073CD10` is called on and with, from scripts and from player orders, and a `compare` of fighting against exploring that reaches the game's own frames.

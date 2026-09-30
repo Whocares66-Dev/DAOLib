@@ -73,6 +73,7 @@ class CommandCall
     const CScriptLocation *Location(int n) const;
     const CGameEffect *Effect(int n) const;
     const CScriptEvent *Event(int n) const;
+    const ::dao::Command *Command(int n) const; // AddCommand's second argument, say
 
     // Runs the handler this intercept replaced: another plugin's intercept,
     // or the engine's command. Its result is the handler's.
