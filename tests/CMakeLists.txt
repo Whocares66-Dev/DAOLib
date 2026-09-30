@@ -5,6 +5,7 @@ add_executable(
     test_code.cpp
     test_crashlog.cpp
     test_fingerprint.cpp
+    test_objects.cpp
     test_range.cpp
     test_relocate.cpp
     test_saferead.cpp
@@ -23,5 +24,12 @@ if(Python3_Interpreter_FOUND)
         COMMAND
             "${Python3_EXECUTABLE}" -m unittest discover -s
             "${CMAKE_SOURCE_DIR}/tools" -p "test_*.py"
+    )
+    # The generated field descriptors are what the tables say.
+    add_test(
+        NAME generated_fields
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/gen_script_fields.py" --check
     )
 endif()

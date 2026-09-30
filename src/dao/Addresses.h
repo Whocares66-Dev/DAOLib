@@ -84,6 +84,15 @@ DAO_ADDRESS(kCClientExoApp_SetPaused, "CClientExoApp::SetPaused", 0x005D6740)
 // pops an object id and passes it here, `mov ecx, [g_clientExoApp]`, one
 // argument, and gets the object back in eax.
 DAO_ADDRESS(kCClientExoApp_GetObject, "CClientExoApp::GetObjectById", 0x005D5BE0)
+// The typed lookups beside it, found 2026-09-30 by tools/script_backends.py
+// (dev/object_lookups.csv): the same shape, then a cast through the virtual
+// slot that only the named class answers with `this`. Each __thiscall, the
+// id, `ret 4`. GetGameObjectById does not cast: the object as the array
+// holds it.
+DAO_ADDRESS(kCClientExoApp_GetGameObjectById, "CClientExoApp::GetGameObjectById", 0x005D5840)
+DAO_ADDRESS(kCClientExoApp_GetCreatureById, "CClientExoApp::GetCreatureById", 0x005D58C0)
+DAO_ADDRESS(kCClientExoApp_GetPlaceableById, "CClientExoApp::GetPlaceableById", 0x005D5B40)
+DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x005D5C60)
 // Queue a command on an object: __thiscall(command, addToFront, override),
 // `ret 0xC`, returns 1. Seen in play 2026-09-30 (dev/TURN_BASED.md): about
 // 200 commands in a fight, all on CCCreature, from the scripts'

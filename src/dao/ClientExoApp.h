@@ -3,16 +3,18 @@
 // comes from the RTTI of the vftables its constructor stores; the lineage
 // is BioWare's Aurora engine (Neverwinter Nights' CExoApp).
 //
-// The first class of the library in CommonLib's shape: an opaque type, the
-// fields known so far read at their offsets, and the engine's own functions
-// called at their addresses. Nothing here reimplements the engine. Every
-// offset and address was read 2026-09-29 from the disassembly of
-// CClientExoApp::SetPaused (dao/Addresses.h has the story); none is yet
-// verified in play, which is what the probe plugin is for.
+// An opaque type, the fields known so far read at their offsets, and the
+// engine's own functions called at their addresses. Nothing here
+// reimplements the engine. The pause state and SetPaused were read from the
+// disassembly on 2026-09-29 and seen working in play (probe.log); the
+// lookups by id on 2026-09-30 (dev/SCRIPT_COMMANDS.md), checked in play by
+// the probe's script checks.
 #pragma once
 
 #include "dao/Addresses.h"
 #include "dao/Module.h"
+#include "dao/ObjectId.h"
+#include "dao/Objects.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -35,18 +37,44 @@ class CClientExoApp
         return *At<CClientExoApp *>(addr::kClientExoApp);
     }
 
+    // -- objects by id: null for an id that names nothing, or names an
+    //    object of another class. __thiscall, the id, `ret 4`, each.
+
+    CGameObject *GetGameObjectById(ObjectId id)
+    {
+        return Lookup<CGameObject>(addr::kCClientExoApp_GetGameObjectById, id);
+    }
+    CCObject *GetObjectById(ObjectId id)
+    {
+        return Lookup<CCObject>(addr::kCClientExoApp_GetObject, id);
+    }
+    CCCreature *GetCreatureById(ObjectId id)
+    {
+        return Lookup<CCCreature>(addr::kCClientExoApp_GetCreatureById, id);
+    }
+    CCPlaceable *GetPlaceableById(ObjectId id)
+    {
+        return Lookup<CCPlaceable>(addr::kCClientExoApp_GetPlaceableById, id);
+    }
+    CCWayPoint *GetWayPointById(ObjectId id)
+    {
+        return Lookup<CCWayPoint>(addr::kCClientExoApp_GetWayPointById, id);
+    }
+
+    // -- pause
+
     // The paused flag: the byte at +0xC of the flag object at +0xD8, as the
     // engine's own getter (0x00838210, `mov al, [ecx+0xC]`) reads it.
     bool IsPaused() const
     {
-        return Field<std::uint8_t>(kPausedFlag + kFlagValue) != 0;
+        return Read<std::uint8_t>(kPausedFlag + kFlagValue) != 0;
     }
 
     // Milliseconds spent paused so far this session: the running total
     // SetPaused keeps at +0xFC, not counting a pause still in progress.
     std::uint32_t PausedMilliseconds() const
     {
-        return Field<std::uint32_t>(kPausedTotal);
+        return Read<std::uint32_t>(kPausedTotal);
     }
 
     // The engine's own pause. `second` is what the pause key passes 1 for;
@@ -57,23 +85,56 @@ class CClientExoApp
         reinterpret_cast<Fn>(Module::Address(addr::kCClientExoApp_SetPaused))(this, 0, paused, second);
     }
 
+    // -- game mode
+
+    // Seen in play 2026-09-29/30 (dev/TURN_BASED.md): 0 exploring, 1 combat,
+    // 3 a menu screen, 4 dialogue, 9 loading, 11 the main menu.
+    enum class GameMode : std::int32_t
+    {
+        Explore = 0,
+        Combat = 1,
+        MenuScreen = 3,
+        Dialogue = 4,
+        Loading = 9,
+        MainMenu = 11,
+    };
+    GameMode Mode() const
+    {
+        const auto *holder = Read<const std::byte *>(kModeHolder);
+        return static_cast<GameMode>(*reinterpret_cast<const std::int32_t *>(holder + kModeValue));
+    }
+
+    // The script commands object (dao/Script.h), made in the application's
+    // initialisation and given to the script VM.
+    void *Commands() const
+    {
+        return Read<void *>(kCommands);
+    }
+
     static constexpr std::size_t kPausedFlag = 0xD8;
     static constexpr std::size_t kSecondFlag = 0xE8; // set from SetPaused's `second`, by the disassembly
     static constexpr std::size_t kFlagValue = 0xC;
     static constexpr std::size_t kPausedSince = 0xF8;
     static constexpr std::size_t kPausedTotal = 0xFC;
     // A pointer to an object holding the game mode, an int at +0x78 of it.
-    // Seen in play 2026-09-29 (dev/TURN_BASED.md): 0 exploring, 3 a menu
-    // screen, 4 dialogue, 9 loading, 11 the main menu. What the object is,
-    // is not yet read.
+    // What the object is, is not yet read.
     static constexpr std::size_t kModeHolder = 0x114;
     static constexpr std::size_t kModeValue = 0x78;
+    // `app->[+0x1E4] = new CVirtualMachineCommands` in the application's
+    // initialisation (0x005DBE22), the object then handed to the VM.
+    static constexpr std::size_t kCommands = 0x1E4;
     static constexpr std::size_t kSize = 0x2F0; // what operator new is asked for
 
   private:
-    template <class T> const T &Field(std::size_t offset) const
+    template <class T> const T &Read(std::size_t offset) const
     {
         return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+
+    template <class T> T *Lookup(std::uintptr_t function, ObjectId id)
+    {
+        using Fn = T *(__fastcall *)(CClientExoApp *, int, ObjectId);
+        return reinterpret_cast<Fn>(Module::Address(function))(this, 0, id);
     }
 };
 
