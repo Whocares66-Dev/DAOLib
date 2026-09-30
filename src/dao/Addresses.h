@@ -307,23 +307,25 @@ DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 // slot's folder, then <name>.das and <name>.das.met opened with
 // ECFileAccess and written ("savegame" for an empty name). FindSave,
 // __cdecl, looks for "*.das" in a slot's folder, for loading. In play,
-// 2026-09-30: FindSave was called for a load (character, slot 2, kind 0),
-// but Write was not for a quicksave, though its savegame.das was written:
-// the quicksave writes another way, still to read. The names are ours.
+// 2026-09-30: FindSave was called for a load (character, slot 2, kind 0);
+// a quicksave asked for slot -1, kind 2, and Write was called with the slot
+// resolved (1, kind 2) and returned 1. An earlier quicksave had not called
+// it, for a reason not read (the worker's check below). The names are ours.
 DAO_ADDRESS(kSaveGame_SlotFolder, "SaveGame::SlotFolder", 0x00643DD0)
 DAO_ADDRESS(kSaveGame_Write, "SaveGame::Write", 0x00646280)
 DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
-// Where a save is done, read 2026-09-30 after the quicksave above: in the
-// loading game mode, whose slot 8 calls the Worker, a state machine in
-// numbered steps behind the SaveScreen movie. Write runs only when a check
-// (0x004C9B10) passes; the quicksave went the other way. Step 10 calls
-// WriteScreenshot, __thiscall on the object at the application's +0x150
-// (out path, const std::wstring &character, slot, kind, 0), `ret 0x14`,
-// the character being the save manager's (the application's +0x14C) +0x18:
-// the slot's folder and its screen.dds, the slot and kind resolved. The
-// probe logs it, to see a save's slot as it is written.
+// Where a save is done, read 2026-09-30: in the loading game mode, whose
+// slot 8 calls the Worker, a state machine in numbered steps behind the
+// SaveScreen movie. Write runs only when a check (0x004C9B10) passes. Step
+// 10 asks for the save's screenshot path. ScreenshotPath is a
+// SaveLoadProxy method (the application's +0x150), __thiscall (out path,
+// const std::wstring &character, slot, kind, bool mustExist), `ret 0x14`:
+// the slot's folder and screen.dds, or an empty path if mustExist and the
+// file is not there (it opens it to see). In play, 2026-09-30, the save and
+// load screen called it for every slot of every character as it filled
+// (mustExist), and a save once, after Write (not mustExist).
 DAO_ADDRESS(kGameModeLoading_Worker, "GameModeLoading::Worker", 0x006C6520)
-DAO_ADDRESS(kSaveGame_WriteScreenshot, "SaveGame::WriteScreenshot", 0x006CB7A0)
+DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x006CB7A0)
 
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature

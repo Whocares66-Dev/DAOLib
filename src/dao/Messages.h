@@ -85,7 +85,9 @@ inline bool Send(void *receiver, const Message &message)
 // Every message the engine delivers, as it delivers it: a plugin's
 // observer sees the receiver and the message just before the receiver's
 // handler; an interceptor may take the message instead (return true), and
-// then no handler runs and the sender hears it was handled.
+// then no handler runs and the sender hears it was handled. The engine
+// offers one message to several receivers, and only one has a handler for
+// it: observers and interceptors see only that delivery, once per message.
 //
 //   dao::messages::OnMessage<dao::messages::SetGameModeMessage>(
 //       [](void *, const dao::messages::SetGameModeMessage &m) { spdlog::info("mode {}", m.mode); });
@@ -178,7 +180,9 @@ static_assert(sizeof(CenterOnObjectMessage) == 8);
 // 3 a fourth; a slot of -1 lets the handler choose, as the quicksave's key
 // binding "SaveGameMessage -1 2" asks). A save's message is 0x28 bytes, a
 // name after (an engine std::wstring, which its clone copies). Read
-// 2026-09-30; the example plugin logs both in play.
+// 2026-09-30, and seen in play the same day: the quicksave key sent slot
+// -1, kind 2, no name, and SaveGame::Write then wrote slot 1; a quickload
+// sent slot 1, kind 2, and a load from the menu slot 2, kind 0.
 struct SaveGameMessage : Message
 {
     static constexpr std::uintptr_t kVftable = 0x00B00098;

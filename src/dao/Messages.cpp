@@ -1,8 +1,11 @@
 #include "dao/Messages.h"
 
+#include "dao/Addresses.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -34,10 +37,31 @@ std::mutex g_adding;
 using DispatchFn = bool(__fastcall *)(void *registry, int edx, void *receiver, const Message *message);
 Detour<DispatchFn> g_dispatch;
 
+// Whether Dispatch will find this receiver a handler for this message, as
+// it decides (0x004D8330, read 2026-09-30): the receiver's byte at +4 set,
+// and Find (__thiscall (receiver's class, message's class), `ret 8`,
+// walking both classes' parents) giving one. Each class is what the
+// object's vtable slot 0 returns. The engine delivers one message to
+// several receivers, and only one has a handler: in play, 2026-09-30, a
+// click's message came through Dispatch four times and its handler ran
+// once.
+bool Handles(void *registry, const void *receiver, const Message *message)
+{
+    if (receiver == nullptr || *(static_cast<const std::uint8_t *>(receiver) + 4) == 0)
+    {
+        return false;
+    }
+    using ClassFn = const void *(__fastcall *)(const void *, int);
+    const auto classOf = [](const void *object) { return (*static_cast<ClassFn *const *>(object))[0](object, 0); };
+    using FindFn = const void *(__fastcall *)(void *, int, const void *, const void *);
+    return reinterpret_cast<FindFn>(Module::Address(addr::kMessageRegistry_Find))(registry, 0, classOf(receiver),
+                                                                                  classOf(message)) != nullptr;
+}
+
 bool __fastcall Dispatch(void *registry, int edx, void *receiver, const Message *message)
 {
     const auto subscriptions = g_subscriptions.load(std::memory_order_acquire);
-    if (message != nullptr && !subscriptions->empty())
+    if (message != nullptr && !subscriptions->empty() && Handles(registry, receiver, message))
     {
         const auto vftable = reinterpret_cast<std::uintptr_t>(message->vtable);
         bool taken = false;

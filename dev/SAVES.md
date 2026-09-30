@@ -38,9 +38,16 @@ Read 2026-09-30 (`src/dao/Addresses.h`, `SaveGame`):
 - **Writing.** `SaveGame::Write` writes `<name>.das` and `<name>.das.met` there, `savegame` if the name is empty.
 - **Loading.** `SaveGame::FindSave` finds the `.das` in a slot's folder for loading.
 
-In play, 2026-09-30: `FindSave` was called for a load (character, slot 2, kind 0), but `Write` was not called for a quicksave that was written. Saves run in the loading game mode, whose worker (`GameModeLoading::Worker`) calls `Write` only when a check passes. Its step 10 writes the save's screenshot through `SaveGame::WriteScreenshot`, with the slot and kind resolved. The probe logs that too, and the example plugin logs every `SaveGameMessage` and `LoadGameMessage` with its slot, kind and name.
+Seen in play, 2026-09-30:
 
-Once a session shows them, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
+- **A quicksave.** The key sent `SaveGameMessage` with slot -1 (the handler chooses), kind 2 and no name. `SaveGame::Write` was then called for Aedan, slot 1, kind 2, and returned 1. Last came the screenshot's path, `...\Aedan\Saves\QuickSave_1\screen.dds`.
+- **Loads.** A load from the menu sent `LoadGameMessage` slot 2, kind 0, and `FindSave` was called with the same. A quickload sent slot 1, kind 2.
+- **An earlier quicksave did not call `Write`**, though its files were written. Saves run in the loading game mode, whose worker (`GameModeLoading::Worker`) calls `Write` only when a check passes, and what that check is has not been read.
+- **The save and load screen.** As it fills, it asks `SaveLoadProxy::ScreenshotPath` for every slot of every character, with an empty path for one with no screenshot.
+
+So a plugin's save data can hang on `Write` returning: it has the character, the slot and the kind, which name the folder. It can hang on `FindSave` or `LoadGameMessage` for a load. The unread check is the gap: a save that skips `Write` would be missed.
+
+Once that check is read, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
 
 ## What it means for plugins
 
