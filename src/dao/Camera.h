@@ -64,6 +64,22 @@
 // radians(facing) + pi left the camera at the creature's side, though one
 // screenshot, everyone facing about 180, had seemed to agree. The offset's
 // setter is not yet seen.
+//
+// One yaw, read 2026-09-30 for a camera that did not stay behind a
+// creature once the player had turned it. The scene camera's manager
+// (0x006C4C60) runs a list of camera behaviours each frame; the orbit
+// (type 2, the update above) is the one that places it. It keeps one yaw,
+// +0x1C, mirrored at +0x18 and in the orbit behaviour's +0x34, and
+// SetYaw writes all three. The player's turning is not a second yaw: the
+// controller puts the mouse's rate in +0x44 each frame, the manager
+// clears it after, and the orbit turns it into a yaw speed (the
+// behaviour's +0x80) that dies away within a quarter of a second once the
+// mouse stops. The update has a second mode, a byte at +0x00 armed by a
+// timer at +0x04, in which the yaw is taken from where the camera stands
+// and SetYaw's yaw is ignored; the constructor sets the timer to -1, and
+// nothing found sets it again, so it should not arise. Nothing else was
+// found turning the camera but SetYaw, and the controller's reset
+// (TurnBehind, below).
 #pragma once
 
 #include "dao/Addresses.h"
@@ -165,6 +181,17 @@ class CameraController
     {
         using Fn = void(__fastcall *)(CameraController *, int);
         reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerExplore_SnapToTarget))(this, 0);
+    }
+
+    // Turn the camera to an object's heading at once, the engine's own way:
+    // what the controller's reset does for the object it follows (its slot
+    // 9). The yaw is the object's heading, read from its orientation (the
+    // graphics object's +0x130), plus 270 degrees, normalised. Meant to put
+    // the camera behind the object; not yet seen in play.
+    void TurnBehind(ObjectId object)
+    {
+        using Fn = void(__fastcall *)(CameraController *, int, ObjectId);
+        reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_TurnBehind))(this, 0, object);
     }
 
     // The tactical view, high above, rather than the close one.
