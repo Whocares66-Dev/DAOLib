@@ -17,7 +17,9 @@
 //   tools/probe_report.py. dev/PROBE.md says how to read a session.
 // - The library's fields, each checked against the script command it was
 //   read from, every time a script calls it (ScriptChecks.h).
+// - Every event the engine's queue delivers, counted by kind (Events.h).
 #include "Census.h"
+#include "Events.h"
 #include "Recorder.h"
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
@@ -191,6 +193,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_setPaused, dao::addr::kCClientExoApp_SetPaused, &SetPaused, "CClientExoApp::SetPaused");
     Place(g_queueCommand, dao::addr::kObject_QueueCommand, &QueueCommand, "GameObject::QueueCommand");
     probe::AttachScriptChecks();
+    probe::AttachEventWatch();
 
     // The census, on everything but what is hooked above.
     const std::uint32_t hookedAbove[] = {

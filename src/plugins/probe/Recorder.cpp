@@ -1,6 +1,7 @@
 #include "Recorder.h"
 
 #include "Census.h"
+#include "Events.h"
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
@@ -145,6 +146,7 @@ class Recorder
             {
                 spdlog::info("recorder: {} threads sampled, {} calls counted so far", threads_.size(), totalCalls_);
                 ReportScriptChecks();
+                ReportEventWatch();
                 lastHealth = now;
             }
             first = false;

@@ -22,6 +22,7 @@
 #include "dao/Addresses.h"
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
+#include "dao/Structures.h"
 #include "dao/core/CommandWord.h"
 #include "dao/core/ObjectType.h"
 #include "dao/generated/ObjectCasts.h"
@@ -158,21 +159,30 @@ class CGameObject : Opaque
     static constexpr std::size_t kId = 0x10;
     static constexpr std::size_t kType = 0x14;
 
+  protected:
+    template <class T> const T &Read(std::size_t offset) const
+    {
+        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
+    }
+
   private:
     template <class T> T *As(generated::CastSlot slot)
     {
         return static_cast<T *>(Cast(slot));
-    }
-
-    template <class T> const T &Read(std::size_t offset) const
-    {
-        return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
     }
 };
 
 class CCObject : public CGameObject
 {
   public:
+    // The event the object's script is handling, what GetCurrentEvent
+    // (0x00658210) gives a script run on it; null when there is none. The
+    // engine's own, valid while the script runs.
+    const CScriptEvent *CurrentEvent() const
+    {
+        return Read<const CScriptEvent *>(0x2A8);
+    }
+
     std::int32_t AILevel() const
     {
         return generated::CCObject_AILevel.Get(this);
@@ -290,9 +300,21 @@ class CCItem : public CCObject
 };
 class CCArea : public CGameObject
 {
+  public:
+    // As CCObject::CurrentEvent, for an area's script (GetCurrentEvent).
+    const CScriptEvent *CurrentEvent() const
+    {
+        return Read<const CScriptEvent *>(0x3C4);
+    }
 };
 class CCModule : public CGameObject
 {
+  public:
+    // As CCObject::CurrentEvent, for the module's script (GetCurrentEvent).
+    const CScriptEvent *CurrentEvent() const
+    {
+        return Read<const CScriptEvent *>(0x390);
+    }
 };
 class SEffectsHolder : Opaque
 {

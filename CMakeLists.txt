@@ -165,6 +165,7 @@ add_library(
     probe
     MODULE
     src/plugins/probe/Census.cpp
+    src/plugins/probe/Events.cpp
     src/plugins/probe/Probe.cpp
     src/plugins/probe/Recorder.cpp
     src/plugins/probe/ScriptChecks.cpp

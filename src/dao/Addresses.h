@@ -217,6 +217,28 @@ DAO_ADDRESS(kStdWString_AssignRange, "std::wstring::assign", 0x004C1270) // (oth
 DAO_ADDRESS(kOperatorNew, "operator_new", 0x00413660)
 DAO_ADDRESS(kOperatorDelete, "operator_delete", 0x004136C0)
 
+// The engine's event queue, read 2026-09-30 from SignalEvent (0x00657E40).
+// The object at CClientExoApp+0x1AC keeps it; it has no vtable and so no
+// RTTI name, and plays the part of NWN's CServerAIMaster, whose calls these
+// match: SignalEvent hands AddEventDeltaTime (0, 0, caller, target, 10,
+// the CScriptEvent), 10 being NWN's EVENT_SIGNAL_EVENT, and it reads the
+// world clock (EC::WorldTimer, CClientExoApp+0xD4) and queues a CAIEvent
+// (RTTI; NWN's CServerAIEventNode) now or later, in a list at +0x64 of the
+// master. ProcessEvent takes one due event, frees the node, and hands the
+// event to its target: a CCObject's slot 50 (vtable +0xC8), an area's or
+// the module's handler below; with no target it frees the event's data
+// through DeleteEventData, which ClearEvents also uses. Not yet seen in
+// play: which events pass through here (the probe counts them).
+DAO_ADDRESS(kAIMaster_AddEventDeltaTime, "AIMaster::AddEventDeltaTime", 0x0064ACE0)
+DAO_ADDRESS(kAIMaster_AddEventNow, "AIMaster::AddEventNow", 0x0064A630)
+DAO_ADDRESS(kAIMaster_AddEventLater, "AIMaster::AddEventLater", 0x0064A740)
+DAO_ADDRESS(kAIMaster_ProcessEvent, "AIMaster::ProcessEvent", 0x0064A8C0) // (CAIEvent **), __thiscall
+DAO_ADDRESS(kAIMaster_ClearEvents, "AIMaster::ClearEvents", 0x0064AC80)
+DAO_ADDRESS(kAIMaster_DeleteEventData, "AIMaster::DeleteEventData", 0x0064A520) // (id, data)
+DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
+DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
+DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
+
 // The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
 // application's array at +0xCC.
