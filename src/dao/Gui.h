@@ -7,6 +7,13 @@
 //   });
 //   dao::gui::OnFSCommand("MyMod_EndTurn", [](void *owner, std::string_view args) { EndTurn(); });
 //
+// And a plugin calls into a movie the game shows:
+//
+//   dao::gui::Movie movie{dao::gui::MovieOf(owner)};
+//   movie.SetVariable("_root.TurnBar._visible", dao::gui::Value::Bool(true));
+//   const dao::gui::Value cards[] = {dao::gui::Value::Number(3)};
+//   movie.Invoke("_root.TurnBar.SetCardCount", cards);
+//
 // In ActionScript, `ExternalInterface.call("MyMod_GetTurn")` and
 // `fscommand("MyMod_EndTurn", "")` reach those, from any of the game's
 // movies or a mod's own.
@@ -107,8 +114,7 @@ struct Value
         v.value.boolean = b;
         return v;
     }
-    // The text must outlive the call it answers: GFx copies it when the
-    // answer is set.
+    // The text must outlive the call it is passed to; GFx copies it there.
     static Value String(const char *text)
     {
         Value v;
@@ -116,8 +122,80 @@ struct Value
         v.value.string = text;
         return v;
     }
+    static Value WString(const wchar_t *text)
+    {
+        Value v;
+        v.type = static_cast<std::uint32_t>(Type::StringW);
+        v.value.wstring = text;
+        return v;
+    }
 };
 static_assert(sizeof(Value) == 16);
+
+// A Flash movie: GFx's GFxMovieView (its class GFxMovieRoot), as the game's
+// UI objects hold it (MovieOf). Its vtable, read 2026-09-30 from the
+// game's own calls (the paths it passes, _root.OriginalStageWidth,
+// _root.fsc_retval, the floaty layer's batch updates), is GFx 3.0's
+// GFxMovie in order, and each slot's `ret` agrees: 9 GetVisible, 10
+// IsAvailable(path), 11 SetVariable(path, value, setType), 12
+// GetVariable(out, path), 13 SetVariableArray(type, path, index, data,
+// count, setType), 14 SetVariableArraySize(path, count, setType), 15
+// GetVariableArraySize(path), 16 GetVariableArray(type, path, index, data,
+// count), 17 the variadic Invoke (__cdecl), 18 Invoke(method, result,
+// args, count), 19 InvokeArgs, 42 SetExternalInterfaceRetVal, 43
+// GetUserData. No slots for GFx 3.1's CreateString and CreateObject sit
+// before SetVariable, so this is the 3.0 interface.
+//
+// Not yet seen in play. Call it on the thread the movie's own calls come
+// on (an FSCommand or ExternalInterface handler runs there).
+class Movie
+{
+  public:
+    explicit Movie(void *view) : view_(view)
+    {
+    }
+    explicit operator bool() const
+    {
+        return view_ != nullptr;
+    }
+    void *View() const
+    {
+        return view_;
+    }
+
+    // How a set variable holds (GFx's SetVarType). The game sets with
+    // Sticky: kept for a clip not loaded yet, and set on it when it is.
+    enum class SetType : std::int32_t
+    {
+        Normal = 0,
+        Sticky = 1,
+        Permanent = 2,
+    };
+
+    // Whether a path names something in the movie now.
+    bool IsAvailable(const char *path) const;
+    bool SetVariable(const char *path, const Value &value, SetType type = SetType::Sticky);
+    // An ActionScript array at a path, from index on, as the game fills
+    // _root.fsc_retval and the floaty layer's batch updates (GFx's
+    // SetArrayType: 0 int, 1 double, 4 wide string, 5 value).
+    bool SetArray(const char *path, std::span<const std::int32_t> values, std::uint32_t index = 0,
+                  SetType type = SetType::Sticky);
+    bool SetArray(const char *path, std::span<const double> values, std::uint32_t index = 0,
+                  SetType type = SetType::Sticky);
+    bool SetArray(const char *path, std::span<const wchar_t *const> values, std::uint32_t index = 0,
+                  SetType type = SetType::Sticky);
+    bool SetArray(const char *path, std::span<const Value> values, std::uint32_t index = 0,
+                  SetType type = SetType::Sticky);
+    bool SetArraySize(const char *path, std::uint32_t count, SetType type = SetType::Sticky);
+    std::uint32_t ArraySize(const char *path) const;
+    // Calls an ActionScript function by its path; true if it ran. What it
+    // returns is not read: GFx hands strings and objects out as references
+    // of its own to release.
+    bool Invoke(const char *method, std::span<const Value> args = {});
+
+  private:
+    void *view_;
+};
 
 // An ExternalInterface call as a handler sees it.
 struct Call
@@ -150,5 +228,10 @@ void OnAnyExternalInterface(ExternalInterfaceHandler observer);
 
 // The movie a UI object owns (+0x1C), GFx's GFxMovieView; null for none.
 void *MovieOf(const void *owner);
+
+// An FSCommand's answer, as the game's own handlers give theirs: an array
+// of ints in the calling movie's _root.fsc_retval, which the ActionScript
+// reads after its fscommand().
+bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values);
 
 } // namespace dao::gui

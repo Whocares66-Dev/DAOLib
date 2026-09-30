@@ -5,6 +5,7 @@
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
 
+#include <cstddef>
 #include <map>
 #include <mutex>
 #include <utility>
@@ -108,6 +109,88 @@ void *MovieOf(const void *owner)
     }
     const auto movie = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(owner) + 0x1C);
     return movie ? reinterpret_cast<void *>(*movie) : nullptr;
+}
+
+namespace
+{
+
+template <class Fn> Fn Slot(void *view, std::size_t slot)
+{
+    return (*static_cast<Fn *const *>(view))[slot];
+}
+
+// SetVariableArray, slot 13: __thiscall (type, path, index, data, count,
+// setType), `ret 0x18`.
+bool SetArrayOf(void *view, std::int32_t kind, const char *path, std::uint32_t index, const void *data,
+                std::uint32_t count, Movie::SetType type)
+{
+    if (view == nullptr)
+    {
+        return false;
+    }
+    using Fn = bool(__fastcall *)(void *, int, std::int32_t, const char *, std::uint32_t, const void *, std::uint32_t,
+                                  Movie::SetType);
+    return Slot<Fn>(view, 13)(view, 0, kind, path, index, data, count, type);
+}
+
+} // namespace
+
+bool Movie::IsAvailable(const char *path) const
+{
+    using Fn = bool(__fastcall *)(void *, int, const char *);
+    return view_ != nullptr && Slot<Fn>(view_, 10)(view_, 0, path);
+}
+
+bool Movie::SetVariable(const char *path, const Value &value, SetType type)
+{
+    using Fn = bool(__fastcall *)(void *, int, const char *, const Value *, SetType);
+    return view_ != nullptr && Slot<Fn>(view_, 11)(view_, 0, path, &value, type);
+}
+
+bool Movie::SetArray(const char *path, std::span<const std::int32_t> values, std::uint32_t index, SetType type)
+{
+    return SetArrayOf(view_, 0, path, index, values.data(), static_cast<std::uint32_t>(values.size()), type);
+}
+
+bool Movie::SetArray(const char *path, std::span<const double> values, std::uint32_t index, SetType type)
+{
+    return SetArrayOf(view_, 1, path, index, values.data(), static_cast<std::uint32_t>(values.size()), type);
+}
+
+bool Movie::SetArray(const char *path, std::span<const wchar_t *const> values, std::uint32_t index, SetType type)
+{
+    // GFx takes the array of string pointers as its data.
+    return SetArrayOf(view_, 4, path, index, static_cast<const void *>(values.data()),
+                      static_cast<std::uint32_t>(values.size()), type);
+}
+
+bool Movie::SetArray(const char *path, std::span<const Value> values, std::uint32_t index, SetType type)
+{
+    return SetArrayOf(view_, 5, path, index, values.data(), static_cast<std::uint32_t>(values.size()), type);
+}
+
+bool Movie::SetArraySize(const char *path, std::uint32_t count, SetType type)
+{
+    using Fn = bool(__fastcall *)(void *, int, const char *, std::uint32_t, SetType);
+    return view_ != nullptr && Slot<Fn>(view_, 14)(view_, 0, path, count, type);
+}
+
+std::uint32_t Movie::ArraySize(const char *path) const
+{
+    using Fn = std::uint32_t(__fastcall *)(void *, int, const char *);
+    return view_ != nullptr ? Slot<Fn>(view_, 15)(view_, 0, path) : 0;
+}
+
+bool Movie::Invoke(const char *method, std::span<const Value> args)
+{
+    using Fn = bool(__fastcall *)(void *, int, const char *, Value *, const Value *, std::uint32_t);
+    return view_ != nullptr &&
+           Slot<Fn>(view_, 18)(view_, 0, method, nullptr, args.data(), static_cast<std::uint32_t>(args.size()));
+}
+
+bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)
+{
+    return Movie{MovieOf(owner)}.SetArray("_root.fsc_retval", values);
 }
 
 void Call::Return(const Value &answer) const

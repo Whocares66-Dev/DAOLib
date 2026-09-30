@@ -193,6 +193,15 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             spdlog::info("ExternalInterface {}({}) from {} at {}, thread {}", call.name, args,
                          call.owner != nullptr ? dao::TypeName(call.owner) : std::string("nothing"), call.owner,
                          GetCurrentThreadId());
+            // The calling movie, read and left as it is: its root is there,
+            // and the FSCommand answer array's size reads.
+            if (seen == 1)
+            {
+                const dao::gui::Movie movie{dao::gui::MovieOf(call.owner)};
+                spdlog::info("its movie at {}: _root {}, _root.fsc_retval has {} entries", movie.View(),
+                             movie.IsAvailable("_root") ? "available" : "not available",
+                             movie.ArraySize("_root.fsc_retval"));
+            }
         }
     });
 

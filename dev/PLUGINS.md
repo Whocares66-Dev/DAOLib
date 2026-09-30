@@ -74,6 +74,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Hook an engine message (the player's orders, pause, mode changes) | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn`, `As<M>()` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
 | Send an engine message, as the engine does (move the camera, pause, switch mode) | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h`, `dao/GameModes.h` |
 | Answer a Flash movie's `ExternalInterface.call` or `fscommand` by name, or watch the game's | `dao::gui::OnExternalInterface("Name", fn)` with `call.Return(Value::Number(n))`, `OnFSCommand`, `OnAnyFSCommand`, `OnAnyExternalInterface` | `dao/Gui.h` |
+| Call into a movie: set a variable or an array, call an ActionScript function | `dao::gui::Movie{dao::gui::MovieOf(owner)}.SetVariable(path, value)`, `SetArray`, `Invoke("_root.Fn", args)`; `ReturnFSCommand(owner, ints)` | `dao/Gui.h` |
 | React to the game's script events (damage, perception, mode changes, loads) | `dao::events::OnScriptEvent(EventType::Damaged, fn)` | `dao/Events.h` |
 | Run code every frame | `dao::OnFrame(fn)` | `dao/Frame.h` |
 | Hook any engine function | `dao::Detour<Fn>` on an address from `dao/Addresses.h` | `dao/Hook.h` |
