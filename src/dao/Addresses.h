@@ -25,17 +25,27 @@ namespace dao::addr
 // the loader detours to run plugins on the main thread before the game.
 DAO_ADDRESS(kEntryPoint, "entry", 0x008E3024)
 
-// The script command table (dev/SCRIPT_COMMANDS.md). RegisterAll is one long
-// function of 827 calls to Register(this, id, function, "COMMAND_NAME"),
-// one per command a script can call; tools/script_commands.py reads the
-// table out of it. Found 2026-09-29 from the references to the COMMAND_
-// strings; Ghidra's analysis had made no function of it (nothing it found
-// calls it directly), which ImportNames.java now does. The class it is a
-// method of is not yet known: `this` is in esi throughout, and the RTTI
-// names CVirtualMachineCommands and CClientVirtualMachineCommands are the
-// candidates.
-DAO_ADDRESS(kScriptCommands_RegisterAll, "ScriptCommands::RegisterAll", 0x00674E90)
-DAO_ADDRESS(kScriptCommands_Register, "ScriptCommands::Register", 0x0064DD40)
+// The script command table (dev/SCRIPT_COMMANDS.md, dao/Script.h), on the
+// CVirtualMachineCommands object at CClientExoApp+0x1E4. Its vtable runs
+// in the order of NWN's CVirtualMachineCmdImplementer (NWN:EE's
+// CVirtualMachineCmdImplementer.hpp): destructor, InitializeCommands,
+// ExecuteCommand.
+//
+// InitializeCommands, slot 1: allocates the table, 0xD7C bytes (863
+// handlers), zeroes it, then makes 827 calls to Register(id, function,
+// "COMMAND_NAME"), one per command a script can call, and returns (`ret`).
+// tools/script_commands.py reads the table out of it. The VM calls it when
+// it is given the object (0x00A2D240, which keeps it at VM+0x1968), just
+// after the application stores it. Read 2026-09-30; until then this row
+// said the registrations began at 0x00674E90, which is ReadIniEntry's
+// handler, one of the functions registered.
+DAO_ADDRESS(kCVirtualMachineCommands_InitializeCommands, "CVirtualMachineCommands::InitializeCommands", 0x00675210)
+// `table = this->[+0xC]; table[id] = fn`, `ret 0xC`, the name unused.
+DAO_ADDRESS(kCVirtualMachineCommands_Register, "CVirtualMachineCommands::Register", 0x0064DD40)
+// Slot 2: an id of 0x35F or more, or an empty slot, is error -642
+// (0xFFFFFD7E); otherwise `table[id](id, paramCount)` with the commands
+// object in ecx, its result returned.
+DAO_ADDRESS(kCVirtualMachineCommands_ExecuteCommand, "CVirtualMachineCommands::ExecuteCommand", 0x0064DD60)
 
 // Pause (dev/TURN_BASED.md). Read 2026-09-29 with tools/daoexe.py; not yet
 // verified in play.
