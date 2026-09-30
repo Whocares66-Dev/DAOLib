@@ -177,6 +177,8 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Effects' time: a temporary effect's duration and time left, and the clock they all age on (hold it, advance it, decide per effect) | 2026-09-30, from Engine_ApplyEffectOnObject, the effects holder's update and AddElapsed | not yet |
 | Regeneration's clock: health, mana and stamina coming back, held and advanced with the effects' (`dao/Clock.h`) | 2026-09-30, from UpdateRegeneration and the depletable property's step | not yet |
 | The game's speed: both clocks, the world timer's scale and the frame timer (`dao::clock::SetSpeed`) | 2026-09-30, from the world timer, the objects' timers and EclipseGame's frame step | checked 2026-09-30: the world timer's scale alone changed nothing the player saw; with the frame timer too, `examples/speed` at 2 made a fight twice as fast, sound in step |
+| Asking for an ability's target: explore mode's BeginTargeting (`GameModeExplore::RequestTarget`) | 2026-09-30, from the quickbar's handler for PerformAbilityMessage | checked 2026-09-30 by the turn-based mod at 14:59 and 15:03: Shield Pummel and ability 617 asked for their target, and the click used them |
+| The world's geometry: every shape along a ray, the nearest between two points, line of sight as the scripts judge it, the current area (`dao/World.h`) | 2026-09-30, from the cursor pick, World::Raycast, the scripts' CheckLineOfSight commands and the physics scene's slots | not yet seen in play; `examples/world` logs what it finds |
 
 ## The first session
 

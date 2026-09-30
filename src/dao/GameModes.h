@@ -18,6 +18,7 @@
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
+#include "dao/World.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,36 +49,6 @@ enum class GameMode : std::int32_t
     PartyPicker = 12, // GameModePartyPicker
 };
 
-// One thing along the ray from the camera through the mouse cursor, as
-// explore mode's picking finds it (GameModeExplore below). 0x30 bytes, read
-// 2026-09-30 from its constructor (0x00648B10) and the raycast that fills
-// it (0x006497A0, which copies each from the physics' own hit): the point,
-// what was hit (0x00648B70 decides by the physics' collision flags), and
-// the object's id. The rest is the physics' flags and a float kept as is.
-struct PickHit
-{
-    enum class Kind : std::int32_t
-    {
-        Nothing = 0,
-        Ground = 1, // the area's walkmesh or terrain
-        Object = 2, // a creature, placeable or other object, `object` its id
-    };
-
-    Vector position;
-    std::uint32_t padding0 = 0;
-    Kind kind = Kind::Nothing;
-    ObjectId object = 0xFFFFFFFF;
-    // The physics' flag 0x01000000 clear; explore mode's walkable test
-    // requires it of a ground hit.
-    bool solid = false;
-    std::uint32_t unknown1c = 0;
-    float unknown20 = 0;
-    std::uint32_t collisionFlags = 0;
-    std::uint32_t unknown28 = 0;
-    std::uint32_t padding2c = 0;
-};
-static_assert(sizeof(PickHit) == 0x30);
-
 // Explore mode, and combat mode, which derives from it (dao::TypeName and
 // tools\daoexe.py --bases GameModeCombat): what is under the mouse cursor,
 // as a click would act on it. Read 2026-09-30.
@@ -93,7 +64,8 @@ static_assert(sizeof(PickHit) == 0x30);
 // move (0x0070C9A0) goes to +0xD0's point if +0xD4 allows, recording it at
 // +0xA0 (0x0070BE80) before the creature walks. Each mode keeps its own;
 // the one current is the one updated. On the game's thread, as a frame
-// callback runs; not yet seen in play.
+// callback runs. Seen in play 2026-09-30 (dev/LIBRARY.md). The hits are
+// dao::world::Hit, which dao/World.h's Raycast returns too.
 class GameModeExplore
 {
   public:
@@ -113,7 +85,7 @@ class GameModeExplore
     // ground rather than an object.
     std::optional<Vector> CursorGround() const
     {
-        const auto *hit = Read<const PickHit *>(kCursorGround);
+        const auto *hit = Read<const world::Hit *>(kCursorGround);
         return hit != nullptr ? std::optional<Vector>(hit->position) : std::nullopt;
     }
 
@@ -128,10 +100,10 @@ class GameModeExplore
 
     // Everything along the ray, nearest first, from the latest pick; the
     // cursor's choice is made among these.
-    std::span<const PickHit> CursorHits() const
+    std::span<const world::Hit> CursorHits() const
     {
         const auto count = Read<std::int32_t>(kHitCount);
-        const auto *hits = reinterpret_cast<const PickHit *>(reinterpret_cast<const std::byte *>(this) + kHits);
+        const auto *hits = reinterpret_cast<const world::Hit *>(reinterpret_cast<const std::byte *>(this) + kHits);
         return {hits, count > 0 && count <= kMaxHits ? static_cast<std::size_t>(count) : 0};
     }
 
@@ -140,7 +112,9 @@ class GameModeExplore
     // targeting cursor, and the ability used on what the player clicks,
     // through PerformAbilityOnTargetUnderCursorMessage. BeginTargeting
     // (dao/Addresses.h) shows "Target Required" instead when its input
-    // check fails. On the game's thread. Not yet seen in play.
+    // check fails. On the game's thread. Seen in play 2026-09-30, by the
+    // turn-based mod: Shield Pummel asked for its target, and the click used
+    // it.
     void RequestTarget(std::int32_t ability, ObjectId caster)
     {
         using Fn = void(__fastcall *)(GameModeExplore *, int, std::int32_t, ObjectId, ObjectId);

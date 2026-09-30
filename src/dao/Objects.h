@@ -304,6 +304,26 @@ class CCObject : public CGameObject
         return Read<const CScriptEvent *>(0x2A8);
     }
 
+    // Where the object stands: what GetPosition returns (its handler,
+    // 0x00655400, reads these three floats; a fourth pads them to 16 bytes).
+    Vector Position() const
+    {
+        return Read<Vector>(0x120);
+    }
+    // The id of the area it is in: what GetArea returns (0x00655000 reads
+    // it), and what line of sight compares (0x00668DB0).
+    ObjectId AreaId() const
+    {
+        return Read<ObjectId>(0x254);
+    }
+    // Its area: the object's slot 40, cast to an area (0x00695180), as the
+    // scripts' line of sight finds it. Null for an object in none.
+    CCArea *Area()
+    {
+        using Fn = CCArea *(__fastcall *)(CCObject *);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCCObject_Area))(this);
+    }
+
     std::int32_t AILevel() const
     {
         return generated::CCObject_AILevel.Get(this);
@@ -593,6 +613,15 @@ class CCArea : public CGameObject
 class CCModule : public CGameObject
 {
   public:
+    // The area the player is in (0x005FE470): the module's own at +0x388
+    // once that one is loaded (its byte at +0x45C), else the area of the
+    // application's controlled creature. Null before either.
+    CCArea *CurrentArea()
+    {
+        using Fn = CCArea *(__fastcall *)(CCModule *);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCCModule_CurrentArea))(this);
+    }
+
     // As CCObject::CurrentEvent, for the module's script (GetCurrentEvent).
     const CScriptEvent *CurrentEvent() const
     {

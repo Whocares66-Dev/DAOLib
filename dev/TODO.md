@@ -56,6 +56,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** line of sight, path length and what lies between two points are engine questions. Scripts have a little of this, but not the pathfinder's path or a raycast.
 - **Leads:** `World::Raycast` (`0x006497A0`, arguments read, `dao/Addresses.h`); the pick's hits (`dao/GameModes.h`, `PickHit`); explore mode's walkable test (`0x0070C840`) and the area's check (`0x0073DE70`).
 - **Done when:** `dao::world::Raycast(from, to)` and a path length agree with what the game does in play.
+- **Done in code, not yet seen in play (2026-09-30):** `dao/World.h`: `Raycast` (the engine's `World::Raycast`, every shape along a ray), `FirstHit`, `LineOfSight` (the area's own test, `0x0067C3F0`, which the scripts' `CheckLineOfSight*` commands use, so doors block and chests do not), `CurrentArea`; `CCObject::Position`, `AreaId`, `Area`; `CClientExoApp::GetModule`, `CCModule::CurrentArea`. The areas' physics is PhysX; a query's mask is PhysX's groups mask, and which bit is which kind of object is read only in part (`dao::world::groups`). `examples/world` logs what it finds. Left: seeing it in play, naming the rest of the groups from its log, and a path length (the pathfinder is not read yet).
 
 ## 6. Dialogue
 

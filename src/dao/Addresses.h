@@ -94,14 +94,34 @@ DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 
 // CanMoveTo judges the ground. A move click goes through MoveTo
 // (__thiscall (creature id, const Vector4 *point, -1), `ret 0xC`), which
 // records the point and has the creature walk. Raycast is __thiscall on
-// the application's +0x10C, (hits, max, const Vector4 *origin, const
-// Vector4 *direction, collision mask, flag, area or null for the
-// current), `ret 0x1C`, and returns the count. The names are ours.
+// the application's +0x10C, which it does not read, (hits, max, const
+// Vector4 *origin, const Vector4 *unit direction, collision mask, flag,
+// physics scene or null for the current area's), `ret 0x1C`, and returns
+// the count. The names are ours.
 DAO_ADDRESS(kGameModeExplore_CastCursorRay, "GameModeExplore::CastCursorRay", 0x0070B590)
 DAO_ADDRESS(kGameModeExplore_UpdateCursor, "GameModeExplore::UpdateCursor", 0x0070F270)
 DAO_ADDRESS(kGameModeExplore_CanMoveTo, "GameModeExplore::CanMoveTo", 0x0070C840)
 DAO_ADDRESS(kGameModeExplore_MoveTo, "GameModeExplore::MoveTo", 0x0070BE80)
 DAO_ADDRESS(kWorld_Raycast, "World::Raycast", 0x006497A0)
+// World queries (dao/World.h), read 2026-09-30. Raycast collects its hits
+// in a static vector (below) and, with its flag, adds the selection group
+// 0x20000 to the mask and keeps an object's body and volume both; it uses
+// the current area's scene when given none (0x00648B30: the module's
+// current area, its +0x62C, whose +0xCC is the scene, 0x00537D60). The
+// area's LineOfSight is __thiscall (const Vector4 *from, const Vector4
+// *to, Vector4 *where blocked or null, ignored object id, mask), `ret
+// 0x14`, and returns true when nothing blocks: the scene's slot 4 finds
+// the nearest shape on the segment, and a placeable hit blocks only if
+// its base type is 1 (a door) or 8 (0x0067A670). An object's area is its
+// slot 40, cast by slot 2 (0x00695180); the module's current area is its
+// +0x388 once loaded, else the controlled creature's (0x005FE470). The
+// names are ours.
+DAO_DATA(kWorld_RaycastResults, "World::g_raycastResults", 0x00C347B0)
+DAO_ADDRESS(kWorld_CurrentScene, "World::CurrentScene", 0x00648B30)
+DAO_ADDRESS(kCCArea_LineOfSight, "CCArea::LineOfSight", 0x0067C3F0)
+DAO_ADDRESS(kCCPlaceable_BlocksSight, "CCPlaceable::BlocksSight", 0x0067A670)
+DAO_ADDRESS(kCCObject_Area, "CCObject::Area", 0x00695180)
+DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a
@@ -123,6 +143,9 @@ DAO_ADDRESS(kCClientExoApp_GetGameObjectById, "CClientExoApp::GetGameObjectById"
 DAO_ADDRESS(kCClientExoApp_GetCreatureById, "CClientExoApp::GetCreatureById", 0x005D58C0)
 DAO_ADDRESS(kCClientExoApp_GetPlaceableById, "CClientExoApp::GetPlaceableById", 0x005D5B40)
 DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x005D5C60)
+// The module, read 2026-09-30: the object manager (+0xCC) looks up the id
+// at +0x2B8 and the result is cast through slot 7, CCModule's.
+DAO_ADDRESS(kCClientExoApp_GetModule, "CClientExoApp::GetModule", 0x005D4FC0)
 // Queue a command on an object: __thiscall(command, addToFront, override),
 // `ret 0xC`. Seen in play 2026-09-30 (dev/TURN_BASED.md): about 200
 // commands in a fight, all on CCCreature. Read 2026-09-30: it returns 0

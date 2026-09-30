@@ -58,6 +58,13 @@ class CClientExoApp
     {
         return Lookup<CCPlaceable>(addr::kCClientExoApp_GetPlaceableById, id);
     }
+    // The module: the object whose id the application keeps at +0x2B8,
+    // cast (0x005D4FC0). Null before a game is loaded.
+    CCModule *GetModule()
+    {
+        using Fn = CCModule *(__fastcall *)(CClientExoApp *);
+        return reinterpret_cast<Fn>(Module::Address(addr::kCClientExoApp_GetModule))(this);
+    }
     CCWayPoint *GetWayPointById(ObjectId id)
     {
         return Lookup<CCWayPoint>(addr::kCClientExoApp_GetWayPointById, id);
@@ -106,6 +113,14 @@ class CClientExoApp
     {
         const CClientExoApp *app = Get();
         return app != nullptr ? app->Mode() : std::nullopt;
+    }
+    // Explore mode, what is under the cursor, from anywhere: null unless the
+    // game is exploring or fighting (dao/GameModes.h, Explore).
+    static GameModeExplore *CurrentExplore()
+    {
+        const CClientExoApp *app = Get();
+        const GameModeController *modes = app != nullptr ? app->GameModes() : nullptr;
+        return modes != nullptr ? modes->Explore() : nullptr;
     }
 
     // The script commands object (dao/Script.h), made in the application's
