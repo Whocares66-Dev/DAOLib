@@ -356,7 +356,9 @@ DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, "CameraControllerExplore::Sna
 // The renderer holds a CCCreature of its own at +0x20 (built with id -1,
 // the model the portrait shows), the source creature at +0xD40, a set-up
 // flag at +0xD44, and the texture's name at +0xD4C, an engine
-// std::wstring: "portrait_" and a counter, made on its first render
+// std::wstring: "portrait_", the creature's tag and a counter (in play,
+// 2026-09-30: portrait_player0, portrait_bhn200cr_howe_landra33), made on
+// its first render
 // (Setup: a 146x146 render target, a SceneCamera, the lights
 // "portrait_lightrig" and "el_lr_new_day2"; the camera from table 7, by
 // the creature's appearance). A movie shows a texture as "img://<name>"

@@ -393,7 +393,7 @@ class CCCreature : public CCObject
     // The creature's portrait, rendered as the party's are, any creature
     // (dao/Addresses.h, UpdatePortrait): the first call makes its portrait
     // renderer, and every call renders it again. The answer is the URL a
-    // movie loads it by, "img://portrait_<n>" (loadMovie, or an image
+    // movie loads it by, "img://portrait_<tag><counter>" (loadMovie, or an image
     // control), empty if the engine made no portrait. From the scripts'
     // thread (a frame callback); rendering is not free, so once per change
     // rather than per frame. Read 2026-09-30, not yet seen in play.

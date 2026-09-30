@@ -86,8 +86,10 @@ inline bool Send(void *receiver, const Message &message)
 // observer sees the receiver and the message just before the receiver's
 // handler; an interceptor may take the message instead (return true), and
 // then no handler runs and the sender hears it was handled. The engine
-// offers one message to several receivers, and only one has a handler for
-// it: observers and interceptors see only that delivery, once per message.
+// offers a message to receivers in turn and passes it on from one handler
+// to the next (the game mode controller to the GUI system, then to the
+// current mode): observers and interceptors see it once, at the first
+// receiver with a handler, and taking it there takes it from the rest.
 //
 //   dao::messages::OnMessage<dao::messages::SetGameModeMessage>(
 //       [](void *, const dao::messages::SetGameModeMessage &m) { spdlog::info("mode {}", m.mode); });

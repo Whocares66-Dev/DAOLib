@@ -4,6 +4,7 @@
 #include "dao/Hook.h"
 #include "dao/Module.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -37,14 +38,23 @@ std::mutex g_adding;
 using DispatchFn = bool(__fastcall *)(void *registry, int edx, void *receiver, const Message *message);
 Detour<DispatchFn> g_dispatch;
 
+// A message comes through Dispatch more than once. Its sender may offer it
+// to receivers in turn until one has a handler, and a handler may pass it
+// on: the game mode controller's handler for every game or GUI message
+// (0x00640080, 0x006400E0) sends it to the GUI system, and if that does
+// not take it, to the current mode, inside its own delivery. In play,
+// 2026-09-30, a click came through four times, then three with only
+// receivers that had a handler. So observers see a message once: at the
+// first receiver with a handler, and not again in deliveries nested inside
+// that one (the messages being delivered on this thread, outermost
+// first).
+thread_local std::vector<const Message *> t_delivering;
+
 // Whether Dispatch will find this receiver a handler for this message, as
 // it decides (0x004D8330, read 2026-09-30): the receiver's byte at +4 set,
 // and Find (__thiscall (receiver's class, message's class), `ret 8`,
 // walking both classes' parents) giving one. Each class is what the
-// object's vtable slot 0 returns. The engine delivers one message to
-// several receivers, and only one has a handler: in play, 2026-09-30, a
-// click's message came through Dispatch four times and its handler ran
-// once.
+// object's vtable slot 0 returns.
 bool Handles(void *registry, const void *receiver, const Message *message)
 {
     if (receiver == nullptr || *(static_cast<const std::uint8_t *>(receiver) + 4) == 0)
@@ -58,34 +68,43 @@ bool Handles(void *registry, const void *receiver, const Message *message)
                                                                                   classOf(message)) != nullptr;
 }
 
+bool Nested(const Message *message)
+{
+    return std::find(t_delivering.begin(), t_delivering.end(), message) != t_delivering.end();
+}
+
 bool __fastcall Dispatch(void *registry, int edx, void *receiver, const Message *message)
 {
     const auto subscriptions = g_subscriptions.load(std::memory_order_acquire);
-    if (message != nullptr && !subscriptions->empty() && Handles(registry, receiver, message))
+    if (message == nullptr || subscriptions->empty() || Nested(message) || !Handles(registry, receiver, message))
     {
-        const auto vftable = reinterpret_cast<std::uintptr_t>(message->vtable);
-        bool taken = false;
-        for (const auto &s : *subscriptions)
+        return g_dispatch.Original()(registry, edx, receiver, message);
+    }
+    const auto vftable = reinterpret_cast<std::uintptr_t>(message->vtable);
+    bool taken = false;
+    for (const auto &s : *subscriptions)
+    {
+        if (s.vftable != 0 && Module::Address(s.vftable) != vftable)
         {
-            if (s.vftable != 0 && Module::Address(s.vftable) != vftable)
-            {
-                continue;
-            }
-            if (s.observe)
-            {
-                s.observe(receiver, *message);
-            }
-            else if (!taken && s.intercept && s.intercept(receiver, *message))
-            {
-                taken = true;
-            }
+            continue;
         }
-        if (taken)
+        if (s.observe)
         {
-            return true;
+            s.observe(receiver, *message);
+        }
+        else if (!taken && s.intercept && s.intercept(receiver, *message))
+        {
+            taken = true;
         }
     }
-    return g_dispatch.Original()(registry, edx, receiver, message);
+    if (taken)
+    {
+        return true;
+    }
+    t_delivering.push_back(message);
+    const bool handled = g_dispatch.Original()(registry, edx, receiver, message);
+    t_delivering.pop_back();
+    return handled;
 }
 
 void Add(Subscription subscription)
