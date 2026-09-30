@@ -47,6 +47,7 @@ In `probe.log`:
 - `script checks: 18 of 18 getters shadowed` once at start-up, or why not.
 - `script check GetTeamId (807): first call, ...` the first time a getter's answer and our field agree.
 - A warning with both values for each of the first five mismatches of a getter.
+- Since 2026-09-30, a check of the object itself on every call that found one: its id at +0x10 is the id asked for, its type byte is the getter's class's, and the engine's cast, from the object as `GetGameObjectById` returns it, gives the same pointer as the typed lookup. A warning for each of the first five objects that fail it.
 - Every minute, with the recorder's health line: per getter called so far, its calls, matches, mismatches, calls on an id that named no object of its class, and calls where the engine's handler failed. Then how many getters were called and how many matched every time.
 
 A getter no script calls in a session stays unchecked. The census saw `GETCOMBATSTATE` run through every fight; the placeable getters want chests and locks, and `GetMapPinState` the world map.

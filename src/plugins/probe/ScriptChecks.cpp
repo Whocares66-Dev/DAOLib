@@ -5,8 +5,11 @@
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/ObjectId.h"
+#include "dao/Objects.h"
 #include "dao/SafeRead.h"
 #include "dao/Script.h"
+#include "dao/core/ObjectType.h"
+#include "dao/generated/ObjectCasts.h"
 #include "dao/generated/ScriptFields.h"
 
 #include <array>
@@ -15,6 +18,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
+#include <string>
 
 namespace probe
 {
@@ -39,7 +43,12 @@ struct Check
     std::atomic<std::uint32_t> matchedNonZero{0};
     std::atomic<std::uint32_t> mismatched{0};
     std::atomic<std::uint32_t> noObject{0}; // the id named no object of the getter's class
-    std::atomic<std::uint32_t> failed{0};   // the engine's handler, or a peek, failed
+    // The object itself, checked on every call that found one: its id and
+    // type byte (dao::CGameObject), and the engine's cast from the object as
+    // the array holds it to the getter's class, against the typed lookup.
+    std::atomic<std::uint32_t> objectMatched{0};
+    std::atomic<std::uint32_t> objectMismatched{0};
+    std::atomic<std::uint32_t> failed{0}; // the engine's handler, or a peek, failed
 };
 
 // By command number. Written once, on the engine's thread, before any
@@ -128,6 +137,55 @@ std::optional<std::uint32_t> PeekAnswer(bool isObject)
     return std::nullopt;
 }
 
+struct Expected
+{
+    dao::generated::CastSlot cast = dao::generated::CastSlot::CCObject;
+    std::optional<dao::core::ObjectType> type; // none for CCObject: any of its classes
+};
+
+Expected ExpectedOf(ObjectClass objectClass)
+{
+    using dao::core::ObjectType;
+    using dao::generated::CastSlot;
+    switch (objectClass)
+    {
+    case ObjectClass::CCCreature:
+        return {CastSlot::CCCreature, ObjectType::Creature};
+    case ObjectClass::CCPlaceable:
+        return {CastSlot::CCPlaceable, ObjectType::Placeable};
+    case ObjectClass::CCWayPoint:
+        return {CastSlot::CCWayPoint, ObjectType::Waypoint};
+    case ObjectClass::CCObject:
+        break;
+    }
+    return {CastSlot::CCObject, std::nullopt};
+}
+
+void CheckObject(Check &check, dao::CClientExoApp *app, dao::ObjectId object, void *target)
+{
+    const ScriptGetter &getter = *check.getter;
+    const Expected expected = ExpectedOf(getter.objectClass);
+    const auto at = reinterpret_cast<std::uintptr_t>(target);
+    const auto id = dao::TryRead<dao::ObjectId>(at + dao::CGameObject::kId);
+    const auto type = dao::TryRead<std::uint8_t>(at + dao::CGameObject::kType);
+    dao::CGameObject *game = app->GetGameObjectById(object);
+    void *cast = game != nullptr ? game->Cast(expected.cast) : nullptr;
+    const bool typeOk = type && (!expected.type || *type == static_cast<std::uint8_t>(*expected.type));
+    if (id && *id == object && typeOk && game == target && cast == target)
+    {
+        ++check.objectMatched;
+        return;
+    }
+    if (check.objectMismatched++ < kMismatchesLogged)
+    {
+        spdlog::warn("script check {} ({}): object {:#010x} at {}: id at +{:#x} reads {}, type {}, as a game "
+                     "object {}, cast {}",
+                     getter.name, getter.command, object, target, dao::CGameObject::kId,
+                     id ? fmt::format("{:#010x}", *id) : std::string("nothing"),
+                     type ? fmt::format("{}", *type) : std::string("nothing"), static_cast<void *>(game), cast);
+    }
+}
+
 void Compare(Check &check, dao::ObjectId object, std::uint32_t answer)
 {
     const ScriptGetter &getter = *check.getter;
@@ -138,6 +196,7 @@ void Compare(Check &check, dao::ObjectId object, std::uint32_t answer)
         ++check.noObject;
         return;
     }
+    CheckObject(check, app, object, target);
     const auto field = ReadField(target, getter);
     if (field && (answer == field->zeroExtended || answer == field->signExtended))
     {
@@ -285,9 +344,10 @@ void ReportScriptChecks()
             ++clean;
         }
         spdlog::info("script check {} ({}): {} calls, {} matched ({} on a value other than 0), {} mismatched, {} on no "
-                     "object, {} failed",
+                     "object, {} failed; the object's id, type and cast {} matched, {} mismatched",
                      getter.name, getter.command, calls, matched, check.matchedNonZero.load(), mismatched,
-                     check.noObject.load(), check.failed.load());
+                     check.noObject.load(), check.failed.load(), check.objectMatched.load(),
+                     check.objectMismatched.load());
     }
     spdlog::info("script checks: {} of {} getters called, {} of those matched on every object", called,
                  std::size(dao::generated::kScriptGetters), clean);
