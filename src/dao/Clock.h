@@ -60,8 +60,9 @@ void Advance(float seconds);
 //   total to the scene (0x008107F0), what animation plays by. This hooks
 //   the timer's update (EC::ITimer::Update, 0x004CB160) and scales that
 //   timer's seconds, and the total with them.
-// Not yet seen in play with both. The Flash UI keeps its own clock
-// (Scaleform's GTimer) and is not slowed. Called on any thread; takes
+// Seen in play with both, 2026-09-30: examples/speed at 2 in a fight made
+// the fight visibly twice as fast, and sound kept pace. The Flash UI keeps
+// its own clock (Scaleform's GTimer) and is not changed. Called on any thread; takes
 // effect from the next frame.
 void SetSpeed(float scale);
 float Speed();
