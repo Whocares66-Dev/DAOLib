@@ -172,6 +172,21 @@ std::vector<Slot> List(std::wstring_view character);
 // read; a caller that must know waits for OnGameLoaded with a time limit.
 bool Load(const Slot &save);
 
+// A save made with content this install lacks is not loaded when asked for:
+// the game puts up "This saved game cannot be loaded. It requires the
+// following content", with Force Load and Cancel, and waits. Seen
+// 2026-10-01: a save made in the GOG install, asked for in the EA app's,
+// which has no Collector's Edition content (dev/BUILDS.md). This is the
+// Force Load button, the dialog's answer to the application
+// (GUIDialogResultMessage, 3): the dialog closes and the game makes the
+// load it was last asked for again, this time without that content, so a
+// save made from the game then loaded no longer has it. Call it only when
+// a Load just asked for has not started, since the game keeps what it was
+// last asked for and would load it again. True if the game took the
+// answer; false, and nothing sent, if no load was ever asked for. Not for
+// a plugin to decide on a player's behalf: for a tool that drives the game.
+bool ForceLoad();
+
 // Saves, as the save screen does for a manual save and the quicksave key
 // for the quicksave: SaveGameMessage. A slot of -1 lets the game choose (the
 // next free manual slot; the quicksave and the autosave have their own),

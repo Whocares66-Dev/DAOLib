@@ -266,6 +266,24 @@ struct LoadGameMessage : Message
 };
 static_assert(sizeof(LoadGameMessage) == 0xC);
 
+// A dialog box's answer, from the popup to the application: the code of
+// the button pressed. Read 2026-10-01 from the application's handler,
+// 0x005DAA30, which closes the popup and goes by the code alone. For the
+// dialog a load raises over content the install lacks ("This saved game
+// cannot be loaded. It requires the following content"): 1 turns the
+// content on (each name in the application's list at +0x26C) and loads, 2
+// opens a link, 3 is Force Load (dao/Saves.h, ForceLoad). The 0x1C bytes
+// after it are taken to be a std::wstring, an input box's text, by the
+// size and the one call the message's clone makes; the handler's paths
+// read above do not use them.
+struct GUIDialogResultMessage : Message
+{
+    DAO_VFTABLE(64890);
+    std::int32_t result;
+    std::byte text[0x1C];
+};
+static_assert(sizeof(GUIDialogResultMessage) == 0x24);
+
 // The save proxy's own (dao/Saves.h has what they do), read 2026-09-30
 // from its handlers: fill its list of characters from their folders,
 // choose one by its place in the list, and set the save screens' mode (0

@@ -134,6 +134,16 @@ constexpr std::size_t kChosen = 0xE4;
 constexpr std::size_t kHeroes = 0x150;
 constexpr std::size_t kHeroFolder = 0x98;
 constexpr std::int32_t kLoadScreen = 2;
+// CClientExoApp keeps the load it was last asked for, to make again once a
+// dialog over missing content is answered (its handler of
+// GUIDialogResultMessage, 0x005DAA30, read 2026-10-01): a path at +0x218
+// if the load was by path, else the character's folder at +0x234 with the
+// slot and kind at +0x250 and +0x254; each a std::wstring. Answer 3 sets
+// the byte at +0x298, which lets the load go on without the content, and
+// makes the load again from these.
+constexpr std::size_t kAskedPath = 0x218;
+constexpr std::size_t kAskedCharacter = 0x234;
+constexpr std::int32_t kForceLoad = 3;
 
 std::uintptr_t Proxy()
 {
@@ -284,6 +294,27 @@ bool Load(const Slot &save)
         SendToProxy(proxy, ModeMessage(before));
     }
     return true;
+}
+
+bool ForceLoad()
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return false;
+    }
+    const auto at = reinterpret_cast<std::uintptr_t>(app);
+    if (ReadString(at + kAskedPath).value_or(L"").empty() && ReadString(at + kAskedCharacter).value_or(L"").empty())
+    {
+        return false; // no load was ever asked for
+    }
+    // The answer's text as the engine's empty string; the handler does not
+    // read it, and it holds nothing to free.
+    WString none(L"");
+    auto answer = messages::Make<messages::GUIDialogResultMessage>();
+    answer.result = kForceLoad;
+    std::memcpy(answer.text, none.Engine(), sizeof answer.text);
+    return messages::Send(app, answer);
 }
 
 bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
