@@ -239,7 +239,7 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 // with whatever stands in it.
 //
 //   if (const auto room = dao::world::RoomOf(enemy); room && !room->Shown())
-//       ; // do not send the camera there: the player would see nothing
+//       ; // do not send the camera there: the player would see black
 //
 // Two things decide a room, read 2026-09-30 and 2026-10-01 (dao/Addresses.h,
 // "Rooms and their streaming").
@@ -266,8 +266,15 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 // Seen in play, 2026-10-01, in Castle Cousland: 61 rooms, 53 wanted, 1
 // wanted now and 7 dropped, the controlled creature's own room wanted and
 // loaded, and none dropped once the party stood in the hall. A first
-// reading took "wanted now" for "drawn"; it is not. The seen value is not
-// yet seen in play; examples/world logs it with each room's state.
+// reading took "wanted now" for "drawn"; it is not.
+//
+// And outdoors, the same day, through the Eluvian server in the Dalish
+// forest clearing: the party, two wolves 25 m off and three corpses were
+// each in a room, the rooms' numbers 0x30002 to 0x40003 (cells of the
+// terrain, by the look of them, not a file's number), every one in view
+// (1), and none with its load reading loaded, though all were on screen.
+// So Shown() goes by what has been seen alone. What an indoor room never
+// seen reads is not yet seen in play; examples/world logs it.
 struct Room
 {
     static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
@@ -291,16 +298,18 @@ struct Room
     // Filled by RoomAt and RoomOf for their point, else 0.
     float distance = 0;
 
-    // In memory and in the world.
+    // In memory and in the world, for a room of an indoor area. An outdoor
+    // area's rooms are cells of its terrain, whose load does not read
+    // kLoaded even under the party's feet (below).
     bool Loaded() const
     {
         return load == kLoaded;
     }
-    // Loaded, and seen by the party now or before: the game draws it and
-    // what stands in it.
+    // Seen by the party now or before: the game draws it and what stands
+    // in it, rather than black.
     bool Shown() const
     {
-        return Loaded() && seen != kNeverSeen;
+        return seen != kNeverSeen;
     }
 };
 // Every room of the current area; none before an area is there. On the
