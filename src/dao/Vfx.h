@@ -65,4 +65,23 @@ bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing
 // Takes a placed effect away; nothing for one already gone.
 void Remove(ObjectId effect);
 
+// Leaves an effect out of the cursor's pick, or puts it back in.
+//
+// Some rows have a shape the cursor's ray meets. Seen in play, 2026-10-01
+// (the turn-based mod): row 30000, "Movement Indicator", the game's own
+// move marker, is one of the selection reticles' models, and moved after
+// the cursor each frame it took the pick from the ground under it: the
+// mode's CursorGround read a point and nothing by turns, and a click there
+// would not have been a move. The aiming rings (30017 to 30019) have no
+// such shape.
+//
+// An effect left out is taken from what the cursor's ray met before the
+// mode chooses among it (a detour of GameModeExplore::CastCursorRay), so
+// the mode's CursorObject, CursorGround and CursorHits, and a click, are
+// as they would be without it; dao::world::PickAt leaves it out too. The
+// effect still has its shape: dao::world::Raycast meets it. Remove forgets
+// it. Not yet seen in play.
+void SetPickable(ObjectId effect, bool pickable);
+bool IsPickable(ObjectId effect);
+
 } // namespace dao::vfx

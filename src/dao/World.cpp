@@ -6,6 +6,7 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
+#include "dao/Vfx.h"
 #include "dao/core/Msvc8.h"
 #include "dao/core/Path.h"
 
@@ -232,7 +233,12 @@ std::vector<Hit> PickAt(std::int32_t x, std::int32_t y)
     (*reinterpret_cast<Fn **>(camera))[kPixelToRaySlot](camera, 0, x, y, &nearPoint, &farPoint);
     const Vector origin = nearPoint.ToVector();
     const Vector end = farPoint.ToVector();
-    return Raycast(origin, {end.x - origin.x, end.y - origin.y, end.z - origin.z}, groups::kCursor, true);
+    std::vector<Hit> hits =
+        Raycast(origin, {end.x - origin.x, end.y - origin.y, end.z - origin.z}, groups::kCursor, true);
+    // As the cursor's own pick is with them: without the effects a plugin
+    // left out of it (dao/Vfx.h).
+    std::erase_if(hits, [](const Hit &hit) { return hit.object != kInvalidObject && !vfx::IsPickable(hit.object); });
+    return hits;
 }
 
 namespace
