@@ -10,6 +10,7 @@ They build with the library when DAOLib is the top-level project (`DAO_BUILD_EXA
 | [`damage/`](damage/Damage.cpp) | Changing combat without replacing a script: the party takes half damage, changed where the scripts hand the new health to the engine, so no script override and other plugins can do the same beside it | `dao/ScriptHooks.h` |
 | [`commands/`](commands/Commands.cpp) | Commands starting and ending: the controlled creature's, and anyone's that fail, with how they ended | `dao/CommandEvents.h` |
 | [`cooldown/`](cooldown/Cooldown.cpp) | An ability's cooldown as the quickbar draws it: the seconds left and the seconds it was set to, read after each ability the controlled creature uses, then set to two thirds of a long hold | `dao/Abilities.h` |
+| [`input/`](input/Input.cpp) | A key of the plugin's own: two actions registered as the game registers its own, one on F11 and one for the player to bind in the controls screen, each press logged | `dao/Input.h` |
 | [`preview/`](preview/Preview.cpp) | Drawing in the world: the game's aiming ring follows the cursor, the in-reach or out-of-reach row by the distance | `dao/Vfx.h` |
 | [`dialogue/`](dialogue/Dialogue.cpp) | Conversations: each NPC line, the replies offered, and the replies whose condition hid them, with the plot flag or script that decided | `dao/Dialogue.h` |
 | [`world/`](world/World.cpp) | The world's geometry: whether the controlled creature can see what the cursor is on, and what a ray straight down meets, with each hit's collision groups | `dao/World.h` |

@@ -7,6 +7,7 @@ add_executable(
     test_crashlog.cpp
     test_fingerprint.cpp
     test_gff4.cpp
+    test_input.cpp
     test_msvc8.cpp
     test_names.cpp
     test_objects.cpp

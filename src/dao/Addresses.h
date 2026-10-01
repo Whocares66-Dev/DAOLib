@@ -406,6 +406,63 @@ DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
 DAO_ADDRESS(kMessages_FromText, "Messages::FromText", 0x004D2320)
 DAO_ADDRESS(kMessages_FromBindingText, "Messages::FromBindingText", 0x007957D0)
 DAO_ADDRESS(kMessages_FromCallbackText, "Messages::FromCallbackText", 0x00524BE0)
+// The player's keys, read 2026-10-01 (dao/Input.h). The game mode
+// controller's start (0x00641870) calls, in this order:
+// Input::RegisterInputMessages (0x006DC900), which fills the modes' groups
+// of texts; RegisterActions; ResetKeys; LoadKeyBindings.
+//
+// The actions are Eclipse::GroupedInputMappings' (its one object made by
+// Get, kept at g_groupedInputMappings), each an Eclipse::
+// GroupedInputMappings::GroupedInputs of 0x13C bytes:
+// - AddAction, __thiscall (const std::wstring &name, const TalkString
+//   &label, 0, 0), `ret 0x10`: makes the action unless the name is there
+//   (the container at +0x58 asked, its slots 6 and 2). The label is the
+//   engine's talk string, 0x24 bytes: a flag that its text is there, a
+//   string reference, the text (0x004D1C70 makes one from a reference,
+//   0x004D1EB0 reads the text, asking the talk table if the flag is 0).
+// - AddMapping, __thiscall (const std::wstring &name, const uint32
+//   *trigger, const std::wstring &text, const bool *), `ret 0x10`: what
+//   the action's two keys send. The trigger is a device and an event with
+//   no key (0x10000000 the keyboard; 0x20000 for the screenshot's and the
+//   console's actions, 0x40000 and 0x50000 for others); the text names a
+//   message ("TakeScreenshotMessage").
+// - SetKey, __thiscall (const std::wstring &name, const uint32 *input,
+//   int which of its two keys, bool), `ret 0x10`: the input is a code, the
+//   modifiers and the device in one word (dao/core/InputCode.h). The game's
+//   defaults pass 0 last; with 1 it goes on to look at the actions that
+//   have the key already.
+// - RegisterActions, __cdecl (): 53 AddAction calls with the labels'
+//   string references (373290 on), then the mappings.
+// - ResetKeys, __cdecl (): clears the keys (0x00893D70), sets the game's
+//   defaults (0x006E9510, 56 SetKey calls) and reads keymap.gda's for the
+//   language. Also called from 0x005E5F40.
+// - LoadKeyBindings and SaveKeyBindings, __cdecl (): KeyBindings.ini in
+//   the user's folder, read (0x00895580) and written (0x00895980).
+//
+// The modes' groups are another object (made by InputModes::Get, kept at
+// g_inputModes): Group, __thiscall (const std::wstring &name), `ret 4`,
+// answers the group of that name, the names being the modes' classes'
+// ("GameModeExplore") and "DisableAll"; a group has a set of the texts it
+// allows (at +0x30; Allow, __thiscall (const std::wstring &text), `ret 4`,
+// adds one), a set it bars (+0x5C), and a flag (+0) that it bars all it
+// does not allow. Allowed, __thiscall (const std::wstring &text), `ret
+// 4`, is asked by the input mapper for each text a pressed key has
+// (0x0087C950): true if a group that is on allows the text and none bars
+// it. The names are ours.
+DAO_ADDRESS(kGroupedInputMappings_Get, "Eclipse::GroupedInputMappings::Get", 0x00895DC0)
+DAO_DATA(kGroupedInputMappings, "g_groupedInputMappings", 0x00C3B9D8)
+DAO_ADDRESS(kGroupedInputMappings_AddAction, "Eclipse::GroupedInputMappings::AddAction", 0x00894530)
+DAO_ADDRESS(kGroupedInputMappings_AddMapping, "Eclipse::GroupedInputMappings::AddMapping", 0x00894BB0)
+DAO_ADDRESS(kGroupedInputMappings_SetKey, "Eclipse::GroupedInputMappings::SetKey", 0x00894CC0)
+DAO_ADDRESS(kInput_RegisterActions, "Input::RegisterActions", 0x006E30D0)
+DAO_ADDRESS(kInput_ResetKeys, "Input::ResetKeys", 0x006EA9F0)
+DAO_ADDRESS(kInput_LoadKeyBindings, "Input::LoadKeyBindings", 0x006EA8F0)
+DAO_ADDRESS(kInput_SaveKeyBindings, "Input::SaveKeyBindings", 0x006EA970)
+DAO_ADDRESS(kInputModes_Get, "InputModes::Get", 0x00891010)
+DAO_DATA(kInputModes, "g_inputModes", 0x00C3B800)
+DAO_ADDRESS(kInputModes_Group, "InputModes::Group", 0x00890C60)
+DAO_ADDRESS(kInputModeGroup_Allow, "InputModeGroup::Allow", 0x0088F810)
+DAO_ADDRESS(kInputModes_Allowed, "InputModes::Allowed", 0x0088F430)
 DAO_ADDRESS(kMessageRegistry_Get, "MessageRegistry::Get", 0x004740B0)
 DAO_DATA(kMessageRegistry, "g_messageRegistry", 0x00C2C09C)
 DAO_ADDRESS(kMessageRegistry_Dispatch, "MessageRegistry::Dispatch", 0x004D8330)

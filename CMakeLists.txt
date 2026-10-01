@@ -166,6 +166,7 @@ add_library(
     src/dao/GameModes.cpp
     src/dao/Gda.cpp
     src/dao/Gui.cpp
+    src/dao/Input.cpp
     src/dao/Log.cpp
     src/dao/Messages.cpp
     src/dao/Saves.cpp

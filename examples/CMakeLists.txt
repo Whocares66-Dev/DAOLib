@@ -31,3 +31,6 @@ dao_apply_warnings(example_commands)
 
 add_daolib_plugin(example_cooldown SOURCES cooldown/Cooldown.cpp)
 dao_apply_warnings(example_cooldown)
+
+add_daolib_plugin(example_input SOURCES input/Input.cpp)
+dao_apply_warnings(example_input)
