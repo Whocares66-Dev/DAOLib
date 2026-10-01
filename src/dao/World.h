@@ -144,14 +144,19 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 // - AimAt: 243 pixels above her feet; and for a wolf standing behind
 //   another creature as the camera saw them, a pixel on the wolf's visible
 //   part, where the pick met the wolf first.
-// Not yet seen: the real cursor put at an AimAt pixel and the game's own
-// CursorObject read.
+// - The real cursor put at an AimAt pixel, by the play tester: the game's
+//   own CursorObject was the creature and the click attacked it, at
+//   pixels inside it; at one on its edge the game's pick held nothing
+//   (AimAt, below, now keeps off edges).
 struct ScreenPoint
 {
     float x = 0;
     float y = 0;
     bool inFront = false; // of the camera; behind it, x and y mean nothing
     bool inView = false;  // in front, and within the view's pixels
+    // From AimAt only: how many of the eight pixels ten away meet the
+    // object first too. 8 is well inside it; a low count is its edge.
+    std::int32_t around = 0;
 };
 
 struct ViewSize
@@ -176,8 +181,19 @@ std::vector<Hit> PickAt(std::int32_t x, std::int32_t y);
 // A pixel to click an object at: its place on the screen at a height where
 // the pick there meets it before any other object, tried at a few heights
 // from its middle outward, since an object is picked by its body and not
-// its feet. Nothing if it is not in view at any of them, or another object
-// is in front at every one.
+// its feet. Of those, the first with the pick meeting it at all eight
+// pixels ten away as well, or failing one the height with most of them:
+// a pixel inside the object, not on its edge. Nothing if it is not in view
+// at any height, or another object is in front at every one.
+//
+// Why inside: in play, 2026-10-01, the real cursor put at a pixel on the
+// top edge of a spider as drawn was over nothing by the game's own pick
+// (no object, no ground, no hits) and the click became a move, while
+// PickAt at that pixel met the spider; 37 pixels lower the two agreed and
+// the click attacked. The mode's pick is taken 15 times a second from
+// where the engine has the cursor, and holds no hits when the engine gives
+// it no place for the cursor (dao/GameModes.h); at an edge the two can
+// differ, so an edge is no place to aim.
 std::optional<ScreenPoint> AimAt(ObjectId object);
 
 // The nearest shape between two points, if any: Raycast, cut at `to`.

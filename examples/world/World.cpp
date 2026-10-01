@@ -189,7 +189,8 @@ void LogScreenOf(dao::ObjectId object)
     const auto aim = dao::world::AimAt(object);
     spdlog::info("  on the screen: its feet at ({:.0f}, {:.0f}){}{}; the pick there: {}; to click it: {}", screen->x,
                  screen->y, screen->inFront ? "" : ", behind the camera", screen->inView ? "" : ", out of view", picked,
-                 aim ? std::format("({:.0f}, {:.0f})", aim->x, aim->y) : std::string("no pixel found"));
+                 aim ? std::format("({:.0f}, {:.0f}), {} of 8 around on it too", aim->x, aim->y, aim->around)
+                     : std::string("no pixel found"));
 }
 
 void LogWalksNearby(dao::ObjectId self)

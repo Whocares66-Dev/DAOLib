@@ -235,6 +235,24 @@ std::vector<Hit> PickAt(std::int32_t x, std::int32_t y)
     return Raycast(origin, {end.x - origin.x, end.y - origin.y, end.z - origin.z}, groups::kCursor, true);
 }
 
+namespace
+{
+
+// Whether the pick at a pixel meets this object before any other.
+bool MeetsFirst(ObjectId object, std::int32_t x, std::int32_t y)
+{
+    for (const Hit &hit : PickAt(x, y))
+    {
+        if (hit.kind == Hit::Kind::Object)
+        {
+            return hit.object == object;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 std::optional<ScreenPoint> AimAt(ObjectId object)
 {
     CClientExoApp *app = CClientExoApp::Get();
@@ -247,27 +265,41 @@ std::optional<ScreenPoint> AimAt(ObjectId object)
     // From about a person's middle outward: a body is picked there, a low
     // thing (a chest, a body on the ground) near its base.
     constexpr std::array<float, 6> kHeights = {0.9F, 1.2F, 0.6F, 1.5F, 0.3F, 0.05F};
+    constexpr std::int32_t kAway = 10; // pixels, to each of the eight around
+    std::optional<ScreenPoint> best;
     for (const float height : kHeights)
     {
-        const auto screen = ToScreen({base.x, base.y, base.z + height});
+        auto screen = ToScreen({base.x, base.y, base.z + height});
         if (!screen || !screen->inView)
         {
             continue;
         }
-        for (const Hit &hit : PickAt(static_cast<std::int32_t>(screen->x), static_cast<std::int32_t>(screen->y)))
+        const auto x = static_cast<std::int32_t>(screen->x);
+        const auto y = static_cast<std::int32_t>(screen->y);
+        if (!MeetsFirst(object, x, y))
         {
-            if (hit.kind != Hit::Kind::Object)
+            continue;
+        }
+        for (std::int32_t dx = -kAway; dx <= kAway; dx += kAway)
+        {
+            for (std::int32_t dy = -kAway; dy <= kAway; dy += kAway)
             {
-                continue;
+                if ((dx != 0 || dy != 0) && MeetsFirst(object, x + dx, y + dy))
+                {
+                    ++screen->around;
+                }
             }
-            if (hit.object == object)
-            {
-                return screen;
-            }
-            break; // another object is in front here
+        }
+        if (screen->around == 8)
+        {
+            return screen;
+        }
+        if (!best || screen->around > best->around)
+        {
+            best = screen;
         }
     }
-    return std::nullopt;
+    return best;
 }
 
 std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t mask)
