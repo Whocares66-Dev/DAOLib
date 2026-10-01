@@ -215,11 +215,9 @@ constexpr float kNearGoal = 2.0F;             // metres, as RequestPath asks
 constexpr float kNearStart = 5.0F;            // metres, as RequestPath asks
 constexpr float kSlice = 0.01F;               // seconds of search a step
 constexpr std::int32_t kSlices = 200;
-constexpr int kLegs = 4;                 // searches end to end, each on from where the last gave up
-constexpr int kProbes = 4;               // short searches past where a search gave up
-constexpr float kProbeStep = 0.5F;       // metres between them
-constexpr std::int32_t kProbeSlices = 6; // slices each
-constexpr std::size_t kBarredAt = 0x84;  // in the path: a pointer to the barred cell's point, once noted
+constexpr int kAhead = 5;               // points ahead of where a search gave up, looked at for a door
+constexpr float kAheadStep = 0.5F;      // metres between them
+constexpr std::size_t kBarredAt = 0x84; // in the path: a pointer to the barred cell's point, once noted
 constexpr auto kLongest = std::chrono::milliseconds(30); // of the game's frame, for one search
 constexpr float kArrived = 0.25F;                        // metres from the destination
 constexpr std::size_t kActive = 0x00;                    // in the path: a route is being worked out
@@ -549,89 +547,50 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         return leg;
     };
 
-    // A search gives up part way where a stretch will not work out, and
-    // answers "found" with what it has; a creature then walks that and asks
-    // again from its end. So this goes on from where a leg got to, as the
-    // walker would, for a few legs within the one time limit.
+    Leg leg = runLeg(from, kSlices, true, 1);
+    const std::string flags = leg.flags;
     std::vector<Vector> walked;
-    std::optional<Vector> barredAt;
-    std::string flags;
-    Vector4 legFrom = from;
-    int legs = 0;
-    for (; legs < kLegs; ++legs)
+    if (leg.found)
     {
-        Leg leg = runLeg(legFrom, kSlices, true, legs + 1);
-        flags = leg.flags;
-        barredAt = leg.barredAt;
-        // This leg's waypoints after those before it, the joint once.
-        const std::size_t before = walked.size();
-        if (leg.found)
-        {
-            for (const Vector &point : leg.found->waypoints)
-            {
-                if (walked.empty() || DistanceSquared(walked.back(), point) > 1e-6F)
-                {
-                    walked.push_back(point);
-                }
-            }
-        }
-        if (leg.arrives || answer.result != kFound || walked.size() == before || walked.empty() ||
-            std::chrono::steady_clock::now() - started >= kLongest)
-        {
-            if (leg.arrives)
-            {
-                answer.path = WalkPath{walked, 0};
-            }
-            break;
-        }
-        // Given up part way with some of the way found: on from there.
-        legFrom = Vector4(walked.back());
-        legFrom.w = from.w;
+        walked = leg.found->waypoints;
     }
-
-    // Given up short of a door: the engine answers 6 only for a walker
-    // standing in the door's barred cells (in play, 1.2 m from a shut door,
-    // it answered 6 at once where a search from the waypoint before had
-    // given up). So a few short searches from half a metre on, and on
-    // again, the way the path was heading, to have the door named.
-    if (!answer.path && answer.result == kFound && !walked.empty())
+    if (leg.arrives)
     {
-        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
-        if (walked.size() >= 2)
-        {
-            const Vector &a = walked[walked.size() - 2];
-            heading = {walked.back().x - a.x, walked.back().y - a.y, 0};
-        }
-        const float long0 = std::hypot(heading.x, heading.y);
-        for (int probe = 1; long0 > 1e-6F && probe <= kProbes && answer.result != kBarred; ++probe)
-        {
-            Vector4 probeFrom(walked.back());
-            probeFrom.x += heading.x / long0 * kProbeStep * static_cast<float>(probe);
-            probeFrom.y += heading.y / long0 * kProbeStep * static_cast<float>(probe);
-            probeFrom.w = from.w;
-            const std::int32_t was = answer.result;
-            Leg leg = runLeg(probeFrom, kProbeSlices, false, legs + 1 + probe);
-            if (answer.result == kBarred)
-            {
-                barredAt = leg.barredAt ? leg.barredAt : std::optional<Vector>(probeFrom.ToVector());
-                flags = leg.flags;
-            }
-            else
-            {
-                answer.result = was;
-            }
-        }
+        answer.path = WalkPath{walked, 0};
     }
-    answer.waypoints = walked.size();
-    if (!answer.path && !walked.empty())
+    else if (!walked.empty())
     {
         answer.partial = WalkPath{walked, 0};
     }
+    answer.waypoints = walked.size();
 
     if (answer.result == kBarred)
     {
-        const Vector at = barredAt ? *barredAt : !walked.empty() ? walked.back() : from.ToVector();
+        // About the barred cell the engine noted, as the game looks.
+        const Vector at = leg.barredAt ? *leg.barredAt : !walked.empty() ? walked.back() : from.ToVector();
         answer.blocker = Blocker(*app, area, at);
+    }
+    else if (!answer.path && answer.result == kFound && !walked.empty())
+    {
+        // Given up part way. The engine answers 6 only to a walker standing
+        // in a door's barred cells; a search that stops short of them gives
+        // up with what it has (in play, 1.2 m short of a shut door, 53 m
+        // along). So the same test of a placeable's footprint, on points
+        // ahead the way the path was heading.
+        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
+        if (walked.size() >= 2)
+        {
+            const Vector &before = walked[walked.size() - 2];
+            heading = {walked.back().x - before.x, walked.back().y - before.y, 0};
+        }
+        const float span = std::hypot(heading.x, heading.y);
+        for (int ahead = 1; span > 1e-6F && ahead <= kAhead && answer.blocker == kInvalidObject; ++ahead)
+        {
+            Vector at = walked.back();
+            at.x += heading.x / span * kAheadStep * static_cast<float>(ahead);
+            at.y += heading.y / span * kAheadStep * static_cast<float>(ahead);
+            answer.blocker = Blocker(*app, area, at);
+        }
     }
 
     // What the search saw, for a log.
