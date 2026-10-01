@@ -7,15 +7,18 @@
 //           spdlog::info("{:#x} was hurt by {:#x}", target, event.Creator());
 //   });
 //
-// Events travel through the engine's event queue (dao/Addresses.h, "The
-// engine's event queue"): SignalEvent and the engine itself queue a
-// CScriptEvent for a target, and AIMaster::ProcessEvent hands it to the
-// target when it is due. OnScriptEvent detours ProcessEvent. Seen in play
-// 2026-09-30 (dev/LIBRARY.md): damage, perception, attack impacts, ability
-// casts, heartbeats, game mode changes, module and area loads, command
-// completions and the scripts' own event numbers all come this way. Not
-// every event does: most EVENT_TYPE_COMMAND_COMPLETEs are delivered some
-// other way, so a callback sees only a few of those.
+// Events reach an object two ways. Most travel through the engine's event
+// queue (dao/Addresses.h, "The engine's event queue"): SignalEvent and the
+// engine queue a CScriptEvent, AIMaster::ProcessEvent hands it to the
+// target's handler when it is due, and the handler runs the object's
+// script for it (CCObject::RunEventScript, 0x00698960). Some never queue:
+// engine code calls RunEventScript at once, 18 places in all (a creature's
+// death, an order received, a selection, effects, the command queue). So
+// OnScriptEvent detours RunEventScript, which sees both, and the queue
+// too, for the events it hands an area or the module, which have handlers
+// of their own. Read 2026-09-30, after a play test in which four deaths
+// and most EVENT_TYPE_COMMAND_COMPLETEs never reached a ProcessEvent hook
+// (the Eluvian server's report); the new hook is not yet seen in play.
 //
 // Callbacks run on the scripts' thread, and see the event the target is
 // about to handle; they observe, they do not change or stop it.

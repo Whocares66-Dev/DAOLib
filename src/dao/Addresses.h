@@ -856,6 +856,15 @@ DAO_ADDRESS(kAIMaster_ProcessEvent, "AIMaster::ProcessEvent", 0x0064A8C0) // (CA
 DAO_ADDRESS(kAIMaster_ClearEvents, "AIMaster::ClearEvents", 0x0064AC80)
 DAO_ADDRESS(kAIMaster_DeleteEventData, "AIMaster::DeleteEventData", 0x0064A520) // (id, data)
 DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
+// Where an object's script meets its event (dao/Events.h): __thiscall
+// (CScriptEvent **), `ret 4`. CCObject's handler (slot 50, 0x00698A50,
+// shared with the triggers, sounds, waypoints and more; CCCreature's,
+// CCPlaceable's, CCItem's and CCAreaOfEffectObject's chain to it) calls it
+// for a script event (handler id 10), and 17 other places call it
+// straight, delivering at once: a creature's death and update, the command
+// queue, effects, Party::Select, the orders. Read 2026-09-30.
+DAO_ADDRESS(kCCObject_RunEventScript, "CCObject::RunEventScript", 0x00698960)
+DAO_ADDRESS(kCCObject_EventHandler, "CCObject::EventHandler", 0x00698A50)
 DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
 
 // Conversations (dao/Dialogue.h), read 2026-09-30. The engine's
