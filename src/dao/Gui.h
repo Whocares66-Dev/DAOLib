@@ -298,7 +298,7 @@ bool HasMovie(std::wstring_view file);
 // a picker, not read here. The GUI system keeps whether a box is up at
 // +0x1FA: set when it shows one (0x0060BA90, which then has the movie
 // show it, PopupLayer.ShowDialogBoxFromGame) and cleared by
-// DialogBoxClosedMessage. Pressing a button from a plugin is not read.
+// DialogBoxClosedMessage. PressPopupButton presses one from a plugin.
 // Seen in play, 2026-10-01, through the Eluvian server: after the scripts'
 // ShowPopup(379897, 1) it gave the text "Shield Pummel", the string's own
 // and not its number, and two buttons, Yes with the callback
@@ -318,6 +318,18 @@ struct Popup
 // Nothing when no box is up, or before the GUI system is. On the game's
 // thread.
 std::optional<Popup> CurrentPopup();
+
+// Presses a button of the box that is up, for a tool that drives the game:
+// the game is sent the button's callback, as the movie sends it when the
+// button is clicked (dao/Messages.h, SendText), and then, as the movie
+// tells it once the box has gone, that the box is closed
+// (DialogBoxClosedMessage), and the popup layer's screen is hidden. False,
+// and nothing done, when no box is up, for a button the box has not, or a
+// callback the engine cannot make a message of. Read 2026-10-01; what the
+// movie itself does at a click is ActionScript and not read, so whether
+// the box leaves the screen this way is for play to say. Not yet seen in
+// play.
+bool PressPopupButton(std::size_t index);
 
 // An FSCommand's answer, as the game's own handlers give theirs: an array
 // of ints in the calling movie's _root.fsc_retval, which the ActionScript

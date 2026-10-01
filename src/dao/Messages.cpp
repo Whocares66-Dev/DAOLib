@@ -4,6 +4,7 @@
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/String.h"
 
 #include <algorithm>
 #include <atomic>
@@ -136,6 +137,35 @@ void OnMessage(std::uintptr_t vftable, MessageObserver observer)
 void InterceptMessage(std::uintptr_t vftable, MessageInterceptor interceptor)
 {
     Add({vftable, {}, std::move(interceptor)});
+}
+
+bool SendText(std::wstring_view text)
+{
+    // Messages::FromCallbackText's answer: who receives, and the message,
+    // made on the engine's heap.
+    struct Made
+    {
+        void *receiver = nullptr;
+        Message *message = nullptr;
+    };
+    WString callback(text);
+    Made made;
+    using FromFn = Made *(__cdecl *)(Made *, const core::WStringRep *);
+    reinterpret_cast<FromFn>(Module::Address(addr::kMessages_FromCallbackText))(&made, callback.Engine());
+    if (made.message == nullptr)
+    {
+        return false;
+    }
+    if (made.receiver != nullptr)
+    {
+        Send(made.receiver, *made.message);
+    }
+    // As the movies' SendMessage lets its message go: the deleting
+    // destructor, slot 4.
+    using DeleteFn = void *(__fastcall *)(Message *, int, std::uint32_t);
+    const auto *slots = *reinterpret_cast<DeleteFn **>(made.message);
+    slots[4](made.message, 0, 1);
+    return made.receiver != nullptr;
 }
 
 } // namespace dao::messages

@@ -5,6 +5,7 @@
 #include "dao/Data.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Messages.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
 #include "dao/String.h"
@@ -423,6 +424,19 @@ std::optional<Popup> CurrentPopup()
                                data::Text(L"GUIPopupLayer.Callback" + n).value_or(L"")});
     }
     return box;
+}
+
+bool PressPopupButton(std::size_t index)
+{
+    const auto box = CurrentPopup();
+    void *gui = GuiSystem();
+    if (!box || gui == nullptr || index >= box->buttons.size() || !messages::SendText(box->buttons[index].callback))
+    {
+        return false;
+    }
+    messages::Send(gui, messages::Make<messages::DialogBoxClosedMessage>());
+    HideScreen(L"PopupLayer");
+    return true;
 }
 
 } // namespace dao::gui

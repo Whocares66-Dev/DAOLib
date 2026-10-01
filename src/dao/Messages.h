@@ -39,6 +39,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <string_view>
 
 namespace dao::messages
 {
@@ -82,6 +83,22 @@ inline bool Send(void *receiver, const Message &message)
     using Fn = bool(__cdecl *)(const Message *, void *);
     return reinterpret_cast<Fn>(Module::Address(addr::kMessages_Send))(&message, receiver);
 }
+
+// Sends the message a text names to the receiver it names, as a movie's
+// button does with its callback and the engine does with what a script or
+// a data table gives it:
+//
+//   dao::messages::SendText(L"CClientExoApp.GUIDialogResult 1 0");
+//
+// The text is "Receiver.Message arguments": the receiver by its name in
+// the data tree (CClientExoApp, GUIPopupLayer), the message by its class's
+// name less "Message", and its fields in order, apart by spaces. The engine
+// makes the message and has it read its own fields from the text
+// (dao/Addresses.h, "Messages from text"), so any class the engine can make
+// from text can be sent, with no layout known here. False, and nothing
+// sent, for a receiver or a message the engine does not know. From the
+// scripts' thread, as Send. Not yet seen in play.
+bool SendText(std::wstring_view text);
 
 // Every message the engine delivers, as it delivers it: a plugin's
 // observer sees the receiver and the message just before the receiver's
@@ -247,6 +264,16 @@ struct SetSaveLoadModeMessage : Message
     std::int32_t mode;
 };
 static_assert(sizeof(SetSaveLoadModeMessage) == 8);
+
+// What the popup layer's movie tells the GUI system once a message box has
+// closed (dao/Gui.h, Popup): the handler (0x0060FB50) takes the popup
+// layer's screen out of the open ones and clears the system's "a box is
+// up".
+struct DialogBoxClosedMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00AEE580;
+};
+static_assert(sizeof(DialogBoxClosedMessage) == 4);
 
 // A conversation's and a cutscene's keys (dao/Dialogue.h has what each
 // does), read 2026-10-01 from their handlers. SelectResponseMessage, to

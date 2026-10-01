@@ -379,6 +379,26 @@ DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
 // receiver: synchronous, on the caller's thread, and the message stays the
 // caller's. The names are ours.
 DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
+// Messages from text, read 2026-10-01 (dao/Messages.h, SendText). A movie's
+// button and a key's binding name a message as text, and the engine makes
+// the message from it. FromText, __cdecl (const std::wstring &), reads the
+// text through a Messages::InputStringDataStream (0x00AF1474): its first
+// word names the class in the registry of message makers (0x00489BC0), the
+// message is made (0x004D22B0, by the name's hash) and reads its own
+// fields from the rest (its slot 5), and is answered, or null for a name
+// the registry has not. FromBindingText is the same over the input
+// bindings' registry (0x00613A30), which the input mapper uses for a
+// pressed key (0x0087C950). FromCallbackText, __cdecl (out {receiver,
+// message}, const std::wstring &), takes "Receiver.Message args": the
+// receiver's name up to the dot, found in the data tree's tokens and asked
+// for its message receiver (its slot 19), and the rest to FromText. The
+// movies' ExternalInterface SendMessage (GuiExternal::SendMessage,
+// 0x0051C800) does the same from Flash values, sends the message
+// (Messages::Send) and deletes it (its slot 4, with 1). The names are
+// ours.
+DAO_ADDRESS(kMessages_FromText, "Messages::FromText", 0x004D2320)
+DAO_ADDRESS(kMessages_FromBindingText, "Messages::FromBindingText", 0x007957D0)
+DAO_ADDRESS(kMessages_FromCallbackText, "Messages::FromCallbackText", 0x00524BE0)
 DAO_ADDRESS(kMessageRegistry_Get, "MessageRegistry::Get", 0x004740B0)
 DAO_DATA(kMessageRegistry, "g_messageRegistry", 0x00C2C09C)
 DAO_ADDRESS(kMessageRegistry_Dispatch, "MessageRegistry::Dispatch", 0x004D8330)
