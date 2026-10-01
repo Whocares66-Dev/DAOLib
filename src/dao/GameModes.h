@@ -70,6 +70,25 @@ enum class GameMode : std::int32_t
 // the one current is the one updated. On the game's thread, as a frame
 // callback runs. Seen in play 2026-09-30 (dev/LIBRARY.md). The hits are
 // dao::world::Hit, which dao/World.h's Raycast returns too.
+//
+// When the choice is nothing, read 2026-10-01. The chooser (0x0070EAA0)
+// first asks the interface whether the mouse is over one of its movies'
+// elements (the GUI system's slot 71, which asks the Scaleform manager,
+// 0x00511420); if so it chooses nothing: no object, no ground, the
+// walkable verdict false, though the ray was cast and the hits are there.
+// And with no place for the cursor at all (outside the view) the ray is
+// not cast and there are no hits. Otherwise it walks the hits: an object
+// that passes its tests is chosen, else the ground hit, whose verdict is
+// CanMoveTo's (the point free for the controlled creature, by its own
+// pathfinding parameters, and clear of a collision box).
+//
+// So a plugin's movie that draws under the cursor empties the pick and
+// takes the click. Seen in play that day (the turn-based mod's path
+// preview): with a shape of its layer-1 movie on the cursor's pixel,
+// CursorGround was nothing in half the reads and six of nine clicks to
+// move were lost; with nothing drawn there, never. A visual effect with a
+// shape is an object hit and takes the ground's place too (dao/Vfx.h,
+// SetPickable).
 class GameModeExplore
 {
   public:

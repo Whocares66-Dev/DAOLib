@@ -60,6 +60,10 @@ So a plugin's row gets into such a list only by adding to the script. `dao::gui:
 
 Seen in play, 2026-10-01, by the turn-based mod's movie on layer 1 (a stage authored 1280 by 720, `Stage.scaleMode = "showAll"`, in a client area of 1600 by 1000): the engine gives the movie the whole client area and the movie's own scale mode does the rest. The stage was laid over the area scaled by one number (1.25) and centred, with 50 pixels of nothing above and below. In the movie `Stage.width` read 1280, the authored width, but `Stage.height` read about 800, the view's height in stage units, not the authored 720. So a movie that turns view pixels (`dao::world::ToScreen`) into stage points must carry its authored size as numbers of its own and not read it from `Stage`. With that done, a line drawn from `ToScreen`'s points lay on the creature's feet and the cursor's ground point, at four places.
 
+## A movie under the cursor
+
+Explore mode's pick (`dao/GameModes.h`) chooses nothing when the interface says the mouse is over an element of one of its movies: the chooser (`0x0070EAA0`) asks the GUI system (its slot 71, on to the Scaleform manager, `0x00511420`) before it looks at what the ray met. A click there is the interface's and not the world's. This holds for a plugin's movie as for the game's. Seen in play, 2026-10-01: the turn-based mod's layer-1 movie drew a path's end on the cursor's pixel, and the mode's ground point was nothing in half the reads and six of nine clicks to move were lost; with nothing drawn on that pixel the pick was steady. So a movie that draws in the world's part of the screen keeps its shapes off the cursor's pixel, or makes its clip one the mouse does not meet (Scaleform's `hitTestDisable`, with `_global.gfxExtensions` set as the game's own movies set it; not yet seen to work in this game).
+
 ## What Scaleform's own documentation adds
 
 Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's pages on its GFx 3 integration describe the same interface a generation later. They're good for what things mean, not for names or layouts. They confirmed four points, 2026-09-30:
