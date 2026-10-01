@@ -34,7 +34,7 @@ So a registration number is a script function number. The table is verified agai
 
 ## Why this table is the first map of the engine
 
-- **Every function a script can call is named.** `tools/names.py` turns the rows into Ghidra names (`ScriptCommand::TOGGLEGAMEPAUSE` at `0x0066A7A0`), so the decompiler shows the engine's vocabulary instead of `FUN_0066a7a0`.
+- **Every function a script can call is named.** Each row's function is named in the address library's table (`tools/names.py --give`), and `tools/names.py` gives the names to Ghidra (`ScriptCommand::TOGGLEGAMEPAUSE` at `0x0066A7A0`), so the decompiler shows the engine's vocabulary instead of `FUN_0066a7a0`.
 - **Each implementation is a worked example of the engine's types.** A command reads its arguments off the script VM's stack, calls into the engine, and pushes a result. With the signature beside it, the argument reads are identified before the body is read.
 - **The registry is the natural place to add commands.** Registering our own number, name and function through `CVirtualMachineCommands::Register`, plus a matching declaration in a `script.ldf` the toolset compiles against, would put a new command in reach of scripts, as NWNX did for Neverwinter Nights. `dao/Script.h` sets a slot of the table directly, which is the same thing after the fact; about 150 of the 863 slots are empty. Not yet tried with a new command.
 
@@ -50,7 +50,7 @@ So a registration number is a script function number. The table is verified agai
 | A command's sole callee | 187 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
 | Candidates, unnamed | 24 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
 
-The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py` puts their names into Ghidra, and a name set by hand wins. `ForScript_X` means the engine function behind script command X. It says what the function does for scripts, not the engine's own name for it.
+The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py --give` puts their names into the address library's table, from which Ghidra has them, and a name set by hand wins. `ForScript_X` means the engine function behind script command X. It says what the function does for scripts, not the engine's own name for it.
 
 ## Fields
 

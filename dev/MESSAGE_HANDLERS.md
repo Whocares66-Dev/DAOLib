@@ -24,7 +24,7 @@ mov   ecx, esi
 call  0x004D9190                         ; register (handler, message type) on the owner
 ```
 
-The script follows that shape for each handler vftable and writes `dev/message_handlers.csv`: `owner,message,method,function_va,this_adjust,vftable_va,built_at_va`. 289 of 314 resolve; the other 25 are built by code the pattern does not follow (function_va 0), such as some of `GUI::ScaleformManager`'s cursor handlers. `tools/names.py` names each method `Owner::Method_Message` in Ghidra.
+The script follows that shape for each handler vftable and writes `dev/message_handlers.csv`: `owner,message,method,function_va,this_adjust,vftable_va,built_at_va`. 289 of 314 resolve; the other 25 are built by code the pattern does not follow (function_va 0), such as some of `GUI::ScaleformManager`'s cursor handlers. Each method is named `Owner::Method_Message` in the address library's table (`tools/names.py --give`), and so in Ghidra.
 
 Why it matters:
 

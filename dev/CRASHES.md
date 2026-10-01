@@ -18,7 +18,7 @@ The loader (`src/loader/CrashLog.cpp`) installs a crash logger before anything e
 Names come from three places:
 - **Our DLLs:** their PDBs, which `tools\deploy.ps1` copies beside them.
 - **Windows DLLs:** their exports.
-- **The game:** `bin_ship\daolib\functions.tsv`, Ghidra's function list, which deploy also copies (`dev/PROBE.md` says how to export it). With it, `0x0073D054` reads as `FUN_0073d000+0x54` or `GameModeGUI::vfunction7+0x1c`. Without it, the game's addresses stay bare.
+- **The game:** `bin_ship\daolib\functions.tsv`, Ghidra's function list, which deploy also copies (`dev/PROBE.md` says how to export it). With it, `0x0073D054` reads as `FUN_0073d000+0x54` or `GameModeGUI::vfunction7+0x1c`. Without it, the game's addresses stay bare. The names are of the GOG build's addresses. In the EA app's build (`dev/BUILDS.md`) an address in the game is given as that build's own, then as GOG's, by which the name is found: `DAOrigins.exe 0x004c1770 (GOG 0x005d6740) CClientExoApp::SetPaused+0x0`, or `(not in the GOG build)` for code EA's build alone has. Written 2026-10-01 and not yet seen: no crash has been made in the EA game.
 
 ## How it stays installed
 

@@ -15,7 +15,7 @@ Worked examples are in `examples/`, one small plugin per part of the library, ea
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
 {
     dao::OpenLog("myplugin"); // Documents\BioWare\Dragon Age\daolib\myplugin.log
-    if (info == nullptr || info->apiVersion != dao::kPluginApiVersion || !info->expectedExecutable)
+    if (info == nullptr || info->apiVersion != dao::kPluginApiVersion || !info->knownExecutable)
         return false;         // not the loader or the game this was built for
 
     dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::CommandCall &call) {
@@ -108,13 +108,15 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Read or set a value in the engine's data tree, as the UI binds to it | `dao::data::Text(L"GUI.SelectedChar")`, `Number(path)`, `Find(path)->Kind()`, `->Set(value)` | `dao/Data.h` |
 | React to the game's script events (damage, perception, mode changes, loads) | `dao::events::OnScriptEvent(EventType::Damaged, fn)` | `dao/Events.h` |
 | Run code every frame | `dao::OnFrame(fn)` | `dao/Frame.h` |
-| Hook any engine function | `dao::Detour<Fn>` on an address from `dao/Addresses.h` | `dao/Hook.h` |
+| Hook any engine function | `dao::Detour<Fn>` on an ID from `dao/Addresses.h` | `dao/Hook.h` |
 | Know what an object is | `dao::TypeName(ptr)`, from the RTTI | `dao/TypeName.h` |
 | Read memory that might not be there | `dao::TryRead<T>(address)` | `dao/SafeRead.h` |
 
 ## How much to trust each part
 
 Every address and layout was read from the one supported exe, with a note in `dao/Addresses.h` or the class's header saying how and when. `dev/LIBRARY.md` keeps a table of what has been checked in play and what has only been read. As of 2026-09-30: object lookups, 14 fields, the object layout and casts, strings, locations, effects, events and object arrays have all matched the engine's own answers on thousands of calls. Calling commands from C++, intercepting them, the frame callback, the event queue, the game mode controller's table, the data tables and the messages' layouts are built but not yet seen in play. A plugin that relies on those should expect to be the one that finds out.
+
+**Other builds.** The exe everything was read from is GOG's. In the EA app's build the same functions and globals are elsewhere, so the library holds each as an ID, a number that means the same thing in every build, and looks it up in the running build as it is used (`dao::Module::Address`, `dao::At`, `dao::Detour`). A plugin does nothing for it: one DLL serves every build the address library has a file for, a build it was never built against included (`dev/BUILDS.md`). A plugin's own findings are IDs too: read the address in GOG's listing and `python tools\address_ids.py 0x005D6740` gives the ID to write, as `dao::AddressId{10547}` or a `DAO_ADDRESS` row of the plugin's own. Three things an ID cannot do, each rare. A field offset holds in both builds except in the few classes EA changed (`ContentManager`, `GUI::ScaleformManager` from +0x190, the `AnimBase` family from +0x224). A function EA's build lacks maps to nothing, and `Detour::Attach` on it returns false, as it does for any refusal. And a detour on a small function whose code is shared with others (a getter, a destructor) may catch a different set of callers in each build, since each build's linker folded identical functions its own way.
 
 ## Exceptions
 

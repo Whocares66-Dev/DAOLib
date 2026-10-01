@@ -34,7 +34,7 @@ So addresses are fixed per build and there is only one build; there is no unpack
 ## Rules
 
 - **The executable is the authority.** An address, an offset or a convention comes from the Ghidra listing of `game\DAOrigins.exe`, with a note saying where it was read, and is verified in play by the probe before anything relies on it. The wiki, the toolset docs and memory are leads, not facts.
-- **One build.** Everything is conditional on `dao::Module::IsExpectedExecutable()`; on any other exe the loader loads nothing and says so in its log.
+- **IDs, not addresses.** A function or a global is held as an ID from the address library (`extern/DAOAddressLibrary`), which means the same thing in every build of the game, and looked up at run time in that library's file for the build that is running ([BUILDS.md](BUILDS.md)). Everything is conditional on `dao::Module::IsKnownExecutable()`: on an exe with no such file the loader loads nothing and says so in its log.
 - **Call, do not reimplement.** A wrapper calls the engine's function at its address. Rewriting engine logic in C++ is how a library drifts from the game.
 - **Log what a hook read, not only what it did.** A session in play is the test fixture there is no headless substitute for.
 - **Testable code lives in `src/dao/core`**, never touches the process, and is covered by `tests/`. Everything else is verified by playing.
