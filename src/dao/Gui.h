@@ -309,7 +309,9 @@ bool HasMovie(std::wstring_view file);
 // add patches at plugin load. Several patches for one movie run in the
 // order they were added, each on what the one before left; and so do the
 // patches of several plugins, each plugin's on what the others' left, in
-// no promised order. Nothing is written to disk.
+// no promised order (seen in play, 2026-10-01: one plugin's key rows and
+// another's section on the Game tab, in one opening of the screen).
+// Nothing is written to disk.
 //
 // The name is the movie's file without its extension ("optionsmenu" for
 // optionsmenu.gfx), in any case. Read 2026-10-01 (dao/Addresses.h,

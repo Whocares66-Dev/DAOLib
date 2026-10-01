@@ -12,7 +12,8 @@
 // three boxes under the left column, the second ticked. Click each: the
 // first and second change and stay changed, the third goes back. Rest the
 // mouse on one for its tooltip. Close with OK or Cancel and open again:
-// the boxes are as they were left (a change is made at the click).
+// the boxes are as they were left (a change is made at the click). All of
+// it seen 2026-10-01 (dao/Options.h).
 // What it does goes to example_options.log.
 #include "dao/Options.h"
 #include "dao/Frame.h"

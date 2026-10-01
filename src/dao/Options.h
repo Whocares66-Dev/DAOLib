@@ -38,8 +38,26 @@
 // The rows are shared with every other plugin that adds a section, each
 // taking what the ones before it left.
 //
-// From DAOLib_Load, before the game first opens its options. Not yet seen
-// in play.
+// From DAOLib_Load, before the game first opens its options.
+//
+// Seen in play, 2026-10-01, with examples/options/ beside examples/input/
+// (the play tester's session, on 3783dd4):
+// - The heading and three boxes under the left column's last box, the
+//   boxes and labels in line with the game's own and spaced as they are.
+//   The heading is plain text centred over the column, smaller than the
+//   game's own gold bars ("Gameplay", "Feedback"): a caption.
+// - Each box was asked its value at each opening and drawn by the answer.
+// - A click changed a box and it stayed; the box that refuses was empty
+//   again 0.3 s after its click, with no flicker caught.
+// - Each box had its tooltip, drawn under it over the row below.
+// - The game's own boxes worked and did not move. Restore Defaults reset
+//   the game's and left the plugin's; after Cancel and a second opening
+//   the plugin's were as left and nothing was doubled.
+// - In a fight, the screen opened from the main menu with the game paused
+//   behind it: the refusing box refused and another changed, each
+//   callback run at the click, not when the screen closed.
+// The first try, with two plugins patching the movie, showed no section:
+// dao/Gui.h, OnMovieLoad, has why.
 #pragma once
 
 #include <functional>
