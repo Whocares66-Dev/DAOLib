@@ -120,19 +120,24 @@ DAO_DATA(kWorld_RaycastResults, "World::g_raycastResults", 0x00C347B0)
 // The world on the screen, read 2026-10-01 (dao/World.h, ToScreen). The
 // cursor's ray cast (GameModeExplore::CastCursorRay, 0x0070B590) takes the
 // cursor's place in pixels, asks this global's object for the scene being
-// drawn (its slot 9, no arguments), whose camera is at its +0xC0, a
-// Renderer::PerspectiveCamera (vftable 0x00B58604, 42 slots), and has the
-// camera turn the pixel into two points of the world, near and far (its
+// drawn (its slot 9, no arguments: an Eclipse::IGraphicsInternal's +0x58),
+// whose camera is at its +0xC0: a GraphicsStructures::SceneCamera (28
+// slots), which wraps the renderer's camera at its +4, a
+// Renderer::PerspectiveCamera (42 slots), and passes its slots 16 to 19
+// on to it. It has the camera turn the pixel into two points of the
+// world, near and far (its
 // slot 17, (x, y, out near, out far), `ret 0x10`); the ray from the first
 // toward the second is cast with the mask 0x2607 and the selection
 // volumes. The camera's slot 19, (const point, out x, out y, out bool),
 // `ret 0x10`, goes the other way: the point through the view matrix
 // (+0x80) and the projection (+0x40, remade first if the flag at +0x30
 // says so), the bool whether it came out in front, and x and y in pixels
-// of the view, whose width and height the object at the camera's +4
-// answers (its slots 5 and 6). The points are four floats, aligned for
-// SSE. The names are ours.
+// of the view, whose width and height the object at the renderer's
+// camera's +4 answers (its slots 5 and 6): the renderer's camera's, not
+// the wrapper's, whose +4 is the renderer's camera itself. The points are
+// four floats, aligned for SSE. The names are ours.
 DAO_DATA(kGraphics, "g_graphics", 0x00C31650)
+DAO_DATA(kPerspectiveCamera_Vftable, "Renderer::PerspectiveCamera::vftable", 0x00B58604)
 DAO_ADDRESS(kWorld_CurrentScene, "World::CurrentScene", 0x00648B30)
 DAO_ADDRESS(kCCArea_LineOfSight, "CCArea::LineOfSight", 0x0067C3F0)
 DAO_ADDRESS(kCCPlaceable_BlocksSight, "CCPlaceable::BlocksSight", 0x0067A670)

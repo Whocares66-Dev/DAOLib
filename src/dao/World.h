@@ -128,7 +128,10 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 // (dao/Addresses.h): the scene's camera turns a pixel into a ray and a
 // point into a pixel, and these ask it. Pixels are of the game's view, from
 // its top left: the window's client area. On the game's thread, with an
-// area loaded. Not yet seen in play.
+// area loaded. Not yet seen in play: the first try hung the game at
+// ScreenSize, which asked the wrong object (dao/Addresses.h); these now
+// answer nothing unless the scene's camera is the perspective camera they
+// were read from.
 struct ScreenPoint
 {
     float x = 0;

@@ -128,8 +128,9 @@ namespace
 
 // Renderer::PerspectiveCamera's slots (dao/Addresses.h).
 constexpr std::size_t kSceneSlot = 9;      // in the graphics object: the scene being drawn
-constexpr std::size_t kSceneCamera = 0xC0; // in the scene
-constexpr std::size_t kCameraView = 0x4;   // in the camera: what answers the view's size
+constexpr std::size_t kSceneCamera = 0xC0; // in the scene: its GraphicsStructures::SceneCamera
+constexpr std::size_t kRenderCamera = 0x4; // in the scene's camera: the renderer's camera it wraps
+constexpr std::size_t kCameraView = 0x4;   // in the renderer's camera: what answers the view's size
 constexpr std::size_t kViewWidthSlot = 5;
 constexpr std::size_t kViewHeightSlot = 6;
 constexpr std::size_t kPixelToRaySlot = 17;
@@ -154,8 +155,19 @@ void *RenderCamera()
     {
         return nullptr;
     }
-    const auto camera = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(scene) + kSceneCamera);
-    return camera ? reinterpret_cast<void *>(*camera) : nullptr;
+    // The scene's camera wraps the renderer's (it passes these slots on to
+    // it), and the view's size is the renderer's camera's to ask. Only a
+    // perspective camera is one these know: the first try took the wrapper
+    // for it, asked the wrong object for the view's size and hung the game
+    // (the Eluvian server, 2026-10-01).
+    const auto wrapper = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(scene) + kSceneCamera);
+    const auto camera = wrapper && *wrapper != 0 ? TryRead<std::uintptr_t>(*wrapper + kRenderCamera) : std::nullopt;
+    if (!camera || *camera == 0 ||
+        TryRead<std::uintptr_t>(*camera).value_or(0) != Module::Address(addr::kPerspectiveCamera_Vftable))
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<void *>(*camera);
 }
 
 std::optional<ViewSize> SizeOf(void *camera)
