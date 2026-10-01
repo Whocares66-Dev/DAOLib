@@ -30,6 +30,16 @@
 // not wait on those. EVENT_TYPE_COMMAND_COMPLETE came 2,094 times in the
 // session, so the event and the end are not one to one.
 //
+// And from the turn-based mod's play, 2026-10-01: eight melee attackers on
+// one human-sized target all had room, each attacking from 1.9 m; with
+// fourteen, attacks ended COMMAND_FAILED_NO_SPACE_IN_MELEE_RING 15 to 90 ms
+// after they were queued, and the game's AI then queued a move to the
+// target and a second attack itself, the move often ending
+// COMMAND_FAILED_INVALID_PATH at once. A use-object on a door, queued for
+// the hero in a fight, ended COMMAND_FAILED with the door still shut, and
+// from 12.1 m COMMAND_FAILED_COMMAND_CLEARED, though the same order opens
+// the door in explore mode.
+//
 // Callbacks run on the game's thread, inside the command step: keep them
 // short, and queue or clear no commands from one.
 #pragma once

@@ -28,7 +28,10 @@
 // full sweep that never moves. GetCooldown and SetCooldown here read and
 // set the two. Seen in play, 2026-10-01 (examples/cooldown): Powerful
 // Swings set to 800 s left of 1200 s read back 800 of 1200, ticked a second
-// a second, and its quickbar slot drew a sweep about two thirds dark.
+// a second, and its quickbar slot drew a sweep about two thirds dark. The
+// turn-based mod, the same day, wrote a three-turn wait as thirds of 3600
+// s: 3599.9 left drew the slot wholly dark, 2399 a third lit, 1199 two
+// thirds lit, then ready.
 #pragma once
 
 #include "dao/ObjectId.h"
