@@ -299,7 +299,12 @@ bool HasMovie(std::wstring_view file);
 // +0x1FA: set when it shows one (0x0060BA90, which then has the movie
 // show it, PopupLayer.ShowDialogBoxFromGame) and cleared by
 // DialogBoxClosedMessage. Pressing a button from a plugin is not read.
-// Not yet seen in play.
+// Seen in play, 2026-10-01, through the Eluvian server: after the scripts'
+// ShowPopup(379897, 1) it gave the text "Shield Pummel", the string's own
+// and not its number, and two buttons, Yes with the callback
+// "GUIPopupLayer.ScriptDialogResult 1 1 -1" and No with "... 1 2 -1";
+// nothing before the box was up. A script's box holds nothing: loads,
+// orders and a fight went on under it.
 struct Popup
 {
     struct Button
