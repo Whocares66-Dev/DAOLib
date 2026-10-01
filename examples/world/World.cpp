@@ -10,7 +10,9 @@
 // For the object under the cursor it also asks the pathfinder for the walk
 // there (FindPath), and logs its length beside the straight distance (and
 // every ten seconds does the same for the six creatures nearest the
-// controlled one, so a run with no one at the mouse has them too), and
+// controlled one, so a run with no one at the mouse has them too, each
+// with where it is on the screen, what the pick meets there and the pixel
+// to click it at), and
 // the room the object stands in with how much the game wants it and whether
 // it is loaded; every two seconds, how many of the area's rooms are in each
 // state.
@@ -29,6 +31,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <string>
 #include <vector>
@@ -152,16 +155,59 @@ void LogWalkTo(dao::ObjectId self, dao::ObjectId seen)
 
 // The walks to the creatures nearest the controlled one, with no cursor
 // needed.
+// Where an object is on the screen, what the game's pick meets at that
+// pixel, and the pixel to click it at.
+void LogScreenOf(dao::ObjectId object)
+{
+    const dao::CCObject *found = dao::CClientExoApp::Get()->GetObjectById(object);
+    if (found == nullptr)
+    {
+        return;
+    }
+    const dao::Vector feet = found->Position();
+    const auto screen = dao::world::ToScreen(feet);
+    if (!screen)
+    {
+        spdlog::info("  on the screen: no answer");
+        return;
+    }
+    std::string picked = "nothing";
+    if (screen->inView)
+    {
+        const auto hits =
+            dao::world::PickAt(static_cast<std::int32_t>(screen->x), static_cast<std::int32_t>(screen->y));
+        picked = std::to_string(hits.size()) + " hit(s)";
+        for (const dao::world::Hit &hit : hits)
+        {
+            if (hit.kind == dao::world::Hit::Kind::Object)
+            {
+                picked += std::format(", the first object 0x{:x}", hit.object);
+                break;
+            }
+        }
+    }
+    const auto aim = dao::world::AimAt(object);
+    spdlog::info("  on the screen: its feet at ({:.0f}, {:.0f}){}{}; the pick there: {}; to click it: {}", screen->x,
+                 screen->y, screen->inFront ? "" : ", behind the camera", screen->inView ? "" : ", out of view", picked,
+                 aim ? std::format("({:.0f}, {:.0f})", aim->x, aim->y) : std::string("no pixel found"));
+}
+
 void LogWalksNearby(dao::ObjectId self)
 {
     const dao::script::Array nearest =
         dao::script::api::GetNearestObject(self, dao::script::constants::OBJECT_TYPE_CREATURE, kNearest);
+    if (const auto size = dao::world::ScreenSize())
+    {
+        spdlog::info("the view is {} by {}; 0x{:x} itself:", size->width, size->height, self);
+        LogScreenOf(self);
+    }
     spdlog::info("the {} creature(s) nearest 0x{:x}:", nearest.Size(), self);
     for (std::size_t i = 0; i < nearest.Size(); ++i)
     {
         if (const dao::ObjectId creature = nearest.Object(i); creature != dao::kInvalidObject && creature != self)
         {
             LogWalkTo(self, creature);
+            LogScreenOf(creature);
         }
     }
 }

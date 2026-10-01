@@ -123,6 +123,141 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
     return out;
 }
 
+namespace
+{
+
+// Renderer::PerspectiveCamera's slots (dao/Addresses.h).
+constexpr std::size_t kSceneSlot = 9;      // in the graphics object: the scene being drawn
+constexpr std::size_t kSceneCamera = 0xC0; // in the scene
+constexpr std::size_t kCameraView = 0x4;   // in the camera: what answers the view's size
+constexpr std::size_t kViewWidthSlot = 5;
+constexpr std::size_t kViewHeightSlot = 6;
+constexpr std::size_t kPixelToRaySlot = 17;
+constexpr std::size_t kPointToPixelSlot = 19;
+
+// The camera the scene is drawn through, null with none.
+void *RenderCamera()
+{
+    if (!OnGameThread())
+    {
+        return nullptr;
+    }
+    const auto graphics = TryRead<std::uintptr_t>(Module::Address(addr::kGraphics));
+    if (!graphics || *graphics == 0)
+    {
+        return nullptr;
+    }
+    using SceneFn = void *(__fastcall *)(void *, int);
+    auto *object = reinterpret_cast<void *>(*graphics);
+    void *scene = (*reinterpret_cast<SceneFn **>(object))[kSceneSlot](object, 0);
+    if (scene == nullptr)
+    {
+        return nullptr;
+    }
+    const auto camera = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(scene) + kSceneCamera);
+    return camera ? reinterpret_cast<void *>(*camera) : nullptr;
+}
+
+std::optional<ViewSize> SizeOf(void *camera)
+{
+    const auto view = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(camera) + kCameraView);
+    if (!view || *view == 0)
+    {
+        return std::nullopt;
+    }
+    using SizeFn = std::int32_t(__fastcall *)(void *, int);
+    auto *object = reinterpret_cast<void *>(*view);
+    SizeFn *slots = *reinterpret_cast<SizeFn **>(object);
+    const ViewSize size{slots[kViewWidthSlot](object, 0), slots[kViewHeightSlot](object, 0)};
+    return size.width > 0 && size.height > 0 ? std::optional(size) : std::nullopt;
+}
+
+} // namespace
+
+std::optional<ViewSize> ScreenSize()
+{
+    void *camera = RenderCamera();
+    return camera != nullptr ? SizeOf(camera) : std::nullopt;
+}
+
+std::optional<ScreenPoint> ToScreen(const Vector &point)
+{
+    void *camera = RenderCamera();
+    if (camera == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto size = SizeOf(camera);
+    if (!size)
+    {
+        return std::nullopt;
+    }
+    Vector4 world(point);
+    world.w = 1.0F;
+    ScreenPoint screen;
+    using Fn = void(__fastcall *)(void *, int, const Vector4 *, float *, float *, bool *);
+    (*reinterpret_cast<Fn **>(camera))[kPointToPixelSlot](camera, 0, &world, &screen.x, &screen.y, &screen.inFront);
+    screen.inView = screen.inFront && screen.x >= 0 && screen.y >= 0 && screen.x < static_cast<float>(size->width) &&
+                    screen.y < static_cast<float>(size->height);
+    return screen;
+}
+
+std::vector<Hit> PickAt(std::int32_t x, std::int32_t y)
+{
+    void *camera = RenderCamera();
+    if (camera == nullptr)
+    {
+        return {};
+    }
+    const auto size = SizeOf(camera);
+    if (!size || x < 0 || y < 0 || x >= size->width || y >= size->height)
+    {
+        return {};
+    }
+    Vector4 nearPoint;
+    Vector4 farPoint;
+    using Fn = void(__fastcall *)(void *, int, std::int32_t, std::int32_t, Vector4 *, Vector4 *);
+    (*reinterpret_cast<Fn **>(camera))[kPixelToRaySlot](camera, 0, x, y, &nearPoint, &farPoint);
+    const Vector origin = nearPoint.ToVector();
+    const Vector end = farPoint.ToVector();
+    return Raycast(origin, {end.x - origin.x, end.y - origin.y, end.z - origin.z}, groups::kCursor, true);
+}
+
+std::optional<ScreenPoint> AimAt(ObjectId object)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    CCObject *target = app != nullptr ? app->GetObjectById(object) : nullptr;
+    if (target == nullptr)
+    {
+        return std::nullopt;
+    }
+    const Vector base = target->Position();
+    // From about a person's middle outward: a body is picked there, a low
+    // thing (a chest, a body on the ground) near its base.
+    constexpr std::array<float, 6> kHeights = {0.9F, 1.2F, 0.6F, 1.5F, 0.3F, 0.05F};
+    for (const float height : kHeights)
+    {
+        const auto screen = ToScreen({base.x, base.y, base.z + height});
+        if (!screen || !screen->inView)
+        {
+            continue;
+        }
+        for (const Hit &hit : PickAt(static_cast<std::int32_t>(screen->x), static_cast<std::int32_t>(screen->y)))
+        {
+            if (hit.kind != Hit::Kind::Object)
+            {
+                continue;
+            }
+            if (hit.object == object)
+            {
+                return screen;
+            }
+            break; // another object is in front here
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t mask)
 {
     const Vector along{to.x - from.x, to.y - from.y, to.z - from.z};

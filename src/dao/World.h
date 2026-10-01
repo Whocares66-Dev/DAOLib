@@ -123,6 +123,46 @@ CCArea *CurrentArea();
 std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uint32_t mask = groups::kCursor,
                          bool selectionVolumes = false);
 
+// The world on the screen: where a point of the world is drawn, and what a
+// point of the screen is over. Read 2026-10-01 from the cursor's own pick
+// (dao/Addresses.h): the scene's camera turns a pixel into a ray and a
+// point into a pixel, and these ask it. Pixels are of the game's view, from
+// its top left: the window's client area. On the game's thread, with an
+// area loaded. Not yet seen in play.
+struct ScreenPoint
+{
+    float x = 0;
+    float y = 0;
+    bool inFront = false; // of the camera; behind it, x and y mean nothing
+    bool inView = false;  // in front, and within the view's pixels
+};
+
+struct ViewSize
+{
+    std::int32_t width = 0;
+    std::int32_t height = 0;
+};
+
+// The view's size in pixels.
+std::optional<ViewSize> ScreenSize();
+
+// Where a point of the world is on the screen.
+std::optional<ScreenPoint> ToScreen(const Vector &point);
+
+// Everything under a pixel, nearest first, as the cursor's pick gathers it
+// when it is there: the ray the camera gives for the pixel, cast with the
+// cursor's mask and the objects' pick volumes. The first object in it is
+// what a click there would most likely act on; the game's own choice for
+// where the cursor is now is GameModeExplore's (dao/GameModes.h).
+std::vector<Hit> PickAt(std::int32_t x, std::int32_t y);
+
+// A pixel to click an object at: its place on the screen at a height where
+// the pick there meets it before any other object, tried at a few heights
+// from its middle outward, since an object is picked by its body and not
+// its feet. Nothing if it is not in view at any of them, or another object
+// is in front at every one.
+std::optional<ScreenPoint> AimAt(ObjectId object);
+
 // The nearest shape between two points, if any: Raycast, cut at `to`.
 std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t mask = groups::kSight);
 
