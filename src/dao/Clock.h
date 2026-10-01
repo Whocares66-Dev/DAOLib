@@ -60,10 +60,19 @@ void Advance(float seconds);
 //   total to the scene (0x008107F0), what animation plays by. This hooks
 //   the timer's update (EC::ITimer::Update, 0x004CB160) and scales that
 //   timer's seconds, and the total with them.
-// Seen in play with both, 2026-09-30: examples/speed at 2 in a fight made
-// the fight visibly twice as fast, and sound kept pace. The Flash UI keeps
-// its own clock (Scaleform's GTimer) and is not changed. Called on any thread; takes
-// effect from the next frame.
+// What play showed, 2026-09-30, which does not agree. Watching
+// examples/speed at 2, the user saw a fight run faster, moves and swings
+// with it, sound in step. Timed (a script polling the hero's position
+// every 40 ms over a fixed 19.5 m route in a fight), his pace was 4.5 m/s
+// with and without speed 2, and an archer's walk and a melee swing took as
+// long at 2 as at 1; scaling the game object's other frame timer (+0xB8,
+// the renderer's) too changed nothing either. The world clock does double
+// (a plugin's own count of world time ran at twice the wall clock). So the
+// fight's pace (the AI, effects, regeneration) follows this, and whether
+// animation and movement do is open: where movement takes its time from
+// is not read yet. The Flash UI keeps its own clock (Scaleform's GTimer)
+// and is not changed. Called on any thread; takes effect from the next
+// frame.
 //
 // True if both clocks took it: false if there is no world timer yet (before
 // a game is loaded; call again later) or the frame timer's hook could not be
