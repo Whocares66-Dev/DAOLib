@@ -55,6 +55,7 @@ namespace dao::input
 using Key = core::Key;
 inline constexpr std::uint32_t kShift = core::kShift;
 inline constexpr std::uint32_t kControl = core::kControl;
+inline constexpr std::uint32_t kAlt = core::kAlt;
 
 struct Action
 {
@@ -67,7 +68,7 @@ struct Action
     std::wstring label;
     // The key it has until the player binds another; Key::None for no key.
     Key key = Key::None;
-    std::uint32_t modifiers = 0; // kShift, kControl
+    std::uint32_t modifiers = 0; // kShift, kControl, kAlt, or'd
     // The modes its key works in. Loading has no group of keys.
     std::vector<GameMode> modes = {GameMode::Explore, GameMode::Combat};
 };

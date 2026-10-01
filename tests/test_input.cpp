@@ -18,11 +18,13 @@ TEST_CASE("a key's input word is the game's own", "[input]")
     CHECK(KeyboardInput(Key::F1, dao::core::kShift) == 0x1010003B);  // SelectPartyMember1Inclusive
     CHECK(KeyboardInput(Key::PageDown) == 0x100000D1);               // ZoomIn's second key
     CHECK(KeyboardInput(Key::A, dao::core::kShift | dao::core::kControl) == 0x1030001E);
+    CHECK(KeyboardInput(Key::Z, dao::core::kAlt) == 0x1040002C); // HideMainInterface's second key in keymap.gda
+    CHECK(KeyboardInput(Key::T, dao::core::kControl) == 0x10200014);
 }
 
 TEST_CASE("bits that are no modifier are dropped from a key's word", "[input]")
 {
-    CHECK(KeyboardInput(Key::J, 0xFFFFFFFF) == 0x10300024);
+    CHECK(KeyboardInput(Key::J, 0xFFFFFFFF) == 0x10700024);
     CHECK(KeyboardInput(Key::J, dao::core::kMouse) == 0x10000024);
 }
 

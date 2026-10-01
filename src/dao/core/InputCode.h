@@ -4,7 +4,9 @@
 // An input is one 32-bit word. Read 2026-10-01 from the game's own default
 // keys (0x006E9510) and the two functions that make the word (0x00880570
 // for a key, 0x00880590 for a mouse button): a code in the low bits, the
-// modifiers held with it above (0x100000 Shift, 0x200000 Control), and the
+// modifiers held with it above (0x100000 Shift, 0x200000 Control, 0x400000
+// Alt: the three the engine tests to write a key's name, "Shift + ", "Alt
+// + ", "Control + ", 0x0088E560), and the
 // device at the top (0x10000000 the keyboard, 0x20000000 the mouse). The
 // keyboard's codes are DirectInput's scan codes: the game's defaults give
 // pause 0x39, quicksave 0x3F, the journal 0x24 and select all 0x200000 with
@@ -107,6 +109,7 @@ enum class Key : std::uint32_t
 // Held with the key; or them together.
 inline constexpr std::uint32_t kShift = 0x00100000;
 inline constexpr std::uint32_t kControl = 0x00200000;
+inline constexpr std::uint32_t kAlt = 0x00400000;
 
 inline constexpr std::uint32_t kKeyboard = 0x10000000;
 inline constexpr std::uint32_t kMouse = 0x20000000;
@@ -119,7 +122,7 @@ inline constexpr std::uint32_t kOnPress = 0x00020000;
 // The word for a key with its modifiers, as 0x00880570 makes it.
 constexpr std::uint32_t KeyboardInput(Key key, std::uint32_t modifiers = 0)
 {
-    return static_cast<std::uint32_t>(key) | (modifiers & (kShift | kControl)) | kKeyboard;
+    return static_cast<std::uint32_t>(key) | (modifiers & (kShift | kControl | kAlt)) | kKeyboard;
 }
 
 inline constexpr std::wstring_view kActionWord = L"DAOLibAction";
