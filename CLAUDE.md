@@ -28,7 +28,7 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 ```
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
-                the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h),
+                the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h), drawing in the world (Vfx.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
                 the engine's messages (Messages.h), the game's modes (GameModes.h), a callback per frame
                 (Frame.h), script events (Events.h), the game's data tables (Gda.h), the Flash UI's calls (Gui.h), the data tree (Data.h), the talk tables (Tlk.h), the camera (Camera.h, CameraMoves.h), a plugin's save data (Saves.h), the effects' and regeneration's clock and the game's speed (Effects.h, Clock.h), the world's geometry (World.h), conversations (Dialogue.h),

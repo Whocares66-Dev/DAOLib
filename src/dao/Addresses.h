@@ -145,6 +145,26 @@ DAO_ADDRESS(kMovementController_Cancel, "MovementController::Cancel", 0x00A62960
 DAO_ADDRESS(kMovementController_NextWaypoint, "MovementController::NextWaypoint", 0x00A625E0)
 DAO_ADDRESS(kPathSearch_Waypoint, "PathSearch::Waypoint", 0x00A47620)
 
+// Visual effects in the world (dao/Vfx.h), read 2026-09-30 from explore
+// mode's aiming (0x00710F80), which keeps its ring's id in a global and
+// places, moves and removes it each frame. The manager is a singleton made
+// on first use (Get, __cdecl, its pointer at 0x00C389C8). Place is
+// __thiscall (const {row, area id, scale, 0} *, the id it had or -1, mode,
+// const Vector4 *at, const Vector4 *facing or null, attach to or 0), `ret
+// 0x18`, and answers the effect's id, the one it had if that still lives;
+// Find (id) `ret 4` answers its object; Remove (id, 0) `ret 8`. An effect
+// is moved by CCObject::SetPosition (const Vector4 *, flag), `ret 8`.
+// AimRingEffect (area type, out of reach) answers the ring's vfx_base row,
+// 30017 to 30019. The names are ours.
+DAO_ADDRESS(kVfxManager_Get, "VfxManager::Get", 0x0079E820)
+DAO_ADDRESS(kVfxManager_Place, "VfxManager::Place", 0x0079EDC0)
+DAO_ADDRESS(kVfxManager_Find, "VfxManager::Find", 0x0079D780)
+DAO_ADDRESS(kVfxManager_Remove, "VfxManager::Remove", 0x0079EAE0)
+DAO_ADDRESS(kCCObject_SetPosition, "CCObject::SetPosition", 0x00695540)
+DAO_ADDRESS(kGameModeExplore_AimRingEffect, "GameModeExplore::AimRingEffect", 0x0070AB20)
+DAO_ADDRESS(kGameModeExplore_UpdateAim, "GameModeExplore::UpdateAim", 0x00710F80)
+DAO_DATA(kGameModeExplore_AimRing, "GameModeExplore::g_aimRing", 0x00C0679C)
+
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a
 // second in combat; not yet verified in play.

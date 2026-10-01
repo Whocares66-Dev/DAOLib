@@ -151,6 +151,7 @@ add_library(
     src/dao/ScriptCall.cpp
     src/dao/Orders.cpp
     src/dao/Abilities.cpp
+    src/dao/Vfx.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp
