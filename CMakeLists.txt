@@ -150,6 +150,7 @@ add_library(
     src/dao/Dialogue.cpp
     src/dao/ScriptCall.cpp
     src/dao/Orders.cpp
+    src/dao/Abilities.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp

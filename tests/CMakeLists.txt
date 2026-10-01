@@ -8,6 +8,7 @@ add_executable(
     test_fingerprint.cpp
     test_gff4.cpp
     test_msvc8.cpp
+    test_names.cpp
     test_objects.cpp
     test_path.cpp
     test_range.cpp

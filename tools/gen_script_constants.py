@@ -13,7 +13,11 @@ both into
   fits;
 - every constant again under its script name, `dao::script::constants::
   EVENT_TYPE_COMMAND_COMPLETE`, so code carried over from a script or the
-  wiki reads the same.
+  wiki reads the same;
+- a Name() per enum, the script name of a value at run time:
+  Name(EventType::CommandComplete) is "EVENT_TYPE_COMMAND_COMPLETE", for
+  logs and tools that show a number to a person. Where two constants share
+  a value, the first one's name.
 
 A creature property's id (PROPERTY_ATTRIBUTE_*, _SIMPLE_*, _DEPLETABLE_*)
 is a row of the game's properties table (properties.gda), which the
@@ -212,6 +216,7 @@ def header(constants, sources, notes):
         "#pragma once",
         "",
         "#include <cstdint>",
+        "#include <string_view>",
         "",
         "namespace dao::script",
         "{",
@@ -231,6 +236,24 @@ def header(constants, sources, notes):
                 lines.append(f"    // {notes[name]}")
             lines.append(f"    {member} = {value if value >= 0 else f'({value})'},")
         lines.append("};")
+        lines.append("")
+        # Short and fixed, so the formatter never rewraps it.
+        lines.append("// The value's script name; empty for a value no constant names.")
+        lines.append(f"constexpr std::string_view Name({enum} value)")
+        lines.append("{")
+        lines.append("    switch (value)")
+        lines.append("    {")
+        seen = set()
+        for member, value, name in members:
+            if value in seen:
+                continue
+            seen.add(value)
+            lines.append(f"    case {enum}::{member}:")
+            lines.append(f'        return "{name}";')
+        lines.append("    default:")
+        lines.append("        return {};")
+        lines.append("    }")
+        lines.append("}")
         lines.append("")
     lines.append("namespace constants")
     lines.append("{")

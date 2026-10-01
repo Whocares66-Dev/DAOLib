@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace dao::core
 {
@@ -65,6 +66,103 @@ enum class CommandType : std::uint8_t
     Turn = 41,
     Fly = 42,
 };
+
+// A command type's name, as the enum spells it ("UseAbility"); empty for a
+// type not named above. The scripts have no constants for these.
+constexpr std::string_view Name(CommandType type)
+{
+    switch (type)
+    {
+    case CommandType::Invalid:
+        return "Invalid";
+    case CommandType::Attack:
+        return "Attack";
+    case CommandType::Appear:
+        return "Appear";
+    case CommandType::Disappear:
+        return "Disappear";
+    case CommandType::ForceFollowObject:
+        return "ForceFollowObject";
+    case CommandType::RandomWalk:
+        return "RandomWalk";
+    case CommandType::DoFunction:
+        return "DoFunction";
+    case CommandType::GiveItem:
+        return "GiveItem";
+    case CommandType::TakeItem:
+        return "TakeItem";
+    case CommandType::JumpToObject:
+        return "JumpToObject";
+    case CommandType::JumpToLocation:
+        return "JumpToLocation";
+    case CommandType::SpeakString:
+        return "SpeakString";
+    case CommandType::SpeakStrref:
+        return "SpeakStrref";
+    case CommandType::Wait:
+        return "Wait";
+    case CommandType::PlayAnimation:
+        return "PlayAnimation";
+    case CommandType::PlaySound:
+        return "PlaySound";
+    case CommandType::MoveAwayFromObject:
+        return "MoveAwayFromObject";
+    case CommandType::MoveAwayFromPoint:
+        return "MoveAwayFromPoint";
+    case CommandType::StartConversation:
+        return "StartConversation";
+    case CommandType::Examine:
+        return "Examine";
+    case CommandType::MoveToLocation:
+        return "MoveToLocation";
+    case CommandType::MoveToObject:
+        return "MoveToObject";
+    case CommandType::MoveToMultipleLocations:
+        return "MoveToMultipleLocations";
+    case CommandType::Lock:
+        return "Lock";
+    case CommandType::Unlock:
+        return "Unlock";
+    case CommandType::UseAbility:
+        return "UseAbility";
+    case CommandType::UseItem:
+        return "UseItem";
+    case CommandType::DropItem:
+        return "DropItem";
+    case CommandType::PickupItem:
+        return "PickupItem";
+    case CommandType::EquipItem:
+        return "EquipItem";
+    case CommandType::UnequipItem:
+        return "UnequipItem";
+    case CommandType::UseObject:
+        return "UseObject";
+    case CommandType::ExecuteEffect:
+        return "ExecuteEffect";
+    case CommandType::Drive:
+        return "Drive";
+    case CommandType::SellItem:
+        return "SellItem";
+    case CommandType::BuyItem:
+        return "BuyItem";
+    case CommandType::DoEvent:
+        return "DoEvent";
+    case CommandType::Interact:
+        return "Interact";
+    case CommandType::Deathblow:
+        return "Deathblow";
+    case CommandType::SheatheWeapons:
+        return "SheatheWeapons";
+    case CommandType::SwitchWeaponSets:
+        return "SwitchWeaponSets";
+    case CommandType::Turn:
+        return "Turn";
+    case CommandType::Fly:
+        return "Fly";
+    default:
+        return {};
+    }
+}
 
 constexpr CommandType TypeOf(std::uint32_t word)
 {

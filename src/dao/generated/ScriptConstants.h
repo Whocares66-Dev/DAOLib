@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace dao::script
 {
@@ -24,6 +25,30 @@ enum class CombatResult : std::int32_t
     Backstab = 9,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(CombatResult value)
+{
+    switch (value)
+    {
+    case CombatResult::Invalid:
+        return "COMBAT_RESULT_INVALID";
+    case CombatResult::Hit:
+        return "COMBAT_RESULT_HIT";
+    case CombatResult::Criticalhit:
+        return "COMBAT_RESULT_CRITICALHIT";
+    case CombatResult::Miss:
+        return "COMBAT_RESULT_MISS";
+    case CombatResult::Deathblow:
+        return "COMBAT_RESULT_DEATHBLOW";
+    case CombatResult::Blocked:
+        return "COMBAT_RESULT_BLOCKED";
+    case CombatResult::Backstab:
+        return "COMBAT_RESULT_BACKSTAB";
+    default:
+        return {};
+    }
+}
+
 // COMMAND_ADDBEHAVIOR_* (script.ldf), 3 values.
 enum class CommandAddbehavior : std::int32_t
 {
@@ -31,6 +56,22 @@ enum class CommandAddbehavior : std::int32_t
     Softclear = 1,
     Hardclear = 2,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(CommandAddbehavior value)
+{
+    switch (value)
+    {
+    case CommandAddbehavior::Dontclear:
+        return "COMMAND_ADDBEHAVIOR_DONTCLEAR";
+    case CommandAddbehavior::Softclear:
+        return "COMMAND_ADDBEHAVIOR_SOFTCLEAR";
+    case CommandAddbehavior::Hardclear:
+        return "COMMAND_ADDBEHAVIOR_HARDCLEAR";
+    default:
+        return {};
+    }
+}
 
 // COMMAND_FAILED_* (script.ldf), 9 values.
 enum class CommandFailed : std::int32_t
@@ -46,6 +87,34 @@ enum class CommandFailed : std::int32_t
     CommandCleared = (-2),
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(CommandFailed value)
+{
+    switch (value)
+    {
+    case CommandFailed::Timeout:
+        return "COMMAND_FAILED_TIMEOUT";
+    case CommandFailed::PathActionRequired:
+        return "COMMAND_FAILED_PATH_ACTION_REQUIRED";
+    case CommandFailed::Disabled:
+        return "COMMAND_FAILED_DISABLED";
+    case CommandFailed::TargetDestroyed:
+        return "COMMAND_FAILED_TARGET_DESTROYED";
+    case CommandFailed::NoLineOfSight:
+        return "COMMAND_FAILED_NO_LINE_OF_SIGHT";
+    case CommandFailed::NoSpaceInMeleeRing:
+        return "COMMAND_FAILED_NO_SPACE_IN_MELEE_RING";
+    case CommandFailed::InvalidPath:
+        return "COMMAND_FAILED_INVALID_PATH";
+    case CommandFailed::InvalidData:
+        return "COMMAND_FAILED_INVALID_DATA";
+    case CommandFailed::CommandCleared:
+        return "COMMAND_FAILED_COMMAND_CLEARED";
+    default:
+        return {};
+    }
+}
+
 // COMMAND_RESULT_* (script.ldf), 4 values.
 enum class CommandResult : std::int32_t
 {
@@ -54,6 +123,24 @@ enum class CommandResult : std::int32_t
     FailedNoResources = (-1),
     FailedNoValidTarget = (-2),
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(CommandResult value)
+{
+    switch (value)
+    {
+    case CommandResult::Invalid:
+        return "COMMAND_RESULT_INVALID";
+    case CommandResult::Success:
+        return "COMMAND_RESULT_SUCCESS";
+    case CommandResult::FailedNoResources:
+        return "COMMAND_RESULT_FAILED_NO_RESOURCES";
+    case CommandResult::FailedNoValidTarget:
+        return "COMMAND_RESULT_FAILED_NO_VALID_TARGET";
+    default:
+        return {};
+    }
+}
 
 // COMMAND_TYPE_* (script.ldf), 20 values.
 enum class CommandType : std::int32_t
@@ -80,6 +167,56 @@ enum class CommandType : std::int32_t
     Fly = 42,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(CommandType value)
+{
+    switch (value)
+    {
+    case CommandType::Invalid:
+        return "COMMAND_TYPE_INVALID";
+    case CommandType::Attack:
+        return "COMMAND_TYPE_ATTACK";
+    case CommandType::DoFunction:
+        return "COMMAND_TYPE_DO_FUNCTION";
+    case CommandType::JumpToObject:
+        return "COMMAND_TYPE_JUMP_TO_OBJECT";
+    case CommandType::JumpToLocation:
+        return "COMMAND_TYPE_JUMP_TO_LOCATION";
+    case CommandType::Wait:
+        return "COMMAND_TYPE_WAIT";
+    case CommandType::PlayAnimation:
+        return "COMMAND_TYPE_PLAY_ANIMATION";
+    case CommandType::StartConversation:
+        return "COMMAND_TYPE_START_CONVERSATION";
+    case CommandType::MoveToLocation:
+        return "COMMAND_TYPE_MOVE_TO_LOCATION";
+    case CommandType::MoveToObject:
+        return "COMMAND_TYPE_MOVE_TO_OBJECT";
+    case CommandType::Recover:
+        return "COMMAND_TYPE_RECOVER";
+    case CommandType::UseAbility:
+        return "COMMAND_TYPE_USE_ABILITY";
+    case CommandType::EquipItem:
+        return "COMMAND_TYPE_EQUIP_ITEM";
+    case CommandType::UnequipItem:
+        return "COMMAND_TYPE_UNEQUIP_ITEM";
+    case CommandType::UseObject:
+        return "COMMAND_TYPE_USE_OBJECT";
+    case CommandType::Drive:
+        return "COMMAND_TYPE_DRIVE";
+    case CommandType::Interact:
+        return "COMMAND_TYPE_INTERACT";
+    case CommandType::Deathblow:
+        return "COMMAND_TYPE_DEATHBLOW";
+    case CommandType::SwitchWeaponSets:
+        return "COMMAND_TYPE_SWITCH_WEAPON_SETS";
+    case CommandType::Fly:
+        return "COMMAND_TYPE_FLY";
+    default:
+        return {};
+    }
+}
+
 // EFFECT_CONFUSION_* (effect_constants_h.nss), 7 values.
 enum class EffectConfusion : std::int32_t
 {
@@ -92,6 +229,30 @@ enum class EffectConfusion : std::int32_t
     EffectIntegerIndex = 0,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectConfusion value)
+{
+    switch (value)
+    {
+    case EffectConfusion::SwitchFactionPercentage:
+        return "EFFECT_CONFUSION_SWITCH_FACTION_PERCENTAGE";
+    case EffectConfusion::NeutralVfxSmall:
+        return "EFFECT_CONFUSION_NEUTRAL_VFX_SMALL";
+    case EffectConfusion::NeutralVfxMedium:
+        return "EFFECT_CONFUSION_NEUTRAL_VFX_MEDIUM";
+    case EffectConfusion::NeutralVfxLarge:
+        return "EFFECT_CONFUSION_NEUTRAL_VFX_LARGE";
+    case EffectConfusion::DazeVfx:
+        return "EFFECT_CONFUSION_DAZE_VFX";
+    case EffectConfusion::AnimationId:
+        return "EFFECT_CONFUSION_ANIMATION_ID";
+    case EffectConfusion::EffectIntegerIndex:
+        return "EFFECT_CONFUSION_EFFECT_INTEGER_INDEX";
+    default:
+        return {};
+    }
+}
+
 // EFFECT_DURATION_TYPE_* (script.ldf), 6 values.
 enum class EffectDurationType : std::int32_t
 {
@@ -102,6 +263,28 @@ enum class EffectDurationType : std::int32_t
     Death = 6,
     Upkeep = 99,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectDurationType value)
+{
+    switch (value)
+    {
+    case EffectDurationType::Invalid:
+        return "EFFECT_DURATION_TYPE_INVALID";
+    case EffectDurationType::Instant:
+        return "EFFECT_DURATION_TYPE_INSTANT";
+    case EffectDurationType::Temporary:
+        return "EFFECT_DURATION_TYPE_TEMPORARY";
+    case EffectDurationType::Permanent:
+        return "EFFECT_DURATION_TYPE_PERMANENT";
+    case EffectDurationType::Death:
+        return "EFFECT_DURATION_TYPE_DEATH";
+    case EffectDurationType::Upkeep:
+        return "EFFECT_DURATION_TYPE_UPKEEP";
+    default:
+        return {};
+    }
+}
 
 // EFFECT_FLAG_DISABLE_* (script.ldf), 8 values.
 enum class EffectFlagDisable : std::int32_t
@@ -116,6 +299,32 @@ enum class EffectFlagDisable : std::int32_t
     Input = 128,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectFlagDisable value)
+{
+    switch (value)
+    {
+    case EffectFlagDisable::Movement:
+        return "EFFECT_FLAG_DISABLE_MOVEMENT";
+    case EffectFlagDisable::Turning:
+        return "EFFECT_FLAG_DISABLE_TURNING";
+    case EffectFlagDisable::Combat:
+        return "EFFECT_FLAG_DISABLE_COMBAT";
+    case EffectFlagDisable::Talents:
+        return "EFFECT_FLAG_DISABLE_TALENTS";
+    case EffectFlagDisable::Spells:
+        return "EFFECT_FLAG_DISABLE_SPELLS";
+    case EffectFlagDisable::Skills:
+        return "EFFECT_FLAG_DISABLE_SKILLS";
+    case EffectFlagDisable::Items:
+        return "EFFECT_FLAG_DISABLE_ITEMS";
+    case EffectFlagDisable::Input:
+        return "EFFECT_FLAG_DISABLE_INPUT";
+    default:
+        return {};
+    }
+}
+
 // EFFECT_FLOAT_* (effect_constants_h.nss), 4 values.
 enum class EffectFloat : std::int32_t
 {
@@ -124,6 +333,24 @@ enum class EffectFloat : std::int32_t
     KnockbackDistance = 2,
     Scale = 3,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectFloat value)
+{
+    switch (value)
+    {
+    case EffectFloat::InterpolationAngle:
+        return "EFFECT_FLOAT_INTERPOLATION_ANGLE";
+    case EffectFloat::Potency:
+        return "EFFECT_FLOAT_POTENCY";
+    case EffectFloat::KnockbackDistance:
+        return "EFFECT_FLOAT_KNOCKBACK_DISTANCE";
+    case EffectFloat::Scale:
+        return "EFFECT_FLOAT_SCALE";
+    default:
+        return {};
+    }
+}
 
 // EFFECT_INTEGER_* (effect_constants_h.nss), 4 values.
 enum class EffectInteger : std::int32_t
@@ -134,6 +361,24 @@ enum class EffectInteger : std::int32_t
     DontInterpolate = 3,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectInteger value)
+{
+    switch (value)
+    {
+    case EffectInteger::DisablePhysics:
+        return "EFFECT_INTEGER_DISABLE_PHYSICS";
+    case EffectInteger::UseInterpolationAngle:
+        return "EFFECT_INTEGER_USE_INTERPOLATION_ANGLE";
+    case EffectInteger::Vfx:
+        return "EFFECT_INTEGER_VFX";
+    case EffectInteger::DontInterpolate:
+        return "EFFECT_INTEGER_DONT_INTERPOLATE";
+    default:
+        return {};
+    }
+}
+
 // EFFECT_REWARD_BONUS_* (effect_constants_h.nss), 4 values.
 enum class EffectRewardBonus : std::int32_t
 {
@@ -142,6 +387,22 @@ enum class EffectRewardBonus : std::int32_t
     TypeCash = 2,
     FieldMagnitude = 1,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectRewardBonus value)
+{
+    switch (value)
+    {
+    case EffectRewardBonus::TypeCodex:
+        return "EFFECT_REWARD_BONUS_TYPE_CODEX";
+    case EffectRewardBonus::FieldType:
+        return "EFFECT_REWARD_BONUS_FIELD_TYPE";
+    case EffectRewardBonus::TypeCash:
+        return "EFFECT_REWARD_BONUS_TYPE_CASH";
+    default:
+        return {};
+    }
+}
 
 // EFFECT_TYPE_* (script.ldf), 80 values.
 enum class EffectType : std::int32_t
@@ -227,6 +488,176 @@ enum class EffectType : std::int32_t
     RecurringKnockdown = 2001,
     Null = 10000,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EffectType value)
+{
+    switch (value)
+    {
+    case EffectType::Invalid:
+        return "EFFECT_TYPE_INVALID";
+    case EffectType::VisualEffect:
+        return "EFFECT_TYPE_VISUAL_EFFECT";
+    case EffectType::CameraShake:
+        return "EFFECT_TYPE_CAMERA_SHAKE";
+    case EffectType::Paralyze:
+        return "EFFECT_TYPE_PARALYZE";
+    case EffectType::MovementRate:
+        return "EFFECT_TYPE_MOVEMENT_RATE";
+    case EffectType::Alpha:
+        return "EFFECT_TYPE_ALPHA";
+    case EffectType::Aoe:
+        return "EFFECT_TYPE_AOE";
+    case EffectType::Death:
+        return "EFFECT_TYPE_DEATH";
+    case EffectType::MovementRateDebuff:
+        return "EFFECT_TYPE_MOVEMENT_RATE_DEBUFF";
+    case EffectType::Heartbeat:
+        return "EFFECT_TYPE_HEARTBEAT";
+    case EffectType::WalkingBomb:
+        return "EFFECT_TYPE_WALKING_BOMB";
+    case EffectType::Root:
+        return "EFFECT_TYPE_ROOT";
+    case EffectType::Shapechange:
+        return "EFFECT_TYPE_SHAPECHANGE";
+    case EffectType::Resurrection:
+        return "EFFECT_TYPE_RESURRECTION";
+    case EffectType::Enchantment:
+        return "EFFECT_TYPE_ENCHANTMENT";
+    case EffectType::LockInventory:
+        return "EFFECT_TYPE_LOCK_INVENTORY";
+    case EffectType::Modifymanastamina:
+        return "EFFECT_TYPE_MODIFYMANASTAMINA";
+    case EffectType::Summon:
+        return "EFFECT_TYPE_SUMMON";
+    case EffectType::Healhealth:
+        return "EFFECT_TYPE_HEALHEALTH";
+    case EffectType::Disease:
+        return "EFFECT_TYPE_DISEASE";
+    case EffectType::ModifyProperty:
+        return "EFFECT_TYPE_MODIFY_PROPERTY";
+    case EffectType::Damage:
+        return "EFFECT_TYPE_DAMAGE";
+    case EffectType::Knockdown:
+        return "EFFECT_TYPE_KNOCKDOWN";
+    case EffectType::Modifyattribute:
+        return "EFFECT_TYPE_MODIFYATTRIBUTE";
+    case EffectType::Upkeep:
+        return "EFFECT_TYPE_UPKEEP";
+    case EffectType::Dot:
+        return "EFFECT_TYPE_DOT";
+    case EffectType::DispelMagic:
+        return "EFFECT_TYPE_DISPEL_MAGIC";
+    case EffectType::Daze:
+        return "EFFECT_TYPE_DAZE";
+    case EffectType::Stealth:
+        return "EFFECT_TYPE_STEALTH";
+    case EffectType::ModifyCritchance:
+        return "EFFECT_TYPE_MODIFY_CRITCHANCE";
+    case EffectType::AiModifier:
+        return "EFFECT_TYPE_AI_MODIFIER";
+    case EffectType::Impact:
+        return "EFFECT_TYPE_IMPACT";
+    case EffectType::Regeneration:
+        return "EFFECT_TYPE_REGENERATION";
+    case EffectType::Stun:
+        return "EFFECT_TYPE_STUN";
+    case EffectType::Grabbed:
+        return "EFFECT_TYPE_GRABBED";
+    case EffectType::Grabbing:
+        return "EFFECT_TYPE_GRABBING";
+    case EffectType::Conecasting:
+        return "EFFECT_TYPE_CONECASTING";
+    case EffectType::Addability:
+        return "EFFECT_TYPE_ADDABILITY";
+    case EffectType::HeavyImpact:
+        return "EFFECT_TYPE_HEAVY_IMPACT";
+    case EffectType::Sleep:
+        return "EFFECT_TYPE_SLEEP";
+    case EffectType::Charm:
+        return "EFFECT_TYPE_CHARM";
+    case EffectType::Confusion:
+        return "EFFECT_TYPE_CONFUSION";
+    case EffectType::Fear:
+        return "EFFECT_TYPE_FEAR";
+    case EffectType::SleepPlot:
+        return "EFFECT_TYPE_SLEEP_PLOT";
+    case EffectType::LockQuickbar:
+        return "EFFECT_TYPE_LOCK_QUICKBAR";
+    case EffectType::LockCharacter:
+        return "EFFECT_TYPE_LOCK_CHARACTER";
+    case EffectType::LifeWard:
+        return "EFFECT_TYPE_LIFE_WARD";
+    case EffectType::FeignDeath:
+        return "EFFECT_TYPE_FEIGN_DEATH";
+    case EffectType::Overwhelmed:
+        return "EFFECT_TYPE_OVERWHELMED";
+    case EffectType::Overwhelming:
+        return "EFFECT_TYPE_OVERWHELMING";
+    case EffectType::MarkOfDeath:
+        return "EFFECT_TYPE_MARK_OF_DEATH";
+    case EffectType::SimulateDeath:
+        return "EFFECT_TYPE_SIMULATE_DEATH";
+    case EffectType::CurseOfMortality:
+        return "EFFECT_TYPE_CURSE_OF_MORTALITY";
+    case EffectType::Rooting:
+        return "EFFECT_TYPE_ROOTING";
+    case EffectType::MisdirectionHex:
+        return "EFFECT_TYPE_MISDIRECTION_HEX";
+    case EffectType::DeathHex:
+        return "EFFECT_TYPE_DEATH_HEX";
+    case EffectType::FlankImmunity:
+        return "EFFECT_TYPE_FLANK_IMMUNITY";
+    case EffectType::Slip:
+        return "EFFECT_TYPE_SLIP";
+    case EffectType::Petrify:
+        return "EFFECT_TYPE_PETRIFY";
+    case EffectType::SpellWard:
+        return "EFFECT_TYPE_SPELL_WARD";
+    case EffectType::DamageWard:
+        return "EFFECT_TYPE_DAMAGE_WARD";
+    case EffectType::WynneRemoval:
+        return "EFFECT_TYPE_WYNNE_REMOVAL";
+    case EffectType::Knockback:
+        return "EFFECT_TYPE_KNOCKBACK";
+    case EffectType::DecreaseProperty:
+        return "EFFECT_TYPE_DECREASE_PROPERTY";
+    case EffectType::Swarm:
+        return "EFFECT_TYPE_SWARM";
+    case EffectType::Singing:
+        return "EFFECT_TYPE_SINGING";
+    case EffectType::Draining:
+        return "EFFECT_TYPE_DRAINING";
+    case EffectType::RecentlyStunned:
+        return "EFFECT_TYPE_RECENTLY_STUNNED";
+    case EffectType::Dummy:
+        return "EFFECT_TYPE_DUMMY";
+    case EffectType::Luck:
+        return "EFFECT_TYPE_LUCK";
+    case EffectType::RewardBonus:
+        return "EFFECT_TYPE_REWARD_BONUS";
+    case EffectType::TrapDetectionBonus:
+        return "EFFECT_TYPE_TRAP_DETECTION_BONUS";
+    case EffectType::BloodMagicBonus:
+        return "EFFECT_TYPE_BLOOD_MAGIC_BONUS";
+    case EffectType::MabariDominance:
+        return "EFFECT_TYPE_MABARI_DOMINANCE";
+    case EffectType::ManaShield:
+        return "EFFECT_TYPE_MANA_SHIELD";
+    case EffectType::DummyHostile:
+        return "EFFECT_TYPE_DUMMY_HOSTILE";
+    case EffectType::Autocrit:
+        return "EFFECT_TYPE_AUTOCRIT";
+    case EffectType::Test:
+        return "EFFECT_TYPE_TEST";
+    case EffectType::RecurringKnockdown:
+        return "EFFECT_TYPE_RECURRING_KNOCKDOWN";
+    case EffectType::Null:
+        return "EFFECT_TYPE_NULL";
+    default:
+        return {};
+    }
+}
 
 // EVENT_TYPE_* (script.ldf), 116 values.
 enum class EventType : std::int32_t
@@ -349,6 +780,248 @@ enum class EventType : std::int32_t
     TrainingMovementCommandIssued = 1073,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(EventType value)
+{
+    switch (value)
+    {
+    case EventType::Invalid:
+        return "EVENT_TYPE_INVALID";
+    case EventType::Spellcastat:
+        return "EVENT_TYPE_SPELLCASTAT";
+    case EventType::Damaged:
+        return "EVENT_TYPE_DAMAGED";
+    case EventType::Spawn:
+        return "EVENT_TYPE_SPAWN";
+    case EventType::Death:
+        return "EVENT_TYPE_DEATH";
+    case EventType::MeleeAttackStart:
+        return "EVENT_TYPE_MELEE_ATTACK_START";
+    case EventType::InventoryAdded:
+        return "EVENT_TYPE_INVENTORY_ADDED";
+    case EventType::InventoryRemoved:
+        return "EVENT_TYPE_INVENTORY_REMOVED";
+    case EventType::Enter:
+        return "EVENT_TYPE_ENTER";
+    case EventType::Exit:
+        return "EVENT_TYPE_EXIT";
+    case EventType::Blocked:
+        return "EVENT_TYPE_BLOCKED";
+    case EventType::Equip:
+        return "EVENT_TYPE_EQUIP";
+    case EventType::Unequip:
+        return "EVENT_TYPE_UNEQUIP";
+    case EventType::Failtoopen:
+        return "EVENT_TYPE_FAILTOOPEN";
+    case EventType::Use:
+        return "EVENT_TYPE_USE";
+    case EventType::Click:
+        return "EVENT_TYPE_CLICK";
+    case EventType::TrapTriggered:
+        return "EVENT_TYPE_TRAP_TRIGGERED";
+    case EventType::TrapDisarmed:
+        return "EVENT_TYPE_TRAP_DISARMED";
+    case EventType::Dialogue:
+        return "EVENT_TYPE_DIALOGUE";
+    case EventType::ModuleStart:
+        return "EVENT_TYPE_MODULE_START";
+    case EventType::ModuleLoad:
+        return "EVENT_TYPE_MODULE_LOAD";
+    case EventType::Listener:
+        return "EVENT_TYPE_LISTENER";
+    case EventType::Locked:
+        return "EVENT_TYPE_LOCKED";
+    case EventType::Unlocked:
+        return "EVENT_TYPE_UNLOCKED";
+    case EventType::Playerlevelup:
+        return "EVENT_TYPE_PLAYERLEVELUP";
+    case EventType::ModuleGetcharstage:
+        return "EVENT_TYPE_MODULE_GETCHARSTAGE";
+    case EventType::PerceptionAppear:
+        return "EVENT_TYPE_PERCEPTION_APPEAR";
+    case EventType::PerceptionDisappear:
+        return "EVENT_TYPE_PERCEPTION_DISAPPEAR";
+    case EventType::SetPlot:
+        return "EVENT_TYPE_SET_PLOT";
+    case EventType::GetPlot:
+        return "EVENT_TYPE_GET_PLOT";
+    case EventType::AttackImpact:
+        return "EVENT_TYPE_ATTACK_IMPACT";
+    case EventType::CombatInitiated:
+        return "EVENT_TYPE_COMBAT_INITIATED";
+    case EventType::AbilityCastImpact:
+        return "EVENT_TYPE_ABILITY_CAST_IMPACT";
+    case EventType::AbilityCastStart:
+        return "EVENT_TYPE_ABILITY_CAST_START";
+    case EventType::ApplyEffect:
+        return "EVENT_TYPE_APPLY_EFFECT";
+    case EventType::RemoveEffect:
+        return "EVENT_TYPE_REMOVE_EFFECT";
+    case EventType::CommandPending:
+        return "EVENT_TYPE_COMMAND_PENDING";
+    case EventType::CommandComplete:
+        return "EVENT_TYPE_COMMAND_COMPLETE";
+    case EventType::Gameobjectsloaded:
+        return "EVENT_TYPE_GAMEOBJECTSLOADED";
+    case EventType::ArealoadPreloadexit:
+        return "EVENT_TYPE_AREALOAD_PRELOADEXIT";
+    case EventType::ArealoadPostloadexit:
+        return "EVENT_TYPE_AREALOAD_POSTLOADEXIT";
+    case EventType::ArealoadSpecial:
+        return "EVENT_TYPE_AREALOAD_SPECIAL";
+    case EventType::ArealoadsaveSpecial:
+        return "EVENT_TYPE_AREALOADSAVE_SPECIAL";
+    case EventType::ArealoadsavePreloadexit:
+        return "EVENT_TYPE_AREALOADSAVE_PRELOADEXIT";
+    case EventType::ArealoadsavePostloadexit:
+        return "EVENT_TYPE_AREALOADSAVE_POSTLOADEXIT";
+    case EventType::ChargenStart:
+        return "EVENT_TYPE_CHARGEN_START";
+    case EventType::ChargenScreenEntered:
+        return "EVENT_TYPE_CHARGEN_SCREEN_ENTERED";
+    case EventType::ChargenSelectRace:
+        return "EVENT_TYPE_CHARGEN_SELECT_RACE";
+    case EventType::ChargenSelectClass:
+        return "EVENT_TYPE_CHARGEN_SELECT_CLASS";
+    case EventType::ChargenSelectSoundset:
+        return "EVENT_TYPE_CHARGEN_SELECT_SOUNDSET";
+    case EventType::ChargenSelectName:
+        return "EVENT_TYPE_CHARGEN_SELECT_NAME";
+    case EventType::ChargenAssignAttributes:
+        return "EVENT_TYPE_CHARGEN_ASSIGN_ATTRIBUTES";
+    case EventType::ChargenAssignAbilities:
+        return "EVENT_TYPE_CHARGEN_ASSIGN_ABILITIES";
+    case EventType::ChargenSelectLevelupClass:
+        return "EVENT_TYPE_CHARGEN_SELECT_LEVELUP_CLASS";
+    case EventType::ChargenImportHero:
+        return "EVENT_TYPE_CHARGEN_IMPORT_HERO";
+    case EventType::ChargenSelectGender:
+        return "EVENT_TYPE_CHARGEN_SELECT_GENDER";
+    case EventType::ChargenSelectBackground:
+        return "EVENT_TYPE_CHARGEN_SELECT_BACKGROUND";
+    case EventType::ChargenEnd:
+        return "EVENT_TYPE_CHARGEN_END";
+    case EventType::GamemodeChange:
+        return "EVENT_TYPE_GAMEMODE_CHANGE";
+    case EventType::DeathResParty:
+        return "EVENT_TYPE_DEATH_RES_PARTY";
+    case EventType::ModulePresave:
+        return "EVENT_TYPE_MODULE_PRESAVE";
+    case EventType::ManaStamDepleted:
+        return "EVENT_TYPE_MANA_STAM_DEPLETED";
+    case EventType::ItemOnhit:
+        return "EVENT_TYPE_ITEM_ONHIT";
+    case EventType::PartymemberAdded:
+        return "EVENT_TYPE_PARTYMEMBER_ADDED";
+    case EventType::PartymemberDropped:
+        return "EVENT_TYPE_PARTYMEMBER_DROPPED";
+    case EventType::UsePlotaction:
+        return "EVENT_TYPE_USE_PLOTACTION";
+    case EventType::ChantersDonation:
+        return "EVENT_TYPE_CHANTERS_DONATION";
+    case EventType::ItemOntestUsable:
+        return "EVENT_TYPE_ITEM_ONTEST_USABLE";
+    case EventType::PartypickerClosed:
+        return "EVENT_TYPE_PARTYPICKER_CLOSED";
+    case EventType::LevelOfTheWeek:
+        return "EVENT_TYPE_LEVEL_OF_THE_WEEK";
+    case EventType::AbilityAcquired:
+        return "EVENT_TYPE_ABILITY_ACQUIRED";
+    case EventType::AoeHeartbeat:
+        return "EVENT_TYPE_AOE_HEARTBEAT";
+    case EventType::WorldMapClosed:
+        return "EVENT_TYPE_WORLD_MAP_CLOSED";
+    case EventType::PopupResult:
+        return "EVENT_TYPE_POPUP_RESULT";
+    case EventType::PlaceableCollision:
+        return "EVENT_TYPE_PLACEABLE_COLLISION";
+    case EventType::PlaceableOnclick:
+        return "EVENT_TYPE_PLACEABLE_ONCLICK";
+    case EventType::ReachedWaypoint:
+        return "EVENT_TYPE_REACHED_WAYPOINT";
+    case EventType::ArealistPostload:
+        return "EVENT_TYPE_AREALIST_POSTLOAD";
+    case EventType::Heartbeat2:
+        return "EVENT_TYPE_HEARTBEAT2";
+    case EventType::GiftItem:
+        return "EVENT_TYPE_GIFT_ITEM";
+    case EventType::LoadTacticsPreset:
+        return "EVENT_TYPE_LOAD_TACTICS_PRESET";
+    case EventType::GuiOpened:
+        return "EVENT_TYPE_GUI_OPENED";
+    case EventType::InventoryFull:
+        return "EVENT_TYPE_INVENTORY_FULL";
+    case EventType::CreatureEntersDialogue:
+        return "EVENT_TYPE_CREATURE_ENTERS_DIALOGUE";
+    case EventType::RubberBand:
+        return "EVENT_TYPE_RUBBER_BAND";
+    case EventType::GiveUp:
+        return "EVENT_TYPE_GIVE_UP";
+    case EventType::OnSelect:
+        return "EVENT_TYPE_ON_SELECT";
+    case EventType::OnOrderReceived:
+        return "EVENT_TYPE_ON_ORDER_RECEIVED";
+    case EventType::BeginTravel:
+        return "EVENT_TYPE_BEGIN_TRAVEL";
+    case EventType::WorldmapPretransition:
+        return "EVENT_TYPE_WORLDMAP_PRETRANSITION";
+    case EventType::AbilityProjectileLaunched:
+        return "EVENT_TYPE_ABILITY_PROJECTILE_LAUNCHED";
+    case EventType::PlayerCommandAdded:
+        return "EVENT_TYPE_PLAYER_COMMAND_ADDED";
+    case EventType::CharRecordOpened:
+        return "EVENT_TYPE_CHAR_RECORD_OPENED";
+    case EventType::OptionsChanged:
+        return "EVENT_TYPE_OPTIONS_CHANGED";
+    case EventType::RoamDistExceeded:
+        return "EVENT_TYPE_ROAM_DIST_EXCEEDED";
+    case EventType::PlotCompleted:
+        return "EVENT_TYPE_PLOT_COMPLETED";
+    case EventType::PartyMoneyChanged:
+        return "EVENT_TYPE_PARTY_MONEY_CHANGED";
+    case EventType::CodexChanged:
+        return "EVENT_TYPE_CODEX_CHANGED";
+    case EventType::UseAbilityImmediate:
+        return "EVENT_TYPE_USE_ABILITY_IMMEDIATE";
+    case EventType::CraftItem:
+        return "EVENT_TYPE_CRAFT_ITEM";
+    case EventType::WorldmapPosttransition:
+        return "EVENT_TYPE_WORLDMAP_POSTTRANSITION";
+    case EventType::PartypickerInit:
+        return "EVENT_TYPE_PARTYPICKER_INIT";
+    case EventType::TrainingBegin:
+        return "EVENT_TYPE_TRAINING_BEGIN";
+    case EventType::TrainingFollowerSelected:
+        return "EVENT_TYPE_TRAINING_FOLLOWER_SELECTED";
+    case EventType::TrainingGuiTacticsOpened:
+        return "EVENT_TYPE_TRAINING_GUI_TACTICS_OPENED";
+    case EventType::TrainingGuiLevlupOpened:
+        return "EVENT_TYPE_TRAINING_GUI_LEVLUP_OPENED";
+    case EventType::TrainingGuiInventoryOpened:
+        return "EVENT_TYPE_TRAINING_GUI_INVENTORY_OPENED";
+    case EventType::TrainingQbarItemEquipped:
+        return "EVENT_TYPE_TRAINING_QBAR_ITEM_EQUIPPED";
+    case EventType::TrainingMaximumZoomIn:
+        return "EVENT_TYPE_TRAINING_MAXIMUM_ZOOM_IN";
+    case EventType::TrainingWeaponEquipped:
+        return "EVENT_TYPE_TRAINING_WEAPON_EQUIPPED";
+    case EventType::TrainingDelayedNoaction:
+        return "EVENT_TYPE_TRAINING_DELAYED_NOACTION";
+    case EventType::TrainingUnpause:
+        return "EVENT_TYPE_TRAINING_UNPAUSE";
+    case EventType::TrainingItemUnequipped:
+        return "EVENT_TYPE_TRAINING_ITEM_UNEQUIPPED";
+    case EventType::TrainingItemEquipped:
+        return "EVENT_TYPE_TRAINING_ITEM_EQUIPPED";
+    case EventType::TrainingTacticPresetSelected:
+        return "EVENT_TYPE_TRAINING_TACTIC_PRESET_SELECTED";
+    case EventType::TrainingMovementCommandIssued:
+        return "EVENT_TYPE_TRAINING_MOVEMENT_COMMAND_ISSUED";
+    default:
+        return {};
+    }
+}
+
 // FOLLOWER_STATE_* (script.ldf), 7 values.
 enum class FollowerState : std::int32_t
 {
@@ -361,6 +1034,30 @@ enum class FollowerState : std::int32_t
     Lockedactive = 7,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(FollowerState value)
+{
+    switch (value)
+    {
+    case FollowerState::Invalid:
+        return "FOLLOWER_STATE_INVALID";
+    case FollowerState::Active:
+        return "FOLLOWER_STATE_ACTIVE";
+    case FollowerState::Available:
+        return "FOLLOWER_STATE_AVAILABLE";
+    case FollowerState::Unavailable:
+        return "FOLLOWER_STATE_UNAVAILABLE";
+    case FollowerState::Suspended:
+        return "FOLLOWER_STATE_SUSPENDED";
+    case FollowerState::Loading:
+        return "FOLLOWER_STATE_LOADING";
+    case FollowerState::Lockedactive:
+        return "FOLLOWER_STATE_LOCKEDACTIVE";
+    default:
+        return {};
+    }
+}
+
 // GAME_PLOT_ASSIST_* (script.ldf), 3 values.
 enum class GamePlotAssist : std::int32_t
 {
@@ -369,6 +1066,22 @@ enum class GamePlotAssist : std::int32_t
     AllAreas = 2,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(GamePlotAssist value)
+{
+    switch (value)
+    {
+    case GamePlotAssist::Off:
+        return "GAME_PLOT_ASSIST_OFF";
+    case GamePlotAssist::ExploredAreas:
+        return "GAME_PLOT_ASSIST_EXPLORED_AREAS";
+    case GamePlotAssist::AllAreas:
+        return "GAME_PLOT_ASSIST_ALL_AREAS";
+    default:
+        return {};
+    }
+}
+
 // GET_ITEMS_OPTION_* (script.ldf), 3 values.
 enum class GetItemsOption : std::int32_t
 {
@@ -376,6 +1089,22 @@ enum class GetItemsOption : std::int32_t
     Backpack = 0,
     Equipped = 2,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(GetItemsOption value)
+{
+    switch (value)
+    {
+    case GetItemsOption::All:
+        return "GET_ITEMS_OPTION_ALL";
+    case GetItemsOption::Backpack:
+        return "GET_ITEMS_OPTION_BACKPACK";
+    case GetItemsOption::Equipped:
+        return "GET_ITEMS_OPTION_EQUIPPED";
+    default:
+        return {};
+    }
+}
 
 // GUI_HIGHLIGHT_* (script.ldf), 8 values.
 enum class GuiHighlight : std::int32_t
@@ -390,6 +1119,32 @@ enum class GuiHighlight : std::int32_t
     UnequippedItem = 7,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(GuiHighlight value)
+{
+    switch (value)
+    {
+    case GuiHighlight::Follower:
+        return "GUI_HIGHLIGHT_FOLLOWER";
+    case GuiHighlight::Tactics:
+        return "GUI_HIGHLIGHT_TACTICS";
+    case GuiHighlight::Inventory:
+        return "GUI_HIGHLIGHT_INVENTORY";
+    case GuiHighlight::HealthPoultice:
+        return "GUI_HIGHLIGHT_HEALTH_POULTICE";
+    case GuiHighlight::EmptyQbar:
+        return "GUI_HIGHLIGHT_EMPTY_QBAR";
+    case GuiHighlight::TacticPreset:
+        return "GUI_HIGHLIGHT_TACTIC_PRESET";
+    case GuiHighlight::EquipmentSlot:
+        return "GUI_HIGHLIGHT_EQUIPMENT_SLOT";
+    case GuiHighlight::UnequippedItem:
+        return "GUI_HIGHLIGHT_UNEQUIPPED_ITEM";
+    default:
+        return {};
+    }
+}
+
 // GUI_LOGIN_* (script.ldf), 3 values.
 enum class GuiLogin : std::int32_t
 {
@@ -397,6 +1152,22 @@ enum class GuiLogin : std::int32_t
     Connected = 50,
     NewAccount = 51,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(GuiLogin value)
+{
+    switch (value)
+    {
+    case GuiLogin::Connecting:
+        return "GUI_LOGIN_CONNECTING";
+    case GuiLogin::Connected:
+        return "GUI_LOGIN_CONNECTED";
+    case GuiLogin::NewAccount:
+        return "GUI_LOGIN_NEW_ACCOUNT";
+    default:
+        return {};
+    }
+}
 
 // INVENTORY_SLOT_* (script.ldf), 20 values.
 enum class InventorySlot : std::int32_t
@@ -423,6 +1194,56 @@ enum class InventorySlot : std::int32_t
     DogCollar = 19,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(InventorySlot value)
+{
+    switch (value)
+    {
+    case InventorySlot::Invalid:
+        return "INVENTORY_SLOT_INVALID";
+    case InventorySlot::Main:
+        return "INVENTORY_SLOT_MAIN";
+    case InventorySlot::Offhand:
+        return "INVENTORY_SLOT_OFFHAND";
+    case InventorySlot::Rangedammo:
+        return "INVENTORY_SLOT_RANGEDAMMO";
+    case InventorySlot::Chest:
+        return "INVENTORY_SLOT_CHEST";
+    case InventorySlot::Head:
+        return "INVENTORY_SLOT_HEAD";
+    case InventorySlot::Boots:
+        return "INVENTORY_SLOT_BOOTS";
+    case InventorySlot::Gloves:
+        return "INVENTORY_SLOT_GLOVES";
+    case InventorySlot::Cloak:
+        return "INVENTORY_SLOT_CLOAK";
+    case InventorySlot::Ring1:
+        return "INVENTORY_SLOT_RING1";
+    case InventorySlot::Ring2:
+        return "INVENTORY_SLOT_RING2";
+    case InventorySlot::Neck:
+        return "INVENTORY_SLOT_NECK";
+    case InventorySlot::Belt:
+        return "INVENTORY_SLOT_BELT";
+    case InventorySlot::Bite:
+        return "INVENTORY_SLOT_BITE";
+    case InventorySlot::ShaleShoulders:
+        return "INVENTORY_SLOT_SHALE_SHOULDERS";
+    case InventorySlot::ShaleChest:
+        return "INVENTORY_SLOT_SHALE_CHEST";
+    case InventorySlot::ShaleRightarm:
+        return "INVENTORY_SLOT_SHALE_RIGHTARM";
+    case InventorySlot::ShaleLeftarm:
+        return "INVENTORY_SLOT_SHALE_LEFTARM";
+    case InventorySlot::DogWarpaint:
+        return "INVENTORY_SLOT_DOG_WARPAINT";
+    case InventorySlot::DogCollar:
+        return "INVENTORY_SLOT_DOG_COLLAR";
+    default:
+        return {};
+    }
+}
+
 // IS_PRC_* (script.ldf), 3 values.
 enum class IsPrc : std::int32_t
 {
@@ -430,6 +1251,22 @@ enum class IsPrc : std::int32_t
     Downloading = 2,
     Installed = 4,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(IsPrc value)
+{
+    switch (value)
+    {
+    case IsPrc::Offer:
+        return "IS_PRC_OFFER";
+    case IsPrc::Downloading:
+        return "IS_PRC_DOWNLOADING";
+    case IsPrc::Installed:
+        return "IS_PRC_INSTALLED";
+    default:
+        return {};
+    }
+}
 
 // LOG_CHANNEL_* (script.ldf), 38 values.
 enum class LogChannel : std::int32_t
@@ -474,6 +1311,92 @@ enum class LogChannel : std::int32_t
     Uimessages = 1112,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(LogChannel value)
+{
+    switch (value)
+    {
+    case LogChannel::General:
+        return "LOG_CHANNEL_GENERAL";
+    case LogChannel::Temp:
+        return "LOG_CHANNEL_TEMP";
+    case LogChannel::Qa:
+        return "LOG_CHANNEL_QA";
+    case LogChannel::QaRegression:
+        return "LOG_CHANNEL_QA_REGRESSION";
+    case LogChannel::DesignScripterror:
+        return "LOG_CHANNEL_DESIGN_SCRIPTERROR";
+    case LogChannel::DesignTodo:
+        return "LOG_CHANNEL_DESIGN_TODO";
+    case LogChannel::DesignHack:
+        return "LOG_CHANNEL_DESIGN_HACK";
+    case LogChannel::Ai:
+        return "LOG_CHANNEL_AI";
+    case LogChannel::Threat:
+        return "LOG_CHANNEL_THREAT";
+    case LogChannel::ThreatData:
+        return "LOG_CHANNEL_THREAT_DATA";
+    case LogChannel::Loot:
+        return "LOG_CHANNEL_LOOT";
+    case LogChannel::Plot:
+        return "LOG_CHANNEL_PLOT";
+    case LogChannel::Dialog:
+        return "LOG_CHANNEL_DIALOG";
+    case LogChannel::Events:
+        return "LOG_CHANNEL_EVENTS";
+    case LogChannel::EventsPlaceables:
+        return "LOG_CHANNEL_EVENTS_PLACEABLES";
+    case LogChannel::Systems:
+        return "LOG_CHANNEL_SYSTEMS";
+    case LogChannel::SystemsWrappers:
+        return "LOG_CHANNEL_SYSTEMS_WRAPPERS";
+    case LogChannel::SystemsTlktrigger:
+        return "LOG_CHANNEL_SYSTEMS_TLKTRIGGER";
+    case LogChannel::SystemsPlaceables:
+        return "LOG_CHANNEL_SYSTEMS_PLACEABLES";
+    case LogChannel::SystemsTraps:
+        return "LOG_CHANNEL_SYSTEMS_TRAPS";
+    case LogChannel::Effects:
+        return "LOG_CHANNEL_EFFECTS";
+    case LogChannel::Character:
+        return "LOG_CHANNEL_CHARACTER";
+    case LogChannel::CharacterStats:
+        return "LOG_CHANNEL_CHARACTER_STATS";
+    case LogChannel::Rewards:
+        return "LOG_CHANNEL_REWARDS";
+    case LogChannel::Combat:
+        return "LOG_CHANNEL_COMBAT";
+    case LogChannel::CombatAbility:
+        return "LOG_CHANNEL_COMBAT_ABILITY";
+    case LogChannel::CombatGore:
+        return "LOG_CHANNEL_COMBAT_GORE";
+    case LogChannel::CombatDeath:
+        return "LOG_CHANNEL_COMBAT_DEATH";
+    case LogChannel::CombatDamage:
+        return "LOG_CHANNEL_COMBAT_DAMAGE";
+    case LogChannel::CombatTohit:
+        return "LOG_CHANNEL_COMBAT_TOHIT";
+    case LogChannel::AmbientAi:
+        return "LOG_CHANNEL_AMBIENT_AI";
+    case LogChannel::Commands:
+        return "LOG_CHANNEL_COMMANDS";
+    case LogChannel::Resistances:
+        return "LOG_CHANNEL_RESISTANCES";
+    case LogChannel::Autobalance:
+        return "LOG_CHANNEL_AUTOBALANCE";
+    case LogChannel::EventsPerception:
+        return "LOG_CHANNEL_EVENTS_PERCEPTION";
+    case LogChannel::EventsChargen:
+        return "LOG_CHANNEL_EVENTS_CHARGEN";
+    case LogChannel::Soundsets:
+        return "LOG_CHANNEL_SOUNDSETS";
+    case LogChannel::Uimessages:
+        return "LOG_CHANNEL_UIMESSAGES";
+    default:
+        return {};
+    }
+}
+
 // OBJECT_TYPE_* (script.ldf), 19 values.
 enum class ObjectTypeFlags : std::uint32_t
 {
@@ -498,6 +1421,54 @@ enum class ObjectTypeFlags : std::uint32_t
     All = 4294967295,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(ObjectTypeFlags value)
+{
+    switch (value)
+    {
+    case ObjectTypeFlags::Invalid:
+        return "OBJECT_TYPE_INVALID";
+    case ObjectTypeFlags::Gui:
+        return "OBJECT_TYPE_GUI";
+    case ObjectTypeFlags::Tile:
+        return "OBJECT_TYPE_TILE";
+    case ObjectTypeFlags::Module:
+        return "OBJECT_TYPE_MODULE";
+    case ObjectTypeFlags::Area:
+        return "OBJECT_TYPE_AREA";
+    case ObjectTypeFlags::Store:
+        return "OBJECT_TYPE_STORE";
+    case ObjectTypeFlags::Creature:
+        return "OBJECT_TYPE_CREATURE";
+    case ObjectTypeFlags::Item:
+        return "OBJECT_TYPE_ITEM";
+    case ObjectTypeFlags::Trigger:
+        return "OBJECT_TYPE_TRIGGER";
+    case ObjectTypeFlags::Projectile:
+        return "OBJECT_TYPE_PROJECTILE";
+    case ObjectTypeFlags::Placeable:
+        return "OBJECT_TYPE_PLACEABLE";
+    case ObjectTypeFlags::Areaofeffectobject:
+        return "OBJECT_TYPE_AREAOFEFFECTOBJECT";
+    case ObjectTypeFlags::Waypoint:
+        return "OBJECT_TYPE_WAYPOINT";
+    case ObjectTypeFlags::Sound:
+        return "OBJECT_TYPE_SOUND";
+    case ObjectTypeFlags::Party:
+        return "OBJECT_TYPE_PARTY";
+    case ObjectTypeFlags::Mappatch:
+        return "OBJECT_TYPE_MAPPATCH";
+    case ObjectTypeFlags::Vfx:
+        return "OBJECT_TYPE_VFX";
+    case ObjectTypeFlags::Map:
+        return "OBJECT_TYPE_MAP";
+    case ObjectTypeFlags::All:
+        return "OBJECT_TYPE_ALL";
+    default:
+        return {};
+    }
+}
+
 // PLACEABLE_ACTION_* (script.ldf), 18 values.
 enum class PlaceableAction : std::int32_t
 {
@@ -521,6 +1492,52 @@ enum class PlaceableAction : std::int32_t
     TurnRight = 17,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PlaceableAction value)
+{
+    switch (value)
+    {
+    case PlaceableAction::Invalid:
+        return "PLACEABLE_ACTION_INVALID";
+    case PlaceableAction::Open:
+        return "PLACEABLE_ACTION_OPEN";
+    case PlaceableAction::Close:
+        return "PLACEABLE_ACTION_CLOSE";
+    case PlaceableAction::Unlock:
+        return "PLACEABLE_ACTION_UNLOCK";
+    case PlaceableAction::Destroy:
+        return "PLACEABLE_ACTION_DESTROY";
+    case PlaceableAction::Use:
+        return "PLACEABLE_ACTION_USE";
+    case PlaceableAction::Examine:
+        return "PLACEABLE_ACTION_EXAMINE";
+    case PlaceableAction::Disarm:
+        return "PLACEABLE_ACTION_DISARM";
+    case PlaceableAction::FlipCover:
+        return "PLACEABLE_ACTION_FLIP_COVER";
+    case PlaceableAction::UseCover:
+        return "PLACEABLE_ACTION_USE_COVER";
+    case PlaceableAction::Dialog:
+        return "PLACEABLE_ACTION_DIALOG";
+    case PlaceableAction::OpenInventory:
+        return "PLACEABLE_ACTION_OPEN_INVENTORY";
+    case PlaceableAction::TriggerTrap:
+        return "PLACEABLE_ACTION_TRIGGER_TRAP";
+    case PlaceableAction::Topple:
+        return "PLACEABLE_ACTION_TOPPLE";
+    case PlaceableAction::LeaveCover:
+        return "PLACEABLE_ACTION_LEAVE_COVER";
+    case PlaceableAction::AreaTransition:
+        return "PLACEABLE_ACTION_AREA_TRANSITION";
+    case PlaceableAction::TurnLeft:
+        return "PLACEABLE_ACTION_TURN_LEFT";
+    case PlaceableAction::TurnRight:
+        return "PLACEABLE_ACTION_TURN_RIGHT";
+    default:
+        return {};
+    }
+}
+
 // PLACEABLE_TYPE_* (script.ldf), 7 values.
 enum class PlaceableType : std::int32_t
 {
@@ -533,6 +1550,30 @@ enum class PlaceableType : std::int32_t
     Flipcover = 6,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PlaceableType value)
+{
+    switch (value)
+    {
+    case PlaceableType::Invalid:
+        return "PLACEABLE_TYPE_INVALID";
+    case PlaceableType::Door:
+        return "PLACEABLE_TYPE_DOOR";
+    case PlaceableType::Chest:
+        return "PLACEABLE_TYPE_CHEST";
+    case PlaceableType::Bag:
+        return "PLACEABLE_TYPE_BAG";
+    case PlaceableType::Lever:
+        return "PLACEABLE_TYPE_LEVER";
+    case PlaceableType::Art:
+        return "PLACEABLE_TYPE_ART";
+    case PlaceableType::Flipcover:
+        return "PLACEABLE_TYPE_FLIPCOVER";
+    default:
+        return {};
+    }
+}
+
 // PP_GUI_STATUS_* (script.ldf), 3 values.
 enum class PpGuiStatus : std::int32_t
 {
@@ -540,6 +1581,22 @@ enum class PpGuiStatus : std::int32_t
     ReadOnly = 1,
     Use = 2,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PpGuiStatus value)
+{
+    switch (value)
+    {
+    case PpGuiStatus::NoUse:
+        return "PP_GUI_STATUS_NO_USE";
+    case PpGuiStatus::ReadOnly:
+        return "PP_GUI_STATUS_READ_ONLY";
+    case PpGuiStatus::Use:
+        return "PP_GUI_STATUS_USE";
+    default:
+        return {};
+    }
+}
 
 // PROJECTILE_TARGET_* (script.ldf), 16 values.
 enum class ProjectileTarget : std::int32_t
@@ -561,6 +1618,48 @@ enum class ProjectileTarget : std::int32_t
     LowerlegR = 19,
     LowerlegL = 22,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(ProjectileTarget value)
+{
+    switch (value)
+    {
+    case ProjectileTarget::Invalid:
+        return "PROJECTILE_TARGET_INVALID";
+    case ProjectileTarget::Head:
+        return "PROJECTILE_TARGET_HEAD";
+    case ProjectileTarget::Neck:
+        return "PROJECTILE_TARGET_NECK";
+    case ProjectileTarget::Uppertorso:
+        return "PROJECTILE_TARGET_UPPERTORSO";
+    case ProjectileTarget::Midtorso:
+        return "PROJECTILE_TARGET_MIDTORSO";
+    case ProjectileTarget::Lowertorso:
+        return "PROJECTILE_TARGET_LOWERTORSO";
+    case ProjectileTarget::ClavicleR:
+        return "PROJECTILE_TARGET_CLAVICLE_R";
+    case ProjectileTarget::ClavicleL:
+        return "PROJECTILE_TARGET_CLAVICLE_L";
+    case ProjectileTarget::UpperarmR:
+        return "PROJECTILE_TARGET_UPPERARM_R";
+    case ProjectileTarget::UpperarmL:
+        return "PROJECTILE_TARGET_UPPERARM_L";
+    case ProjectileTarget::LowerarmR:
+        return "PROJECTILE_TARGET_LOWERARM_R";
+    case ProjectileTarget::LowerarmL:
+        return "PROJECTILE_TARGET_LOWERARM_L";
+    case ProjectileTarget::UpperlegR:
+        return "PROJECTILE_TARGET_UPPERLEG_R";
+    case ProjectileTarget::UpperlegL:
+        return "PROJECTILE_TARGET_UPPERLEG_L";
+    case ProjectileTarget::LowerlegR:
+        return "PROJECTILE_TARGET_LOWERLEG_R";
+    case ProjectileTarget::LowerlegL:
+        return "PROJECTILE_TARGET_LOWERLEG_L";
+    default:
+        return {};
+    }
+}
 
 // PROPERTY_ATTRIBUTE_* (script.ldf), 18 values.
 enum class PropertyAttribute : std::int32_t
@@ -587,6 +1686,52 @@ enum class PropertyAttribute : std::int32_t
     RangedAimSpeed = 24,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PropertyAttribute value)
+{
+    switch (value)
+    {
+    case PropertyAttribute::Strength:
+        return "PROPERTY_ATTRIBUTE_STRENGTH";
+    case PropertyAttribute::Dexterity:
+        return "PROPERTY_ATTRIBUTE_DEXTERITY";
+    case PropertyAttribute::Willpower:
+        return "PROPERTY_ATTRIBUTE_WILLPOWER";
+    case PropertyAttribute::Magic:
+        return "PROPERTY_ATTRIBUTE_MAGIC";
+    case PropertyAttribute::Intelligence:
+        return "PROPERTY_ATTRIBUTE_INTELLIGENCE";
+    case PropertyAttribute::Constitution:
+        return "PROPERTY_ATTRIBUTE_CONSTITUTION";
+    case PropertyAttribute::Attack:
+        return "PROPERTY_ATTRIBUTE_ATTACK";
+    case PropertyAttribute::Defense:
+        return "PROPERTY_ATTRIBUTE_DEFENSE";
+    case PropertyAttribute::Armor:
+        return "PROPERTY_ATTRIBUTE_ARMOR";
+    case PropertyAttribute::Ap:
+        return "PROPERTY_ATTRIBUTE_AP";
+    case PropertyAttribute::Spellpower:
+        return "PROPERTY_ATTRIBUTE_SPELLPOWER";
+    case PropertyAttribute::RegenerationHealth:
+        return "PROPERTY_ATTRIBUTE_REGENERATION_HEALTH";
+    case PropertyAttribute::Displacement:
+        return "PROPERTY_ATTRIBUTE_DISPLACEMENT";
+    case PropertyAttribute::MovementSpeedModifier:
+        return "PROPERTY_ATTRIBUTE_MOVEMENT_SPEED_MODIFIER";
+    case PropertyAttribute::MeleeCritModifier:
+        return "PROPERTY_ATTRIBUTE_MELEE_CRIT_MODIFIER";
+    case PropertyAttribute::MagicCritModifier:
+        return "PROPERTY_ATTRIBUTE_MAGIC_CRIT_MODIFIER";
+    case PropertyAttribute::RangedCritModifier:
+        return "PROPERTY_ATTRIBUTE_RANGED_CRIT_MODIFIER";
+    case PropertyAttribute::RangedAimSpeed:
+        return "PROPERTY_ATTRIBUTE_RANGED_AIM_SPEED";
+    default:
+        return {};
+    }
+}
+
 // PROPERTY_SIMPLE_* (script.ldf), 5 values.
 enum class PropertySimple : std::int32_t
 {
@@ -598,6 +1743,26 @@ enum class PropertySimple : std::int32_t
     ThreatDecreaseRate = 40,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PropertySimple value)
+{
+    switch (value)
+    {
+    case PropertySimple::Level:
+        return "PROPERTY_SIMPLE_LEVEL";
+    case PropertySimple::InventorySize:
+        return "PROPERTY_SIMPLE_INVENTORY_SIZE";
+    case PropertySimple::Age:
+        return "PROPERTY_SIMPLE_AGE";
+    case PropertySimple::Experience:
+        return "PROPERTY_SIMPLE_EXPERIENCE";
+    case PropertySimple::ThreatDecreaseRate:
+        return "PROPERTY_SIMPLE_THREAT_DECREASE_RATE";
+    default:
+        return {};
+    }
+}
+
 // PROPERTY_TYPE_* (script.ldf), 5 values.
 enum class PropertyType : std::int32_t
 {
@@ -608,6 +1773,26 @@ enum class PropertyType : std::int32_t
     Derived = 4,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PropertyType value)
+{
+    switch (value)
+    {
+    case PropertyType::Invalid:
+        return "PROPERTY_TYPE_INVALID";
+    case PropertyType::Attribute:
+        return "PROPERTY_TYPE_ATTRIBUTE";
+    case PropertyType::Simple:
+        return "PROPERTY_TYPE_SIMPLE";
+    case PropertyType::Depletable:
+        return "PROPERTY_TYPE_DEPLETABLE";
+    case PropertyType::Derived:
+        return "PROPERTY_TYPE_DERIVED";
+    default:
+        return {};
+    }
+}
+
 // PROPERTY_VALUE_* (script.ldf), 4 values.
 enum class PropertyValue : std::int32_t
 {
@@ -617,6 +1802,24 @@ enum class PropertyValue : std::int32_t
     Modifier = 4,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(PropertyValue value)
+{
+    switch (value)
+    {
+    case PropertyValue::Total:
+        return "PROPERTY_VALUE_TOTAL";
+    case PropertyValue::Base:
+        return "PROPERTY_VALUE_BASE";
+    case PropertyValue::Current:
+        return "PROPERTY_VALUE_CURRENT";
+    case PropertyValue::Modifier:
+        return "PROPERTY_VALUE_MODIFIER";
+    default:
+        return {};
+    }
+}
+
 // RESISTANCE_CHECK_* (script.ldf), 3 values.
 enum class ResistanceCheck : std::int32_t
 {
@@ -624,6 +1827,22 @@ enum class ResistanceCheck : std::int32_t
     Failure = 0,
     Invalid = (-1),
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(ResistanceCheck value)
+{
+    switch (value)
+    {
+    case ResistanceCheck::Success:
+        return "RESISTANCE_CHECK_SUCCESS";
+    case ResistanceCheck::Failure:
+        return "RESISTANCE_CHECK_FAILURE";
+    case ResistanceCheck::Invalid:
+        return "RESISTANCE_CHECK_INVALID";
+    default:
+        return {};
+    }
+}
 
 // TABLE_* (2da_constants_h.nss), 84 values.
 enum class Table : std::int32_t
@@ -714,6 +1933,180 @@ enum class Table : std::int32_t
     Damagetypes = 1008,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(Table value)
+{
+    switch (value)
+    {
+    case Table::Packages:
+        return "TABLE_PACKAGES";
+    case Table::Itemprps:
+        return "TABLE_ITEMPRPS";
+    case Table::Experience:
+        return "TABLE_EXPERIENCE";
+    case Table::EffectImmunities:
+        return "TABLE_EFFECT_IMMUNITIES";
+    case Table::Ranges:
+        return "TABLE_RANGES";
+    case Table::AbilitiesTalents:
+        return "TABLE_ABILITIES_TALENTS";
+    case Table::Items:
+        return "TABLE_ITEMS";
+    case Table::MaterialTypes:
+        return "TABLE_MATERIAL_TYPES";
+    case Table::ApprovalNormalRanges:
+        return "TABLE_APPROVAL_NORMAL_RANGES";
+    case Table::ApprovalRomanceRanges:
+        return "TABLE_APPROVAL_ROMANCE_RANGES";
+    case Table::ApprovalMotivations:
+        return "TABLE_APPROVAL_MOTIVATIONS";
+    case Table::CoreRules:
+        return "TABLE_CORE_RULES";
+    case Table::Effects:
+        return "TABLE_EFFECTS";
+    case Table::Commands:
+        return "TABLE_COMMANDS";
+    case Table::Events:
+        return "TABLE_EVENTS";
+    case Table::Ambient:
+        return "TABLE_AMBIENT";
+    case Table::BaseAnimations:
+        return "TABLE_BASE_ANIMATIONS";
+    case Table::TacticsConditions:
+        return "TABLE_TACTICS_CONDITIONS";
+    case Table::Appearance:
+        return "TABLE_APPEARANCE";
+    case Table::WorldMaps:
+        return "TABLE_WORLD_MAPS";
+    case Table::RulesRaces:
+        return "TABLE_RULES_RACES";
+    case Table::RulesClasses:
+        return "TABLE_RULES_CLASSES";
+    case Table::RulesArmorData:
+        return "TABLE_RULES_ARMOR_DATA";
+    case Table::RulesBackgrounds:
+        return "TABLE_RULES_BACKGROUNDS";
+    case Table::Soundsets:
+        return "TABLE_SOUNDSETS";
+    case Table::EffectRegeneration:
+        return "TABLE_EFFECT_REGENERATION";
+    case Table::Creatureranks:
+        return "TABLE_CREATURERANKS";
+    case Table::Autoscale:
+        return "TABLE_AUTOSCALE";
+    case Table::AutoscaleEasy:
+        return "TABLE_AUTOSCALE_EASY";
+    case Table::AutoscaleHard:
+        return "TABLE_AUTOSCALE_HARD";
+    case Table::AutoscaleData:
+        return "TABLE_AUTOSCALE_DATA";
+    case Table::PlaceableTypes:
+        return "TABLE_PLACEABLE_TYPES";
+    case Table::AreaMusic:
+        return "TABLE_AREA_MUSIC";
+    case Table::Clouds:
+        return "TABLE_CLOUDS";
+    case Table::Atmosphere:
+        return "TABLE_ATMOSPHERE";
+    case Table::UiMessages:
+        return "TABLE_UI_MESSAGES";
+    case Table::Qbar:
+        return "TABLE_QBAR";
+    case Table::Traps:
+        return "TABLE_TRAPS";
+    case Table::Fog:
+        return "TABLE_FOG";
+    case Table::ItemSets:
+        return "TABLE_ITEM_SETS";
+    case Table::TacticsBaseConditions:
+        return "TABLE_TACTICS_BASE_CONDITIONS";
+    case Table::AiTacticsTargetType:
+        return "TABLE_AI_TACTICS_TARGET_TYPE";
+    case Table::TacticsUserPresets:
+        return "TABLE_TACTICS_USER_PRESETS";
+    case Table::RulesDiseases:
+        return "TABLE_RULES_DISEASES";
+    case Table::Plotactions:
+        return "TABLE_PLOTACTIONS";
+    case Table::AiAbilityCond:
+        return "TABLE_AI_ABILITY_COND";
+    case Table::PlotTypes:
+        return "TABLE_PLOT_TYPES";
+    case Table::AiBehaviors:
+        return "TABLE_AI_BEHAVIORS";
+    case Table::AbilityData:
+        return "TABLE_ABILITY_DATA";
+    case Table::AbilityEffects:
+        return "TABLE_ABILITY_EFFECTS";
+    case Table::Characters:
+        return "TABLE_CHARACTERS";
+    case Table::Itemstats:
+        return "TABLE_ITEMSTATS";
+    case Table::Crafting:
+        return "TABLE_CRAFTING";
+    case Table::Treasures:
+        return "TABLE_TREASURES";
+    case Table::Shapechange:
+        return "TABLE_SHAPECHANGE";
+    case Table::ScreenShake:
+        return "TABLE_SCREEN_SHAKE";
+    case Table::Framebuffer:
+        return "TABLE_FRAMEBUFFER";
+    case Table::ProvingFights:
+        return "TABLE_PROVING_FIGHTS";
+    case Table::ProvingTypes:
+        return "TABLE_PROVING_TYPES";
+    case Table::SpellConjuringspeed:
+        return "TABLE_SPELL_CONJURINGSPEED";
+    case Table::CommandTypes:
+        return "TABLE_COMMAND_TYPES";
+    case Table::RulesInjuries:
+        return "TABLE_RULES_INJURIES";
+    case Table::Rewards:
+        return "TABLE_REWARDS";
+    case Table::VfxPersistent:
+        return "TABLE_VFX_PERSISTENT";
+    case Table::Category:
+        return "TABLE_CATEGORY";
+    case Table::Material:
+        return "TABLE_MATERIAL";
+    case Table::Stealing:
+        return "TABLE_STEALING";
+    case Table::GiftValues:
+        return "TABLE_GIFT_VALUES";
+    case Table::Difficulty:
+        return "TABLE_DIFFICULTY";
+    case Table::ClimaxArmies:
+        return "TABLE_CLIMAX_ARMIES";
+    case Table::ClimaxAlienageArmy:
+        return "TABLE_CLIMAX_ALIENAGE_ARMY";
+    case Table::ClimaxMarketArmy:
+        return "TABLE_CLIMAX_MARKET_ARMY";
+    case Table::ClimaxPalaceArmy:
+        return "TABLE_CLIMAX_PALACE_ARMY";
+    case Table::ClimaxGatesattArmy:
+        return "TABLE_CLIMAX_GATESATT_ARMY";
+    case Table::ClimaxGatesdefArmy:
+        return "TABLE_CLIMAX_GATESDEF_ARMY";
+    case Table::ClimaxGoodguysArmy:
+        return "TABLE_CLIMAX_GOODGUYS_ARMY";
+    case Table::AppFollowerBonuses:
+        return "TABLE_APP_FOLLOWER_BONUSES";
+    case Table::Summons:
+        return "TABLE_SUMMONS";
+    case Table::StartingEquipment:
+        return "TABLE_STARTING_EQUIPMENT";
+    case Table::Achievements:
+        return "TABLE_ACHIEVEMENTS";
+    case Table::Projectiles:
+        return "TABLE_PROJECTILES";
+    case Table::Damagetypes:
+        return "TABLE_DAMAGETYPES";
+    default:
+        return {};
+    }
+}
+
 // VARIABLE_TYPE_* (script.ldf), 13 values.
 enum class VariableType : std::uint32_t
 {
@@ -732,6 +2125,42 @@ enum class VariableType : std::uint32_t
     All = 4294967295,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(VariableType value)
+{
+    switch (value)
+    {
+    case VariableType::Invalid:
+        return "VARIABLE_TYPE_INVALID";
+    case VariableType::Integer:
+        return "VARIABLE_TYPE_INTEGER";
+    case VariableType::Float:
+        return "VARIABLE_TYPE_FLOAT";
+    case VariableType::String:
+        return "VARIABLE_TYPE_STRING";
+    case VariableType::Object:
+        return "VARIABLE_TYPE_OBJECT";
+    case VariableType::Location:
+        return "VARIABLE_TYPE_LOCATION";
+    case VariableType::Player:
+        return "VARIABLE_TYPE_PLAYER";
+    case VariableType::Dataset:
+        return "VARIABLE_TYPE_DATASET";
+    case VariableType::Event:
+        return "VARIABLE_TYPE_EVENT";
+    case VariableType::Command:
+        return "VARIABLE_TYPE_COMMAND";
+    case VariableType::Effect:
+        return "VARIABLE_TYPE_EFFECT";
+    case VariableType::Itemproperty:
+        return "VARIABLE_TYPE_ITEMPROPERTY";
+    case VariableType::All:
+        return "VARIABLE_TYPE_ALL";
+    default:
+        return {};
+    }
+}
+
 // VFX_CRUST_* (effect_constants_h.nss), 7 values.
 enum class VfxCrust : std::int32_t
 {
@@ -744,6 +2173,30 @@ enum class VfxCrust : std::int32_t
     Electricity = 1005,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(VfxCrust value)
+{
+    switch (value)
+    {
+    case VfxCrust::Stun:
+        return "VFX_CRUST_STUN";
+    case VfxCrust::Sleep:
+        return "VFX_CRUST_SLEEP";
+    case VfxCrust::Bloodmagic:
+        return "VFX_CRUST_BLOODMAGIC";
+    case VfxCrust::Web:
+        return "VFX_CRUST_WEB";
+    case VfxCrust::Ghost:
+        return "VFX_CRUST_GHOST";
+    case VfxCrust::Wbomb:
+        return "VFX_CRUST_WBOMB";
+    case VfxCrust::Electricity:
+        return "VFX_CRUST_ELECTRICITY";
+    default:
+        return {};
+    }
+}
+
 // VFX_GROUND_* (effect_constants_h.nss), 4 values.
 enum class VfxGround : std::int32_t
 {
@@ -753,6 +2206,24 @@ enum class VfxGround : std::int32_t
     BloodpoolL = 1125,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(VfxGround value)
+{
+    switch (value)
+    {
+    case VfxGround::IceSheet:
+        return "VFX_GROUND_ICE_SHEET";
+    case VfxGround::BloodpoolS:
+        return "VFX_GROUND_BLOODPOOL_S";
+    case VfxGround::BloodpoolM:
+        return "VFX_GROUND_BLOODPOOL_M";
+    case VfxGround::BloodpoolL:
+        return "VFX_GROUND_BLOODPOOL_L";
+    default:
+        return {};
+    }
+}
+
 // VFX_IMP_* (effect_constants_h.nss), 3 values.
 enum class VfxImp : std::int32_t
 {
@@ -761,6 +2232,22 @@ enum class VfxImp : std::int32_t
     BloodSmall = 1016,
 };
 
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(VfxImp value)
+{
+    switch (value)
+    {
+    case VfxImp::Death:
+        return "VFX_IMP_DEATH";
+    case VfxImp::Deactivate:
+        return "VFX_IMP_DEACTIVATE";
+    case VfxImp::BloodSmall:
+        return "VFX_IMP_BLOOD_SMALL";
+    default:
+        return {};
+    }
+}
+
 // WM_GUI_STATUS_* (script.ldf), 3 values.
 enum class WmGuiStatus : std::int32_t
 {
@@ -768,6 +2255,22 @@ enum class WmGuiStatus : std::int32_t
     ReadOnly = 1,
     Use = 2,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(WmGuiStatus value)
+{
+    switch (value)
+    {
+    case WmGuiStatus::NoUse:
+        return "WM_GUI_STATUS_NO_USE";
+    case WmGuiStatus::ReadOnly:
+        return "WM_GUI_STATUS_READ_ONLY";
+    case WmGuiStatus::Use:
+        return "WM_GUI_STATUS_USE";
+    default:
+        return {};
+    }
+}
 
 // WM_LOCATION_* (script.ldf), 6 values.
 enum class WmLocation : std::int32_t
@@ -779,6 +2282,28 @@ enum class WmLocation : std::int32_t
     Complete = 5,
     Destroyed = 6,
 };
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(WmLocation value)
+{
+    switch (value)
+    {
+    case WmLocation::Inactive:
+        return "WM_LOCATION_INACTIVE";
+    case WmLocation::Active:
+        return "WM_LOCATION_ACTIVE";
+    case WmLocation::GrayedOut:
+        return "WM_LOCATION_GRAYED_OUT";
+    case WmLocation::Unlocked:
+        return "WM_LOCATION_UNLOCKED";
+    case WmLocation::Complete:
+        return "WM_LOCATION_COMPLETE";
+    case WmLocation::Destroyed:
+        return "WM_LOCATION_DESTROYED";
+    default:
+        return {};
+    }
+}
 
 namespace constants
 {
