@@ -2,16 +2,16 @@
 //
 // Two actions are registered at load, as the game registers its own: one
 // with a default key (F11) that works while exploring and in a fight, and
-// one with no key, for the player to bind in the controls screen. Each
+// one with no key, for the player to bind (in KeyBindings.ini). Each
 // press is logged with the game's mode and how often the key has been
 // pressed; once a second for the first minute the log says what became of
 // the registration, since the game takes the actions only when its mode
 // controller starts.
 //
-// What to look for in play: both actions listed in the controls screen
-// under the labels below; F11 logging one line per press and none while a
-// menu or a conversation is up; a key bound to either in the controls
-// screen logging too, and still bound after the game is restarted.
+// What to look for in play: F11 logging one line per press and none while a
+// menu or a conversation is up, and both actions' lines in KeyBindings.ini
+// after the first run. Seen 2026-10-01 (dao/Input.h), all but the
+// conversation; the controls screen did not list the actions.
 // What it does goes to example_input.log.
 #include "dao/Input.h"
 #include "dao/ClientExoApp.h"

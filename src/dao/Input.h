@@ -1,5 +1,6 @@
-// A plugin's own action: a key the player can rebind in the game's controls
-// screen, and a callback when it is pressed.
+// A plugin's own action: a key registered with the game's own and kept in
+// its KeyBindings.ini, and a callback when it is pressed. (The controls
+// screen does not list it yet; below.)
 //
 //   dao::input::RegisterAction(
 //       {.name = L"MyPluginEndTurn", .label = L"End turn", .key = dao::input::Key::Enter},
@@ -33,11 +34,22 @@
 // rest, and it is silent where the game's own keys are (a mode not named,
 // or while the engine shuts the keys out).
 //
-// Not yet seen in play: none of this has run in the game. What play has to
-// say: that the action shows in the controls screen and can be rebound
-// there, that the callback runs once per press (the trigger is the one the
-// game's screenshot and console keys have, taken to be the press), and
-// that a rebound key comes back from KeyBindings.ini at the next start.
+// Seen in play, 2026-10-01, with examples/input/ (the play tester's
+// session, the real keyboard):
+// - The engine took both actions as the game came up, 7.4 s after load.
+// - The default key, F11, ran the callback once a press while exploring,
+//   and once for a key held two seconds: the trigger is the press.
+// - It was silent with the area map, the main menu and the inventory up,
+//   and worked again when they closed. It did run with the game paused
+//   (Space) while exploring: a pause is not a mode.
+// - The game wrote the actions into KeyBindings.ini at that first start,
+//   after its own: "DAOLibExamplePing_0=Keyboard::Button_F11",
+//   "DAOLibExamplePing_1=(UNASSIGNED)".
+// - The controls screen's Restore Defaults left F11 working, and the
+//   game's own keys worked throughout.
+// - The controls screen did NOT list the actions. So a player rebinds one
+//   in KeyBindings.ini, by the line above; that the game reads a changed
+//   line back for a plugin's action is not yet seen.
 #pragma once
 
 #include "dao/GameModes.h"
