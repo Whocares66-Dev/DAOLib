@@ -136,19 +136,22 @@ float *Scale()
 
 } // namespace
 
-void SetSpeed(float scale)
+bool SetSpeed(float scale)
 {
     if (scale <= 0)
     {
-        return;
+        return false;
     }
     static std::once_flag once;
-    std::call_once(once, [] { g_timerUpdate.Attach(addr::kITimer_Update, &TimerUpdate); });
+    static std::atomic<bool> hooked{false};
+    std::call_once(once, [] { hooked = g_timerUpdate.Attach(addr::kITimer_Update, &TimerUpdate); });
     g_speed = scale;
-    if (float *world = Scale(); world != nullptr)
+    float *world = Scale();
+    if (world != nullptr)
     {
         *world = scale;
     }
+    return world != nullptr && hooked;
 }
 
 float Speed()

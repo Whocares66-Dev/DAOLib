@@ -64,7 +64,14 @@ void Advance(float seconds);
 // the fight visibly twice as fast, and sound kept pace. The Flash UI keeps
 // its own clock (Scaleform's GTimer) and is not changed. Called on any thread; takes
 // effect from the next frame.
-void SetSpeed(float scale);
+//
+// True if both clocks took it: false if there is no world timer yet (before
+// a game is loaded; call again later) or the frame timer's hook could not be
+// placed. The hook is placed by the first call, in the calling plugin's own
+// copy of the library. Two plugins setting a speed each scale the frame's
+// time by their own, which multiply; the world timer's is one field, the
+// last set. So one plugin should own the game's speed.
+bool SetSpeed(float scale);
 float Speed();
 
 } // namespace dao::clock

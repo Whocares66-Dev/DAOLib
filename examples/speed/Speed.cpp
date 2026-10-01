@@ -39,8 +39,9 @@ void Frame()
     last = mode;
     if (fighting != wasFighting)
     {
-        dao::clock::SetSpeed(fighting ? kFightSpeed : 1.0F);
-        spdlog::info("{}: the world at {:.2f} speed", fighting ? "a fight" : "the fight is over", dao::clock::Speed());
+        const bool took = dao::clock::SetSpeed(fighting ? kFightSpeed : 1.0F);
+        spdlog::info("{}: the world at {:.2f} speed{}", fighting ? "a fight" : "the fight is over", dao::clock::Speed(),
+                     took ? "" : " (not taken: no world timer, or the frame's hook not placed)");
     }
 }
 
