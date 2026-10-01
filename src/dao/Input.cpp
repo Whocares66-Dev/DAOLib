@@ -229,21 +229,25 @@ bool __fastcall Allowed(void *modes, int edx, const core::WStringRep *text)
     {
         return allowed;
     }
-    // Ours: no message has this name, so the engine is told no either way.
-    if (allowed)
+    // A plugin's action, but whose? Each plugin links its own copy of this
+    // library and each copy detours this function, one inside the other.
+    // An action of another copy's is passed on as the engine answered it,
+    // or that copy, further out, would never hear its key was allowed.
+    const std::lock_guard lock(g_mutex);
+    for (std::size_t i = 0; i < g_actions.size(); ++i)
     {
-        const std::lock_guard lock(g_mutex);
-        for (std::size_t i = 0; i < g_actions.size(); ++i)
+        if (g_actions[i].action.name == *name)
         {
-            if (g_actions[i].action.name == *name)
+            // Ours: no message has this name, so the engine is told no.
+            if (allowed)
             {
                 ++g_actions[i].presses;
                 g_queued.push_back(i);
-                break;
             }
+            return false;
         }
     }
-    return false;
+    return allowed;
 }
 
 void RunQueued()

@@ -9,6 +9,8 @@
 #include "dao/core/InputCode.h"
 #include "dao/core/OptionsMovie.h"
 
+#include <Windows.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -32,8 +34,23 @@ constexpr std::string_view kOptionPrefix = "DAOLib";
 
 // The ids the library gives its observers. The engine's own count down
 // from 0xFFFFFFFF, a movie's own count up from 0 (dao/Addresses.h), so
-// these meet neither.
+// ids from 0x40000000 meet neither. Each plugin links its own copy of this
+// library, and two copies' checkboxes can be in one movie, which keeps
+// its callbacks by id; so a copy's ids carry the plugin they are in: 15
+// bits of its DLL's base address (which is a multiple of 0x10000, and
+// below 0x80000000), then 15 bits of a count.
 constexpr std::uint32_t kFirstObserver = 0x40000000;
+constexpr std::uint32_t kObserverCount = 0x7FFF;
+
+std::uint32_t ObserverBase()
+{
+    HMODULE module = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&ObserverBase), &module);
+    const std::uint32_t plugin =
+        (static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(module)) >> 16U) & 0x7FFFU;
+    return kFirstObserver | plugin << 15U;
+}
 
 struct Entry
 {
@@ -76,7 +93,7 @@ std::vector<Observer> g_observers;
 std::vector<std::uint32_t> g_asked; // observers to tell their option's value, by id
 std::vector<Click> g_clicks;
 std::vector<Delivery> g_deliveries;
-std::uint32_t g_nextObserver = kFirstObserver;
+std::uint32_t g_observerCount = 0;
 
 // Under g_mutex: the entry an option's name in the movie is, if it is ours.
 std::optional<std::size_t> EntryOf(std::string_view option)
@@ -144,7 +161,8 @@ bool OnAddTokenObserver(const gui::Call &call)
     {
         return false;
     }
-    const std::uint32_t id = g_nextObserver++;
+    static const std::uint32_t base = ObserverBase();
+    const std::uint32_t id = base | (g_observerCount++ & kObserverCount);
     g_asked.push_back(id);
     g_observers.push_back({call.owner, id, *entry});
     call.Return(gui::Value::Number(id));
