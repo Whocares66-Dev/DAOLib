@@ -51,6 +51,15 @@ So a plugin's save data can hang on `Write` returning: it has the character, the
 
 Once that is read, a plugin's data can go beside the save under the same name, `<name>.daolib`, the way SKSE keeps a `.skse` file beside a Skyrim save.
 
+## Asking for a save or a load
+
+Read 2026-09-30 from the save proxy's handlers, for `dao::saves::Load` and `Save`:
+
+- **The proxy.** `SaveLoadProxy` is the application's `+0x150`; the game mode controller passes `LoadGameMessage` and `SaveGameMessage` on to it (`0x00640140`). Its state is SmartData attributes, each holding its value at its `+0xC`.
+- **Whose saves.** A load means the character chosen at `+0xE4` (its folder's name). `SelectHeroMessage` chooses by its place in the list at `+0x150`, whose records hold the folder's name at `+0x98`; `RefreshHeroesMessage` fills the list from the folders, reading each save's `.das.met`.
+- **The load screen's mode.** `+0xAC` is the save screens' mode (`SetSaveLoadModeMessage`). Setting it to 1 or 2 makes the first character in the list the chosen one, or in the world the one played, and refreshes the saves. The load handler does that itself unless the mode is 2, which is how the load screen keeps a choice. So a load of a chosen character is: mode 2, `SelectHeroMessage`, `LoadGameMessage`. The handler sets the mode back to 0 once the load has begun.
+- **The checks.** Both handlers first ask the game mode controller whether a save or load may happen now (`0x006CB740`). A manual save's slot of -1 takes the next free one (`+0x6C`), an autosave's comes from `+0x7C`, and the quicksave's must be 1 (`+0x8C`); a manual or quick save also needs `+0x5C`, which saving's being allowed sets. A save then begins only once there is a game (the application's `+0x14C`), and the save handler answers whether it did. It hands the slot, kind and name to the application (`0x005D7FC0`), whose save state copies the name.
+
 ## What it means for plugins
 
 A save is the engine's own objects written out. A plugin that keeps state of its own needs it saved and loaded with the game's: DAOLib's "save and load" item (`dev/LIBRARY.md`). The script variables are one place the game already saves by name. A plugin's own data could ride in a table of its own, as SKSE's co-saves do beside Skyrim's saves.

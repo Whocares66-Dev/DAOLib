@@ -223,6 +223,30 @@ struct LoadGameMessage : Message
 };
 static_assert(sizeof(LoadGameMessage) == 0xC);
 
+// The save proxy's own (dao/Saves.h has what they do), read 2026-09-30
+// from its handlers: fill its list of characters from their folders,
+// choose one by its place in the list, and set the save screens' mode (0
+// none, 2 the load screen's).
+struct RefreshHeroesMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E274;
+};
+static_assert(sizeof(RefreshHeroesMessage) == 4);
+
+struct SelectHeroMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E2D4;
+    std::int32_t index;
+};
+static_assert(sizeof(SelectHeroMessage) == 8);
+
+struct SetSaveLoadModeMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1E1E4;
+    std::int32_t mode;
+};
+static_assert(sizeof(SetSaveLoadModeMessage) == 8);
+
 // Switch the game's mode (dao/GameModes.h). 8 bytes; the controller's
 // handler (0x006416E0) passes +4 to SetGameMode.
 struct SetGameModeMessage : Message

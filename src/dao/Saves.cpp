@@ -1,14 +1,19 @@
 #include "dao/Saves.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Events.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Messages.h"
 #include "dao/Module.h"
+#include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/core/Msvc8.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -109,7 +114,224 @@ void AttachLoading()
     });
 }
 
+// The save proxy (dev/SAVES.md), the application's +0x150, and in it
+// SmartData attributes, each holding its value at its +0xC, read
+// 2026-09-30 from its handlers:
+// - +0xAC, the save screens' mode: 0 none, 2 the load screen's. Setting
+//   it (SetSaveLoadModeMessage, 0x006D1A50) to 1 or 2 makes the first
+//   character in the list the chosen one (in the world, the one played)
+//   and refreshes the saves; the load handler does that itself unless the
+//   mode is 2, which is how the load screen keeps a choice. Each save and
+//   load handler sets it back to 0 once it has begun.
+// - +0xE4, the chosen character's folder name, a std::wstring: whose
+//   saves a load means. SelectHeroMessage sets it from the list.
+// - +0x150, the characters, a vector of records whose +0x98 is the folder
+//   name (a std::wstring); RefreshHeroesMessage fills it from the folders.
+constexpr std::size_t kSaveLoadProxy = 0x150;
+constexpr std::size_t kAttributeValue = 0xC;
+constexpr std::size_t kMode = 0xAC;
+constexpr std::size_t kChosen = 0xE4;
+constexpr std::size_t kHeroes = 0x150;
+constexpr std::size_t kHeroFolder = 0x98;
+constexpr std::int32_t kLoadScreen = 2;
+
+std::uintptr_t Proxy()
+{
+    const CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return 0;
+    }
+    return TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + kSaveLoadProxy).value_or(0);
+}
+
+std::optional<std::wstring> ReadString(std::uintptr_t at)
+{
+    core::WStringRep rep;
+    if (!TryCopy(&rep, at, sizeof rep) || rep.size > 4096)
+    {
+        return std::nullopt;
+    }
+    if (rep.capacity <= core::WStringRep::kInlineCapacity)
+    {
+        return std::wstring(rep.View());
+    }
+    std::wstring text(rep.size, L'\0');
+    if (rep.size != 0 &&
+        !TryCopy(text.data(), reinterpret_cast<std::uintptr_t>(rep.data.pointer), rep.size * sizeof(wchar_t)))
+    {
+        return std::nullopt;
+    }
+    return text;
+}
+
+std::vector<std::wstring> Heroes(std::uintptr_t proxy)
+{
+    std::vector<std::wstring> heroes;
+    const auto list = TryRead<core::VectorRep<std::uint32_t>>(proxy + kHeroes + kAttributeValue);
+    if (!list || list->first == nullptr || list->last < list->first || list->last - list->first > 1000)
+    {
+        return heroes;
+    }
+    for (const std::uint32_t *at = list->first; at != list->last; ++at)
+    {
+        const auto record = TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(at));
+        if (record && *record != 0)
+        {
+            heroes.push_back(ReadString(*record + kHeroFolder).value_or(L""));
+        }
+    }
+    return heroes;
+}
+
+bool SendToProxy(std::uintptr_t proxy, const messages::Message &message)
+{
+    return messages::Send(reinterpret_cast<void *>(proxy), message);
+}
+
+messages::SetSaveLoadModeMessage ModeMessage(std::int32_t mode)
+{
+    auto message = messages::Make<messages::SetSaveLoadModeMessage>();
+    message.mode = mode;
+    return message;
+}
+
+std::int32_t Mode(std::uintptr_t proxy)
+{
+    return TryRead<std::int32_t>(proxy + kMode + kAttributeValue).value_or(0);
+}
+
 } // namespace
+
+std::vector<std::wstring> Characters()
+{
+    const std::uintptr_t proxy = Proxy();
+    if (proxy == 0)
+    {
+        return {};
+    }
+    auto heroes = Heroes(proxy);
+    if (heroes.empty())
+    {
+        SendToProxy(proxy, messages::Make<messages::RefreshHeroesMessage>());
+        heroes = Heroes(proxy);
+    }
+    return heroes;
+}
+
+std::wstring Character()
+{
+    const std::uintptr_t proxy = Proxy();
+    return proxy != 0 ? ReadString(proxy + kChosen + kAttributeValue).value_or(L"") : L"";
+}
+
+std::vector<Slot> List(std::wstring_view character)
+{
+    std::vector<Slot> slots;
+    // The Saves folder holding the slots' folders, as the game names it.
+    const auto saves = Slot{std::wstring(character), 1, Kind::Manual}.Folder().parent_path();
+    std::error_code error;
+    for (const auto &entry : std::filesystem::directory_iterator(saves, error))
+    {
+        const auto name = core::SlotFolderName::Parse(entry.path().filename().wstring());
+        if (!name || !entry.is_directory(error))
+        {
+            continue;
+        }
+        Slot slot{std::wstring(character), name->number, static_cast<Kind>(name->kind)};
+        if (slot.Exists())
+        {
+            slots.push_back(std::move(slot));
+        }
+    }
+    std::ranges::sort(slots, {}, [](const Slot &slot) { return std::pair(slot.kind, slot.number); });
+    return slots;
+}
+
+bool Load(const Slot &save)
+{
+    const std::uintptr_t proxy = Proxy();
+    if (proxy == 0)
+    {
+        return false;
+    }
+    const std::wstring character = save.character.empty() ? Character() : save.character;
+    if (character.empty() || !Slot{character, save.number, save.kind}.Exists())
+    {
+        return false;
+    }
+    // As the load screen: its mode, which keeps the choice, then the
+    // character by its place in the game's list.
+    const std::int32_t before = Mode(proxy);
+    SendToProxy(proxy, ModeMessage(kLoadScreen));
+    const auto heroes = Characters();
+    const auto found = std::ranges::find(heroes, character);
+    if (found == heroes.end())
+    {
+        SendToProxy(proxy, ModeMessage(before));
+        return false;
+    }
+    auto select = messages::Make<messages::SelectHeroMessage>();
+    select.index = static_cast<std::int32_t>(found - heroes.begin());
+    SendToProxy(proxy, select);
+    auto load = messages::Make<messages::LoadGameMessage>();
+    load.slot = save.number;
+    load.kind = static_cast<std::int32_t>(save.kind);
+    SendToProxy(proxy, load);
+    // A load that began set the mode back itself; one declined left it.
+    if (Mode(proxy) == kLoadScreen && before != kLoadScreen)
+    {
+        SendToProxy(proxy, ModeMessage(before));
+    }
+    return true;
+}
+
+bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
+{
+    const std::uintptr_t proxy = Proxy();
+    if (proxy == 0)
+    {
+        return false;
+    }
+    // The name as the engine's string, which the handler copies; this one
+    // is freed here, by the engine's own functions (dao/String.h).
+    WString text(name);
+    auto message = messages::Make<messages::SaveGameMessage>();
+    message.slot = slot;
+    message.kind = static_cast<std::int32_t>(kind);
+    std::memcpy(message.name, text.Engine(), sizeof message.name);
+    return SendToProxy(proxy, message);
+}
+
+bool Slot::Exists() const
+{
+    std::error_code error;
+    for (const auto &entry : std::filesystem::directory_iterator(Folder(), error))
+    {
+        if (entry.path().extension() == L".das")
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<core::SaveMeta> Slot::Meta() const
+{
+    std::error_code error;
+    for (const auto &entry : std::filesystem::directory_iterator(Folder(), error))
+    {
+        const std::wstring file = entry.path().filename().wstring();
+        if (!file.ends_with(L".das.met"))
+        {
+            continue;
+        }
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        return core::SaveMeta::Parse(std::as_bytes(std::span(bytes.data(), bytes.size())));
+    }
+    return std::nullopt;
+}
 
 std::filesystem::path Slot::Folder() const
 {
