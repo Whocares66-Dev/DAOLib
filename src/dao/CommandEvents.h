@@ -23,7 +23,8 @@
 // eight fights, 1,699 ends): 1,286 successes, 315 cleared, 29
 // COMMAND_FAILED_INVALID_PATH, 5 COMMAND_FAILED_TIMEOUT, 3
 // COMMAND_FAILED_PATH_ACTION_REQUIRED, and 61 with result 2, every one a
-// PlayAnimation, which no constant names. A start has its end for every
+// PlayAnimation: COMMAND_LOOPING. A later session had 5 with -1,
+// COMMAND_FAILED. A start has its end for every
 // type but ExecuteEffect: the one a dying creature starts, the frame it
 // dies, never ends (40 of 136 starts), so a plugin pairing the two must
 // not wait on those. EVENT_TYPE_COMMAND_COMPLETE came 2,094 times in the
@@ -43,13 +44,16 @@
 namespace dao::commands
 {
 
-// The results an end carries: success, or a COMMAND_FAILED_* (script.ldf),
-// -2 for a command cleared.
+// The results an end carries, as script.ldf names them: COMMAND_SUCCESSFUL,
+// COMMAND_LOOPING (a looping animation's end), COMMAND_FAILED, or a
+// COMMAND_FAILED_* saying why, -2 for a command cleared.
 inline constexpr std::int32_t kSuccess = 1;
+inline constexpr std::int32_t kLooping = 2;
+inline constexpr std::int32_t kFailed = -1;
 inline constexpr std::int32_t kCleared = -2;
 
-// "success", or the failure's script name (COMMAND_FAILED_TIMEOUT); empty
-// for a result no constant names (2, which PlayAnimation ends with).
+// "success", "looping", "COMMAND_FAILED", or the failure's script name
+// (COMMAND_FAILED_TIMEOUT); empty for a result no constant names.
 std::string_view ResultName(std::int32_t result);
 
 void OnStart(std::function<void(ObjectId object, const Command &command)> observer);

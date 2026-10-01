@@ -70,6 +70,14 @@ std::string_view ResultName(std::int32_t result)
     {
         return "success";
     }
+    if (result == kLooping)
+    {
+        return "looping";
+    }
+    if (result == kFailed)
+    {
+        return "COMMAND_FAILED";
+    }
     return script::Name(static_cast<script::CommandFailed>(result));
 }
 
