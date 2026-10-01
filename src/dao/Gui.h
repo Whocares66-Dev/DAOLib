@@ -307,8 +307,9 @@ bool HasMovie(std::wstring_view file);
 // first time the game opens that file, on the thread that opens it, and
 // what it answers is what the game reads then and every time after; so
 // add patches at plugin load. Several patches for one movie run in the
-// order they were added, each on what the one before left. Nothing is
-// written to disk.
+// order they were added, each on what the one before left; and so do the
+// patches of several plugins, each plugin's on what the others' left, in
+// no promised order. Nothing is written to disk.
 //
 // The name is the movie's file without its extension ("optionsmenu" for
 // optionsmenu.gfx), in any case. Read 2026-10-01 (dao/Addresses.h,

@@ -134,6 +134,7 @@ std::optional<Bytes> InsertBefore(std::span<const std::byte> movie, const Member
 // Something a sprite places: where the designer put a control.
 struct Instance
 {
+    std::string name;
     std::uint16_t sprite = 0;    // the sprite that places it
     std::uint16_t character = 0; // what it is an instance of
     std::uint16_t depth = 0;
@@ -144,6 +145,10 @@ struct Instance
 
 // The first instance of that name in any sprite.
 std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::string_view name);
+
+// Everything a sprite places that has a character, named or not, in the
+// order its tags have them.
+std::vector<Instance> InstancesOf(std::span<const std::byte> movie, std::uint16_t sprite);
 
 // The character the movie exports under a name (ExportAssets), as script
 // attaches it by.

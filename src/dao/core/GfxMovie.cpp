@@ -913,13 +913,14 @@ std::optional<Bytes> InsertBefore(std::span<const std::byte> movie, const Member
     return Insert(movie, anchor, code);
 }
 
-std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::string_view name)
+std::vector<Instance> InstancesOf(std::span<const std::byte> movie, std::uint16_t sprite)
 {
+    std::vector<Instance> instances;
     Reader bytes{movie};
     const auto first = Tags(bytes);
     if (!first)
     {
-        return std::nullopt;
+        return instances;
     }
     std::size_t at = *first;
     while (at < movie.size())
@@ -929,9 +930,8 @@ std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::stri
         {
             break;
         }
-        if (tag.code == kDefineSprite && tag.length >= 4)
+        if (tag.code == kDefineSprite && tag.length >= 4 && bytes.U16(tag.body) == sprite)
         {
-            std::optional<Instance> found;
             std::uint16_t deepest = 0;
             std::size_t inner = tag.body + 4;
             const std::size_t end = tag.body + tag.length;
@@ -946,18 +946,50 @@ std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::stri
                 {
                     const Placed what = ReadPlaced(bytes, placed);
                     deepest = std::max(deepest, what.depth);
-                    if (!found && bytes.good && what.name == name && !name.empty() && what.character)
+                    if (bytes.good && what.character)
                     {
-                        found = Instance{bytes.U16(tag.body), *what.character, what.depth, 0, what.x / 20, what.y / 20};
+                        instances.push_back(
+                            {std::string(what.name), sprite, *what.character, what.depth, 0, what.x / 20, what.y / 20});
                     }
-                    bytes.good = true; // a placement not understood is not this one
+                    bytes.good = true; // a placement not understood is none of these
                 }
                 inner = placed.body + placed.length;
             }
-            if (found)
+            for (Instance &instance : instances)
             {
-                found->deepest = deepest;
-                return found;
+                instance.deepest = deepest;
+            }
+            break;
+        }
+        at = tag.body + tag.length;
+    }
+    return instances;
+}
+
+std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::string_view name)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    if (!first || name.empty())
+    {
+        return std::nullopt;
+    }
+    std::size_t at = *first;
+    while (at < movie.size())
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > movie.size() - tag.body || tag.code == kEnd)
+        {
+            break;
+        }
+        if (tag.code == kDefineSprite && tag.length >= 4)
+        {
+            for (Instance &instance : InstancesOf(movie, bytes.U16(tag.body)))
+            {
+                if (instance.name == name)
+                {
+                    return std::move(instance);
+                }
             }
         }
         at = tag.body + tag.length;

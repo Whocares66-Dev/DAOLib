@@ -35,6 +35,8 @@
 // There is room for eleven rows: five under the left column and six under
 // the right, a heading taking one. Sections are placed in the order they
 // were added, each whole or not at all; StateOf says what became of one.
+// The rows are shared with every other plugin that adds a section, each
+// taking what the ones before it left.
 //
 // From DAOLib_Load, before the game first opens its options. Not yet seen
 // in play.

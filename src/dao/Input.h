@@ -53,8 +53,9 @@
 // The controls screen, read after: its list is written in its movie's
 // script, one AddKeyBinding("TogglePause") for each action it shows, so
 // no action the script does not name is listed. This now adds the same
-// call for each action the engine took, under a header "Mods" after the
-// game's last section, by patching the movie as the game opens it
+// call for each action the engine took, under a header after the game's
+// last section (the action's `section`, "Mods" unless the plugin names its
+// own), by patching the movie as the game opens it
 // (dao/Gui.h, OnMovieLoad; dao/core/GfxMovie.h). A row made that way is
 // the game's own row: the label and the two keys from the engine's data,
 // rebound as the game's are. Seen in play the same day, with
@@ -97,6 +98,9 @@ struct Action
     std::uint32_t modifiers = 0; // kShift, kControl, kAlt, or'd
     // The modes its key works in. Loading has no group of keys.
     std::vector<GameMode> modes = {GameMode::Explore, GameMode::Combat};
+    // The heading its row goes under in the controls screen: a plugin's
+    // own ("Turn-based"), shared by its actions.
+    std::wstring section = L"Mods";
 };
 
 // Registers an action and the callback for its key. From DAOLib_Load only:

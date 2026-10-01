@@ -504,15 +504,42 @@ Patched PatchedMovie(void *file, const std::string &name)
 using OpenFileFn = void *(__fastcall *)(void *opener, int edx, const char *url);
 Detour<OpenFileFn> g_openFile;
 
+// Whether a file is the game's own over a resource: its vtable the game's,
+// or the game's in every slot but the length's. The second is a file
+// another plugin has patched already. Each plugin links its own copy of
+// this library, each copy detours OpenFile, and the copies run one inside
+// the other; the inner one's file has that copy's vtable. (Seen in play,
+// 2026-10-01: with two plugins patching the options movie, the outer copy
+// took the inner's file for a stranger and left it alone.)
+bool IsMovieFile(void *file)
+{
+    const auto game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
+    const auto slots = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(file));
+    if (!slots || *slots == 0)
+    {
+        return false;
+    }
+    if (*slots == reinterpret_cast<std::uintptr_t>(game))
+    {
+        return true;
+    }
+    for (std::size_t slot = 0; slot < kFileSlots; ++slot)
+    {
+        const auto function = TryRead<std::uintptr_t>(*slots + slot * sizeof(void *));
+        if (!function || (slot != kFileLengthSlot && *function != reinterpret_cast<std::uintptr_t>(game[slot])))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void *__fastcall OpenFile(void *opener, int edx, const char *url)
 {
     void *file = g_openFile.Original()(opener, edx, url);
     // Only the game's own file over a resource it found is one to point
     // elsewhere.
-    if (file == nullptr || url == nullptr ||
-        *static_cast<void *const **>(file) !=
-            reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable)) ||
-        FileBegin(file) == nullptr)
+    if (file == nullptr || url == nullptr || !IsMovieFile(file) || FileBegin(file) == nullptr)
     {
         return file;
     }
@@ -525,8 +552,10 @@ void *__fastcall OpenFile(void *opener, int edx, const char *url)
         const std::lock_guard lock(g_movieMutex);
         if (!g_patchedFileVtableMade)
         {
-            void *const *slots = *static_cast<void *const **>(file);
-            std::copy(slots - 1, slots + kFileSlots, g_patchedFileVtable.begin());
+            // The game's vtable, its RTTI word before it, with the length's
+            // slot ours.
+            const auto game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
+            std::copy(game - 1, game + kFileSlots, g_patchedFileVtable.begin());
             g_patchedFileVtable[1 + kFileLengthSlot] = reinterpret_cast<void *>(&PatchedLength);
             g_patchedFileVtableMade = true;
         }

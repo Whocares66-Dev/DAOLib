@@ -6,9 +6,11 @@
 #include "dao/Gui.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
-#include "dao/core/GfxMovie.h"
+#include "dao/String.h"
 #include "dao/core/Msvc8.h"
+#include "dao/core/OptionsMovie.h"
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <optional>
@@ -274,29 +276,34 @@ void RunQueued()
 // <name>"), and rebinds as the game's rows do.
 std::optional<std::vector<std::byte>> ListActions(std::span<const std::byte> movie)
 {
-    std::vector<core::gfx::Call> calls;
+    // The actions the engine took, by their sections in the order each
+    // was first named.
+    std::vector<core::options_movie::KeySection> sections;
     {
         const std::lock_guard lock(g_mutex);
         for (const Entry &entry : g_actions)
         {
-            if (entry.state == ActionState::Registered)
+            if (entry.state != ActionState::Registered)
             {
-                // The names are letters and digits (ValidActionName).
-                std::string name;
-                for (const wchar_t c : entry.action.name)
-                {
-                    name.push_back(static_cast<char>(c));
-                }
-                calls.push_back({"AddKeyBinding", std::move(name)});
+                continue;
             }
+            const std::string title = Utf8(entry.action.section);
+            auto section = std::find_if(sections.begin(), sections.end(),
+                                        [&](const core::options_movie::KeySection &s) { return s.title == title; });
+            if (section == sections.end())
+            {
+                section = sections.insert(sections.end(), {title, {}});
+            }
+            // The names are letters and digits (ValidActionName).
+            std::string name;
+            for (const wchar_t c : entry.action.name)
+            {
+                name.push_back(static_cast<char>(c));
+            }
+            section->actions.push_back(std::move(name));
         }
     }
-    if (calls.empty())
-    {
-        return std::nullopt;
-    }
-    calls.insert(calls.begin(), core::gfx::Call{"AddHeader", "Mods"});
-    return core::gfx::InsertAfter(movie, {"AddKeyBinding", "HideMainInterface"}, core::gfx::Statements(calls));
+    return core::options_movie::ListKeys(movie, sections);
 }
 
 bool Attach()

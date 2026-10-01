@@ -1,5 +1,6 @@
 #include "dao/core/OptionsMovie.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <utility>
 
@@ -33,14 +34,14 @@ gfx::Bytes ToggleSetUp(const Toggle &toggle)
 // r2.<instance>_init = function () {
 //     this.KeyBindingHeader_mc_init = function () { this.SetText(title); };
 // };
-gfx::Bytes HeadingSetUp(std::size_t section, std::string_view title)
+gfx::Bytes HeadingSetUp(const Slot &slot, std::string_view title)
 {
     using namespace gfx;
     const Bytes setText =
         Join({Push({Text(title), Integer(1), Register(1), Text("SetText")}), Do(Op::CallMethod), Do(Op::Pop)});
     const Bytes setUp = Join({Push({Register(1), Text(kHeadingText)}), Function(setText), Do(Op::SetMember)});
-    return Join({Push({Register(kSetUpRegister), Text(HeadingInstance(section) + "_init")}), Function(setUp),
-                 Do(Op::SetMember)});
+    return Join(
+        {Push({Register(kSetUpRegister), Text(HeadingInstance(slot) + "_init")}), Function(setUp), Do(Op::SetMember)});
 }
 
 } // namespace
@@ -50,9 +51,9 @@ std::string ToggleInstance(std::string_view option)
     return "Opt" + std::string(option) + "_mc";
 }
 
-std::string HeadingInstance(std::size_t section)
+std::string HeadingInstance(const Slot &slot)
 {
-    return "DAOLibSection" + std::to_string(section) + "_mc";
+    return "DAOLibSectionAt" + std::to_string(slot.x) + "x" + std::to_string(slot.y) + "_mc";
 }
 
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
@@ -63,12 +64,19 @@ std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
     {
         return std::nullopt;
     }
+    const std::vector<gfx::Instance> placed = gfx::InstancesOf(movie, left->sprite);
     std::vector<Slot> slots;
     for (const auto &last : {*left, *right})
     {
         for (std::int32_t y = last.y + kRow; y <= kLastRow; y += kRow)
         {
-            slots.push_back({last.x, y});
+            const bool taken = std::any_of(placed.begin(), placed.end(), [&](const gfx::Instance &instance) {
+                return instance.x == last.x && instance.y == y;
+            });
+            if (!taken)
+            {
+                slots.push_back({last.x, y});
+            }
         }
     }
     return slots;
@@ -101,8 +109,9 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
         {
             break;
         }
-        place(HeadingInstance(shown), *heading);
-        const gfx::Bytes headingSetUp = HeadingSetUp(shown, section.title);
+        const Slot at = (*slots)[slot];
+        place(HeadingInstance(at), *heading);
+        const gfx::Bytes headingSetUp = HeadingSetUp(at, section.title);
         setUps.insert(setUps.end(), headingSetUp.begin(), headingSetUp.end());
         for (const Toggle &toggle : section.toggles)
         {
@@ -126,6 +135,49 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
         shown = 0;
     }
     return patched;
+}
+
+std::optional<gfx::Bytes> ListKeys(std::span<const std::byte> movie, std::span<const KeySection> sections)
+{
+    gfx::Bytes current(movie.begin(), movie.end());
+    std::vector<gfx::Call> fresh; // sections whose headings are still to make
+    bool changed = false;
+    for (const KeySection &section : sections)
+    {
+        std::vector<gfx::Call> rows;
+        rows.reserve(section.actions.size());
+        for (const std::string &action : section.actions)
+        {
+            rows.push_back({"AddKeyBinding", action});
+        }
+        if (rows.empty())
+        {
+            continue;
+        }
+        if (auto under = gfx::InsertAfter(current, {"AddHeader", section.title}, gfx::Statements(rows)))
+        {
+            current = std::move(*under);
+            changed = true;
+            continue;
+        }
+        fresh.push_back({"AddHeader", section.title});
+        fresh.insert(fresh.end(), rows.begin(), rows.end());
+    }
+    if (!fresh.empty())
+    {
+        auto listed = gfx::InsertAfter(current, {"AddKeyBinding", "HideMainInterface"}, gfx::Statements(fresh));
+        if (!listed)
+        {
+            return std::nullopt;
+        }
+        current = std::move(*listed);
+        changed = true;
+    }
+    if (!changed)
+    {
+        return std::nullopt;
+    }
+    return current;
 }
 
 } // namespace dao::core::options_movie

@@ -41,7 +41,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
   - In play, 2026-10-01 (`examples/input/`): the engine took the actions, the default key ran the callback once a press and was silent under the map, the main menu and the inventory, and the game wrote the actions into `KeyBindings.ini` (`DAOLibExamplePing_0=Keyboard::Button_F11`). The controls screen did not list them. `inputmap.gda` is not the list: its 188 rows are the keys' own names ("Web Back", "ThumbLX").
   - The controls screen (2026-10-01). Its list is in its movie's script (`optionsmenu.gfx`): `AddHeader` for a section, `AddKeyBinding("TogglePause")` for each action. The library now adds a header "Mods" and a call for each plugin's action by patching the movie as the game opens it (`dao::gui::OnMovieLoad`, `dev/GUI.md`).
   - Done, 2026-10-01: in play the rows showed under "Mods", a key bound there ran the plugin's callback, and it was still bound after a restart. A plugin registers an action, the player binds it in the controls screen, and a callback runs on the key.
-- **Left:** a held key (a callback on the release too) and the mouse's codes, when a plugin wants them. A section's own title in place of "Mods".
+- **Left:** a held key (a callback on the release too) and the mouse's codes, when a plugin wants them.
 
 ## 4. Time: game speed and the clock
 

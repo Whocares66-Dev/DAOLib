@@ -26,6 +26,11 @@
 // So a section is added by placing a heading and checkboxes in the Game
 // tab's sprite, in the rows it has free, and adding their set-up functions
 // before the first of the game's own.
+//
+// - The Controls tab's key list is built in script: AddHeader(text) for a
+//   section and AddKeyBinding("TogglePause") for each action, the last of
+//   them HideMainInterface. A plugin's actions are listed by the same
+//   calls added after that one.
 #pragma once
 
 #include "dao/core/GfxMovie.h"
@@ -64,13 +69,17 @@ struct Slot
 };
 
 // The free rows, in the order they are filled: down the left column from
-// under its last checkbox, then down the right. Nothing if the movie's
-// Game tab is not as read.
+// under its last checkbox, then down the right, but for rows something is
+// placed in already. Each plugin links its own copy of the library and
+// each copy patches the movie the others have patched, so a row another
+// plugin's section took is taken. Nothing if the movie's Game tab is not
+// as read.
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie);
 
-// The name a checkbox for an option is placed under, and a heading's.
+// The name a checkbox for an option is placed under, and the name of a
+// heading in a row: by the row, so that no two plugins' headings share one.
 std::string ToggleInstance(std::string_view option);
-std::string HeadingInstance(std::size_t section);
+std::string HeadingInstance(const Slot &slot);
 
 // The movie with as many of the sections as there are rows for, each a
 // heading and its checkboxes, a section never split or begun without room
@@ -78,5 +87,19 @@ std::string HeadingInstance(std::size_t section);
 // `shown` 0, if the movie is not as read or no section fits.
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
                                       std::size_t &shown);
+
+// Actions for the Controls tab's key list, under a heading.
+struct KeySection
+{
+    std::string title;
+    std::vector<std::string> actions; // the engine's names for them
+};
+
+// The movie with the sections' actions listed after the game's own, each
+// section under its heading, in order. A section whose heading the list
+// has already (another plugin's copy of the library put it there) has its
+// rows put under that heading and no second one made. Nothing if the list
+// is not as read or there is no action to add.
+std::optional<gfx::Bytes> ListKeys(std::span<const std::byte> movie, std::span<const KeySection> sections);
 
 } // namespace dao::core::options_movie

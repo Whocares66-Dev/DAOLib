@@ -261,7 +261,7 @@ TEST_CASE("sections are placed whole, in order, while there is room", "[options]
     CHECK(shown == 2);
 
     // A heading, then its checkboxes, each a row down, over what was there.
-    const auto heading = gfx::FindInstance(*patched, HeadingInstance(0));
+    const auto heading = gfx::FindInstance(*patched, HeadingInstance({7, 263}));
     REQUIRE(heading);
     CHECK(heading->character == kHeading);
     CHECK(heading->x == 7);
@@ -271,7 +271,7 @@ TEST_CASE("sections are placed whole, in order, while there is room", "[options]
     REQUIRE(toggle);
     CHECK(toggle->character == kCheckbox);
     CHECK(toggle->y == 298);
-    const auto second = gfx::FindInstance(*patched, HeadingInstance(1));
+    const auto second = gfx::FindInstance(*patched, HeadingInstance({7, 333}));
     const auto a = gfx::FindInstance(*patched, ToggleInstance("DAOLibA"));
     const auto b = gfx::FindInstance(*patched, ToggleInstance("DAOLibB"));
     REQUIRE((second && a && b));
@@ -292,7 +292,7 @@ TEST_CASE("sections are placed whole, in order, while there is room", "[options]
         gfx::Join({gfx::Push({gfx::Text("Turn-based"), gfx::Integer(1), gfx::Register(1), gfx::Text("SetText")}),
                    gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::Pop)});
     const Bytes headingSetUp =
-        gfx::Join({gfx::Push({gfx::Register(2), gfx::Text("DAOLibSection0_mc_init")}),
+        gfx::Join({gfx::Push({gfx::Register(2), gfx::Text("DAOLibSectionAt7x263_mc_init")}),
                    gfx::Function(gfx::Join({gfx::Push({gfx::Register(1), gfx::Text("KeyBindingHeader_mc_init")}),
                                             gfx::Function(setText), gfx::Do(gfx::Op::SetMember)})),
                    gfx::Do(gfx::Op::SetMember)});
@@ -301,6 +301,104 @@ TEST_CASE("sections are placed whole, in order, while there is room", "[options]
     // They are before the game's first, and the patched movie still reads.
     CHECK(gfx::InsertBefore(*patched, {2, "OptAutoPause_mc_init"}, gfx::Do(gfx::Op::Pop)));
     CHECK(Get(*patched, 4, 4) == patched->size());
+}
+
+TEST_CASE("a second plugin's sections go in the rows the first left", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    std::size_t shown = 0;
+    // Each plugin has its own copy of the library, and each copy patches
+    // what the other left.
+    const auto first = AddSections(
+        movie, std::vector<Section>{{"First", {{"DAOLibOne", "One", ""}, {"DAOLibTwo", "Two", ""}}}}, shown);
+    REQUIRE(first);
+    CHECK(shown == 1);
+    const auto slots = FreeSlots(*first);
+    REQUIRE(slots);
+    REQUIRE(slots->size() == 8);
+    CHECK((*slots)[0].x == 7);
+    CHECK((*slots)[0].y == 368);
+
+    const auto both = AddSections(*first, std::vector<Section>{{"Second", {{"DAOLibThree", "Three", ""}}}}, shown);
+    REQUIRE(both);
+    CHECK(shown == 1);
+    // The first plugin's are where they were, the second's under them, and
+    // the two headings have names of their own.
+    const auto one = gfx::FindInstance(*both, ToggleInstance("DAOLibOne"));
+    const auto three = gfx::FindInstance(*both, ToggleInstance("DAOLibThree"));
+    const auto firstHeading = gfx::FindInstance(*both, HeadingInstance({7, 263}));
+    const auto secondHeading = gfx::FindInstance(*both, HeadingInstance({7, 368}));
+    REQUIRE((one && three && firstHeading && secondHeading));
+    CHECK(one->y == 298);
+    CHECK(three->y == 403);
+    CHECK(secondHeading->depth > one->depth);
+    CHECK(HeadingInstance({7, 263}) != HeadingInstance({7, 368}));
+    CHECK(Holds(*both, gfx::Push({gfx::Text("First"), gfx::Integer(1), gfx::Register(1), gfx::Text("SetText")})));
+    CHECK(Holds(*both, gfx::Push({gfx::Text("Second"), gfx::Integer(1), gfx::Register(1), gfx::Text("SetText")})));
+}
+
+TEST_CASE("everything a sprite places is listed", "[gfx]")
+{
+    const Bytes movie = OptionsMovie();
+    const auto instances = gfx::InstancesOf(movie, kGameTab);
+    REQUIRE(instances.size() == 4);
+    CHECK(instances[0].name == "OptAutoPause_mc");
+    CHECK(instances[3].name == "OptSubtitles_mc");
+    CHECK(instances[3].deepest == 69);
+    CHECK(gfx::InstancesOf(movie, 9999).empty());
+    CHECK(gfx::InstancesOf({}, kGameTab).empty());
+}
+
+TEST_CASE("actions are listed under their headings after the game's own", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    // The key list in small: two of the game's rows.
+    Bytes script = Pool({"AddKeyBinding", "TogglePause", "HideMainInterface"});
+    Add(script, PooledCall(1, 0));
+    Add(script, PooledCall(2, 0));
+    Add(script, Simple(0x17));
+    const Bytes movie = Movie(LongTag(12, script));
+
+    const std::vector<KeySection> sections = {
+        {"Turn-based", {"TurnBasedToggle"}}, {"Mods", {"OtherOne", "OtherTwo"}}, {"Nothing", {}}};
+    const auto listed = ListKeys(movie, sections);
+    REQUIRE(listed);
+    const std::vector<gfx::Call> expected = {{"AddHeader", "Turn-based"},
+                                             {"AddKeyBinding", "TurnBasedToggle"},
+                                             {"AddHeader", "Mods"},
+                                             {"AddKeyBinding", "OtherOne"},
+                                             {"AddKeyBinding", "OtherTwo"}};
+    const Bytes code = gfx::Statements(expected);
+    const auto at = std::search(listed->begin(), listed->end(), code.begin(), code.end());
+    REQUIRE(at != listed->end());
+    // Straight after the game's last row: its call and pop.
+    CHECK(*(at - 1) == std::byte{0x17});
+    CHECK(*(at - 2) == std::byte{0x3D});
+    CHECK(listed->size() == movie.size() + code.size());
+
+    // Another plugin's copy of the library adds to what this one left: a
+    // heading that is there takes the rows, a new one is made after the
+    // game's rows.
+    const std::vector<KeySection> more = {{"Mods", {"ThirdOne"}}, {"Camera mod", {"Orbit"}}};
+    const auto both = ListKeys(*listed, more);
+    REQUIRE(both);
+    const Bytes mods = gfx::Statements(
+        std::vector<gfx::Call>{{"AddHeader", "Mods"}, {"AddKeyBinding", "ThirdOne"}, {"AddKeyBinding", "OtherOne"}});
+    CHECK(Holds(*both, mods));
+    const Bytes camera = gfx::Statements(
+        std::vector<gfx::Call>{{"AddHeader", "Camera mod"}, {"AddKeyBinding", "Orbit"}, {"AddHeader", "Turn-based"}});
+    CHECK(Holds(*both, camera));
+    // One "Mods" heading, not two.
+    const Bytes heading = gfx::Statements(std::vector<gfx::Call>{{"AddHeader", "Mods"}});
+    const auto firstHeading = std::search(both->begin(), both->end(), heading.begin(), heading.end());
+    REQUIRE(firstHeading != both->end());
+    CHECK(std::search(firstHeading + 1, both->end(), heading.begin(), heading.end()) == both->end());
+
+    // Nothing to add, or a list that is not the game's.
+    CHECK_FALSE(ListKeys(movie, {}));
+    CHECK_FALSE(ListKeys(movie, std::vector<KeySection>{{"Nothing", {}}}));
+    CHECK_FALSE(ListKeys(Movie(LongTag(12, Simple(0x17))), sections));
 }
 
 TEST_CASE("a section with no room is left out, and those after it", "[options]")

@@ -91,7 +91,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         {.name = std::wstring(kPing), .label = L"DAOLib example: log a line", .key = dao::input::Key::F11},
         [] { Pressed(kPing); });
     const bool unbound = dao::input::RegisterAction(
-        {.name = std::wstring(kUnbound), .label = L"DAOLib example: no key until bound"}, [] { Pressed(kUnbound); });
+        {.name = std::wstring(kUnbound), .label = L"DAOLib example: no key until bound", .section = L"DAOLib example"},
+        [] { Pressed(kUnbound); });
     // A name with a space is refused, and so is a name given twice.
     const bool spaced = dao::input::RegisterAction({.name = L"Not A Name", .label = L"refused"}, [] {});
     const bool twice = dao::input::RegisterAction({.name = std::wstring(kPing), .label = L"refused"}, [] {});
