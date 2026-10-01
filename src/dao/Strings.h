@@ -6,13 +6,12 @@
 //   const std::wstring tooFar = text.String(2, L"Too far");
 //
 // A plugin ships turnbased_en-us.tlk, turnbased_de-de.tlk and so on beside
-// its DLL: GFF4 talk tables as the game's own (dao/core/TalkTable.h; the
-// toolset writes them, and any of the game's core_<lang>.tlk shows the
-// shape). The player's language is the game's: Locale under [GameOptions]
-// in Documents\BioWare\Dragon Age\Settings\DragonAge.ini (en-us on this
-// machine, 2026-09-30), the setting that picks the game's own
-// core_<lang>.tlk. A language with no file of the plugin's falls back to
-// en-us; a string with no entry, to the fallback given.
+// its DLL: GFF4 talk tables as the game's own (dao/core/TalkTable.h).
+// `python tools/tlk.py --write strings.csv turnbased_en-us.tlk` makes one
+// from a CSV of id,text rows; the toolset writes them too. The player's language is the game's: Locale under
+// [GameOptions] in Documents\BioWare\Dragon Age\Settings\DragonAge.ini (en-us on this machine, 2026-09-30), the setting
+// that picks the game's own core_<lang>.tlk. A language with no file of the plugin's falls back to en-us; a string with
+// no entry, to the fallback given.
 #pragma once
 
 #include "dao/Plugin.h"

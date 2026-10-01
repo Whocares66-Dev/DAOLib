@@ -1,38 +1,15 @@
 """tools/tlk.py on a version 0.2 talk table built here."""
 
-import struct
+import os
+import tempfile
 import unittest
 
 import tlk
 
 
 def build_tlk(strings):
-    """GFF V4.0 PC TLK V0.2: the top struct's list of (id, text) structs."""
-    templates = [
-        (b"TLK ", [(tlk.STRING_LIST, 1, 0x8000 | 0x4000, 0)], 4),
-        (b"STRN", [(tlk.STRING_ID, 4, 0, 0), (tlk.STRING_TEXT, 14, 0, 4)], 8),
-    ]
-    fields_at = 28 + 16 * len(templates)
-    decls = tmpl = b""
-    for label, fields, size in templates:
-        tmpl += struct.pack(
-            "<4sIII", label[::-1], len(fields), fields_at + len(decls), size
-        )
-        for flabel, t, flags, off in fields:
-            decls += struct.pack("<III", flabel, (flags << 16) | t, off)
-    data_offset = fields_at + len(decls)
-    body = bytearray(4)
-    # The list starts right after the top struct.
-    struct.pack_into("<I", body, 0, len(body))
-    body += struct.pack("<I", len(strings))
-    at = len(body)
-    body += bytes(8 * len(strings))
-    for i, (strref, text) in enumerate(strings):
-        raw = (text + "\0").encode("utf-16-le")
-        struct.pack_into("<II", body, at + 8 * i, strref, len(body))
-        body += struct.pack("<I", len(raw) // 2) + raw
-    head = b"GFF V4.0PC  TLK V0.2" + struct.pack("<II", len(templates), data_offset)
-    return head + tmpl + decls + bytes(body)
+    """A talk table as the game's are laid out: tlk.write."""
+    return tlk.write(strings)
 
 
 class TalkTableTest(unittest.TestCase):
@@ -49,6 +26,25 @@ class TalkTableTest(unittest.TestCase):
         data[12:16] = b"G2DA"
         with self.assertRaises(ValueError):
             tlk.TalkTable(bytes(data))
+
+    def test_a_csv_becomes_a_table(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, "strings.csv")
+            target = os.path.join(folder, "turnbased_en-us.tlk")
+            with open(source, "w", encoding="utf-8", newline="") as f:
+                f.write('id,text\n1,End turn\n2,"Too far, 3 m"\n7000001,Fin du tour\n')
+            self.assertEqual(tlk.main(["--write", source, target]), 0)
+            with open(target, "rb") as f:
+                table = tlk.TalkTable(f.read())
+        self.assertEqual(len(table), 3)
+        self.assertEqual(table.get(2), "Too far, 3 m")
+        self.assertEqual(table.get(7000001), "Fin du tour")
+
+    def test_the_labels_are_in_file_order(self):
+        data = tlk.write([(1, "x")])
+        # The game's own files keep "TLK " and "STRN" as written.
+        self.assertEqual(data[28:32], b"TLK ")
+        self.assertEqual(data[44:48], b"STRN")
 
 
 if __name__ == "__main__":

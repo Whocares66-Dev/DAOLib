@@ -13,9 +13,18 @@ and which xoreos also reads, does not occur here.
     python tools/tlk.py 379897 ...          print those strings
     python tools/tlk.py --lang de-de 379897 in another language
     python tools/tlk.py --count             how many strings there are
+    python tools/tlk.py --write IN.csv OUT.tlk
+                                            a plugin's own talk table
+
+--write makes a talk table of a plugin's own (dao/Strings.h) from a CSV of
+id,text rows (UTF-8, a header row of "id,text" allowed), laid out as the
+game's own: the same templates, labels and field types, so the library's
+reader and the game's read it alike.
 """
 
+import csv
 import os
+import struct
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +63,57 @@ class TalkTable:
         return self.strings.get(strref)
 
 
+def write(strings):
+    """A version 0.2 talk table of [(id, text)], as bytes: GFF V4.0 PC,
+    type "TLK " V0.2, a TLK top struct holding the string list, each a STRN
+    of the id and an offset to the text, as the game's own are."""
+    templates = [
+        (b"TLK ", [(STRING_LIST, 1, 0x8000 | 0x4000, 0)], 4),
+        (b"STRN", [(STRING_ID, 4, 0, 0), (STRING_TEXT, 14, 0, 4)], 8),
+    ]
+    fields_at = 28 + 16 * len(templates)
+    decls = tmpl = b""
+    for label, fields, size in templates:
+        tmpl += struct.pack("<4sIII", label, len(fields), fields_at + len(decls), size)
+        for flabel, t, flags, off in fields:
+            decls += struct.pack("<III", flabel, (flags << 16) | t, off)
+    data_offset = fields_at + len(decls)
+    body = bytearray(4)
+    # The list starts right after the top struct.
+    struct.pack_into("<I", body, 0, len(body))
+    body += struct.pack("<I", len(strings))
+    at = len(body)
+    body += bytes(8 * len(strings))
+    for i, (strref, text) in enumerate(strings):
+        raw = (text + "\0").encode("utf-16-le")
+        struct.pack_into("<II", body, at + 8 * i, strref, len(body))
+        body += struct.pack("<I", len(raw) // 2) + raw
+    head = b"GFF V4.0PC  TLK V0.2" + struct.pack("<II", len(templates), data_offset)
+    return head + tmpl + decls + bytes(body)
+
+
+def read_csv(path):
+    """[(id, text)] from a CSV of id,text rows; a header row is skipped."""
+    out = []
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        for row in csv.reader(f):
+            if not row or not row[0].strip():
+                continue
+            if not row[0].strip().lstrip("-").isdigit():
+                continue  # the header
+            out.append((int(row[0]), row[1] if len(row) > 1 else ""))
+    return out
+
+
 def main(argv):
+    if "--write" in argv:
+        i = argv.index("--write")
+        source, target = argv[i + 1], argv[i + 2]
+        strings = read_csv(source)
+        with open(target, "wb") as f:
+            f.write(write(strings))
+        print(f"{len(strings)} strings written to {target}")
+        return 0
     lang = "en-us"
     if "--lang" in argv:
         i = argv.index("--lang")
