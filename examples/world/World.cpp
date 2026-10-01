@@ -6,8 +6,7 @@
 // also casts a ray straight down onto the controlled creature and logs
 // each shape it met: what kind of thing, and its collision groups, which
 // tell which bits the ground and each kind of object carry. And while the
-// creature walks, the path its movement found: its waypoints and length;
-// while it stands, the path it would walk to the ground under the cursor.
+// creature walks, the path its movement found: its waypoints and length.
 //
 // Everything runs in a frame callback, on the game's thread, where the
 // world's queries must be asked. What it finds goes to example_world.log.
@@ -98,23 +97,6 @@ void LogPath(dao::ObjectId self)
                  path->waypoints.size(), path->Length(), path->Remaining(creature->Position()), path->next);
 }
 
-// The path the creature would walk to the ground under the cursor, found
-// now, while it stands idle: what a move preview would draw.
-void PathToCursor(dao::ObjectId self, const dao::GameModeExplore &explore)
-{
-    const auto ground = explore.CursorGround();
-    if (!ground)
-    {
-        return;
-    }
-    const auto path = dao::world::FindPath(self, *ground);
-    if (path)
-    {
-        spdlog::info("0x{:x} would walk {:.2f} m to the cursor at ({:.2f}, {:.2f}, {:.2f}), {} waypoints", self,
-                     path->Length(), ground->x, ground->y, ground->z, path->waypoints.size());
-    }
-}
-
 void Frame()
 {
     const dao::GameModeExplore *explore = dao::CClientExoApp::CurrentExplore();
@@ -139,10 +121,6 @@ void Frame()
     {
         LookDown(self);
         LogPath(self);
-    }
-    else if (dao::FrameCount() % kFramesBetweenRays == kFramesBetweenRays / 2)
-    {
-        PathToCursor(self, *explore);
     }
 }
 

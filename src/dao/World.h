@@ -52,6 +52,10 @@ inline constexpr std::uint32_t kObjects = 0x1 | 0x2 | 0x4 | 0x20000;
 inline constexpr std::uint32_t kGround = 0x8 | 0x20;
 // Placeables: LineOfSight looks a hit with this up as one.
 inline constexpr std::uint32_t kPlaceables = 0x4;
+// A creature's body: in play, 2026-09-30, a ray down onto the controlled
+// creature met it first with only this group and the creature's id, which
+// the engine's own sorting (above) leaves as Nothing.
+inline constexpr std::uint32_t kCreatureBodies = 0x10;
 // The generous volume an object is picked by, beside its body; Raycast's
 // `selectionVolumes` adds it to the mask.
 inline constexpr std::uint32_t kSelection = 0x20000;
@@ -93,10 +97,11 @@ struct Hit
     {
         return kind == Kind::Ground;
     }
-    // The object met, if it was one.
+    // The object the shape belongs to, if any: an Object hit's, and a
+    // creature's body, which the engine sorts as Nothing but gives the id.
     std::optional<ObjectId> Object() const
     {
-        return kind == Kind::Object ? std::optional<ObjectId>(object) : std::nullopt;
+        return object != kInvalidObject ? std::optional<ObjectId>(object) : std::nullopt;
     }
 };
 static_assert(sizeof(Hit) == 0x30);
@@ -161,17 +166,16 @@ struct WalkPath
 // Nothing for a creature not walking a path, or not there.
 std::optional<WalkPath> CurrentPath(ObjectId creature);
 
-// The path a creature would walk to `to` from where it stands, found now
-// by its own movement as a move order's would be: RequestPath (0x0073EA80,
-// __thiscall on the creature's area (creature, const Vector4 *to, null for
-// from where it stands), `ret 0xC`) called until it answers, each call a
-// slice of the search a frame of walking would give it, at most
-// `maxSlices`. The search is the creature's own, so it is asked only of a
-// creature with nothing queued: one walking, fighting or acting gets
-// nothing, and its path is left alone. A later order asks again from where
-// the creature then stands. Nothing too if no path is found. Not yet seen
-// in play.
-std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, int maxSlices = 64);
+// No path is found on demand yet. A FindPath that drove the creature's own
+// search (RequestPath, 0x0073EA80, until it answered) was taken out after
+// play, 2026-09-30: RequestPath takes a new start and destination only
+// when no search is in progress (0x0073D6E0: the search's +0 flag, or open
+// nodes at its +0x18), else it goes on with the old one. So its first
+// answer was the previous search's, a search left unfinished kept every
+// later call on old ends (one path, 15.59 m, all through a fight), and the
+// search it left behind stood as the creature's own path; the creature
+// then would not walk a clicked path. A search of the plugin's own, or the
+// creature's put back as it was, is what is needed (dev/TODO.md, item 5).
 
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject
 // asks it: from kEyeHeight above one's position to kEyeHeight above the
