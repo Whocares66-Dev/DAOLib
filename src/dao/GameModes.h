@@ -82,6 +82,15 @@ enum class GameMode : std::int32_t
 // CanMoveTo's (the point free for the controlled creature, by its own
 // pathfinding parameters, and clear of a collision box).
 //
+// The interface's answer (0x00511420) is yes while the mouse is over any
+// of its movies (a set at the Scaleform manager's +0x80) or one of them
+// holds a mouse press (+0xA0, set by the button-down handlers, 0x00512340,
+// and cleared by the button-up ones, 0x00512480). Both are changed by the
+// mouse's events, not each frame, while the pick is re-taken every 1/15 s
+// whether the mouse moves or not (the mode's update, 0x00712F90); so a
+// pick that stays nothing with the mouse still is the interface's state
+// left as the last mouse event had it.
+//
 // So a plugin's movie that draws under the cursor empties the pick and
 // takes the click. Seen in play that day (the turn-based mod's path
 // preview): with a shape of its layer-1 movie on the cursor's pixel,

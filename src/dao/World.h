@@ -148,6 +148,10 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 //   on the creature's feet and the cursor's ground point at four places,
 //   one after the camera came round. dev/GUI.md has how a movie's stage
 //   lies over the view.
+// - FindPath against the walk, the turn-based mod's preview: ten walks
+//   ordered from a path shown, 1 to 8.8 m, round a creature and up a ramp
+//   among them, stayed within 0.34 m of the path FindPath gave, and fifty
+//   searches for a creature at rest took 15 ms in all.
 // - The real cursor put at an AimAt pixel, by the play tester: the game's
 //   own CursorObject was the creature and the click attacked it, at
 //   pixels inside it; at one on its edge the game's pick held nothing
