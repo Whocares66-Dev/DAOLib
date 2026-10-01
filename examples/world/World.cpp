@@ -8,7 +8,9 @@
 // tell which bits the ground and each kind of object carry. And while the
 // creature walks, the path its movement found: its waypoints and length.
 // For the object under the cursor it also asks the pathfinder for the walk
-// there (FindPath), and logs its length beside the straight distance, and
+// there (FindPath), and logs its length beside the straight distance (and
+// every ten seconds does the same for the six creatures nearest the
+// controlled one, so a run with no one at the mouse has them too), and
 // the room the object stands in with how much the game wants it and whether
 // it is loaded; every two seconds, how many of the area's rooms are in each
 // state.
@@ -34,8 +36,10 @@
 namespace
 {
 
-constexpr std::uint64_t kFramesBetweenRays = 60; // about two seconds
-constexpr float kAbove = 10.0F;                  // metres above the creature the ray starts
+constexpr std::uint64_t kFramesBetweenRays = 60;   // about two seconds
+constexpr std::uint64_t kFramesBetweenWalks = 300; // about ten
+constexpr std::int32_t kNearest = 6;
+constexpr float kAbove = 10.0F; // metres above the creature the ray starts
 
 const char *KindName(dao::world::Hit::Kind kind)
 {
@@ -141,6 +145,22 @@ void LogWalkTo(dao::ObjectId self, dao::ObjectId seen)
                  search.waypoints, answers, search.trace);
 }
 
+// The walks to the creatures nearest the controlled one, with no cursor
+// needed.
+void LogWalksNearby(dao::ObjectId self)
+{
+    const dao::script::Array nearest =
+        dao::script::api::GetNearestObject(self, dao::script::constants::OBJECT_TYPE_CREATURE, kNearest);
+    spdlog::info("the {} creature(s) nearest 0x{:x}:", nearest.Size(), self);
+    for (std::size_t i = 0; i < nearest.Size(); ++i)
+    {
+        if (const dao::ObjectId creature = nearest.Object(i); creature != dao::kInvalidObject && creature != self)
+        {
+            LogWalkTo(self, creature);
+        }
+    }
+}
+
 void LookAtCursor(dao::ObjectId self, dao::ObjectId seen)
 {
     if (seen == self)
@@ -223,6 +243,10 @@ void Frame()
         LookDown(self);
         LogPath(self);
         LogRooms(self);
+    }
+    if (dao::FrameCount() % kFramesBetweenWalks == 0)
+    {
+        LogWalksNearby(self);
     }
 }
 
