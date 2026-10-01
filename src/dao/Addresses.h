@@ -254,7 +254,11 @@ DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
 // a straight walk is refused beside standing creatures. The fine search
 // (Pathfinding::MapSearchEnvironment, 0x00B592E0) walks through stamps and
 // crowding at a cost (0x00A45AA0), but for a mover wider than a cell takes
-// only cells with room about them (0x00A461A0). The names are ours.
+// only cells with room about them (0x00A461A0). RequestPath begins by
+// telling the pathfinding world about its mover (0x0073EB24): at the
+// world's +0xC4 whether the creature's +0xC90 is not 0, which decides
+// which kind of stamp stops it in the straight-walk check, and at +0xC8
+// the creature's size (its slot 39). The names are ours.
 DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)
 DAO_ADDRESS(kMovementController_Constructor, "MovementController::MovementController", 0x00A62B20)
 DAO_ADDRESS(kMovementController_Free, "MovementController::Free", 0x00A625B0)

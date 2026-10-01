@@ -226,6 +226,10 @@ constexpr std::size_t kGaveUp = 0x48;                    // in the path: stretch
 // destination (0x007C4B80).
 constexpr std::size_t kWide = 0x8D;
 constexpr std::size_t kNearGoalFlag = 0x8C;
+constexpr std::size_t kWorldStamps = 0xC4;  // in the pathfinding world: which stamps stop the mover
+constexpr std::size_t kWorldSize = 0xC8;    // in the pathfinding world: the mover's size
+constexpr std::size_t kMoverStamps = 0xC90; // in the creature: not 0 for the other kind of stamp
+constexpr std::size_t kSizeSlot = 39;       // the creature's vtable: its size, a float
 constexpr std::int32_t kFound = 1;
 constexpr std::int32_t kNone = 5;
 constexpr std::int32_t kNoMesh = 8;
@@ -313,7 +317,11 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         return answer;
     }
     CCCreature *mover = app->GetCreatureById(creature);
-    CCArea *area = mover != nullptr ? mover->Area() : nullptr;
+    if (mover == nullptr)
+    {
+        return answer;
+    }
+    CCArea *area = mover->Area();
     const std::uintptr_t own = Movement(mover);
     const auto world = own != 0 ? TryRead<std::uintptr_t>(own + kPathWorld) : std::nullopt;
     const auto parameters = own != 0 ? TryRead<std::uintptr_t>(own + kParameters) : std::nullopt;
@@ -333,6 +341,18 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         return answer;
     }
     void *controller = search.Controller();
+
+    // As RequestPath begins (0x0073EB24): the pathfinding world is told
+    // which creatures' stamps stop this mover and how wide it is, which
+    // the straight-walk check goes by. Left unset, they are the last
+    // creature's to ask.
+    {
+        using SizeFn = float(__fastcall *)(CCCreature *);
+        const auto *slots = *reinterpret_cast<SizeFn **>(mover);
+        *reinterpret_cast<std::uint8_t *>(*world + kWorldStamps) =
+            TryRead<std::int32_t>(reinterpret_cast<std::uintptr_t>(mover) + kMoverStamps).value_or(0) != 0 ? 1 : 0;
+        *reinterpret_cast<float *>(*world + kWorldSize) = slots[kSizeSlot](mover);
+    }
 
     Vector4 goal(to);
     goal.w = from.w;

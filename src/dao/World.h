@@ -213,6 +213,10 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // - to skeletons 67 to 70 m off behind shut doors: none, the search
 //   answering 6 at the door. That version went on past the 6 until its 30
 //   ms ran out, 130 to 170 slices; this one stops there.
+// Read after, 2026-10-01: RequestPath tells the pathfinding world its
+// mover's size and which stamps stop it before it asks, and the search
+// here did not, so its straight-walk check went by the last creature to
+// have asked. It tells it now; not yet seen in play.
 //
 // An earlier FindPath drove the creature's own search (RequestPath until it
 // answered) and was taken out after play, 2026-09-30: RequestPath takes new
