@@ -26,7 +26,9 @@
 // share is what a quickbar slot's sweep can show. The scripts' SetCooldown
 // sets both numbers to the one time, so a long hold set that way shows a
 // full sweep that never moves. GetCooldown and SetCooldown here read and
-// set the two. Not yet seen in play; examples/cooldown shows both.
+// set the two. Seen in play, 2026-10-01 (examples/cooldown): Powerful
+// Swings set to 800 s left of 1200 s read back 800 of 1200, ticked a second
+// a second, and its quickbar slot drew a sweep about two thirds dark.
 #pragma once
 
 #include "dao/ObjectId.h"

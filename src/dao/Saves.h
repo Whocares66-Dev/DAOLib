@@ -134,7 +134,10 @@ void OnGameLoaded(std::function<void(const std::optional<Slot> &loaded)> callbac
 // Asking the game to save or load: the messages its menus and keys send to
 // its save proxy (SaveLoadProxy, the application's +0x150; dev/SAVES.md),
 // read 2026-09-30. From the main menu or in the world, on the game's thread
-// (a frame callback). Not yet seen in play.
+// (a frame callback). Seen in play, 2026-10-01, through the Eluvian server:
+// Characters, List and Meta listed the ten saves there, and Load of a
+// manual save, asked at the main menu, had it loaded and in explore mode 14
+// s later with no menu touched, OnGameLoaded called. Save is not yet seen.
 
 // The characters the game has saves for, by their folders' names, as its
 // load screen lists them. Read from the save proxy's list, which the game
