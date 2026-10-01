@@ -278,6 +278,36 @@ class OwnSearch
     bool made_ = false;
 };
 
+// The placeable in the way at a point, as CCCreature::PathBlocker finds it
+// (dao/Addresses.h).
+ObjectId Blocker(CClientExoApp &app, const CCArea *area, const Vector &point)
+{
+    constexpr std::size_t kAreaObjects = 0x690; // in the area: a vector of ids
+    constexpr float kReach = 5.0F;
+    const auto objects = TryRead<core::VectorRep<ObjectId>>(reinterpret_cast<std::uintptr_t>(area) + kAreaObjects);
+    if (!objects || objects->first == nullptr || objects->last < objects->first ||
+        objects->last - objects->first > 100000)
+    {
+        return kInvalidObject;
+    }
+    const Vector4 at(point);
+    using CoversFn = bool(__fastcall *)(CCPlaceable *, int, const Vector4 *);
+    const auto covers = reinterpret_cast<CoversFn>(Module::Address(addr::kCCPlaceable_Covers));
+    for (const ObjectId id : objects->View())
+    {
+        CCPlaceable *placeable = app.GetPlaceableById(id);
+        if (placeable == nullptr)
+        {
+            continue;
+        }
+        if (DistanceSquared(placeable->Position(), point) <= kReach * kReach && covers(placeable, 0, &at))
+        {
+            return id;
+        }
+    }
+    return kInvalidObject;
+}
+
 void LiftObstacle(std::uintptr_t controller)
 {
     if (controller != 0)
@@ -464,6 +494,11 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
             found->next = 0;
             (arrives ? answer.path : answer.partial) = std::move(found);
         }
+    }
+
+    if (answer.result == kBarred && answer.partial)
+    {
+        answer.blocker = Blocker(*app, area, answer.partial->waypoints.back());
     }
 
     // What the search saw, for a log.

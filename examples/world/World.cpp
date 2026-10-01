@@ -134,6 +134,10 @@ void LogWalkTo(dao::ObjectId self, dao::ObjectId seen)
         spdlog::info("no walk from 0x{:x} to 0x{:x} ({:.2f} m straight): answer {} after {} slice(s){}", self, seen,
                      straight, search.result, search.slices,
                      search.partial ? fmt::format(", {:.2f} m of the way found", search.partial->Length()) : "");
+        if (search.blocker != dao::kInvalidObject)
+        {
+            spdlog::info("  in the way: 0x{:x}", search.blocker);
+        }
     }
     std::string answers;
     for (const std::int32_t answer : search.answers)

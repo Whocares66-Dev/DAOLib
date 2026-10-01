@@ -229,6 +229,11 @@ struct PathSearch
     // With no path, as far as the search got: to the door in the way, or
     // to where it gave up.
     std::optional<WalkPath> partial;
+    // With the answer 6, the placeable in the way, found as the game finds
+    // it for a creature's own path: within 5 m of where the search stopped,
+    // its footprint holding that point. A shut door in play; kInvalidObject
+    // if none is found.
+    ObjectId blocker = kInvalidObject;
     // The pathfinder's last answer: 1 found (or given up part way, when
     // `path` is nothing), 5 none, 6 a door or the like in the way, which a
     // walker must act on to go on (the game ends a move there with

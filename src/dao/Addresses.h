@@ -258,7 +258,17 @@ DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
 // telling the pathfinding world about its mover (0x0073EB24): at the
 // world's +0xC4 whether the creature's +0xC90 is not 0, which decides
 // which kind of stamp stops it in the straight-walk check, and at +0xC8
-// the creature's size (its slot 39). The names are ours.
+// the creature's size (its slot 39).
+//
+// What is in the way, read 2026-10-01. When a creature's own search
+// answers 6, the creature's PathBlocker (0x006A7E10) takes its path's last
+// waypoint and goes through the area's objects (ids, a vector at the
+// area's +0x690) for a placeable within 5 m of it whose footprint holds
+// the point (CCPlaceable::Covers, __thiscall (const Vector4 *), `ret 4`),
+// and answers its id: the object the scripts are then told to use. So what
+// bars a path is a placeable, a shut door in play. The names are ours.
+DAO_ADDRESS(kCCCreature_PathBlocker, "CCCreature::PathBlocker", 0x006A7E10)
+DAO_ADDRESS(kCCPlaceable_Covers, "CCPlaceable::Covers", 0x0074DC40)
 DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)
 DAO_ADDRESS(kMovementController_Constructor, "MovementController::MovementController", 0x00A62B20)
 DAO_ADDRESS(kMovementController_Free, "MovementController::Free", 0x00A625B0)
