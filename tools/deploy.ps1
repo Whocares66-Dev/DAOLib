@@ -39,7 +39,19 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 
 if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.exe in $Game" }
-if (Get-Process -Name DAOrigins -ErrorAction SilentlyContinue) { throw 'DAOrigins.exe is running; close it first' }
+# The game holds its DLLs open. Another install of the game has the same
+# process name (the EA version beside GOG's), so the running one is asked
+# where it runs from: only this install's blocks the copy. One whose path
+# cannot be read is taken for this install's.
+$exe = Join-Path $Game 'DAOrigins.exe'
+foreach ($running in @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue)) {
+    $from = $running.Path
+    if (-not $from -or [string]::Equals($from, $exe, [StringComparison]::OrdinalIgnoreCase)) {
+        $where = if ($from) { $from } else { 'a path that cannot be read' }
+        throw "DAOrigins.exe is running from $where (process $($running.Id)); close it first"
+    }
+    Show-Info "another install's game is running, from $from (process $($running.Id)); it does not hold this install's files"
+}
 
 $loader = Join-Path $Game 'version.dll'
 $loaderPdb = Join-Path $Game 'version.pdb'

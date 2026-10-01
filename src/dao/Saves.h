@@ -159,6 +159,12 @@ std::vector<Slot> List(std::wstring_view character);
 // is not up; true if the game was asked, which it may still decline (in a
 // cutscene, say). When the world is there, OnGameLoaded is called with the
 // slot. A character's own name chooses it, empty the one Character() says.
+// A save that needs content the game does not have registered stops at the
+// game's own "requires the following content" dialog (Force Load or
+// Cancel): Load has answered true and nothing follows until the player
+// answers it (in play, 2026-10-01, after another install of the game had
+// rewritten Settings\AddIns.xml). Seeing that dialog from a plugin is not
+// read; a caller that must know waits for OnGameLoaded with a time limit.
 bool Load(const Slot &save);
 
 // Saves, as the save screen does for a manual save and the quicksave key
