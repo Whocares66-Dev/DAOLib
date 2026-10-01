@@ -1,9 +1,9 @@
 // Example: drawing in the world (dao/Vfx.h).
 //
 // While the game is in explore or combat mode, a ring follows the ground
-// under the cursor: the game's gold aiming ring if the point is within
-// kReach of the party's controlled creature, its red one if not, the
-// engine's own rings scaled to kRingRadius. A turn-based mode's movement
+// under the cursor: the game's aiming ring if the point is within kReach of
+// the party's controlled creature, the one it shows out of reach if not
+// (they looked alike in play; dao/Vfx.h), scaled to kRingRadius. A turn-based mode's movement
 // preview, measured as the crow flies: a path's length waits on a path
 // search a plugin can ask for (dev/TODO.md, item 5). The ring is placed
 // once and moved; it is placed afresh when its colour changes, and taken

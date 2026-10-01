@@ -29,8 +29,13 @@
 // The data tree has what the conversation screen shows: Conversation.
 // NPCLine, .Responses (each a Text and an Icon), .ResponsesReady, .HasVO
 // (dao/Data.h). Ambient conversations, the lines creatures speak in
-// passing, are conversations too, and the hooks see them as well. Not yet
-// seen in play.
+// passing, are conversations too, and the hooks see them as well. Seen in
+// play 2026-09-30 (examples/dialogue, Eleanor at Highever): NPC lines and
+// each set of replies as on the screen. What came with them: a line with
+// no text (an NPC line used to route, "[OWNER]" and empty); one NPC line
+// heard twice a millisecond apart; a "continue" reply with no text; the
+// talk table's markup (<emp>) left in the text; the speaker as the file
+// writes it (OWNER, not the creature).
 //
 // Callbacks run on the game's thread, inside the engine's own work: keep
 // them short, and make no conversation start or end from one.
@@ -88,5 +93,10 @@ void OnNpcLine(std::function<void(Conversation &, const Line &line)> observer);
 
 // The replies offered after an NPC line, in their order on the screen.
 void OnReplies(std::function<void(Conversation &, std::span<const Line> replies)> observer);
+
+// The reply the player chose, as the conversation goes on from it
+// (Conversation::Advance, 0x007F1910, __thiscall (line), `ret 4`; -1 for
+// going on with no reply, which is not reported).
+void OnReplyChosen(std::function<void(Conversation &, const Line &reply)> observer);
 
 } // namespace dao::dialogue

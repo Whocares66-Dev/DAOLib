@@ -80,6 +80,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             spdlog::info("  {}. {} (line {}, icon {})", i + 1, Text(replies[i]), replies[i].index, replies[i].icon);
         }
     });
+    dao::dialogue::OnReplyChosen([](dao::dialogue::Conversation &, const dao::dialogue::Line &reply) {
+        spdlog::info("  chose: {} (line {})", Text(reply), reply.index);
+    });
     dao::dialogue::OnLineAvailable([](dao::dialogue::Conversation &, const dao::dialogue::Line &line, bool available) {
         if (!available && line.kind == dao::dialogue::Line::Kind::Player)
         {

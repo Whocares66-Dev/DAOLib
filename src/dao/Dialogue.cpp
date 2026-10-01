@@ -41,6 +41,7 @@ std::mutex g_lock;
 std::vector<std::function<bool(Conversation &, const Line &, bool)>> g_decide;
 std::vector<std::function<void(Conversation &, const Line &)>> g_npcLines;
 std::vector<std::function<void(Conversation &, std::span<const Line>)>> g_replies;
+std::vector<std::function<void(Conversation &, const Line &)>> g_chosen;
 
 template <class T> std::vector<T> Copy(const std::vector<T> &callbacks)
 {
@@ -126,6 +127,26 @@ void __fastcall ShowReplies(void *mode, int edx, const void *list, bool flag)
     }
 }
 
+// Conversation::Advance: bool __thiscall (reply line, -1 for none), `ret 4`.
+using AdvanceFn = bool(__fastcall *)(Conversation *, int, std::uint32_t);
+Detour<AdvanceFn> g_advance;
+
+bool __fastcall Advance(Conversation *conversation, int edx, std::uint32_t index)
+{
+    const auto observers = Copy(g_chosen);
+    if (conversation != nullptr && index != kNone && !observers.empty())
+    {
+        if (const auto line = conversation->LineAt(index); line && line->kind == Line::Kind::Player)
+        {
+            for (const auto &observer : observers)
+            {
+                detail::Guard("a dialogue reply chosen callback", [&] { observer(*conversation, *line); });
+            }
+        }
+    }
+    return g_advance.Original()(conversation, edx, index);
+}
+
 void Attach()
 {
     static std::once_flag once;
@@ -133,6 +154,7 @@ void Attach()
         g_available.Attach(addr::kConversation_IsLineAvailable, &Available);
         g_playLine.Attach(addr::kConversation_PlayLine, &PlayLine);
         g_showReplies.Attach(addr::kGameModeDialog_ShowResponses, &ShowReplies);
+        g_advance.Attach(addr::kConversation_Advance, &Advance);
     });
 }
 
@@ -201,6 +223,13 @@ void OnReplies(std::function<void(Conversation &, std::span<const Line> replies)
     Attach();
     const std::lock_guard lock(g_lock);
     g_replies.push_back(std::move(observer));
+}
+
+void OnReplyChosen(std::function<void(Conversation &, const Line &reply)> observer)
+{
+    Attach();
+    const std::lock_guard lock(g_lock);
+    g_chosen.push_back(std::move(observer));
 }
 
 } // namespace dao::dialogue
