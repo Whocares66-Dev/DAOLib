@@ -225,7 +225,10 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 //   answered 6 either, and took the call to 47 to 66 ms. So the searching
 //   on is gone again: one search, and where it gives up part way, the
 //   placeable whose footprint holds a point just ahead is named instead.
-//   That last is not yet seen in play.
+//   Seen in play the same day: from the entrance to each of three
+//   creatures past the door, the answer 1, 53.38 m of the way, and the
+//   blocker the door, in 25 slices; and the walk to the spider in the same
+//   room found as before.
 // Read after, 2026-10-01: RequestPath tells the pathfinding world its
 // mover's size and which stamps stop it before it asks, and the search
 // here did not, so its straight-walk check went by the last creature to

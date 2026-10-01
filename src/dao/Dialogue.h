@@ -110,8 +110,11 @@ void OnReplyChosen(std::function<void(Conversation &, const Line &reply)> observ
 
 // Answering as the player does, by the messages the screen and the keys
 // send (dao/Messages.h), read 2026-10-01 from the dialogue mode's handlers.
-// On the game's thread, and not from one of the callbacks above. Not yet
-// seen in play.
+// On the game's thread, and not from one of the callbacks above. Seen in
+// play, 2026-10-01, through the Eluvian server: Choose took a reply at
+// Tamlen's conversation, OnReplyChosen following, and Continue went on
+// through the reply with no text and the conversation ended. InCutscene
+// and SkipCutscene are not yet seen.
 
 // Chooses the reply at a place in Replies(): what a click on it, or its
 // number key, sends. The dialogue mode takes it only while replies are on
