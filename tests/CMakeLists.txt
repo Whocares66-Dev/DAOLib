@@ -24,6 +24,13 @@ add_executable(
 )
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)
+# The address library's files, as its build packs them: the tests read them
+# as dao::Module does at start-up.
+target_compile_definitions(
+    dao_tests
+    PRIVATE DAO_ADDRESS_DATA_DIR="${DAOADDR_DATA_DIR}"
+)
+add_dependencies(dao_tests daoaddr_data)
 
 include(Catch)
 catch_discover_tests(dao_tests)
@@ -36,6 +43,14 @@ if(Python3_Interpreter_FOUND)
         COMMAND
             "${Python3_EXECUTABLE}" -m unittest discover -s
             "${PROJECT_SOURCE_DIR}/tools" -p "test_*.py"
+    )
+    # Every ID in the source is the address library's for the address
+    # written beside it.
+    add_test(
+        NAME address_ids
+        COMMAND
+            "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/address_ids.py"
+            --check
     )
     # The generated field descriptors are what the tables say.
     add_test(

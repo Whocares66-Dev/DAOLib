@@ -54,8 +54,10 @@ using Text = dao::Module::CodeRange;
 // of all samples).
 bool IsUpdate(std::uint32_t preferredReturn)
 {
-    return preferredReturn >= dao::addr::kEclipseUpdateTask_Execute &&
-           preferredReturn <= dao::addr::kEclipseUpdateTask_ExecuteEnd;
+    // Both ends as the listing has them, which is what the return is given as.
+    static const std::uint32_t begin = dao::Module::Preferred(dao::addr::kEclipseUpdateTask_Execute);
+    static const std::uint32_t end = begin + dao::addr::kEclipseUpdateTask_ExecuteSize;
+    return preferredReturn >= begin && preferredReturn <= end;
 }
 
 // What one sample copies while its thread is suspended: registers and stack
@@ -455,8 +457,10 @@ bool StartRecorder()
         return false;
     }
     CloseHandle(thread);
-    spdlog::info("recorder: started; .text {:#010x}-{:#010x}; files in {}", Preferred(range.begin),
-                 Preferred(range.end), dao::LogDirectory().string());
+    // The running build's own section, not its counterpart in GOG's: the
+    // code's end is the end of nothing in another build.
+    spdlog::info("recorder: started; .text {:#010x}-{:#010x}; files in {}", dao::Module::ImageAddress(range.begin),
+                 dao::Module::ImageAddress(range.end), dao::LogDirectory().string());
     return true;
 }
 

@@ -18,7 +18,9 @@
 namespace dao
 {
 
-inline constexpr std::uint32_t kPluginApiVersion = 1;
+// 2, 2026-10-01: the library knows more than one build of the game, and a
+// plugin built against version 1 would use GOG's addresses in the EA build.
+inline constexpr std::uint32_t kPluginApiVersion = 2;
 
 struct LoaderInfo
 {
@@ -27,7 +29,7 @@ struct LoaderInfo
     const wchar_t *loaderPath;     // the loader DLL's own path
     const wchar_t *pluginPath;     // this plugin's path
     const wchar_t *executablePath; // DAOrigins.exe's
-    bool expectedExecutable;       // Module::IsExpectedExecutable() at load
+    bool knownExecutable;          // Module::IsKnownExecutable() at load: a build the addresses are known in
 };
 
 using LoadFn = bool(__cdecl *)(const LoaderInfo *);

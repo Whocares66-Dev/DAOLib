@@ -150,8 +150,8 @@ using MessageObserver = std::function<void(void *receiver, const Message &messag
 using MessageInterceptor = std::function<bool(void *receiver, const Message &message)>;
 
 void OnAnyMessage(MessageObserver observer);
-void OnMessage(std::uintptr_t vftable, MessageObserver observer);
-void InterceptMessage(std::uintptr_t vftable, MessageInterceptor interceptor);
+void OnMessage(AddressId vftable, MessageObserver observer);
+void InterceptMessage(AddressId vftable, MessageInterceptor interceptor);
 
 template <class M> void OnMessage(std::function<void(void *receiver, const M &message)> observer)
 {
@@ -190,7 +190,7 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // which a click then answers with PerformAbilityOnTargetUnderCursorMessage.
 struct PerformAbilityMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1DEE4;
+    DAO_VFTABLE(68725);
     std::int32_t ability;
     ObjectId caster;
     ObjectId target;
@@ -205,12 +205,12 @@ static_assert(sizeof(PerformAbilityMessage) == 0x10);
 // going up sends the move. Read 2026-09-30.
 struct PreMoveCharacterToLocationMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1DA64;
+    DAO_VFTABLE(68701);
 };
 static_assert(sizeof(PreMoveCharacterToLocationMessage) == 4);
 struct MoveCharacterToLocationMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1DA94;
+    DAO_VFTABLE(68702);
 };
 static_assert(sizeof(MoveCharacterToLocationMessage) == 4);
 
@@ -219,7 +219,7 @@ static_assert(sizeof(MoveCharacterToLocationMessage) == 4);
 // mode's object under the cursor (GameModeExplore::CursorObject).
 struct PerformPrimaryActionOnTargetUnderCursorMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B16190;
+    DAO_VFTABLE(67740);
 };
 static_assert(sizeof(PerformPrimaryActionOnTargetUnderCursorMessage) == 4);
 
@@ -236,7 +236,7 @@ static_assert(sizeof(PerformPrimaryActionOnTargetUnderCursorMessage) == 4);
 // with its event, and a snap rather than a pan.
 struct CenterOnObjectMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E754;
+    DAO_VFTABLE(68770);
     ObjectId object;
 };
 static_assert(sizeof(CenterOnObjectMessage) == 8);
@@ -251,7 +251,7 @@ static_assert(sizeof(CenterOnObjectMessage) == 8);
 // sent slot 1, kind 2, and a load from the menu slot 2, kind 0.
 struct SaveGameMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B00098;
+    DAO_VFTABLE(64880);
     std::int32_t slot;
     std::int32_t kind;
     std::byte name[0x1C]; // an engine std::wstring (dao/core/Msvc8.h, WStringRep)
@@ -260,7 +260,7 @@ static_assert(sizeof(SaveGameMessage) == 0x28);
 
 struct LoadGameMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B03A14;
+    DAO_VFTABLE(65376);
     std::int32_t slot;
     std::int32_t kind;
 };
@@ -272,20 +272,20 @@ static_assert(sizeof(LoadGameMessage) == 0xC);
 // none, 2 the load screen's).
 struct RefreshHeroesMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E274;
+    DAO_VFTABLE(68744);
 };
 static_assert(sizeof(RefreshHeroesMessage) == 4);
 
 struct SelectHeroMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E2D4;
+    DAO_VFTABLE(68746);
     std::int32_t index;
 };
 static_assert(sizeof(SelectHeroMessage) == 8);
 
 struct SetSaveLoadModeMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E1E4;
+    DAO_VFTABLE(68741);
     std::int32_t mode;
 };
 static_assert(sizeof(SetSaveLoadModeMessage) == 8);
@@ -296,7 +296,7 @@ static_assert(sizeof(SetSaveLoadModeMessage) == 8);
 // up".
 struct DialogBoxClosedMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00AEE580;
+    DAO_VFTABLE(62667);
 };
 static_assert(sizeof(DialogBoxClosedMessage) == 4);
 
@@ -308,20 +308,20 @@ static_assert(sizeof(DialogBoxClosedMessage) == 4);
 // cutscene mode (0x00691D60): the skip key in each.
 struct SelectResponseMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1DE84;
+    DAO_VFTABLE(68723);
     std::int32_t index;
 };
 static_assert(sizeof(SelectResponseMessage) == 8);
 
 struct SkipDialogMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1DE54;
+    DAO_VFTABLE(68722);
 };
 static_assert(sizeof(SkipDialogMessage) == 4);
 
 struct SkipCutsceneMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1EC04;
+    DAO_VFTABLE(68795);
 };
 static_assert(sizeof(SkipCutsceneMessage) == 4);
 
@@ -331,7 +331,7 @@ static_assert(sizeof(SkipCutsceneMessage) == 4);
 // Read 2026-10-01.
 struct SkipMovieMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1EC34;
+    DAO_VFTABLE(68796);
 };
 static_assert(sizeof(SkipMovieMessage) == 4);
 
@@ -355,7 +355,7 @@ static_assert(sizeof(SkipMovieMessage) == 4);
 // call taking 381 ms.
 struct TakeScreenshotMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B07DAC;
+    DAO_VFTABLE(65864);
     // The strings' own constructors make them empty, so this has one too.
     TakeScreenshotMessage() : Message{}
     {
@@ -370,7 +370,7 @@ static_assert(sizeof(TakeScreenshotMessage) == 0x78);
 // handler (0x006416E0) passes +4 to SetGameMode.
 struct SetGameModeMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1D9D4;
+    DAO_VFTABLE(68698);
     std::int32_t mode;
 };
 static_assert(sizeof(SetGameModeMessage) == 8);
@@ -379,15 +379,15 @@ static_assert(sizeof(SetGameModeMessage) == 8);
 // dao/Addresses.h), and pause and unpause as such. No fields, 4 bytes each.
 struct UserTogglePauseMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E904;
+    DAO_VFTABLE(68779);
 };
 struct PauseMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E8A4;
+    DAO_VFTABLE(68777);
 };
 struct UnpauseMessage : Message
 {
-    static constexpr std::uintptr_t kVftable = 0x00B1E8D4;
+    DAO_VFTABLE(68778);
 };
 
 } // namespace dao::messages

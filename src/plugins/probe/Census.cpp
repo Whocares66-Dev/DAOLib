@@ -53,7 +53,7 @@ std::span<const Target> Targets()
     return kTargets;
 }
 
-CensusResult AttachCensus(std::span<const std::uint32_t> except)
+CensusResult AttachCensus(std::span<const dao::AddressId> except)
 {
     CensusResult result;
     auto *stubs = static_cast<std::uint8_t *>(
@@ -82,12 +82,19 @@ CensusResult AttachCensus(std::span<const std::uint32_t> except)
     for (std::size_t i = 0; i < kTargetCount; ++i)
     {
         const Target &t = kTargets[i];
-        if (std::ranges::find(except, t.address) != except.end())
+        if (std::ranges::find(except, t.id) != except.end())
         {
             ++result.skipped;
             continue;
         }
-        g_probeOriginals[i] = reinterpret_cast<void *>(dao::Module::Address(t.address));
+        g_probeOriginals[i] = reinterpret_cast<void *>(dao::Module::Address(t.id));
+        if (g_probeOriginals[i] == nullptr)
+        {
+            // A function the running build of the game does not have.
+            ++result.failed;
+            spdlog::warn("census: {} ({:#010x} in the listing) is not in this build", t.label, t.address);
+            continue;
+        }
         // Detours abandons a whole transaction when one attach in it fails,
         // so each target gets a transaction of its own.
         if (DetourTransactionBegin() != NO_ERROR)

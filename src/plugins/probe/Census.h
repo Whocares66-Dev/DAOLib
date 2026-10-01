@@ -10,6 +10,8 @@
 // every signature: __stdcall script commands, __thiscall handlers.
 #pragma once
 
+#include "dao/Addresses.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -26,7 +28,8 @@ enum class Kind : std::uint8_t
 
 struct Target
 {
-    std::uint32_t address; // preferred-base virtual address
+    dao::AddressId id;     // the function (dao/Addresses.h)
+    std::uint32_t address; // where the GOG build's listing has it: its name in the reports
     Kind kind;
     const char *label; // every name at the address, " | " between
 };
@@ -41,9 +44,9 @@ struct CensusResult
     std::size_t failed = 0;  // Detours refused: too short, or not code it can relocate
 };
 
-// Detours every target except those at the given addresses, one transaction
+// Detours every target except the given functions, one transaction
 // each so a refusal costs one target and not all. At plugin load only.
-CensusResult AttachCensus(std::span<const std::uint32_t> except);
+CensusResult AttachCensus(std::span<const dao::AddressId> except);
 
 // Calls counted so far at each target, by its index in Targets(); zero for a
 // target not attached. Read without locking: each count is one aligned

@@ -7,6 +7,20 @@
 // the CRT's start, on the main thread, with the loader lock released.
 // There the plugins are loaded and their DAOLib_Load called, then the entry
 // point runs and the game starts.
+//
+// Which build of the game this is, and where its entry point is, comes from
+// the address library's file for it (dao/Module.h): with none, nothing is
+// loaded.
+//
+// The EA build (dev/BUILDS.md) is wrapped: the exe's entry point is a jump
+// into Core\Activation.dll, and the game's code is encrypted until that has
+// run, so there is nothing to detour when this DLL is loaded and a plugin's
+// hooks would be written into bytes about to be decrypted over. There the
+// plugins load at the first call the game's own code makes instead: the
+// CRT's start reads the clock for its stack cookie before anything else
+// (__security_init_cookie, the entry point's first call), so a detour on
+// GetSystemTimeAsFileTime, watching for a caller inside the exe's .text, is
+// the same moment one call later, on the same thread.
 #include "dao/Addresses.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
@@ -17,8 +31,11 @@
 
 #include <Windows.h>
 
+#include <intrin.h>
+
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -48,8 +65,11 @@ void LoadPlugins()
 {
     const auto exePath = dao::Module::Path();
     const auto loaderPath = SelfPath();
-    const auto folder = exePath.parent_path() / L"daolib" / L"plugins";
-    const bool expected = dao::Module::IsExpectedExecutable();
+    // Beside the loader, which deployed is beside the exe. A loader put into
+    // the game from the build tree (tools\run_from_build.py) finds the build's
+    // plugins the same way, with nothing copied into the game.
+    const auto folder = loaderPath.parent_path() / L"daolib" / L"plugins";
+    const bool known = dao::Module::IsKnownExecutable();
 
     std::error_code ec;
     if (!std::filesystem::is_directory(folder, ec))
@@ -88,7 +108,7 @@ void LoadPlugins()
             .loaderPath = loaderPath.c_str(),
             .pluginPath = path.c_str(),
             .executablePath = exePath.c_str(),
-            .expectedExecutable = expected,
+            .knownExecutable = known,
         };
         const bool ok = load(&info);
         spdlog::info("{}: {}", name, ok ? "loaded" : "refused to load");
@@ -104,23 +124,84 @@ void __stdcall EntryHook()
     g_entry.Original()();
 }
 
+// The wrapped build's way in: the clock, as the game's code first reads it.
+using SystemTimeFn = void(WINAPI *)(LPFILETIME);
+SystemTimeFn g_systemTime = nullptr;
+dao::Module::CodeRange g_code;
+std::atomic<bool> g_gameStarted = false;
+
+void WINAPI SystemTimeHook(LPFILETIME time)
+{
+    // The wrapper, the system and this DLL's own log read the clock too, and
+    // only a caller in the exe's code is the game. Once is all it is for;
+    // the detour stays, since another thread may be inside it.
+    const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    if (!g_gameStarted.load(std::memory_order_relaxed) && g_code.Contains(caller) && !g_gameStarted.exchange(true))
+    {
+        spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
+                     dao::Module::ImageAddress(caller));
+        LoadPlugins();
+        spdlog::info("starting the game");
+    }
+    g_systemTime(time);
+}
+
+bool WaitForGameCode()
+{
+    const auto code = dao::Module::Code();
+    if (!code)
+    {
+        return false;
+    }
+    g_code = *code;
+    g_systemTime = &GetSystemTimeAsFileTime;
+    if (DetourTransactionBegin() != NO_ERROR)
+    {
+        return false;
+    }
+    DetourUpdateThread(GetCurrentThread());
+    if (DetourAttach(reinterpret_cast<PVOID *>(&g_systemTime), reinterpret_cast<PVOID>(&SystemTimeHook)) != NO_ERROR ||
+        DetourTransactionCommit() != NO_ERROR)
+    {
+        DetourTransactionAbort();
+        return false;
+    }
+    return true;
+}
+
 void Attach()
 {
     dao::OpenLog("loader");
     // First, so a crash anywhere after this is logged, the loader's own included.
-    loader::crashlog::Install();
+    loader::crashlog::Install(SelfPath().parent_path());
     const auto fingerprint = dao::Module::Fingerprint();
+    const daoaddr::Library *library = dao::Module::Library();
     if (fingerprint)
     {
-        spdlog::info("DAOrigins.exe at {:#x}: link stamp {:#x}, image size {:#x}, entry rva {:#x}{}",
-                     dao::Module::Base(), fingerprint->timeDateStamp, fingerprint->sizeOfImage,
-                     fingerprint->entryPointRva,
-                     dao::Module::IsExpectedExecutable() ? "" : " -- NOT the expected build");
+        spdlog::info("DAOrigins.exe at {:#x}: link stamp {:#x}, image size {:#x}, entry rva {:#x}", dao::Module::Base(),
+                     fingerprint->timeDateStamp, fingerprint->sizeOfImage, fingerprint->entryPointRva);
     }
-    if (!dao::Module::IsExpectedExecutable())
+    if (fingerprint == std::nullopt || library == nullptr)
     {
-        spdlog::error("this is not the build the addresses were read from (dao/core/Fingerprint.h); "
-                      "plugins are not loaded");
+        spdlog::error("the address library has no file for this build of the game ({} beside the loader, under "
+                      "daolib\\addresses); plugins are not loaded",
+                      daoaddr::FileName(fingerprint ? fingerprint->timeDateStamp : 0));
+        return;
+    }
+    // The file by name, not its folder alone: which build's file was read is
+    // the first thing to check when an ID is not where it should be.
+    spdlog::info("address library: {} IDs for this build, from {}", library->Count(),
+                 (dao::Module::AddressFolder() / daoaddr::FileName(fingerprint->timeDateStamp)).string());
+    // A wrapped build's headers give the wrapper's entry point, not the
+    // game's, which the address library knows by its ID like any function.
+    if (library->Rva(dao::addr::kEntryPoint) != fingerprint->entryPointRva)
+    {
+        if (!WaitForGameCode())
+        {
+            spdlog::error("could not detour GetSystemTimeAsFileTime; plugins are not loaded");
+            return;
+        }
+        spdlog::info("the game's code is wrapped; plugins load when it first runs");
         return;
     }
     if (!g_entry.Attach(dao::addr::kEntryPoint, &EntryHook))

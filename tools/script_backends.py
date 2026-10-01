@@ -47,7 +47,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import daoexe  # noqa: E402
 import msvc_names  # noqa: E402
-import names  # noqa: E402
+import address_ids  # noqa: E402
 import probe_report  # noqa: E402
 
 COMMANDS = os.path.join(HERE, "..", "dev", "script_commands.csv")
@@ -258,7 +258,7 @@ class Commands:
         self.callers_of = collections.Counter(
             c for cs in self.calls.values() for c in set(cs)
         )
-        self.known = {va for _, _, va, _ in names.header_rows()}
+        self.known = address_ids.addresses_in_source()
         self.vm = {va for va in self.known if 0x00A2D000 <= va < 0x00A30000}
         self.lookups = find_lookups(self.img, self.functions, self.callers_of)
 

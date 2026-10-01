@@ -12,6 +12,9 @@ their vtables, the script commands, and disassembly of any address.
     python tools/daoexe.py --strings text       printable strings containing text, with addresses
     python tools/daoexe.py --imports            DLLs imported and the functions from each
 
+    python tools/daoexe.py --exe PATH ...       any of the above over another file: another
+                                                build (dev/BUILDS.md), whose addresses are its own
+
 Addresses are virtual addresses at the preferred base, as Ghidra and
 src/dao/Addresses.h write them. --disasm needs capstone (pip install capstone);
 the rest needs nothing beyond Python.
@@ -30,8 +33,8 @@ import msvc_names  # noqa: E402
 
 EXE = os.path.join(HERE, "..", "game", "DAOrigins.exe")
 
-# The one build every address was read from; dao/core/Fingerprint.h has the
-# same numbers, and the two must agree.
+# The GOG build: the one the Ghidra project is of and every address written
+# in the source was read from.
 EXPECTED = {
     "sha256": "7e719cac4b6c138ec9114a6089e651c5409c77cffcf0bc58b8ef633c1289859c",
     "time_date_stamp": 0x4EB19D53,
@@ -39,6 +42,16 @@ EXPECTED = {
     "entry_point_rva": 0x004E3024,
     "image_base": 0x00400000,
     "version": "1.05.13263.0",
+}
+
+# Builds that are not the one above, by SHA-256, so --check can say which
+# one a file is. The address library (extern/DAOAddressLibrary) has what each
+# is, how it differs, and its own copy of this reader that knows them all.
+OTHER_BUILDS = {
+    "da168d429496f36f92fdf5320aa96381cd642cbab5cc153fbae3f550cba3e1b3": (
+        "the EA app's build, as installed: linked 2013-08-22, .text and .data encrypted "
+        "by EA's wrapper (the address library's tools/ea_dump.py reads it once decrypted)"
+    ),
 }
 
 
@@ -294,6 +307,8 @@ def check(img):
         if ok
         else "NOT the expected build: addresses in src/dao/Addresses.h do not apply"
     )
+    if sha in OTHER_BUILDS:
+        print(f"it is {OTHER_BUILDS[sha]}")
     return 0 if ok else 1
 
 
@@ -301,13 +316,19 @@ def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    if not os.path.exists(EXE):
+    exe = EXE
+    if argv[0] == "--exe":
+        if len(argv) < 3:
+            print("--exe needs a path and then what to do with it", file=sys.stderr)
+            return 2
+        exe, argv = argv[1], argv[2:]
+    if not os.path.exists(exe):
         print(
-            f"no {os.path.normpath(EXE)}; copy the game's bin_ship\\DAOrigins.exe there",
+            f"no {os.path.normpath(exe)}; copy the game's bin_ship\\DAOrigins.exe there",
             file=sys.stderr,
         )
         return 2
-    img = Image()
+    img = Image(exe)
     mode, rest = argv[0], argv[1:]
     want = rest[0].lower() if rest else ""
     if mode == "--check":

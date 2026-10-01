@@ -749,12 +749,12 @@ void AttachScriptChecks()
     if (g_initializeCommands.Attach(dao::addr::kCVirtualMachineCommands_InitializeCommands, &InitializeCommands))
     {
         spdlog::info("script checks: detoured CVirtualMachineCommands::InitializeCommands at {:#010x}",
-                     dao::addr::kCVirtualMachineCommands_InitializeCommands);
+                     dao::Module::Preferred(dao::addr::kCVirtualMachineCommands_InitializeCommands));
     }
     else
     {
         spdlog::error("script checks: could not detour InitializeCommands at {:#010x}",
-                      dao::addr::kCVirtualMachineCommands_InitializeCommands);
+                      dao::Module::Preferred(dao::addr::kCVirtualMachineCommands_InitializeCommands));
     }
 }
 

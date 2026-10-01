@@ -148,7 +148,7 @@ class CClientExoApp
         return *reinterpret_cast<const T *>(reinterpret_cast<const std::byte *>(this) + offset);
     }
 
-    template <class T> T *Lookup(std::uintptr_t function, ObjectId id)
+    template <class T> T *Lookup(AddressId function, ObjectId id)
     {
         using Fn = T *(__fastcall *)(CClientExoApp *, int, ObjectId);
         return reinterpret_cast<Fn>(Module::Address(function))(this, 0, id);

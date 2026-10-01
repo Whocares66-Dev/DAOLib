@@ -44,6 +44,7 @@ namespace
 using SetFilterFn = LPTOP_LEVEL_EXCEPTION_FILTER(WINAPI *)(LPTOP_LEVEL_EXCEPTION_FILTER);
 SetFilterFn g_setFilter = nullptr;      // the real one, after the detour
 LPTOP_LEVEL_EXCEPTION_FILTER g_chained; // the filter the game asked for last
+std::filesystem::path g_folder;         // where the loader is: daolib\ is beside it
 std::atomic<bool> g_crashing{false};    // one log per process, whatever else faults
 
 // What the crashing thread hands the writer: copies, since the writer runs
@@ -170,10 +171,18 @@ class Report
         }
         if (IsExe(m))
         {
-            const auto preferred =
-                static_cast<std::uint32_t>(address - dao::Module::Base() + dao::core::kPreferredBase);
-            std::string text = fmt::format("{} {:#010x}", m->name, preferred);
-            if (const auto hit = functions_.Find(preferred))
+            // The names are of the GOG build's addresses. In another build
+            // the address is given as that build's listing shows it, then as
+            // GOG's, which is what the name is looked up by; an address GOG's
+            // build has no counterpart of has neither.
+            const std::uint32_t own = dao::Module::ImageAddress(address);
+            const std::uint32_t preferred = dao::Module::Preferred(address);
+            std::string text = fmt::format("{} {:#010x}", m->name, own);
+            if (preferred != own)
+            {
+                text += preferred != 0 ? fmt::format(" (GOG {:#010x})", preferred) : " (not in the GOG build)";
+            }
+            if (const auto hit = preferred != 0 ? functions_.Find(preferred) : std::nullopt)
             {
                 text += fmt::format(" {}+{:#x}", hit->name, hit->offset);
             }
@@ -265,8 +274,8 @@ class Report
     {
         const auto fingerprint = dao::Module::Fingerprint();
         w.Line("Dragon Age: Origins, DAOrigins.exe link stamp {:#x}{}", fingerprint ? fingerprint->timeDateStamp : 0,
-               dao::Module::IsExpectedExecutable() ? " (1.05.13263.0, the build DAOLib knows)"
-                                                   : " -- NOT the build DAOLib knows");
+               dao::Module::IsKnownExecutable() ? " (a build the address library knows)"
+                                                : " -- NOT a build the address library knows");
         std::array<char, 32> when{};
         const std::time_t now = std::time(nullptr);
         std::tm local{};
@@ -534,12 +543,13 @@ class Report
     void LoadFunctions()
     {
         // Ghidra's names for the game's functions, deployed beside the
-        // plugins (tools\deploy.ps1). Only for the build they were read from.
-        if (!dao::Module::IsExpectedExecutable())
+        // plugins (tools\deploy.ps1). They are the GOG build's, and serve any
+        // build whose addresses map back to it (Describe).
+        if (!dao::Module::IsKnownExecutable())
         {
             return;
         }
-        const auto path = dao::Module::Path().parent_path() / L"daolib" / L"functions.tsv";
+        const auto path = g_folder / L"daolib" / L"functions.tsv";
         std::ifstream in(path, std::ios::binary);
         if (!in)
         {
@@ -555,8 +565,7 @@ class Report
         // Our PDBs sit beside our DLLs; the search path names those folders
         // and nothing else, so no symbol server is asked and nothing waits
         // on the network in a dying process.
-        const auto bin = dao::Module::Path().parent_path();
-        const std::wstring search = bin.wstring() + L";" + (bin / L"daolib" / L"plugins").wstring();
+        const std::wstring search = g_folder.wstring() + L";" + (g_folder / L"daolib" / L"plugins").wstring();
         SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_FAIL_CRITICAL_ERRORS |
                       SYMOPT_NO_PROMPTS);
         symbols_ = SymInitializeW(GetCurrentProcess(), search.c_str(), TRUE) != FALSE;
@@ -628,8 +637,9 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
 
 } // namespace
 
-void Install()
+void Install(const std::filesystem::path &loaderFolder)
 {
+    g_folder = loaderFolder;
     g_chained = SetUnhandledExceptionFilter(&Filter);
     const HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
     g_setFilter = kernel32 != nullptr

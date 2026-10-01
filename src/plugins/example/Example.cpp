@@ -113,7 +113,7 @@ int CheckCombatState(dao::script::CommandCall &call)
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
 {
     dao::OpenLog("example");
-    if (info == nullptr || info->apiVersion != dao::kPluginApiVersion || !info->expectedExecutable)
+    if (info == nullptr || info->apiVersion != dao::kPluginApiVersion || !info->knownExecutable)
     {
         spdlog::error("not the loader or the game this was built for");
         return false;

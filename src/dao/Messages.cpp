@@ -26,7 +26,7 @@ namespace
 // and an observer or an interceptor.
 struct Subscription
 {
-    std::uintptr_t vftable = 0;
+    AddressId vftable{}; // the message class's, or none (0) for every message
     MessageObserver observe;
     MessageInterceptor intercept;
 };
@@ -88,7 +88,7 @@ bool __fastcall Dispatch(void *registry, int edx, void *receiver, const Message 
     bool taken = false;
     for (const auto &s : *subscriptions)
     {
-        if (s.vftable != 0 && Module::Address(s.vftable) != vftable)
+        if (s.vftable != AddressId{} && Module::Address(s.vftable) != vftable)
         {
             continue;
         }
@@ -128,15 +128,15 @@ void Add(Subscription subscription)
 
 void OnAnyMessage(MessageObserver observer)
 {
-    Add({0, std::move(observer), {}});
+    Add({AddressId{}, std::move(observer), {}});
 }
 
-void OnMessage(std::uintptr_t vftable, MessageObserver observer)
+void OnMessage(AddressId vftable, MessageObserver observer)
 {
     Add({vftable, std::move(observer), {}});
 }
 
-void InterceptMessage(std::uintptr_t vftable, MessageInterceptor interceptor)
+void InterceptMessage(AddressId vftable, MessageInterceptor interceptor)
 {
     Add({vftable, {}, std::move(interceptor)});
 }

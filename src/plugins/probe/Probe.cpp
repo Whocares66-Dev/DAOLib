@@ -92,8 +92,7 @@ void __fastcall SetPaused(dao::CClientExoApp *self, int edx, bool paused, bool s
 {
     // The address the call returns to, as a preferred-base address: the
     // caller, to look up in Ghidra.
-    const auto caller =
-        reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - dao::Module::Base() + dao::core::kPreferredBase;
+    const auto caller = dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
     const bool before = self->IsPaused();
     CrashIfTesting();
     g_setPaused.Original()(self, edx, paused, second);
@@ -228,15 +227,16 @@ int __cdecl FindSave(void *out, const dao::core::WStringRep *character, std::int
     return g_findSave.Original()(out, character, slot, kind);
 }
 
-template <class Fn> void Place(dao::Detour<Fn> &detour, std::uintptr_t address, Fn hook, const char *what)
+// The address logged is the GOG build's listing's, as everywhere in the logs.
+template <class Fn> void Place(dao::Detour<Fn> &detour, dao::AddressId id, Fn hook, const char *what)
 {
-    if (detour.Attach(address, hook))
+    if (detour.Attach(id, hook))
     {
-        spdlog::info("detoured {} at {:#010x}", what, address);
+        spdlog::info("detoured {} at {:#010x}", what, dao::Module::Preferred(id));
     }
     else
     {
-        spdlog::error("could not detour {} at {:#010x}", what, address);
+        spdlog::error("could not detour {} at {:#010x}", what, dao::Module::Preferred(id));
     }
 }
 
@@ -250,8 +250,11 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::error("loader API {} is not {}", info != nullptr ? info->apiVersion : 0, dao::kPluginApiVersion);
         return false;
     }
-    spdlog::info("exe at {:#x}, expected build: {}", dao::Module::Base(), info->expectedExecutable);
-    if (!info->expectedExecutable)
+    const auto fingerprint = dao::Module::Fingerprint();
+    spdlog::info("exe at {:#x}, link stamp {:#x}, {}", dao::Module::Base(),
+                 fingerprint ? fingerprint->timeDateStamp : 0,
+                 info->knownExecutable ? "a build the address library knows" : "not a build the address library knows");
+    if (!info->knownExecutable)
     {
         return false;
     }
@@ -276,14 +279,14 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     probe::AttachEventWatch();
 
     // The census, on everything but what is hooked above.
-    const std::uint32_t hookedAbove[] = {
-        static_cast<std::uint32_t>(dao::addr::kGameModeController_HandleUserTogglePause),
-        static_cast<std::uint32_t>(dao::addr::kCClientExoApp_SetPaused),
-        static_cast<std::uint32_t>(dao::addr::kCCObject_QueueCommand),
-        static_cast<std::uint32_t>(dao::addr::kCClientVirtualMachineCommands_AddCommand),
-        static_cast<std::uint32_t>(dao::addr::kScaleformManager_OpenMovie),
-        static_cast<std::uint32_t>(dao::addr::kSaveGame_Write),
-        static_cast<std::uint32_t>(dao::addr::kSaveGame_FindSave),
+    const dao::AddressId hookedAbove[] = {
+        dao::addr::kGameModeController_HandleUserTogglePause,
+        dao::addr::kCClientExoApp_SetPaused,
+        dao::addr::kCCObject_QueueCommand,
+        dao::addr::kCClientVirtualMachineCommands_AddCommand,
+        dao::addr::kScaleformManager_OpenMovie,
+        dao::addr::kSaveGame_Write,
+        dao::addr::kSaveGame_FindSave,
     };
     const auto census = probe::AttachCensus(hookedAbove);
     spdlog::info("census: {} of {} functions counted, {} skipped (hooked above), {} refused by Detours",

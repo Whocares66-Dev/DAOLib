@@ -1,29 +1,62 @@
-// Every address this library reads from the game, each read from the
-// executable dao/core/Fingerprint.h names (the GOG 1.05.13263.0 build) in
-// Ghidra, as a preferred-base virtual address: what the Ghidra listing
-// shows. Go through dao::Module::Address, which relocates it.
+// Every function and global this library reaches in the game, each as an
+// ID: a number from DAOAddressLibrary (extern/DAOAddressLibrary) that means
+// the same function or global in every build of DAOrigins.exe. Where it is
+// in the build that is running is looked up at run time, by
+// dao::Module::Address, in that build's file (dao/Module.h), so nothing
+// here, and no plugin, is tied to one build.
 //
-// DAO_ADDRESS is code, DAO_DATA a global. The second argument is the
-// engine's name for it, as it is named in Ghidra: tools/names.py reads this file and tools/ghidra-mcp.ps1 applies
-// those names to the analysis on every launch, so a finding recorded here
-// is read back beside the code it was made from. `Class::Method` becomes
-// the namespace Class.
+// A row is a constant and its ID, and nothing else about the thing: what
+// the engine calls it, and where it is in each build, are written down once,
+// in the address library's table (its data/addresses.csv), and looked up
+// there. `python tools/address_ids.py kName`, or an ID, or an address, says
+// what a row is: its name and its address in every build. tools/names.py
+// gives the table's names to Ghidra on every launch (tools/ghidra-mcp.ps1),
+// so a finding is read back beside the code it was made from.
 //
-// Add a row with what it is, how it was found, and the date. An address
-// with no story is one nobody can check.
+// DAO_ADDRESS is code, DAO_DATA a global. DAO_VFTABLE, inside a class,
+// gives it kVftable: its vftable's ID, by which a message or an attribute
+// is told from another.
+//
+// Each was read in Ghidra in the GOG 1.05.13263.0 build, and the stories in
+// the comments are all told in that build's addresses, as the listing shows
+// them (preferred-base virtual addresses). To add one, write it as it was
+// read, with the engine's name for it:
+//
+//   DAO_ADDRESS(kCClientExoApp_SetPaused, "CClientExoApp::SetPaused", 0x005D6740)
+//
+// and run tools/address_ids.py, which finds its ID, puts the name in the
+// table and leaves the row as the ID alone. Until then the row does not
+// compile. Add it with what it is, how it was found, and the date: an
+// address with no story is one nobody can check.
 #pragma once
+
+#include "daoaddr/Library.h"
 
 #include <cstdint>
 
-#define DAO_ADDRESS(name, engineName, va) inline constexpr std::uintptr_t name = (va);
-#define DAO_DATA(name, engineName, va) inline constexpr std::uintptr_t name = (va);
+namespace dao
+{
+
+// A function's or a global's number in the address library. Its own type,
+// so an address cannot be passed where one is wanted.
+using AddressId = daoaddr::Id;
+
+} // namespace dao
+
+#define DAO_ADDRESS(name, id) inline constexpr ::dao::AddressId name{id};
+#define DAO_DATA(name, id) inline constexpr ::dao::AddressId name{id};
+#define DAO_VFTABLE(id)                                                                                                \
+    static constexpr ::dao::AddressId kVftable                                                                         \
+    {                                                                                                                  \
+        id                                                                                                             \
+    }
 
 namespace dao::addr
 {
 
 // The exe's entry point (mainCRTStartup), from IMAGE_OPTIONAL_HEADER, which
 // the loader detours to run plugins on the main thread before the game.
-DAO_ADDRESS(kEntryPoint, "entry", 0x008E3024)
+DAO_ADDRESS(kEntryPoint, 25795)
 
 // The script command table (dev/SCRIPT_COMMANDS.md, dao/Script.h), on the
 // CVirtualMachineCommands object at CClientExoApp+0x1E4. Its vtable runs
@@ -42,13 +75,13 @@ DAO_ADDRESS(kEntryPoint, "entry", 0x008E3024)
 // probe's detour ran once, five seconds into start-up, on the commands
 // object the application keeps, and on the thread every script command
 // then ran on.
-DAO_ADDRESS(kCVirtualMachineCommands_InitializeCommands, "CVirtualMachineCommands::InitializeCommands", 0x00675210)
+DAO_ADDRESS(kCVirtualMachineCommands_InitializeCommands, 13533)
 // `table = this->[+0xC]; table[id] = fn`, `ret 0xC`, the name unused.
-DAO_ADDRESS(kCVirtualMachineCommands_Register, "CVirtualMachineCommands::Register", 0x0064DD40)
+DAO_ADDRESS(kCVirtualMachineCommands_Register, 12839)
 // Slot 2: an id of 0x35F or more, or an empty slot, is error -642
 // (0xFFFFFD7E); otherwise `table[id](id, paramCount)` with the commands
 // object in ecx, its result returned.
-DAO_ADDRESS(kCVirtualMachineCommands_ExecuteCommand, "CVirtualMachineCommands::ExecuteCommand", 0x0064DD60)
+DAO_ADDRESS(kCVirtualMachineCommands_ExecuteCommand, 12840)
 
 // Pause (dev/TURN_BASED.md). Read 2026-09-29 with tools/daoexe.py; not yet
 // verified in play.
@@ -61,13 +94,12 @@ DAO_ADDRESS(kCVirtualMachineCommands_ExecuteCommand, "CVirtualMachineCommands::E
 // __thiscall bool(const UserTogglePauseMessage&), `ret 4`, always true. It
 // ignores its controller: it reads the app's paused flag and calls SetPaused
 // with the opposite, and 1 as the second argument.
-DAO_ADDRESS(kGameModeController_HandleUserTogglePause, "GameModeController::HandleMessage_UserTogglePauseMessage",
-            0x006403C0)
+DAO_ADDRESS(kGameModeController_HandleUserTogglePause, 12587)
 // The application object: allocated 0x2F0 bytes and constructed at
 // 0x005DCC4A (constructor 0x005DC510, whose vftable stores name the class
 // CClientExoApp), stored here, cleared at 0x005D42D3.
-DAO_DATA(kClientExoApp, "g_clientExoApp", 0x00C327EC)
-DAO_ADDRESS(kCClientExoApp_Constructor, "CClientExoApp::CClientExoApp", 0x005DC510)
+DAO_DATA(kClientExoApp, 100835)
+DAO_ADDRESS(kCClientExoApp_Constructor, 10640)
 // Pause or unpause. __thiscall void(bool paused, bool second), `ret 8`. Does
 // nothing if the flag already says `paused`. Otherwise it sets the flag (an
 // object at +0xD8 whose byte at +0xC is the value, set through its vtable
@@ -77,14 +109,14 @@ DAO_ADDRESS(kCClientExoApp_Constructor, "CClientExoApp::CClientExoApp", 0x005DC5
 // 0-5, UI updates per mode). Named SetPaused by what it does; the engine's
 // name is not in the exe. What `second` means is not yet read: the pause
 // key passes 1.
-DAO_ADDRESS(kCClientExoApp_SetPaused, "CClientExoApp::SetPaused", 0x005D6740)
+DAO_ADDRESS(kCClientExoApp_SetPaused, 10547)
 // The game mode controller, CClientExoApp+0x114 (dao/GameModes.h), read
 // 2026-09-30: its constructor, from the application's initialisation
 // (0x005DC052), and SetGameMode(mode, 0, 0), __thiscall, which its
 // handler for SetGameModeMessage (0x006416E0) calls with the message's
 // field.
-DAO_ADDRESS(kGameModeController_Constructor, "GameModeController::GameModeController", 0x00641370)
-DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 0x006414A0)
+DAO_ADDRESS(kGameModeController_Constructor, 12617)
+DAO_ADDRESS(kGameModeController_SetGameMode, 12618)
 
 // What is under the mouse cursor, read 2026-09-30 (dao/GameModes.h,
 // GameModeExplore, has the fields). The mode's update re-picks 15 times a
@@ -98,11 +130,11 @@ DAO_ADDRESS(kGameModeController_SetGameMode, "GameModeController::SetGameMode", 
 // Vector4 *origin, const Vector4 *unit direction, collision mask, flag,
 // physics scene or null for the current area's), `ret 0x1C`, and returns
 // the count. The names are ours.
-DAO_ADDRESS(kGameModeExplore_CastCursorRay, "GameModeExplore::CastCursorRay", 0x0070B590)
-DAO_ADDRESS(kGameModeExplore_UpdateCursor, "GameModeExplore::UpdateCursor", 0x0070F270)
-DAO_ADDRESS(kGameModeExplore_CanMoveTo, "GameModeExplore::CanMoveTo", 0x0070C840)
-DAO_ADDRESS(kGameModeExplore_MoveTo, "GameModeExplore::MoveTo", 0x0070BE80)
-DAO_ADDRESS(kWorld_Raycast, "World::Raycast", 0x006497A0)
+DAO_ADDRESS(kGameModeExplore_CastCursorRay, 16179)
+DAO_ADDRESS(kGameModeExplore_UpdateCursor, 16280)
+DAO_ADDRESS(kGameModeExplore_CanMoveTo, 16220)
+DAO_ADDRESS(kGameModeExplore_MoveTo, 16197)
+DAO_ADDRESS(kWorld_Raycast, 12713)
 // World queries (dao/World.h), read 2026-09-30. Raycast collects its hits
 // in a static vector (below) and, with its flag, adds the selection group
 // 0x20000 to the mask and keeps an object's body and volume both; it uses
@@ -116,7 +148,7 @@ DAO_ADDRESS(kWorld_Raycast, "World::Raycast", 0x006497A0)
 // slot 40, cast by slot 2 (0x00695180); the module's current area is its
 // +0x388 once loaded, else the controlled creature's (0x005FE470). The
 // names are ours.
-DAO_DATA(kWorld_RaycastResults, "World::g_raycastResults", 0x00C347B0)
+DAO_DATA(kWorld_RaycastResults, 101265)
 // The world on the screen, read 2026-10-01 (dao/World.h, ToScreen). The
 // cursor's ray cast (GameModeExplore::CastCursorRay, 0x0070B590) takes the
 // cursor's place in pixels, asks this global's object for the scene being
@@ -136,13 +168,13 @@ DAO_DATA(kWorld_RaycastResults, "World::g_raycastResults", 0x00C347B0)
 // camera's +4 answers (its slots 5 and 6): the renderer's camera's, not
 // the wrapper's, whose +4 is the renderer's camera itself. The points are
 // four floats, aligned for SSE. The names are ours.
-DAO_DATA(kGraphics, "g_graphics", 0x00C31650)
-DAO_DATA(kPerspectiveCamera_Vftable, "Renderer::PerspectiveCamera::vftable", 0x00B58604)
-DAO_ADDRESS(kWorld_CurrentScene, "World::CurrentScene", 0x00648B30)
-DAO_ADDRESS(kCCArea_LineOfSight, "CCArea::LineOfSight", 0x0067C3F0)
-DAO_ADDRESS(kCCPlaceable_BlocksSight, "CCPlaceable::BlocksSight", 0x0067A670)
-DAO_ADDRESS(kCCObject_Area, "CCObject::Area", 0x00695180)
-DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
+DAO_DATA(kGraphics, 100485)
+DAO_DATA(kPerspectiveCamera_Vftable, 74603)
+DAO_ADDRESS(kWorld_CurrentScene, 12699)
+DAO_ADDRESS(kCCArea_LineOfSight, 13635)
+DAO_ADDRESS(kCCPlaceable_BlocksSight, 13576)
+DAO_ADDRESS(kCCObject_Area, 14059)
+DAO_ADDRESS(kCCModule_CurrentArea, 11018)
 // Paths, read 2026-09-30 (dao/World.h, CurrentPath; dev/TODO.md, item 5). A
 // creature's MovementController is its +0xA40 (Movement); the move
 // commands' update (0x007A9130) asks for a path through RequestPath
@@ -200,18 +232,18 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // (its slot 22, SetSeen, which keeps it at the room's +0x100: 1 in view, 2
 // seen before, 0 never) and whether to show (its slot 31, with false for
 // one never seen). The names are ours.
-DAO_ADDRESS(kCCArea_RoomsSeen, "CCArea::RoomsSeen", 0x006886F0)
+DAO_ADDRESS(kCCArea_RoomsSeen, 13805)
 // Which room a thing is in, read 2026-10-01 from how the party's rooms are
 // gathered. An object keeps its room at +0x41C and the room's number at
 // +0x150 (-1 in none), set by its own refresh (0x00695D70), which asks its
 // area for the room at its position raised by its height: RoomAt,
 // __thiscall on the area (const Vector4 *), `ret 4`, which hands the point
 // to the layout (its slot 2) and answers the room or null.
-DAO_ADDRESS(kCCArea_RoomAt, "CCArea::RoomAt", 0x0067B3A0)
-DAO_ADDRESS(kAreaLayout_Update, "AreaLayout::Update", 0x005CA1B0)
-DAO_ADDRESS(kIndoorStreamPolicy_Decide, "EC::IndoorStreamPolicy::Decide", 0x005D3FA0)
-DAO_ADDRESS(kCRoom_SetState, "CRoom::SetState", 0x005D31D0)
-DAO_ADDRESS(kBounds_DistanceSquared, "Bounds::DistanceSquared", 0x004D2D30)
+DAO_ADDRESS(kCCArea_RoomAt, 13596)
+DAO_ADDRESS(kAreaLayout_Update, 10254)
+DAO_ADDRESS(kIndoorStreamPolicy_Decide, 10447)
+DAO_ADDRESS(kCRoom_SetState, 10429)
+DAO_ADDRESS(kBounds_DistanceSquared, 4918)
 
 // Cooldowns (dao/Abilities.h), read 2026-09-30 from the scripts'
 // SetCooldown and GetRemainingCooldown. A creature's stats keep a cooldown
@@ -231,13 +263,13 @@ DAO_ADDRESS(kBounds_DistanceSquared, "Bounds::DistanceSquared", 0x004D2D30)
 // the manager (float seconds), from Cooldowns' own caller) takes the time
 // from each, sets the share to what is left over +0x20, and drops a record
 // that has run out from the ticking ones. The names are ours.
-DAO_ADDRESS(kCCCreatureStats_Cooldowns, "CCCreatureStats::Cooldowns", 0x0071CA00)
-DAO_ADDRESS(kCCCreatureStats_SetCooldown, "CCCreatureStats::SetCooldown", 0x0071DCE0)
-DAO_ADDRESS(kCooldownManager_Find, "CooldownManager::Find", 0x0071C250)
-DAO_ADDRESS(kCooldownManager_Tick, "CooldownManager::Tick", 0x0071C840)
-DAO_ADDRESS(kCCCreature_Movement, "CCCreature::Movement", 0x006A2570)
-DAO_ADDRESS(kCCObject_RequestPath, "CCObject::RequestPath", 0x0073EA80)
-DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
+DAO_ADDRESS(kCCCreatureStats_Cooldowns, 16534)
+DAO_ADDRESS(kCCCreatureStats_SetCooldown, 16554)
+DAO_ADDRESS(kCooldownManager_Find, 16526)
+DAO_ADDRESS(kCooldownManager_Tick, 16532)
+DAO_ADDRESS(kCCCreature_Movement, 14455)
+DAO_ADDRESS(kCCObject_RequestPath, 17573)
+DAO_ADDRESS(kMovementController_Step, 33560)
 // A search apart from any creature's (dao/World.h, FindPath), read
 // 2026-09-30. The controller is a plain record, about 0xA0 bytes: the
 // pathfinding world at +0x0C (the application's +0x118), the mover's
@@ -291,25 +323,25 @@ DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
 // about is the path's own note of the barred cell, a pointer at the path's
 // +0x84 to a point made on first use (0x00A476B0), which the search's
 // refining writes when it answers 6 (0x00A4D1F0). The names are ours.
-DAO_ADDRESS(kCCCreature_PathBlocker, "CCCreature::PathBlocker", 0x006A7E10)
-DAO_ADDRESS(kCCPlaceable_Covers, "CCPlaceable::Covers", 0x0074DC40)
-DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)
-DAO_ADDRESS(kMovementController_Constructor, "MovementController::MovementController", 0x00A62B20)
-DAO_ADDRESS(kMovementController_Free, "MovementController::Free", 0x00A625B0)
-DAO_ADDRESS(kMovementController_IsFree, "MovementController::IsFree", 0x00A62A90)
-DAO_ADDRESS(kMovementController_SetStart, "MovementController::SetStart", 0x00A62990)
-DAO_ADDRESS(kMovementController_SetGoal, "MovementController::SetGoal", 0x00A629C0)
-DAO_ADDRESS(kMovementController_LiftObstacle, "MovementController::LiftObstacle", 0x00A627D0)
-DAO_ADDRESS(kMovementController_Direct, "MovementController::Direct", 0x00A626F0)
-DAO_ADDRESS(kCCCreature_PlaceObstacle, "CCCreature::PlaceObstacle", 0x006A3BC0)
-DAO_ADDRESS(kCCArea_NearestFree, "CCArea::NearestFree", 0x0073E7F0)
+DAO_ADDRESS(kCCCreature_PathBlocker, 14603)
+DAO_ADDRESS(kCCPlaceable_Covers, 17891)
+DAO_ADDRESS(kMovementParameters_Constructor, 33566)
+DAO_ADDRESS(kMovementController_Constructor, 33575)
+DAO_ADDRESS(kMovementController_Free, 33555)
+DAO_ADDRESS(kMovementController_IsFree, 33573)
+DAO_ADDRESS(kMovementController_SetStart, 33570)
+DAO_ADDRESS(kMovementController_SetGoal, 33571)
+DAO_ADDRESS(kMovementController_LiftObstacle, 33563)
+DAO_ADDRESS(kMovementController_Direct, 33561)
+DAO_ADDRESS(kCCCreature_PlaceObstacle, 14494)
+DAO_ADDRESS(kCCArea_NearestFree, 17572)
 // Lets a finished search go before a new one (__thiscall, no arguments):
 // the move update calls it first, then puts the mover's id in the
 // controller's parameters (+0x10, its first word), the target's id at
 // +0x94 when the command has one, and the range, 0.05 m, at +0x90.
-DAO_ADDRESS(kMovementController_Cancel, "MovementController::Cancel", 0x00A62960)
-DAO_ADDRESS(kMovementController_NextWaypoint, "MovementController::NextWaypoint", 0x00A625E0)
-DAO_ADDRESS(kPathSearch_Waypoint, "PathSearch::Waypoint", 0x00A47620)
+DAO_ADDRESS(kMovementController_Cancel, 33569)
+DAO_ADDRESS(kMovementController_NextWaypoint, 33556)
+DAO_ADDRESS(kPathSearch_Waypoint, 33026)
 
 // Visual effects in the world (dao/Vfx.h), read 2026-09-30 from explore
 // mode's aiming (0x00710F80), which keeps its ring's id in a global and
@@ -322,14 +354,14 @@ DAO_ADDRESS(kPathSearch_Waypoint, "PathSearch::Waypoint", 0x00A47620)
 // is moved by CCObject::SetPosition (const Vector4 *, flag), `ret 8`.
 // AimRingEffect (area type, out of reach) answers the ring's vfx_base row,
 // 30017 to 30019. The names are ours.
-DAO_ADDRESS(kVfxManager_Get, "VfxManager::Get", 0x0079E820)
-DAO_ADDRESS(kVfxManager_Place, "VfxManager::Place", 0x0079EDC0)
-DAO_ADDRESS(kVfxManager_Find, "VfxManager::Find", 0x0079D780)
-DAO_ADDRESS(kVfxManager_Remove, "VfxManager::Remove", 0x0079EAE0)
-DAO_ADDRESS(kCCObject_SetPosition, "CCObject::SetPosition", 0x00695540)
-DAO_ADDRESS(kGameModeExplore_AimRingEffect, "GameModeExplore::AimRingEffect", 0x0070AB20)
-DAO_ADDRESS(kGameModeExplore_UpdateAim, "GameModeExplore::UpdateAim", 0x00710F80)
-DAO_DATA(kGameModeExplore_AimRing, "GameModeExplore::g_aimRing", 0x00C0679C)
+DAO_ADDRESS(kVfxManager_Get, 19701)
+DAO_ADDRESS(kVfxManager_Place, 19710)
+DAO_ADDRESS(kVfxManager_Find, 19676)
+DAO_ADDRESS(kVfxManager_Remove, 19704)
+DAO_ADDRESS(kCCObject_SetPosition, 14084)
+DAO_ADDRESS(kGameModeExplore_AimRingEffect, 16149)
+DAO_ADDRESS(kGameModeExplore_UpdateAim, 16294)
+DAO_DATA(kGameModeExplore_AimRing, 97481)
 
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a
@@ -338,7 +370,7 @@ DAO_DATA(kGameModeExplore_AimRing, "GameModeExplore::g_aimRing", 0x00C0679C)
 // An object by its id, on the application: the script command AddCommand
 // pops an object id and passes it here, `mov ecx, [g_clientExoApp]`, one
 // argument, and gets the object back in eax.
-DAO_ADDRESS(kCClientExoApp_GetObjectById, "CClientExoApp::GetObjectById", 0x005D5BE0)
+DAO_ADDRESS(kCClientExoApp_GetObjectById, 10519)
 // The typed lookups beside it, found 2026-09-30 by tools/script_backends.py
 // (dev/object_lookups.csv): the same shape, then a cast through the virtual
 // slot that only the named class answers with `this`. Each __thiscall, the
@@ -347,13 +379,13 @@ DAO_ADDRESS(kCClientExoApp_GetObjectById, "CClientExoApp::GetObjectById", 0x005D
 // 2026-09-30 by the probe's script checks (dev/LIBRARY.md): each found the
 // object the engine's getters answered for, on every call. The waypoint's
 // was not called, and GetGameObjectById is not used by the checks.
-DAO_ADDRESS(kCClientExoApp_GetGameObjectById, "CClientExoApp::GetGameObjectById", 0x005D5840)
-DAO_ADDRESS(kCClientExoApp_GetCreatureById, "CClientExoApp::GetCreatureById", 0x005D58C0)
-DAO_ADDRESS(kCClientExoApp_GetPlaceableById, "CClientExoApp::GetPlaceableById", 0x005D5B40)
-DAO_ADDRESS(kCClientExoApp_GetWayPointById, "CClientExoApp::GetWayPointById", 0x005D5C60)
+DAO_ADDRESS(kCClientExoApp_GetGameObjectById, 10507)
+DAO_ADDRESS(kCClientExoApp_GetCreatureById, 10509)
+DAO_ADDRESS(kCClientExoApp_GetPlaceableById, 10517)
+DAO_ADDRESS(kCClientExoApp_GetWayPointById, 10521)
 // The module, read 2026-09-30: the object manager (+0xCC) looks up the id
 // at +0x2B8 and the result is cast through slot 7, CCModule's.
-DAO_ADDRESS(kCClientExoApp_GetModule, "CClientExoApp::GetModule", 0x005D4FC0)
+DAO_ADDRESS(kCClientExoApp_GetModule, 10493)
 // Queue a command on an object: __thiscall(command, addToFront, override),
 // `ret 0xC`. Seen in play 2026-09-30 (dev/TURN_BASED.md): about 200
 // commands in a fight, all on CCCreature. Read 2026-09-30: it returns 0
@@ -384,7 +416,7 @@ DAO_ADDRESS(kCClientExoApp_GetModule, "CClientExoApp::GetModule", 0x005D4FC0)
 //               a wait at the front, static
 //   0x006D694C, 0x006D69CC  the client table's SetActive, the same
 // So whose a command is shows in the command itself: Command::PlayerIssued.
-DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
+DAO_ADDRESS(kCCObject_QueueCommand, 17550)
 
 // Sending a message (dao/Messages.h), read 2026-09-30. Handlers are kept by
 // a registry, a singleton of 0x28 bytes made on first use (Get), in a table
@@ -402,7 +434,7 @@ DAO_ADDRESS(kCCObject_QueueCommand, "CCObject::QueueCommand", 0x0073CD10)
 // it that 74 places call, __cdecl (message, receiver), a no-op for a null
 // receiver: synchronous, on the caller's thread, and the message stays the
 // caller's. The names are ours.
-DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
+DAO_ADDRESS(kMessages_Send, 4886)
 // Messages from text, read 2026-10-01 (dao/Messages.h, SendText). A movie's
 // button and a key's binding name a message as text, and the engine makes
 // the message from it. FromText, __cdecl (const std::wstring &), reads the
@@ -424,9 +456,9 @@ DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
 // (0x0087C950, for the texts the current mode's group allows) and sends
 // them all to the one receiver it was given, the game mode controller,
 // the receiver RawInputMessage has too. The names are ours.
-DAO_ADDRESS(kMessages_FromText, "Messages::FromText", 0x004D2320)
-DAO_ADDRESS(kMessages_FromBindingText, "Messages::FromBindingText", 0x007957D0)
-DAO_ADDRESS(kMessages_FromCallbackText, "Messages::FromCallbackText", 0x00524BE0)
+DAO_ADDRESS(kMessages_FromText, 4890)
+DAO_ADDRESS(kMessages_FromBindingText, 19413)
+DAO_ADDRESS(kMessages_FromCallbackText, 6984)
 // The player's keys, read 2026-10-01 (dao/Input.h). The game mode
 // controller's start (0x00641870) calls, in this order:
 // Input::RegisterInputMessages (0x006DC900), which fills the modes' groups
@@ -470,25 +502,25 @@ DAO_ADDRESS(kMessages_FromCallbackText, "Messages::FromCallbackText", 0x00524BE0
 // 4`, is asked by the input mapper for each text a pressed key has
 // (0x0087C950): true if a group that is on allows the text and none bars
 // it. The names are ours.
-DAO_ADDRESS(kGroupedInputMappings_Get, "Eclipse::GroupedInputMappings::Get", 0x00895DC0)
-DAO_DATA(kGroupedInputMappings, "g_groupedInputMappings", 0x00C3B9D8)
-DAO_ADDRESS(kGroupedInputMappings_AddAction, "Eclipse::GroupedInputMappings::AddAction", 0x00894530)
-DAO_ADDRESS(kGroupedInputMappings_AddMapping, "Eclipse::GroupedInputMappings::AddMapping", 0x00894BB0)
-DAO_ADDRESS(kGroupedInputMappings_SetKey, "Eclipse::GroupedInputMappings::SetKey", 0x00894CC0)
-DAO_ADDRESS(kInput_RegisterActions, "Input::RegisterActions", 0x006E30D0)
-DAO_ADDRESS(kInput_ResetKeys, "Input::ResetKeys", 0x006EA9F0)
-DAO_ADDRESS(kInput_LoadKeyBindings, "Input::LoadKeyBindings", 0x006EA8F0)
-DAO_ADDRESS(kInput_SaveKeyBindings, "Input::SaveKeyBindings", 0x006EA970)
-DAO_ADDRESS(kInputModes_Get, "InputModes::Get", 0x00891010)
-DAO_DATA(kInputModes, "g_inputModes", 0x00C3B800)
-DAO_ADDRESS(kInputModes_Group, "InputModes::Group", 0x00890C60)
-DAO_ADDRESS(kInputModeGroup_Allow, "InputModeGroup::Allow", 0x0088F810)
-DAO_ADDRESS(kInputModes_Allowed, "InputModes::Allowed", 0x0088F430)
-DAO_ADDRESS(kMessageRegistry_Get, "MessageRegistry::Get", 0x004740B0)
-DAO_DATA(kMessageRegistry, "g_messageRegistry", 0x00C2C09C)
-DAO_ADDRESS(kMessageRegistry_Dispatch, "MessageRegistry::Dispatch", 0x004D8330)
-DAO_ADDRESS(kMessageRegistry_Find, "MessageRegistry::Find", 0x004D82A0)
-DAO_ADDRESS(kMessageRegistry_Register, "MessageRegistry::Register", 0x004D9190)
+DAO_ADDRESS(kGroupedInputMappings_Get, 24389)
+DAO_DATA(kGroupedInputMappings, 102772)
+DAO_ADDRESS(kGroupedInputMappings_AddAction, 24363)
+DAO_ADDRESS(kGroupedInputMappings_AddMapping, 24375)
+DAO_ADDRESS(kGroupedInputMappings_SetKey, 24377)
+DAO_ADDRESS(kInput_RegisterActions, 15454)
+DAO_ADDRESS(kInput_ResetKeys, 15458)
+DAO_ADDRESS(kInput_LoadKeyBindings, 15456)
+DAO_ADDRESS(kInput_SaveKeyBindings, 15457)
+DAO_ADDRESS(kInputModes_Get, 24303)
+DAO_DATA(kInputModes, 102761)
+DAO_ADDRESS(kInputModes_Group, 24295)
+DAO_ADDRESS(kInputModeGroup_Allow, 24272)
+DAO_ADDRESS(kInputModes_Allowed, 24264)
+DAO_ADDRESS(kMessageRegistry_Get, 3100)
+DAO_DATA(kMessageRegistry, 100247)
+DAO_ADDRESS(kMessageRegistry_Dispatch, 5090)
+DAO_ADDRESS(kMessageRegistry_Find, 5089)
+DAO_ADDRESS(kMessageRegistry_Register, 5110)
 
 // The Flash UI's calls into the game (dao/Gui.h), read 2026-09-30. GFx
 // calls the game's FSCommand handler and ExternalInterface handler, slot 1
@@ -508,15 +540,15 @@ DAO_ADDRESS(kMessageRegistry_Register, "MessageRegistry::Register", 0x004D9190)
 // 0x00716540). An ExternalInterface handler answers through the movie,
 // its owner's +0x1C, slot 42 (GFx's SetExternalInterfaceRetVal). The
 // names are ours but for the GFx classes'.
-DAO_DATA(kGuiManager, "g_scaleformManager", 0x00C31264)
-DAO_ADDRESS(kEclipseGFxFSCommandHandler_Callback, "EclipseGFxFSCommandHandler::Callback", 0x00511030)
-DAO_ADDRESS(kEclipseGFxExternalInterface_Callback, "EclipseGFxExternalInterface::Callback", 0x00511050)
-DAO_ADDRESS(kGuiCommands_DispatchFSCommand, "GuiCommands::DispatchFSCommand", 0x0051F5F0)
-DAO_ADDRESS(kGuiCommands_DispatchExternalInterface, "GuiCommands::DispatchExternalInterface", 0x0051F640)
-DAO_ADDRESS(kGuiCommands_Find, "GuiCommands::Find", 0x0051F4F0)
-DAO_ADDRESS(kGuiCommands_RegisterFSCommand, "GuiCommands::RegisterFSCommand", 0x005201C0)
-DAO_ADDRESS(kGuiCommands_RegisterExternalInterface, "GuiCommands::RegisterExternalInterface", 0x00520280)
-DAO_ADDRESS(kCrc32, "Crc32", 0x004CA960)
+DAO_DATA(kGuiManager, 100415)
+DAO_ADDRESS(kEclipseGFxFSCommandHandler_Callback, 6584)
+DAO_ADDRESS(kEclipseGFxExternalInterface_Callback, 6585)
+DAO_ADDRESS(kGuiCommands_DispatchFSCommand, 6866)
+DAO_ADDRESS(kGuiCommands_DispatchExternalInterface, 6867)
+DAO_ADDRESS(kGuiCommands_Find, 6864)
+DAO_ADDRESS(kGuiCommands_RegisterFSCommand, 6878)
+DAO_ADDRESS(kGuiCommands_RegisterExternalInterface, 6879)
+DAO_ADDRESS(kCrc32, 4715)
 // The game's movies, read 2026-09-30. The owner the calls above carry is
 // the manager's record of a movie: its name, an engine std::wstring at +0
 // (0x1C bytes), then the movie at +0x1C, GFx's GFxMovieView. The manager
@@ -529,12 +561,12 @@ DAO_ADDRESS(kCrc32, "Crc32", 0x004CA960)
 // for its slots 80 and 81 (IsMovieOnStage and CallFunctionOnMovie, run by
 // the ActionScript of MovieUtils). InvokeOnRecord is a record's own
 // Invoke: a jump to its movie's slot 18. The names are ours.
-DAO_ADDRESS(kGuiMovieSet_Begin, "GuiMovieSet::Begin", 0x006AD480)
-DAO_ADDRESS(kGuiMovieSet_Next, "GuiMovieSet::Next", 0x006AD4D0)
-DAO_ADDRESS(kScaleformManager_FindMovie, "GUI::ScaleformManager::FindMovie", 0x00511730)
-DAO_ADDRESS(kGuiMovie_Invoke, "GuiMovie::Invoke", 0x00518850)
-DAO_ADDRESS(kDragonAgeGUISystem_IsMovieOnStage, "GUI::DragonAgeGUISystem::IsMovieOnStage", 0x0060C920)
-DAO_ADDRESS(kDragonAgeGUISystem_CallFunctionOnMovie, "GUI::DragonAgeGUISystem::CallFunctionOnMovie", 0x0060C990)
+DAO_ADDRESS(kGuiMovieSet_Begin, 14716)
+DAO_ADDRESS(kGuiMovieSet_Next, 14717)
+DAO_ADDRESS(kScaleformManager_FindMovie, 6603)
+DAO_ADDRESS(kGuiMovie_Invoke, 6741)
+DAO_ADDRESS(kDragonAgeGUISystem_IsMovieOnStage, 11443)
+DAO_ADDRESS(kDragonAgeGUISystem_CallFunctionOnMovie, 11444)
 // Loading a movie (dev/GUI.md), read 2026-09-30. GetMovieDef, __thiscall
 // (out GFxMovieDef*, const std::wstring &name), `ret 8`: the name's .swf
 // becomes .gfx, a definition already loaded comes from the manager's cache
@@ -550,13 +582,13 @@ DAO_ADDRESS(kDragonAgeGUISystem_CallFunctionOnMovie, "GUI::DragonAgeGUISystem::C
 // to the record's +0x100. What screen, layer and flags mean is for the
 // probe to show (it logs every call). The manager is made and its font
 // library loaded by Initialize, from the GUI system's slot 5.
-DAO_ADDRESS(kScaleformManager_Initialize, "GUI::ScaleformManager::Initialize", 0x00515FE0)
-DAO_ADDRESS(kScaleformManager_GetMovieDef, "GUI::ScaleformManager::GetMovieDef", 0x005146E0)
-DAO_ADDRESS(kScaleformManager_CreateMovieView, "GUI::ScaleformManager::CreateMovieView", 0x00514940)
-DAO_ADDRESS(kScaleformManager_OpenMovie, "GUI::ScaleformManager::OpenMovie", 0x00514B10)
-DAO_ADDRESS(kGuiMovie_Construct, "GuiMovie::GuiMovie", 0x0051A040)
-DAO_ADDRESS(kGUISystem_OpenScreen, "GUI::GUISystem::OpenScreen", 0x00523BF0)
-DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
+DAO_ADDRESS(kScaleformManager_Initialize, 6697)
+DAO_ADDRESS(kScaleformManager_GetMovieDef, 6673)
+DAO_ADDRESS(kScaleformManager_CreateMovieView, 6674)
+DAO_ADDRESS(kScaleformManager_OpenMovie, 6676)
+DAO_ADDRESS(kGuiMovie_Construct, 6782)
+DAO_ADDRESS(kGUISystem_OpenScreen, 6954)
+DAO_ADDRESS(kGFxLoader_CreateMovie, 26910)
 // Every screen is a GUI::GUIScene (the base of GUIMain, GUIInventory,
 // GUIPopupLayer and the rest, a SmartObject), made by
 // GUIScene(name, filename, layer, b, flags) and kept by the GUI system in
@@ -575,9 +607,9 @@ DAO_ADDRESS(kGFxLoader_CreateMovie, "GFxLoader::CreateMovie", 0x0090C470)
 // loading screens, 0x04 on skills and spells, 0x02 on screenshots. b is 0
 // for most, 10 for the character record, journal, map, skills and spells.
 // PushGUIScreenMessage (a screen's name) pushes a scene by name.
-DAO_ADDRESS(kGUIScene_Constructor, "GUI::GUIScene::GUIScene", 0x00A55AC0)
-DAO_ADDRESS(kGUISystem_SceneIdByName, "GUI::GUISystem::SceneIdByName", 0x00523ED0)
-DAO_ADDRESS(kGUISystem_Scene, "GUI::GUISystem::Scene", 0x00523FD0)
+DAO_ADDRESS(kGUIScene_Constructor, 33297)
+DAO_ADDRESS(kGUISystem_SceneIdByName, 6961)
+DAO_ADDRESS(kGUISystem_Scene, 6962)
 // A scene's registration, read 2026-09-30: the GUI system's constructor
 // makes 61 scenes, 0xC0 bytes each from operator new, and adds each with
 // AddScene, __thiscall (id, scene), `ret 8`: the ids are 0-0x3F; a new id
@@ -589,10 +621,10 @@ DAO_ADDRESS(kGUISystem_Scene, "GUI::GUISystem::Scene", 0x00523FD0)
 // definition too if asked), slot 19 hides (the record deactivated and its
 // shown flag cleared, the movie kept), each __thiscall (const
 // std::wstring &name), `ret 4`.
-DAO_ADDRESS(kGUISystem_AddScene, "GUI::GUISystem::AddScene", 0x005240D0)
-DAO_ADDRESS(kGUISystem_CloseScreen, "GUI::GUISystem::CloseScreen", 0x00523FF0)
-DAO_ADDRESS(kGUISystem_HideScreen, "GUI::GUISystem::HideScreen", 0x00523CB0)
-DAO_ADDRESS(kCClientExoApp_SetGUISystem, "CClientExoApp::SetGUISystem", 0x005D4F20)
+DAO_ADDRESS(kGUISystem_AddScene, 6965)
+DAO_ADDRESS(kGUISystem_CloseScreen, 6963)
+DAO_ADDRESS(kGUISystem_HideScreen, 6956)
+DAO_ADDRESS(kCClientExoApp_SetGUISystem, 10491)
 // Where a movie's file comes from, read 2026-09-30. GetMovieDef gives GFx a
 // scene's filename with ".swf" put on a bare name; GFx asks the game's
 // EclipseGFxFileOpener, whose OpenFile (its slot 1) makes a
@@ -603,8 +635,8 @@ DAO_ADDRESS(kCClientExoApp_SetGUISystem, "CClientExoApp::SetGUISystem", 0x005D4F
 // tries it with ".gfx". So a scene "turnorder" is the resource
 // "turnorder.gfx", found wherever the resource system finds the game's
 // own (its override folders and archives; not read here).
-DAO_ADDRESS(kEclipseGFxFileOpener_OpenFile, "EclipseGFxFileOpener::OpenFile", 0x005113A0)
-DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::ScaleformResourceFile", 0x00523220)
+DAO_ADDRESS(kEclipseGFxFileOpener_OpenFile, 6592)
+DAO_ADDRESS(kScaleformResourceFile_Constructor, 6930)
 // The file itself, read 2026-10-01 (dao/Gui.h, OnMovieLoad): 0x38 bytes, a
 // GFile of 19 slots. It reads from the resource's bytes in memory: where
 // they begin is at +0x30 and where it has read to at +0x34 (its Tell,
@@ -616,7 +648,7 @@ DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::Sca
 // slot are another's reads another's bytes. GFx takes "GFX" and "FWS" as
 // well as the compressed "CFX" and "CWS" (the four signatures are tested
 // at 0x00913FF4 on).
-DAO_DATA(kScaleformResourceFile_Vftable, "GUI::ScaleformResourceFile::vftable", 0x00AF65A4)
+DAO_DATA(kScaleformResourceFile_Vftable, 63755)
 // A movie told of the data tree's changes, read 2026-10-01 (dao/Options.h).
 // A movie asks to be told a token's value with ExternalInterface's
 // AddTokenObserver(label, "", token) (GuiExternal::AddTokenObserver,
@@ -633,9 +665,9 @@ DAO_DATA(kScaleformResourceFile_Vftable, "GUI::ScaleformResourceFile::vftable", 
 // and "TokenManager.BatchTokenReplacementValues" of wide strings, and
 // invokes "TokenManager.PerformBatchTokenReplacements", the movie's own
 // function that calls each id's callback with its value. The name is ours.
-DAO_ADDRESS(kGuiMovie_DeliverTokens, "GuiMovie::DeliverTokens", 0x00519B00)
-DAO_ADDRESS(kResources_Find, "Resources::Find", 0x004D5BA0)
-DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
+DAO_ADDRESS(kGuiMovie_DeliverTokens, 6777)
+DAO_ADDRESS(kResources_Find, 5034)
+DAO_ADDRESS(kResources_Release, 5021)
 
 // Saving and loading (dev/SAVES.md), read 2026-09-30. SaveLoadProxy's
 // SaveGameMessage and LoadGameMessage handlers take a slot and a kind (0 a
@@ -652,9 +684,9 @@ DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 // a quicksave asked for slot -1, kind 2, and Write was called with the slot
 // resolved (1, kind 2) and returned 1. An earlier quicksave had not called
 // it, for a reason not read (the worker's check below). The names are ours.
-DAO_ADDRESS(kSaveGame_SlotFolder, "SaveGame::SlotFolder", 0x00643DD0)
-DAO_ADDRESS(kSaveGame_Write, "SaveGame::Write", 0x00646280)
-DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
+DAO_ADDRESS(kSaveGame_SlotFolder, 12666)
+DAO_ADDRESS(kSaveGame_Write, 12680)
+DAO_ADDRESS(kSaveGame_FindSave, 12676)
 // Where a save is done, read 2026-09-30: in the loading game mode, whose
 // slot 8 calls the Worker, a state machine in numbered steps behind the
 // SaveScreen movie. Write runs only when a check (0x004C9B10) passes. Step
@@ -665,8 +697,8 @@ DAO_ADDRESS(kSaveGame_FindSave, "SaveGame::FindSave", 0x00645E00)
 // file is not there (it opens it to see). In play, 2026-09-30, the save and
 // load screen called it for every slot of every character as it filled
 // (mustExist), and a save once, after Write (not mustExist).
-DAO_ADDRESS(kGameModeLoading_Worker, "GameModeLoading::Worker", 0x006C6520)
-DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x006CB7A0)
+DAO_ADDRESS(kGameModeLoading_Worker, 15080)
+DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, 15140)
 
 // The camera and the party's selection, read 2026-09-30 from
 // CenterOnObjectMessage's handler (dao/Messages.h). Party::Select,
@@ -686,10 +718,10 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, "SaveLoadProxy::ScreenshotPath", 0x00
 // target rigidly, and eases only when the target changes (dao/Camera.h
 // has the whole reading): SetTarget, Zoom and Update below. The names are
 // ours.
-DAO_ADDRESS(kParty_Select, "Party::Select", 0x00639E50)
-DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, "CameraControllerExplore::SnapToTarget", 0x0076FCE0)
-DAO_ADDRESS(kCameraControllerExplore_Update, "CameraControllerExplore::Update", 0x007714B0)
-DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, "CameraControllerExplore::OnTargetChanged", 0x007709B0)
+DAO_ADDRESS(kParty_Select, 12478)
+DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, 18510)
+DAO_ADDRESS(kCameraControllerExplore_Update, 18526)
+DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, 18518)
 // The tactical view's frame, read 2026-09-30 for a pan that stopped short
 // (dao/CameraMoves.h). The explore controller's tactical step
 // (0x00771060, __thiscall (seconds, target, party list), `ret 0xC`, from
@@ -706,18 +738,18 @@ DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, "CameraControllerExplore::
 // edge}, which moves the offsets at +0xF0 and +0x100) or, with none, keeps
 // the party in view (KeepInView, 0x00770BB0, `ret 8`). Each has the one
 // caller. The names are ours.
-DAO_ADDRESS(kCameraControllerExplore_TacticalStep, "CameraControllerExplore::TacticalStep", 0x00771060)
-DAO_ADDRESS(kCameraControllerExplore_PullToParty, "CameraControllerExplore::PullToParty", 0x0076FDD0)
-DAO_ADDRESS(kCameraControllerExplore_PlayerPan, "CameraControllerExplore::PlayerPan", 0x007703F0)
-DAO_ADDRESS(kCameraControllerExplore_KeepInView, "CameraControllerExplore::KeepInView", 0x00770BB0)
-DAO_ADDRESS(kCameraControllerBase_ReadInput, "CameraControllerBase::ReadInput", 0x007EDC60)
-DAO_ADDRESS(kCameraControllerBase_SetTarget, "CameraControllerBase::SetTarget", 0x007EE840)
-DAO_ADDRESS(kCameraControllerBase_Zoom, "CameraControllerBase::Zoom", 0x007EE7E0)
-DAO_ADDRESS(kCameraControllerBase_TurnBehind, "CameraControllerBase::TurnBehind", 0x007EE880)
-DAO_ADDRESS(kSceneCameraManager_Update, "SceneCameraManager::Update", 0x006C4C60)
-DAO_ADDRESS(kSceneCamera_SetPitch, "SceneCamera::SetPitch", 0x006C2BC0)
-DAO_ADDRESS(kSceneCamera_Update, "SceneCamera::Update", 0x006C2C20)
-DAO_ADDRESS(kSceneCamera_SetYaw, "SceneCamera::SetYaw", 0x006C2B90)
+DAO_ADDRESS(kCameraControllerExplore_TacticalStep, 18524)
+DAO_ADDRESS(kCameraControllerExplore_PullToParty, 18513)
+DAO_ADDRESS(kCameraControllerExplore_PlayerPan, 18516)
+DAO_ADDRESS(kCameraControllerExplore_KeepInView, 18520)
+DAO_ADDRESS(kCameraControllerBase_ReadInput, 21234)
+DAO_ADDRESS(kCameraControllerBase_SetTarget, 21241)
+DAO_ADDRESS(kCameraControllerBase_Zoom, 21239)
+DAO_ADDRESS(kCameraControllerBase_TurnBehind, 21242)
+DAO_ADDRESS(kSceneCameraManager_Update, 15038)
+DAO_ADDRESS(kSceneCamera_SetPitch, 15001)
+DAO_ADDRESS(kSceneCamera_Update, 15003)
+DAO_ADDRESS(kSceneCamera_SetYaw, 15000)
 
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature
@@ -738,7 +770,7 @@ DAO_ADDRESS(kSceneCamera_SetYaw, "SceneCamera::SetYaw", 0x006C2B90)
 // (EclipseGFxImageLoader, whose slot 1 ends in LoadImage: "img://" or
 // "imgps://", then the engine's texture of that name, else a file; the
 // URL may add ?Width=, &Height= and ?Async=). The names are ours.
-DAO_ADDRESS(kCCCreature_UpdatePortrait, "CCCreature::UpdatePortrait", 0x006AE2D0)
+DAO_ADDRESS(kCCCreature_UpdatePortrait, 14737)
 // Its pair, read 2026-09-30: ReleasePortrait, a CCCreature method with no
 // arguments that returns 1, destroys the renderer (0x007F3D00, which
 // destroys the clone at +0x20 with ~CCCreature), frees it and clears the
@@ -746,18 +778,18 @@ DAO_ADDRESS(kCCCreature_UpdatePortrait, "CCCreature::UpdatePortrait", 0x006AE2D0
 // of UpdatePortrait's callers: a screen that shows a portrait renders it
 // and releases it again. Otherwise ~CCCreature destroys a renderer still
 // held, when the creature goes with its area.
-DAO_ADDRESS(kCCCreature_ReleasePortrait, "CCCreature::ReleasePortrait", 0x0069F470)
-DAO_ADDRESS(kPortraitRenderer_Constructor, "PortraitRenderer::PortraitRenderer", 0x007F3D80)
-DAO_ADDRESS(kPortraitRenderer_Setup, "PortraitRenderer::Setup", 0x007F3E20)
-DAO_ADDRESS(kPortraitRenderer_Render, "PortraitRenderer::Render", 0x007F46E0)
-DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, "EclipseGFxImageLoader::LoadImage", 0x00516A20)
+DAO_ADDRESS(kCCCreature_ReleasePortrait, 14365)
+DAO_ADDRESS(kPortraitRenderer_Constructor, 21346)
+DAO_ADDRESS(kPortraitRenderer_Setup, 21347)
+DAO_ADDRESS(kPortraitRenderer_Render, 21350)
+DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
 // engine's CTlkTable in this global; GetString, __thiscall (strref,
 // std::wstring &out, flag 0), `ret 0xC`, with the gender to use set at the
 // table's +0x1C first (0 male, 1 female).
-DAO_DATA(kTlkTable, "g_tlkTable", 0x00C1D08C)
-DAO_ADDRESS(kCTlkTable_GetString, "CTlkTable::GetString", 0x004E4990)
+DAO_DATA(kTlkTable, 99738)
+DAO_ADDRESS(kCTlkTable_GetString, 5384)
 
 // A creature's properties, read 2026-09-30 from GetCreatureProperty and
 // SetCreatureProperty: the creature's +0x7C4 is a SmartData attribute
@@ -772,13 +804,13 @@ DAO_ADDRESS(kCTlkTable_GetString, "CTlkTable::GetString", 0x004E4990)
 // themselves (0x0071B239): __thiscall (id, float value, 1), `ret 0xC`,
 // base (for PROPERTY_VALUE_* 1 and 2), current, modifier. The ids are the
 // scripts' PROPERTY_*. The names are ours.
-DAO_ADDRESS(kCreatureProperties_GetTotal, "CreatureProperties::GetTotal", 0x006435C0)
-DAO_ADDRESS(kCreatureProperties_GetBase, "CreatureProperties::GetBase", 0x006436B0)
-DAO_ADDRESS(kCreatureProperties_GetCurrent, "CreatureProperties::GetCurrent", 0x006437A0)
-DAO_ADDRESS(kCreatureProperties_GetModifier, "CreatureProperties::GetModifier", 0x00643890)
-DAO_ADDRESS(kCreatureStats_SetBase, "CCCreatureStats::SetBase", 0x0071B230)
-DAO_ADDRESS(kCreatureStats_SetCurrent, "CCCreatureStats::SetCurrent", 0x0071B320)
-DAO_ADDRESS(kCreatureStats_SetModifier, "CCCreatureStats::SetModifier", 0x0071B280)
+DAO_ADDRESS(kCreatureProperties_GetTotal, 12658)
+DAO_ADDRESS(kCreatureProperties_GetBase, 12659)
+DAO_ADDRESS(kCreatureProperties_GetCurrent, 12660)
+DAO_ADDRESS(kCreatureProperties_GetModifier, 12661)
+DAO_ADDRESS(kCreatureStats_SetBase, 16510)
+DAO_ADDRESS(kCreatureStats_SetCurrent, 16513)
+DAO_ADDRESS(kCreatureStats_SetModifier, 16511)
 
 // The engine's data tree (dao/Data.h), read 2026-09-30 from the UI's
 // ExternalInterface handlers GetValue and GetNumber. Get, __cdecl, no
@@ -791,14 +823,14 @@ DAO_ADDRESS(kCreatureStats_SetModifier, "CCCreatureStats::SetModifier", 0x0071B2
 // GetValue passes flag 0. AddTokenObserver registers a movie's interest in
 // a path (three strings, answering an id). The handlers' names are the
 // game's registered ones; the rest ours.
-DAO_ADDRESS(kTokenManager_Get, "SmartData::TokenManager::Get", 0x00455BF0)
-DAO_DATA(kTokenManager, "g_tokenManager", 0x00C325B0)
-DAO_ADDRESS(kTokenManager_Find, "SmartData::TokenManager::Find", 0x005C6E80)
-DAO_DATA(kNullAttribute, "SmartData::g_nullAttribute", 0x00BF99E0)
-DAO_ADDRESS(kGuiExternal_GetValue, "GuiExternal::GetValue", 0x0051EC60)
-DAO_ADDRESS(kGuiExternal_GetNumber, "GuiExternal::GetNumber", 0x0051CFD0)
-DAO_ADDRESS(kGuiExternal_AddTokenObserver, "GuiExternal::AddTokenObserver", 0x0051CD50)
-DAO_ADDRESS(kGuiExternal_SendMessage, "GuiExternal::SendMessage", 0x0051C800)
+DAO_ADDRESS(kTokenManager_Get, 2312)
+DAO_DATA(kTokenManager, 100796)
+DAO_ADDRESS(kTokenManager_Find, 10161)
+DAO_DATA(kNullAttribute, 96499)
+DAO_ADDRESS(kGuiExternal_GetValue, 6856)
+DAO_ADDRESS(kGuiExternal_GetNumber, 6846)
+DAO_ADDRESS(kGuiExternal_AddTokenObserver, 6844)
+DAO_ADDRESS(kGuiExternal_SendMessage, 6830)
 // The plain attributes' own vtables (RTTI), by which an attribute found
 // by path says its type: SmartData::Attribute<T, NoMemberLookup,
 // InternalStorage, ObserverNotification> for each T, and float's custom
@@ -807,24 +839,24 @@ DAO_ADDRESS(kGuiExternal_SendMessage, "GuiExternal::SendMessage", 0x0051C800)
 // which is how a bound movie learns of it (read 2026-09-30 from
 // Attribute<int>'s: compare, store, notify). Slot 14 does not tell types
 // apart: the linker folded it to two shared bodies.
-DAO_DATA(kAttributeBool_Vftable, "SmartData::Attribute<bool>::vftable", 0x00AEA6A4)
-DAO_DATA(kAttributeInt_Vftable, "SmartData::Attribute<int>::vftable", 0x00ADE4E4)
-DAO_DATA(kAttributeUnsignedInt_Vftable, "SmartData::Attribute<unsigned int>::vftable", 0x00AED6AC)
-DAO_DATA(kAttributeShort_Vftable, "SmartData::Attribute<short>::vftable", 0x00AEC43C)
-DAO_DATA(kAttributeByte_Vftable, "SmartData::Attribute<unsigned char>::vftable", 0x00B1B0BC)
-DAO_DATA(kAttributeFloat_Vftable, "SmartData::Attribute<float>::vftable", 0x00B00CC4)
-DAO_DATA(kAttributeFloatCustom_Vftable, "SmartData::Attribute<float,CustomStorage>::vftable", 0x00B1B12C)
+DAO_DATA(kAttributeBool_Vftable, 62231)
+DAO_DATA(kAttributeInt_Vftable, 60440)
+DAO_DATA(kAttributeUnsignedInt_Vftable, 62558)
+DAO_DATA(kAttributeShort_Vftable, 62416)
+DAO_DATA(kAttributeByte_Vftable, 68350)
+DAO_DATA(kAttributeFloat_Vftable, 64977)
+DAO_DATA(kAttributeFloatCustom_Vftable, 68352)
 // The engine's way to make and queue a command: __thiscall(type, parameters
 // (a CDataArrays), addToFront, static, playerIssued, override, the +8
 // word). Called from 13 places: effects (ExecuteEffect, from CCObject and
 // CCCreature), drawing and sheathing weapons with their animation (from
 // SetCombatState among others), modal abilities' animations, jumps, moves
 // and conversations, and QueuePlayerCommand. The names are ours.
-DAO_ADDRESS(kCCObject_QueueNewCommand, "CCObject::QueueNewCommand", 0x0073D000)
+DAO_ADDRESS(kCCObject_QueueNewCommand, 17553)
 // QueueNewCommand with playerIssued 1, not static: the player's orders, as
 // explore mode's PerformUseObjectMessage handler and the functions beside
 // it (0x007F6410, 0x007F64C0, 0x007F6690) queue them.
-DAO_ADDRESS(kCCObject_QueuePlayerCommand, "CCObject::QueuePlayerCommand", 0x0073D060)
+DAO_ADDRESS(kCCObject_QueuePlayerCommand, 17554)
 // The player's orders (dao/Orders.h), read 2026-09-30: QueuePlayerCommand's
 // three callers, each __stdcall, each signalling OrderReceived (__cdecl
 // (CCCreature *, target), EVENT_TYPE_ON_ORDER_RECEIVED to the creature)
@@ -833,18 +865,18 @@ DAO_ADDRESS(kCCObject_QueuePlayerCommand, "CCObject::QueuePlayerCommand", 0x0073
 // Vector4 *point) `ret 0x14`. QueuePlayerCommand itself is __thiscall
 // (type, CDataArrays *parameters from operator new, addToFront), `ret 0xC`.
 // The names are ours.
-DAO_ADDRESS(kOrders_Attack, "Orders::Attack", 0x007F6410)
-DAO_ADDRESS(kOrders_UseObject, "Orders::UseObject", 0x007F6550)
-DAO_ADDRESS(kOrders_UseAbility, "Orders::UseAbility", 0x007F6690)
-DAO_ADDRESS(kOrders_OrderReceived, "Orders::OrderReceived", 0x007F6370)
+DAO_ADDRESS(kOrders_Attack, 21386)
+DAO_ADDRESS(kOrders_UseObject, 21388)
+DAO_ADDRESS(kOrders_UseAbility, 21389)
+DAO_ADDRESS(kOrders_OrderReceived, 21385)
 // The object's queue, read 2026-09-30 from GetCurrentCommand,
 // GetCommandByIndex and GetCommandQueueSize: a list at +0x2CC, its count
 // at +0x2D4 (the list's +8), and at +0x2DC a pointer to the slot holding
 // the current command, the queue's head. GetCurrentCommand is that read,
 // __thiscall with no arguments; GetCommandByIndex walks the list,
 // __thiscall(index), `ret 4`, null past its end.
-DAO_ADDRESS(kCCObject_GetCurrentCommand, "CCObject::GetCurrentCommand", 0x0073C5F0)
-DAO_ADDRESS(kCCObject_GetCommandByIndex, "CCObject::GetCommandByIndex", 0x0073C6D0)
+DAO_ADDRESS(kCCObject_GetCurrentCommand, 17535)
+DAO_ADDRESS(kCCObject_GetCommandByIndex, 17539)
 // A command's start and end (dao/CommandEvents.h), read 2026-09-30. The
 // object's command step, each frame (__thiscall, `ret 8`), ends the head
 // command when done or failed and starts the next (StartNext, __thiscall,
@@ -855,11 +887,11 @@ DAO_ADDRESS(kCCObject_GetCommandByIndex, "CCObject::GetCommandByIndex", 0x0073C6
 // through a thunk to its +0x6C's vtable: Start, slot 2 (object, command),
 // and End, slot 3 (object, command, result, flag); each thunk has one
 // caller. The names are ours.
-DAO_ADDRESS(kCCObject_StepCommands, "CCObject::StepCommands", 0x0073D320)
-DAO_ADDRESS(kCCObject_StartNextCommand, "CCObject::StartNextCommand", 0x0073C7D0)
-DAO_ADDRESS(kCCObject_ClearCurrentCommand, "CCObject::ClearCurrentCommand", 0x0073C730)
-DAO_ADDRESS(kCommands_Start, "Commands::Start", 0x0064A500)
-DAO_ADDRESS(kCommands_End, "Commands::End", 0x0064A510)
+DAO_ADDRESS(kCCObject_StepCommands, 17558)
+DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
+DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
+DAO_ADDRESS(kCommands_Start, 12731)
+DAO_ADDRESS(kCommands_End, 12732)
 
 // A second script command table, beside CVirtualMachineCommands: RTTI's
 // CClientVirtualMachineCommands, a CVirtualMachineCmdImplementer, made by
@@ -869,12 +901,10 @@ DAO_ADDRESS(kCommands_End, "Commands::End", 0x0064A510)
 // intercepts are the other table's. Whether single-player runs a script on
 // this one is not known yet: the probe counts its AddCommand's calls.
 // Read 2026-09-30.
-DAO_ADDRESS(kCClientVirtualMachineCommands_Constructor, "CClientVirtualMachineCommands::CClientVirtualMachineCommands",
-            0x006D3A00)
-DAO_ADDRESS(kCClientVirtualMachineCommands_InitializeCommands, "CClientVirtualMachineCommands::InitializeCommands",
-            0x006DB420)
-DAO_ADDRESS(kCClientVirtualMachineCommands_AddCommand, "CClientVirtualMachineCommands::AddCommand", 0x006DA1F0)
-DAO_ADDRESS(kCClientVirtualMachineCommands_SetActive, "CClientVirtualMachineCommands::SetActive", 0x006D67A0)
+DAO_ADDRESS(kCClientVirtualMachineCommands_Constructor, 15293)
+DAO_ADDRESS(kCClientVirtualMachineCommands_InitializeCommands, 15424)
+DAO_ADDRESS(kCClientVirtualMachineCommands_AddCommand, 15416)
+DAO_ADDRESS(kCClientVirtualMachineCommands_SetActive, 15348)
 
 // The game's update, as a task on the engine's worker threads: from the
 // deliberate crash of 2026-09-30, whose stack ran CClientExoApp's start-up
@@ -882,15 +912,17 @@ DAO_ADDRESS(kCClientVirtualMachineCommands_SetActive, "CClientVirtualMachineComm
 // calls the per-frame update at 0x00412EB0, on a Multithreading::Thread.
 // The probe counts a stack sample as game logic when this function's frame
 // is on it; the range is Ghidra's.
-DAO_ADDRESS(kEclipseUpdateTask_Execute, "Eclipse::UpdateTask::vfunction3", 0x00413310)
+DAO_ADDRESS(kEclipseUpdateTask_Execute, 382)
 // What that slot calls each frame (dao/Frame.h), read 2026-09-30:
 // __thiscall, no arguments, true to go on running, on the object in the
 // global below (0x280 bytes, made by 0x0040DCB0 at start-up; no vtable, so
 // no RTTI name: named here for what it runs). It returns false at once if
 // its byte at +0xCD is set, a quit flag by how the task uses the answer.
-DAO_DATA(kEclipseGame, "g_eclipseGame", 0x00C1D0A0)
-DAO_ADDRESS(kEclipseGame_Update, "EclipseGame::Update", 0x00412EB0)
-inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
+DAO_DATA(kEclipseGame, 99742)
+DAO_ADDRESS(kEclipseGame_Update, 378)
+// Eclipse::UpdateTask's slot 3 is this long (0x00413310 to 0x00413368 in the
+// listing): an address in it is its ID's address and less than this more.
+inline constexpr std::uint32_t kEclipseUpdateTask_ExecuteSize = 0x58;
 
 // The script machine's typed stack, named after Neverwinter Nights: NWN:EE's
 // headers (C:\Modding\unified, NWNXLib/API/API/CVirtualMachine.hpp) declare
@@ -910,23 +942,21 @@ inline constexpr std::uintptr_t kEclipseUpdateTask_ExecuteEnd = 0x00413368;
 // script checks popped and pushed back each getter's argument and answer
 // on about 2,200 calls, and the scripts ran on unchanged. The rest are not
 // yet exercised.
-DAO_DATA(kVirtualMachine, "g_pVirtualMachine", 0x00C1D080)
-DAO_ADDRESS(kCVirtualMachine_StackPopInteger, "CVirtualMachine::StackPopInteger", 0x00A2F3C0) // 453/464
-DAO_ADDRESS(kCVirtualMachine_StackPopFloat, "CVirtualMachine::StackPopFloat", 0x00A2F410)     // 72/74
-DAO_ADDRESS(kCVirtualMachine_StackPopVector, "CVirtualMachine::StackPopVector", 0x00A2F460)   // 18/19
-DAO_ADDRESS(kCVirtualMachine_StackPopString, "CVirtualMachine::StackPopString", 0x00A2F4C0)   // 136/145
-DAO_ADDRESS(kCVirtualMachine_StackPopArray, "CVirtualMachine::StackPopArray", 0x00A2F520)     // 4/5, arrays of any type
-DAO_ADDRESS(kCVirtualMachine_StackPopResource, "CVirtualMachine::StackPopResource", 0x00A2F5F0) // 15/15
-DAO_ADDRESS(kCVirtualMachine_StackPopEngineStructure, "CVirtualMachine::StackPopEngineStructure",
-            0x00A2F650) // 99/99: effect, location, event, command
-DAO_ADDRESS(kCVirtualMachine_StackPopObject, "CVirtualMachine::StackPopObject", 0x00A2F6D0)     // 415/426
-DAO_ADDRESS(kCVirtualMachine_StackPushInteger, "CVirtualMachine::StackPushInteger", 0x00A2D650) // 77/77
-DAO_ADDRESS(kCVirtualMachine_StackPushFloat, "CVirtualMachine::StackPushFloat", 0x00A2D690)     // 1/1, and the order
-DAO_ADDRESS(kCVirtualMachine_StackPushVector, "CVirtualMachine::StackPushVector", 0x00A2D6D0)   // 2/2
-DAO_ADDRESS(kCVirtualMachine_StackPushString, "CVirtualMachine::StackPushString", 0x00A2D730)   // 5/5
-DAO_ADDRESS(kCVirtualMachine_StackPushEngineStructure, "CVirtualMachine::StackPushEngineStructure",
-            0x00A2D920) // 31/31: command, effect, location, event
-DAO_ADDRESS(kCVirtualMachine_StackPushObject, "CVirtualMachine::StackPushObject", 0x00A2D980) // 3/3
+DAO_DATA(kVirtualMachine, 99736)
+DAO_ADDRESS(kCVirtualMachine_StackPopInteger, 32550)          // 453/464
+DAO_ADDRESS(kCVirtualMachine_StackPopFloat, 32551)            // 72/74
+DAO_ADDRESS(kCVirtualMachine_StackPopVector, 32552)           // 18/19
+DAO_ADDRESS(kCVirtualMachine_StackPopString, 32553)           // 136/145
+DAO_ADDRESS(kCVirtualMachine_StackPopArray, 32554)            // 4/5, arrays of any type
+DAO_ADDRESS(kCVirtualMachine_StackPopResource, 32555)         // 15/15
+DAO_ADDRESS(kCVirtualMachine_StackPopEngineStructure, 32556)  // 99/99: effect, location, event, command
+DAO_ADDRESS(kCVirtualMachine_StackPopObject, 32557)           // 415/426
+DAO_ADDRESS(kCVirtualMachine_StackPushInteger, 32504)         // 77/77
+DAO_ADDRESS(kCVirtualMachine_StackPushFloat, 32505)           // 1/1, and the order
+DAO_ADDRESS(kCVirtualMachine_StackPushVector, 32506)          // 2/2
+DAO_ADDRESS(kCVirtualMachine_StackPushString, 32507)          // 5/5
+DAO_ADDRESS(kCVirtualMachine_StackPushEngineStructure, 32510) // 31/31: command, effect, location, event
+DAO_ADDRESS(kCVirtualMachine_StackPushObject, 32511)          // 3/3
 // The commands object's engine-structure functions (dao/Structures.h), read
 // 2026-09-30: each __thiscall on CVirtualMachineCommands with the
 // structure's number first (script.ldf's ENGINE_STRUCTURE_n), `ret 8`.
@@ -937,22 +967,19 @@ DAO_ADDRESS(kCVirtualMachine_StackPushObject, "CVirtualMachine::StackPushObject"
 // VM's StackPushEngineStructure and StackPopEngineStructure both call it,
 // so a pop hands the command a copy of its own to destroy, and a push
 // copies. NWN has the same three a slot later, after a GetEqual.
-DAO_ADDRESS(kCVirtualMachineCommands_CreateGameDefinedStructure, "CVirtualMachineCommands::CreateGameDefinedStructure",
-            0x00652D60)
-DAO_ADDRESS(kCVirtualMachineCommands_DestroyGameDefinedStructure,
-            "CVirtualMachineCommands::DestroyGameDefinedStructure", 0x0066DFB0)
-DAO_ADDRESS(kCVirtualMachineCommands_CopyGameDefinedStructure, "CVirtualMachineCommands::CopyGameDefinedStructure",
-            0x00674AF0)
+DAO_ADDRESS(kCVirtualMachineCommands_CreateGameDefinedStructure, 12971)
+DAO_ADDRESS(kCVirtualMachineCommands_DestroyGameDefinedStructure, 13453)
+DAO_ADDRESS(kCVirtualMachineCommands_CopyGameDefinedStructure, 13530)
 // The structures' own constructors, from Create and Copy.
-DAO_ADDRESS(kCScriptEvent_Constructor, "CScriptEvent::CScriptEvent", 0x0069BAC0)
+DAO_ADDRESS(kCScriptEvent_Constructor, 14241)
 // CScriptEvent's vtable, which its constructor stores (RTTI): how
 // dao/Events.h tells a script event's data without reading its RTTI.
-DAO_DATA(kCScriptEvent_Vftable, "CScriptEvent::vftable", 0x00B0F12C)
-DAO_ADDRESS(kCScriptEvent_CopyConstructor, "CScriptEvent::CScriptEvent_copy", 0x0069CB10)
-DAO_ADDRESS(kCScriptLocation_Constructor, "CScriptLocation::CScriptLocation", 0x007ABD00)
-DAO_ADDRESS(kCScriptLocation_CopyConstructor, "CScriptLocation::CScriptLocation_copy", 0x0064DD90)
-DAO_ADDRESS(kCGameEffect_Constructor, "CGameEffect::CGameEffect", 0x00A652A0)
-DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A65130)
+DAO_DATA(kCScriptEvent_Vftable, 66962)
+DAO_ADDRESS(kCScriptEvent_CopyConstructor, 14272)
+DAO_ADDRESS(kCScriptLocation_Constructor, 19899)
+DAO_ADDRESS(kCScriptLocation_CopyConstructor, 12841)
+DAO_ADDRESS(kCGameEffect_Constructor, 33640)
+DAO_ADDRESS(kCGameEffect_CopyConstructor, 33636)
 // The clocks, read 2026-09-30 (dev/TODO.md, item 4). The engine's
 // microsecond clock (the performance counter over its frequency) on a
 // global timer, read through a thunk from 31 places, world code among
@@ -960,7 +987,7 @@ DAO_ADDRESS(kCGameEffect_CopyConstructor, "CGameEffect::CGameEffect_copy", 0x00A
 // performance counter's in milliseconds, or GetTickCount's) that the UI
 // reads through a jump. Which clock gives the world its frame time is not
 // yet pinned. The names are ours.
-DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
+DAO_ADDRESS(kClock_Microseconds, 4466)
 // The world's time (dao/Clock.h, SetSpeed): EC::WorldTimer (vftable
 // 0x00B58C44), the application's +0xD4, over EC::ITimer. Its update (slot
 // 6) takes the microsecond clock's seconds since the last, times its scale
@@ -972,7 +999,7 @@ DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
 // world time (0x00A35AF0), and CCCreature's update (slot 87, 0x006BE4B0)
 // hands those milliseconds to regeneration and its effects. The names are
 // ours.
-DAO_ADDRESS(kWorldTimer_Constructor, "EC::WorldTimer::WorldTimer", 0x00A35F30)
+DAO_ADDRESS(kWorldTimer_Constructor, 32707)
 // The game's time scale (dao/Clock.h, SetSpeed), read 2026-09-30. The
 // application keeps it at +0x2C8; SetTimeScale, __thiscall (scale, seconds,
 // owner id or -1), `ret 0xC`, sets it at once for 0 seconds, else records
@@ -981,8 +1008,8 @@ DAO_ADDRESS(kWorldTimer_Constructor, "EC::WorldTimer::WorldTimer", 0x00A35F30)
 // update (0x005D7560) advances the world timer (0x00A35A10), then, when the
 // scale is 0 or more, writes it to the world timer's +0x54 and gives it to
 // the scene (0x008107F0, slot 6, as a double). The names are ours.
-DAO_ADDRESS(kCClientExoApp_SetTimeScale, "CClientExoApp::SetTimeScale", 0x005D81C0)
-DAO_ADDRESS(kCClientExoApp_FrameUpdate, "CClientExoApp::FrameUpdate", 0x005D7560)
+DAO_ADDRESS(kCClientExoApp_SetTimeScale, 10573)
+DAO_ADDRESS(kCClientExoApp_FrameUpdate, 10566)
 // The frame's clock (dao/Clock.h): the Eclipse game object, a global the
 // update task reads (0x00401F30 returns it), keeps two EC::ITimer at +0xB4
 // and +0xB8 (its constructor, 0x00404260). ITimer::Update, __thiscall
@@ -991,23 +1018,23 @@ DAO_ADDRESS(kCClientExoApp_FrameUpdate, "CClientExoApp::FrameUpdate", 0x005D7560
 // the double at +0x18. EclipseGame's frame step (0x004025C0) updates the
 // +0xB4 timer, keeps its seconds at the game's +0xBC, and gives its total
 // to the scene (0x008107F0). The game object is kEclipseGame above.
-DAO_ADDRESS(kITimer_Update, "EC::ITimer::Update", 0x004CB160)
-DAO_ADDRESS(kEclipseGame_FrameStep, "EclipseGame::FrameStep", 0x004025C0)
-DAO_ADDRESS(kWorldTimer_Update, "EC::WorldTimer::Update", 0x00A358F0)
-DAO_ADDRESS(kWorldTimer_SinceUpdate, "EC::WorldTimer::SinceUpdate", 0x00A35980)
-DAO_ADDRESS(kWorldTimer_WorldTime, "EC::WorldTimer::WorldTime", 0x00A35AF0)
-DAO_ADDRESS(kObjectTimer_Update, "ObjectTimer::Update", 0x006FA1D0)
-DAO_ADDRESS(kCCCreature_Update, "CCCreature::Update", 0x006BE4B0)
-DAO_DATA(kClock_Timer, "g_clockTimer", 0x00C2BDF8)
-DAO_DATA(kGTimer_Clock, "GTimer::g_clock", 0x00C1DAA8)
+DAO_ADDRESS(kITimer_Update, 4728)
+DAO_ADDRESS(kEclipseGame_FrameStep, 74)
+DAO_ADDRESS(kWorldTimer_Update, 32689)
+DAO_ADDRESS(kWorldTimer_SinceUpdate, 32690)
+DAO_ADDRESS(kWorldTimer_WorldTime, 32695)
+DAO_ADDRESS(kObjectTimer_Update, 15799)
+DAO_ADDRESS(kCCCreature_Update, 14951)
+DAO_DATA(kClock_Timer, 100176)
+DAO_DATA(kGTimer_Clock, 99837)
 
 // Input, read 2026-09-30 (dev/TODO.md, item 3). The key bindings' actions
 // name a message as text per game mode, registered at start-up by
 // RegisterInputMessages (one large function), and a key's message is built
 // by name and delivered. RawInputMessage's handler in the input mappings
 // runs while the controls screen captures a key. The names are ours.
-DAO_ADDRESS(kInput_RegisterInputMessages, "Input::RegisterInputMessages", 0x006DC900)
-DAO_ADDRESS(kGroupedInputMappings_HandleRawInput, "Eclipse::GroupedInputMappings::HandleRawInput", 0x00894ED0)
+DAO_ADDRESS(kInput_RegisterInputMessages, 15452)
+DAO_ADDRESS(kGroupedInputMappings_HandleRawInput, 24378)
 
 // Using an ability from the quickbar, read 2026-09-30 from
 // PerformAbilityMessage's handler (dao/Messages.h says how it chooses a
@@ -1024,15 +1051,15 @@ DAO_ADDRESS(kGroupedInputMappings_HandleRawInput, "Eclipse::GroupedInputMappings
 // selected target's id, set only through 0x0070D030, which the messages
 // that cycle targets call; ValidTarget (object, TargetType) says whether the
 // ability may be used on it. The names are ours.
-DAO_ADDRESS(kGameModeExplore_UseAbility, "GameModeExplore::UseAbility", 0x00711680)
-DAO_ADDRESS(kGameModeExplore_BeginTargeting, "GameModeExplore::BeginTargeting", 0x0070BA30)
-DAO_ADDRESS(kGameModeExplore_AttackTarget, "GameModeExplore::AttackTarget", 0x0070B980)
-DAO_ADDRESS(kGameModeExplore_ValidTarget, "GameModeExplore::ValidTarget", 0x0070D550)
-DAO_DATA(kSelectedTarget, "g_selectedTarget", 0x00C06794)
+DAO_ADDRESS(kGameModeExplore_UseAbility, 16297)
+DAO_ADDRESS(kGameModeExplore_BeginTargeting, 16186)
+DAO_ADDRESS(kGameModeExplore_AttackTarget, 16183)
+DAO_ADDRESS(kGameModeExplore_ValidTarget, 16234)
+DAO_DATA(kSelectedTarget, 97479)
 // The one setter of the selected target: __thiscall on explore mode (id),
 // `ret 4`; it stores the id, tells the target's GUI and moves the
 // highlight (dao/GameModes.h, SelectTarget). Read 2026-09-30.
-DAO_ADDRESS(kGameModeExplore_SelectTarget, "GameModeExplore::SelectTarget", 0x0070D030)
+DAO_ADDRESS(kGameModeExplore_SelectTarget, 16228)
 
 // How a temporary effect runs out, read 2026-09-30 (dao/Effects.h). Each
 // object's update ages its effects through its effects holder (a virtual
@@ -1044,10 +1071,10 @@ DAO_ADDRESS(kGameModeExplore_SelectTarget, "GameModeExplore::SelectTarget", 0x00
 // which adds them to the effect's +0x30, never past its duration at +0x2C.
 // Then, if the duration less the elapsed is nothing, it ends the effect.
 // AddElapsed has no other caller. The names are ours.
-DAO_ADDRESS(kCGameEffect_AddElapsed, "CGameEffect::AddElapsed", 0x0079F2A0)
-DAO_ADDRESS(kEffectsHolder_Update, "SEffectsHolder::Update", 0x007A1500)
-DAO_ADDRESS(kEffectsHolder_AgeEffect, "SEffectsHolder::AgeEffect", 0x007A0B10)
-DAO_ADDRESS(kCGameEffect_Prepare, "CGameEffect::Prepare", 0x0065C760)
+DAO_ADDRESS(kCGameEffect_AddElapsed, 19723)
+DAO_ADDRESS(kEffectsHolder_Update, 19775)
+DAO_ADDRESS(kEffectsHolder_AgeEffect, 19766)
+DAO_ADDRESS(kCGameEffect_Prepare, 13143)
 // Regeneration, read 2026-09-30 (dao/Clock.h). UpdateRegeneration,
 // __thiscall on the creature's stats (ms, bool in combat), `ret 8`, adds
 // the milliseconds to the stats' +0x58 and, each 3000 of them out of
@@ -1057,9 +1084,9 @@ DAO_ADDRESS(kCGameEffect_Prepare, "CGameEffect::Prepare", 0x0065C760)
 // is set, else adds the total of the property its +0x64 (out of combat) or
 // +0x6C (in combat) names: properties.gda's NonCombatEffect and
 // CombatEffect. The names are ours.
-DAO_ADDRESS(kCCCreatureStats_UpdateRegeneration, "CCCreatureStats::UpdateRegeneration", 0x0071B0E0)
-DAO_ADDRESS(kCCCreatureStats_RegenerateAll, "CCCreatureStats::RegenerateAll", 0x00795BA0)
-DAO_ADDRESS(kCreaturePropertyDepletable_Regenerate, "CreaturePropertyDepletable::Regenerate", 0x0079CAD0)
+DAO_ADDRESS(kCCCreatureStats_UpdateRegeneration, 16509)
+DAO_ADDRESS(kCCCreatureStats_RegenerateAll, 19430)
+DAO_ADDRESS(kCreaturePropertyDepletable_Regenerate, 19652)
 // The parameters by index of CDataArrays, the base CGameEffect and
 // CScriptEvent share at +0 (the RTTI's base class descriptors), from
 // GetEffectInteger and its three siblings (one body, 0x00651270) and
@@ -1068,15 +1095,15 @@ DAO_ADDRESS(kCreaturePropertyDepletable_Regenerate, "CreaturePropertyDepletable:
 // ints, +0x8 floats, +0x10 objects, +0x14 strings), bounds-checked; out of
 // range, 0, 0.0, -1, and a static empty string. GetString returns a
 // pointer to the string.
-DAO_ADDRESS(kCDataArrays_GetInteger, "CDataArrays::GetInteger", 0x00A5A220)
-DAO_ADDRESS(kCDataArrays_GetFloat, "CDataArrays::GetFloat", 0x00A5A250)
-DAO_ADDRESS(kCDataArrays_GetObject, "CDataArrays::GetObject", 0x00A5A2B0)
-DAO_ADDRESS(kCDataArrays_GetString, "CDataArrays::GetString", 0x00A5A2E0)
+DAO_ADDRESS(kCDataArrays_GetInteger, 33398)
+DAO_ADDRESS(kCDataArrays_GetFloat, 33399)
+DAO_ADDRESS(kCDataArrays_GetObject, 33401)
+DAO_ADDRESS(kCDataArrays_GetString, 33402)
 // A fifth list at +0xC, read 2026-09-30 from the script commands that build
 // commands (CommandMoveToLocation and its kin), which store their
 // booleans in it: the getter has the other four's shape and answers 0 out
 // of range. No script command reads it. The name is ours.
-DAO_ADDRESS(kCDataArrays_GetFlag, "CDataArrays::GetFlag", 0x00A5A280)
+DAO_ADDRESS(kCDataArrays_GetFlag, 33400)
 // The setters the same constructors call, __thiscall (index, value),
 // `ret 8`: each makes its list if there is none, grows it to the index and
 // stores. The vector setter takes a pointer to 16 bytes, three floats and
@@ -1084,12 +1111,12 @@ DAO_ADDRESS(kCDataArrays_GetFlag, "CDataArrays::GetFlag", 0x00A5A280)
 // {data, size, capacity} of 16-byte elements (its accessor, 0x005728B0,
 // is data + index * 16). The string setter takes a pointer to the engine's
 // std::wstring.
-DAO_ADDRESS(kCDataArrays_SetInteger, "CDataArrays::SetInteger", 0x00A5B710)
-DAO_ADDRESS(kCDataArrays_SetFloat, "CDataArrays::SetFloat", 0x00A5B7D0)
-DAO_ADDRESS(kCDataArrays_SetFlag, "CDataArrays::SetFlag", 0x00A5B890)
-DAO_ADDRESS(kCDataArrays_SetObject, "CDataArrays::SetObject", 0x00A5B950)
-DAO_ADDRESS(kCDataArrays_SetString, "CDataArrays::SetString", 0x00A5BA10)
-DAO_ADDRESS(kCDataArrays_SetVector, "CDataArrays::SetVector", 0x00A5A9B0)
+DAO_ADDRESS(kCDataArrays_SetInteger, 33416)
+DAO_ADDRESS(kCDataArrays_SetFloat, 33417)
+DAO_ADDRESS(kCDataArrays_SetFlag, 33418)
+DAO_ADDRESS(kCDataArrays_SetObject, 33419)
+DAO_ADDRESS(kCDataArrays_SetString, 33420)
+DAO_ADDRESS(kCDataArrays_SetVector, 33409)
 
 // Commands (dao/Objects.h, Command), read 2026-09-30 from the 17 script
 // commands that build one and from AddCommand. Each takes a command from
@@ -1099,11 +1126,11 @@ DAO_ADDRESS(kCDataArrays_SetVector, "CDataArrays::SetVector", 0x00A5A9B0)
 // or pop (CopyGameDefinedStructure, structure 2) is a new command from the
 // pool with the fields copied by CopyFrom, not a shared reference; destroy
 // (structure 2) is Release, which puts it back. The names are ours.
-DAO_ADDRESS(kCommandPool_New, "CommandPool::New", 0x007468C0)
-DAO_ADDRESS(kCommandPool_Release, "CommandPool::Release", 0x0066DE30)
-DAO_ADDRESS(kCommand_Constructor, "Command::Command", 0x00741F10)
-DAO_ADDRESS(kCommand_CopyFrom, "Command::CopyFrom", 0x00741FC0)
-DAO_ADDRESS(kCommand_SetType, "Command::SetType", 0x00742090)
+DAO_ADDRESS(kCommandPool_New, 17726)
+DAO_ADDRESS(kCommandPool_Release, 13451)
+DAO_ADDRESS(kCommand_Constructor, 17647)
+DAO_ADDRESS(kCommand_CopyFrom, 17649)
+DAO_ADDRESS(kCommand_SetType, 17652)
 
 // Script arrays (dao/core/ScriptArray.h), read 2026-09-30. The value is
 // the tag and a shared payload; these make, copy, measure and free one,
@@ -1112,29 +1139,29 @@ DAO_ADDRESS(kCommand_SetType, "Command::SetType", 0x00742090)
 // given, so the caller keeps and frees its own, as GetTeam (0x0066E570)
 // does: Destructor, then operator delete. The engine's name for the class
 // is not in the exe.
-DAO_ADDRESS(kScriptArray_Constructor, "ScriptArray::ScriptArray", 0x00A2E920) // (tag): empty
-DAO_ADDRESS(kScriptArray_CopyConstructor, "ScriptArray::ScriptArray_copy", 0x00A2D260)
-DAO_ADDRESS(kScriptArray_Destructor, "ScriptArray::~ScriptArray", 0x00A2E830)
-DAO_ADDRESS(kScriptArray_Size, "ScriptArray::Size", 0x00A2DB80)
-DAO_ADDRESS(kCVirtualMachine_StackPushArray, "CVirtualMachine::StackPushArray", 0x00A2D7C0)
+DAO_ADDRESS(kScriptArray_Constructor, 32538) // (tag): empty
+DAO_ADDRESS(kScriptArray_CopyConstructor, 32494)
+DAO_ADDRESS(kScriptArray_Destructor, 32537)
+DAO_ADDRESS(kScriptArray_Size, 32519)
+DAO_ADDRESS(kCVirtualMachine_StackPushArray, 32508)
 // A resource on the stack is a std::wstring under tag 0x60 (StackPopResource
 // copies it out with the string's operator=): this pushes one, as
 // StackPushString does a string under tag 5. Read 2026-09-30.
-DAO_ADDRESS(kCVirtualMachine_StackPushResource, "CVirtualMachine::StackPushResource", 0x00A2D890)
+DAO_ADDRESS(kCVirtualMachine_StackPushResource, 32509)
 
 // The engine's std::wstring, MSVC 2005's (dao/core/Msvc8.h), read
 // 2026-09-30 from GetStringLength (0x00657CC0), which makes one on its
 // stack, pops into it and destroys it. __thiscall each. The C runtime is
 // linked into the exe, so these have no import names, and memory they
 // allocate is the engine's heap's: only the engine's destructor frees it.
-DAO_ADDRESS(kStdWString_Constructor, "std::wstring::wstring", 0x004C0D90)
-DAO_ADDRESS(kStdWString_Destructor, "std::wstring::~wstring", 0x004C0DB0)
-DAO_ADDRESS(kStdWString_Assign, "std::wstring::operator=", 0x004C2AB0)   // assign(other, 0, npos)
-DAO_ADDRESS(kStdWString_AssignRange, "std::wstring::assign", 0x004C1270) // (other, position, count)
+DAO_ADDRESS(kStdWString_Constructor, 4497)
+DAO_ADDRESS(kStdWString_Destructor, 4498)
+DAO_ADDRESS(kStdWString_Assign, 4546)      // assign(other, 0, npos)
+DAO_ADDRESS(kStdWString_AssignRange, 4517) // (other, position, count)
 // The allocator every engine allocation above goes through: operator new
 // calls the engine's memory manager (0x004B92C0) with a tag of -1.
-DAO_ADDRESS(kOperatorNew, "operator_new", 0x00413660)
-DAO_ADDRESS(kOperatorDelete, "operator_delete", 0x004136C0)
+DAO_ADDRESS(kOperatorNew, 392)
+DAO_ADDRESS(kOperatorDelete, 397)
 
 // The VM's stack as a whole, read 2026-09-30 for calling commands from C++
 // (dao/Script.h, Invoke): an object at VM+0x1738 whose first word is the
@@ -1142,7 +1169,7 @@ DAO_ADDRESS(kOperatorDelete, "operator_delete", 0x004136C0)
 // pops index both with it). Truncate, __thiscall on that object with the
 // new depth, `ret 4`, destroys every value above the depth and sets it;
 // each pop ends with it.
-DAO_ADDRESS(kCVirtualMachineStack_Truncate, "CVirtualMachineStack::Truncate", 0x00A2F390)
+DAO_ADDRESS(kCVirtualMachineStack_Truncate, 32549)
 
 // The engine's event queue, read 2026-09-30 from SignalEvent (0x00657E40).
 // The object at CClientExoApp+0x1AC keeps it; it has no vtable and so no
@@ -1156,13 +1183,13 @@ DAO_ADDRESS(kCVirtualMachineStack_Truncate, "CVirtualMachineStack::Truncate", 0x
 // the module's handler below; with no target it frees the event's data
 // through DeleteEventData, which ClearEvents also uses. Not yet seen in
 // play: which events pass through here (the probe counts them).
-DAO_ADDRESS(kAIMaster_AddEventDeltaTime, "AIMaster::AddEventDeltaTime", 0x0064ACE0)
-DAO_ADDRESS(kAIMaster_AddEventNow, "AIMaster::AddEventNow", 0x0064A630)
-DAO_ADDRESS(kAIMaster_AddEventLater, "AIMaster::AddEventLater", 0x0064A740)
-DAO_ADDRESS(kAIMaster_ProcessEvent, "AIMaster::ProcessEvent", 0x0064A8C0) // (CAIEvent **), __thiscall
-DAO_ADDRESS(kAIMaster_ClearEvents, "AIMaster::ClearEvents", 0x0064AC80)
-DAO_ADDRESS(kAIMaster_DeleteEventData, "AIMaster::DeleteEventData", 0x0064A520) // (id, data)
-DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
+DAO_ADDRESS(kAIMaster_AddEventDeltaTime, 12754)
+DAO_ADDRESS(kAIMaster_AddEventNow, 12745)
+DAO_ADDRESS(kAIMaster_AddEventLater, 12746)
+DAO_ADDRESS(kAIMaster_ProcessEvent, 12749) // (CAIEvent **), __thiscall
+DAO_ADDRESS(kAIMaster_ClearEvents, 12753)
+DAO_ADDRESS(kAIMaster_DeleteEventData, 12733) // (id, data)
+DAO_ADDRESS(kCAIEvent_Constructor, 19600)
 // Where an object's script meets its event (dao/Events.h): __thiscall
 // (CScriptEvent **), `ret 4`. CCObject's handler (slot 50, 0x00698A50,
 // shared with the triggers, sounds, waypoints and more; CCCreature's,
@@ -1170,9 +1197,9 @@ DAO_ADDRESS(kCAIEvent_Constructor, "CAIEvent::CAIEvent", 0x0079BDA0)
 // for a script event (handler id 10), and 17 other places call it
 // straight, delivering at once: a creature's death and update, the command
 // queue, effects, Party::Select, the orders. Read 2026-09-30.
-DAO_ADDRESS(kCCObject_RunEventScript, "CCObject::RunEventScript", 0x00698960)
-DAO_ADDRESS(kCCObject_EventHandler, "CCObject::EventHandler", 0x00698A50)
-DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
+DAO_ADDRESS(kCCObject_RunEventScript, 14176)
+DAO_ADDRESS(kCCObject_EventHandler, 14177)
+DAO_ADDRESS(kCCArea_EventHandler, 13685)
 
 // Conversations (dao/Dialogue.h), read 2026-09-30. The engine's
 // conversation has no vtable; its file (GFF4 "CONV") is at +0x20, its size
@@ -1191,19 +1218,19 @@ DAO_ADDRESS(kCCArea_EventHandler, "CCArea::EventHandler", 0x0067F180)
 // screen through ConversationData::AddResponse (__thiscall (text, icon),
 // `ret 8`), which makes a Response (0x90 bytes: Text, Icon) in the data
 // tree's Conversation.Responses. The names are ours.
-DAO_ADDRESS(kConversation_Start, "Conversation::Start", 0x007F2210)
-DAO_ADDRESS(kConversation_IsLineAvailable, "Conversation::IsLineAvailable", 0x007F0D30)
-DAO_ADDRESS(kConversation_FirstAvailable, "Conversation::FirstAvailable", 0x007F1100)
-DAO_ADDRESS(kConversation_PlayLine, "Conversation::PlayLine", 0x007F1EF0)
-DAO_ADDRESS(kConversation_OfferReplies, "Conversation::OfferReplies", 0x007F1A40)
-DAO_ADDRESS(kConversation_Advance, "Conversation::Advance", 0x007F1910)
-DAO_ADDRESS(kConversation_End, "Conversation::End", 0x007F0F50)
-DAO_ADDRESS(kGameModeDialog_ShowResponses, "GameModeDialog::ShowResponses", 0x00690B70)
-DAO_ADDRESS(kGameModeDialog_AddResponse, "GameModeDialog::AddResponse", 0x00690810)
-DAO_ADDRESS(kConversationData_Constructor, "ConversationData::ConversationData", 0x0068FF10)
-DAO_ADDRESS(kConversationData_AddResponse, "ConversationData::AddResponse", 0x00690670)
-DAO_ADDRESS(kResponse_Constructor, "Response::Response", 0x0068D2A0)
-DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
+DAO_ADDRESS(kConversation_Start, 21329)
+DAO_ADDRESS(kConversation_IsLineAvailable, 21310)
+DAO_ADDRESS(kConversation_FirstAvailable, 21313)
+DAO_ADDRESS(kConversation_PlayLine, 21328)
+DAO_ADDRESS(kConversation_OfferReplies, 21326)
+DAO_ADDRESS(kConversation_Advance, 21324)
+DAO_ADDRESS(kConversation_End, 21312)
+DAO_ADDRESS(kGameModeDialog_ShowResponses, 13949)
+DAO_ADDRESS(kGameModeDialog_AddResponse, 13948)
+DAO_ADDRESS(kConversationData_Constructor, 13933)
+DAO_ADDRESS(kConversationData_AddResponse, 13944)
+DAO_ADDRESS(kResponse_Constructor, 13885)
+DAO_ADDRESS(kCCModule_EventHandler, 11051)
 
 // The game's data tables (dao/Gda.h), read 2026-09-30. The object in this
 // global keeps them; +4 of it is its store, made on first use (0x00A2CBC0).
@@ -1215,25 +1242,25 @@ DAO_ADDRESS(kCCModule_EventHandler, "CCModule::EventHandler", 0x005FF850)
 // (0x0065404D-0x00654088: the column trimmed of " \t", lowercased and
 // hashed, the out a std::wstring), and slot 11 for a bool, whose cell
 // reader (M2DA's slot 15, 0x004EC4D0) writes one byte. Read 2026-09-30.
-DAO_DATA(kGdaTables, "g_gdaTables", 0x00C1D090)
-DAO_ADDRESS(kGdaTables_GetInt, "GdaTables::GetInt", 0x00A2CCC0)
-DAO_ADDRESS(kGdaTables_GetFloat, "GdaTables::GetFloat", 0x00A2CC80)
-DAO_ADDRESS(kGdaTables_GetString, "GdaTables::GetString", 0x00A2CC40)
-DAO_ADDRESS(kGdaTables_GetBool, "GdaTables::GetBool", 0x00A2CD00)
+DAO_DATA(kGdaTables, 99739)
+DAO_ADDRESS(kGdaTables_GetInt, 32473)
+DAO_ADDRESS(kGdaTables_GetFloat, 32472)
+DAO_ADDRESS(kGdaTables_GetString, 32471)
+DAO_ADDRESS(kGdaTables_GetBool, 32474)
 // The store's lookup of a table by number, __thiscall, `ret 4`, null if it
 // has none: what every getter above starts with. A table's row count is
 // its slot 5 and its column count its slot 4, no arguments, as
 // GetM2DARows and GetM2DAColumns call them (M2DA's +0x44 and +0x40, G2DA's
 // +0x30 and +0x2C). The name is ours.
-DAO_ADDRESS(kGdaStore_FindTable, "GdaStore::FindTable", 0x004DF580)
+DAO_ADDRESS(kGdaStore_FindTable, 5262)
 
 // The object array's lookup: NWN's `uint8_t CGameObjectArray::GetGameObject(
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
 // application's array at +0xCC.
-DAO_ADDRESS(kCGameObjectArray_GetGameObject, "CGameObjectArray::GetGameObject", 0x00A58190)
+DAO_ADDRESS(kCGameObjectArray_GetGameObject, 33354)
 // SetCombatState's engine side: the script command looks the creature up
 // (0x005D58C0) and calls this on it with the state. How a creature enters
 // and leaves combat, for a turn-based mode.
-DAO_ADDRESS(kCCCreature_SetCombatState, "CCCreature::SetCombatState", 0x006AE0A0)
+DAO_ADDRESS(kCCCreature_SetCombatState, 14734)
 
 } // namespace dao::addr

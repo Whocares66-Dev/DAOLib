@@ -1,0 +1,3 @@
+[submodule "extern/DAOAddressLibrary"]
+	path = extern/DAOAddressLibrary
+	url = ../DAOAddressLibrary.git

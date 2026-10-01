@@ -5,7 +5,9 @@
 .DESCRIPTION
     After `.\tools\build.ps1 -Preset <preset>`, puts build\<preset>\version.dll beside
     DAOrigins.exe and build\<preset>\daolib\plugins\*.dll under bin_ship\daolib\plugins,
-    each with its .pdb, so the crash logger can name our frames (dev/CRASHES.md). With
+    each with its .pdb, so the crash logger can name our frames (dev/CRASHES.md), and
+    the address library's files (build\<preset>\daolib\addresses\*.bin, one per build
+    of the game) under bin_ship\daolib\addresses, where the loader reads its own. With
     game\ghidra\functions.tsv present (dev/PROBE.md), copies it to bin_ship\daolib too,
     so the crash logger can name the game's. The game must not be running: it holds
     those files open.
@@ -19,8 +21,16 @@
     game to stock: version.dll is ours alone, the system's stays in SysWOW64 untouched.
     The logs are elsewhere (Documents) and stay.
 
+    -Install picks the game: gog (the default) or ea, the EA app's install
+    (dev/BUILDS.md), which takes the same files in the same places. The EA app installs
+    under Program Files with no write access for the user, so its bin_ship needs that
+    granted once, from an elevated shell:
+        icacls "C:\Program Files\EA Games\Dragon Age\bin_ship" /grant "${env:USERNAME}:(OI)(CI)M"
+    -Game names a bin_ship folder that is neither.
+
 .EXAMPLE
     .\tools\deploy.ps1                 # debug build into the GOG install
+    .\tools\deploy.ps1 -Install ea     # into the EA app's
     .\tools\deploy.ps1 -Examples saves  # and examples\saves
     .\tools\deploy.ps1 -Preset release
     .\tools\deploy.ps1 -Remove
@@ -31,19 +41,27 @@ param(
     [string] $Preset = 'debug',
     [switch] $Remove,
     [string[]] $Examples = @(),
-    [string] $Game = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins\bin_ship'
+    [ValidateSet('gog', 'ea')]
+    [string] $Install = 'gog',
+    [string] $Game
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 
+if (-not $Game) {
+    $Game = @{
+        gog = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins\bin_ship'
+        ea  = 'C:\Program Files\EA Games\Dragon Age\bin_ship'
+    }[$Install]
+}
 if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.exe in $Game" }
 # The game holds its DLLs open. Another install of the game has the same
 # process name (the EA version beside GOG's), so the running one is asked
 # where it runs from: only this install's blocks the copy. One whose path
 # cannot be read is taken for this install's.
-$exe = Join-Path $Game 'DAOrigins.exe'
+$exe = (Resolve-Path (Join-Path $Game 'DAOrigins.exe')).Path
 foreach ($running in @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue)) {
     $from = $running.Path
     if (-not $from -or [string]::Equals($from, $exe, [StringComparison]::OrdinalIgnoreCase)) {
@@ -94,6 +112,16 @@ foreach ($dll in Get-ChildItem -Path (Join-Path $build 'daolib\plugins') -Filter
     if (Test-Path $pdb) { Copy-Item -Force $pdb $plugins }
     Show-Ok "plugin  -> $(Join-Path $plugins $dll.Name)"
 }
+# The address library's files, one per build of the game: the loader and every
+# plugin read the one for the game they are in, and load nothing without it.
+$builtAddresses = Join-Path $build 'daolib\addresses'
+if (-not (Test-Path (Join-Path $builtAddresses '*.bin'))) { throw "No address files in $builtAddresses; the build makes them" }
+$addresses = Join-Path $daolib 'addresses'
+New-Item -ItemType Directory -Force $addresses | Out-Null
+foreach ($file in Get-ChildItem -Path $builtAddresses -Filter '*.bin') {
+    Copy-Item -Force $file.FullName (Join-Path $addresses $file.Name)
+}
+Show-Ok "addresses -> $addresses"
 $functions = Join-Path $repo 'game\ghidra\functions.tsv'
 if (Test-Path $functions) {
     Copy-Item -Force $functions (Join-Path $daolib 'functions.tsv')

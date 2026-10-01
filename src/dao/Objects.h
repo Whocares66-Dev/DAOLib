@@ -466,7 +466,7 @@ class CCCreature : public CCObject
             return std::nullopt;
         }
         using Fn = float(__fastcall *)(const void *, int, std::int32_t);
-        std::uintptr_t getter = addr::kCreatureProperties_GetTotal;
+        AddressId getter = addr::kCreatureProperties_GetTotal;
         switch (value)
         {
         case script::PropertyValue::Base:
@@ -503,7 +503,7 @@ class CCCreature : public CCObject
         {
             return false;
         }
-        std::uintptr_t setter = addr::kCreatureStats_SetBase;
+        AddressId setter = addr::kCreatureStats_SetBase;
         if (value == script::PropertyValue::Current)
         {
             setter = addr::kCreatureStats_SetCurrent;

@@ -38,16 +38,21 @@ template <class Fn> class Detour
         Detach();
     }
 
-    // Attach to the function at a preferred-base address from dao/Addresses.h.
-    // False, with nothing changed, if Detours refused: an address that is not
+    // Attach to the function with an ID from dao/Addresses.h.
+    // False, with nothing changed, if the running build has no such function
+    // (Module::Address gives zero) or Detours refused: an address that is not
     // code, or one already patched in a way it cannot follow.
-    bool Attach(std::uintptr_t preferredVa, Fn hook)
+    bool Attach(AddressId id, Fn hook)
     {
         if (attached_)
         {
             return false;
         }
-        original_ = reinterpret_cast<Fn>(Module::Address(preferredVa));
+        original_ = reinterpret_cast<Fn>(Module::Address(id));
+        if (original_ == nullptr)
+        {
+            return false;
+        }
         hook_ = hook;
         if (DetourTransactionBegin() != NO_ERROR)
         {

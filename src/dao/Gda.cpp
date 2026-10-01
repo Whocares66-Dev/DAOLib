@@ -26,7 +26,7 @@ void *Keeper()
 
 // The keeper's getters: __thiscall, (table, row, column hash, out),
 // `ret 0x10`, true if the cell was there.
-template <class T> bool Call(std::uintptr_t getter, std::int32_t table, std::int32_t row, std::uint32_t hash, T *out)
+template <class T> bool Call(AddressId getter, std::int32_t table, std::int32_t row, std::uint32_t hash, T *out)
 {
     void *tables = Keeper();
     if (tables == nullptr)
@@ -37,7 +37,7 @@ template <class T> bool Call(std::uintptr_t getter, std::int32_t table, std::int
     return reinterpret_cast<Fn>(Module::Address(getter))(tables, 0, table, row, hash, out);
 }
 
-template <class T> std::optional<T> Get(std::uintptr_t getter, std::int32_t table, std::int32_t row, std::uint32_t hash)
+template <class T> std::optional<T> Get(AddressId getter, std::int32_t table, std::int32_t row, std::uint32_t hash)
 {
     T value{};
     return Call(getter, table, row, hash, &value) ? std::optional{value} : std::nullopt;

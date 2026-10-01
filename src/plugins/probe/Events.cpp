@@ -130,16 +130,18 @@ void AttachEventWatch()
 {
     dao::script::OnCommandsReady([] {}); // to learn the scripts' thread
     dao::OnFrame(&Frame);
-    spdlog::info("frame watch: detoured the per-frame update at {:#010x}", dao::addr::kEclipseGame_Update);
+    spdlog::info("frame watch: detoured the per-frame update at {:#010x}",
+                 dao::Module::Preferred(dao::addr::kEclipseGame_Update));
 
     if (g_processEvent.Attach(dao::addr::kAIMaster_ProcessEvent, &ProcessEvent))
     {
-        spdlog::info("event watch: detoured AIMaster::ProcessEvent at {:#010x}", dao::addr::kAIMaster_ProcessEvent);
+        spdlog::info("event watch: detoured AIMaster::ProcessEvent at {:#010x}",
+                     dao::Module::Preferred(dao::addr::kAIMaster_ProcessEvent));
     }
     else
     {
         spdlog::error("event watch: could not detour AIMaster::ProcessEvent at {:#010x}",
-                      dao::addr::kAIMaster_ProcessEvent);
+                      dao::Module::Preferred(dao::addr::kAIMaster_ProcessEvent));
     }
 }
 

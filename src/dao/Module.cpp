@@ -6,9 +6,105 @@
 
 #include <array>
 #include <span>
+#include <utility>
 
 namespace dao::Module
 {
+
+namespace
+{
+
+// The GOG build, by its link stamp: the one the Ghidra project, the names
+// and every address written in a comment are of (dao/Addresses.h).
+constexpr std::uint32_t kListingLinkStamp = 0x4eb19d53;
+
+// How far past an ID's address is still taken to be the same thing, going
+// from a running address back to the listing's: no function of the game's is
+// this long, and past it the nearest ID below says nothing.
+constexpr std::uint32_t kFarthest = 0x10000;
+
+// The folder of the DLL this code is linked into: the loader's, or a
+// plugin's.
+std::filesystem::path OwnFolder()
+{
+    HMODULE module = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&OwnFolder), &module) == FALSE)
+    {
+        return {};
+    }
+    std::array<wchar_t, MAX_PATH> buffer{};
+    const DWORD length = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
+    return std::filesystem::path(std::wstring_view(buffer.data(), length)).parent_path();
+}
+
+struct Libraries
+{
+    std::filesystem::path folder;
+    std::optional<daoaddr::Library> running; // the build this process is
+    std::optional<daoaddr::Library> listing; // GOG's, if that is another
+};
+
+// Read once, by each DLL for itself: the files do not change under a
+// running game, and Address asks every time.
+const Libraries &Loaded()
+{
+    static const Libraries libraries = [] {
+        Libraries out;
+        const auto have = Fingerprint();
+        if (!have || !have->is32Bit)
+        {
+            return out;
+        }
+        const std::string name = daoaddr::FileName(have->timeDateStamp);
+        const auto own = OwnFolder();
+        // Beside the loader: for the loader itself, for a plugin in
+        // daolib\plugins, and for either when the loader sits beside the exe.
+        for (const auto &folder : {own / L"daolib" / L"addresses", own.parent_path() / L"addresses",
+                                   Path().parent_path() / L"daolib" / L"addresses"})
+        {
+            auto library = daoaddr::Library::Load(folder / name);
+            if (!library)
+            {
+                continue;
+            }
+            // The file's name says the link stamp; its header says the
+            // rest, and all of it must be the running exe's.
+            const daoaddr::BuildInfo &build = library->Build();
+            if (build.linkStamp != have->timeDateStamp || build.sizeOfImage != have->sizeOfImage ||
+                build.entryPointRva != have->entryPointRva || build.imageBase != have->imageBase)
+            {
+                continue;
+            }
+            out.folder = folder;
+            out.running = std::move(library);
+            if (have->timeDateStamp != kListingLinkStamp)
+            {
+                out.listing = daoaddr::Library::Load(folder / daoaddr::FileName(kListingLinkStamp));
+            }
+            break;
+        }
+        return out;
+    }();
+    return libraries;
+}
+
+// The library whose addresses are the listing's: GOG's.
+const daoaddr::Library *Listing()
+{
+    const Libraries &libraries = Loaded();
+    if (!libraries.running)
+    {
+        return nullptr;
+    }
+    if (libraries.running->Build().linkStamp == kListingLinkStamp)
+    {
+        return &*libraries.running;
+    }
+    return libraries.listing ? &*libraries.listing : nullptr;
+}
+
+} // namespace
 
 std::uintptr_t Base()
 {
@@ -33,10 +129,59 @@ std::optional<core::Fingerprint> Fingerprint()
     return core::ReadFingerprint(std::span<const std::byte>(bytes, kHeaderBytes));
 }
 
-bool IsExpectedExecutable()
+const daoaddr::Library *Library()
 {
-    const auto have = Fingerprint();
-    return have && *have == core::kExpected;
+    const Libraries &libraries = Loaded();
+    return libraries.running ? &*libraries.running : nullptr;
+}
+
+std::filesystem::path AddressFolder()
+{
+    return Loaded().folder;
+}
+
+std::uintptr_t Address(AddressId id)
+{
+    const daoaddr::Library *library = Library();
+    const auto rva = library != nullptr ? library->Rva(id) : std::nullopt;
+    return rva ? Base() + *rva : 0;
+}
+
+std::optional<daoaddr::Entry> Find(AddressId id)
+{
+    const daoaddr::Library *library = Library();
+    return library != nullptr ? library->Find(id) : std::nullopt;
+}
+
+std::uint32_t Preferred(std::uintptr_t runtime)
+{
+    const daoaddr::Library *library = Library();
+    // In GOG's build the listing's address is the image's own; so it is
+    // taken to be in a build the library does not know, where there is
+    // nothing better to say.
+    if (library == nullptr || library->Build().linkStamp == kListingLinkStamp)
+    {
+        return ImageAddress(runtime);
+    }
+    const daoaddr::Library *listing = Listing();
+    if (listing == nullptr)
+    {
+        return 0;
+    }
+    static const daoaddr::Index index{*library};
+    const auto hit = index.At(static_cast<std::uint32_t>(runtime - Base()));
+    if (!hit || hit->offset > kFarthest)
+    {
+        return 0;
+    }
+    const auto there = listing->Address(hit->id);
+    return there ? *there + hit->offset : 0;
+}
+
+std::uint32_t Preferred(AddressId id)
+{
+    const daoaddr::Library *listing = Listing();
+    return listing != nullptr ? listing->Address(id).value_or(0) : 0;
 }
 
 std::optional<CodeRange> Code()

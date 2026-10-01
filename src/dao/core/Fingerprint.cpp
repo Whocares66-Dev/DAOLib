@@ -53,7 +53,7 @@ std::optional<Fingerprint> ReadFingerprint(std::span<const std::byte> image)
     // A PE32+ image keeps a 64-bit base where PE32 keeps a 32-bit one, so the
     // fields above only mean what they say for PE32; report the rest as not
     // 32-bit and leave the base at what was read, which a caller comparing
-    // against kExpected rejects anyway.
+    // against a known build rejects anyway.
     return Fingerprint{
         .timeDateStamp = *timeDateStamp,
         .sizeOfImage = *sizeOfImage,

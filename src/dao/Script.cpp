@@ -26,7 +26,7 @@ void *VirtualMachine()
 }
 
 // The VM's pops and pushes: BOOL, __thiscall on the VM, one argument, `ret 4`.
-template <class Arg> bool CallVm(std::uintptr_t function, Arg arg)
+template <class Arg> bool CallVm(AddressId function, Arg arg)
 {
     void *vm = VirtualMachine();
     if (vm == nullptr)
@@ -37,7 +37,7 @@ template <class Arg> bool CallVm(std::uintptr_t function, Arg arg)
     return reinterpret_cast<Fn>(Module::Address(function))(vm, 0, arg) != FALSE;
 }
 
-template <class A, class B> bool CallVm(std::uintptr_t function, A a, B b)
+template <class A, class B> bool CallVm(AddressId function, A a, B b)
 {
     void *vm = VirtualMachine();
     if (vm == nullptr)

@@ -134,6 +134,15 @@ find_library(DETOURS_LIBRARY detours REQUIRED)
 # functions over bytes and numbers -- and is what tests/ covers. The rest
 # reads process memory and is verified in play.
 # ---------------------------------------------------------------------------
+# The address library: an ID for every function and global of the game, and
+# where each is in each build of it. daolib holds IDs (dao/Addresses.h) and
+# reads the file for the running build at run time (dao/Module.h); the
+# library's own build packs those files into <build>/daolib/addresses,
+# beside the loader, where they are looked for.
+if(NOT TARGET DAOAddressLibrary::daoaddr)
+    add_subdirectory(extern/DAOAddressLibrary)
+endif()
+
 add_library(
     daolib
     STATIC
@@ -187,7 +196,10 @@ dao_apply_warnings(daolib)
 target_compile_features(daolib PUBLIC cxx_std_20)
 target_include_directories(daolib PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_include_directories(daolib SYSTEM PUBLIC ${DETOURS_INCLUDE_DIRS})
-target_link_libraries(daolib PUBLIC spdlog::spdlog ${DETOURS_LIBRARY})
+target_link_libraries(
+    daolib
+    PUBLIC spdlog::spdlog ${DETOURS_LIBRARY} DAOAddressLibrary::daoaddr
+)
 target_compile_definitions(
     daolib
     PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX DAO_VERSION_STRING="${PROJECT_VERSION}"

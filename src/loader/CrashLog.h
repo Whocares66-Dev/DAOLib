@@ -6,13 +6,16 @@
 // last lines of every DAOLib log. dev/CRASHES.md says how to read one.
 #pragma once
 
+#include <filesystem>
+
 namespace loader::crashlog
 {
 
 // Installs the unhandled-exception filter, and a hook on
 // SetUnhandledExceptionFilter that keeps it installed: a filter the game or
 // its runtime sets later is remembered and called after ours, not put in
-// its place. From the loader's DllMain, first.
-void Install();
+// its place. From the loader's DllMain, first. The folder is the loader's
+// own: daolib\functions.tsv and the plugins' PDBs are looked for under it.
+void Install(const std::filesystem::path &loaderFolder);
 
 } // namespace loader::crashlog

@@ -55,7 +55,7 @@ double Attribute::Number() const
 Attribute::Type Attribute::Kind() const
 {
     const auto vtable = *reinterpret_cast<const std::uintptr_t *>(this);
-    const auto is = [vtable](std::uintptr_t address) { return vtable == Module::Address(address); };
+    const auto is = [vtable](AddressId id) { return vtable == Module::Address(id); };
     if (is(addr::kAttributeBool_Vftable))
     {
         return Type::Bool;
