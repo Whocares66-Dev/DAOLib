@@ -275,8 +275,18 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 // (1), and none with its load reading loaded, though all were on screen:
 // each read load 2 and state 6, a state the indoor policy never gives, in
 // explore mode and in a fight alike. So Shown() goes by what has been seen
-// alone, and state and load are an indoor room's. What an indoor room
-// never seen reads is not yet seen in play; examples/world logs it.
+// alone, and state and load are an indoor room's.
+//
+// And indoors, the same day, in the Elven Ruins (through the Eluvian
+// server, the turn-based mod going by Shown()): rooms 1574 to 1580, the
+// party's own in view and every other never seen, not shown, though
+// loaded. The first hall and the entrance tunnel 40 m from it are one
+// room. Walking into the next hall put it in view and the room beyond it
+// too, unentered. A room behind a shut door stayed never seen, three
+// spiders idle in it 13 to 24 m off, and read in view the moment the door
+// opened, before anyone walked in; in Castle Cousland a room behind an
+// opened door had stayed black until the hero entered, so which neighbours
+// a room shows is the area's own.
 struct Room
 {
     static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
