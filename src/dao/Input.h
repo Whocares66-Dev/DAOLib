@@ -57,7 +57,13 @@
 // game's last section, by patching the movie as the game opens it
 // (dao/Gui.h, OnMovieLoad; dao/core/GfxMovie.h). A row made that way is
 // the game's own row: the label and the two keys from the engine's data,
-// rebound as the game's are. Not yet seen in play.
+// rebound as the game's are. Seen in play the same day, with
+// examples/input/: the header and both rows at the list's end; a key bound
+// to the row with none (F10) ran its callback, and the other rebound (F11
+// to F12) answered the new key and not the old; both were in
+// KeyBindings.ini and still bound after a restart; opening the screen
+// again doubled nothing; Restore Defaults put the first back to F11 and
+// emptied the second; and a row of the game's own still rebound.
 #pragma once
 
 #include "dao/GameModes.h"

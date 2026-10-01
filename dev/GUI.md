@@ -42,7 +42,7 @@ So a plugin's row gets into such a list only by adding to the script. `dao::gui:
 - **Where.** GFx reads a movie through `GUI::ScaleformResourceFile`, a file object over the resource's bytes in memory: where they begin at +0x30, where it has read to at +0x34, its length from its slot 6. The library detours `EclipseGFxFileOpener::OpenFile`, and for a movie with a patch points the file at the patched bytes and gives it a vtable whose length slot answers theirs.
 - **What.** The patch is given the movie uncompressed (`dao/core/GfxMovie.h`, `Unpack`; the game's are `CFX`, a zlib stream after the header, inflated by `dao/core/Inflate.h`) and answers the changed bytes. GFx takes the uncompressed `GFX` as readily.
 - **How a script is added to.** `core::gfx::InsertAfter(movie, {"AddKeyBinding", "HideMainInterface"}, code)` finds that statement in the movie's script and puts `code` after it, then makes everything around it fit: the header's length, the tags' lengths, the sizes of the functions it is inside, and any branch that jumps across it. `Statements` makes the code for calls like the game's own.
-- **Checked.** On the game's own `optionsmenu.gfx` the patched movie lists as the original does but for the added calls and one branch 118 bytes longer. Not yet seen in play.
+- **Checked.** On the game's own `optionsmenu.gfx` the patched movie lists as the original does but for the added calls and one branch 118 bytes longer. In play, 2026-10-01, the patched movie opened every time and showed the added header and rows, which rebound as the game's own do.
 
 `dao::input` uses it to list a plugin's actions in the controls screen.
 

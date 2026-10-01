@@ -306,7 +306,10 @@ bool HasMovie(std::wstring_view file);
 // optionsmenu.gfx), in any case. Read 2026-10-01 (dao/Addresses.h,
 // EclipseGFxFileOpener::OpenFile): the game's file object reads from the
 // resource's bytes in memory, and this points it at the patched bytes and
-// answers their length. Not yet seen in play.
+// answers their length. Seen in play the same day through dao/Input.h's
+// rows in the controls screen: the patched options movie opened each
+// time, twice in one session and again after a restart, its other tabs as
+// ever.
 using MoviePatch = std::function<std::optional<std::vector<std::byte>>(std::span<const std::byte> movie)>;
 void OnMovieLoad(std::wstring_view name, MoviePatch patch);
 
