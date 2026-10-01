@@ -217,6 +217,51 @@ constexpr std::string_view Name(CommandType value)
     }
 }
 
+// DAMAGE_TYPE_* (2da_constants_h.nss), 10 values.
+enum class DamageType : std::int32_t
+{
+    Invalid = 0,
+    Physical = 1,
+    Fire = 2,
+    Cold = 3,
+    Electricity = 4,
+    Nature = 5,
+    Plot = 6,
+    Tbd = 7,
+    Spirit = 8,
+    Dot = 9,
+};
+
+// The value's script name; empty for a value no constant names.
+constexpr std::string_view Name(DamageType value)
+{
+    switch (value)
+    {
+    case DamageType::Invalid:
+        return "DAMAGE_TYPE_INVALID";
+    case DamageType::Physical:
+        return "DAMAGE_TYPE_PHYSICAL";
+    case DamageType::Fire:
+        return "DAMAGE_TYPE_FIRE";
+    case DamageType::Cold:
+        return "DAMAGE_TYPE_COLD";
+    case DamageType::Electricity:
+        return "DAMAGE_TYPE_ELECTRICITY";
+    case DamageType::Nature:
+        return "DAMAGE_TYPE_NATURE";
+    case DamageType::Plot:
+        return "DAMAGE_TYPE_PLOT";
+    case DamageType::Tbd:
+        return "DAMAGE_TYPE_TBD";
+    case DamageType::Spirit:
+        return "DAMAGE_TYPE_SPIRIT";
+    case DamageType::Dot:
+        return "DAMAGE_TYPE_DOT";
+    default:
+        return {};
+    }
+}
+
 // EFFECT_CONFUSION_* (effect_constants_h.nss), 7 values.
 enum class EffectConfusion : std::int32_t
 {
@@ -3002,6 +3047,16 @@ inline constexpr std::int32_t TABLE_STARTING_EQUIPMENT = 1001;
 inline constexpr std::int32_t TABLE_ACHIEVEMENTS = 268;
 inline constexpr std::int32_t TABLE_PROJECTILES = 1006;
 inline constexpr std::int32_t TABLE_DAMAGETYPES = 1008;
+inline constexpr std::int32_t DAMAGE_TYPE_INVALID = 0;
+inline constexpr std::int32_t DAMAGE_TYPE_PHYSICAL = 1;
+inline constexpr std::int32_t DAMAGE_TYPE_FIRE = 2;
+inline constexpr std::int32_t DAMAGE_TYPE_COLD = 3;
+inline constexpr std::int32_t DAMAGE_TYPE_ELECTRICITY = 4;
+inline constexpr std::int32_t DAMAGE_TYPE_NATURE = 5;
+inline constexpr std::int32_t DAMAGE_TYPE_PLOT = 6;
+inline constexpr std::int32_t DAMAGE_TYPE_TBD = 7;
+inline constexpr std::int32_t DAMAGE_TYPE_SPIRIT = 8;
+inline constexpr std::int32_t DAMAGE_TYPE_DOT = 9;
 
 } // namespace constants
 

@@ -47,8 +47,10 @@ EFFECTS = os.path.join(
     ROOT, "toolset", "extract", "scripts", "_Game Effects", "effect_constants_h.nss"
 )
 # The game's data tables by number (TABLE_ABILITIES_TALENTS = 1, ...), what
-# dao/Gda.h and the scripts' GetM2DA* commands take; only the TABLE_
-# constants are taken from it.
+# dao/Gda.h and the scripts' GetM2DA* commands take; and the damage types
+# (DAMAGE_TYPE_*), which EVENT_TYPE_DAMAGED's integer 0 carries. Only those
+# two groups are taken from it.
+FROM_TABLES = ("TABLE_", "DAMAGE_TYPE_")
 TABLES = os.path.join(
     ROOT, "toolset", "extract", "scripts", "_Core Includes", "2da_constants_h.nss"
 )
@@ -296,7 +298,7 @@ def main(argv):
         tables = {}
         parse(f.read(), "2da_constants_h.nss", tables)
         for k, v in tables.items():
-            if k.startswith("TABLE_"):
+            if k.startswith(FROM_TABLES):
                 raw.setdefault(k, v)
     constants = resolve(raw)
     notes = property_notes(constants, table)

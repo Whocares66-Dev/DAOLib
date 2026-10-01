@@ -80,6 +80,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Hold the game's clock for effects and regeneration, and spend a round's worth at once (a fight in turns): `dao::clock::Hold(true)`, `Advance(seconds)`; run the world faster or slower: `dao::clock::SetSpeed(0.5f)` | `dao/Clock.h` |
 | Show a number as a person reads it: a script constant's name (`Name(EffectType::Root)`, every generated enum; `Name(core::CommandType)`), an ability's name and label (`dao::abilities::Name(id)`) | `dao/generated/ScriptConstants.h`, `dao/Abilities.h` |
 | Draw in the world with the game's own effects: a ring on the ground of any radius, the engine's aiming ring (`dao::vfx::PlaceRing`), any vfx_base row placed, scaled, moved and removed | `dao/Vfx.h` |
+| Who is selected in the party bar: `dao::party::Selected()` | `dao/Party.h` |
 | A plugin's own text in the player's language: its own talk tables beside its DLL (`<name>_<locale>.tlk`), the game's language (`dao::strings::Locale`) | `dao/Strings.h` |
 | Hear any object start and end a command, with how it ended (success, cleared, a COMMAND_FAILED_*): `dao::commands::OnStart`, `OnEnd` | `dao/CommandEvents.h` |
 | Act through explore mode's own click state: select a target as the cycle-target keys do (`GameModeExplore::SelectTarget`, `SelectedTarget`), set the object under the cursor for the next click message (`SetCursorObject`) | `dao/GameModes.h` |

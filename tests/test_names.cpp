@@ -13,6 +13,8 @@ TEST_CASE("a constant's script name, from its enum value")
     CHECK(Name(dao::script::PlaceableAction::Destroy) == "PLACEABLE_ACTION_DESTROY");
     // A value no constant names has none.
     CHECK(Name(static_cast<EffectType>(987654)).empty());
+    // From 2da_constants_h.nss: what EVENT_TYPE_DAMAGED's integer 0 carries.
+    CHECK(Name(dao::script::DamageType::Fire) == "DAMAGE_TYPE_FIRE");
 }
 
 TEST_CASE("a command type's name")
