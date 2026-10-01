@@ -122,6 +122,22 @@ DAO_ADDRESS(kCCArea_LineOfSight, "CCArea::LineOfSight", 0x0067C3F0)
 DAO_ADDRESS(kCCPlaceable_BlocksSight, "CCPlaceable::BlocksSight", 0x0067A670)
 DAO_ADDRESS(kCCObject_Area, "CCObject::Area", 0x00695180)
 DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
+// Paths, read 2026-09-30 (dao/World.h, CurrentPath; dev/TODO.md, item 5). A
+// creature's MovementController is its +0xA40 (Movement); the move
+// commands' update (0x007A9130) asks for a path through RequestPath
+// (__thiscall (creature, const Vector4 *to, const Vector4 *from or null),
+// `ret 0xC`; 1 found, 5 failed, 8 no controller, else still searching),
+// which sets the controller's start (+0x60) and destination (+0x30) and
+// advances the search a slice of time (Step, 0x00A62640, through
+// 0x00A473F0 and the Pathfinding search environments). The search, at the
+// controller's +0x14, keeps its waypoints in a std::vector at +0x70
+// (Waypoint reads one) and the next one's index at +0x88. The names are
+// ours.
+DAO_ADDRESS(kCCCreature_Movement, "CCCreature::Movement", 0x006A2570)
+DAO_ADDRESS(kCCObject_RequestPath, "CCObject::RequestPath", 0x0073EA80)
+DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
+DAO_ADDRESS(kMovementController_NextWaypoint, "MovementController::NextWaypoint", 0x00A625E0)
+DAO_ADDRESS(kPathSearch_Waypoint, "PathSearch::Waypoint", 0x00A47620)
 
 // Creature actions (dev/TURN_BASED.md). Read 2026-09-30 from AddCommand's
 // implementation after the probe showed it running about five times a

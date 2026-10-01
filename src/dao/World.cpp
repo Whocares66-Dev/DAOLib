@@ -6,6 +6,8 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
+#include "dao/core/Msvc8.h"
+#include "dao/core/Path.h"
 
 #include <Windows.h>
 
@@ -126,6 +128,75 @@ std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t 
         return std::nullopt;
     }
     return hits.front();
+}
+
+namespace
+{
+constexpr std::size_t kMovement = 0xA40; // in the creature: its MovementController
+constexpr std::size_t kSearch = 0x14;    // in the controller
+constexpr std::size_t kWaypoints = 0x70; // in the search: a std::vector of 12-byte points
+constexpr std::size_t kNext = 0x88;      // in the search
+
+using core::Point3;
+
+std::vector<Point3> Points(const std::vector<Vector> &waypoints)
+{
+    std::vector<Point3> out;
+    out.reserve(waypoints.size());
+    for (const Vector &v : waypoints)
+    {
+        out.push_back({v.x, v.y, v.z});
+    }
+    return out;
+}
+} // namespace
+
+float WalkPath::Length() const
+{
+    return core::PathLength(Points(waypoints));
+}
+
+float WalkPath::Remaining(const Vector &from) const
+{
+    return core::PathRemaining(Points(waypoints), next, {from.x, from.y, from.z});
+}
+
+std::optional<WalkPath> CurrentPath(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr || !OnGameThread())
+    {
+        return std::nullopt;
+    }
+    const CCCreature *object = app->GetCreatureById(creature);
+    if (object == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto controller = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(object) + kMovement);
+    const auto search = controller && *controller != 0 ? TryRead<std::uintptr_t>(*controller + kSearch) : std::nullopt;
+    if (!search || *search == 0)
+    {
+        return std::nullopt;
+    }
+    const auto points = TryRead<core::VectorRep<Point3>>(*search + kWaypoints);
+    const auto next = TryRead<std::int32_t>(*search + kNext);
+    if (!points || !next)
+    {
+        return std::nullopt;
+    }
+    const auto view = points->View();
+    if (view.empty() || view.size() > 4096)
+    {
+        return std::nullopt;
+    }
+    WalkPath path;
+    for (const Point3 &p : view)
+    {
+        path.waypoints.push_back({p.x, p.y, p.z});
+    }
+    path.next = *next < 0 ? 0 : static_cast<std::size_t>(*next);
+    return path;
 }
 
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)

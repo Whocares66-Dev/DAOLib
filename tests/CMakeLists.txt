@@ -9,6 +9,7 @@ add_executable(
     test_gff4.cpp
     test_msvc8.cpp
     test_objects.cpp
+    test_path.cpp
     test_range.cpp
     test_relocate.cpp
     test_saferead.cpp

@@ -5,7 +5,8 @@
 // not, each time the object under the cursor changes. Every two seconds it
 // also casts a ray straight down onto the controlled creature and logs
 // each shape it met: what kind of thing, and its collision groups, which
-// tell which bits the ground and each kind of object carry.
+// tell which bits the ground and each kind of object carry. And while the
+// creature walks, the path its movement found: its waypoints and length.
 //
 // Everything runs in a frame callback, on the game's thread, where the
 // world's queries must be asked. What it finds goes to example_world.log.
@@ -82,6 +83,20 @@ void LookDown(dao::ObjectId self)
     }
 }
 
+// The path the creature is walking, if it is: its length, and what is
+// left of it from where it stands.
+void LogPath(dao::ObjectId self)
+{
+    const auto path = dao::world::CurrentPath(self);
+    const dao::CCObject *creature = dao::CClientExoApp::Get()->GetObjectById(self);
+    if (!path || creature == nullptr)
+    {
+        return;
+    }
+    spdlog::info("0x{:x} walks a path of {} waypoints, {:.2f} m, {:.2f} m left (heading for waypoint {})", self,
+                 path->waypoints.size(), path->Length(), path->Remaining(creature->Position()), path->next);
+}
+
 void Frame()
 {
     const dao::GameModeExplore *explore = dao::CClientExoApp::CurrentExplore();
@@ -105,6 +120,7 @@ void Frame()
     if (dao::FrameCount() % kFramesBetweenRays == 0)
     {
         LookDown(self);
+        LogPath(self);
     }
 }
 

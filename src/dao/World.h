@@ -138,6 +138,29 @@ struct Sight
 };
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore = kInvalidObject);
 
+// The path a creature is walking, as its movement found it: the waypoints
+// from where the search started to where it ends, and the one it is
+// heading for. Read 2026-09-30: a creature's MovementController (its
+// +0xA40, 0x006A2570; vftable 0x00B596C0) keeps its search at +0x14, whose
+// waypoints are a std::vector of 12-byte points at +0x70 (0x00A47620 reads
+// one, bounds-checked by (last - first) / 12) and whose next waypoint's
+// index is at +0x88 (0x00A625E0). The move commands' update (0x007A9130)
+// asks for the path a slice of time a frame (0x0073EA80, the search
+// advanced by 0x00A62640), so a path appears a frame or more after the
+// order, not while the game is paused. Not yet seen in play.
+struct WalkPath
+{
+    std::vector<Vector> waypoints;
+    std::size_t next = 0; // index of the waypoint being walked to
+
+    // Along the waypoints, start to end.
+    float Length() const;
+    // From `from` (where the creature is) to the next waypoint, then on.
+    float Remaining(const Vector &from) const;
+};
+// Nothing for a creature not walking a path, or not there.
+std::optional<WalkPath> CurrentPath(ObjectId creature);
+
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject
 // asks it: from kEyeHeight above one's position to kEyeHeight above the
 // other's, in the viewer's area; not if they are in different areas.
