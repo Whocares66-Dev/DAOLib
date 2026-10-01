@@ -540,14 +540,16 @@ class CCCreature : public CCObject
         return Property(script::PropertySimple::Level);
     }
 
-  private:
     // The creature's CCCreatureStats: the value of its attribute at +0x7C4.
-    // The setters take it; the getters take its property list, +0x190.
+    // The property setters take it, and the getters its property list,
+    // +0x190; its cooldowns are in dao/Abilities.h.
     void *Stats() const
     {
         return Read<void *>(kStats);
     }
     static constexpr std::size_t kStats = 0x7D0;
+
+  private:
     static constexpr std::size_t kProperties = 0x190;
 };
 

@@ -134,6 +134,28 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // controller's +0x14, keeps its waypoints in a std::vector at +0x70
 // (Waypoint reads one) and the next one's index at +0x88. The names are
 // ours.
+// Cooldowns (dao/Abilities.h), read 2026-09-30 from the scripts'
+// SetCooldown and GetRemainingCooldown. A creature's stats keep a cooldown
+// manager at +0xF4, made on first use (Cooldowns, __thiscall, no
+// arguments). Find, __thiscall on the manager (ability, const std::wstring
+// &item tag), `ret 8`, gives an ability's record or null. A record is 0x44
+// bytes: the ability, the tag of the item it came from (a std::wstring at
+// +4), the seconds it was last set to at +0x20, and two float attributes,
+// the seconds left at +0x24 and their share of +0x20 at +0x34 (each value
+// at the attribute's +0xC). A record is made when the creature gains the
+// ability (0x0071EAC0, through 0x0071D6D0) and handed to the creature's
+// ability list for the interface (the stats' +0x1B4, 0x0062D760).
+// SetCooldown, __thiscall on the stats (ability, float seconds, const
+// std::wstring &tag), `ret 0xC`, sets +0x20 and the seconds left to the
+// time, the share to 1, and puts the record among those that tick; it does
+// nothing for an ability with no record. Tick (0x0071C840, __thiscall on
+// the manager (float seconds), from Cooldowns' own caller) takes the time
+// from each, sets the share to what is left over +0x20, and drops a record
+// that has run out from the ticking ones. The names are ours.
+DAO_ADDRESS(kCCCreatureStats_Cooldowns, "CCCreatureStats::Cooldowns", 0x0071CA00)
+DAO_ADDRESS(kCCCreatureStats_SetCooldown, "CCCreatureStats::SetCooldown", 0x0071DCE0)
+DAO_ADDRESS(kCooldownManager_Find, "CooldownManager::Find", 0x0071C250)
+DAO_ADDRESS(kCooldownManager_Tick, "CooldownManager::Tick", 0x0071C840)
 DAO_ADDRESS(kCCCreature_Movement, "CCCreature::Movement", 0x006A2570)
 DAO_ADDRESS(kCCObject_RequestPath, "CCObject::RequestPath", 0x0073EA80)
 DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)

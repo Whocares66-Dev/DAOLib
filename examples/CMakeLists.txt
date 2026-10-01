@@ -28,3 +28,6 @@ dao_apply_warnings(example_preview)
 
 add_daolib_plugin(example_commands SOURCES commands/Commands.cpp)
 dao_apply_warnings(example_commands)
+
+add_daolib_plugin(example_cooldown SOURCES cooldown/Cooldown.cpp)
+dao_apply_warnings(example_cooldown)
