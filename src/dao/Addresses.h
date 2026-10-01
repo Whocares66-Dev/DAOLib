@@ -397,8 +397,12 @@ DAO_ADDRESS(kMessages_Send, "Messages::Send", 0x004D20C0)
 // for its message receiver (its slot 19), and the rest to FromText. The
 // movies' ExternalInterface SendMessage (GuiExternal::SendMessage,
 // 0x0051C800) does the same from Flash values, sends the message
-// (Messages::Send) and deletes it (its slot 4, with 1). The names are
-// ours.
+// (Messages::Send) and deletes it (its slot 4, with 1). A pressed key
+// goes the same way: the input's dispatcher (0x0087D690) finds the
+// bindings an input matches, has each one's text made into a message
+// (0x0087C950, for the texts the current mode's group allows) and sends
+// them all to the one receiver it was given, the game mode controller,
+// the receiver RawInputMessage has too. The names are ours.
 DAO_ADDRESS(kMessages_FromText, "Messages::FromText", 0x004D2320)
 DAO_ADDRESS(kMessages_FromBindingText, "Messages::FromBindingText", 0x007957D0)
 DAO_ADDRESS(kMessages_FromCallbackText, "Messages::FromCallbackText", 0x00524BE0)

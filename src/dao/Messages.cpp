@@ -1,6 +1,8 @@
 #include "dao/Messages.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
+#include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
@@ -166,6 +168,28 @@ bool SendText(std::wstring_view text)
     const auto *slots = *reinterpret_cast<DeleteFn **>(made.message);
     slots[4](made.message, 0, 1);
     return made.receiver != nullptr;
+}
+
+bool SendBinding(std::wstring_view text)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    void *controller = app != nullptr ? app->GameModes() : nullptr;
+    if (controller == nullptr)
+    {
+        return false;
+    }
+    WString binding(text);
+    using FromFn = Message *(__cdecl *)(const core::WStringRep *);
+    Message *message = reinterpret_cast<FromFn>(Module::Address(addr::kMessages_FromBindingText))(binding.Engine());
+    if (message == nullptr)
+    {
+        return false;
+    }
+    Send(controller, *message);
+    using DeleteFn = void *(__fastcall *)(Message *, int, std::uint32_t);
+    const auto *slots = *reinterpret_cast<DeleteFn **>(message);
+    slots[4](message, 0, 1);
+    return true;
 }
 
 } // namespace dao::messages

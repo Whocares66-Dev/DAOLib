@@ -102,6 +102,21 @@ inline bool Send(void *receiver, const Message &message)
 // answered true and the box went; "Nobody.NoSuchThing 1" answered false.
 bool SendText(std::wstring_view text);
 
+// Sends the message a key's binding names, as pressing the key does:
+//
+//   dao::messages::SendBinding(L"SaveGameMessage -1 2");   // the quicksave key's
+//
+// The text is the message's class name and its fields, as the bindings
+// have them ("UserTogglePauseMessage", "SelectPartyMemberIndexMessage 0
+// 1"); the engine makes the message from it, and it goes to the game mode
+// controller, where a pressed key's goes, which hands it on to the
+// interface and the current mode. A key's own message is only made in the
+// modes its binding is registered for; this sends in any, and a mode with
+// no handler for it lets it pass. False, and nothing sent, for a name the
+// bindings' registry has not, or before the game modes are there. Not yet
+// seen in play.
+bool SendBinding(std::wstring_view text);
+
 // Every message the engine delivers, as it delivers it: a plugin's
 // observer sees the receiver and the message just before the receiver's
 // handler; an interceptor may take the message instead (return true), and
