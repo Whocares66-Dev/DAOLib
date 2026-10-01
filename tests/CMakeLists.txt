@@ -14,6 +14,7 @@ add_executable(
     test_range.cpp
     test_relocate.cpp
     test_saferead.cpp
+    test_savemeta.cpp
     test_script_table.cpp
     test_talktable.cpp
 )

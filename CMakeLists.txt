@@ -145,6 +145,7 @@ add_library(
     src/dao/core/Gff4.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
+    src/dao/core/SaveMeta.cpp
     src/dao/core/ScriptValue.cpp
     src/dao/core/TalkTable.cpp
     src/dao/Data.cpp

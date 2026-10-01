@@ -1,0 +1,118 @@
+#include "dao/core/SaveMeta.h"
+#include "gff4_builder.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <cstdint>
+#include <string_view>
+#include <vector>
+
+using dao::core::SaveMeta;
+using dao::core::SlotFolderName;
+using dao::test::Builder;
+
+namespace
+{
+
+// A save's metadata laid out as the game's are (tools/gff4.py --templates
+// on CastleCousland.das.met): one template of 0x30 bytes, its label empty,
+// four-byte fields at 0 to 44, the strings by their offset in the data.
+std::vector<std::byte> MakeMeta(std::string_view type = "SVMT")
+{
+    Builder b;
+    b.Text(0, "GFF V4.0PC  ");
+    b.Text(12, type);
+    b.Text(16, "V1.1");
+    b.U32(20, 1); // templates
+    const std::size_t templates = 28;
+    const std::size_t fields = templates + 16;
+    struct Decl
+    {
+        std::uint32_t label;
+        std::uint32_t type; // 5 a signed 32-bit number, 14 a string
+    };
+    const std::vector<Decl> decls{
+        {SaveMeta::kStory, 14},
+        {SaveMeta::kArea, 14},
+        {SaveMeta::kTimePlayed, 5},
+        {SaveMeta::kLevel, 5},
+        {SaveMeta::kClass, 5},
+        {SaveMeta::kGender, 5},
+        {SaveMeta::kRace, 5},
+        {SaveMeta::kBackground, 5},
+        {SaveMeta::kCharacter, 14},
+        {SaveMeta::kName, 14},
+        {16809, 14},
+        {16810, 14},
+    };
+    b.U32(templates + 4, static_cast<std::uint32_t>(decls.size()));
+    b.U32(templates + 8, static_cast<std::uint32_t>(fields));
+    b.U32(templates + 12, 0x30);
+    for (std::size_t i = 0; i < decls.size(); ++i)
+    {
+        b.U32(fields + 12 * i, decls[i].label);
+        b.U32(fields + 12 * i + 4, decls[i].type);
+        b.U32(fields + 12 * i + 8, static_cast<std::uint32_t>(4 * i));
+    }
+    b.data = fields + 12 * decls.size();
+    b.U32(24, static_cast<std::uint32_t>(b.data));
+    b.U8(b.data + 0x30 - 1, 0);
+    const std::size_t top = b.data;
+    b.U32(top + 0, b.String(u"You are the second child of Teyrn Bryce Cousland."));
+    b.U32(top + 4, b.String(u"Castle Cousland"));
+    b.U32(top + 8, 1125);
+    b.U32(top + 12, 1);
+    b.U32(top + 16, 1);
+    b.U32(top + 20, 1);
+    b.U32(top + 24, 3);
+    b.U32(top + 28, 5);
+    b.U32(top + 32, b.String(u"Aedan"));
+    b.U32(top + 36, b.String(u"Castle Cousland"));
+    b.U32(top + 40, b.String(u"single player;"));
+    b.U32(top + 44, b.String(u"SP;"));
+    return b.bytes;
+}
+
+} // namespace
+
+TEST_CASE("a save's metadata, as the load screen shows it")
+{
+    const auto meta = SaveMeta::Parse(MakeMeta());
+    REQUIRE(meta);
+    CHECK(meta->area == L"Castle Cousland");
+    CHECK(meta->character == L"Aedan");
+    CHECK(meta->name == L"Castle Cousland");
+    CHECK(meta->story == L"You are the second child of Teyrn Bryce Cousland.");
+    CHECK(meta->secondsPlayed == 1125);
+    CHECK(meta->level == 1);
+    CHECK(meta->characterClass == 1);
+    CHECK(meta->gender == 1);
+    CHECK(meta->race == 3);
+    CHECK(meta->background == 5);
+}
+
+TEST_CASE("a file that is not a save's metadata is refused")
+{
+    CHECK_FALSE(SaveMeta::Parse(MakeMeta("TLK ")));
+    CHECK_FALSE(SaveMeta::Parse({}));
+}
+
+TEST_CASE("a slot's kind and number from its folder's name")
+{
+    const auto manual = SlotFolderName::Parse(L"Slot_12");
+    REQUIRE(manual);
+    CHECK(manual->kind == 0);
+    CHECK(manual->number == 12);
+    const auto autosave = SlotFolderName::Parse(L"AutoSave_4");
+    REQUIRE(autosave);
+    CHECK(autosave->kind == 1);
+    CHECK(autosave->number == 4);
+    const auto quick = SlotFolderName::Parse(L"QuickSave_1");
+    REQUIRE(quick);
+    CHECK(quick->kind == 2);
+    CHECK(quick->number == 1);
+    CHECK_FALSE(SlotFolderName::Parse(L"Slot_"));
+    CHECK_FALSE(SlotFolderName::Parse(L"Slot_1a"));
+    CHECK_FALSE(SlotFolderName::Parse(L"Screenshots"));
+    CHECK_FALSE(SlotFolderName::Parse(L"Slot_1234567890"));
+}
