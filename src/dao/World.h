@@ -128,10 +128,24 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 // (dao/Addresses.h): the scene's camera turns a pixel into a ray and a
 // point into a pixel, and these ask it. Pixels are of the game's view, from
 // its top left: the window's client area. On the game's thread, with an
-// area loaded. Not yet seen in play: the first try hung the game at
-// ScreenSize, which asked the wrong object (dao/Addresses.h); these now
-// answer nothing unless the scene's camera is the perspective camera they
-// were read from.
+// area loaded. They answer nothing unless the scene's camera is the
+// perspective camera they were read from. (The first try hung the game at
+// ScreenSize, which asked the wrong object: dao/Addresses.h.)
+//
+// Seen in play, 2026-10-01, through the Eluvian server, windowed 1600 by
+// 1000, the close view:
+// - ScreenSize answered 1600 by 1000, the window's client size.
+// - ToScreen of the controlled creature's position: (800, 926), her feet,
+//   in front and in view; of a point behind the camera, not in front.
+// - PickAt 60 pixels above her feet: her, then the ground. At a cave
+//   wall: nothing, the cursor's mask leaving walls out. Outside the view:
+//   nothing. A creature is in a pick twice running, its body and its pick
+//   volume.
+// - AimAt: 243 pixels above her feet; and for a wolf standing behind
+//   another creature as the camera saw them, a pixel on the wolf's visible
+//   part, where the pick met the wolf first.
+// Not yet seen: the real cursor put at an AimAt pixel and the game's own
+// CursorObject read.
 struct ScreenPoint
 {
     float x = 0;
