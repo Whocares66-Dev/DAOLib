@@ -78,6 +78,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** a plugin's text today is English in code. A talk table of its own, beside the game's, would give it the player's language.
 - **Leads:** `CTlkTable` (`dao/Tlk.h`, `0x004E4990`); `tools/tlk.py` reads the format; how the game loads an add-on's talk table.
 - **Done when:** `dao::tlk::String` finds a plugin's string by its id, in the player's language.
+- **Done another way (2026-09-30):** `dao/Strings.h` loads a plugin's own talk tables from beside its DLL (`<name>_<locale>.tlk`, falling back to en-us), by the game's language (`[GameOptions] Locale` in `DragonAge.ini`), through a talk table reader in `core/` (`TalkTable.h`, tested, and the same 51,846 strings as `tools/tlk.py` from `core_en-us.tlk`). The engine's own tables are not touched, so a plugin's ids need not avoid the game's. Left: the female forms (`_f.tlk`), and adding to the engine's tables, if a plugin's text must reach the game's own UI by strref.
 
 ## Also
 

@@ -146,6 +146,7 @@ add_library(
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
     src/dao/core/ScriptValue.cpp
+    src/dao/core/TalkTable.cpp
     src/dao/Data.cpp
     src/dao/Dialogue.cpp
     src/dao/ScriptCall.cpp
@@ -153,6 +154,7 @@ add_library(
     src/dao/Abilities.cpp
     src/dao/Vfx.cpp
     src/dao/CommandEvents.cpp
+    src/dao/Strings.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp

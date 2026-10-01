@@ -1,5 +1,6 @@
 #include "dao/core/Conversation.h"
 #include "dao/core/Gff4.h"
+#include "gff4_builder.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -14,67 +15,14 @@ using dao::core::ConversationFile;
 using dao::core::ConversationLine;
 namespace gff4 = dao::core::gff4;
 
+using dao::test::Builder;
+
 namespace
 {
 
 // A conversation file made by hand, as the game's are laid out
 // (tools/gff4.py --templates on one): a CONV top struct, NTRY and RPLY
 // lines in a generic list of references, a PLOT condition in place.
-class Builder
-{
-  public:
-    std::vector<std::byte> bytes;
-
-    void Text(std::size_t at, std::string_view text)
-    {
-        Grow(at + text.size());
-        std::memcpy(bytes.data() + at, text.data(), text.size());
-    }
-    void U32(std::size_t at, std::uint32_t value)
-    {
-        Grow(at + 4);
-        std::memcpy(bytes.data() + at, &value, 4);
-    }
-    void U8(std::size_t at, std::uint8_t value)
-    {
-        Grow(at + 1);
-        bytes[at] = static_cast<std::byte>(value);
-    }
-    // Appends to the data block: a string, returning its data offset.
-    std::uint32_t String(std::u16string_view text)
-    {
-        const std::size_t at = bytes.size();
-        U32(at, static_cast<std::uint32_t>(text.size() + 1));
-        for (std::size_t i = 0; i <= text.size(); ++i)
-        {
-            const std::uint16_t unit = i < text.size() ? text[i] : 0;
-            Grow(at + 4 + 2 * i + 2);
-            std::memcpy(bytes.data() + at + 4 + 2 * i, &unit, 2);
-        }
-        return static_cast<std::uint32_t>(at - data);
-    }
-    std::uint32_t Numbers(const std::vector<std::uint32_t> &values)
-    {
-        const std::size_t at = bytes.size();
-        U32(at, static_cast<std::uint32_t>(values.size()));
-        for (std::size_t i = 0; i < values.size(); ++i)
-        {
-            U32(at + 4 + 4 * i, values[i]);
-        }
-        return static_cast<std::uint32_t>(at - data);
-    }
-
-    std::size_t data = 0;
-
-  private:
-    void Grow(std::size_t size)
-    {
-        if (bytes.size() < size)
-        {
-            bytes.resize(size);
-        }
-    }
-};
 
 struct FieldSpec
 {

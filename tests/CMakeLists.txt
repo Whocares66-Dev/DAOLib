@@ -15,6 +15,7 @@ add_executable(
     test_relocate.cpp
     test_saferead.cpp
     test_script_table.cpp
+    test_talktable.cpp
 )
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)
