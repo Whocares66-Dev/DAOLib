@@ -285,6 +285,35 @@ bool CloseScreen(std::wstring_view name);
 // (L"turnorder.gfx"), as GFx would ask for it.
 bool HasMovie(std::wstring_view file);
 
+// A message box the game has up: its text and its buttons, for a tool that
+// cannot see the screen (a test whose load has stopped at "this save
+// requires the following content").
+//
+// Read 2026-10-01. The game's message boxes are one movie, the popup
+// layer (GUI::GUIPopupLayer, built by 0x0070A071's function), which keeps
+// what it shows in the data tree under GUIPopupLayer: DialogBoxText,
+// NumButtons, and for each button a Label0 to Label3 and a Callback0 to
+// Callback3, the message the game is sent when it is pressed, as text
+// ("CClientExoApp.GUIDialogResult 1 0"); also an input box, a checkbox and
+// a picker, not read here. The GUI system keeps whether a box is up at
+// +0x1FA: set when it shows one (0x0060BA90, which then has the movie
+// show it, PopupLayer.ShowDialogBoxFromGame) and cleared by
+// DialogBoxClosedMessage. Pressing a button from a plugin is not read.
+// Not yet seen in play.
+struct Popup
+{
+    struct Button
+    {
+        std::wstring label;
+        std::wstring callback;
+    };
+    std::wstring text;
+    std::vector<Button> buttons;
+};
+// Nothing when no box is up, or before the GUI system is. On the game's
+// thread.
+std::optional<Popup> CurrentPopup();
+
 // An FSCommand's answer, as the game's own handlers give theirs: an array
 // of ints in the calling movie's _root.fsc_retval, which the ActionScript
 // reads after its fscommand().

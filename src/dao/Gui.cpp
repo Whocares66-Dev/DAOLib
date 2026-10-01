@@ -2,6 +2,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Data.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
@@ -13,6 +14,7 @@
 #include <cstddef>
 #include <map>
 #include <mutex>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -400,6 +402,27 @@ void OnAnyExternalInterface(ExternalInterfaceHandler observer)
     const std::lock_guard lock(g_mutex);
     g_anyExternal.push_back(std::move(observer));
     AttachLocked();
+}
+
+std::optional<Popup> CurrentPopup()
+{
+    constexpr std::size_t kBoxUp = 0x1FA; // in the GUI system
+    constexpr int kMostButtons = 4;
+    const void *gui = GuiSystem();
+    if (gui == nullptr || TryRead<std::uint8_t>(reinterpret_cast<std::uintptr_t>(gui) + kBoxUp).value_or(0) == 0)
+    {
+        return std::nullopt;
+    }
+    Popup box;
+    box.text = data::Text(L"GUIPopupLayer.DialogBoxText").value_or(L"");
+    const int buttons = static_cast<int>(data::Number(L"GUIPopupLayer.NumButtons").value_or(0));
+    for (int i = 0; i < buttons && i < kMostButtons; ++i)
+    {
+        const std::wstring n = std::to_wstring(i);
+        box.buttons.push_back({data::Text(L"GUIPopupLayer.Label" + n).value_or(L""),
+                               data::Text(L"GUIPopupLayer.Callback" + n).value_or(L"")});
+    }
+    return box;
 }
 
 } // namespace dao::gui
