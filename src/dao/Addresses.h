@@ -722,6 +722,10 @@ DAO_ADDRESS(kGameModeExplore_BeginTargeting, "GameModeExplore::BeginTargeting", 
 DAO_ADDRESS(kGameModeExplore_AttackTarget, "GameModeExplore::AttackTarget", 0x0070B980)
 DAO_ADDRESS(kGameModeExplore_ValidTarget, "GameModeExplore::ValidTarget", 0x0070D550)
 DAO_DATA(kSelectedTarget, "g_selectedTarget", 0x00C06794)
+// The one setter of the selected target: __thiscall on explore mode (id),
+// `ret 4`; it stores the id, tells the target's GUI and moves the
+// highlight (dao/GameModes.h, SelectTarget). Read 2026-09-30.
+DAO_ADDRESS(kGameModeExplore_SelectTarget, "GameModeExplore::SelectTarget", 0x0070D030)
 
 // How a temporary effect runs out, read 2026-09-30 (dao/Effects.h). Each
 // object's update ages its effects through its effects holder (a virtual

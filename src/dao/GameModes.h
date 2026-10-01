@@ -125,6 +125,32 @@ class GameModeExplore
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
     }
 
+    // The selected target: what the cycle-target keys choose, and what a
+    // quickbar ability is used on when it is valid for it (dao/Messages.h,
+    // PerformAbilityMessage). Nothing when none is selected.
+    static std::optional<ObjectId> SelectedTarget()
+    {
+        const auto id = *reinterpret_cast<const ObjectId *>(Module::Address(addr::kSelectedTarget));
+        return id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
+    }
+    // Select a target as the cycle-target keys do (0x0070D030): the id kept,
+    // the target's GUI told, the highlight moved. Then a PerformAbilityMessage
+    // for an ability valid on it uses it there, as a quickbar click would.
+    // On the game's thread. Not yet seen in play.
+    void SelectTarget(ObjectId target)
+    {
+        using Fn = void(__fastcall *)(GameModeExplore *, int, ObjectId);
+        reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_SelectTarget))(this, 0, target);
+    }
+    // Set the object a click acts on, as if the cursor were over it: what
+    // PerformPrimaryActionOnTargetUnderCursorMessage's handler reads (+0xCC).
+    // The mode picks again from the cursor 15 times a second, so set it and
+    // send the message in the same frame callback. Not yet seen in play.
+    void SetCursorObject(ObjectId object)
+    {
+        *reinterpret_cast<ObjectId *>(reinterpret_cast<std::byte *>(this) + kCursorObject) = object;
+    }
+
     // Where the latest move click sent the controlled creature.
     Vector LastMoveDestination() const
     {
