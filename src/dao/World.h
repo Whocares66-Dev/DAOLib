@@ -221,7 +221,14 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 //   straight, 29 waypoints and 44.18 m; to creatures 80 to 143 m off past a
 //   door, none, the search giving up 53.38 m along, short of the door, with
 //   no 6 and so no blocker. Searching on from where it gave up is for that
-//   case; not yet seen in play.
+//   case. In play it changed nothing there: the second search gave up
+//   from the same cell. But with the creature standing at that end, 1.2 m
+//   from the shut door, the search answered 6 at once, with no part of the
+//   way to look about from and so no blocker. The engine answers 6 for a
+//   walker in a door's barred cells and notes the cell in the path; this
+//   now reads that note for the blocker, and where a search gives up it
+//   tries four short searches from half a metre on and on, the way the
+//   path was heading, to have the door named. Not yet seen in play.
 // Read after, 2026-10-01: RequestPath tells the pathfinding world its
 // mover's size and which stamps stop it before it asks, and the search
 // here did not, so its straight-walk check went by the last creature to
@@ -239,9 +246,9 @@ struct PathSearch
     // to where it gave up.
     std::optional<WalkPath> partial;
     // With the answer 6, the placeable in the way, found as the game finds
-    // it for a creature's own path: within 5 m of where the search stopped,
-    // its footprint holding that point. A shut door in play; kInvalidObject
-    // if none is found.
+    // it for a creature's own path: within 5 m of the barred cell the search
+    // noted, its footprint holding that point. A shut door in play;
+    // kInvalidObject if none is found.
     ObjectId blocker = kInvalidObject;
     // The pathfinder's last answer: 1 found (or given up part way, when
     // `path` is nothing), 5 none, 6 a door or the like in the way, which a

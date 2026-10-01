@@ -266,7 +266,10 @@ DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
 // area's +0x690) for a placeable within 5 m of it whose footprint holds
 // the point (CCPlaceable::Covers, __thiscall (const Vector4 *), `ret 4`),
 // and answers its id: the object the scripts are then told to use. So what
-// bars a path is a placeable, a shut door in play. The names are ours.
+// bars a path is a placeable, a shut door in play. The point it looks
+// about is the path's own note of the barred cell, a pointer at the path's
+// +0x84 to a point made on first use (0x00A476B0), which the search's
+// refining writes when it answers 6 (0x00A4D1F0). The names are ours.
 DAO_ADDRESS(kCCCreature_PathBlocker, "CCCreature::PathBlocker", 0x006A7E10)
 DAO_ADDRESS(kCCPlaceable_Covers, "CCPlaceable::Covers", 0x0074DC40)
 DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)

@@ -215,7 +215,11 @@ constexpr float kNearGoal = 2.0F;             // metres, as RequestPath asks
 constexpr float kNearStart = 5.0F;            // metres, as RequestPath asks
 constexpr float kSlice = 0.01F;               // seconds of search a step
 constexpr std::int32_t kSlices = 200;
-constexpr int kLegs = 4;                                 // searches end to end, each on from where the last gave up
+constexpr int kLegs = 4;                 // searches end to end, each on from where the last gave up
+constexpr int kProbes = 4;               // short searches past where a search gave up
+constexpr float kProbeStep = 0.5F;       // metres between them
+constexpr std::int32_t kProbeSlices = 6; // slices each
+constexpr std::size_t kBarredAt = 0x84;  // in the path: a pointer to the barred cell's point, once noted
 constexpr auto kLongest = std::chrono::milliseconds(30); // of the game's frame, for one search
 constexpr float kArrived = 0.25F;                        // metres from the destination
 constexpr std::size_t kActive = 0x00;                    // in the path: a route is being worked out
@@ -450,21 +454,23 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     const auto step = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
     const auto word = [](std::uintptr_t at) { return TryRead<std::int32_t>(at).value_or(0); };
 
-    // A search gives up part way where a stretch will not work out, and
-    // answers "found" with what it has; a creature then walks that and asks
-    // again from its end, which is when a door in the way is named (6). So
-    // this goes on from where a leg got to, as the walker would, for a few
-    // legs within the one time limit.
-    const auto started = std::chrono::steady_clock::now();
-    std::vector<Vector> walked;
-    std::string flags;
-    Vector4 legFrom = from;
-    for (int leg = 0; leg < kLegs; ++leg)
+    // One search from a point to the destination, with a controller of its
+    // own: a straight walk if one will do, else the search stepped until it
+    // answers, the time runs out (`timed`) or `most` slices are spent.
+    struct Leg
     {
+        std::optional<WalkPath> found;
+        bool arrives = false;
+        std::optional<Vector> barredAt; // with the answer 6, the barred cell the engine notes
+        std::string flags;
+    };
+    const auto started = std::chrono::steady_clock::now();
+    const auto runLeg = [&](const Vector4 &legFrom, std::int32_t most, bool timed, int number0) {
+        Leg leg;
         OwnSearch legSearch(*world, *parameters);
         if (!legSearch.Made())
         {
-            break;
+            return leg;
         }
         void *leg0 = legSearch.Controller();
         Vector4 toward0;
@@ -482,23 +488,23 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         setGoal(leg0, 0, *number, &goal, &toward0);
         const std::uintptr_t path =
             TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(leg0) + kSearch).value_or(0);
-
-        std::optional<WalkPath> found;
-        bool arrives = false;
         if (direct(leg0, 0, 0, 0))
         {
             answer.result = kFound;
-            found = WalkPath{{legFrom.ToVector(), goal.ToVector()}, 0};
-            arrives = true;
+            leg.found = WalkPath{{legFrom.ToVector(), goal.ToVector()}, 0};
+            leg.arrives = true;
         }
         else
         {
-            while (path != 0 && answer.slices < kSlices && std::chrono::steady_clock::now() - started < kLongest)
+            std::int32_t spent = 0;
+            while (path != 0 && spent < most && answer.slices < kSlices &&
+                   (!timed || std::chrono::steady_clock::now() - started < kLongest))
             {
+                ++spent;
                 ++answer.slices;
                 answer.result = step(leg0, 0, kSlice);
                 answer.answers.push_back(answer.result);
-                found = PathOf(reinterpret_cast<std::uintptr_t>(leg0));
+                leg.found = PathOf(reinterpret_cast<std::uintptr_t>(leg0));
                 if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh ||
                     answer.result == kBarred)
                 {
@@ -509,33 +515,59 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
                 // next stretch as the walker nears the end of what it has.
                 // No one walks this path, so its walker is put at the last
                 // waypoint.
-                if (found && !found->waypoints.empty())
+                if (leg.found && !leg.found->waypoints.empty())
                 {
                     *reinterpret_cast<std::int32_t *>(path + kNext) =
-                        static_cast<std::int32_t>(found->waypoints.size() - 1);
+                        static_cast<std::int32_t>(leg.found->waypoints.size() - 1);
                 }
             }
             // A path counts only if it gets there (0x00A4D1F0 ends one it
             // gave up on "found").
-            if (found && found->waypoints.size() >= 2)
+            if (leg.found && leg.found->waypoints.size() >= 2)
             {
-                const Vector &last = found->waypoints.back();
+                const Vector &last = leg.found->waypoints.back();
                 const bool there = std::hypot(last.x - goal.x, last.y - goal.y) < kArrived;
                 const bool whole = TryRead<std::uint8_t>(path + kWhole).value_or(0) != 0;
-                arrives = there && (answer.result == kFound || whole);
+                leg.arrives = there && (answer.result == kFound || whole);
+            }
+            // With a 6 the engine notes the barred cell in the path, for
+            // the creature's PathBlocker to look about (0x00A4D1F0).
+            if (answer.result == kBarred)
+            {
+                if (const auto noted = TryRead<std::uintptr_t>(path + kBarredAt); noted && *noted != 0)
+                {
+                    leg.barredAt = TryRead<Vector>(*noted);
+                }
             }
         }
         const auto flag = [path](std::size_t at) {
             return path != 0 ? TryRead<std::uint8_t>(path + at).value_or(0) : std::uint8_t{0};
         };
-        flags = std::format("leg {}: path active {}, whole {}, gave up {}, wide {}, near {}", leg + 1, flag(kActive),
-                            flag(kWhole), path != 0 ? word(path + kGaveUp) : 0, flag(kWide), flag(kNearGoalFlag));
+        leg.flags =
+            std::format("leg {}: path active {}, whole {}, gave up {}, wide {}, near {}", number0, flag(kActive),
+                        flag(kWhole), path != 0 ? word(path + kGaveUp) : 0, flag(kWide), flag(kNearGoalFlag));
+        return leg;
+    };
 
+    // A search gives up part way where a stretch will not work out, and
+    // answers "found" with what it has; a creature then walks that and asks
+    // again from its end. So this goes on from where a leg got to, as the
+    // walker would, for a few legs within the one time limit.
+    std::vector<Vector> walked;
+    std::optional<Vector> barredAt;
+    std::string flags;
+    Vector4 legFrom = from;
+    int legs = 0;
+    for (; legs < kLegs; ++legs)
+    {
+        Leg leg = runLeg(legFrom, kSlices, true, legs + 1);
+        flags = leg.flags;
+        barredAt = leg.barredAt;
         // This leg's waypoints after those before it, the joint once.
         const std::size_t before = walked.size();
-        if (found)
+        if (leg.found)
         {
-            for (const Vector &point : found->waypoints)
+            for (const Vector &point : leg.found->waypoints)
             {
                 if (walked.empty() || DistanceSquared(walked.back(), point) > 1e-6F)
                 {
@@ -543,10 +575,10 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
                 }
             }
         }
-        if (arrives || answer.result != kFound || walked.size() == before || walked.empty() ||
+        if (leg.arrives || answer.result != kFound || walked.size() == before || walked.empty() ||
             std::chrono::steady_clock::now() - started >= kLongest)
         {
-            if (arrives)
+            if (leg.arrives)
             {
                 answer.path = WalkPath{walked, 0};
             }
@@ -556,15 +588,50 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         legFrom = Vector4(walked.back());
         legFrom.w = from.w;
     }
+
+    // Given up short of a door: the engine answers 6 only for a walker
+    // standing in the door's barred cells (in play, 1.2 m from a shut door,
+    // it answered 6 at once where a search from the waypoint before had
+    // given up). So a few short searches from half a metre on, and on
+    // again, the way the path was heading, to have the door named.
+    if (!answer.path && answer.result == kFound && !walked.empty())
+    {
+        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
+        if (walked.size() >= 2)
+        {
+            const Vector &a = walked[walked.size() - 2];
+            heading = {walked.back().x - a.x, walked.back().y - a.y, 0};
+        }
+        const float long0 = std::hypot(heading.x, heading.y);
+        for (int probe = 1; long0 > 1e-6F && probe <= kProbes && answer.result != kBarred; ++probe)
+        {
+            Vector4 probeFrom(walked.back());
+            probeFrom.x += heading.x / long0 * kProbeStep * static_cast<float>(probe);
+            probeFrom.y += heading.y / long0 * kProbeStep * static_cast<float>(probe);
+            probeFrom.w = from.w;
+            const std::int32_t was = answer.result;
+            Leg leg = runLeg(probeFrom, kProbeSlices, false, legs + 1 + probe);
+            if (answer.result == kBarred)
+            {
+                barredAt = leg.barredAt ? leg.barredAt : std::optional<Vector>(probeFrom.ToVector());
+                flags = leg.flags;
+            }
+            else
+            {
+                answer.result = was;
+            }
+        }
+    }
     answer.waypoints = walked.size();
     if (!answer.path && !walked.empty())
     {
         answer.partial = WalkPath{walked, 0};
     }
 
-    if (answer.result == kBarred && answer.partial)
+    if (answer.result == kBarred)
     {
-        answer.blocker = Blocker(*app, area, answer.partial->waypoints.back());
+        const Vector at = barredAt ? *barredAt : !walked.empty() ? walked.back() : from.ToVector();
+        answer.blocker = Blocker(*app, area, at);
     }
 
     // What the search saw, for a log.

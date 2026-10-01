@@ -326,9 +326,12 @@ std::optional<Popup> CurrentPopup();
 // (DialogBoxClosedMessage), and the popup layer's screen is hidden. False,
 // and nothing done, when no box is up, for a button the box has not, or a
 // callback the engine cannot make a message of. Read 2026-10-01; what the
-// movie itself does at a click is ActionScript and not read, so whether
-// the box leaves the screen this way is for play to say. Not yet seen in
-// play.
+// movie itself does at a click is ActionScript and not read. Seen in play
+// the same day, through the Eluvian server: with a script's Yes and No box
+// up, pressing No answered true, CurrentPopup was nothing at once, and the
+// game's own screenshot showed the box gone and the interface back.
+// Whether the script heard the answer (EVENT_TYPE_POPUP_RESULT) is not yet
+// seen.
 bool PressPopupButton(std::size_t index);
 
 // An FSCommand's answer, as the game's own handlers give theirs: an array

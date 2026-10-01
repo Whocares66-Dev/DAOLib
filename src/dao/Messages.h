@@ -97,7 +97,9 @@ inline bool Send(void *receiver, const Message &message)
 // (dao/Addresses.h, "Messages from text"), so any class the engine can make
 // from text can be sent, with no layout known here. False, and nothing
 // sent, for a receiver or a message the engine does not know. From the
-// scripts' thread, as Send. Not yet seen in play.
+// scripts' thread, as Send. Seen in play, 2026-10-01, through the Eluvian
+// server: "GUIPopupLayer.ScriptDialogResult 1 1 -1", a box's own Yes,
+// answered true and the box went; "Nobody.NoSuchThing 1" answered false.
 bool SendText(std::wstring_view text);
 
 // Every message the engine delivers, as it delivers it: a plugin's
