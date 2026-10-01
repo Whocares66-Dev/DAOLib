@@ -195,7 +195,11 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // ahead of the waypoint its walker heads for, and the next as the walker
 // nears the end of that, so this moves its own search's walker along to
 // have the whole path. And it answers "found" for a path it gave up on
-// part way, so a path counts here only if it ends at the destination.
+// part way, so a path counts here only if it ends at the destination. A
+// creature walks such a part and asks again from its end, which is when
+// the game learns of a door in the way; so where a search gives up with
+// some of the way found, this searches on from there, up to four searches
+// end to end, the waypoints joined.
 //
 // Seen in play, 2026-10-01. The first version answered a straight walk
 // rightly but, once the party had walked and so stood as obstacles, every
@@ -213,6 +217,11 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // - to skeletons 67 to 70 m off behind shut doors: none, the search
 //   answering 6 at the door. That version went on past the 6 until its 30
 //   ms ran out, 130 to 170 slices; this one stops there.
+// - and, through the Eluvian server from the ruins' entrance: 40.7 m
+//   straight, 29 waypoints and 44.18 m; to creatures 80 to 143 m off past a
+//   door, none, the search giving up 53.38 m along, short of the door, with
+//   no 6 and so no blocker. Searching on from where it gave up is for that
+//   case; not yet seen in play.
 // Read after, 2026-10-01: RequestPath tells the pathfinding world its
 // mover's size and which stamps stop it before it asks, and the search
 // here did not, so its straight-walk check went by the last creature to
