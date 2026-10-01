@@ -49,7 +49,11 @@
 //   boxes and labels in line with the game's own and spaced as they are.
 //   The heading was then plain text centred over the column, smaller than
 //   the game's own gold bars ("Gameplay", "Feedback"): a caption. It is
-//   now the game's bar and heading text; that is not yet seen in play.
+//   now the game's bar and heading text, seen the same day on 98eacf4: a
+//   bar of the width, height and gradient of the game's two, the title
+//   left-aligned in the face and size of "Gameplay", the gaps above and
+//   below it as the game's; the third box under it ends just inside the
+//   panel's corner, so three is what the left column holds.
 // - Each box was asked its value at each opening and drawn by the answer.
 // - A click changed a box and it stayed; the box that refuses was empty
 //   again 0.3 s after its click, with no flicker caught.
@@ -61,7 +65,8 @@
 //   behind it: the refusing box refused and another changed, each
 //   callback run at the click, not when the screen closed.
 // The first try, with two plugins patching the movie, showed no section:
-// dao/Gui.h, OnMovieLoad, has why.
+// dao/Gui.h, OnMovieLoad, has why. The turn-based mod's own section (one
+// box, refused in a fight) was seen the same day too.
 #pragma once
 
 #include <functional>

@@ -233,6 +233,8 @@ bool __fastcall Allowed(void *modes, int edx, const core::WStringRep *text)
     // library and each copy detours this function, one inside the other.
     // An action of another copy's is passed on as the engine answered it,
     // or that copy, further out, would never hear its key was allowed.
+    // (Seen in play, 2026-10-01: the turn-based mod and examples/input/
+    // together, both plugins' keys working, three headings in the list.)
     const std::lock_guard lock(g_mutex);
     for (std::size_t i = 0; i < g_actions.size(); ++i)
     {
