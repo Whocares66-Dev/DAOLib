@@ -18,7 +18,12 @@
 // too, for the events it hands an area or the module, which have handlers
 // of their own. Read 2026-09-30, after a play test in which four deaths
 // and most EVENT_TYPE_COMMAND_COMPLETEs never reached a ProcessEvent hook
-// (the Eluvian server's report); the new hook is not yet seen in play.
+// (the Eluvian server's report). Seen in play with the new hook, 2026-09-30
+// (20:07 to 20:14, two fights): every death came, each 1.5 to 2.5 s after
+// the creature was dead by IsDead, once its death had played out, the
+// creator the killer for a death from a blow and null for one by an
+// applied effect. For the moment of death itself, a plugin watches IsDead
+// or EVENT_TYPE_DAMAGED.
 //
 // Callbacks run on the scripts' thread, and see the event the target is
 // about to handle; they observe, they do not change or stop it.

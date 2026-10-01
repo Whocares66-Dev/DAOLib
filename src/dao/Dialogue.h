@@ -35,7 +35,8 @@
 // no text (an NPC line used to route, "[OWNER]" and empty); one NPC line
 // heard twice a millisecond apart; a "continue" reply with no text; the
 // talk table's markup (<emp>) left in the text; the speaker as the file
-// writes it (OWNER, not the creature).
+// writes it (OWNER, not the creature). BeginConversation called in a fight
+// answered 1 and started nothing (the Eluvian server, 2026-09-30).
 //
 // Callbacks run on the game's thread, inside the engine's own work: keep
 // them short, and make no conversation start or end from one.
