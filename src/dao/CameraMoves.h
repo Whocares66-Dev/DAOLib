@@ -52,7 +52,12 @@ void EaseYaw(float radians, float seconds);
 // Follow a creature and glide the focus onto it. In the tactical view the
 // camera keeps its height and its turn, and only slides; close in, the
 // game pans by itself to a creature within 15 m (CameraController::
-// Follow), and farther it cuts.
+// Follow), and farther it cuts. Selecting that same creature while the pan
+// runs (the turn-based mod's order: select, then pan) does not stop it:
+// the game's own retargeting is taken as where the pan goes on from, not
+// as the player panning. Selecting another creature, or the player
+// panning, still does (2026-09-30: a pan stopped by a selection in the
+// same frame once left the view on the creature before).
 void PanTo(ObjectId object, float seconds);
 
 // The yaw that puts the camera behind a creature, from its forward vector

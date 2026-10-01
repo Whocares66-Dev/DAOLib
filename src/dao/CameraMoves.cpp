@@ -45,6 +45,7 @@ struct PanMove
     bool running = false;
     float tau = 0;
     std::optional<Vector> left;
+    ObjectId object = kInvalidObject; // what the camera is panning to
 };
 // Only the game's thread touches these: the moves' callers and the frame.
 YawMove g_yaw;
@@ -110,6 +111,13 @@ void __fastcall SetTarget(CameraController *self, int edx, ObjectId id)
 {
     const ObjectId before = self != nullptr ? self->Target() : kInvalidObject;
     g_setTarget.Original()(self, edx, id);
+    // The game set the target the pan is going to (selecting that creature,
+    // in the tactical view, rewrites the offset to keep the view): where
+    // the pan goes on from, not the player panning.
+    if (g_pan.running && id == g_pan.object)
+    {
+        g_pan.left.reset();
+    }
     if (self == nullptr || self->Target() == before)
     {
         return;
@@ -165,16 +173,21 @@ float Tau(float seconds)
     return std::fmax(seconds, 0.0F) / 4;
 }
 
+void AttachTargetHook()
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_setTarget.Attach(addr::kCameraControllerBase_SetTarget, &SetTarget); });
+}
+
 } // namespace
 
 void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback)
 {
-    const std::lock_guard lock(g_targetLock);
-    g_targetChanged.push_back(std::move(callback));
-    if (g_setTarget.Original() == nullptr)
     {
-        g_setTarget.Attach(addr::kCameraControllerBase_SetTarget, &SetTarget);
+        const std::lock_guard lock(g_targetLock);
+        g_targetChanged.push_back(std::move(callback));
     }
+    AttachTargetHook();
 }
 
 CameraController *Current()
@@ -198,8 +211,9 @@ void PanTo(ObjectId object, float seconds)
     {
         return;
     }
+    AttachTargetHook();
     camera->Follow(object);
-    g_pan = PanMove{true, Tau(seconds), std::nullopt};
+    g_pan = PanMove{true, Tau(seconds), std::nullopt, object};
 }
 
 std::optional<float> YawBehind(ObjectId object)
