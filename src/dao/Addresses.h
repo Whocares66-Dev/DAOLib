@@ -486,6 +486,18 @@ DAO_ADDRESS(kCCObject_QueueNewCommand, "CCObject::QueueNewCommand", 0x0073D000)
 // explore mode's PerformUseObjectMessage handler and the functions beside
 // it (0x007F6410, 0x007F64C0, 0x007F6690) queue them.
 DAO_ADDRESS(kCCObject_QueuePlayerCommand, "CCObject::QueuePlayerCommand", 0x0073D060)
+// The player's orders (dao/Orders.h), read 2026-09-30: QueuePlayerCommand's
+// three callers, each __stdcall, each signalling OrderReceived (__cdecl
+// (CCCreature *, target), EVENT_TYPE_ON_ORDER_RECEIVED to the creature)
+// after. Attack (creature, target) `ret 8`; UseObject (creature, object,
+// action) `ret 0xC`; UseAbility (ability, creature, item, target, const
+// Vector4 *point) `ret 0x14`. QueuePlayerCommand itself is __thiscall
+// (type, CDataArrays *parameters from operator new, addToFront), `ret 0xC`.
+// The names are ours.
+DAO_ADDRESS(kOrders_Attack, "Orders::Attack", 0x007F6410)
+DAO_ADDRESS(kOrders_UseObject, "Orders::UseObject", 0x007F6550)
+DAO_ADDRESS(kOrders_UseAbility, "Orders::UseAbility", 0x007F6690)
+DAO_ADDRESS(kOrders_OrderReceived, "Orders::OrderReceived", 0x007F6370)
 // The object's queue, read 2026-09-30 from GetCurrentCommand,
 // GetCommandByIndex and GetCommandQueueSize: a list at +0x2CC, its count
 // at +0x2D4 (the list's +8), and at +0x2DC a pointer to the slot holding

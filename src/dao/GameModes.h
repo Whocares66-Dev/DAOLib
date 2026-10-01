@@ -127,6 +127,16 @@ class GameModeExplore
         return Read<Vector>(kLastMoveDestination);
     }
 
+    // Send a creature to a point, as a move click does (0x0070BE80): the
+    // point recorded as the latest move's destination, the creature told
+    // its order arrived (dao/Orders.h has the rest of the player's orders).
+    void MoveTo(ObjectId creature, const Vector &point)
+    {
+        alignas(16) const float at[4] = {point.x, point.y, point.z, 0.0F};
+        using Fn = void(__fastcall *)(GameModeExplore *, int, ObjectId, const float *, std::int32_t);
+        reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_MoveTo))(this, 0, creature, at, -1);
+    }
+
     static constexpr std::size_t kLastMoveDestination = 0xA0;
     static constexpr std::size_t kCursorObject = 0xCC;
     static constexpr std::size_t kCursorGround = 0xD0;
