@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -24,11 +25,10 @@ namespace
 
 using Clock = std::chrono::steady_clock;
 
-// How far the camera may have moved between frames on its own before it
+// How far the camera may have turned between frames on its own before it
 // counts as the player's doing: more than the orbit's dying spin after the
-// mouse stops, less than a player's turn or pan.
-constexpr float kYawSlack = 0.01F;    // radians
-constexpr float kOffsetSlack = 0.05F; // metres
+// mouse stops, less than a player's turn.
+constexpr float kYawSlack = 0.01F; // radians
 // Near enough to stop.
 constexpr float kYawDone = 0.002F;
 constexpr float kOffsetDone = 0.02F;
@@ -44,13 +44,34 @@ struct PanMove
 {
     bool running = false;
     float tau = 0;
-    std::optional<Vector> left;
     ObjectId object = kInvalidObject; // what the camera is panning to
 };
-// Only the game's thread touches these: the moves' callers and the frame.
+// Only the game's thread touches these: the moves' callers, the frame and
+// the camera's own update.
 YawMove g_yaw;
 PanMove g_pan;
+std::optional<MoveEnd> g_yawEnd;
+std::optional<MoveEnd> g_panEnd;
+bool g_playerPanned = false;
 Clock::time_point g_last;
+
+std::mutex g_endLock;
+std::vector<std::function<void(Move, MoveEnd)>> g_ended;
+
+void End(Move move, MoveEnd why)
+{
+    (move == Move::Yaw ? g_yaw.running : g_pan.running) = false;
+    (move == Move::Yaw ? g_yawEnd : g_panEnd) = why;
+    std::vector<std::function<void(Move, MoveEnd)>> callbacks;
+    {
+        const std::lock_guard lock(g_endLock);
+        callbacks = g_ended;
+    }
+    for (const auto &callback : callbacks)
+    {
+        detail::Guard("a camera move callback", [&] { callback(move, why); });
+    }
+}
 
 float Length(Vector v)
 {
@@ -68,35 +89,67 @@ void StepYaw(CameraController &camera, float dt)
     SceneCamera *scene = camera.Scene();
     if (scene == nullptr)
     {
-        g_yaw.running = false;
+        End(Move::Yaw, MoveEnd::NoCamera);
         return;
     }
     const float now = scene->Yaw();
     if (g_yaw.left && std::fabs(now - *g_yaw.left) > kYawSlack)
     {
-        g_yaw.running = false; // the player turned it
+        End(Move::Yaw, MoveEnd::Player);
         return;
     }
     const float d = core::ShortestTurn(now, g_yaw.target);
-    const float next = std::fabs(d) < kYawDone ? now + d : now + d * Share(dt, g_yaw.tau);
+    const bool there = std::fabs(d) < kYawDone;
+    const float next = there ? now + d : now + d * Share(dt, g_yaw.tau);
     scene->SetYaw(next);
     g_yaw.left = next;
-    g_yaw.running = std::fabs(d) >= kYawDone;
+    if (there)
+    {
+        End(Move::Yaw, MoveEnd::Arrived);
+    }
 }
 
 void StepPan(CameraController &camera, float dt)
 {
-    const Vector now = camera.FocusOffset();
-    if (g_pan.left && Length({now.x - g_pan.left->x, now.y - g_pan.left->y, now.z - g_pan.left->z}) > kOffsetSlack)
+    if (std::exchange(g_playerPanned, false))
     {
-        g_pan.running = false; // the player panned it
+        End(Move::Pan, MoveEnd::Player);
         return;
     }
-    const float keep = Length(now) < kOffsetDone ? 0.0F : 1 - Share(dt, g_pan.tau);
-    const Vector next{now.x * keep, now.y * keep, now.z * keep};
-    camera.SetFocusOffset(next);
-    g_pan.left = next;
-    g_pan.running = keep > 0;
+    // The game's own pull back to the party would move the focus as well,
+    // and faster each frame (dao/Camera.h, PullSpeed).
+    camera.SetPullSpeed(0);
+    const Vector now = camera.FocusOffset();
+    const bool there = Length(now) < kOffsetDone;
+    const float keep = there ? 0.0F : 1 - Share(dt, g_pan.tau);
+    camera.SetFocusOffset({now.x * keep, now.y * keep, now.z * keep});
+    if (there)
+    {
+        End(Move::Pan, MoveEnd::Arrived);
+    }
+}
+
+// CameraControllerExplore::PlayerPan (dao/Addresses.h): the game panning
+// the tactical camera for the player, with the input's direction; nothing
+// to pan when both are 0.
+struct PanInput
+{
+    std::int32_t x;
+    std::int32_t y;
+    bool keysOrEdge;
+};
+using PlayerPanFn = void(__fastcall *)(CameraController *self, int edx, float seconds, const PanInput *input,
+                                       void *target, void *party);
+Detour<PlayerPanFn> g_playerPan;
+
+void __fastcall PlayerPan(CameraController *self, int edx, float seconds, const PanInput *input, void *target,
+                          void *party)
+{
+    if (input != nullptr && (input->x != 0 || input->y != 0))
+    {
+        g_playerPanned = true;
+    }
+    g_playerPan.Original()(self, edx, seconds, input, target, party);
 }
 
 // CameraControllerBase::SetTarget (dao/Addresses.h): __thiscall (id),
@@ -111,16 +164,15 @@ void __fastcall SetTarget(CameraController *self, int edx, ObjectId id)
 {
     const ObjectId before = self != nullptr ? self->Target() : kInvalidObject;
     g_setTarget.Original()(self, edx, id);
-    // The game set the target the pan is going to (selecting that creature,
-    // in the tactical view, rewrites the offset to keep the view): where
-    // the pan goes on from, not the player panning.
-    if (g_pan.running && id == g_pan.object)
-    {
-        g_pan.left.reset();
-    }
     if (self == nullptr || self->Target() == before)
     {
         return;
+    }
+    // Selecting the creature the pan goes to changes nothing here; another
+    // takes the camera.
+    if (g_pan.running && self->Target() != g_pan.object)
+    {
+        End(Move::Pan, MoveEnd::Retargeted);
     }
     std::vector<std::function<void(ObjectId, ObjectId)>> callbacks;
     {
@@ -145,7 +197,13 @@ void Step()
     CameraController *camera = Current();
     if (camera == nullptr)
     {
-        Stop();
+        for (const Move move : {Move::Yaw, Move::Pan})
+        {
+            if (move == Move::Yaw ? g_yaw.running : g_pan.running)
+            {
+                End(move, MoveEnd::NoCamera);
+            }
+        }
         return;
     }
     if (g_yaw.running)
@@ -179,6 +237,12 @@ void AttachTargetHook()
     std::call_once(once, [] { g_setTarget.Attach(addr::kCameraControllerBase_SetTarget, &SetTarget); });
 }
 
+void AttachPanHook()
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_playerPan.Attach(addr::kCameraControllerExplore_PlayerPan, &PlayerPan); });
+}
+
 } // namespace
 
 void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback)
@@ -200,7 +264,12 @@ CameraController *Current()
 void EaseYaw(float radians, float seconds)
 {
     Start();
+    if (g_yaw.running)
+    {
+        End(Move::Yaw, MoveEnd::Replaced);
+    }
     g_yaw = YawMove{true, radians, Tau(seconds), std::nullopt};
+    g_yawEnd.reset();
 }
 
 void PanTo(ObjectId object, float seconds)
@@ -212,8 +281,15 @@ void PanTo(ObjectId object, float seconds)
         return;
     }
     AttachTargetHook();
+    AttachPanHook();
+    if (g_pan.running)
+    {
+        End(Move::Pan, MoveEnd::Replaced);
+    }
     camera->Follow(object);
-    g_pan = PanMove{true, Tau(seconds), std::nullopt, object};
+    g_pan = PanMove{true, Tau(seconds), object};
+    g_panEnd.reset();
+    g_playerPanned = false;
 }
 
 std::optional<float> YawBehind(ObjectId object)
@@ -233,8 +309,44 @@ bool Moving()
 
 void Stop()
 {
-    g_yaw.running = false;
-    g_pan.running = false;
+    for (const Move move : {Move::Yaw, Move::Pan})
+    {
+        if (move == Move::Yaw ? g_yaw.running : g_pan.running)
+        {
+            End(move, MoveEnd::Stopped);
+        }
+    }
+}
+
+std::string_view Name(MoveEnd why)
+{
+    switch (why)
+    {
+    case MoveEnd::Arrived:
+        return "arrived";
+    case MoveEnd::Player:
+        return "the player";
+    case MoveEnd::Retargeted:
+        return "retargeted";
+    case MoveEnd::Replaced:
+        return "replaced";
+    case MoveEnd::Stopped:
+        return "stopped";
+    case MoveEnd::NoCamera:
+        return "no camera";
+    }
+    return {};
+}
+
+void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback)
+{
+    const std::lock_guard lock(g_endLock);
+    g_ended.push_back(std::move(callback));
+}
+
+std::optional<MoveEnd> LastEnd(Move move)
+{
+    return move == Move::Yaw ? g_yawEnd : g_panEnd;
 }
 
 } // namespace dao::camera

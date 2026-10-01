@@ -10,13 +10,15 @@
 // The camera follows the selected member, so a change of what it follows
 // is a change of selection (OnTargetChanged). The moves read the camera as
 // it is each frame and stop if the player takes it mid-move, so the
-// player's own turning and panning are never fought. What it does goes to
-// example_camera.log.
+// player's own turning and panning are never fought; each move's end, and
+// why, is logged (OnMoveEnded). What it does goes to example_camera.log.
 #include "dao/CameraMoves.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 
 #include <spdlog/spdlog.h>
+
+#include <cmath>
 
 namespace
 {
@@ -39,6 +41,15 @@ void Selected(dao::ObjectId now, dao::ObjectId /*before*/)
     spdlog::info("now following {:#010x}: {}", now, camera->Tactical() ? "gliding over" : "coming round behind");
 }
 
+void Ended(dao::camera::Move move, dao::camera::MoveEnd why)
+{
+    const dao::CameraController *camera = dao::camera::Current();
+    const dao::Vector offset = camera != nullptr ? camera->FocusOffset() : dao::Vector{};
+    spdlog::info("the {} ended: {}; the focus {:.2f} m from what it follows",
+                 move == dao::camera::Move::Pan ? "pan" : "turn", dao::camera::Name(why),
+                 std::hypot(offset.x, offset.y));
+}
+
 } // namespace
 
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
@@ -50,5 +61,6 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     dao::camera::OnTargetChanged(&Selected);
+    dao::camera::OnMoveEnded(&Ended);
     return true;
 }

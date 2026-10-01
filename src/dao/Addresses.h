@@ -414,6 +414,27 @@ DAO_ADDRESS(kParty_Select, "Party::Select", 0x00639E50)
 DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, "CameraControllerExplore::SnapToTarget", 0x0076FCE0)
 DAO_ADDRESS(kCameraControllerExplore_Update, "CameraControllerExplore::Update", 0x007714B0)
 DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, "CameraControllerExplore::OnTargetChanged", 0x007709B0)
+// The tactical view's frame, read 2026-09-30 for a pan that stopped short
+// (dao/CameraMoves.h). The explore controller's tactical step
+// (0x00771060, __thiscall (seconds, target, party list), `ret 0xC`, from
+// its Update) first pulls the camera back toward the party (PullToParty,
+// __thiscall (float seconds, bool inView, party list), `ret 0xC`): while
+// the offset is not nothing and neither the target nor any party member is
+// in view, a speed at +0xEC grows by 30 m/s each second (0x00C0E038) and
+// moves the offset by it toward the nearest party member; once one is in
+// view it dies away within a frame or two. Then, if one is in view, it
+// reads the player's input (ReadInput, 0x007EDC60: the pan keys, a held
+// mouse button's drag, the cursor at the screen's edge) and either pans
+// by it (PlayerPan, __thiscall (float seconds, const PanInput *, target
+// object, party list), `ret 0x10`, the input {int x, int y, bool keys or
+// edge}, which moves the offsets at +0xF0 and +0x100) or, with none, keeps
+// the party in view (KeepInView, 0x00770BB0, `ret 8`). Each has the one
+// caller. The names are ours.
+DAO_ADDRESS(kCameraControllerExplore_TacticalStep, "CameraControllerExplore::TacticalStep", 0x00771060)
+DAO_ADDRESS(kCameraControllerExplore_PullToParty, "CameraControllerExplore::PullToParty", 0x0076FDD0)
+DAO_ADDRESS(kCameraControllerExplore_PlayerPan, "CameraControllerExplore::PlayerPan", 0x007703F0)
+DAO_ADDRESS(kCameraControllerExplore_KeepInView, "CameraControllerExplore::KeepInView", 0x00770BB0)
+DAO_ADDRESS(kCameraControllerBase_ReadInput, "CameraControllerBase::ReadInput", 0x007EDC60)
 DAO_ADDRESS(kCameraControllerBase_SetTarget, "CameraControllerBase::SetTarget", 0x007EE840)
 DAO_ADDRESS(kCameraControllerBase_Zoom, "CameraControllerBase::Zoom", 0x007EE7E0)
 DAO_ADDRESS(kCameraControllerBase_TurnBehind, "CameraControllerBase::TurnBehind", 0x007EE880)

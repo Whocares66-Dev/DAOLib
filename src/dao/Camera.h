@@ -221,6 +221,20 @@ class CameraController
         Write(kOtherOffset, Vector{});
     }
 
+    // The tactical view's pull back to the party (dao/Addresses.h,
+    // PullToParty): the speed, in metres a second, at which the game moves
+    // the focus toward the nearest party member while neither it nor what
+    // the camera follows is in view; it grows by 30 each second until one
+    // is. 0 when nothing pulls; set to 0, the pull starts over from rest.
+    float PullSpeed() const
+    {
+        return Read<float>(kPullSpeed);
+    }
+    void SetPullSpeed(float metresPerSecond)
+    {
+        Write(kPullSpeed, metresPerSecond);
+    }
+
     // The scene's camera the controller drives.
     SceneCamera *Scene() const
     {
@@ -231,6 +245,7 @@ class CameraController
     static constexpr std::size_t kTarget = 0x08;
     static constexpr std::size_t kFocus = 0x70;
     static constexpr std::size_t kViewFlag = 0x90;
+    static constexpr std::size_t kPullSpeed = 0xEC;
     static constexpr std::size_t kOtherOffset = 0xF0;
     static constexpr std::size_t kKeptOffset = 0x100;
 

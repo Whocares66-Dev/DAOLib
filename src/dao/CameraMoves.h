@@ -13,16 +13,29 @@
 // - The short way round. The camera's yaw is not wrapped (it ran past 2
 //   pi in play), so a turn goes by the smaller angle to the target,
 //   whatever multiple of 2 pi either is at.
-// - The player wins. If the camera is not where the move left it the
-//   frame before, the player (or the game) has turned or panned it, and
-//   the move stops there, leaving the camera theirs.
+// - The player wins. A pan stops when the game pans the camera for the
+//   player (its own pan from the keys, a dragged mouse button or the
+//   cursor at the screen's edge, hooked), and a turn when the camera's yaw
+//   is not where the turn left it the frame before. Either leaves the
+//   camera theirs.
+// - Why it stopped. OnMoveEnded and LastEnd say: there, the player, the
+//   camera following something else, replaced, stopped, or no camera.
+//
+// A pan does not take the game's own changes to the offset for the
+// player's: until 2026-09-30 it did, stopping when the offset moved more
+// than 5 cm between frames. In the tactical view the game pulls the focus
+// back toward the party while no party member is in view (CameraController
+// ::PullSpeed), faster each frame, and a pan from a room the party could
+// not be seen in was stopped by it within about six frames, twice at the
+// start of the hero's turn in the turn-based mod. A pan now holds that
+// pull at rest while it runs.
 //
 // A move eases out: quick at first, slowing into place, near enough there
 // after `seconds`. A new move of the same kind replaces the one running.
 // Called on the game's thread (a frame callback, a script event); the
-// moves run in a frame callback of their own. One plugin's moves only:
-// two plugins moving the camera at once would each see the other's as the
-// player's and stop. Not yet seen in play.
+// moves run in a frame callback of their own. One plugin's moves only: a
+// second plugin's turn would look like the player's, and two pans would
+// pull against each other.
 #pragma once
 
 #include "dao/Camera.h"
@@ -30,6 +43,7 @@
 
 #include <functional>
 #include <optional>
+#include <string_view>
 
 namespace dao::camera
 {
@@ -68,5 +82,31 @@ std::optional<float> YawBehind(ObjectId object);
 // Whether a move is still running, and stopping them.
 bool Moving();
 void Stop();
+
+enum class Move
+{
+    Yaw, // EaseYaw
+    Pan, // PanTo
+};
+
+// Why a move ended.
+enum class MoveEnd
+{
+    Arrived,    // there, near enough (2 cm, or a thousandth of a turn)
+    Player,     // the player panned or turned the camera
+    Retargeted, // the camera began following something else
+    Replaced,   // a new move of the same kind
+    Stopped,    // Stop()
+    NoCamera,   // the camera went: a menu, a dialogue, a cutscene, loading
+};
+std::string_view Name(MoveEnd why);
+
+// When a move ends, and why, on the game's thread, once the move has let
+// go of the camera: a callback may start another.
+void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback);
+
+// Why the last move of a kind ended; nothing while one runs or before the
+// first.
+std::optional<MoveEnd> LastEnd(Move move);
 
 } // namespace dao::camera
