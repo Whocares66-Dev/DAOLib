@@ -113,8 +113,16 @@ bool SendText(std::wstring_view text);
 // interface and the current mode. A key's own message is only made in the
 // modes its binding is registered for; this sends in any, and a mode with
 // no handler for it lets it pass. False, and nothing sent, for a name the
-// bindings' registry has not, or before the game modes are there. Not yet
-// seen in play.
+// bindings' registry has not, or before the game modes are there. Seen in
+// play, 2026-10-01, through the Eluvian server, in explore mode:
+// "UserTogglePauseMessage" answered true and the game was paused, and
+// again and it ran; "NoSuchMessage 1" answered false and nothing happened.
+// With two in the party and the first selected and controlled,
+// "SelectPartyMemberIndexMessage 1 1" selected both, the first still
+// controlled, and "SelectPartyMemberIndexMessage 0 1" after it left the
+// second selected alone and controlled: with its second field 1 the
+// message adds to the selection or takes from it, as the key does with
+// the add-to-selection key held. A second field of 0 was not tried.
 bool SendBinding(std::wstring_view text);
 
 // Every message the engine delivers, as it delivers it: a plugin's
