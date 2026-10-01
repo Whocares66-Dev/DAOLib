@@ -29,7 +29,12 @@
 // by a command that ends when the effect does (ExecuteEffect, type 32,
 // queued at the front as the effect lands). Held, the effect does not end,
 // so neither does the command, and the creature does nothing until the
-// clock is advanced past it or the effect is removed.
+// clock is advanced past it or the effect is removed. The same with an
+// ability that is a timed effect on its user and one on its target (a
+// giant spider's Overwhelm, 2026-10-01): held, it never ends. The mod now
+// advances the clock in quarter-second steps while the acting creature is
+// at such a command after its own action, and takes that off the round's
+// worth.
 #pragma once
 
 namespace dao::clock

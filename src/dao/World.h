@@ -301,7 +301,10 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 // spiders idle in it 13 to 24 m off, and read in view the moment the door
 // opened, before anyone walked in; in Castle Cousland a room behind an
 // opened door had stayed black until the hero entered, so which neighbours
-// a room shows is the area's own.
+// a room shows is the area's own. The turn-based mod went by Shown() the
+// same night: four spiders in a room never seen, loaded, were left out of
+// a fight next door; the door opened, the room read in view at once, and
+// they joined, the camera on their turns showing the room drawn.
 struct Room
 {
     static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
