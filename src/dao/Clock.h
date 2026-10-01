@@ -45,42 +45,27 @@ bool Held();
 // next update. Works while held.
 void Advance(float seconds);
 
-// How fast the game runs: 1 as it plays, 0.5 half speed, 2 twice. Read
-// 2026-09-30; the game keeps two clocks, and this scales both.
-// - The world timer (EC::WorldTimer, the application's +0xD4), which the
-//   game's logic runs on: an object's timer (0x006FA1D0) asks it for the
-//   world time, and CCCreature's update hands the difference to
-//   regeneration and the effects. Its update (0x00A358F0) multiplies each
-//   frame's seconds by a float at its +0x54 that the engine sets to 1 and
-//   never changes. In play, 2026-09-30, setting it alone changed nothing
-//   the player could see.
-// - The frame's timer (an EC::ITimer at the Eclipse game object's +0xB4),
-//   which the frame runs on: EclipseGame's update ticks it (0x004025C0),
-//   keeps its seconds as the frame's (the game's +0xBC), and gives its
-//   total to the scene (0x008107F0), what animation plays by. This hooks
-//   the timer's update (EC::ITimer::Update, 0x004CB160) and scales that
-//   timer's seconds, and the total with them.
-// What play showed, 2026-09-30, which does not agree. Watching
-// examples/speed at 2, the user saw a fight run faster, moves and swings
-// with it, sound in step. Timed (a script polling the hero's position
-// every 40 ms over a fixed 19.5 m route in a fight), his pace was 4.5 m/s
-// with and without speed 2, and an archer's walk and a melee swing took as
-// long at 2 as at 1; scaling the game object's other frame timer (+0xB8,
-// the renderer's) too changed nothing either. The world clock does double
-// (a plugin's own count of world time ran at twice the wall clock). So the
-// fight's pace (the AI, effects, regeneration) follows this, and whether
-// animation and movement do is open: where movement takes its time from
-// is not read yet. The Flash UI keeps its own clock (Scaleform's GTimer)
-// and is not changed. Called on any thread; takes effect from the next
-// frame.
+// How fast the game runs: 1 as it plays, 0.5 half speed, 2 twice; over
+// `seconds` if given, eased there from the speed it had, else at once.
 //
-// True if both clocks took it: false if there is no world timer yet (before
-// a game is loaded; call again later) or the frame timer's hook could not be
-// placed. The hook is placed by the first call, in the calling plugin's own
-// copy of the library. Two plugins setting a speed each scale the frame's
-// time by their own, which multiply; the world timer's is one field, the
-// last set. So one plugin should own the game's speed.
-bool SetSpeed(float scale);
+// The game's own time scale, read 2026-09-30, what its slow motion uses.
+// The application keeps it at +0x2C8 (SetTimeScale, 0x005D81C0, sets it,
+// or eases it there over a time), and its frame update (0x005D7560) hands
+// it on each frame: to the world timer (EC::WorldTimer, the application's
+// +0xD4, its scale at +0x54), which the game's logic runs on (each
+// object's timer, so the AI, commands, effects and regeneration), and to
+// the scene (0x008107F0, its slot 6), which animation plays by. Writing the
+// world timer's scale directly, as this did before, lasted a frame: the
+// update overwrites it from +0x2C8 each frame (in play, 2026-09-30, a
+// creature's own time stayed at 1000 ms a wall second "at speed 2", and its
+// pace with it). Not yet seen in play this way. The Flash UI keeps its own
+// clock (Scaleform's GTimer) and is not changed.
+//
+// False, and nothing done, before the application is up or for a speed of
+// 0 or less. Called on the game's thread. The speed is the game's one: two
+// plugins setting it take turns, the last one set winning.
+bool SetSpeed(float scale, float seconds = 0.0F);
+// The speed set: the application's +0x2C8, 1 when none is.
 float Speed();
 
 } // namespace dao::clock

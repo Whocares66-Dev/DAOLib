@@ -676,6 +676,16 @@ DAO_ADDRESS(kClock_Microseconds, "Clock::Microseconds", 0x004BFFF0)
 // hands those milliseconds to regeneration and its effects. The names are
 // ours.
 DAO_ADDRESS(kWorldTimer_Constructor, "EC::WorldTimer::WorldTimer", 0x00A35F30)
+// The game's time scale (dao/Clock.h, SetSpeed), read 2026-09-30. The
+// application keeps it at +0x2C8; SetTimeScale, __thiscall (scale, seconds,
+// owner id or -1), `ret 0xC`, sets it at once for 0 seconds, else records
+// the scale it had (+0x2BC), the one asked (+0x2C0), the time (+0x2C4) and
+// how far it is (+0x2D0) for its update to ease (+0x2D8 set). The frame
+// update (0x005D7560) advances the world timer (0x00A35A10), then, when the
+// scale is 0 or more, writes it to the world timer's +0x54 and gives it to
+// the scene (0x008107F0, slot 6, as a double). The names are ours.
+DAO_ADDRESS(kCClientExoApp_SetTimeScale, "CClientExoApp::SetTimeScale", 0x005D81C0)
+DAO_ADDRESS(kCClientExoApp_FrameUpdate, "CClientExoApp::FrameUpdate", 0x005D7560)
 // The frame's clock (dao/Clock.h): the Eclipse game object, a global the
 // update task reads (0x00401F30 returns it), keeps two EC::ITimer at +0xB4
 // and +0xB8 (its constructor, 0x00404260). ITimer::Update, __thiscall
