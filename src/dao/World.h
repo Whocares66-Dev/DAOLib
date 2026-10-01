@@ -31,6 +31,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dao
@@ -187,8 +188,22 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // names a creature standing at the point, whose obstacle is lifted the same
 // way (the game does that for the creature a mover follows), so a path to
 // an enemy ends at it rather than failing. A straight walk, where one will
-// do, is the two ends; else the search is run to its end, in slices of 10
-// ms and at most 50 of them. On the game's thread. Not yet seen in play.
+// do, is the two ends; else the search is run to its end, in slices, for at
+// most 30 ms. On the game's thread.
+//
+// The engine's search is made for a walker: it works out only the stretch
+// ahead of the waypoint its walker heads for, and the next as the walker
+// nears the end of that, so this moves its own search's walker along to
+// have the whole path. And it answers "found" for a path it gave up on
+// part way, so a path counts here only if it ends at the destination.
+//
+// Seen in play, 2026-10-01, the first version: a straight walk came back
+// right (2 waypoints, 1.85 m) while no one had yet walked, and the creature
+// walked as before after many searches; but once the party had walked, and
+// so stood as obstacles, every search came back "found" with the start
+// alone, even to a creature 1.9 m away. This version checks the start once
+// the mover's own obstacle is lifted, moves its walker along, and counts a
+// path only if it arrives; it is not yet seen in play.
 //
 // An earlier FindPath drove the creature's own search (RequestPath until it
 // answered) and was taken out after play, 2026-09-30: RequestPath takes new
@@ -197,12 +212,23 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // creature would not walk a click.
 struct PathSearch
 {
-    std::optional<WalkPath> path; // nothing if none was found
+    std::optional<WalkPath> path; // nothing if none was found that reaches the destination
     // The pathfinder's last answer: 1 found, 5 none, 8 no mesh there, 0 not
     // asked (no such creature, or off the game's thread), others a search
     // the slices ran out on.
     std::int32_t result = 0;
     std::int32_t slices = 0; // slices of search it took; 0 for a straight walk
+    // For telling why a search failed: each slice's answer in order, the
+    // waypoints the engine's path held at the end, whether the creature fit
+    // at each end (an end it did not fit at was moved to a free place
+    // nearby), the ends the search used, and a line for a log.
+    std::vector<std::int32_t> answers;
+    std::size_t waypoints = 0;
+    bool startFree = false;
+    bool goalFree = false;
+    Vector start{};
+    Vector goal{};
+    std::string trace;
 };
 PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
 // The path alone.

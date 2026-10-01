@@ -13,9 +13,12 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <format>
+#include <utility>
 
 namespace dao::world
 {
@@ -209,8 +212,14 @@ constexpr std::size_t kParametersHead = 0x10; // of the parameters: id, radius, 
 constexpr std::size_t kAreaNumber = 0x10;     // in the area
 constexpr std::size_t kFacing = 0x130;        // in the creature, after its position
 constexpr float kNearGoal = 2.0F;             // metres, as RequestPath asks
+constexpr float kNearStart = 5.0F;            // metres, as RequestPath asks
 constexpr float kSlice = 0.01F;               // seconds of search a step
-constexpr std::int32_t kSlices = 50;
+constexpr std::int32_t kSlices = 200;
+constexpr auto kLongest = std::chrono::milliseconds(30); // of the game's frame, for one search
+constexpr float kArrived = 0.25F;                        // metres from the destination
+constexpr std::size_t kActive = 0x00;                    // in the path: a route is being worked out
+constexpr std::size_t kWhole = 0x01;                     // in the path: every stretch has been worked out
+constexpr std::size_t kGaveUp = 0x48;                    // in the path: stretches it could not work out
 constexpr std::int32_t kFound = 1;
 constexpr std::int32_t kNone = 5;
 constexpr std::int32_t kNoMesh = 8;
@@ -332,22 +341,47 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         direction.z /= length;
     }
 
-    // Where the mover does not fit, the nearest place back toward the start.
     using IsFreeFn = bool(__fastcall *)(void *, int, const Vector4 *, std::int32_t, std::int32_t, std::int32_t);
-    if (!reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree))(controller, 0, &goal, *number, 0,
-                                                                                       0))
+    using NearestFn = std::int32_t(__fastcall *)(CCArea *, int, const Vector4 *, const Vector4 *, float, void *,
+                                                 std::int32_t, Vector4 *);
+    const auto isFree = reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree));
+    const auto nearestFree = reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree));
+
+    // The destination, as RequestPath settles it, the obstacles still in
+    // place: where the mover does not fit, the nearest place within 2 m
+    // back toward the start, so a walk to a creature ends beside it.
+    answer.goalFree = isFree(controller, 0, &goal, *number, 0, 0);
+    if (!answer.goalFree)
     {
         Vector4 back;
         back.x = -direction.x;
         back.y = -direction.y;
         back.z = -direction.z;
         Vector4 nearest = goal;
-        using NearestFn = std::int32_t(__fastcall *)(CCArea *, int, const Vector4 *, const Vector4 *, float, void *,
-                                                     std::int32_t, Vector4 *);
-        reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree))(area, 0, &goal, &back, kNearGoal,
-                                                                                controller, 0, &nearest);
+        nearestFree(area, 0, &goal, &back, kNearGoal, controller, 0, &nearest);
         goal = nearest;
     }
+
+    // The mover's own obstacle, and that of a creature it walks toward, out
+    // of the way for the search, as RequestPath lifts them.
+    CCCreature *target = toward != kInvalidObject ? app->GetCreatureById(toward) : nullptr;
+    const bool startFreeBefore = isFree(controller, 0, &from, *number, 0, 0);
+    LiftObstacle(own);
+    LiftObstacle(Movement(target));
+
+    // The start, its own obstacle gone: where the mover still does not fit
+    // (others stand against it), the nearest place within 5 m toward the
+    // destination. RequestPath then puts the creature there; this only
+    // starts the search there.
+    answer.startFree = isFree(controller, 0, &from, *number, 0, 0);
+    if (!answer.startFree)
+    {
+        Vector4 nearest = from;
+        nearestFree(area, 0, &from, &direction, kNearStart, controller, 0, &nearest);
+        from = nearest;
+    }
+    answer.start = from.ToVector();
+    answer.goal = goal.ToVector();
 
     using SetEndFn = bool(__fastcall *)(void *, int, std::int32_t, const Vector4 *, const Vector4 *);
     reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetStart))(controller, 0, *number, &from,
@@ -355,37 +389,67 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetGoal))(controller, 0, *number, &goal,
                                                                                    &direction);
 
-    // The mover's own obstacle, and that of a creature it walks toward, out
-    // of the way for the search, as RequestPath lifts them: after the
-    // destination is settled, so a walk to a creature ends beside it.
-    CCCreature *target = toward != kInvalidObject ? app->GetCreatureById(toward) : nullptr;
-    LiftObstacle(own);
-    LiftObstacle(Movement(target));
-
+    const std::uintptr_t path =
+        TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(controller) + kSearch).value_or(0);
     using DirectFn = bool(__fastcall *)(void *, int, std::int32_t, std::int32_t);
     if (reinterpret_cast<DirectFn>(Module::Address(addr::kMovementController_Direct))(controller, 0, 0, 0))
     {
         answer.result = kFound;
         answer.path = WalkPath{{from.ToVector(), goal.ToVector()}, 0};
+        answer.waypoints = 2;
     }
     else
     {
         using StepFn = std::int32_t(__fastcall *)(void *, int, float);
         const auto step = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
-        while (answer.slices < kSlices)
+        const auto started = std::chrono::steady_clock::now();
+        std::optional<WalkPath> found;
+        while (path != 0 && answer.slices < kSlices && std::chrono::steady_clock::now() - started < kLongest)
         {
             ++answer.slices;
             answer.result = step(controller, 0, kSlice);
+            answer.answers.push_back(answer.result);
+            found = PathOf(reinterpret_cast<std::uintptr_t>(controller));
+            answer.waypoints = found ? found->waypoints.size() : 0;
             if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh)
             {
                 break;
             }
+            // The search keeps only two waypoints ahead of the one its
+            // walker is heading for (0x00A4C520), and works out the next
+            // stretch as the walker nears the end of what it has. No one
+            // walks this path, so its walker is put at the last waypoint.
+            if (answer.waypoints > 0)
+            {
+                *reinterpret_cast<std::int32_t *>(path + kNext) = static_cast<std::int32_t>(answer.waypoints - 1);
+            }
         }
-        if (answer.result == kFound)
+        // A search that could not work a stretch out twice ends "found"
+        // with what it had (0x00A4D1F0), so a path counts only if it gets
+        // there.
+        if (found && found->waypoints.size() >= 2)
         {
-            answer.path = PathOf(reinterpret_cast<std::uintptr_t>(controller));
+            const Vector &last = found->waypoints.back();
+            const bool there = std::hypot(last.x - goal.x, last.y - goal.y) < kArrived;
+            const bool whole = TryRead<std::uint8_t>(path + kWhole).value_or(0) != 0;
+            if (there && (answer.result == kFound || whole))
+            {
+                found->next = 0;
+                answer.path = std::move(found);
+            }
         }
     }
+
+    // What the search saw, for a log.
+    const auto word = [](std::uintptr_t at) { return TryRead<std::int32_t>(at).value_or(0); };
+    const std::uintptr_t parameters0 = *parameters;
+    answer.trace = std::format(
+        "start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, radius {:.2f}, size {}; "
+        "path active {}, whole {}, gave up {}",
+        answer.startFree, startFreeBefore, answer.goalFree, static_cast<std::uint32_t>(word(parameters0)),
+        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC),
+        path != 0 ? TryRead<std::uint8_t>(path + kActive).value_or(0) : 0,
+        path != 0 ? TryRead<std::uint8_t>(path + kWhole).value_or(0) : 0, path != 0 ? word(path + kGaveUp) : 0);
 
     PlaceObstacle(mover);
     PlaceObstacle(target);

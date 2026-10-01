@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace
@@ -129,6 +130,15 @@ void LogWalkTo(dao::ObjectId self, dao::ObjectId seen)
         spdlog::info("no walk from 0x{:x} to 0x{:x} ({:.2f} m straight): answer {} after {} slice(s)", self, seen,
                      straight, search.result, search.slices);
     }
+    std::string answers;
+    for (const std::int32_t answer : search.answers)
+    {
+        answers += (answers.empty() ? "" : " ") + std::to_string(answer);
+    }
+    spdlog::info("  the search: from ({:.2f}, {:.2f}, {:.2f}) to ({:.2f}, {:.2f}, {:.2f}), {} waypoint(s) at the end, "
+                 "answers [{}]; {}",
+                 search.start.x, search.start.y, search.start.z, search.goal.x, search.goal.y, search.goal.z,
+                 search.waypoints, answers, search.trace);
 }
 
 void LookAtCursor(dao::ObjectId self, dao::ObjectId seen)
