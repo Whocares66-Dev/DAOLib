@@ -33,6 +33,7 @@
 #include "dao/Addresses.h"
 #include "dao/Module.h"
 #include "dao/ObjectId.h"
+#include "dao/core/Msvc8.h"
 #include "dao/generated/MessageHandlers.h"
 
 #include <cstddef>
@@ -246,6 +247,35 @@ struct SetSaveLoadModeMessage : Message
     std::int32_t mode;
 };
 static_assert(sizeof(SetSaveLoadModeMessage) == 8);
+
+// The screenshot key's message (KeyBindings.ini's Screenshot binds
+// TakeScreenshotMessage, with no arguments), sent to the game mode
+// controller, which handles it (0x00642050):
+//
+//   auto shot = dao::messages::Make<dao::messages::TakeScreenshotMessage>();
+//   dao::messages::Send(dao::CClientExoApp::Get()->GameModes(), shot);
+//
+// Read 2026-09-30 from its constructor (0x00650CE0): a flag and four
+// engine strings, which the key leaves 0 and empty, as Make does. The
+// handler names the file for the local time, to the millisecond, in
+// Documents\BioWare\Dragon Age\Screenshots\User, as the key's are, and
+// asks the renderer for the picture, the interface included. What the flag
+// and the strings change is not read (whether the third string, its
+// length at +0x54, and the fourth, at +0x70, are empty changes the name).
+// The script command Screenshot does nothing in this build (the Eluvian
+// server, 2026-09-30). Not yet seen in play.
+struct TakeScreenshotMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B07DAC;
+    // The strings' own constructors make them empty, so this has one too.
+    TakeScreenshotMessage() : Message{}
+    {
+    }
+    std::uint8_t flag = 0;
+    std::uint8_t padding[3]{};
+    core::WStringRep strings[4];
+};
+static_assert(sizeof(TakeScreenshotMessage) == 0x78);
 
 // Switch the game's mode (dao/GameModes.h). 8 bytes; the controller's
 // handler (0x006416E0) passes +4 to SetGameMode.
