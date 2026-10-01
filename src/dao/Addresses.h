@@ -164,7 +164,22 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // 2026-10-01, in Castle Cousland: 61 rooms, 1 in state 5, 53 in state 4 and
 // 7 in state 3, the controlled creature's own room in state 4 with its
 // load 1. So the states are how much a room is wanted, and the load is
-// whether it is there. The names are ours.
+// whether it is there.
+//
+// What draws a room black is another thing, read 2026-10-01: whether the
+// party has seen it. The area's update (0x0068AF30) gathers the rooms the
+// party's members stand in (0x00635FD0, on the party, into the area's
+// +0x61C) and, when they have changed, runs RoomsSeen (__thiscall on the
+// area (const std::vector<int> &rooms), `ret 4`): those rooms, and each
+// neighbour of one that passes a test of the two (0x00687EC0, not read:
+// in play a room behind a door just opened stayed unseen until the hero
+// walked in), are in view; each is added to the area's list of rooms seen
+// (a std::vector<int> at +0x460, which a save keeps as
+// SavegameAreaRoomsViewed, 16018); then every room is told which it is
+// (its slot 22, SetSeen, which keeps it at the room's +0x100: 1 in view, 2
+// seen before, 0 never) and whether to show (its slot 31, with false for
+// one never seen). The names are ours.
+DAO_ADDRESS(kCCArea_RoomsSeen, "CCArea::RoomsSeen", 0x006886F0)
 DAO_ADDRESS(kAreaLayout_Update, "AreaLayout::Update", 0x005CA1B0)
 DAO_ADDRESS(kIndoorStreamPolicy_Decide, "EC::IndoorStreamPolicy::Decide", 0x005D3FA0)
 DAO_ADDRESS(kCRoom_SetState, "CRoom::SetState", 0x005D31D0)

@@ -408,6 +408,7 @@ constexpr std::size_t kRoomCount = 0x428;   // in the layout
 constexpr std::size_t kRoomNumber = 0x14;   // in a room
 constexpr std::size_t kRoomBounds = 0x120;  // in a room
 constexpr std::size_t kRoomLoad = 0x264;    // in a room
+constexpr std::size_t kRoomSeen = 0x100;    // in a room
 constexpr std::size_t kRoomState = 0x268;   // in a room
 constexpr std::size_t kRoomLoading = 0x371; // in a room
 constexpr std::uint32_t kMaxRooms = 4096;
@@ -446,7 +447,8 @@ std::optional<Room> ReadRoom(std::uintptr_t at)
     const auto load = TryRead<std::int32_t>(at + kRoomLoad);
     const auto state = TryRead<std::int32_t>(at + kRoomState);
     const auto loading = TryRead<std::uint8_t>(at + kRoomLoading);
-    if (!number || !load || !state || !loading)
+    const auto seen = TryRead<std::int32_t>(at + kRoomSeen);
+    if (!number || !load || !state || !loading || !seen)
     {
         return std::nullopt;
     }
@@ -455,6 +457,7 @@ std::optional<Room> ReadRoom(std::uintptr_t at)
     room.state = *state;
     room.load = *load;
     room.loading = *loading != 0;
+    room.seen = *seen;
     return room;
 }
 

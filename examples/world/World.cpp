@@ -54,8 +54,9 @@ void LogRoomOf(const char *what, dao::ObjectId object)
 {
     if (const auto room = dao::world::RoomOf(object))
     {
-        spdlog::info("{} 0x{:x} is in room {} ({:.1f} m from its bounds): state {}, load {} ({}){}", what, object,
-                     room->number, room->distance, room->state, room->load, room->Loaded() ? "loaded" : "not loaded",
+        spdlog::info("{} 0x{:x} is in room {} ({:.1f} m from its bounds): seen {} ({}), state {}, load {} ({}){}", what,
+                     object, room->number, room->distance, room->seen, room->Shown() ? "shown" : "not shown",
+                     room->state, room->load, room->Loaded() ? "loaded" : "not loaded",
                      room->loading ? ", loading" : "");
     }
     else
@@ -72,8 +73,12 @@ void LogRooms(dao::ObjectId self)
     int wanted = 0;
     int dropped = 0;
     int loaded = 0;
+    int inView = 0;
+    int seenBefore = 0;
     for (const dao::world::Room &room : rooms)
     {
+        inView += room.seen == dao::world::Room::kInView ? 1 : 0;
+        seenBefore += room.seen == dao::world::Room::kSeenBefore ? 1 : 0;
         now += room.state == dao::world::Room::kWantedNow ? 1 : 0;
         wanted += room.state == dao::world::Room::kWanted ? 1 : 0;
         dropped += room.state == dao::world::Room::kDropped ? 1 : 0;
@@ -81,12 +86,16 @@ void LogRooms(dao::ObjectId self)
     }
     static int lastWanted = -1;
     static int lastLoaded = -1;
-    if (wanted != lastWanted || loaded != lastLoaded)
+    static int lastSeen = -1;
+    if (wanted != lastWanted || loaded != lastLoaded || inView + 100 * seenBefore != lastSeen)
     {
         lastWanted = wanted;
         lastLoaded = loaded;
-        spdlog::info("{} rooms: {} wanted now, {} wanted, {} dropped; {} loaded", rooms.size(), now, wanted, dropped,
-                     loaded);
+        lastSeen = inView + 100 * seenBefore;
+        spdlog::info("{} rooms: {} in view, {} seen before, {} never seen; {} wanted now, {} wanted, {} dropped; {} "
+                     "loaded",
+                     rooms.size(), inView, seenBefore, static_cast<int>(rooms.size()) - inView - seenBefore, now,
+                     wanted, dropped, loaded);
         LogRoomOf("the controlled creature", self);
     }
 }

@@ -208,13 +208,25 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward = kInva
 // The path alone.
 std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
 
-// The rooms of the current area, and whether each is in the world: an area
-// is laid out in rooms, loaded and dropped as the camera moves, and a room
-// not loaded shows black with whatever stands in it.
+// The rooms of the current area, and whether the game shows each: an area
+// is laid out in rooms, and a room the party has never seen is drawn black
+// with whatever stands in it.
 //
-//   if (const auto room = dao::world::RoomOf(enemy); room && !room->Loaded())
-//       ; // do not send the camera there yet
+//   if (const auto room = dao::world::RoomOf(enemy); room && !room->Shown())
+//       ; // do not send the camera there: the player would see nothing
 //
+// Two things decide a room, read 2026-09-30 and 2026-10-01 (dao/Addresses.h,
+// "Rooms and their streaming").
+//
+// Whether it has been seen follows the party, not the camera. When the
+// rooms the party's members stand in change, those rooms and some of their
+// neighbours are in view (1); a room in view before stays seen (2), which a
+// save keeps; and a room never in view (0) is hidden. In play, 2026-10-01:
+// beyond a shut door all was black in the tactical view, the room behind
+// stayed black with the door open, its four soldiers inactive, and drew
+// when the hero walked in, when they woke and the fight began.
+//
+// Whether it is loaded follows the camera.
 // Read 2026-09-30 (dao/Addresses.h, "Rooms and their streaming"). Each
 // frame the area's layout takes the scene's camera's position, not the
 // party's, and asks its policy how much each room is wanted: now (5)
@@ -227,9 +239,9 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 //
 // Seen in play, 2026-10-01, in Castle Cousland: 61 rooms, 53 wanted, 1
 // wanted now and 7 dropped, the controlled creature's own room wanted and
-// loaded. A first reading took "wanted now" for "drawn"; it is not, and
-// whether a loaded room can still be drawn black (the scene's own
-// visibility) is not read. examples/world logs each room's state.
+// loaded, and none dropped once the party stood in the hall. A first
+// reading took "wanted now" for "drawn"; it is not. The seen value is not
+// yet seen in play; examples/world logs it with each room's state.
 struct Room
 {
     static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
@@ -240,18 +252,29 @@ struct Room
     static constexpr std::int32_t kLoaded = 1;
     static constexpr std::int32_t kNotLoaded = 2;
 
+    static constexpr std::int32_t kNeverSeen = 0; // hidden: drawn black
+    static constexpr std::int32_t kInView = 1;    // the party is in it, or in a room that sees it
+    static constexpr std::int32_t kSeenBefore = 2;
+
     std::int32_t number = 0; // the room's, as in its file's name, <area>_<number>.rim
     std::int32_t state = 0;  // how much the game last wanted it: kDropped, kWanted, kWantedNow
     std::int32_t load = kNotLoaded;
     bool loading = false; // a load in the background is under way
+    std::int32_t seen = kNeverSeen;
     // How far a point is from the room's bounds, in metres; 0 inside them.
     // Filled by RoomAt and RoomOf for their point, else 0.
     float distance = 0;
 
-    // In memory and in the world: what stands in it can be drawn.
+    // In memory and in the world.
     bool Loaded() const
     {
         return load == kLoaded;
+    }
+    // Loaded, and seen by the party now or before: the game draws it and
+    // what stands in it.
+    bool Shown() const
+    {
+        return Loaded() && seen != kNeverSeen;
     }
 };
 // Every room of the current area; none before an area is there. On the
