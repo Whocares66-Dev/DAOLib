@@ -72,6 +72,16 @@ void EaseYaw(float radians, float seconds);
 // as the player panning. Selecting another creature, or the player
 // panning, still does (2026-09-30: a pan stopped by a selection in the
 // same frame once left the view on the creature before).
+//
+// What "arrived" means for a pan: the controller's offset from what it
+// follows has been eased to nothing, which is the whole of the move in the
+// tactical view. Close in there is no offset to ease, the game's own pan
+// carrying the camera over (0x007707D0, from OnTargetChanged), so the move
+// ends arrived on its first frame while that pan is still under way and
+// CameraController::Focus() is still between the two creatures (in play,
+// 2026-09-30, the turn-based mod's: arrived after 25 ms with the focus 3.1
+// m from the creature). So to ask whether a pan fell short, read
+// FocusOffset() or LastEnd, not the focus against the creature's position.
 void PanTo(ObjectId object, float seconds);
 
 // The yaw that puts the camera behind a creature, from its forward vector

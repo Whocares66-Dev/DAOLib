@@ -170,7 +170,10 @@ class CameraController
     }
 
     // Where the camera looks: the followed object's position and the
-    // controller's offset, as of the last update.
+    // controller's offset, as of the last update. Not where it is headed:
+    // while the game pans from one creature to the next, close in, this is
+    // a point between them, and after an offset is set it is a frame
+    // behind.
     Vector Focus() const
     {
         return Read<Vector>(kFocus);
