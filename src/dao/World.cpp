@@ -220,6 +220,12 @@ constexpr float kArrived = 0.25F;                        // metres from the dest
 constexpr std::size_t kActive = 0x00;                    // in the path: a route is being worked out
 constexpr std::size_t kWhole = 0x01;                     // in the path: every stretch has been worked out
 constexpr std::size_t kGaveUp = 0x48;                    // in the path: stretches it could not work out
+// In the path, set by the search's step (0x00A62640): the mover is wider
+// than a cell of the grid, so the fine search takes only cells with room
+// about them (0x00A461A0), and the mover is a large one near its
+// destination (0x007C4B80).
+constexpr std::size_t kWide = 0x8D;
+constexpr std::size_t kNearGoalFlag = 0x8C;
 constexpr std::int32_t kFound = 1;
 constexpr std::int32_t kNone = 5;
 constexpr std::int32_t kNoMesh = 8;
@@ -443,13 +449,15 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     // What the search saw, for a log.
     const auto word = [](std::uintptr_t at) { return TryRead<std::int32_t>(at).value_or(0); };
     const std::uintptr_t parameters0 = *parameters;
+    const auto flag = [path](std::size_t at) {
+        return path != 0 ? TryRead<std::uint8_t>(path + at).value_or(0) : std::uint8_t{0};
+    };
     answer.trace = std::format(
         "start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, radius {:.2f}, size {}; "
-        "path active {}, whole {}, gave up {}",
+        "path active {}, whole {}, gave up {}, wide {}, near {}",
         answer.startFree, startFreeBefore, answer.goalFree, static_cast<std::uint32_t>(word(parameters0)),
-        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC),
-        path != 0 ? TryRead<std::uint8_t>(path + kActive).value_or(0) : 0,
-        path != 0 ? TryRead<std::uint8_t>(path + kWhole).value_or(0) : 0, path != 0 ? word(path + kGaveUp) : 0);
+        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC), flag(kActive), flag(kWhole),
+        path != 0 ? word(path + kGaveUp) : 0, flag(kWide), flag(kNearGoalFlag));
 
     PlaceObstacle(mover);
     PlaceObstacle(target);

@@ -241,7 +241,20 @@ DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
 // Direct (__thiscall (0, 0), `ret 8`) asks whether a straight walk will do,
 // and else Step advances the search (1 found, 5 none, 8 no mesh, others
 // still searching). The area's number is an attribute at the area's +4 (its
-// value at +0x10). The names are ours.
+// value at +0x10).
+//
+// The grid the searches run on, read 2026-10-01. A cell has a kind
+// (0x00A49070): under 5 walkable, 5 and 6 a creature's stamp, 7 and up not
+// walkable; and counts of what crowds it (0x00A49160, 0x00A49240). A
+// creature's obstacle (0x00A469C0, stamped by PlaceObstacle and taken out
+// by LiftObstacle from a record of the cells it changed) makes the cells
+// under it kind 6 and adds to the count of those within a metre round it.
+// IsFree goes by the fixed kinds alone, so a creature does not make a place
+// unfree. Direct (0x00A4BB80) fails on any crowded cell and on a stamp, so
+// a straight walk is refused beside standing creatures. The fine search
+// (Pathfinding::MapSearchEnvironment, 0x00B592E0) walks through stamps and
+// crowding at a cost (0x00A45AA0), but for a mover wider than a cell takes
+// only cells with room about them (0x00A461A0). The names are ours.
 DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)
 DAO_ADDRESS(kMovementController_Constructor, "MovementController::MovementController", 0x00A62B20)
 DAO_ADDRESS(kMovementController_Free, "MovementController::Free", 0x00A625B0)
