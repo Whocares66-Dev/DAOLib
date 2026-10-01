@@ -132,8 +132,11 @@ std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t 
 
 namespace
 {
-constexpr std::size_t kMovement = 0xA40; // in the creature: its MovementController
-constexpr std::size_t kSearch = 0x14;    // in the controller
+constexpr std::size_t kMovement = 0xA40;  // in the creature: its MovementController
+constexpr std::size_t kParameters = 0x10; // in the controller: its first word the mover's id
+constexpr std::size_t kSearch = 0x14;     // in the controller
+constexpr std::size_t kRange = 0x90;      // in the controller
+constexpr float kArriveWithin = 0.05F;
 constexpr std::size_t kWaypoints = 0x70; // in the search: a std::vector of 12-byte points
 constexpr std::size_t kNext = 0x88;      // in the search
 
@@ -197,6 +200,58 @@ std::optional<WalkPath> CurrentPath(ObjectId creature)
     }
     path.next = *next < 0 ? 0 : static_cast<std::size_t>(*next);
     return path;
+}
+
+std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, int maxSlices)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr || !OnGameThread())
+    {
+        return std::nullopt;
+    }
+    CCCreature *object = app->GetCreatureById(creature);
+    if (object == nullptr || object->CommandQueueSize() != 0)
+    {
+        return std::nullopt;
+    }
+    CCArea *area = object->Area();
+    const auto controller = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(object) + kMovement);
+    if (area == nullptr || !controller || *controller == 0)
+    {
+        return std::nullopt;
+    }
+    // Set up as the move commands' update does before it asks (0x007A92B0):
+    // a finished search let go, the mover's id in the controller's
+    // parameters, and the distance it must come within, which every move
+    // command passes as 0.05 m.
+    using CancelFn = void(__fastcall *)(void *, int);
+    reinterpret_cast<CancelFn>(Module::Address(addr::kMovementController_Cancel))(reinterpret_cast<void *>(*controller),
+                                                                                  0);
+    if (const auto parameters = TryRead<std::uintptr_t>(*controller + kParameters); parameters && *parameters != 0)
+    {
+        *reinterpret_cast<ObjectId *>(*parameters) = creature;
+    }
+    *reinterpret_cast<float *>(*controller + kRange) = kArriveWithin;
+    // RequestPath's answers, as the move commands' update reads them.
+    constexpr int kFound = 1;
+    constexpr int kFailed = 5;
+    constexpr int kNoMovement = 8;
+    using Fn = int(__fastcall *)(CCArea *, int, CCCreature *, const Vector4 *, const Vector4 *);
+    const auto request = reinterpret_cast<Fn>(Module::Address(addr::kCCObject_RequestPath));
+    const Vector4 destination(to);
+    for (int slice = 0; slice < maxSlices; ++slice)
+    {
+        const int answer = request(area, 0, object, &destination, nullptr);
+        if (answer == kFound)
+        {
+            return CurrentPath(creature);
+        }
+        if (answer == kFailed || answer == kNoMovement)
+        {
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;
 }
 
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)

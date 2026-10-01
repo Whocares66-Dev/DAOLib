@@ -125,8 +125,9 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // Paths, read 2026-09-30 (dao/World.h, CurrentPath; dev/TODO.md, item 5). A
 // creature's MovementController is its +0xA40 (Movement); the move
 // commands' update (0x007A9130) asks for a path through RequestPath
-// (__thiscall (creature, const Vector4 *to, const Vector4 *from or null),
-// `ret 0xC`; 1 found, 5 failed, 8 no controller, else still searching),
+// (__thiscall on the creature's area (creature, const Vector4 *to, const
+// Vector4 *from or null), `ret 0xC`; 1 found, 5 failed, 8 no controller,
+// else still searching, asked again the next frame),
 // which sets the controller's start (+0x60) and destination (+0x30) and
 // advances the search a slice of time (Step, 0x00A62640, through
 // 0x00A473F0 and the Pathfinding search environments). The search, at the
@@ -136,6 +137,11 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 DAO_ADDRESS(kCCCreature_Movement, "CCCreature::Movement", 0x006A2570)
 DAO_ADDRESS(kCCObject_RequestPath, "CCObject::RequestPath", 0x0073EA80)
 DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
+// Lets a finished search go before a new one (__thiscall, no arguments):
+// the move update calls it first, then puts the mover's id in the
+// controller's parameters (+0x10, its first word), the target's id at
+// +0x94 when the command has one, and the range, 0.05 m, at +0x90.
+DAO_ADDRESS(kMovementController_Cancel, "MovementController::Cancel", 0x00A62960)
 DAO_ADDRESS(kMovementController_NextWaypoint, "MovementController::NextWaypoint", 0x00A625E0)
 DAO_ADDRESS(kPathSearch_Waypoint, "PathSearch::Waypoint", 0x00A47620)
 

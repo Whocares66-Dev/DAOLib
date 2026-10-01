@@ -161,6 +161,18 @@ struct WalkPath
 // Nothing for a creature not walking a path, or not there.
 std::optional<WalkPath> CurrentPath(ObjectId creature);
 
+// The path a creature would walk to `to` from where it stands, found now
+// by its own movement as a move order's would be: RequestPath (0x0073EA80,
+// __thiscall on the creature's area (creature, const Vector4 *to, null for
+// from where it stands), `ret 0xC`) called until it answers, each call a
+// slice of the search a frame of walking would give it, at most
+// `maxSlices`. The search is the creature's own, so it is asked only of a
+// creature with nothing queued: one walking, fighting or acting gets
+// nothing, and its path is left alone. A later order asks again from where
+// the creature then stands. Nothing too if no path is found. Not yet seen
+// in play.
+std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, int maxSlices = 64);
+
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject
 // asks it: from kEyeHeight above one's position to kEyeHeight above the
 // other's, in the viewer's area; not if they are in different areas.
