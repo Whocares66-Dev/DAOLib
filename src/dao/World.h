@@ -148,6 +148,10 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 //   on the creature's feet and the cursor's ground point at four places,
 //   one after the camera came round. dev/GUI.md has how a movie's stage
 //   lies over the view.
+// - Pathfind with the game paused, through the Eluvian server: the same
+//   two ends asked running, paused twice and running again answered the
+//   same each time to the last waypoint and slice (44.18 m, 29 waypoints,
+//   20 slices). A pause changes nothing.
 // - FindPath against the walk, the turn-based mod's preview: ten walks
 //   ordered from a path shown, 1 to 8.8 m, round a creature and up a ramp
 //   among them, stayed within 0.34 m of the path FindPath gave, and fifty
