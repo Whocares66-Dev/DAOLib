@@ -263,7 +263,9 @@ static_assert(sizeof(SetSaveLoadModeMessage) == 8);
 // and the strings change is not read (whether the third string, its
 // length at +0x54, and the fourth, at +0x70, are empty changes the name).
 // The script command Screenshot does nothing in this build (the Eluvian
-// server, 2026-09-30). Not yet seen in play.
+// server, 2026-09-30). Seen in play, 2026-10-01, through that server: one
+// send wrote Screenshots\User\Screenshot20261001012341911.jpg, 512 KB, the
+// call taking 381 ms.
 struct TakeScreenshotMessage : Message
 {
     static constexpr std::uintptr_t kVftable = 0x00B07DAC;

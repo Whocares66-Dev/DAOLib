@@ -272,9 +272,11 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
 // forest clearing: the party, two wolves 25 m off and three corpses were
 // each in a room, the rooms' numbers 0x30002 to 0x40003 (cells of the
 // terrain, by the look of them, not a file's number), every one in view
-// (1), and none with its load reading loaded, though all were on screen.
-// So Shown() goes by what has been seen alone. What an indoor room never
-// seen reads is not yet seen in play; examples/world logs it.
+// (1), and none with its load reading loaded, though all were on screen:
+// each read load 2 and state 6, a state the indoor policy never gives, in
+// explore mode and in a fight alike. So Shown() goes by what has been seen
+// alone, and state and load are an indoor room's. What an indoor room
+// never seen reads is not yet seen in play; examples/world logs it.
 struct Room
 {
     static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
@@ -290,7 +292,9 @@ struct Room
     static constexpr std::int32_t kSeenBefore = 2;
 
     std::int32_t number = 0; // the room's, as in its file's name, <area>_<number>.rim
-    std::int32_t state = 0;  // how much the game last wanted it: kDropped, kWanted, kWantedNow
+    // How much the game last wanted it: kDropped, kWanted, kWantedNow
+    // indoors; 6 for a cell of an outdoor area's terrain.
+    std::int32_t state = 0;
     std::int32_t load = kNotLoaded;
     bool loading = false; // a load in the background is under way
     std::int32_t seen = kNeverSeen;
