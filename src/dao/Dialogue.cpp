@@ -232,6 +232,24 @@ bool SkipCutscene()
     return true;
 }
 
+bool InMovie()
+{
+    return CClientExoApp::CurrentMode() == GameMode::Movie;
+}
+
+bool SkipMovie()
+{
+    auto *app = CClientExoApp::Get();
+    auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    void *movie = modes != nullptr && InMovie() ? modes->ModeObject(GameMode::Movie) : nullptr;
+    if (movie == nullptr)
+    {
+        return false;
+    }
+    messages::Send(movie, messages::Make<messages::SkipMovieMessage>());
+    return true;
+}
+
 std::vector<Line> Replies()
 {
     std::vector<Line> lines;

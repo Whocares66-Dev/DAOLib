@@ -144,6 +144,10 @@ std::vector<Hit> Raycast(const Vector &origin, const Vector &direction, std::uin
 // - AimAt: 243 pixels above her feet; and for a wolf standing behind
 //   another creature as the camera saw them, a pixel on the wolf's visible
 //   part, where the pick met the wolf first.
+// - ToScreen's points drawn by a movie (the turn-based mod's path line):
+//   on the creature's feet and the cursor's ground point at four places,
+//   one after the camera came round. dev/GUI.md has how a movie's stage
+//   lies over the view.
 // - The real cursor put at an AimAt pixel, by the play tester: the game's
 //   own CursorObject was the creature and the click attacked it, at
 //   pixels inside it; at one on its edge the game's pick held nothing

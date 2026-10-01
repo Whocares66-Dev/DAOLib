@@ -132,7 +132,23 @@ bool Continue();
 
 // Whether a cutscene is playing (the game is in its cutscene mode), and
 // skipping it as Escape does. SkipCutscene is false when none is playing.
+//
+// What puts the game in that mode, read 2026-10-01: the scripts'
+// LoadCutscene (0x0066D230) finds the cutscene's resource and, unless a
+// flag of the application's forbids, sets the game's mode to Cutscene at
+// once with the cutscene loaded (0x00692150), then puts each replacement
+// object under its tag. Its bPlayImmediately is popped and not used, and
+// PlayCutscene (0x00651240) pops its object and does nothing: loading is
+// playing. Much of the game's staging is conversations instead, which run
+// in dialogue mode: the Dalish origin's mirror scene and the camp's
+// awakening were dialogue throughout in play, though the module has
+// cutscene files beside them. Not yet seen in play.
 bool InCutscene();
 bool SkipCutscene();
+
+// The same for a pre-rendered video (the game's movie mode): whether one
+// is playing, and skipping it as the key does. Not yet seen in play.
+bool InMovie();
+bool SkipMovie();
 
 } // namespace dao::dialogue

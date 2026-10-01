@@ -164,6 +164,15 @@ inline OwnedCommand Copy(const ::dao::Command &command)
 // popper's copy, sharing the elements with the VM's, freed through the
 // engine. Move-only. The element getters read what the tag says the array
 // holds; an index out of range, or the wrong kind, gives the empty value.
+//
+// A default Array is no array: the stack refuses to push one, so a command
+// that takes an array is not called with it. For a command that wants an
+// array and may have an empty one (LoadCutscene's two, of the tags to
+// replace and the objects to put in their place), make one:
+//
+//   dao::script::api::LoadCutscene(L"bed200cs_farewell", player, 1,
+//       dao::script::Array::Empty(dao::core::ArrayTag::String),
+//       dao::script::Array::Empty(dao::core::ArrayTag::Object), 0);
 class Array
 {
   public:
@@ -171,6 +180,9 @@ class Array
     explicit Array(core::ArrayRep *array) : array_(array)
     {
     }
+    // An array of that kind with nothing in it, made as the engine makes
+    // one (its constructor by tag, 0x00A2E920). Not yet seen in play.
+    static Array Empty(core::ArrayTag kind);
     ~Array();
     Array(Array &&other) noexcept : array_(std::exchange(other.array_, nullptr))
     {

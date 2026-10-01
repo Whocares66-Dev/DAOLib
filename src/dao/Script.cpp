@@ -209,6 +209,24 @@ Array Stack::PopArray()
     return Array{popped};
 }
 
+Array Array::Empty(core::ArrayTag kind)
+{
+    // As StackPopArray makes the popper's: 8 bytes from the engine's
+    // operator new, then the constructor, which makes the payload the tag
+    // calls for. Freed as any Array is.
+    using New = void *(__cdecl *)(std::size_t);
+    auto *array = static_cast<core::ArrayRep *>(
+        reinterpret_cast<New>(Module::Address(addr::kOperatorNew))(sizeof(core::ArrayRep)));
+    if (array == nullptr)
+    {
+        return Array{};
+    }
+    using Constructor = core::ArrayRep *(__fastcall *)(core::ArrayRep *, int, std::int32_t);
+    reinterpret_cast<Constructor>(Module::Address(addr::kScriptArray_Constructor))(array, 0,
+                                                                                   static_cast<std::int32_t>(kind));
+    return Array{array};
+}
+
 Array::~Array()
 {
     if (array_ == nullptr)

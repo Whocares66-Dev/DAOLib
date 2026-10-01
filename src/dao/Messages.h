@@ -325,6 +325,16 @@ struct SkipCutsceneMessage : Message
 };
 static_assert(sizeof(SkipCutsceneMessage) == 4);
 
+// The skip key in the movie mode, a pre-rendered video playing: to
+// GameModeMovie (0x006DC130), which stops the movie (0x006DC040) unless a
+// flag of the application's says movies are not to be skipped (its +0x540).
+// Read 2026-10-01.
+struct SkipMovieMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1EC34;
+};
+static_assert(sizeof(SkipMovieMessage) == 4);
+
 // The screenshot key's message (KeyBindings.ini's Screenshot binds
 // TakeScreenshotMessage, with no arguments), sent to the game mode
 // controller, which handles it (0x00642050):
