@@ -22,7 +22,9 @@
 // (20:07 to 20:14, two fights): every death came, each 1.5 to 2.5 s after
 // the creature was dead by IsDead, once its death had played out, the
 // creator the killer for a death from a blow and null for one by an
-// applied effect. For the moment of death itself, a plugin watches IsDead
+// applied effect. Over a longer session the same day, 39 deaths gave 39
+// events, a median 2.15 s after IsDead and at most 5.14 s (once 20 ms
+// before a frame's IsDead poll). For the moment of death itself, a plugin watches IsDead
 // or EVENT_TYPE_DAMAGED.
 //
 // Callbacks run on the scripts' thread, and see the event the target is
