@@ -158,8 +158,11 @@ bool SkipCutscene();
 // The same for a pre-rendered video (the game's movie mode): whether one
 // is playing, and skipping it as the key does. The scripts' PlayMovie
 // (0x0065ECB0, a resource: a .bik of the game's movies folders) starts
-// one. SkipMovie with no movie answered false in play; with one, not yet
-// seen.
+// one. Seen in play, 2026-10-01, through the Eluvian server: PlayMovie
+// with L"bed100cs_duncan_finds_pc.bik" put the game in movie mode within
+// half a second, InMovie true and InCutscene false; SkipMovie two seconds
+// in answered true and the game was exploring again within half a second.
+// With no movie it answered false.
 bool InMovie();
 bool SkipMovie();
 
