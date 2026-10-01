@@ -407,7 +407,7 @@ constexpr std::size_t kRooms = 0x424;       // in the layout: an array of room p
 constexpr std::size_t kRoomCount = 0x428;   // in the layout
 constexpr std::size_t kRoomNumber = 0x14;   // in a room
 constexpr std::size_t kRoomBounds = 0x120;  // in a room
-constexpr std::size_t kRoomLoaded = 0x264;  // in a room
+constexpr std::size_t kRoomLoad = 0x264;    // in a room
 constexpr std::size_t kRoomState = 0x268;   // in a room
 constexpr std::size_t kRoomLoading = 0x371; // in a room
 constexpr std::uint32_t kMaxRooms = 4096;
@@ -443,17 +443,17 @@ std::vector<std::uintptr_t> RoomPointers()
 std::optional<Room> ReadRoom(std::uintptr_t at)
 {
     const auto number = TryRead<std::int32_t>(at + kRoomNumber);
-    const auto loaded = TryRead<std::int32_t>(at + kRoomLoaded);
+    const auto load = TryRead<std::int32_t>(at + kRoomLoad);
     const auto state = TryRead<std::int32_t>(at + kRoomState);
     const auto loading = TryRead<std::uint8_t>(at + kRoomLoading);
-    if (!number || !loaded || !state || !loading)
+    if (!number || !load || !state || !loading)
     {
         return std::nullopt;
     }
     Room room;
     room.number = *number;
     room.state = *state;
-    room.loaded = *loaded;
+    room.load = *load;
     room.loading = *loading != 0;
     return room;
 }

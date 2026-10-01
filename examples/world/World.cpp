@@ -9,8 +9,9 @@
 // creature walks, the path its movement found: its waypoints and length.
 // For the object under the cursor it also asks the pathfinder for the walk
 // there (FindPath), and logs its length beside the straight distance, and
-// the room the object stands in with what the game's streaming has made of
-// it; every two seconds, how many of the area's rooms are in each state.
+// the room the object stands in with how much the game wants it and whether
+// it is loaded; every two seconds, how many of the area's rooms are in each
+// state.
 //
 // Everything runs in a frame callback, on the game's thread, where the
 // world's queries must be asked. What it finds goes to example_world.log.
@@ -48,13 +49,13 @@ const char *KindName(dao::world::Hit::Kind kind)
     }
 }
 
-// The room an object stands in, and whether the game is drawing it.
+// The room an object stands in, and whether it is loaded.
 void LogRoomOf(const char *what, dao::ObjectId object)
 {
     if (const auto room = dao::world::RoomOf(object))
     {
-        spdlog::info("{} 0x{:x} is in room {} ({:.1f} m from its bounds): state {} ({}), loaded {}{}", what, object,
-                     room->number, room->distance, room->state, room->Drawn() ? "drawn" : "not drawn", room->loaded,
+        spdlog::info("{} 0x{:x} is in room {} ({:.1f} m from its bounds): state {}, load {} ({}){}", what, object,
+                     room->number, room->distance, room->state, room->load, room->Loaded() ? "loaded" : "not loaded",
                      room->loading ? ", loading" : "");
     }
     else
@@ -67,23 +68,25 @@ void LogRoomOf(const char *what, dao::ObjectId object)
 void LogRooms(dao::ObjectId self)
 {
     const std::vector<dao::world::Room> rooms = dao::world::Rooms();
-    int drawn = 0;
-    int held = 0;
+    int now = 0;
+    int wanted = 0;
     int dropped = 0;
+    int loaded = 0;
     for (const dao::world::Room &room : rooms)
     {
-        drawn += room.state == dao::world::Room::kDrawn ? 1 : 0;
-        held += room.state == dao::world::Room::kHeld ? 1 : 0;
+        now += room.state == dao::world::Room::kWantedNow ? 1 : 0;
+        wanted += room.state == dao::world::Room::kWanted ? 1 : 0;
         dropped += room.state == dao::world::Room::kDropped ? 1 : 0;
+        loaded += room.Loaded() ? 1 : 0;
     }
-    static int lastDrawn = -1;
-    static int lastHeld = -1;
-    if (drawn != lastDrawn || held != lastHeld)
+    static int lastWanted = -1;
+    static int lastLoaded = -1;
+    if (wanted != lastWanted || loaded != lastLoaded)
     {
-        lastDrawn = drawn;
-        lastHeld = held;
-        spdlog::info("{} rooms: {} drawn, {} held, {} dropped, {} never asked", rooms.size(), drawn, held, dropped,
-                     static_cast<int>(rooms.size()) - drawn - held - dropped);
+        lastWanted = wanted;
+        lastLoaded = loaded;
+        spdlog::info("{} rooms: {} wanted now, {} wanted, {} dropped; {} loaded", rooms.size(), now, wanted, dropped,
+                     loaded);
         LogRoomOf("the controlled creature", self);
     }
 }

@@ -154,12 +154,17 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // the point to the room's bounds (BoundsDistanceSquared, __thiscall on the
 // bounds (const Vector4 *), `ret 4`): under its +8, 5; under its +0xC, 4;
 // up to its +0x10, 1, which changes nothing; farther, 3. A room keeps its
-// number at +0x14, its bounds at +0x120, whether it is loaded at +0x264 (0
-// in memory and placed, 1 in memory, 2 not loaded), the state last asked at
-// +0x268 and a load under way at +0x371. State 3 unloads it; 4 loads it in
-// the background if it is not loaded and takes its number out of the
-// layout's list of rooms to draw (0x005C92B0); 5 loads it at once if need
-// be and puts its number in that list (0x005C9A50). The names are ours.
+// number at +0x14, its bounds at +0x120, its load at +0x264 (2 not loaded,
+// 0 a load asked for, 1 loaded), the state last asked at +0x268 and a load
+// in the background under way at +0x371. State 3 unloads it; 4 loads it in
+// the background if it is not loaded; 5 loads it at once, or, its load
+// already asked for, puts its number in the layout's list at +0x4D0
+// (0x005C9A50; 4 takes it out again, 0x005C92B0), a list kept under a lock
+// (+0x4B0) for the loading thread: the rooms wanted first. In play,
+// 2026-10-01, in Castle Cousland: 61 rooms, 1 in state 5, 53 in state 4 and
+// 7 in state 3, the controlled creature's own room in state 4 with its
+// load 1. So the states are how much a room is wanted, and the load is
+// whether it is there. The names are ours.
 DAO_ADDRESS(kAreaLayout_Update, "AreaLayout::Update", 0x005CA1B0)
 DAO_ADDRESS(kIndoorStreamPolicy_Decide, "EC::IndoorStreamPolicy::Decide", 0x005D3FA0)
 DAO_ADDRESS(kCRoom_SetState, "CRoom::SetState", 0x005D31D0)

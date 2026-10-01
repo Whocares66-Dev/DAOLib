@@ -208,42 +208,50 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward = kInva
 // The path alone.
 std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
 
-// The rooms of the current area, and whether the game is drawing each: an
-// area is laid out in rooms, loaded and dropped as the camera moves, and a
-// room not being drawn shows black with whatever stands in it.
+// The rooms of the current area, and whether each is in the world: an area
+// is laid out in rooms, loaded and dropped as the camera moves, and a room
+// not loaded shows black with whatever stands in it.
 //
-//   if (const auto room = dao::world::RoomOf(enemy); room && !room->Drawn())
-//       ; // do not send the camera there
+//   if (const auto room = dao::world::RoomOf(enemy); room && !room->Loaded())
+//       ; // do not send the camera there yet
 //
 // Read 2026-09-30 (dao/Addresses.h, "Rooms and their streaming"). Each
 // frame the area's layout takes the scene's camera's position, not the
-// party's, and asks its policy what each room should be: drawn (5) within
-// one distance of the camera, in memory but not drawn (4) within a second
-// distance, or wherever the scene's own check names the room, and dropped
-// (3) beyond a third. So what is drawn follows the camera: a camera sent to
-// a far room brings it in, a frame or more later, the game pausing itself
-// to load when the camera jumps more than 30 m. Not yet seen in play: that
-// 5 is the one drawn and 4 the one shown black is read from what the two
-// states do to the layout's list of rooms to draw; examples/world logs each
-// room's state for a play test to set beside the screen.
+// party's, and asks its policy how much each room is wanted: now (5)
+// within one distance of the camera, in the background (4) within a
+// second, or wherever the scene's own check names the room, and not at all
+// (3) beyond a third, which unloads it. So what is loaded follows the
+// camera: a camera sent toward a dropped room has it loaded in the
+// background, some frames later, the game pausing itself to load only when
+// the camera jumps more than 30 m in a frame.
+//
+// Seen in play, 2026-10-01, in Castle Cousland: 61 rooms, 53 wanted, 1
+// wanted now and 7 dropped, the controlled creature's own room wanted and
+// loaded. A first reading took "wanted now" for "drawn"; it is not, and
+// whether a loaded room can still be drawn black (the scene's own
+// visibility) is not read. examples/world logs each room's state.
 struct Room
 {
-    static constexpr std::int32_t kDropped = 3; // not in memory
-    static constexpr std::int32_t kHeld = 4;    // in memory, or coming, and not drawn
-    static constexpr std::int32_t kDrawn = 5;
+    static constexpr std::int32_t kDropped = 3;   // not wanted: unloaded
+    static constexpr std::int32_t kWanted = 4;    // kept, loaded in the background if it is not
+    static constexpr std::int32_t kWantedNow = 5; // loaded at once, ahead of the others
+
+    static constexpr std::int32_t kLoading = 0;
+    static constexpr std::int32_t kLoaded = 1;
+    static constexpr std::int32_t kNotLoaded = 2;
 
     std::int32_t number = 0; // the room's, as in its file's name, <area>_<number>.rim
-    std::int32_t state = 0;  // what the game last asked of it: kDropped, kHeld, kDrawn, 0 never asked
-    // 0 in memory and placed in the world, 1 in memory, 2 not loaded.
-    std::int32_t loaded = 2;
+    std::int32_t state = 0;  // how much the game last wanted it: kDropped, kWanted, kWantedNow
+    std::int32_t load = kNotLoaded;
     bool loading = false; // a load in the background is under way
     // How far a point is from the room's bounds, in metres; 0 inside them.
     // Filled by RoomAt and RoomOf for their point, else 0.
     float distance = 0;
 
-    bool Drawn() const
+    // In memory and in the world: what stands in it can be drawn.
+    bool Loaded() const
     {
-        return state == kDrawn;
+        return load == kLoaded;
     }
 };
 // Every room of the current area; none before an area is there. On the
