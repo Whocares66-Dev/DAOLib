@@ -11,6 +11,7 @@ add_executable(
     test_inflate.cpp
     test_input.cpp
     test_msvc8.cpp
+    test_optionsmovie.cpp
     test_names.cpp
     test_objects.cpp
     test_path.cpp

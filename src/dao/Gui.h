@@ -236,6 +236,14 @@ using ExternalInterfaceHandler = std::function<void(const Call &call)>;
 void OnFSCommand(std::string name, FSCommandHandler handler);
 void OnExternalInterface(std::string name, ExternalInterfaceHandler handler);
 
+// The same, for a plugin that wants only some of the calls of a name: each
+// is asked in the order added and says whether it took the call. One it
+// did not take goes on to the next, then to a handler above or the game's
+// own. dao/Options.h takes its own checkboxes' clicks this way out of the
+// SendMessage every button of the game's sends.
+void InterceptFSCommand(std::string name, std::function<bool(void *owner, std::string_view args)> filter);
+void InterceptExternalInterface(std::string name, std::function<bool(const Call &call)> filter);
+
 // Every FSCommand or ExternalInterface call, before it is handled. These
 // observe; the call goes on to its handler.
 void OnAnyFSCommand(std::function<void(void *owner, std::string_view name, std::string_view args)> observer);

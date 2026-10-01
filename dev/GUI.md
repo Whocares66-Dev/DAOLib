@@ -46,6 +46,15 @@ So a plugin's row gets into such a list only by adding to the script. `dao::gui:
 
 `dao::input` uses it to list a plugin's actions in the controls screen.
 
+`dao::options` uses it to put a plugin's section on the Game tab (`dao/core/OptionsMovie.h`):
+
+- **Room.** The Game tab is one sprite, its controls in two columns a row every 35 pixels of the 1024 by 768 stage: the left ends with a checkbox at (7, 228), the right at (483, 166), and the tab is empty below them to the screen's buttons. So there are five free rows on the left and six on the right, the same at every resolution, since the movie scales.
+- **Placing.** A heading (the key list's `KeyBindingHeader` symbol) and checkboxes (the tab's own `checkbox_mc`) are placed in those rows by adding `PlaceObject2` tags to the sprite (`core::gfx::PlaceInSprite`).
+- **Setting up.** A clip's set-up function is found by its name with `_init` after it, on the clip or any clip above it (`GetInitFunction`, called by `GUI.Element` when the clip loads). The movie makes its own in one function, and the patch adds a plugin's before the first of them (`core::gfx::InsertBefore`): a checkbox's is the game's `OptionsUtils.MakeOptionToggleInit(option, label, tooltip)`, a heading's sets its text clip's text.
+- **A checkbox's value.** The helper asks to be told the option's value with `ExternalInterface.call("AddTokenObserver", label, "", "ClientOptions.<option>")`, which answers an id, and keeps a callback under the id. The engine tells a movie its tokens' values by setting two arrays in it, `TokenManager.BatchTokenReplacementCallbackIDs` and `TokenManager.BatchTokenReplacementValues`, and invoking `TokenManager.PerformBatchTokenReplacements` (`GuiMovie::DeliverTokens`, `0x00519B00`, run for every movie). For a plugin's option the library takes the `AddTokenObserver` call, answers an id of its own (the engine's count down from 0xFFFFFFFF and a movie's own up from 0; the library's start at 0x40000000), and delivers the value the same way after the engine's own.
+- **A click.** The helper sends the FSCommand `SendMessage` with `ClientOptions.SetClientOptionMessage <option> 1` (or `0`). The library takes those that name a plugin's option (`dao::gui::InterceptFSCommand`), runs the plugin's `set` on the frame's thread, and delivers what it answers, so a refused click draws the box back.
+- **Checked.** On the game's own movie the patch places the heading and boxes at (7, 263) on and adds their set-up functions before `OptAutoPause_mc_init`. Not yet seen in play.
+
 ## What Scaleform's own documentation adds
 
 Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's pages on its GFx 3 integration describe the same interface a generation later. They're good for what things mean, not for names or layouts. They confirmed four points, 2026-09-30:

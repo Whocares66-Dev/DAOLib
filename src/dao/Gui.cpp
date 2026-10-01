@@ -36,6 +36,10 @@ std::map<std::string, FSCommandHandler, std::less<>> g_fsCommands;
 std::map<std::string, ExternalInterfaceHandler, std::less<>> g_externalCalls;
 std::vector<AnyFSCommand> g_anyFSCommand;
 std::vector<ExternalInterfaceHandler> g_anyExternal;
+using FSCommandFilter = std::function<bool(void *owner, std::string_view args)>;
+using ExternalFilter = std::function<bool(const Call &call)>;
+std::map<std::string, std::vector<FSCommandFilter>, std::less<>> g_fsCommandFilters;
+std::map<std::string, std::vector<ExternalFilter>, std::less<>> g_externalFilters;
 
 // The registry's lookups (dao/Addresses.h): __thiscall on the registry,
 // the owner, the call's name, and its arguments, `ret 0xC` and `ret 0x10`.
@@ -50,6 +54,7 @@ void __fastcall DispatchFSCommand(void *registry, int edx, void *owner, const ch
     const std::string_view name = command != nullptr ? command : "";
     const std::string_view text = args != nullptr ? args : "";
     std::vector<AnyFSCommand> observers;
+    std::vector<FSCommandFilter> filters;
     FSCommandHandler handler;
     {
         const std::lock_guard lock(g_mutex);
@@ -58,10 +63,23 @@ void __fastcall DispatchFSCommand(void *registry, int edx, void *owner, const ch
         {
             handler = found->second;
         }
+        if (const auto found = g_fsCommandFilters.find(name); found != g_fsCommandFilters.end())
+        {
+            filters = found->second;
+        }
     }
     for (const auto &observer : observers)
     {
         detail::Guard("an FSCommand observer", [&] { observer(owner, name, text); });
+    }
+    for (const auto &filter : filters)
+    {
+        bool taken = false;
+        detail::Guard("an FSCommand filter", [&] { taken = filter(owner, text); });
+        if (taken)
+        {
+            return;
+        }
     }
     if (handler)
     {
@@ -77,6 +95,7 @@ void __fastcall DispatchExternal(void *registry, int edx, void *owner, const cha
     const Call call{owner, method != nullptr ? method : "",
                     args != nullptr ? std::span<const Value>(args, count) : std::span<const Value>{}};
     std::vector<ExternalInterfaceHandler> observers;
+    std::vector<ExternalFilter> filters;
     ExternalInterfaceHandler handler;
     {
         const std::lock_guard lock(g_mutex);
@@ -85,10 +104,23 @@ void __fastcall DispatchExternal(void *registry, int edx, void *owner, const cha
         {
             handler = found->second;
         }
+        if (const auto found = g_externalFilters.find(call.name); found != g_externalFilters.end())
+        {
+            filters = found->second;
+        }
     }
     for (const auto &observer : observers)
     {
         detail::Guard("an ExternalInterface observer", [&] { observer(call); });
+    }
+    for (const auto &filter : filters)
+    {
+        bool taken = false;
+        detail::Guard("an ExternalInterface filter", [&] { taken = filter(call); });
+        if (taken)
+        {
+            return;
+        }
     }
     if (handler)
     {
@@ -571,6 +603,20 @@ void OnExternalInterface(std::string name, ExternalInterfaceHandler handler)
 {
     const std::lock_guard lock(g_mutex);
     g_externalCalls.insert_or_assign(std::move(name), std::move(handler));
+    AttachLocked();
+}
+
+void InterceptFSCommand(std::string name, std::function<bool(void *owner, std::string_view args)> filter)
+{
+    const std::lock_guard lock(g_mutex);
+    g_fsCommandFilters[std::move(name)].push_back(std::move(filter));
+    AttachLocked();
+}
+
+void InterceptExternalInterface(std::string name, std::function<bool(const Call &call)> filter)
+{
+    const std::lock_guard lock(g_mutex);
+    g_externalFilters[std::move(name)].push_back(std::move(filter));
     AttachLocked();
 }
 

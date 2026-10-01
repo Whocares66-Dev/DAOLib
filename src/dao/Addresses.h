@@ -596,6 +596,23 @@ DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::Sca
 // well as the compressed "CFX" and "CWS" (the four signatures are tested
 // at 0x00913FF4 on).
 DAO_DATA(kScaleformResourceFile_Vftable, "GUI::ScaleformResourceFile::vftable", 0x00AF65A4)
+// A movie told of the data tree's changes, read 2026-10-01 (dao/Options.h).
+// A movie asks to be told a token's value with ExternalInterface's
+// AddTokenObserver(label, "", token) (GuiExternal::AddTokenObserver,
+// 0x0051CD50), which makes a GUI::ScaleformTokenObserver on the movie's
+// record (0x0051A3C0) and answers its id: the record's counter at +0x98,
+// counting down, so the engine's ids run down from 0xFFFFFFFF. (A movie
+// can also name an id of its own, AddTokenObserverWithID, and those count
+// up from 0.) The movie's script keeps the id's callback.
+//
+// DeliverTokens, __thiscall on the movie's record (bool), `ret 4`, is run
+// for every record by 0x00511CA0. For the changes waiting (ids at +0xA8,
+// the values as strings at +0xB8) it sets two arrays in the movie through
+// its slot 13, "TokenManager.BatchTokenReplacementCallbackIDs" of ints
+// and "TokenManager.BatchTokenReplacementValues" of wide strings, and
+// invokes "TokenManager.PerformBatchTokenReplacements", the movie's own
+// function that calls each id's callback with its value. The name is ours.
+DAO_ADDRESS(kGuiMovie_DeliverTokens, "GuiMovie::DeliverTokens", 0x00519B00)
 DAO_ADDRESS(kResources_Find, "Resources::Find", 0x004D5BA0)
 DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 
