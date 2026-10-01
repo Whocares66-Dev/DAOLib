@@ -306,9 +306,12 @@ struct Room
 // Every room of the current area; none before an area is there. On the
 // game's thread.
 std::vector<Room> Rooms();
-// The room a point is in: the one whose bounds hold it, or the nearest.
+// The room a point is in, as the area answers it; for a point in none, the
+// nearest by its bounds, `distance` saying how far.
 std::optional<Room> RoomAt(const Vector &point);
-// The room an object stands in.
+// The room an object is in: the one the object keeps for itself, which is
+// what the game goes by (the party's rooms are its members'). Nothing for
+// an object that is not there, or in an area with no rooms.
 std::optional<Room> RoomOf(ObjectId object);
 
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject

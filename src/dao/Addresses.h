@@ -180,6 +180,13 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // seen before, 0 never) and whether to show (its slot 31, with false for
 // one never seen). The names are ours.
 DAO_ADDRESS(kCCArea_RoomsSeen, "CCArea::RoomsSeen", 0x006886F0)
+// Which room a thing is in, read 2026-10-01 from how the party's rooms are
+// gathered. An object keeps its room at +0x41C and the room's number at
+// +0x150 (-1 in none), set by its own refresh (0x00695D70), which asks its
+// area for the room at its position raised by its height: RoomAt,
+// __thiscall on the area (const Vector4 *), `ret 4`, which hands the point
+// to the layout (its slot 2) and answers the room or null.
+DAO_ADDRESS(kCCArea_RoomAt, "CCArea::RoomAt", 0x0067B3A0)
 DAO_ADDRESS(kAreaLayout_Update, "AreaLayout::Update", 0x005CA1B0)
 DAO_ADDRESS(kIndoorStreamPolicy_Decide, "EC::IndoorStreamPolicy::Decide", 0x005D3FA0)
 DAO_ADDRESS(kCRoom_SetState, "CRoom::SetState", 0x005D31D0)

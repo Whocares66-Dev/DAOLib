@@ -475,6 +475,7 @@ constexpr std::size_t kRoomLoad = 0x264;    // in a room
 constexpr std::size_t kRoomSeen = 0x100;    // in a room
 constexpr std::size_t kRoomState = 0x268;   // in a room
 constexpr std::size_t kRoomLoading = 0x371; // in a room
+constexpr std::size_t kObjectRoom = 0x41C;  // in an object: its room
 constexpr std::uint32_t kMaxRooms = 4096;
 
 // The rooms' addresses, in the layout's order.
@@ -542,11 +543,21 @@ std::vector<Room> Rooms()
 
 std::optional<Room> RoomAt(const Vector &point)
 {
-    // The engine's own measure, the one its streaming goes by: the squared
-    // distance from a point to a room's bounds.
+    const Vector4 at(point);
+    // The area's own answer, the one each object's room comes from.
+    if (CCArea *area = OnGameThread() ? CurrentArea() : nullptr)
+    {
+        using RoomAtFn = std::uintptr_t(__fastcall *)(CCArea *, int, const Vector4 *);
+        const std::uintptr_t room = reinterpret_cast<RoomAtFn>(Module::Address(addr::kCCArea_RoomAt))(area, 0, &at);
+        if (auto found = room != 0 ? ReadRoom(room) : std::nullopt)
+        {
+            return found;
+        }
+    }
+    // A point in no room: the nearest, by the measure the streaming goes
+    // by, the squared distance from a point to a room's bounds.
     using Fn = float(__fastcall *)(std::uintptr_t bounds, int, const Vector4 *);
     const auto distanceSquared = reinterpret_cast<Fn>(Module::Address(addr::kBounds_DistanceSquared));
-    const Vector4 at(point);
     std::optional<Room> nearest;
     for (const std::uintptr_t pointer : RoomPointers())
     {
@@ -568,7 +579,17 @@ std::optional<Room> RoomOf(ObjectId object)
 {
     CClientExoApp *app = CClientExoApp::Get();
     const CCObject *found = app != nullptr && OnGameThread() ? app->GetObjectById(object) : nullptr;
-    return found != nullptr ? RoomAt(found->Position()) : std::nullopt;
+    if (found == nullptr)
+    {
+        return std::nullopt;
+    }
+    // The room the object keeps for itself, which the game goes by.
+    const auto own = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(found) + kObjectRoom);
+    if (auto room = own && *own != 0 ? ReadRoom(*own) : std::nullopt)
+    {
+        return room;
+    }
+    return RoomAt(found->Position());
 }
 
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)
