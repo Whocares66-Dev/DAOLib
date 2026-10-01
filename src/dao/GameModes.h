@@ -91,6 +91,10 @@ enum class GameMode : std::int32_t
 // pick that stays nothing with the mouse still is the interface's state
 // left as the last mouse event had it.
 //
+// Seen in play, 2026-10-01: after the game's window regains the focus, a
+// click at the pixel the mouse already rests on is no order and the pick
+// holds no ground until the mouse moves, with no plugin drawing anything.
+//
 // So a plugin's movie that draws under the cursor empties the pick and
 // takes the click. Seen in play that day (the turn-based mod's path
 // preview): with a shape of its layer-1 movie on the cursor's pixel,

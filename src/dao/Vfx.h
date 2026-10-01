@@ -65,8 +65,18 @@ struct Tint
 // the set-up hands to the model (its slot 69) in place of the row's own
 // Tint column (a packed colour, made into the same four floats). So one
 // row can be placed in any colour: a marker gold where a move reaches and
-// red where it does not. The scale is one number, set on the model by its
-// slot 43; no scale per axis was found. Not yet seen in play.
+// red where it does not. Not yet seen in play.
+//
+// The scale is one number, and not only here: the effect's graphics object
+// (GraphicsStructures::Object, its SetScale 0x00545330) keeps a single
+// float at its +0x54, sizes its bounds and its pick shape by it, and hands
+// three copies of it to the function that composes its transform
+// (0x00545E30). So an effect cannot be stretched along one axis without
+// detours where that number is spread, and there is little to stretch:
+// of the reticles only the party ring (SR_PTY) is a plain quad, with a
+// ring for a texture; SR_HLT (30001) is four small arrows of 18 vertices
+// each. A line on the ground is a row of small effects, or a model made
+// for it.
 ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
                const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
