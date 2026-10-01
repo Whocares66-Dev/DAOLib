@@ -31,7 +31,11 @@ namespace dao
 // The game's modes by number: the scripts' GM_* constants (script.ldf,
 // GetGameMode's answers), and the class at each number of the controller's
 // array, as the probe listed them in play 2026-09-30 -- the two agree on all
-// 13. The main menu runs in CharGen, the character creator's mode.
+// 13. The main menu at start-up runs in Pregame (8): the Eluvian MCP server
+// saw none, pregame, loading, explore from launch to a loaded save
+// (2026-09-30). The probe had seen CharGen behind the main menu earlier
+// that day, so the menu reached some other way (from a game, or with the
+// character creator up) may run in CharGen; which way is not yet pinned.
 enum class GameMode : std::int32_t
 {
     Explore = 0,      // GameModeExplore
@@ -45,7 +49,7 @@ enum class GameMode : std::int32_t
     Pregame = 8,      // GameModePregame
     Loading = 9,      // GameModeLoading
     Movie = 10,       // GameModeMovie
-    CharGen = 11,     // GameModeCharGen: character creation, and the main menu
+    CharGen = 11,     // GameModeCharGen: character creation (the main menu at times; above)
     PartyPicker = 12, // GameModePartyPicker
 };
 

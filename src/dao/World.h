@@ -152,7 +152,10 @@ Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore = kInval
 // index is at +0x88 (0x00A625E0). The move commands' update (0x007A9130)
 // asks for the path a slice of time a frame (0x0073EA80, the search
 // advanced by 0x00A62640), so a path appears a frame or more after the
-// order, not while the game is paused. Not yet seen in play.
+// order, not while the game is paused. The search outlives the walk: a
+// creature that has arrived, or stood since a load, still answers its last
+// path (seen in play, 2026-09-30), so whether it is walking it is its
+// current command's to say (a move: CCObject::CurrentCommand). Seen in play.
 struct WalkPath
 {
     std::vector<Vector> waypoints;

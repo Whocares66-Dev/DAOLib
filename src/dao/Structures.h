@@ -202,7 +202,10 @@ class CGameEffect : public CDataArrays
     {
         return Read<script::EffectType>(0x24);
     }
-    // EFFECT_DURATION_TYPE_* in script.ldf.
+    // EFFECT_DURATION_TYPE_* in script.ldf, which names 0 to 3 and 6. 4 is
+    // what an equipped item's effects carry (seen in play by the Eluvian
+    // MCP server, 2026-09-30); 5 is unnamed too. RemoveEffectsByParameters
+    // leaves 4, 5 and 6 alone unless asked (0x007A0C90).
     script::EffectDurationType DurationType() const
     {
         return Read<script::EffectDurationType>(0x28);
