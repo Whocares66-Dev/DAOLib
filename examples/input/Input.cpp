@@ -11,7 +11,10 @@
 // What to look for in play: F11 logging one line per press and none while a
 // menu or a conversation is up, and both actions' lines in KeyBindings.ini
 // after the first run. Seen 2026-10-01 (dao/Input.h), all but the
-// conversation; the controls screen did not list the actions.
+// conversation; the controls screen did not list the actions then. Since,
+// the library adds them to that screen under a header "Mods": look for
+// both labels at the end of the list, bind a key to the second, and see it
+// logged, and still bound after a restart.
 // What it does goes to example_input.log.
 #include "dao/Input.h"
 #include "dao/ClientExoApp.h"

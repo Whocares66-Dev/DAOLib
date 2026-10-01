@@ -43,6 +43,7 @@
 // movies' names and the thread they come on, and every movie's name.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -284,6 +285,30 @@ bool CloseScreen(std::wstring_view name);
 // Whether the resource system has a movie file by this name
 // (L"turnorder.gfx"), as GFx would ask for it.
 bool HasMovie(std::wstring_view file);
+
+// A movie of the game's own, changed as the game opens its file: the way
+// to add to a screen whose contents are written in its script, as the
+// controls screen's list of actions is (dao/Input.h does it with this).
+//
+//   dao::gui::OnMovieLoad(L"optionsmenu", [](std::span<const std::byte> movie) {
+//       return dao::core::gfx::InsertAfter(movie, {"AddKeyBinding", "HideMainInterface"}, code);
+//   });
+//
+// The patch is given the movie uncompressed (dao/core/GfxMovie.h) and
+// answers the changed movie, or nothing to leave it be. It runs once, the
+// first time the game opens that file, on the thread that opens it, and
+// what it answers is what the game reads then and every time after; so
+// add patches at plugin load. Several patches for one movie run in the
+// order they were added, each on what the one before left. Nothing is
+// written to disk.
+//
+// The name is the movie's file without its extension ("optionsmenu" for
+// optionsmenu.gfx), in any case. Read 2026-10-01 (dao/Addresses.h,
+// EclipseGFxFileOpener::OpenFile): the game's file object reads from the
+// resource's bytes in memory, and this points it at the patched bytes and
+// answers their length. Not yet seen in play.
+using MoviePatch = std::function<std::optional<std::vector<std::byte>>(std::span<const std::byte> movie)>;
+void OnMovieLoad(std::wstring_view name, MoviePatch patch);
 
 // A message box the game has up: its text and its buttons, for a tool that
 // cannot see the screen (a test whose load has stopped at "this save

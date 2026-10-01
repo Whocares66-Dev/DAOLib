@@ -1,6 +1,6 @@
-// A plugin's own action: a key registered with the game's own and kept in
-// its KeyBindings.ini, and a callback when it is pressed. (The controls
-// screen does not list it yet; below.)
+// A plugin's own action: a key registered with the game's own, kept in its
+// KeyBindings.ini and listed in its controls screen, and a callback when
+// it is pressed.
 //
 //   dao::input::RegisterAction(
 //       {.name = L"MyPluginEndTurn", .label = L"End turn", .key = dao::input::Key::Enter},
@@ -47,9 +47,17 @@
 //   "DAOLibExamplePing_1=(UNASSIGNED)".
 // - The controls screen's Restore Defaults left F11 working, and the
 //   game's own keys worked throughout.
-// - The controls screen did NOT list the actions. So a player rebinds one
-//   in KeyBindings.ini, by the line above; that the game reads a changed
-//   line back for a plugin's action is not yet seen.
+// - The controls screen did NOT list the actions. That a line changed in
+//   KeyBindings.ini is read back for a plugin's action is not yet seen.
+//
+// The controls screen, read after: its list is written in its movie's
+// script, one AddKeyBinding("TogglePause") for each action it shows, so
+// no action the script does not name is listed. This now adds the same
+// call for each action the engine took, under a header "Mods" after the
+// game's last section, by patching the movie as the game opens it
+// (dao/Gui.h, OnMovieLoad; dao/core/GfxMovie.h). A row made that way is
+// the game's own row: the label and the two keys from the engine's data,
+// rebound as the game's are. Not yet seen in play.
 #pragma once
 
 #include "dao/GameModes.h"

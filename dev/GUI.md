@@ -29,6 +29,23 @@ GFx calls the game's one FSCommand handler and one ExternalInterface handler. Bo
 
 Every screen is a `GUI::GUIScene`, built as `GUIScene(name, filename, layer, b, flags)` and kept by the GUI system by id and name. `OpenMovie`'s first argument is the scene's id. The layer is the stacking order, going by the values the game's 42 scenes use: 0 floaty text, 1 the HUD (`GUIMain`), 2–3 in-game menus, 4 item examine, 5 conversation, death and the main menu, 6 options and login, 7 popups, 8 loading screens. Flag `0x20` marks the modal screens, `0x10` loading screens. `b` is 10 for the character record, journal, map, skills and spells, and 0 for most others; its meaning is not read. So a plugin's HUD-like movie belongs on layer 1. The GUI system (the application's +0x158) registers its scenes with `AddScene(id, scene)`, ids 0–0x3F, each scene 0xC0 bytes from the engine's allocator. `dao::gui::AddScreen` does the same with an id from 0x100, and `ShowScreen`, `HideScreen` and `CloseScreen` are the GUI system's own by-name slots 17, 19 and 18. The probe logs every `OpenMovie` to confirm the ids and values in play. Where the game finds a movie's file: GFx asks `EclipseGFxFileOpener`, which opens it through the engine's resource system as a resource of type 3 (`GUI::ScaleformResourceFile`). `GetMovieDef` puts `.swf` on a bare name, and the file opener falls back to `.gfx`, so a scene `turnorder` is the resource `turnorder.gfx`, wherever the resource system finds the game's own. `dao::gui::HasMovie(L"turnorder.gfx")` asks it the same way.
 
+## Changing one of the game's movies
+
+A screen's contents are often written in its movie's script, where no table or engine call reaches them. The options screen (`optionsmenu.gfx`, read 2026-10-01 from its ActionScript) is the case in point:
+
+- **The tabs** (Game, Controls, Audio, Video, Online) are clips the designer placed. There is no list of sections the engine fills.
+- **A checkbox** is the movie's `checkbox_mc` symbol, set up by its own helper `OptionsUtils.MakeOptionToggleInit(option, label, tooltip)`. A click sends `ClientOptions.SetClientOptionMessage <option> 1` (or `0`) to `CClientOptions`. OK sends `ClientOptions.CommitOptions`, and the defaults button `ClientOptions.RestoreDefaults`. `SliderHorizontal` and `Picker` are exported symbols too.
+- **The key list** on the Controls tab is built in script: `AddHeader(text)` for a section and `AddKeyBinding("TogglePause")` for each action, 50 of them, the names strings in the script. A row binds its label to the data tree's `InputMappings.Mappings.<name>.Description` and sends `InputMappings.EnableKeyRemappingMessage <name> 0` (or `1`, for the second key) when a key's button is pressed.
+
+So a plugin's row gets into such a list only by adding to the script. `dao::gui::OnMovieLoad(name, patch)` does it in memory:
+
+- **Where.** GFx reads a movie through `GUI::ScaleformResourceFile`, a file object over the resource's bytes in memory: where they begin at +0x30, where it has read to at +0x34, its length from its slot 6. The library detours `EclipseGFxFileOpener::OpenFile`, and for a movie with a patch points the file at the patched bytes and gives it a vtable whose length slot answers theirs.
+- **What.** The patch is given the movie uncompressed (`dao/core/GfxMovie.h`, `Unpack`; the game's are `CFX`, a zlib stream after the header, inflated by `dao/core/Inflate.h`) and answers the changed bytes. GFx takes the uncompressed `GFX` as readily.
+- **How a script is added to.** `core::gfx::InsertAfter(movie, {"AddKeyBinding", "HideMainInterface"}, code)` finds that statement in the movie's script and puts `code` after it, then makes everything around it fit: the header's length, the tags' lengths, the sizes of the functions it is inside, and any branch that jumps across it. `Statements` makes the code for calls like the game's own.
+- **Checked.** On the game's own `optionsmenu.gfx` the patched movie lists as the original does but for the added calls and one branch 118 bytes longer. Not yet seen in play.
+
+`dao::input` uses it to list a plugin's actions in the controls screen.
+
 ## What Scaleform's own documentation adds
 
 Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's pages on its GFx 3 integration describe the same interface a generation later. They're good for what things mean, not for names or layouts. They confirmed four points, 2026-09-30:

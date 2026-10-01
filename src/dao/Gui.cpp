@@ -10,10 +10,14 @@
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
+#include "dao/core/GfxMovie.h"
 #include "dao/core/Msvc8.h"
 
+#include <array>
+#include <cctype>
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -344,6 +348,185 @@ bool HideScreen(std::wstring_view name)
 bool CloseScreen(std::wstring_view name)
 {
     return ByName(18, name);
+}
+
+namespace
+{
+
+// GUI::ScaleformResourceFile (dao/Addresses.h): where its bytes begin and
+// where it has read to, and the slot that answers its length.
+constexpr std::size_t kFileBegin = 0x30;
+constexpr std::size_t kFileAt = 0x34;
+constexpr std::size_t kFileSlots = 19;
+constexpr std::size_t kFileLengthSlot = 6;
+
+using Patched = std::shared_ptr<const std::vector<std::byte>>;
+
+std::mutex g_movieMutex;
+std::vector<std::pair<std::string, MoviePatch>> g_moviePatches; // by name, lower case
+std::map<std::string, Patched, std::less<>> g_patchedMovies;    // null for a movie no patch changed; kept for good
+std::map<const std::byte *, std::size_t> g_patchedLengths;
+// The file's vtable with the length's slot ours, its RTTI word before it.
+std::array<void *, kFileSlots + 1> g_patchedFileVtable{};
+bool g_patchedFileVtableMade = false;
+
+// The movie's name as a patch names it: no folder, no extension, lower case.
+std::string MovieName(std::string_view url)
+{
+    if (const auto slash = url.find_last_of("/\\:"); slash != std::string_view::npos)
+    {
+        url.remove_prefix(slash + 1);
+    }
+    if (const auto dot = url.find_last_of('.'); dot != std::string_view::npos)
+    {
+        url = url.substr(0, dot);
+    }
+    std::string name(url);
+    for (char &c : name)
+    {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return name;
+}
+
+// Where the file's bytes begin, null for a file that found no resource.
+const std::byte *FileBegin(void *file)
+{
+    const auto begin = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(file) + kFileBegin);
+    return begin ? reinterpret_cast<const std::byte *>(*begin) : nullptr;
+}
+
+// The file's slot 6, __thiscall with no arguments: its length. A patched
+// file is known by where its bytes begin.
+std::int32_t __fastcall PatchedLength(void *file, int /*edx*/)
+{
+    const std::byte *begin = FileBegin(file);
+    const std::lock_guard lock(g_movieMutex);
+    const auto found = g_patchedLengths.find(begin);
+    return found != g_patchedLengths.end() ? static_cast<std::int32_t>(found->second) : 0;
+}
+
+// The movie as its patches leave it: made the first time, the same after.
+Patched PatchedMovie(void *file, const std::string &name)
+{
+    std::vector<MoviePatch> patches;
+    {
+        const std::lock_guard lock(g_movieMutex);
+        if (const auto made = g_patchedMovies.find(name); made != g_patchedMovies.end())
+        {
+            return made->second;
+        }
+        for (const auto &[movie, patch] : g_moviePatches)
+        {
+            if (movie == name)
+            {
+                patches.push_back(patch);
+            }
+        }
+    }
+    if (patches.empty())
+    {
+        return nullptr;
+    }
+
+    // What the game would read: the resource's bytes, as long as the file
+    // says it is.
+    void *const *slots = *static_cast<void *const **>(file);
+    const std::byte *begin = FileBegin(file);
+    using LengthFn = std::int32_t(__fastcall *)(void *, int);
+    const std::int32_t length = reinterpret_cast<LengthFn>(slots[kFileLengthSlot])(file, 0);
+    Patched patched;
+    if (begin != nullptr && length > 0)
+    {
+        if (auto movie = core::gfx::Unpack({begin, static_cast<std::size_t>(length)}))
+        {
+            bool changed = false;
+            for (const MoviePatch &patch : patches)
+            {
+                detail::Guard("a movie's patch", [&] {
+                    if (auto next = patch(*movie))
+                    {
+                        *movie = std::move(*next);
+                        changed = true;
+                    }
+                });
+            }
+            if (changed)
+            {
+                patched = std::make_shared<const std::vector<std::byte>>(std::move(*movie));
+            }
+        }
+    }
+
+    const std::lock_guard lock(g_movieMutex);
+    const auto [made, first] = g_patchedMovies.try_emplace(name, patched);
+    if (first && patched)
+    {
+        g_patchedLengths[patched->data()] = patched->size();
+    }
+    return made->second;
+}
+
+// EclipseGFxFileOpener::OpenFile: __thiscall (const char *url), `ret 4`,
+// answering the file GFx reads the movie from.
+using OpenFileFn = void *(__fastcall *)(void *opener, int edx, const char *url);
+Detour<OpenFileFn> g_openFile;
+
+void *__fastcall OpenFile(void *opener, int edx, const char *url)
+{
+    void *file = g_openFile.Original()(opener, edx, url);
+    // Only the game's own file over a resource it found is one to point
+    // elsewhere.
+    if (file == nullptr || url == nullptr ||
+        *static_cast<void *const **>(file) !=
+            reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable)) ||
+        FileBegin(file) == nullptr)
+    {
+        return file;
+    }
+    const Patched patched = PatchedMovie(file, MovieName(url));
+    if (!patched)
+    {
+        return file;
+    }
+    {
+        const std::lock_guard lock(g_movieMutex);
+        if (!g_patchedFileVtableMade)
+        {
+            void *const *slots = *static_cast<void *const **>(file);
+            std::copy(slots - 1, slots + kFileSlots, g_patchedFileVtable.begin());
+            g_patchedFileVtable[1 + kFileLengthSlot] = reinterpret_cast<void *>(&PatchedLength);
+            g_patchedFileVtableMade = true;
+        }
+    }
+    // The file reads from the patched bytes, from their start, and answers
+    // their length. Its resource stays held and is let go as ever.
+    auto *fields = static_cast<std::byte *>(file);
+    *reinterpret_cast<const std::byte **>(fields + kFileBegin) = patched->data();
+    *reinterpret_cast<const std::byte **>(fields + kFileAt) = patched->data();
+    *static_cast<void *const **>(file) = &g_patchedFileVtable[1];
+    return file;
+}
+
+} // namespace
+
+void OnMovieLoad(std::wstring_view name, MoviePatch patch)
+{
+    if (!patch)
+    {
+        return;
+    }
+    std::string narrow;
+    for (const wchar_t c : name)
+    {
+        narrow.push_back(c < 0x80 ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '?');
+    }
+    const std::lock_guard lock(g_movieMutex);
+    g_moviePatches.emplace_back(std::move(narrow), std::move(patch));
+    if (g_openFile.Original() == nullptr)
+    {
+        g_openFile.Attach(addr::kEclipseGFxFileOpener_OpenFile, &OpenFile);
+    }
 }
 
 bool HasMovie(std::wstring_view file)

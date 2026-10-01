@@ -584,6 +584,18 @@ DAO_ADDRESS(kCClientExoApp_SetGUISystem, "CClientExoApp::SetGUISystem", 0x005D4F
 // own (its override folders and archives; not read here).
 DAO_ADDRESS(kEclipseGFxFileOpener_OpenFile, "EclipseGFxFileOpener::OpenFile", 0x005113A0)
 DAO_ADDRESS(kScaleformResourceFile_Constructor, "GUI::ScaleformResourceFile::ScaleformResourceFile", 0x00523220)
+// The file itself, read 2026-10-01 (dao/Gui.h, OnMovieLoad): 0x38 bytes, a
+// GFile of 19 slots. It reads from the resource's bytes in memory: where
+// they begin is at +0x30 and where it has read to at +0x34 (its Tell,
+// slot 4, is their difference; a file that found no resource has 0 at
+// +0x30), and the resource's handle is at +0x2C. Its length (slot 6,
+// __thiscall, no arguments) asks the handle. Read (slot 10, (buffer,
+// count), `ret 8`) copies the lesser of the count and what is left, which
+// it gets through its own slots, so a file whose two pointers and length
+// slot are another's reads another's bytes. GFx takes "GFX" and "FWS" as
+// well as the compressed "CFX" and "CWS" (the four signatures are tested
+// at 0x00913FF4 on).
+DAO_DATA(kScaleformResourceFile_Vftable, "GUI::ScaleformResourceFile::vftable", 0x00AF65A4)
 DAO_ADDRESS(kResources_Find, "Resources::Find", 0x004D5BA0)
 DAO_ADDRESS(kResources_Release, "Resources::Release", 0x004D5860)
 

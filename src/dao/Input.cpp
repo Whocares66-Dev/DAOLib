@@ -3,13 +3,19 @@
 #include "dao/Addresses.h"
 #include "dao/Frame.h"
 #include "dao/Guard.h"
+#include "dao/Gui.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/core/GfxMovie.h"
 #include "dao/core/Msvc8.h"
 
 #include <atomic>
 #include <mutex>
+#include <optional>
+#include <span>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace dao::input
 {
@@ -259,6 +265,40 @@ void RunQueued()
     }
 }
 
+// The controls screen's list is written in its movie's script: a header
+// for each section and AddKeyBinding("TogglePause") for each action, the
+// last of them HideMainInterface (optionsmenu.gfx, read 2026-10-01). So
+// the actions the engine took are listed by adding the same calls after
+// that one, under a header of their own. A row shows the action's label
+// and its two keys from the engine's own data ("InputMappings.Mappings.
+// <name>"), and rebinds as the game's rows do.
+std::optional<std::vector<std::byte>> ListActions(std::span<const std::byte> movie)
+{
+    std::vector<core::gfx::Call> calls;
+    {
+        const std::lock_guard lock(g_mutex);
+        for (const Entry &entry : g_actions)
+        {
+            if (entry.state == ActionState::Registered)
+            {
+                // The names are letters and digits (ValidActionName).
+                std::string name;
+                for (const wchar_t c : entry.action.name)
+                {
+                    name.push_back(static_cast<char>(c));
+                }
+                calls.push_back({"AddKeyBinding", std::move(name)});
+            }
+        }
+    }
+    if (calls.empty())
+    {
+        return std::nullopt;
+    }
+    calls.insert(calls.begin(), core::gfx::Call{"AddHeader", "Mods"});
+    return core::gfx::InsertAfter(movie, {"AddKeyBinding", "HideMainInterface"}, core::gfx::Statements(calls));
+}
+
 bool Attach()
 {
     static std::once_flag once;
@@ -270,6 +310,7 @@ bool Attach()
         if (attached)
         {
             OnFrame(&RunQueued);
+            gui::OnMovieLoad(L"optionsmenu", &ListActions);
         }
     });
     return attached;

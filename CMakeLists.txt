@@ -143,6 +143,8 @@ add_library(
     src/dao/core/Fingerprint.cpp
     src/dao/core/FunctionTable.cpp
     src/dao/core/Gff4.cpp
+    src/dao/core/GfxMovie.cpp
+    src/dao/core/Inflate.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
     src/dao/core/SaveMeta.cpp
