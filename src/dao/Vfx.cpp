@@ -38,8 +38,10 @@ struct Descriptor
     std::int32_t vfx;
     ObjectId area;
     float scale;
-    std::int32_t zero;
+    const Tint *tint; // null for the row's own
 };
+static_assert(sizeof(Descriptor) == 16);
+static_assert(sizeof(Tint) == 16, "the engine's colour is four floats");
 
 void *Manager()
 {
@@ -65,14 +67,17 @@ void Turn(void *object, const Vector4 &facing)
 
 } // namespace
 
-ObjectId Place(std::int32_t vfx, const Vector &at, float scale, const std::optional<Vector> &facing)
+ObjectId Place(std::int32_t vfx, const Vector &at, float scale, const std::optional<Vector> &facing,
+               const std::optional<Tint> &tint)
 {
     const CCArea *area = world::CurrentArea();
     if (area == nullptr)
     {
         return kInvalidObject;
     }
-    const Descriptor descriptor{vfx, area->Id(), scale, 0};
+    // The set-up reads the colour during the call (mode 2 below loads the
+    // effect now, not by a task that would outlive this), and copies it.
+    const Descriptor descriptor{vfx, area->Id(), scale, tint ? &*tint : nullptr};
     const Vector4 where = Padded(at);
     const Vector4 direction = Padded(facing.value_or(Vector{}));
     // Mode 2, as explore mode passes: the effect is loaded now, not by a task.

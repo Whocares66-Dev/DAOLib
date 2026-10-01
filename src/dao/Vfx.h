@@ -46,10 +46,29 @@ inline constexpr std::int32_t kAreaRingOutOfReach = 30019; // "AOE No Selection"
 // The rings' radius at scale 1.
 inline constexpr float kRingRadius = 10.0F;
 
+// A colour an effect's model is tinted with: red, green, blue and alpha,
+// each 0 to 1.
+struct Tint
+{
+    float r = 1.0F;
+    float g = 1.0F;
+    float b = 1.0F;
+    float a = 1.0F;
+};
+
 // Places a vfx_base row at a point in the current area, at `scale`, facing
-// `facing` if given. Its id, or kInvalidObject if there is no area.
+// `facing` if given, tinted with `tint` if given. Its id, or kInvalidObject
+// if there is no area.
+//
+// The tint, read 2026-10-01 from the effect's set-up (0x007EA550): the
+// descriptor's fourth word is a pointer to a colour of four floats, which
+// the set-up hands to the model (its slot 69) in place of the row's own
+// Tint column (a packed colour, made into the same four floats). So one
+// row can be placed in any colour: a marker gold where a move reaches and
+// red where it does not. The scale is one number, set on the model by its
+// slot 43; no scale per axis was found. Not yet seen in play.
 ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
-               const std::optional<Vector> &facing = std::nullopt);
+               const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
 // A ring of `radius` metres on the ground: the engine's aiming ring, or the
 // one it shows for a point out of reach, which looked the same in play.
