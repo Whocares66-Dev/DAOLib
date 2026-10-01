@@ -248,6 +248,31 @@ struct SetSaveLoadModeMessage : Message
 };
 static_assert(sizeof(SetSaveLoadModeMessage) == 8);
 
+// A conversation's and a cutscene's keys (dao/Dialogue.h has what each
+// does), read 2026-10-01 from their handlers. SelectResponseMessage, to
+// the dialogue mode (0x0068D050): the reply at a place in the list on the
+// screen, what a click on it or its number key sends. SkipDialogMessage,
+// to the dialogue mode (0x0068DC10), and SkipCutsceneMessage, to the
+// cutscene mode (0x00691D60): the skip key in each.
+struct SelectResponseMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1DE84;
+    std::int32_t index;
+};
+static_assert(sizeof(SelectResponseMessage) == 8);
+
+struct SkipDialogMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1DE54;
+};
+static_assert(sizeof(SkipDialogMessage) == 4);
+
+struct SkipCutsceneMessage : Message
+{
+    static constexpr std::uintptr_t kVftable = 0x00B1EC04;
+};
+static_assert(sizeof(SkipCutsceneMessage) == 4);
+
 // The screenshot key's message (KeyBindings.ini's Screenshot binds
 // TakeScreenshotMessage, with no arguments), sent to the game mode
 // controller, which handles it (0x00642050):

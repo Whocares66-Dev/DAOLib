@@ -5,6 +5,7 @@
 #include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Messages.h"
 #include "dao/core/Msvc8.h"
 
 #include <mutex>
@@ -183,6 +184,52 @@ Conversation *Current()
 {
     const void *mode = DialogMode();
     return mode != nullptr ? At<Conversation *>(mode, kConversation) : nullptr;
+}
+
+bool Choose(std::size_t index)
+{
+    auto *app = CClientExoApp::Get();
+    auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    const void *mode = DialogMode();
+    if (modes == nullptr || mode == nullptr ||
+        index >= At<core::VectorRep<std::uint32_t>>(mode, kReplies).View().size())
+    {
+        return false;
+    }
+    auto message = messages::Make<messages::SelectResponseMessage>();
+    message.index = static_cast<std::int32_t>(index);
+    messages::Send(modes->ModeObject(GameMode::Dialog), message);
+    return true;
+}
+
+bool Continue()
+{
+    auto *app = CClientExoApp::Get();
+    auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    if (modes == nullptr || DialogMode() == nullptr)
+    {
+        return false;
+    }
+    messages::Send(modes->ModeObject(GameMode::Dialog), messages::Make<messages::SkipDialogMessage>());
+    return true;
+}
+
+bool InCutscene()
+{
+    return CClientExoApp::CurrentMode() == GameMode::Cutscene;
+}
+
+bool SkipCutscene()
+{
+    auto *app = CClientExoApp::Get();
+    auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    void *cutscene = modes != nullptr && InCutscene() ? modes->ModeObject(GameMode::Cutscene) : nullptr;
+    if (cutscene == nullptr)
+    {
+        return false;
+    }
+    messages::Send(cutscene, messages::Make<messages::SkipCutsceneMessage>());
+    return true;
 }
 
 std::vector<Line> Replies()

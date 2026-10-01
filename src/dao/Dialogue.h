@@ -38,6 +38,14 @@
 // writes it (OWNER, not the creature). BeginConversation called in a fight
 // answered 1 and started nothing (the Eluvian server, 2026-09-30).
 //
+// And answering, for a tool that drives the game (a test that must talk
+// its way from one place to the next):
+//
+//   if (!dao::dialogue::Replies().empty())
+//       dao::dialogue::Choose(0);   // the first reply
+//   else
+//       dao::dialogue::Continue();  // skip the line being spoken
+//
 // Callbacks run on the game's thread, inside the engine's own work: keep
 // them short, and make no conversation start or end from one.
 #pragma once
@@ -99,5 +107,29 @@ void OnReplies(std::function<void(Conversation &, std::span<const Line> replies)
 // (Conversation::Advance, 0x007F1910, __thiscall (line), `ret 4`; -1 for
 // going on with no reply, which is not reported).
 void OnReplyChosen(std::function<void(Conversation &, const Line &reply)> observer);
+
+// Answering as the player does, by the messages the screen and the keys
+// send (dao/Messages.h), read 2026-10-01 from the dialogue mode's handlers.
+// On the game's thread, and not from one of the callbacks above. Not yet
+// seen in play.
+
+// Chooses the reply at a place in Replies(): what a click on it, or its
+// number key, sends. The dialogue mode takes it only while replies are on
+// the screen, and does nothing for a reply with no text, the "continue"
+// the screen does not list; Continue takes that one. False, and nothing
+// sent, outside a conversation or for a place past the replies; true says
+// it was sent, and OnReplyChosen says it was taken.
+bool Choose(std::size_t index);
+
+// Goes on, as the skip key does in a conversation: the NPC's line being
+// spoken is cut short and its replies offered at once, and where the first
+// reply is one with no text, the conversation goes on through it. False
+// outside a conversation.
+bool Continue();
+
+// Whether a cutscene is playing (the game is in its cutscene mode), and
+// skipping it as Escape does. SkipCutscene is false when none is playing.
+bool InCutscene();
+bool SkipCutscene();
 
 } // namespace dao::dialogue
