@@ -548,6 +548,21 @@ DAO_ADDRESS(kOrders_OrderReceived, "Orders::OrderReceived", 0x007F6370)
 // __thiscall(index), `ret 4`, null past its end.
 DAO_ADDRESS(kCCObject_GetCurrentCommand, "CCObject::GetCurrentCommand", 0x0073C5F0)
 DAO_ADDRESS(kCCObject_GetCommandByIndex, "CCObject::GetCommandByIndex", 0x0073C6D0)
+// A command's start and end (dao/CommandEvents.h), read 2026-09-30. The
+// object's command step, each frame (__thiscall, `ret 8`), ends the head
+// command when done or failed and starts the next (StartNext, __thiscall,
+// no arguments). ClearCurrentCommand (__thiscall (result, ?, flag, flag),
+// `ret 0x10`; 1 success, -2 cleared, else COMMAND_FAILED_*) is the one
+// way a command ends: the step, ClearAllCommands and the script command
+// all call it. Each tells the commands system (the application's +0x1AC)
+// through a thunk to its +0x6C's vtable: Start, slot 2 (object, command),
+// and End, slot 3 (object, command, result, flag); each thunk has one
+// caller. The names are ours.
+DAO_ADDRESS(kCCObject_StepCommands, "CCObject::StepCommands", 0x0073D320)
+DAO_ADDRESS(kCCObject_StartNextCommand, "CCObject::StartNextCommand", 0x0073C7D0)
+DAO_ADDRESS(kCCObject_ClearCurrentCommand, "CCObject::ClearCurrentCommand", 0x0073C730)
+DAO_ADDRESS(kCommands_Start, "Commands::Start", 0x0064A500)
+DAO_ADDRESS(kCommands_End, "Commands::End", 0x0064A510)
 
 // A second script command table, beside CVirtualMachineCommands: RTTI's
 // CClientVirtualMachineCommands, a CVirtualMachineCmdImplementer, made by

@@ -25,3 +25,6 @@ dao_apply_warnings(example_dialogue)
 
 add_daolib_plugin(example_preview SOURCES preview/Preview.cpp)
 dao_apply_warnings(example_preview)
+
+add_daolib_plugin(example_commands SOURCES commands/Commands.cpp)
+dao_apply_warnings(example_commands)
