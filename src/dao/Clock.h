@@ -58,8 +58,11 @@ void Advance(float seconds);
 // world timer's scale directly, as this did before, lasted a frame: the
 // update overwrites it from +0x2C8 each frame (in play, 2026-09-30, a
 // creature's own time stayed at 1000 ms a wall second "at speed 2", and its
-// pace with it). Not yet seen in play this way. The Flash UI keeps its own
-// clock (Scaleform's GTimer) and is not changed.
+// pace with it). Seen in play this way, 2026-09-30 (examples/speed's
+// meter): at 2 a creature's own time ran 2000 to 2046 ms a wall second and
+// the hero ran 8 to 9 m/s against 4.5 to 4.7 at 1, a fight taking 32 s
+// where one had taken 51; the frame rate did not change. The Flash UI
+// keeps its own clock (Scaleform's GTimer) and is not changed.
 //
 // False, and nothing done, before the application is up or for a speed of
 // 0 or less. Called on the game's thread. The speed is the game's one: two
