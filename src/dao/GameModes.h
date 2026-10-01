@@ -145,7 +145,13 @@ class GameModeExplore
     // Set the object a click acts on, as if the cursor were over it: what
     // PerformPrimaryActionOnTargetUnderCursorMessage's handler reads (+0xCC).
     // The mode picks again from the cursor 15 times a second, so set it and
-    // send the message in the same frame callback. Not yet seen in play.
+    // send the message in the same frame callback. What the handler then does
+    // (0x00712830) is for every party member selected in the party bar, not
+    // the controlled creature alone: an attack on a hostile creature is each
+    // selected member's (dao::orders::Attack is one creature's), and with
+    // none selected nothing is ordered. Its answer is a void call's leftover
+    // and says nothing. In play, 2026-09-30, in a turn-based fight, the
+    // message reached the handler and no command was queued.
     void SetCursorObject(ObjectId object)
     {
         *reinterpret_cast<ObjectId *>(reinterpret_cast<std::byte *>(this) + kCursorObject) = object;
