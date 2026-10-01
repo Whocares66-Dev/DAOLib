@@ -397,6 +397,113 @@ std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId t
     return Pathfind(creature, to, toward).path;
 }
 
+namespace
+{
+
+// The area's layout and its rooms (dao/Addresses.h, "Rooms and their
+// streaming").
+constexpr std::size_t kLayout = 0x658;      // in the area
+constexpr std::size_t kRooms = 0x424;       // in the layout: an array of room pointers
+constexpr std::size_t kRoomCount = 0x428;   // in the layout
+constexpr std::size_t kRoomNumber = 0x14;   // in a room
+constexpr std::size_t kRoomBounds = 0x120;  // in a room
+constexpr std::size_t kRoomLoaded = 0x264;  // in a room
+constexpr std::size_t kRoomState = 0x268;   // in a room
+constexpr std::size_t kRoomLoading = 0x371; // in a room
+constexpr std::uint32_t kMaxRooms = 4096;
+
+// The rooms' addresses, in the layout's order.
+std::vector<std::uintptr_t> RoomPointers()
+{
+    std::vector<std::uintptr_t> rooms;
+    const CCArea *area = OnGameThread() ? CurrentArea() : nullptr;
+    const auto layout =
+        area != nullptr ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(area) + kLayout) : std::nullopt;
+    if (!layout || *layout == 0)
+    {
+        return rooms;
+    }
+    const auto first = TryRead<std::uintptr_t>(*layout + kRooms);
+    const auto count = TryRead<std::uint32_t>(*layout + kRoomCount);
+    if (!first || *first == 0 || !count || *count > kMaxRooms)
+    {
+        return rooms;
+    }
+    for (std::uint32_t i = 0; i < *count; ++i)
+    {
+        const auto room = TryRead<std::uintptr_t>(*first + i * sizeof(std::uintptr_t));
+        if (room && *room != 0)
+        {
+            rooms.push_back(*room);
+        }
+    }
+    return rooms;
+}
+
+std::optional<Room> ReadRoom(std::uintptr_t at)
+{
+    const auto number = TryRead<std::int32_t>(at + kRoomNumber);
+    const auto loaded = TryRead<std::int32_t>(at + kRoomLoaded);
+    const auto state = TryRead<std::int32_t>(at + kRoomState);
+    const auto loading = TryRead<std::uint8_t>(at + kRoomLoading);
+    if (!number || !loaded || !state || !loading)
+    {
+        return std::nullopt;
+    }
+    Room room;
+    room.number = *number;
+    room.state = *state;
+    room.loaded = *loaded;
+    room.loading = *loading != 0;
+    return room;
+}
+
+} // namespace
+
+std::vector<Room> Rooms()
+{
+    std::vector<Room> rooms;
+    for (const std::uintptr_t at : RoomPointers())
+    {
+        if (const auto room = ReadRoom(at))
+        {
+            rooms.push_back(*room);
+        }
+    }
+    return rooms;
+}
+
+std::optional<Room> RoomAt(const Vector &point)
+{
+    // The engine's own measure, the one its streaming goes by: the squared
+    // distance from a point to a room's bounds.
+    using Fn = float(__fastcall *)(std::uintptr_t bounds, int, const Vector4 *);
+    const auto distanceSquared = reinterpret_cast<Fn>(Module::Address(addr::kBounds_DistanceSquared));
+    const Vector4 at(point);
+    std::optional<Room> nearest;
+    for (const std::uintptr_t pointer : RoomPointers())
+    {
+        auto room = ReadRoom(pointer);
+        if (!room)
+        {
+            continue;
+        }
+        room->distance = std::sqrt(std::max(distanceSquared(pointer + kRoomBounds, 0, &at), 0.0F));
+        if (!nearest || room->distance < nearest->distance)
+        {
+            nearest = room;
+        }
+    }
+    return nearest;
+}
+
+std::optional<Room> RoomOf(ObjectId object)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    const CCObject *found = app != nullptr && OnGameThread() ? app->GetObjectById(object) : nullptr;
+    return found != nullptr ? RoomAt(found->Position()) : std::nullopt;
+}
+
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)
 {
     return Ask(CurrentArea(), from, to, ignore);

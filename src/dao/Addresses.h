@@ -134,6 +134,37 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 // controller's +0x14, keeps its waypoints in a std::vector at +0x70
 // (Waypoint reads one) and the next one's index at +0x88. The names are
 // ours.
+// Rooms and their streaming (dao/World.h, Rooms), read 2026-09-30 for the
+// turn-based mod, whose camera panned into rooms drawn black. An area is
+// laid out in rooms (CRoom, vftable 0x00AFFFF4, over IRoomLayout), each
+// loaded from its own file, <area>_<room>.rim, by a RoomLoadingTask. The
+// area's layout is its +0x658: its rooms a pointer array at +0x424 with
+// the count at +0x428, the scene it draws into at +0x4E0, and the
+// streaming's reference point at +0x550. Its update (LayoutUpdate,
+// __thiscall, no arguments, each frame from the area's 0x0067B210) takes
+// the scene's camera's position as that point (unless the layout's +0x560
+// says to take a listed object's), then asks its policy what each room
+// should be and tells the room (its slot 7, SetState, __thiscall (state,
+// layout, 0)). When the point has moved more than 30 m in a frame, in
+// explore mode, it pauses the game until the rooms are in. The indoor
+// policy (EC::IndoorStreamPolicy, 0x00B00078; Decide, its slot 1,
+// __thiscall (layout, ?, room, int *state), `ret 0x10`) answers 4 for a
+// room the scene's +0x68 object names (its slot 21, by the room's number;
+// what that object is, is not read), else goes by the squared distance from
+// the point to the room's bounds (BoundsDistanceSquared, __thiscall on the
+// bounds (const Vector4 *), `ret 4`): under its +8, 5; under its +0xC, 4;
+// up to its +0x10, 1, which changes nothing; farther, 3. A room keeps its
+// number at +0x14, its bounds at +0x120, whether it is loaded at +0x264 (0
+// in memory and placed, 1 in memory, 2 not loaded), the state last asked at
+// +0x268 and a load under way at +0x371. State 3 unloads it; 4 loads it in
+// the background if it is not loaded and takes its number out of the
+// layout's list of rooms to draw (0x005C92B0); 5 loads it at once if need
+// be and puts its number in that list (0x005C9A50). The names are ours.
+DAO_ADDRESS(kAreaLayout_Update, "AreaLayout::Update", 0x005CA1B0)
+DAO_ADDRESS(kIndoorStreamPolicy_Decide, "EC::IndoorStreamPolicy::Decide", 0x005D3FA0)
+DAO_ADDRESS(kCRoom_SetState, "CRoom::SetState", 0x005D31D0)
+DAO_ADDRESS(kBounds_DistanceSquared, "Bounds::DistanceSquared", 0x004D2D30)
+
 // Cooldowns (dao/Abilities.h), read 2026-09-30 from the scripts'
 // SetCooldown and GetRemainingCooldown. A creature's stats keep a cooldown
 // manager at +0xF4, made on first use (Cooldowns, __thiscall, no

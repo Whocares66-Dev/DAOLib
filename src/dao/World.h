@@ -208,6 +208,52 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward = kInva
 // The path alone.
 std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
 
+// The rooms of the current area, and whether the game is drawing each: an
+// area is laid out in rooms, loaded and dropped as the camera moves, and a
+// room not being drawn shows black with whatever stands in it.
+//
+//   if (const auto room = dao::world::RoomOf(enemy); room && !room->Drawn())
+//       ; // do not send the camera there
+//
+// Read 2026-09-30 (dao/Addresses.h, "Rooms and their streaming"). Each
+// frame the area's layout takes the scene's camera's position, not the
+// party's, and asks its policy what each room should be: drawn (5) within
+// one distance of the camera, in memory but not drawn (4) within a second
+// distance, or wherever the scene's own check names the room, and dropped
+// (3) beyond a third. So what is drawn follows the camera: a camera sent to
+// a far room brings it in, a frame or more later, the game pausing itself
+// to load when the camera jumps more than 30 m. Not yet seen in play: that
+// 5 is the one drawn and 4 the one shown black is read from what the two
+// states do to the layout's list of rooms to draw; examples/world logs each
+// room's state for a play test to set beside the screen.
+struct Room
+{
+    static constexpr std::int32_t kDropped = 3; // not in memory
+    static constexpr std::int32_t kHeld = 4;    // in memory, or coming, and not drawn
+    static constexpr std::int32_t kDrawn = 5;
+
+    std::int32_t number = 0; // the room's, as in its file's name, <area>_<number>.rim
+    std::int32_t state = 0;  // what the game last asked of it: kDropped, kHeld, kDrawn, 0 never asked
+    // 0 in memory and placed in the world, 1 in memory, 2 not loaded.
+    std::int32_t loaded = 2;
+    bool loading = false; // a load in the background is under way
+    // How far a point is from the room's bounds, in metres; 0 inside them.
+    // Filled by RoomAt and RoomOf for their point, else 0.
+    float distance = 0;
+
+    bool Drawn() const
+    {
+        return state == kDrawn;
+    }
+};
+// Every room of the current area; none before an area is there. On the
+// game's thread.
+std::vector<Room> Rooms();
+// The room a point is in: the one whose bounds hold it, or the nearest.
+std::optional<Room> RoomAt(const Vector &point);
+// The room an object stands in.
+std::optional<Room> RoomOf(ObjectId object);
+
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject
 // asks it: from kEyeHeight above one's position to kEyeHeight above the
 // other's, in the viewer's area; not if they are in different areas.
