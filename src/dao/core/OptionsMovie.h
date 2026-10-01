@@ -19,13 +19,22 @@
 //   SetClientOptionMessage <option> 1" (or 0) when clicked, and is drawn
 //   ticked or not by what the token "ClientOptions.<option>" is told to it
 //   to be.
-// - A section's heading in the key list is the exported symbol
-//   KeyBindingHeader, whose text clip, named KeyBindingHeader_mc, has its
-//   text set by its own set-up function.
+// - The tab's own headings ("Gameplay", "Feedback") are each a clip of two
+//   things: a gold bar, a shape 437 wide and 48 high, and over it at (24,
+//   13) a text clip, the symbol exported as txt_Game (or txt_Feedback),
+//   whose text is "$LOC_GAMEPLAY" until the movie's script puts the
+//   language's words in. A bar is 15 to the left of the left column's
+//   checkboxes and 37 of the right's, and 69 above its first control.
 //
 // So a section is added by placing a heading and checkboxes in the Game
 // tab's sprite, in the rows it has free, and adding their set-up functions
-// before the first of the game's own.
+// before the first of the game's own. The heading is the game's: its bar,
+// and its heading text clip with a set-up function that sets the title.
+// A bar is higher than a row, so a heading takes two.
+//
+// (The first heading was the key list's, KeyBindingHeader: plain text
+// centred over the column. In play, 2026-10-01, it read as a caption
+// beside the game's bars.)
 //
 // - The Controls tab's key list is built in script: AddHeader(text) for a
 //   section and AddKeyBinding("TogglePause") for each action, the last of
@@ -61,12 +70,18 @@ struct Section
     std::vector<Toggle> toggles;
 };
 
-// A row of the Game tab the game leaves empty.
+// A row of the Game tab the game leaves empty: where a checkbox in it goes.
 struct Slot
 {
     std::int32_t x = 0;
     std::int32_t y = 0;
+    std::int32_t column = 0; // 0 the left, 1 the right
+
+    bool operator==(const Slot &) const = default;
 };
+
+// How many rows a heading takes.
+inline constexpr std::size_t kHeadingRows = 2;
 
 // The free rows, in the order they are filled: down the left column from
 // under its last checkbox, then down the right, but for rows something is
@@ -77,13 +92,15 @@ struct Slot
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie);
 
 // The name a checkbox for an option is placed under, and the name of a
-// heading in a row: by the row, so that no two plugins' headings share one.
+// heading's text in a row: by the row, so that no two plugins' headings
+// share one.
 std::string ToggleInstance(std::string_view option);
 std::string HeadingInstance(const Slot &slot);
 
 // The movie with as many of the sections as there are rows for, each a
-// heading and its checkboxes, a section never split or begun without room
-// for all of it; `shown` is how many went in, from the first. Nothing, and
+// heading and its checkboxes in rows one under the other in one column, a
+// section never split or begun without room for all of it; `shown` is how
+// many went in, from the first. Nothing, and
 // `shown` 0, if the movie is not as read or no section fits.
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
                                       std::size_t &shown);

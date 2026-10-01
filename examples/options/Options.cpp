@@ -8,8 +8,9 @@
 // player clicks one, a line is logged; and once the options screen has
 // been opened, what became of the section.
 //
-// What to look for in play: Options, the Game tab: the heading and the
-// three boxes under the left column, the second ticked. Click each: the
+// What to look for in play: Options, the Game tab: the heading, a gold bar
+// like the game's "Gameplay", and the three boxes under the left column,
+// the second ticked. Click each: the
 // first and second change and stay changed, the third goes back. Rest the
 // mouse on one for its tooltip. Close with OK or Cancel and open again:
 // the boxes are as they were left (a change is made at the click). All of

@@ -150,13 +150,16 @@ std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::stri
 // order its tags have them.
 std::vector<Instance> InstancesOf(std::span<const std::byte> movie, std::uint16_t sprite);
 
+// The first sprite that places a character.
+std::optional<std::uint16_t> SpritePlacing(std::span<const std::byte> movie, std::uint16_t character);
+
 // The character the movie exports under a name (ExportAssets), as script
 // attaches it by.
 std::optional<std::uint16_t> ExportedCharacter(std::span<const std::byte> movie, std::string_view name);
 
 struct Placement
 {
-    std::string name;
+    std::string name; // empty for none, as a shape has none
     std::uint16_t character = 0;
     std::uint16_t depth = 0;
     std::int32_t x = 0; // in pixels

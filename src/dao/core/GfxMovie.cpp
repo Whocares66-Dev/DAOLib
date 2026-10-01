@@ -746,7 +746,8 @@ int BitsFor(std::int32_t value)
 Bytes PlaceTag(const Placement &placement)
 {
     Bytes body;
-    body.push_back(std::byte{0x26}); // a name, a matrix, a character
+    // A matrix and a character, and a name if it has one.
+    body.push_back(placement.name.empty() ? std::byte{0x06} : std::byte{0x26});
     Append(body, placement.depth, 2);
     Append(body, placement.character, 2);
     const std::int32_t x = placement.x * 20; // twips
@@ -758,7 +759,10 @@ Bytes PlaceTag(const Placement &placement)
     bits.Put(static_cast<std::uint32_t>(count), 5);
     bits.Put(static_cast<std::uint32_t>(x), count);
     bits.Put(static_cast<std::uint32_t>(y), count);
-    AppendText(body, placement.name);
+    if (!placement.name.empty())
+    {
+        AppendText(body, placement.name);
+    }
 
     Bytes tag;
     if (body.size() < 0x3F)
@@ -990,6 +994,37 @@ std::optional<Instance> FindInstance(std::span<const std::byte> movie, std::stri
                 {
                     return std::move(instance);
                 }
+            }
+        }
+        at = tag.body + tag.length;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::uint16_t> SpritePlacing(std::span<const std::byte> movie, std::uint16_t character)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    if (!first)
+    {
+        return std::nullopt;
+    }
+    std::size_t at = *first;
+    while (at < movie.size())
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > movie.size() - tag.body || tag.code == kEnd)
+        {
+            break;
+        }
+        if (tag.code == kDefineSprite && tag.length >= 4)
+        {
+            const std::uint16_t sprite = bytes.U16(tag.body);
+            const std::vector<Instance> placed = InstancesOf(movie, sprite);
+            if (std::any_of(placed.begin(), placed.end(),
+                            [character](const Instance &instance) { return instance.character == character; }))
+            {
+                return sprite;
             }
         }
         at = tag.body + tag.length;

@@ -1,6 +1,8 @@
 #include "dao/core/OptionsMovie.h"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -10,16 +12,24 @@ namespace dao::core::options_movie
 namespace
 {
 
-constexpr std::int32_t kRow = 35;          // pixels from one row to the next
-constexpr std::int32_t kLastRow = 403;     // the lowest a row can start, the screen's buttons below
-constexpr std::uint16_t kDepthStep = 6;    // as the designer's own placements are apart
-constexpr std::int32_t kSetUpRegister = 2; // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
+constexpr std::int32_t kRow = 35;           // pixels from one row to the next
+constexpr std::int32_t kLastRow = 403;      // the lowest a row can start, the screen's buttons below
+constexpr std::int32_t kControlHeight = 30; // what a checkbox takes of its row
+constexpr std::uint16_t kDepthStep = 6;     // as the designer's own placements are apart
+constexpr std::int32_t kSetUpRegister = 2;  // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
+
+// A heading: the bar, in its two rows, and the text in the bar.
+constexpr std::int32_t kBarHeight = 48;
+constexpr std::int32_t kBarDown = 6;                               // from its first row's top
+constexpr std::array<std::int32_t, 2> kBarLeftOfColumn = {15, 37}; // of the column's checkboxes
+constexpr std::int32_t kTextRight = 24;
+constexpr std::int32_t kTextDown = 13;
+constexpr std::int32_t kColumnReach = 45; // either side of a column's checkboxes, what is placed is the column's
 
 constexpr std::string_view kLastLeft = "OptLootShimmer_mc";
 constexpr std::string_view kLastRight = "OptShowTutorials_mc";
 constexpr std::string_view kFirstSetUp = "OptAutoPause_mc_init";
-constexpr std::string_view kHeadingSymbol = "KeyBindingHeader";
-constexpr std::string_view kHeadingText = "KeyBindingHeader_mc_init";
+constexpr std::string_view kHeadingText = "txt_Game";
 
 // r2.<instance>_init = OptionsUtils.MakeOptionToggleInit(option, label,
 // tooltip); the arguments pushed last first, as compiled script has them.
@@ -31,17 +41,40 @@ gfx::Bytes ToggleSetUp(const Toggle &toggle)
                  Do(Op::GetVariable), Push({Text("MakeOptionToggleInit")}), Do(Op::CallMethod), Do(Op::SetMember)});
 }
 
-// r2.<instance>_init = function () {
-//     this.KeyBindingHeader_mc_init = function () { this.SetText(title); };
-// };
+// r2.<instance>_init = function () { this.SetText(title); };
 gfx::Bytes HeadingSetUp(const Slot &slot, std::string_view title)
 {
     using namespace gfx;
     const Bytes setText =
         Join({Push({Text(title), Integer(1), Register(1), Text("SetText")}), Do(Op::CallMethod), Do(Op::Pop)});
-    const Bytes setUp = Join({Push({Register(1), Text(kHeadingText)}), Function(setText), Do(Op::SetMember)});
-    return Join(
-        {Push({Register(kSetUpRegister), Text(HeadingInstance(slot) + "_init")}), Function(setUp), Do(Op::SetMember)});
+    return Join({Push({Register(kSetUpRegister), Text(HeadingInstance(slot) + "_init")}), Function(setText),
+                 Do(Op::SetMember)});
+}
+
+// The game's heading: the text clip it exports, and the bar the same clip
+// of the movie places under it.
+struct Heading
+{
+    std::uint16_t bar = 0;
+    std::uint16_t text = 0;
+};
+
+std::optional<Heading> FindHeading(std::span<const std::byte> movie)
+{
+    const auto text = gfx::ExportedCharacter(movie, kHeadingText);
+    const auto clip = text ? gfx::SpritePlacing(movie, *text) : std::nullopt;
+    if (!clip)
+    {
+        return std::nullopt;
+    }
+    for (const gfx::Instance &instance : gfx::InstancesOf(movie, *clip))
+    {
+        if (instance.character != *text)
+        {
+            return Heading{instance.character, *text};
+        }
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -65,19 +98,26 @@ std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
         return std::nullopt;
     }
     const std::vector<gfx::Instance> placed = gfx::InstancesOf(movie, left->sprite);
+    const auto heading = FindHeading(movie);
     std::vector<Slot> slots;
+    std::int32_t column = 0;
     for (const auto &last : {*left, *right})
     {
         for (std::int32_t y = last.y + kRow; y <= kLastRow; y += kRow)
         {
+            // Taken by whatever of the column's reaches into the row: a
+            // bar is higher than a row, and lies in two.
             const bool taken = std::any_of(placed.begin(), placed.end(), [&](const gfx::Instance &instance) {
-                return instance.x == last.x && instance.y == y;
+                const std::int32_t height = heading && instance.character == heading->bar ? kBarHeight : kControlHeight;
+                return instance.x >= last.x - kColumnReach && instance.x <= last.x + kColumnReach &&
+                       instance.y < y + kRow && instance.y + height > y;
             });
             if (!taken)
             {
-                slots.push_back({last.x, y});
+                slots.push_back({last.x, y, column});
             }
         }
+        ++column;
     }
     return slots;
 }
@@ -86,9 +126,9 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
                                       std::size_t &shown)
 {
     shown = 0;
-    const auto slots = FreeSlots(movie);
+    auto slots = FreeSlots(movie);
     const auto tab = gfx::FindInstance(movie, kLastLeft);
-    const auto heading = gfx::ExportedCharacter(movie, kHeadingSymbol);
+    const auto heading = FindHeading(movie);
     if (!slots || !tab || !heading)
     {
         return std::nullopt;
@@ -96,30 +136,52 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
 
     std::vector<gfx::Placement> placements;
     gfx::Bytes setUps;
-    std::size_t slot = 0;
     std::uint16_t depth = tab->deepest;
-    const auto place = [&](std::string name, std::uint16_t character) {
+    const auto place = [&](std::string name, std::uint16_t character, std::int32_t x, std::int32_t y) {
         depth = static_cast<std::uint16_t>(depth + kDepthStep);
-        placements.push_back({std::move(name), character, depth, (*slots)[slot].x, (*slots)[slot].y});
-        ++slot;
+        placements.push_back({std::move(name), character, depth, x, y});
     };
     for (const Section &section : sections)
     {
-        if (section.toggles.empty() || slot + 1 + section.toggles.size() > slots->size())
+        // The first rows free one under the other in one column, enough
+        // for the heading and every checkbox.
+        const std::size_t rows = kHeadingRows + section.toggles.size();
+        std::size_t first = slots->size();
+        for (std::size_t i = 0; i + rows <= slots->size() && first == slots->size(); ++i)
+        {
+            bool together = true;
+            for (std::size_t j = 1; j < rows && together; ++j)
+            {
+                const Slot &above = (*slots)[i + j - 1];
+                const Slot &below = (*slots)[i + j];
+                together = below.column == above.column && below.y == above.y + kRow;
+            }
+            if (together)
+            {
+                first = i;
+            }
+        }
+        if (section.toggles.empty() || first == slots->size())
         {
             break;
         }
-        const Slot at = (*slots)[slot];
-        place(HeadingInstance(at), *heading);
-        const gfx::Bytes headingSetUp = HeadingSetUp(at, section.title);
+        const Slot top = (*slots)[first];
+        const std::int32_t barX = top.x - kBarLeftOfColumn[static_cast<std::size_t>(top.column)];
+        const std::int32_t barY = top.y + kBarDown;
+        place({}, heading->bar, barX, barY);
+        place(HeadingInstance(top), heading->text, barX + kTextRight, barY + kTextDown);
+        const gfx::Bytes headingSetUp = HeadingSetUp(top, section.title);
         setUps.insert(setUps.end(), headingSetUp.begin(), headingSetUp.end());
-        for (const Toggle &toggle : section.toggles)
+        for (std::size_t i = 0; i < section.toggles.size(); ++i)
         {
             // A checkbox is what the game's own are.
-            place(ToggleInstance(toggle.option), tab->character);
-            const gfx::Bytes setUp = ToggleSetUp(toggle);
+            const Slot &row = (*slots)[first + kHeadingRows + i];
+            place(ToggleInstance(section.toggles[i].option), tab->character, row.x, row.y);
+            const gfx::Bytes setUp = ToggleSetUp(section.toggles[i]);
             setUps.insert(setUps.end(), setUp.begin(), setUp.end());
         }
+        slots->erase(slots->begin() + static_cast<std::ptrdiff_t>(first),
+                     slots->begin() + static_cast<std::ptrdiff_t>(first + rows));
         ++shown;
     }
     if (shown == 0)

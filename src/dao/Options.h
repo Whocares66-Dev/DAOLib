@@ -17,8 +17,9 @@
 // draws the box by what the engine tells it the option is.
 //
 // A plugin's section goes the same way. The library patches the options
-// movie as the game opens it (dao/Gui.h, OnMovieLoad): the heading and the
-// checkboxes are placed in the tab's free rows, and each checkbox is set up
+// movie as the game opens it (dao/Gui.h, OnMovieLoad): the heading (the
+// bar and heading text the tab's own "Gameplay" has) and the checkboxes
+// are placed in the tab's free rows, and each checkbox is set up
 // by the game's helper, so it looks and behaves as its neighbours do,
 // tooltip and click sound with them. The library answers for the engine:
 // it takes the checkbox's request to be told its option's value, and its
@@ -33,7 +34,9 @@
 // plugin keeps its own settings.
 //
 // There is room for eleven rows: five under the left column and six under
-// the right, a heading taking one. Sections are placed in the order they
+// the right. A heading is the game's own gold bar and takes two, so the
+// left column holds a heading and three checkboxes, the right a heading
+// and four; a section's rows are in one column. Sections are placed in the order they
 // were added, each whole or not at all; StateOf says what became of one.
 // The rows are shared with every other plugin that adds a section, each
 // taking what the ones before it left.
@@ -44,8 +47,9 @@
 // (the play tester's session, on 3783dd4):
 // - The heading and three boxes under the left column's last box, the
 //   boxes and labels in line with the game's own and spaced as they are.
-//   The heading is plain text centred over the column, smaller than the
-//   game's own gold bars ("Gameplay", "Feedback"): a caption.
+//   The heading was then plain text centred over the column, smaller than
+//   the game's own gold bars ("Gameplay", "Feedback"): a caption. It is
+//   now the game's bar and heading text; that is not yet seen in play.
 // - Each box was asked its value at each opening and drawn by the answer.
 // - A click changed a box and it stayed; the box that refuses was empty
 //   again 0.3 s after its click, with no flicker caught.
