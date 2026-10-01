@@ -197,13 +197,22 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // have the whole path. And it answers "found" for a path it gave up on
 // part way, so a path counts here only if it ends at the destination.
 //
-// Seen in play, 2026-10-01, the first version: a straight walk came back
-// right (2 waypoints, 1.85 m) while no one had yet walked, and the creature
-// walked as before after many searches; but once the party had walked, and
-// so stood as obstacles, every search came back "found" with the start
-// alone, even to a creature 1.9 m away. This version checks the start once
-// the mover's own obstacle is lifted, moves its walker along, and counts a
-// path only if it arrives; it is not yet seen in play.
+// Seen in play, 2026-10-01. The first version answered a straight walk
+// rightly but, once the party had walked and so stood as obstacles, every
+// search came back "found" with the start alone. This version, in the
+// Elven Ruins and the forest clearing, the controlled creature walking as
+// before throughout:
+// - to a companion 0.9 to 3.8 m off, before and after walking: the two
+//   ends, no search;
+// - to a spider's corpse 3.2 m off round a corner: 4 waypoints, 3.42 m,
+//   in 6 slices; to another, 7.14 m straight: 6 waypoints, 7.30 m;
+// - outdoors: 35.80 m straight, 26 waypoints and 46.56 m in 21 slices;
+//   56.10 m straight, 64 waypoints and 107.62 m in 44 slices;
+// - to skeletons 105 to 117 m off in a room never seen: none, the search
+//   giving up part way after 17 to 25 slices, 8 to 10 ms each time;
+// - to skeletons 67 to 70 m off behind shut doors: none, the search
+//   answering 6 at the door. That version went on past the 6 until its 30
+//   ms ran out, 130 to 170 slices; this one stops there.
 //
 // An earlier FindPath drove the creature's own search (RequestPath until it
 // answered) and was taken out after play, 2026-09-30: RequestPath takes new
@@ -213,9 +222,15 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 struct PathSearch
 {
     std::optional<WalkPath> path; // nothing if none was found that reaches the destination
-    // The pathfinder's last answer: 1 found, 5 none, 8 no mesh there, 0 not
-    // asked (no such creature, or off the game's thread), others a search
-    // the slices ran out on.
+    // With no path, as far as the search got: to the door in the way, or
+    // to where it gave up.
+    std::optional<WalkPath> partial;
+    // The pathfinder's last answer: 1 found (or given up part way, when
+    // `path` is nothing), 5 none, 6 a door or the like in the way, which a
+    // walker must act on to go on (the game ends a move there with
+    // COMMAND_FAILED_PATH_ACTION_REQUIRED), 8 no mesh there, 0 not asked (no
+    // such creature, or off the game's thread), others a search the time
+    // ran out on.
     std::int32_t result = 0;
     std::int32_t slices = 0; // slices of search it took; 0 for a straight walk
     // For telling why a search failed: each slice's answer in order, the

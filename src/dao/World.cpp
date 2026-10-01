@@ -229,6 +229,7 @@ constexpr std::size_t kNearGoalFlag = 0x8C;
 constexpr std::int32_t kFound = 1;
 constexpr std::int32_t kNone = 5;
 constexpr std::int32_t kNoMesh = 8;
+constexpr std::int32_t kBarred = 6; // a door, or the like, on the way (0x00A4D1F0, a cell of kind 7)
 
 class OwnSearch
 {
@@ -417,7 +418,8 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
             answer.answers.push_back(answer.result);
             found = PathOf(reinterpret_cast<std::uintptr_t>(controller));
             answer.waypoints = found ? found->waypoints.size() : 0;
-            if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh)
+            if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh ||
+                answer.result == kBarred)
             {
                 break;
             }
@@ -433,16 +435,14 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         // A search that could not work a stretch out twice ends "found"
         // with what it had (0x00A4D1F0), so a path counts only if it gets
         // there.
-        if (found && found->waypoints.size() >= 2)
+        if (found && !found->waypoints.empty())
         {
             const Vector &last = found->waypoints.back();
             const bool there = std::hypot(last.x - goal.x, last.y - goal.y) < kArrived;
             const bool whole = TryRead<std::uint8_t>(path + kWhole).value_or(0) != 0;
-            if (there && (answer.result == kFound || whole))
-            {
-                found->next = 0;
-                answer.path = std::move(found);
-            }
+            const bool arrives = found->waypoints.size() >= 2 && there && (answer.result == kFound || whole);
+            found->next = 0;
+            (arrives ? answer.path : answer.partial) = std::move(found);
         }
     }
 
