@@ -35,10 +35,10 @@
 // fourteen, attacks ended COMMAND_FAILED_NO_SPACE_IN_MELEE_RING 15 to 90 ms
 // after they were queued, and the game's AI then queued a move to the
 // target and a second attack itself, the move often ending
-// COMMAND_FAILED_INVALID_PATH at once. A use-object on a door, queued for
-// the hero in a fight, ended COMMAND_FAILED with the door still shut, and
-// from 12.1 m COMMAND_FAILED_COMMAND_CLEARED, though the same order opens
-// the door in explore mode.
+// COMMAND_FAILED_INVALID_PATH at once. A use-object ended COMMAND_FAILED
+// (-1) all five times in that session, the two that opened their door
+// among them: for that command -1 is how it ends, not a failure, and what
+// the object did is the test of it.
 //
 // Callbacks run on the game's thread, inside the command step: keep them
 // short, and queue or clear no commands from one.
@@ -63,7 +63,9 @@ inline constexpr std::int32_t kFailed = -1;
 inline constexpr std::int32_t kCleared = -2;
 
 // "success", "looping", "COMMAND_FAILED", or the failure's script name
-// (COMMAND_FAILED_TIMEOUT); empty for a result no constant names.
+// (COMMAND_FAILED_TIMEOUT); empty for a result no constant names. A name is
+// the scripts' word for the number, not a verdict: a use-object that works
+// ends COMMAND_FAILED (above).
 std::string_view ResultName(std::int32_t result);
 
 void OnStart(std::function<void(ObjectId object, const Command &command)> observer);
