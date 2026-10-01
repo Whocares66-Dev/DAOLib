@@ -145,8 +145,10 @@ add_library(
     src/dao/core/Gff4.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Rtti.cpp
+    src/dao/core/ScriptValue.cpp
     src/dao/Data.cpp
     src/dao/Dialogue.cpp
+    src/dao/ScriptCall.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp

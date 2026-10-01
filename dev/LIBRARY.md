@@ -180,6 +180,7 @@ The engine structures are made, destroyed and copied by the commands object's sl
 | Asking for an ability's target: explore mode's BeginTargeting (`GameModeExplore::RequestTarget`) | 2026-09-30, from the quickbar's handler for PerformAbilityMessage | checked 2026-09-30 by the turn-based mod at 14:59 and 15:03: Shield Pummel and ability 617 asked for their target, and the click used them |
 | The world's geometry: every shape along a ray, the nearest between two points, line of sight as the scripts judge it, the current area (`dao/World.h`) | 2026-09-30, from the cursor pick, World::Raycast, the scripts' CheckLineOfSight commands and the physics scene's slots | not yet seen in play; `examples/world` logs what it finds |
 | Conversations: the lines spoken and replies offered, as their file has them, and which lines are offered (`dao/Dialogue.h`), over a GFF4 reader (`dao/core/Gff4.h`, `Conversation.h`) | 2026-09-30, from the conversation's functions, dialogue mode's reply list and the game's CONV files | the reader: tests, and 104 of the game's conversations read the same as `tools/gff4.py` reads them; the hooks: not yet seen in play, `examples/dialogue` logs a conversation |
+| Calling a script command by name: every command's signature as data, the arguments checked and defaulted, the call made as `Invoke` makes one (`dao/ScriptCall.h`) | 2026-09-30, generated from script.ldf's signatures | the table and the argument checks: tests; the call: not yet seen in play |
 
 ## The first session
 

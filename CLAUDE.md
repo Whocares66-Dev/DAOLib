@@ -28,17 +28,17 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 ```
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
-                the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h),
+                the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
                 the engine's messages (Messages.h), the game's modes (GameModes.h), a callback per frame
                 (Frame.h), script events (Events.h), the game's data tables (Gda.h), the Flash UI's calls (Gui.h), the data tree (Data.h), the talk tables (Tlk.h), the camera (Camera.h, CameraMoves.h), a plugin's save data (Saves.h), the effects' and regeneration's clock and the game's speed (Effects.h, Clock.h), the world's geometry (World.h), conversations (Dialogue.h),
                 Field.h; dev/LIBRARY.md says how they fit
 src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), cast slots (object_casts.py),
                 the scripts' constants as enums (gen_script_constants.py), every script command as a
-                C++ function (gen_script_api.py), message handlers as hook points
+                C++ function and as a table of signatures (gen_script_api.py), message handlers as hook points
                 (gen_message_handlers.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
-                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray, Angle, Gff4 and Conversation (the game's files),
+                CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray, Angle, Gff4 and Conversation (the game's files), ScriptValue (a command's signature as data),
                 VmStack, GdaHash; tested
 src/plugins/    one folder per plugin: probe/ watches and checks, example/ checks many parts of daolib in play
 examples/       small plugins, one per part of daolib, to read and copy from and to check it in play (examples/README.md)
