@@ -170,7 +170,7 @@ inline OwnedCommand Copy(const ::dao::Command &command)
 // array and may have an empty one (LoadCutscene's two, of the tags to
 // replace and the objects to put in their place), make one:
 //
-//   dao::script::api::LoadCutscene(L"bed200cs_farewell", player, 1,
+//   dao::script::api::LoadCutscene(L"bed110cs_tainted_mirror.cut", player, 1,
 //       dao::script::Array::Empty(dao::core::ArrayTag::String),
 //       dao::script::Array::Empty(dao::core::ArrayTag::Object), 0);
 class Array
@@ -181,7 +181,8 @@ class Array
     {
     }
     // An array of that kind with nothing in it, made as the engine makes
-    // one (its constructor by tag, 0x00A2E920). Not yet seen in play.
+    // one (its constructor by tag, 0x00A2E920). Seen in play, 2026-10-01:
+    // LoadCutscene took an empty array of strings and one of objects.
     static Array Empty(core::ArrayTag kind);
     ~Array();
     Array(Array &&other) noexcept : array_(std::exchange(other.array_, nullptr))

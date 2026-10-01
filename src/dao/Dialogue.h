@@ -142,12 +142,24 @@ bool Continue();
 // playing. Much of the game's staging is conversations instead, which run
 // in dialogue mode: the Dalish origin's mirror scene and the camp's
 // awakening were dialogue throughout in play, though the module has
-// cutscene files beside them. Not yet seen in play.
+// cutscene files beside them.
+//
+// Seen in play, 2026-10-01, through the Eluvian server: LoadCutscene with
+// L"bed110cs_tainted_mirror.cut" and two empty arrays put the game in
+// cutscene mode within half a second, InCutscene true, the cutscene on the
+// screen; with the name alone, no extension, nothing happened; and a
+// cutscene of an area not loaded did nothing either way. SkipCutscene 3.5
+// s in answered true and the game was exploring again within half a
+// second, the hero where she had stood. With no cutscene it answered
+// false.
 bool InCutscene();
 bool SkipCutscene();
 
 // The same for a pre-rendered video (the game's movie mode): whether one
-// is playing, and skipping it as the key does. Not yet seen in play.
+// is playing, and skipping it as the key does. The scripts' PlayMovie
+// (0x0065ECB0, a resource: a .bik of the game's movies folders) starts
+// one. SkipMovie with no movie answered false in play; with one, not yet
+// seen.
 bool InMovie();
 bool SkipMovie();
 
