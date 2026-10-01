@@ -7,6 +7,8 @@
 // each shape it met: what kind of thing, and its collision groups, which
 // tell which bits the ground and each kind of object carry. And while the
 // creature walks, the path its movement found: its waypoints and length.
+// For the object under the cursor it also asks the pathfinder for the walk
+// there (FindPath), and logs its length beside the straight distance.
 //
 // Everything runs in a frame callback, on the game's thread, where the
 // world's queries must be asked. What it finds goes to example_world.log.
@@ -20,6 +22,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 
@@ -39,6 +42,37 @@ const char *KindName(dao::world::Hit::Kind kind)
         return "object";
     default:
         return "nothing";
+    }
+}
+
+// The walk to an object, found now, the creature left as it is. The
+// object's own obstacle is lifted for the search when it is a creature.
+void LogWalkTo(dao::ObjectId self, dao::ObjectId seen)
+{
+    dao::CClientExoApp *app = dao::CClientExoApp::Get();
+    const dao::CCObject *from = app->GetObjectById(self);
+    const dao::CCObject *to = app->GetObjectById(seen);
+    if (from == nullptr || to == nullptr)
+    {
+        return;
+    }
+    const dao::Vector a = from->Position();
+    const dao::Vector b = to->Position();
+    const float straight = std::hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    const dao::world::PathSearch search = dao::world::Pathfind(self, b, seen);
+    if (search.path)
+    {
+        const dao::Vector end = search.path->waypoints.back();
+        spdlog::info(
+            "a walk from 0x{:x} to 0x{:x}: {} waypoints, {:.2f} m ({:.2f} m straight), ending {:.2f} m from it; "
+            "answer {} after {} slice(s)",
+            self, seen, search.path->waypoints.size(), search.path->Length(), straight,
+            std::hypot(end.x - b.x, end.y - b.y, end.z - b.z), search.result, search.slices);
+    }
+    else
+    {
+        spdlog::info("no walk from 0x{:x} to 0x{:x} ({:.2f} m straight): answer {} after {} slice(s)", self, seen,
+                     straight, search.result, search.slices);
     }
 }
 
@@ -62,6 +96,7 @@ void LookAtCursor(dao::ObjectId self, dao::ObjectId seen)
     {
         spdlog::info("0x{:x} cannot see 0x{:x} (another area, or no answer)", self, seen);
     }
+    LogWalkTo(self, seen);
 }
 
 void LookDown(dao::ObjectId self)

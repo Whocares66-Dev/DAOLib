@@ -137,6 +137,41 @@ DAO_ADDRESS(kCCModule_CurrentArea, "CCModule::CurrentArea", 0x005FE470)
 DAO_ADDRESS(kCCCreature_Movement, "CCCreature::Movement", 0x006A2570)
 DAO_ADDRESS(kCCObject_RequestPath, "CCObject::RequestPath", 0x0073EA80)
 DAO_ADDRESS(kMovementController_Step, "MovementController::Step", 0x00A62640)
+// A search apart from any creature's (dao/World.h, FindPath), read
+// 2026-09-30. The controller is a plain record, about 0xA0 bytes: the
+// pathfinding world at +0x0C (the application's +0x118), the mover's
+// parameters at +0x10 (a record of 0x50 bytes: its id, its radius at +4, a
+// size class at +0xC, then the obstacle it stands as), its path at +0x14 (a
+// 0x90-byte object, 0x00A482D0, which holds the search's own state), the
+// destination at +0x30 with a direction at +0x40 and the area's number in
+// the pathfinding world at +0x50, the start at +0x60 with the mover's facing
+// at +0x70 and the area's number again at +0x80, and flags at +0x9C and
+// +0x9D (failed, found). The script command IsLocationSafe (0x0065AF..)
+// makes both records on its stack: the parameters' constructor, then the
+// controller's (__thiscall (world, parameters), `ret 8`, which makes the
+// path), and frees the path after (Free). RequestPath is the order of a
+// search: IsFree (__thiscall (const Vector4 *, area number, 0, 0), `ret
+// 0x10`) asks whether the mover fits at the destination, and if not the
+// area's NearestFree (__thiscall (const Vector4 *at, const Vector4
+// *direction, float reach, controller, 0, Vector4 *out), `ret 0x18`) finds
+// a place within 2 m back toward the start; SetStart and SetGoal
+// (__thiscall (area number, const Vector4 *, const Vector4 *), `ret 0xC`)
+// store the ends; LiftObstacle takes the mover's own obstacle out of the
+// pathfinding world, and the creature's PlaceObstacle puts it back after;
+// Direct (__thiscall (0, 0), `ret 8`) asks whether a straight walk will do,
+// and else Step advances the search (1 found, 5 none, 8 no mesh, others
+// still searching). The area's number is an attribute at the area's +4 (its
+// value at +0x10). The names are ours.
+DAO_ADDRESS(kMovementParameters_Constructor, "MovementParameters::MovementParameters", 0x00A62830)
+DAO_ADDRESS(kMovementController_Constructor, "MovementController::MovementController", 0x00A62B20)
+DAO_ADDRESS(kMovementController_Free, "MovementController::Free", 0x00A625B0)
+DAO_ADDRESS(kMovementController_IsFree, "MovementController::IsFree", 0x00A62A90)
+DAO_ADDRESS(kMovementController_SetStart, "MovementController::SetStart", 0x00A62990)
+DAO_ADDRESS(kMovementController_SetGoal, "MovementController::SetGoal", 0x00A629C0)
+DAO_ADDRESS(kMovementController_LiftObstacle, "MovementController::LiftObstacle", 0x00A627D0)
+DAO_ADDRESS(kMovementController_Direct, "MovementController::Direct", 0x00A626F0)
+DAO_ADDRESS(kCCCreature_PlaceObstacle, "CCCreature::PlaceObstacle", 0x006A3BC0)
+DAO_ADDRESS(kCCArea_NearestFree, "CCArea::NearestFree", 0x0073E7F0)
 // Lets a finished search go before a new one (__thiscall, no arguments):
 // the move update calls it first, then puts the mover's id in the
 // controller's parameters (+0x10, its first word), the target's id at

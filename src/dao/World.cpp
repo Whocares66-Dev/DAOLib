@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 
 namespace dao::world
 {
@@ -161,20 +162,13 @@ float WalkPath::Remaining(const Vector &from) const
     return core::PathRemaining(Points(waypoints), next, {from.x, from.y, from.z});
 }
 
-std::optional<WalkPath> CurrentPath(ObjectId creature)
+namespace
 {
-    CClientExoApp *app = CClientExoApp::Get();
-    if (app == nullptr || !OnGameThread())
-    {
-        return std::nullopt;
-    }
-    const CCCreature *object = app->GetCreatureById(creature);
-    if (object == nullptr)
-    {
-        return std::nullopt;
-    }
-    const auto controller = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(object) + kMovement);
-    const auto search = controller && *controller != 0 ? TryRead<std::uintptr_t>(*controller + kSearch) : std::nullopt;
+
+// The path a controller holds, if it has waypoints.
+std::optional<WalkPath> PathOf(std::uintptr_t controller)
+{
+    const auto search = controller != 0 ? TryRead<std::uintptr_t>(controller + kSearch) : std::nullopt;
     if (!search || *search == 0)
     {
         return std::nullopt;
@@ -197,6 +191,210 @@ std::optional<WalkPath> CurrentPath(ObjectId creature)
     }
     path.next = *next < 0 ? 0 : static_cast<std::size_t>(*next);
     return path;
+}
+
+std::uintptr_t Movement(const CCCreature *creature)
+{
+    return creature != nullptr
+               ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(creature) + kMovement).value_or(0)
+               : 0;
+}
+
+// A search of this library's own (dao/Addresses.h, "A search apart from any
+// creature's"): the engine's records, made here as IsLocationSafe makes
+// them on its stack, and the path freed when it goes.
+constexpr std::size_t kPathWorld = 0x0C;      // in the controller
+constexpr std::size_t kParameters = 0x10;     // in the controller
+constexpr std::size_t kParametersHead = 0x10; // of the parameters: id, radius, size class
+constexpr std::size_t kAreaNumber = 0x10;     // in the area
+constexpr std::size_t kFacing = 0x130;        // in the creature, after its position
+constexpr float kNearGoal = 2.0F;             // metres, as RequestPath asks
+constexpr float kSlice = 0.01F;               // seconds of search a step
+constexpr std::int32_t kSlices = 50;
+constexpr std::int32_t kFound = 1;
+constexpr std::int32_t kNone = 5;
+constexpr std::int32_t kNoMesh = 8;
+
+class OwnSearch
+{
+  public:
+    OwnSearch(std::uintptr_t world, std::uintptr_t parameters)
+    {
+        using ParametersFn = void(__fastcall *)(void *);
+        reinterpret_cast<ParametersFn>(Module::Address(addr::kMovementParameters_Constructor))(parameters_.data());
+        // The mover's id, radius and size class; the obstacle it stands as
+        // stays the creature's own.
+        made_ = TryCopy(parameters_.data(), parameters, kParametersHead);
+        if (made_)
+        {
+            using Fn = void *(__fastcall *)(void *, int, std::uintptr_t, void *);
+            reinterpret_cast<Fn>(Module::Address(addr::kMovementController_Constructor))(controller_.data(), 0, world,
+                                                                                         parameters_.data());
+        }
+    }
+    ~OwnSearch()
+    {
+        if (made_)
+        {
+            using Fn = void(__fastcall *)(void *);
+            reinterpret_cast<Fn>(Module::Address(addr::kMovementController_Free))(controller_.data());
+        }
+    }
+    OwnSearch(const OwnSearch &) = delete;
+    OwnSearch &operator=(const OwnSearch &) = delete;
+
+    bool Made() const
+    {
+        return made_;
+    }
+    void *Controller()
+    {
+        return controller_.data();
+    }
+
+  private:
+    alignas(16) std::array<std::byte, 0x50> parameters_{};
+    alignas(16) std::array<std::byte, 0xB0> controller_{};
+    bool made_ = false;
+};
+
+void LiftObstacle(std::uintptr_t controller)
+{
+    if (controller != 0)
+    {
+        using Fn = void(__fastcall *)(std::uintptr_t);
+        reinterpret_cast<Fn>(Module::Address(addr::kMovementController_LiftObstacle))(controller);
+    }
+}
+
+void PlaceObstacle(CCCreature *creature)
+{
+    if (creature != nullptr)
+    {
+        using Fn = void(__fastcall *)(CCCreature *);
+        reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_PlaceObstacle))(creature);
+    }
+}
+
+} // namespace
+
+std::optional<WalkPath> CurrentPath(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr || !OnGameThread())
+    {
+        return std::nullopt;
+    }
+    return PathOf(Movement(app->GetCreatureById(creature)));
+}
+
+PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
+{
+    PathSearch answer;
+    CClientExoApp *app = CClientExoApp::Get();
+    if (app == nullptr || !OnGameThread())
+    {
+        return answer;
+    }
+    CCCreature *mover = app->GetCreatureById(creature);
+    CCArea *area = mover != nullptr ? mover->Area() : nullptr;
+    const std::uintptr_t own = Movement(mover);
+    const auto world = own != 0 ? TryRead<std::uintptr_t>(own + kPathWorld) : std::nullopt;
+    const auto parameters = own != 0 ? TryRead<std::uintptr_t>(own + kParameters) : std::nullopt;
+    const auto number =
+        area != nullptr ? TryRead<std::int32_t>(reinterpret_cast<std::uintptr_t>(area) + kAreaNumber) : std::nullopt;
+    Vector4 from;
+    Vector4 facing;
+    if (!world || *world == 0 || !parameters || *parameters == 0 || !number ||
+        !TryCopy(&from, reinterpret_cast<std::uintptr_t>(mover) + 0x120, sizeof from) ||
+        !TryCopy(&facing, reinterpret_cast<std::uintptr_t>(mover) + kFacing, sizeof facing))
+    {
+        return answer;
+    }
+    OwnSearch search(*world, *parameters);
+    if (!search.Made())
+    {
+        return answer;
+    }
+    void *controller = search.Controller();
+
+    Vector4 goal(to);
+    goal.w = from.w;
+    Vector4 direction;
+    direction.x = goal.x - from.x;
+    direction.y = goal.y - from.y;
+    direction.z = goal.z - from.z;
+    const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+    if (length > 1e-6F)
+    {
+        direction.x /= length;
+        direction.y /= length;
+        direction.z /= length;
+    }
+
+    // Where the mover does not fit, the nearest place back toward the start.
+    using IsFreeFn = bool(__fastcall *)(void *, int, const Vector4 *, std::int32_t, std::int32_t, std::int32_t);
+    if (!reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree))(controller, 0, &goal, *number, 0,
+                                                                                       0))
+    {
+        Vector4 back;
+        back.x = -direction.x;
+        back.y = -direction.y;
+        back.z = -direction.z;
+        Vector4 nearest = goal;
+        using NearestFn = std::int32_t(__fastcall *)(CCArea *, int, const Vector4 *, const Vector4 *, float, void *,
+                                                     std::int32_t, Vector4 *);
+        reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree))(area, 0, &goal, &back, kNearGoal,
+                                                                                controller, 0, &nearest);
+        goal = nearest;
+    }
+
+    using SetEndFn = bool(__fastcall *)(void *, int, std::int32_t, const Vector4 *, const Vector4 *);
+    reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetStart))(controller, 0, *number, &from,
+                                                                                    &facing);
+    reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetGoal))(controller, 0, *number, &goal,
+                                                                                   &direction);
+
+    // The mover's own obstacle, and that of a creature it walks toward, out
+    // of the way for the search, as RequestPath lifts them: after the
+    // destination is settled, so a walk to a creature ends beside it.
+    CCCreature *target = toward != kInvalidObject ? app->GetCreatureById(toward) : nullptr;
+    LiftObstacle(own);
+    LiftObstacle(Movement(target));
+
+    using DirectFn = bool(__fastcall *)(void *, int, std::int32_t, std::int32_t);
+    if (reinterpret_cast<DirectFn>(Module::Address(addr::kMovementController_Direct))(controller, 0, 0, 0))
+    {
+        answer.result = kFound;
+        answer.path = WalkPath{{from.ToVector(), goal.ToVector()}, 0};
+    }
+    else
+    {
+        using StepFn = std::int32_t(__fastcall *)(void *, int, float);
+        const auto step = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
+        while (answer.slices < kSlices)
+        {
+            ++answer.slices;
+            answer.result = step(controller, 0, kSlice);
+            if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh)
+            {
+                break;
+            }
+        }
+        if (answer.result == kFound)
+        {
+            answer.path = PathOf(reinterpret_cast<std::uintptr_t>(controller));
+        }
+    }
+
+    PlaceObstacle(mover);
+    PlaceObstacle(target);
+    return answer;
+}
+
+std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId toward)
+{
+    return Pathfind(creature, to, toward).path;
 }
 
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)

@@ -169,16 +169,44 @@ struct WalkPath
 // Nothing for a creature not walking a path, or not there.
 std::optional<WalkPath> CurrentPath(ObjectId creature);
 
-// No path is found on demand yet. A FindPath that drove the creature's own
-// search (RequestPath, 0x0073EA80, until it answered) was taken out after
-// play, 2026-09-30: RequestPath takes a new start and destination only
-// when no search is in progress (0x0073D6E0: the search's +0 flag, or open
-// nodes at its +0x18), else it goes on with the old one. So its first
-// answer was the previous search's, a search left unfinished kept every
-// later call on old ends (one path, 15.59 m, all through a fight), and the
-// search it left behind stood as the creature's own path; the creature
-// then would not walk a clicked path. A search of the plugin's own, or the
-// creature's put back as it was, is what is needed (dev/TODO.md, item 5).
+// The path a creature would walk to a point, found now by the game's
+// pathfinder, the creature left as it is: its own path, its walking and
+// its orders are not touched.
+//
+//   if (const auto path = dao::world::FindPath(creature, enemyPosition, enemy))
+//       spdlog::info("{:.1f} m to walk", path->Length());
+//
+// Read 2026-09-30 (dao/Addresses.h, "A search apart from any creature's"):
+// a search is a plain record the engine also makes on the stack of a
+// script command (IsLocationSafe), so this makes one of its own, with the
+// creature's size, and follows RequestPath's order with it. If the
+// creature does not fit at the point, the nearest place within 2 m back
+// toward the creature is the destination, as for a click. The creature's
+// own obstacle is taken out of the pathfinding world for the search and
+// put back after, as the game does each time it asks for a path; `toward`
+// names a creature standing at the point, whose obstacle is lifted the same
+// way (the game does that for the creature a mover follows), so a path to
+// an enemy ends at it rather than failing. A straight walk, where one will
+// do, is the two ends; else the search is run to its end, in slices of 10
+// ms and at most 50 of them. On the game's thread. Not yet seen in play.
+//
+// An earlier FindPath drove the creature's own search (RequestPath until it
+// answered) and was taken out after play, 2026-09-30: RequestPath takes new
+// ends only when no search is in progress, so its answers came a call late,
+// and the search it left stood as the creature's path, after which the
+// creature would not walk a click.
+struct PathSearch
+{
+    std::optional<WalkPath> path; // nothing if none was found
+    // The pathfinder's last answer: 1 found, 5 none, 8 no mesh there, 0 not
+    // asked (no such creature, or off the game's thread), others a search
+    // the slices ran out on.
+    std::int32_t result = 0;
+    std::int32_t slices = 0; // slices of search it took; 0 for a straight walk
+};
+PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
+// The path alone.
+std::optional<WalkPath> FindPath(ObjectId creature, const Vector &to, ObjectId toward = kInvalidObject);
 
 // Whether `target` can be seen from `viewer`, as CheckLineOfSightObject
 // asks it: from kEyeHeight above one's position to kEyeHeight above the
