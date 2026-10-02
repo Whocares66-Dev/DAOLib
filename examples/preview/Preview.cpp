@@ -1,9 +1,9 @@
 // Example: drawing in the world (dao/Vfx.h).
 //
 // While the game is in explore or combat mode, a ring follows the ground
-// under the cursor: the game's aiming ring if the point is within kReach of
-// the party's controlled creature, the one it shows out of reach if not
-// (they looked alike in play; dao/Vfx.h), scaled to kRingRadius. A turn-based mode's movement
+// under the cursor: the game's aiming ring, in its own colour if the point
+// is within kReach of the party's controlled creature and tinted red if
+// not (dao/Vfx.h says which effects take a tint), scaled to kRingRadius. A turn-based mode's movement
 // preview, measured as the crow flies: a path's length waits on a path
 // search a plugin can ask for (dev/TODO.md, item 5). The ring is placed
 // once and moved; it is placed afresh when its colour changes, and taken
@@ -28,6 +28,7 @@ namespace
 constexpr float kReach = 10.0F;             // metres a move may take
 constexpr float kRingRadius = 0.75F;        // metres
 constexpr std::uint64_t kFramesBetween = 2; // the ring follows every other frame
+constexpr dao::vfx::Tint kTooFar{1.0F, 0.16F, 0.10F, 1.0F};
 
 dao::ObjectId g_ring = dao::kInvalidObject;
 bool g_ringInReach = false;
@@ -70,10 +71,11 @@ void Frame()
     if (g_ring == dao::kInvalidObject || inReach != g_ringInReach)
     {
         TakeRingAway();
-        g_ring = dao::vfx::PlaceRing(*ground, kRingRadius, inReach);
+        // The same ring for both, so that the tint is all that differs.
+        g_ring = dao::vfx::PlaceRing(*ground, kRingRadius, true, inReach ? std::nullopt : std::optional(kTooFar));
         g_ringInReach = inReach;
         spdlog::info("ring 0x{:x} at ({:.2f}, {:.2f}, {:.2f}), {:.2f} m away: {}", g_ring, ground->x, ground->y,
-                     ground->z, away, inReach ? "in reach" : "too far");
+                     ground->z, away, inReach ? "in reach, the ring's own colour" : "too far, tinted red");
     }
     else if (!dao::vfx::Move(g_ring, *ground))
     {

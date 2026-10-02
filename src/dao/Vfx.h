@@ -80,8 +80,17 @@ struct Tint
 // turn-based mod's marker placed with a red tint was its usual pale gold.
 // A material object of the same name in the override folder that names
 // ReticalTint would make one of those take a tint, the game's own use of
-// it unchanged while no tint is given. A tinted ring is not yet seen in
-// play.
+// it unchanged while no tint is given. Tried in play that evening by the
+// turn-based mod, with both of the marker's material objects (move_indicator
+// and move_icon) so changed: the marker was still gold, which may be the
+// folder not being read for them or the colour not reaching that shader.
+//
+// The colour is one the game uses itself, on other materials: the effect's
+// set-up (0x007EA550) takes the caller's tint or, with none, the row's own
+// from the table's Tint column (0xAARRGGBB; 137 of the 993 rows have one,
+// the crusts and auras on VFX.mat, whose shaders read the same parameter),
+// and hands either to the same call. A tinted ring is not yet seen in
+// play; examples/preview places one.
 //
 // The scale is one number, and not only here: the effect's graphics object
 // (GraphicsStructures::Object, its SetScale 0x00545330) keeps a single
@@ -97,10 +106,12 @@ ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
                const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
 // A ring of `radius` metres on the ground: the engine's aiming ring, or the
-// one it shows for a point out of reach, which looked the same in play.
-inline ObjectId PlaceRing(const Vector &at, float radius, bool inReach = true)
+// one it shows for a point out of reach, which looked the same in play. In
+// a colour if `tint` is given: the rings' material is one that takes it.
+inline ObjectId PlaceRing(const Vector &at, float radius, bool inReach = true,
+                          const std::optional<Tint> &tint = std::nullopt)
 {
-    return Place(inReach ? kAreaRing : kAreaRingOutOfReach, at, radius / kRingRadius);
+    return Place(inReach ? kAreaRing : kAreaRingOutOfReach, at, radius / kRingRadius, std::nullopt, tint);
 }
 
 // Moves a placed effect, and turns it if `facing` is given; false if it is
