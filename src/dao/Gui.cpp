@@ -16,6 +16,9 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -588,6 +591,26 @@ void OnMovieLoad(std::wstring_view name, MoviePatch patch)
     {
         g_openFile.Attach(addr::kEclipseGFxFileOpener_OpenFile, &OpenFile);
     }
+}
+
+bool ReplaceMovie(std::wstring_view name, const std::filesystem::path &file)
+{
+    std::ifstream in(file, std::ios::binary);
+    if (!in)
+    {
+        return false;
+    }
+    const std::string read((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    // Unpacked, as every patch is given its movie, so that a patch added
+    // after this one can still read and change it; nothing for bytes that
+    // are no movie.
+    auto movie = core::gfx::Unpack(std::as_bytes(std::span(read.data(), read.size())));
+    if (!movie)
+    {
+        return false;
+    }
+    OnMovieLoad(name, [copy = std::move(*movie)](std::span<const std::byte>) { return std::optional(copy); });
+    return true;
 }
 
 bool MouseOverInterface()

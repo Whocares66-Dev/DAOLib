@@ -45,6 +45,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <span>
@@ -340,6 +341,21 @@ bool MouseOverInterface();
 // ever.
 using MoviePatch = std::function<std::optional<std::vector<std::byte>>(std::span<const std::byte> movie)>;
 void OnMovieLoad(std::wstring_view name, MoviePatch patch);
+
+// A movie of the game's replaced whole by a file of the plugin's: a copy of
+// the game's movie changed in a Flash editor (FFDec, as SWF or GFx,
+// compressed or not), shipped beside the plugin and given to the game only
+// while the plugin is loaded, so that removing the plugin brings the game's
+// back with nothing left in the game's folders. Where a change wants
+// graphics of its own, or more than a script can add, this is the way; a
+// few lines of script added to whichever movie the game has
+// (core::gfx::AppendDoAction, through OnMovieLoad) is the way that leaves
+// room for other plugins' changes to the same movie. The file is read now,
+// at the call; false, and the game's movie left alone, if it cannot be read
+// or is not a movie. A patch another plugin adds for that movie later
+// applies to this file; one added before is set aside by it. Not yet seen
+// in play.
+bool ReplaceMovie(std::wstring_view name, const std::filesystem::path &file);
 
 // A message box the game has up: its text and its buttons, for a tool that
 // cannot see the screen (a test whose load has stopped at "this save
