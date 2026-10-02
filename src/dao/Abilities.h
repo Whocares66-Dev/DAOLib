@@ -94,7 +94,12 @@ enum class Kind : std::int32_t
 // Read 2026-10-01 from the scripts' GetAbilityCount (0x00668A20, on to
 // 0x0071A2F0), which counts them: the creature's stats keep four lists of
 // ids, one a kind in the kinds' order, at +0x150 and each 0x10 on (the
-// list of a kind is found by 0x007199D0). Not yet seen in play.
+// list of a kind is found by 0x007199D0). Seen in play 2026-10-01 by the
+// Eluvian server: a level 1 rogue's lists (4 talents, no spells, 6 skills,
+// 2 items) and a warrior's (7, 0, 3, 2) each came to the 12 that
+// GetAbilityCount answers. The lists hold the hidden abilities too (the
+// class's, the humanoid trait), the item list is the usable items'
+// abilities (a poultice, elfroot), and a skill's ranks are an id each.
 std::vector<std::int32_t> Known(ObjectId creature, Kind kind = Kind::All);
 
 } // namespace dao::abilities
