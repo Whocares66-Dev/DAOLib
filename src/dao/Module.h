@@ -86,6 +86,27 @@ std::uint32_t Preferred(std::uintptr_t runtime);
 // The same for an ID: where the listing has it. Zero if GOG's build lacks it.
 std::uint32_t Preferred(AddressId id);
 
+// What a runtime address in the exe is part of: the ID at or below it and
+// how far past. For a hook's _ReturnAddress() that is which function
+// called it, the same ID in every build, where the address is one build's
+// (and so is the offset, in a function the library notes as changed):
+//
+//   const auto caller = dao::Module::Containing(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+//   if (caller && caller->id == kTheScriptsAddCommand) ...
+//
+// `python toolsddress_ids.py 0x0066E1B4` says the ID and offset of an
+// address read in the GOG listing. The library does not know where a
+// function ends, only where the next ID begins; every function the
+// analysis found has an ID, so an address in code is in the function
+// named. Nothing for an address outside the exe, before its first ID, or
+// farther past one than any function is long.
+struct Place
+{
+    AddressId id{};
+    std::uint32_t offset = 0;
+};
+std::optional<Place> Containing(std::uintptr_t runtime);
+
 // The running build's own preferred-base address of a runtime address: what
 // a listing of that build shows. Preferred's answer when GOG's is running.
 inline std::uint32_t ImageAddress(std::uintptr_t runtime)

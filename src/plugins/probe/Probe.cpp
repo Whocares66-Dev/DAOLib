@@ -91,14 +91,18 @@ dao::Detour<SetPausedFn> g_setPaused;
 void __fastcall SetPaused(dao::CClientExoApp *self, int edx, bool paused, bool second)
 {
     // The address the call returns to, as a preferred-base address: the
-    // caller, to look up in Ghidra.
-    const auto caller = dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    // caller, to look up in Ghidra. And as the function it is in, which is
+    // what a plugin compares to tell callers apart in any build.
+    const auto returnsTo = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto caller = dao::Module::Preferred(returnsTo);
+    const auto function = dao::Module::Containing(returnsTo);
     const bool before = self->IsPaused();
     CrashIfTesting();
     g_setPaused.Original()(self, edx, paused, second);
-    spdlog::info("SetPaused({}, {}) from {:#010x}: paused {} -> {}, {} ms paused in total, app {} at {}", paused,
-                 second, caller, before, self->IsPaused(), self->PausedMilliseconds(), dao::TypeName(self),
-                 static_cast<void *>(self));
+    spdlog::info(
+        "SetPaused({}, {}) from {:#010x} (ID {} + {:#x}): paused {} -> {}, {} ms paused in total, app {} at {}", paused,
+        second, caller, function ? static_cast<std::uint32_t>(function->id) : 0, function ? function->offset : 0,
+        before, self->IsPaused(), self->PausedMilliseconds(), dao::TypeName(self), static_cast<void *>(self));
 }
 
 // The command queue's entry (dao/Addresses.h, kCCObject_QueueCommand):

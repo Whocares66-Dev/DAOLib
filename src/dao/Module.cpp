@@ -153,6 +153,38 @@ std::optional<daoaddr::Entry> Find(AddressId id)
     return library != nullptr ? library->Find(id) : std::nullopt;
 }
 
+namespace
+{
+
+// The running build's library read the other way, made on first use.
+const daoaddr::Index *RunningIndex()
+{
+    const daoaddr::Library *library = Library();
+    if (library == nullptr)
+    {
+        return nullptr;
+    }
+    static const daoaddr::Index index{*library};
+    return &index;
+}
+
+} // namespace
+
+std::optional<Place> Containing(std::uintptr_t runtime)
+{
+    const daoaddr::Index *index = RunningIndex();
+    if (index == nullptr || runtime < Base())
+    {
+        return std::nullopt;
+    }
+    const auto hit = index->At(static_cast<std::uint32_t>(runtime - Base()));
+    if (!hit || hit->offset > kFarthest)
+    {
+        return std::nullopt;
+    }
+    return Place{.id = hit->id, .offset = hit->offset};
+}
+
 std::uint32_t Preferred(std::uintptr_t runtime)
 {
     const daoaddr::Library *library = Library();
@@ -168,14 +200,13 @@ std::uint32_t Preferred(std::uintptr_t runtime)
     {
         return 0;
     }
-    static const daoaddr::Index index{*library};
-    const auto hit = index.At(static_cast<std::uint32_t>(runtime - Base()));
-    if (!hit || hit->offset > kFarthest)
+    const auto place = Containing(runtime);
+    if (!place)
     {
         return 0;
     }
-    const auto there = listing->Address(hit->id);
-    return there ? *there + hit->offset : 0;
+    const auto there = listing->Address(place->id);
+    return there ? *there + place->offset : 0;
 }
 
 std::uint32_t Preferred(AddressId id)
