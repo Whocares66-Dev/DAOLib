@@ -1076,6 +1076,14 @@ DAO_ADDRESS(kGameModeExplore_UseAbility, 16297)
 DAO_ADDRESS(kGameModeExplore_BeginTargeting, 16186)
 DAO_ADDRESS(kGameModeExplore_AttackTarget, 16183)
 DAO_ADDRESS(kGameModeExplore_ValidTarget, 16234)
+// What BeginTargeting keeps, read 2026-10-02: one object, the "globals from
+// 0x00C35FA0" above being its fields. BeginTargeting resets it (0x0070AB60)
+// and then sets +0x40 the ability, +0x44 its AbilityType and +0x4C its
+// TargetType (abi_base), +0x48 the target passed, +0x50 the caster, and
+// through its slot 21 +0x14, 1 while the targeting cursor is up; the
+// reset puts 0 in +0x14, +0x40 and +0x44 and -1 in +0x50. Explore mode's
+// aiming (0x00711054) tests +0x40 not 0 and +0x14 1. The name is ours.
+DAO_DATA(kAbilityTargeting, 101587)
 DAO_DATA(kSelectedTarget, 97479)
 // The one setter of the selected target: __thiscall on explore mode (id),
 // `ret 4`; it stores the id, tells the target's GUI and moves the

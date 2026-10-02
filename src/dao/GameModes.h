@@ -157,6 +157,36 @@ class GameModeExplore
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
     }
 
+    // The ability the player is aiming, while the targeting cursor is up: a
+    // quickbar ability pressed with no valid target, or RequestTarget, and
+    // whose it is. Nothing when no ability is being aimed. Read 2026-10-02
+    // from BeginTargeting and explore mode's aiming (dao/Addresses.h,
+    // kAbilityTargeting), which test the same two fields. Not yet seen in
+    // play.
+    struct Aim
+    {
+        std::int32_t ability = 0;
+        ObjectId caster = kInvalidObject;
+    };
+    static std::optional<Aim> Targeting()
+    {
+        constexpr std::size_t kActive = 0x14;
+        constexpr std::size_t kAbility = 0x40;
+        constexpr std::size_t kCaster = 0x50;
+        const auto *state = reinterpret_cast<const std::byte *>(Module::Address(addr::kAbilityTargeting));
+        if (state == nullptr)
+        {
+            return std::nullopt;
+        }
+        const auto active = *reinterpret_cast<const std::int32_t *>(state + kActive);
+        const auto ability = *reinterpret_cast<const std::int32_t *>(state + kAbility);
+        if (active != 1 || ability == 0)
+        {
+            return std::nullopt;
+        }
+        return Aim{ability, *reinterpret_cast<const ObjectId *>(state + kCaster)};
+    }
+
     // The selected target: what the cycle-target keys choose, and what a
     // quickbar ability is used on when it is valid for it (dao/Messages.h,
     // PerformAbilityMessage). Nothing when none is selected.
