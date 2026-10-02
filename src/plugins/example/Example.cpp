@@ -23,6 +23,7 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/Plugin.h"
+#include "dao/Resources.h"
 #include "dao/ScriptHooks.h"
 #include "dao/String.h"
 #include "dao/Tlk.h"
@@ -80,6 +81,24 @@ void CheckTables()
                  rows ? std::to_string(*rows) : std::string("nothing"),
                  columns ? std::to_string(*columns) : std::string("nothing"), dao::script::api::GetM2DARows(kAbilities),
                  dao::script::api::GetM2DAColumns(kAbilities));
+
+    // A file as the game finds it (dao/Resources.h), once: the compiled
+    // rules script, whose header is "NCS V1.0", and a name it has not.
+    static std::once_flag once;
+    std::call_once(once, [] {
+        const auto script = dao::resources::Read(L"rules_core.ncs");
+        std::string header;
+        if (script)
+        {
+            for (std::size_t i = 0; i < script->size() && i < 8; ++i)
+            {
+                header.push_back(static_cast<char>((*script)[i]));
+            }
+        }
+        spdlog::info("resources: rules_core.ncs {} ({} bytes, header \"{}\"); no_such_file.ncs exists: {}",
+                     script ? "read" : "not read", script ? script->size() : 0, header,
+                     dao::resources::Exists(L"no_such_file.ncs"));
+    });
 }
 
 int CheckCombatState(dao::script::CommandCall &call)

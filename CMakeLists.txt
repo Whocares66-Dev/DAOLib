@@ -171,6 +171,7 @@ add_library(
     src/dao/CommandEvents.cpp
     src/dao/Strings.cpp
     src/dao/Party.cpp
+    src/dao/Resources.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/CameraMoves.cpp

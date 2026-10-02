@@ -699,6 +699,24 @@ DAO_DATA(kScaleformResourceFile_Vftable, 63755)
 DAO_ADDRESS(kGuiMovie_DeliverTokens, 6777)
 DAO_ADDRESS(kResources_Find, 5034)
 DAO_ADDRESS(kResources_Release, 5021)
+// A resource's bytes (dao/Resources.h), read 2026-10-02 from the movie
+// file's constructor (its call at 0x00523412) and its length (slot 6,
+// 0x00523140, a tail-jump into Size). The handle Find gives is one word, a
+// pointer to the resource; Data and Size, each __thiscall on the handle
+// with no arguments, lock the resource (0x004D5540), read where its bytes
+// are (Data, through 0x004BF060) or how many (Size, the resource's +0x30),
+// and unlock it (0x004D5570). Both answer 0 when the lock is refused, so a
+// Size of 0 alone does not say the file is empty; and Data, finding no
+// bytes, first builds a message chosen by the resource's state
+// (0x004BEBC0), most likely a line in the game's log (the address
+// library's session, reading GOG and EA the same day). The third argument of Find is a mode, not a file
+// type: the file's name carries its extension, and the movie file asks
+// with 3 (the global at 0x00AF046C, beside 1 and 2), which has its bytes
+// there on return. The type numbers of the engine's older table
+// (0x004C9E3E, ncs 2010, 2da 2017: NWN's) are not what Find takes. The
+// names are ours.
+DAO_ADDRESS(kResources_Data, 5018)
+DAO_ADDRESS(kResources_Size, 5019)
 
 // Saving and loading (dev/SAVES.md), read 2026-09-30. SaveLoadProxy's
 // SaveGameMessage and LoadGameMessage handlers take a slot and a kind (0 a

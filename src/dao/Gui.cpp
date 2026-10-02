@@ -7,6 +7,7 @@
 #include "dao/Hook.h"
 #include "dao/Messages.h"
 #include "dao/Module.h"
+#include "dao/Resources.h"
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
@@ -626,16 +627,8 @@ bool MouseOverInterface()
 
 bool HasMovie(std::wstring_view file)
 {
-    // As GUI::ScaleformResourceFile opens a movie: a resource of type 3.
-    constexpr std::int32_t kMovieResource = 3;
-    WString name(file);
-    std::uintptr_t handle = 0;
-    using FindFn = std::uintptr_t *(__cdecl *)(std::uintptr_t *, const core::WStringRep *, std::int32_t);
-    reinterpret_cast<FindFn>(Module::Address(addr::kResources_Find))(&handle, name.Engine(), kMovieResource);
-    const bool found = handle != 0;
-    using ReleaseFn = void(__fastcall *)(std::uintptr_t *, int);
-    reinterpret_cast<ReleaseFn>(Module::Address(addr::kResources_Release))(&handle, 0);
-    return found;
+    // As GUI::ScaleformResourceFile opens a movie (dao/Resources.h).
+    return resources::Exists(file);
 }
 
 bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)
