@@ -109,8 +109,16 @@ struct Toggle
 //       .set = [](std::int32_t wanted) { return SetSpeedIndex(wanted); },
 //   }});
 //
-// Read 2026-10-02 from the options movie (dao/core/OptionsMovie.h). Not yet
-// seen in play.
+// Read 2026-10-02 from the options movie (dao/core/OptionsMovie.h). Seen in
+// play the same day (examples/options, the GOG game, the play tester): the
+// section under the right column, the slider as the Video tab's detail
+// sliders look, its label at the left and the value's name at the right;
+// the track's ends step it (there are no separate arrows, on the game's
+// either) and stop at the first and last; a drag snaps to a stop, passing
+// through those between, so `set` may be called once for each; the
+// tooltip under the label; the value kept across OK, Cancel and a second
+// opening; nothing overlapping, and the game's own sections and another
+// plugin's beside it as before.
 struct Choice
 {
     std::wstring name; // as a toggle's

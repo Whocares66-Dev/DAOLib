@@ -237,9 +237,14 @@ bool OnSendMessage(void * /*owner*/, std::string_view args)
     {
         wanted = value != "0" ? 1 : 0;
     }
-    else if (std::from_chars(value.data(), value.data() + value.size(), wanted).ec != std::errc{})
+    else if (std::from_chars(value.data(), value.data() + value.size(), wanted).ec != std::errc{} ||
+             wanted == g_entries[*entry].last)
     {
-        return true; // ours, and not a number: nothing to do
+        // Ours, and nothing to do: not a number, or the slider repeating
+        // the value it was just told (it sends whenever its value changes,
+        // a delivered one included; seen in play as a "change" to the same
+        // value as the screen opened).
+        return true;
     }
     g_clicks.push_back({*entry, wanted});
     return true;
