@@ -13,6 +13,7 @@ add_executable(
     test_input.cpp
     test_msvc8.cpp
     test_optionsmovie.cpp
+    test_owedtime.cpp
     test_names.cpp
     test_objects.cpp
     test_path.cpp

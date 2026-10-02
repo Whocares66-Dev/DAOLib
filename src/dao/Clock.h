@@ -44,6 +44,8 @@
 // worth.
 #pragma once
 
+#include "dao/ObjectId.h"
+
 namespace dao::clock
 {
 
@@ -55,8 +57,29 @@ bool Held();
 // Spend `seconds` of the clock on effects, regeneration and timers at
 // once: each effect ages, and each creature regenerates, by that much more
 // on its next update, and the timers that fall due in them come in order.
-// Works while held.
+// Works while held. Objects on clocks of their own are passed by.
 void Advance(float seconds);
+
+// A creature's own time, for a fight measured per creature (each one's
+// clock moving as its turn is spent): OwnClock(id) puts the effects on it,
+// its regeneration and the timers sent to it (its damage over time's
+// ticks) on a clock of its own, which the shared Advance passes by;
+// Advance(id, seconds) moves that one object's three, in steps as small as
+// wanted, the fractions of a millisecond kept. Hold(false) gives every
+// object back to the shared clock.
+//
+//   dao::clock::Hold(true);
+//   dao::clock::OwnClock(creature);          // each combatant
+//   dao::clock::Advance(creature, 0.016f);   // as its turn is spent
+//   dao::clock::Advance(4.0f);               // each round: areas, bystanders
+//   dao::clock::Hold(false);
+//
+// Read 2026-10-02: an effect is aged by its owner's clock (the object it
+// is on, dao/Effects.h), regeneration by its creature's (CCCreature::Update
+// is UpdateRegeneration's one caller), a timer by its target's
+// (dao/Timers.h). Not yet seen in play.
+void OwnClock(ObjectId object, bool own = true);
+void Advance(ObjectId object, float seconds);
 
 // How fast the game runs: 1 as it plays, 0.5 half speed, 2 twice; over
 // `seconds` if given, eased there from the speed it had, else at once.

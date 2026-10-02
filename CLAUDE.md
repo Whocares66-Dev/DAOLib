@@ -41,7 +41,7 @@ src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), 
                 (gen_message_handlers.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
                 CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray, Angle, Gff4, Conversation and TalkTable (the game's files), ScriptValue (a command's signature as data),
-                VmStack, GdaHash, InputCode (a key as the engine's input word), Inflate, GfxMovie and OptionsMovie (a Flash movie patched as bytes, and the options screen's), HeldEvents (delayed events on a plugin's clock); tested
+                VmStack, GdaHash, InputCode (a key as the engine's input word), Inflate, GfxMovie and OptionsMovie (a Flash movie patched as bytes, and the options screen's), HeldEvents and OwedTime (delayed events and ageing on a plugin's clocks); tested
 src/plugins/    one folder per plugin: probe/ watches and checks, example/ checks many parts of daolib in play
 examples/       small plugins, one per part of daolib, to read and copy from and to check it in play (examples/README.md)
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check

@@ -65,13 +65,14 @@ bool g_held = false;
 // The same, read without the lock by the hooks every event passes, which
 // have nothing to do while nothing is held.
 std::atomic<bool> g_holding{false};
-core::HeldEvents<Held> g_events;
+core::HeldByTarget<Held> g_events;
 // Events in the queue when the hold began, by their node, each with when
-// it comes due on the clock; read on the queue's next update after it.
+// it comes due on its target's clock; read on the queue's next update
+// after it.
 std::unordered_map<std::uint32_t, double> g_before;
 bool g_readBefore = false;
 // What was let go, to queue again on the queue's next update.
-std::vector<std::pair<double, Held>> g_released;
+std::vector<core::HeldByTarget<Held>::Left> g_released;
 
 std::mutex g_kindsLock;
 std::vector<std::int32_t> g_kinds{static_cast<std::int32_t>(kDotTick),
@@ -120,7 +121,7 @@ std::int32_t __fastcall AddEventDeltaTime(void *queue, int edx, std::uint32_t da
         const std::lock_guard lock(g_lock);
         if (g_held)
         {
-            g_events.Add(delay, Held{caller, target, id, data});
+            g_events.Add(target, delay, Held{caller, target, id, data});
             return 1;
         }
     }
@@ -173,7 +174,7 @@ bool TakeQueued(std::uint32_t *slot)
     reinterpret_cast<DeleteFn>(*destroy)(*at, 0, 1);
     *slot = 0;
     const std::lock_guard lock(g_lock);
-    g_events.AddAt(*due, Held{node.caller, node.target, node.id, node.data});
+    g_events.AddAt(node.target, *due, Held{node.caller, node.target, node.id, node.data});
     return true;
 }
 
@@ -186,12 +187,20 @@ void __fastcall ProcessEvent(void *queue, int edx, std::uint32_t *slot)
     g_processEvent.Original()(queue, edx, slot);
 }
 
-// The events of a held kind in the queue now, each with how long after
-// now it comes due (dao/Addresses.h: the list, walked from its tail as
-// AddEventLater does).
-std::vector<std::pair<std::uint32_t, double>> ReadQueue(std::uintptr_t queue)
+// An event of a held kind in the queue: its node, its target, and how long
+// after now it comes due.
+struct Queued
 {
-    std::vector<std::pair<std::uint32_t, double>> found;
+    std::uint32_t node = 0;
+    std::uint32_t target = 0;
+    double inSeconds = 0;
+};
+
+// The events of a held kind in the queue now (dao/Addresses.h: the list,
+// walked from its tail as AddEventLater does).
+std::vector<Queued> ReadQueue(std::uintptr_t queue)
+{
+    std::vector<Queued> found;
     const std::uintptr_t timer = WorldTimer();
     const auto list = TryRead<std::uint32_t>(queue + kQueueList);
     if (timer == 0 || !list || *list == 0)
@@ -211,7 +220,7 @@ std::vector<std::pair<std::uint32_t, double>> ReadQueue(std::uintptr_t queue)
         Node node{};
         if (event && *event != 0 && TryCopy(&node, *event, sizeof node) && IsHeldKind(node.id, node.data))
         {
-            found.emplace_back(*event, core::WorldSeconds(day, ms, node.day, node.time, dayLength));
+            found.push_back(Queued{*event, node.target, core::WorldSeconds(day, ms, node.day, node.time, dayLength)});
         }
         position = TryRead<std::uint32_t>(*position);
     }
@@ -228,25 +237,26 @@ using DeliverNowFn = std::int32_t(__fastcall *)(void *queue, int edx, std::uint3
 void BeforeUpdate(void *queue)
 {
     bool read = false;
-    std::vector<std::pair<double, Held>> released;
+    std::vector<core::HeldByTarget<Held>::Left> released;
     {
         const std::lock_guard lock(g_lock);
         read = std::exchange(g_readBefore, false) && g_held;
         released = std::exchange(g_released, {});
+        g_events.Prune();
     }
     if (read)
     {
         const auto before = ReadQueue(reinterpret_cast<std::uintptr_t>(queue));
         const std::lock_guard lock(g_lock);
-        for (const auto &[node, inSeconds] : before)
+        for (const auto &queued : before)
         {
-            g_before[node] = g_events.Now() + inSeconds;
+            g_before[queued.node] = g_events.Now(queued.target) + queued.inSeconds;
         }
     }
     if (!released.empty())
     {
         const std::uint32_t dayLength = DayLength(WorldTimer());
-        for (const auto &[left, event] : released)
+        for (const auto &[target, left, event] : released)
         {
             const core::WorldDelay delay = core::ToWorldDelay(left, dayLength);
             // A delay of none would be delivered now, where a held event
@@ -258,7 +268,7 @@ void BeforeUpdate(void *queue)
     const auto deliverNow = reinterpret_cast<DeliverNowFn>(Module::Address(addr::kAIMaster_DeliverNow));
     for (int i = 0; i < kMostPerUpdate; ++i)
     {
-        std::optional<Held> next;
+        std::optional<std::pair<std::uint32_t, Held>> next;
         {
             const std::lock_guard lock(g_lock);
             next = g_events.Next();
@@ -267,7 +277,8 @@ void BeforeUpdate(void *queue)
         {
             break;
         }
-        deliverNow(queue, 0, next->caller, next->target, next->id, next->data);
+        const Held &event = next->second;
+        deliverNow(queue, 0, event.caller, event.target, event.id, event.data);
     }
 }
 
@@ -291,21 +302,21 @@ Detour<ClearEventsFn> g_clearEvents;
 
 void __fastcall ClearEvents(void *queue, int edx)
 {
-    std::vector<std::pair<double, Held>> dropped;
+    std::vector<core::HeldByTarget<Held>::Left> dropped;
     {
         const std::lock_guard lock(g_lock);
         dropped = g_events.Release();
-        for (const auto &event : std::exchange(g_released, {}))
+        for (const auto &left : std::exchange(g_released, {}))
         {
-            dropped.push_back(event);
+            dropped.push_back(left);
         }
         g_before.clear();
     }
     using DeleteEventDataFn = void(__fastcall *)(void *queue, int edx, std::int32_t id, std::uint32_t data);
     const auto deleteData = reinterpret_cast<DeleteEventDataFn>(Module::Address(addr::kAIMaster_DeleteEventData));
-    for (const auto &[left, event] : dropped)
+    for (const auto &left : dropped)
     {
-        deleteData(queue, 0, event.id, event.data);
+        deleteData(queue, 0, left.event.id, left.event.data);
     }
     g_clearEvents.Original()(queue, edx);
 }
@@ -337,18 +348,18 @@ void Hold(bool held)
     {
         // Held again before the queue's update gave back what the release
         // let go: it waits here as it was.
-        for (const auto &[left, event] : std::exchange(g_released, {}))
+        for (const auto &[target, left, event] : std::exchange(g_released, {}))
         {
-            g_events.Add(left, event);
+            g_events.Add(target, left, event);
         }
         g_readBefore = true;
         return;
     }
     g_readBefore = false;
     g_before.clear();
-    for (const auto &event : g_events.Release())
+    for (const auto &left : g_events.Release())
     {
-        g_released.push_back(event);
+        g_released.push_back(left);
     }
 }
 
@@ -364,6 +375,24 @@ void Advance(float seconds)
     if (g_held)
     {
         g_events.Advance(seconds);
+    }
+}
+
+void OwnClock(ObjectId object, bool own)
+{
+    const std::lock_guard lock(g_lock);
+    if (g_held)
+    {
+        g_events.SetOwn(object, own);
+    }
+}
+
+void Advance(ObjectId object, float seconds)
+{
+    const std::lock_guard lock(g_lock);
+    if (g_held)
+    {
+        g_events.Advance(object, seconds);
     }
 }
 
@@ -386,6 +415,12 @@ std::size_t Waiting()
 {
     const std::lock_guard lock(g_lock);
     return g_events.Size() + g_released.size();
+}
+
+std::size_t Waiting(ObjectId object)
+{
+    const std::lock_guard lock(g_lock);
+    return g_events.Size(object);
 }
 
 } // namespace dao::timers

@@ -5,15 +5,17 @@
 #include "dao/Effects.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/Objects.h"
 #include "dao/SafeRead.h"
 #include "dao/Timers.h"
 #include "dao/TypeName.h"
+#include "dao/core/OwedTime.h"
 
 #include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <unordered_map>
-#include <vector>
+#include <optional>
+#include <utility>
 
 namespace dao::clock
 {
@@ -23,35 +25,31 @@ namespace
 
 std::atomic<bool> g_held{false};
 
-// Advance, for regeneration: as dao/Effects.cpp does for effects, a
-// generation per call, and each creature's stats, by address, remember
-// the last one they took.
+// What each creature's regeneration is owed of the plugin's advances, by
+// its stats' address, on the shared clock or the creature's own
+// (dao/core/OwedTime.h), as dao/Effects.cpp does for effects.
 std::mutex g_lock;
-std::vector<std::int32_t> g_advances;
-std::unordered_map<const void *, std::size_t> g_seen;
+core::OwedTime<std::uintptr_t> g_owed;
 constexpr std::size_t kForgetAfter = 4000;
 
-std::int32_t Advanced(const void *stats)
+// The creature updating on this thread: CCCreature::Update is the one
+// caller of UpdateRegeneration (0x006BE829), and hands it the stats of the
+// creature it updates.
+thread_local ObjectId t_creature = kInvalidObject;
+
+// CCCreature::Update, slot 87: __thiscall, no arguments, `ret`.
+using CreatureUpdateFn = std::int32_t(__fastcall *)(void *creature, int edx);
+Detour<CreatureUpdateFn> g_creatureUpdate;
+
+std::int32_t __fastcall CreatureUpdate(void *creature, int edx)
 {
-    const std::lock_guard lock(g_lock);
-    const std::size_t now = g_advances.size();
-    const auto [it, first] = g_seen.try_emplace(stats, now);
-    if (first)
-    {
-        if (g_seen.size() > kForgetAfter)
-        {
-            g_seen.clear();
-            g_seen.emplace(stats, now);
-        }
-        return 0;
-    }
-    std::int32_t ms = 0;
-    for (std::size_t i = it->second; i < now; ++i)
-    {
-        ms += g_advances[i];
-    }
-    it->second = now;
-    return ms;
+    const auto id = creature != nullptr
+                        ? TryRead<ObjectId>(reinterpret_cast<std::uintptr_t>(creature) + CGameObject::kId)
+                        : std::nullopt;
+    const ObjectId outer = std::exchange(t_creature, id.value_or(kInvalidObject));
+    const std::int32_t result = g_creatureUpdate.Original()(creature, edx);
+    t_creature = outer;
+    return result;
 }
 
 // CCCreatureStats::UpdateRegeneration: __thiscall (ms, bool in combat),
@@ -63,7 +61,13 @@ void __fastcall UpdateRegeneration(void *stats, int edx, std::int32_t ms, bool i
 {
     if (stats != nullptr)
     {
-        ms = (g_held.load(std::memory_order_relaxed) ? 0 : ms) + Advanced(stats);
+        const std::lock_guard lock(g_lock);
+        if (g_owed.Items() > kForgetAfter)
+        {
+            g_owed.ForgetItems();
+        }
+        ms = (g_held.load(std::memory_order_relaxed) ? 0 : ms) +
+             g_owed.Owed(reinterpret_cast<std::uintptr_t>(stats), t_creature);
     }
     g_updateRegeneration.Original()(stats, edx, ms, inCombat);
 }
@@ -71,8 +75,10 @@ void __fastcall UpdateRegeneration(void *stats, int edx, std::int32_t ms, bool i
 void Attach()
 {
     static std::once_flag once;
-    std::call_once(once,
-                   [] { g_updateRegeneration.Attach(addr::kCCCreatureStats_UpdateRegeneration, &UpdateRegeneration); });
+    std::call_once(once, [] {
+        g_creatureUpdate.Attach(addr::kCCCreature_Update, &CreatureUpdate);
+        g_updateRegeneration.Attach(addr::kCCCreatureStats_UpdateRegeneration, &UpdateRegeneration);
+    });
 }
 
 // The game's time scale: the application's +0x2C8, which its frame update
@@ -108,6 +114,11 @@ void Hold(bool held)
 {
     Attach();
     g_held = held;
+    if (!held)
+    {
+        const std::lock_guard lock(g_lock);
+        g_owed.ShareAll();
+    }
     effects::Hold(held);
     timers::Hold(held);
 }
@@ -122,10 +133,32 @@ void Advance(float seconds)
     Attach();
     {
         const std::lock_guard lock(g_lock);
-        g_advances.push_back(static_cast<std::int32_t>(seconds * 1000));
+        g_owed.Advance(static_cast<double>(seconds) * 1000);
     }
     effects::Advance(seconds);
     timers::Advance(seconds);
+}
+
+void OwnClock(ObjectId object, bool own)
+{
+    Attach();
+    {
+        const std::lock_guard lock(g_lock);
+        g_owed.SetOwn(object, own);
+    }
+    effects::OwnClock(object, own);
+    timers::OwnClock(object, own);
+}
+
+void Advance(ObjectId object, float seconds)
+{
+    Attach();
+    {
+        const std::lock_guard lock(g_lock);
+        g_owed.Advance(object, static_cast<double>(seconds) * 1000);
+    }
+    effects::Advance(object, seconds);
+    timers::Advance(object, seconds);
 }
 
 } // namespace dao::clock

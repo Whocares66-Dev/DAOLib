@@ -1,6 +1,7 @@
 // The clock temporary effects run on: buffs, debuffs, damage and healing
 // over time, timed summons, lasting areas. A plugin can hold it still, move
-// it on by a jump, or decide per effect how fast it runs.
+// it on by a jump, for every object or one, or decide per effect how fast
+// it runs.
 //
 //   dao::effects::Hold(true);       // the player's turn: nothing wears off
 //   ...
@@ -31,16 +32,32 @@
 namespace dao::effects
 {
 
-// Stop every temporary effect's time (true), or let it run again (false).
-// Held effects neither wear off nor end.
+// Stop every temporary effect's time (true), or let it run again (false,
+// which also gives every owner back to the shared clock). Held effects
+// neither wear off nor end.
 void Hold(bool held);
 bool Held();
 
 // Age every temporary effect by `seconds` more, each on its owner's next
 // update, once; an effect that runs out ends then. Works while held: the
 // way to spend a round's worth of time on effects at once. Effects applied
-// after the call are not aged by it.
+// after the call are not aged by it. Effects on an object on a clock of
+// its own are passed by.
 void Advance(float seconds);
+
+// Put an object's effects on a clock of their own (true), which the shared
+// Advance passes by, or back on the shared one (false): a creature's own
+// time in a fight measured per creature.
+void OwnClock(ObjectId owner, bool own = true);
+
+// Age one object's effects by `seconds` more, whether or not it is on its
+// own clock: in small steps if wanted, the fractions of a millisecond kept.
+// The owner is the object the effect is on, not its creator (a spider's
+// Overwhelm holds attacker and victim by an effect on each, each aged by
+// its own owner's clock). Read 2026-10-02: SEffectsHolder::AgeEffect,
+// AddElapsed's one caller, is __thiscall on the object's effects holder
+// (the object, the effect), and this follows it.
+void Advance(ObjectId owner, float seconds);
 
 // Decide per effect how much it ages: called with each temporary effect
 // and the milliseconds the engine would age it by, and returns the

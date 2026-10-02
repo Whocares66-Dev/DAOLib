@@ -136,3 +136,100 @@ TEST_CASE("the seconds between two world times")
     CHECK(WorldSeconds(3, 7199000, 4, 1000, 7200) == Approx(2.0));
     CHECK(WorldSeconds(3, 5000, 3, 1000, 7200) == Approx(-4.0));
 }
+
+TEST_CASE("an event sent after an advance counts from its end")
+{
+    // A round's four seconds spent, then a new area pulses for the first
+    // time before the queue next delivers: its next pulse is four seconds
+    // into the next round, not within the one already spent.
+    HeldEvents<std::string> held;
+    held.Add(1.0, "a");
+    held.Advance(4.0);
+    held.Add(1.5, "late");
+    const auto out = Drain(held);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].first == "a");
+    held.Advance(2.0);
+    const auto after = Drain(held);
+    REQUIRE(after.size() == 1);
+    CHECK(after[0].first == "late");
+    CHECK(after[0].second == Approx(5.5));
+}
+
+TEST_CASE("each target's clock moves with the shared one unless it has its own")
+{
+    dao::core::HeldByTarget<std::string> held;
+    held.Add(1, 1.5, "creature's tick");
+    held.Add(2, 4.0, "area's pulse");
+    held.SetOwn(1, true);
+    held.Advance(4.0);
+    auto next = held.Next();
+    REQUIRE(next);
+    CHECK(next->first == 2);
+    CHECK(next->second == "area's pulse");
+    CHECK_FALSE(held.Next());
+    // The creature's own clock, in small steps: nothing until 1.5 s of it.
+    held.Advance(1, 1.0);
+    CHECK_FALSE(held.Next());
+    held.Advance(1, 0.5);
+    next = held.Next();
+    REQUIRE(next);
+    CHECK(next->first == 1);
+    CHECK(held.Now(1) == Approx(1.5));
+}
+
+TEST_CASE("a target's own advance moves no other")
+{
+    dao::core::HeldByTarget<std::string> held;
+    held.Add(1, 1.0, "one");
+    held.Add(2, 1.0, "two");
+    held.Advance(2, 1.0);
+    const auto next = held.Next();
+    REQUIRE(next);
+    CHECK(next->first == 2);
+    CHECK_FALSE(held.Next());
+    CHECK(held.Size(1) == 1);
+}
+
+TEST_CASE("a target's time counts only from its first event")
+{
+    // Advancing a creature with nothing held for it does not bring forward
+    // the first tick sent to it after.
+    dao::core::HeldByTarget<std::string> held;
+    held.SetOwn(1, true);
+    held.Advance(1, 3.0);
+    held.Add(1, 1.5, "tick");
+    CHECK_FALSE(held.Next());
+    held.Advance(1, 1.5);
+    CHECK(held.Next());
+}
+
+TEST_CASE("releasing gives back every target's events and every own clock")
+{
+    dao::core::HeldByTarget<std::string> held;
+    held.Add(1, 2.0, "a");
+    held.Add(2, 3.0, "b");
+    held.SetOwn(1, true);
+    held.Advance(1, 0.5);
+    held.Advance(1.0);
+    const auto left = held.Release();
+    REQUIRE(left.size() == 2);
+    CHECK(left[0].target == 1);
+    CHECK(left[0].seconds == Approx(1.5));
+    CHECK(left[1].target == 2);
+    CHECK(left[1].seconds == Approx(2.0));
+    CHECK_FALSE(held.Own(1));
+    CHECK(held.Size() == 0);
+}
+
+TEST_CASE("clocks nothing waits on are dropped")
+{
+    dao::core::HeldByTarget<std::string> held;
+    held.Add(1, 1.0, "a");
+    held.Advance(1.0);
+    REQUIRE(held.Next());
+    CHECK_FALSE(held.Next());
+    held.Prune();
+    CHECK(held.Size() == 0);
+    CHECK(held.Now(1) == Approx(0.0));
+}

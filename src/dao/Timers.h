@@ -23,7 +23,14 @@
 // began is taken out as it comes due, due as long after the hold began as
 // it was then. Each update of the queue first delivers what has come due
 // here, earliest first, the clock moved to each one's time as it goes, as
-// the engine itself would deliver it (DeliverNow). Released, what is left
+// the engine itself would deliver it (DeliverNow).
+//
+// Each object the events are sent to has its clock here: a damage over
+// time's ticks are sent to its victim, an area's pulses to the area. The
+// shared Advance moves them all; OwnClock takes an object off it, to move
+// by Advance(object, seconds) alone (a creature's own time in a fight
+// measured per creature). A clock's time counts from its first event: an
+// object advanced with nothing held for it is not owed that time. Released, what is left
 // goes back into the queue with the time it has left. The queue's own
 // clearing (a game loaded) drops what is held here too.
 //
@@ -38,6 +45,7 @@
 // before a save. Not yet seen in play.
 #pragma once
 
+#include "dao/ObjectId.h"
 #include "dao/generated/ScriptConstants.h"
 
 #include <cstddef>
@@ -54,16 +62,28 @@ inline constexpr script::EventType kDotTick = static_cast<script::EventType>(101
 void Hold(bool held);
 bool Held();
 
-// Spend `seconds` on what is held: what falls due in them is delivered on
-// the queue's next update, in order. Nothing while not held.
+// Spend `seconds` on what is held for every object not on a clock of its
+// own: what falls due in them is delivered on the queue's next update, in
+// order. Nothing while not held.
 void Advance(float seconds);
+
+// Put an object on a clock of its own (true), which the shared Advance
+// passes by, or back on the shared one (false). While held; Hold(false)
+// gives every object back.
+void OwnClock(ObjectId object, bool own = true);
+
+// Spend `seconds` on what is held for one object, whether or not it is on
+// its own clock: in small steps if wanted, fractions kept. Nothing while
+// not held.
+void Advance(ObjectId object, float seconds);
 
 // Which kinds of script event are held: kDotTick and AOE_HEARTBEAT unless
 // a plugin says otherwise; a plugin's own timers may be added. Takes
 // effect for events sent after it.
 void HoldKind(script::EventType type, bool held = true);
 
-// How many events wait here now.
+// How many events wait here now, in all and for one object.
 std::size_t Waiting();
+std::size_t Waiting(ObjectId object);
 
 } // namespace dao::timers
