@@ -114,10 +114,18 @@ The loader needs nothing of its own for it. Its test for a wrapped build, the en
 - `the game's code is wrapped; plugins load when it first runs`, then 0.3 s later `the game's code is running, decrypted (the clock read from 0x8e21bb); loading plugins`: the CRT's first call, at the address GOG's listing has it.
 - `example.dll`, `example_resume.dll`, `probe.dll`: `loaded`; `starting the game`.
 
-Not yet seen: anything in the game through the plugins, the hooks' first calls, a fight. `tools\deploy.ps1 -Install steam` puts a build there; the Steam library's folder is writable, unlike EA's.
+**Played by hand, 2026-10-02 01:13**, by the play tester with master 5b17dbe deployed (`tools\deploy.ps1 -Install steam`; the Steam library's folder is writable, unlike EA's), the same steps as GOG's and EA's on the same save, and the journal besides. All eight passed, and nothing differed from GOG's but what the build is. Results with the log lines: `build\playtest-2026-10-02-steam\RESULTS.md`.
+
+- Start-up as on the 1st: Steam's file found, `wrapped`, then 0.33 s later `running, decrypted (the clock read from 0x8e21bb)`; seven plugins loaded; the probe's census 871 of 872, none refused.
+- The world on the screen: identical to GOG's and EA's to the pixel (the same feet and click pixels for both creatures, the same room). F11, the controls screen's two headings with a key bound and pressed, the options section with a click kept and a click refused, the preview's rings: as in GOG's.
+- The journal (`examples/journal`), the first sight of the wrapper: at the load 4 quests under way, 25 groups, the active one `shl000pt_main` "Sulcher's Pass"; the same two quests, titles and active one as the journal screen showed. The screen files the two parts of the ruins' quest as that quest's entries, by their texts, not under titles of their own; and shows the groups by name where a quest's `group` is the resource name.
+- The save needed the DLC items and Awakening content GOG's install has; the user installed them into Steam's game, and it then loaded plainly. No save was written.
+- Not the library's, perhaps: with the options screen up, the cursor on the blank part of its right half read `off the interface`, on the left half's `over`. Not tried at that spot in GOG's or EA's.
+
+The Steam folder was put back to stock after (`-Remove`).
 
 ## What is left
 
 - **A deployed run in EA's build.** `.\tools\deploy.ps1 -Install ea`, then the game from the EA app. The EA app's folder gives the user no write access; it is granted once from an elevated shell (the script's help has the line). What only this can show is the last step of "The wrapper finds VERSION.dll by name": that with the loader beside the exe and not yet in the process, it is the one found. `ea_play.py` puts the loader in itself.
 - **More of the game.** The in-world run stood in one place. A fight, a conversation, a chest and a save made are what the remaining getters and the examples want, in the EA build as they did in GOG's.
-- **Steam, played.** One start so far (below); nothing yet in the game through the plugins.
+- **Steam, further.** A fight, a conversation and a save made, as for EA's build.

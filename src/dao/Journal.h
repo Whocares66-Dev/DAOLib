@@ -31,7 +31,8 @@
 // is done stays in PlotList with Completed set; CompletedPlots was empty.
 // Completed and Updated read as text, "1" or "0", and as the number 0
 // either way. A description marks its objective <emp>...</emp> and breaks
-// lines with \r\n.
+// lines with \r\n. The wrapper over them seen in play the same day, in
+// Steam's game: the quests, titles and active one the journal screen shows.
 //
 // From the frame's thread (dao/Frame.h), where the engine reads its own.
 #pragma once
