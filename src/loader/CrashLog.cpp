@@ -273,7 +273,9 @@ class Report
     static void Header(Writer &w)
     {
         const auto fingerprint = dao::Module::Fingerprint();
-        w.Line("Dragon Age: Origins, DAOrigins.exe link stamp {:#x}{}", fingerprint ? fingerprint->timeDateStamp : 0,
+        w.Line("Dragon Age: Origins, DAOrigins.exe link stamp {:#x}, image size {:#x}, entry rva {:#x}{}",
+               fingerprint ? fingerprint->timeDateStamp : 0, fingerprint ? fingerprint->sizeOfImage : 0,
+               fingerprint ? fingerprint->entryPointRva : 0,
                dao::Module::IsKnownExecutable() ? " (a build the address library knows)"
                                                 : " -- NOT a build the address library knows");
         std::array<char, 32> when{};

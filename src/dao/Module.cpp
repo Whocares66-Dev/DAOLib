@@ -14,9 +14,11 @@ namespace dao::Module
 namespace
 {
 
-// The GOG build, by its link stamp: the one the Ghidra project, the names
-// and every address written in a comment are of (dao/Addresses.h).
-constexpr std::uint32_t kListingLinkStamp = 0x4eb19d53;
+// The GOG build: the one the Ghidra project, the names and every address
+// written in a comment are of (dao/Addresses.h). By all four fields, since
+// Steam's build has its link stamp and differs in the rest.
+constexpr daoaddr::BuildInfo kListing{
+    .linkStamp = 0x4eb19d53, .sizeOfImage = 0x009ec0a2, .entryPointRva = 0x004e3024, .imageBase = 0x00400000};
 
 // How far past an ID's address is still taken to be the same thing, going
 // from a running address back to the listing's: no function of the game's is
@@ -51,12 +53,12 @@ const Libraries &Loaded()
 {
     static const Libraries libraries = [] {
         Libraries out;
-        const auto have = Fingerprint();
-        if (!have || !have->is32Bit)
+        const auto want = Build();
+        if (!want)
         {
             return out;
         }
-        const std::string name = daoaddr::FileName(have->timeDateStamp);
+        const std::string name = daoaddr::FileName(*want);
         const auto own = OwnFolder();
         // Beside the loader: for the loader itself, for a plugin in
         // daolib\plugins, and for either when the loader sits beside the exe.
@@ -68,19 +70,20 @@ const Libraries &Loaded()
             {
                 continue;
             }
-            // The file's name says the link stamp; its header says the
-            // rest, and all of it must be the running exe's.
-            const daoaddr::BuildInfo &build = library->Build();
-            if (build.linkStamp != have->timeDateStamp || build.sizeOfImage != have->sizeOfImage ||
-                build.entryPointRva != have->entryPointRva || build.imageBase != have->imageBase)
+            // The name says the build; the header inside must say the same.
+            if (library->Build() != *want)
             {
                 continue;
             }
             out.folder = folder;
             out.running = std::move(library);
-            if (have->timeDateStamp != kListingLinkStamp)
+            if (*want != kListing)
             {
-                out.listing = daoaddr::Library::Load(folder / daoaddr::FileName(kListingLinkStamp));
+                out.listing = daoaddr::Library::Load(folder / daoaddr::FileName(kListing));
+                if (out.listing && out.listing->Build() != kListing)
+                {
+                    out.listing.reset();
+                }
             }
             break;
         }
@@ -97,7 +100,7 @@ const daoaddr::Library *Listing()
     {
         return nullptr;
     }
-    if (libraries.running->Build().linkStamp == kListingLinkStamp)
+    if (libraries.running->Build() == kListing)
     {
         return &*libraries.running;
     }
@@ -105,6 +108,19 @@ const daoaddr::Library *Listing()
 }
 
 } // namespace
+
+std::optional<daoaddr::BuildInfo> Build()
+{
+    const auto have = Fingerprint();
+    if (!have || !have->is32Bit)
+    {
+        return std::nullopt;
+    }
+    return daoaddr::BuildInfo{.linkStamp = have->timeDateStamp,
+                              .sizeOfImage = have->sizeOfImage,
+                              .entryPointRva = have->entryPointRva,
+                              .imageBase = have->imageBase};
+}
 
 std::uintptr_t Base()
 {
@@ -191,7 +207,7 @@ std::uint32_t Preferred(std::uintptr_t runtime)
     // In GOG's build the listing's address is the image's own; so it is
     // taken to be in a build the library does not know, where there is
     // nothing better to say.
-    if (library == nullptr || library->Build().linkStamp == kListingLinkStamp)
+    if (library == nullptr || library->Build() == kListing)
     {
         return ImageAddress(runtime);
     }

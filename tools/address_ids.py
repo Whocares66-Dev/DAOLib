@@ -80,8 +80,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 LIBRARY = os.path.join(ROOT, "extern", "DAOAddressLibrary")
 # The build every address written in the source was read in: GOG's, as
-# src/dao/Module.cpp's kListingLinkStamp says for the running game.
-LISTING_LINK_STAMP = 0x4EB19D53
+# src/dao/Module.cpp's kListing says for the running game. All four header
+# fields, since Steam's build has GOG's link stamp.
+LISTING = {
+    "link_stamp": 0x4EB19D53,
+    "size_of_image": 0x009EC0A2,
+    "entry_point_rva": 0x004E3024,
+    "image_base": 0x00400000,
+}
 
 HEX = r"0[xX][0-9A-Fa-f]+"
 # A row as it stays: the constant and the ID.
@@ -109,11 +115,14 @@ def database():
 def listing(db):
     """The key of the listing's build in the table."""
     keys = [
-        b["key"] for b in db.builds if int(b["link_stamp"], 16) == LISTING_LINK_STAMP
+        b["key"]
+        for b in db.builds
+        if all(int(b[field], 16) == value for field, value in LISTING.items())
     ]
     if len(keys) != 1 or keys[0] not in db.columns:
         raise SystemExit(
-            f"the address library has no column for the build linked at {LISTING_LINK_STAMP:#010x}"
+            "the address library has no column for GOG's build "
+            f"(linked at {LISTING['link_stamp']:#010x}, image size {LISTING['size_of_image']:#x})"
         )
     return keys[0]
 

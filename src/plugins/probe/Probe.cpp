@@ -255,8 +255,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     const auto fingerprint = dao::Module::Fingerprint();
-    spdlog::info("exe at {:#x}, link stamp {:#x}, {}", dao::Module::Base(),
-                 fingerprint ? fingerprint->timeDateStamp : 0,
+    spdlog::info("exe at {:#x}, link stamp {:#x}, image size {:#x}, {}", dao::Module::Base(),
+                 fingerprint ? fingerprint->timeDateStamp : 0, fingerprint ? fingerprint->sizeOfImage : 0,
                  info->knownExecutable ? "a build the address library knows" : "not a build the address library knows");
     if (!info->knownExecutable)
     {

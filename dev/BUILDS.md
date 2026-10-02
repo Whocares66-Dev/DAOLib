@@ -6,7 +6,7 @@ Dragon Age: Origins Ultimate Edition is sold by GOG, EA and Steam, all at 1.05.1
 |---|---|
 | GOG | The one everything was read in: the Ghidra project, the names, every address in a comment. Verified in play. |
 | EA app | Known to the address library. Seen in play 2026-10-01 with the loader put in from the build tree ("Seen in play"). Not yet run deployed. |
-| Steam | Not read: no copy yet. It needs a column in the address library and nothing here. |
+| Steam | `steam-1.05`, read 2026-10-01 in the address library (its `dev/STEAM.md`): GOG's code byte for byte, every GOG ID at its GOG address, wrapped by SteamStub 2.1, and with GOG's link stamp. Below. |
 
 ## IDs, not addresses
 
@@ -25,7 +25,7 @@ The row is the ID and nothing else about the function. What the engine calls it 
 
 ## The files
 
-The address library's build packs its table into one file per build of the game, `daoaddresses-<link stamp>.bin`, in `build\<preset>\daolib\addresses\`. `tools\deploy.ps1` puts them in `bin_ship\daolib\addresses\`, beside the plugins. The loader and each plugin read the one named for the running exe's link stamp, and check that its header gives the exe's image size, entry point and base too (`dao::Module::Library`).
+The address library's build packs its table into one file per build of the game, `daoaddresses-<link stamp>-<image size>-<entry rva>-<base>.bin`, in `build\<preset>\daolib\addresses\`. `tools\deploy.ps1` puts them in `bin_ship\daolib\addresses\`, beside the plugins. The loader and each plugin read the one named for the running exe's four header fields (`dao::Module::Build`), and check that the header inside says the same (`dao::Module::Library`). All four, since Steam's build has GOG's link stamp. The library also still writes GOG's and EA's files under their first names, by the link stamp alone; nothing here reads those any more.
 
 **A build with no file is a build nothing is done in**: the loader logs which file it wanted and loads no plugin. So which builds the library works in is not compiled into anything. A new build of the game needs a new file in that folder, and neither the loader nor a plugin rebuilt. The GOG build's file goes with the others whichever build is installed, since `Preferred` reads it.
 
@@ -101,8 +101,23 @@ Then in the world, 150 seconds in a loaded save (`python tools\ea_play.py --for 
 
 **The two installs share their saves and do not have the same content.** Both keep saves in `Documents\BioWare\Dragon Age`, and GOG's Ultimate Edition has the Collector's Edition's items where the EA app's has not: the add-in `DAO_PRC_PROMO_C2`, `addins\dao_prc_promo_c2` in GOG's folder. Read 2026-10-01 from a save's own list (`SavegameAddinsList`, `tools\gff4.py --dump`): 39 add-ins, all BioWare's, and that one alone not in EA's `addins`. A save made in the GOG game, asked for in the EA game, gets "This saved game cannot be loaded. It requires the following content: Collector's Edition", with Force Load and Cancel, and the game waits. That is the game's, not the library's. `dao::saves::ForceLoad` is the Force Load button (the dialog's answer, `GUIDialogResultMessage` with 3, to the application), for a tool that drives the game; `examples\resume` uses it only where a file `example_resume.force` says a check is running unattended, which `ea_play.py --force-load` writes.
 
+## Steam
+
+Read 2026-10-01 in the address library (`extern\DAOAddressLibrary\dev\STEAM.md`), from the install at `E:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition\bin_ship`. Unwrapped, Steam's exe is GOG's: the whole `.text` is the same bytes, and every one of GOG's IDs is at its GOG address, so nothing here reads differently in it. What differs is the wrapper, SteamStub 2.1: `.text` is encrypted on disk, a section of its own (`.bind`) holds the stub, and the headers' entry point is the stub's (`0x9ed2ee`, image size `0xa49000`). And the link stamp is GOG's, `0x4eb19d53`, which is why the address files are named by all four header fields (above).
+
+The loader needs nothing of its own for it. Its test for a wrapped build, the entry point's ID against the headers' entry point, says wrapped, and it waits for the game's own code's first call, as in EA's build.
+
+**Started once, 2026-10-01 23:18**, by the session that read the address library's Steam column at the user's request, from a DAOLib worktree of its own with the same changes (`C:\project\DAOAddressLibrary\game\daolib-steam`, branch `feat/steam-platform`), deployed into the Steam folder with the probe and two examples. `loader.log`:
+
+- `DAOrigins.exe at 0x400000: link stamp 0x4eb19d53, image size 0xa49000, entry rva 0x9ed2ee`: the stub leaves the headers in memory as they are on disk.
+- `address library: 103528 IDs for this build, from ...\daoaddresses-4eb19d53-00a49000-009ed2ee-00400000.bin`
+- `the game's code is wrapped; plugins load when it first runs`, then 0.3 s later `the game's code is running, decrypted (the clock read from 0x8e21bb); loading plugins`: the CRT's first call, at the address GOG's listing has it.
+- `example.dll`, `example_resume.dll`, `probe.dll`: `loaded`; `starting the game`.
+
+Not yet seen: anything in the game through the plugins, the hooks' first calls, a fight. `tools\deploy.ps1 -Install steam` puts a build there; the Steam library's folder is writable, unlike EA's.
+
 ## What is left
 
 - **A deployed run in EA's build.** `.\tools\deploy.ps1 -Install ea`, then the game from the EA app. The EA app's folder gives the user no write access; it is granted once from an elevated shell (the script's help has the line). What only this can show is the last step of "The wrapper finds VERSION.dll by name": that with the loader beside the exe and not yet in the process, it is the one found. `ea_play.py` puts the loader in itself.
 - **More of the game.** The in-world run stood in one place. A fight, a conversation, a chest and a save made are what the remaining getters and the examples want, in the EA build as they did in GOG's.
-- **Steam.** A column in the address library when there is a copy.
+- **Steam, played.** One start so far (below); nothing yet in the game through the plugins.

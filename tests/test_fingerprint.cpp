@@ -1,5 +1,7 @@
 #include "dao/core/Fingerprint.h"
 
+#include "dao/Addresses.h"
+
 #include "daoaddr/Library.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -53,16 +55,21 @@ std::optional<Fingerprint> FingerprintOfFile(const std::filesystem::path &exe)
     return ReadFingerprint(head);
 }
 
+daoaddr::BuildInfo BuildOf(const Fingerprint &exe)
+{
+    return daoaddr::BuildInfo{.linkStamp = exe.timeDateStamp,
+                              .sizeOfImage = exe.sizeOfImage,
+                              .entryPointRva = exe.entryPointRva,
+                              .imageBase = exe.imageBase};
+}
+
 // Whether the address library, as this build packed it, has a file for the
-// build an exe is: named by its link stamp, and saying the same of the rest.
+// build an exe is: named by its four header fields, and saying the same.
 bool LibraryKnows(const Fingerprint &exe)
 {
     const auto library =
-        daoaddr::Library::Load(std::filesystem::path(DAO_ADDRESS_DATA_DIR) / daoaddr::FileName(exe.timeDateStamp));
-    return library && library->Build() == daoaddr::BuildInfo{.linkStamp = exe.timeDateStamp,
-                                                             .sizeOfImage = exe.sizeOfImage,
-                                                             .entryPointRva = exe.entryPointRva,
-                                                             .imageBase = exe.imageBase};
+        daoaddr::Library::Load(std::filesystem::path(DAO_ADDRESS_DATA_DIR) / daoaddr::FileName(BuildOf(exe)));
+    return exe.is32Bit && library && library->Build() == BuildOf(exe);
 }
 
 } // namespace
@@ -95,6 +102,44 @@ TEST_CASE("bytes that are not a PE image give nothing")
     auto cut = Header(kSample);
     cut.resize(0x80 + 24 + 40); // ends inside the optional header, before SizeOfImage
     CHECK_FALSE(ReadFingerprint(cut).has_value());
+}
+
+TEST_CASE("Steam's build has GOG's link stamp and a file of its own")
+{
+    // The stock Steam exe as installed (the address library's dev/STEAM.md):
+    // SteamStub's headers, GOG's link stamp.
+    auto steam = kSample;
+    steam.sizeOfImage = 0x00a49000;
+    steam.entryPointRva = 0x009ed2ee;
+    REQUIRE(steam.timeDateStamp == kSample.timeDateStamp);
+    CHECK(LibraryKnows(steam));
+    CHECK(daoaddr::FileName(BuildOf(steam)) == "daoaddresses-4eb19d53-00a49000-009ed2ee-00400000.bin");
+    CHECK(daoaddr::FileName(BuildOf(steam)) != daoaddr::FileName(BuildOf(kSample)));
+    // EA's has a file by all four fields too.
+    CHECK(LibraryKnows(Fingerprint{.timeDateStamp = 0x52164c37,
+                                   .sizeOfImage = 0x0096b000,
+                                   .entryPointRva = 0x00001000,
+                                   .imageBase = 0x00400000,
+                                   .is32Bit = true}));
+    // Any one field off is another exe.
+    auto entry = steam;
+    entry.entryPointRva += 1;
+    CHECK_FALSE(LibraryKnows(entry));
+    auto base = steam;
+    base.imageBase += 0x1000;
+    CHECK_FALSE(LibraryKnows(base));
+    // The game's code is GOG's, at GOG's addresses: the CRT's entry point,
+    // which the stub jumps to once it has decrypted the code, among them.
+    const auto load = [](const Fingerprint &exe) {
+        return daoaddr::Library::Load(std::filesystem::path(DAO_ADDRESS_DATA_DIR) / daoaddr::FileName(BuildOf(exe)));
+    };
+    const auto gog = load(kSample);
+    const auto stub = load(steam);
+    REQUIRE(gog);
+    REQUIRE(stub);
+    CHECK(stub->Rva(dao::addr::kEntryPoint) == gog->Rva(dao::addr::kEntryPoint));
+    CHECK(stub->Rva(dao::addr::kEntryPoint) != steam.entryPointRva);
+    CHECK(stub->Rva(dao::addr::kCClientExoApp_SetPaused) == gog->Rva(dao::addr::kCClientExoApp_SetPaused));
 }
 
 TEST_CASE("the address library has a file for the build that was read, and none for another")

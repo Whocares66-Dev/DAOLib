@@ -21,16 +21,18 @@
     game to stock: version.dll is ours alone, the system's stays in SysWOW64 untouched.
     The logs are elsewhere (Documents) and stay.
 
-    -Install picks the game: gog (the default) or ea, the EA app's install
-    (dev/BUILDS.md), which takes the same files in the same places. The EA app installs
+    -Install picks the game: gog (the default), ea, the EA app's install, or steam,
+    Steam's (dev/BUILDS.md), each of which takes the same files in the same places.
+    Steam's library on this machine is on E:, writable as it is. The EA app installs
     under Program Files with no write access for the user, so its bin_ship needs that
     granted once, from an elevated shell:
         icacls "C:\Program Files\EA Games\Dragon Age\bin_ship" /grant "${env:USERNAME}:(OI)(CI)M"
-    -Game names a bin_ship folder that is neither.
+    -Game names a bin_ship folder that is none of them.
 
 .EXAMPLE
     .\tools\deploy.ps1                 # debug build into the GOG install
     .\tools\deploy.ps1 -Install ea     # into the EA app's
+    .\tools\deploy.ps1 -Install steam  # into Steam's
     .\tools\deploy.ps1 -Examples saves  # and examples\saves
     .\tools\deploy.ps1 -Preset release
     .\tools\deploy.ps1 -Remove
@@ -41,7 +43,7 @@ param(
     [string] $Preset = 'debug',
     [switch] $Remove,
     [string[]] $Examples = @(),
-    [ValidateSet('gog', 'ea')]
+    [ValidateSet('gog', 'ea', 'steam')]
     [string] $Install = 'gog',
     [string] $Game
 )
@@ -52,8 +54,9 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 if (-not $Game) {
     $Game = @{
-        gog = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins\bin_ship'
-        ea  = 'C:\Program Files\EA Games\Dragon Age\bin_ship'
+        gog   = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins\bin_ship'
+        ea    = 'C:\Program Files\EA Games\Dragon Age\bin_ship'
+        steam = 'E:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition\bin_ship'
     }[$Install]
 }
 if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.exe in $Game" }

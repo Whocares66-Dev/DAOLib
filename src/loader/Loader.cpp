@@ -21,6 +21,12 @@
 // (__security_init_cookie, the entry point's first call), so a detour on
 // GetSystemTimeAsFileTime, watching for a caller inside the exe's .text, is
 // the same moment one call later, on the same thread.
+//
+// Steam's build is wrapped the same way, by SteamStub 2.1 (the address
+// library's dev/STEAM.md): its headers' entry point is the stub's, in a
+// section of its own, and .text is encrypted until the stub has run. The
+// same way in serves it: nothing here knows which wrapper it is, only that
+// the headers' entry point is not the game's.
 #include "dao/Addresses.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
@@ -181,20 +187,21 @@ void Attach()
         spdlog::info("DAOrigins.exe at {:#x}: link stamp {:#x}, image size {:#x}, entry rva {:#x}", dao::Module::Base(),
                      fingerprint->timeDateStamp, fingerprint->sizeOfImage, fingerprint->entryPointRva);
     }
-    if (fingerprint == std::nullopt || library == nullptr)
+    const auto build = dao::Module::Build();
+    if (!build || library == nullptr)
     {
         spdlog::error("the address library has no file for this build of the game ({} beside the loader, under "
                       "daolib\\addresses); plugins are not loaded",
-                      daoaddr::FileName(fingerprint ? fingerprint->timeDateStamp : 0));
+                      build ? daoaddr::FileName(*build) : std::string("an exe whose headers do not read"));
         return;
     }
     // The file by name, not its folder alone: which build's file was read is
     // the first thing to check when an ID is not where it should be.
     spdlog::info("address library: {} IDs for this build, from {}", library->Count(),
-                 (dao::Module::AddressFolder() / daoaddr::FileName(fingerprint->timeDateStamp)).string());
+                 (dao::Module::AddressFolder() / daoaddr::FileName(*build)).string());
     // A wrapped build's headers give the wrapper's entry point, not the
     // game's, which the address library knows by its ID like any function.
-    if (library->Rva(dao::addr::kEntryPoint) != fingerprint->entryPointRva)
+    if (library->Rva(dao::addr::kEntryPoint) != build->entryPointRva)
     {
         if (!WaitForGameCode())
         {

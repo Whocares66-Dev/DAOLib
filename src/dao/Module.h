@@ -4,10 +4,12 @@
 // The game is sold in more than one build (extern/DAOAddressLibrary's
 // dev/BUILDS.md), each with its functions and globals somewhere else. The
 // library holds IDs (dao/Addresses.h), and here each is looked up in the
-// file for the build that is running: daolib\addresses\daoaddresses-<link
-// stamp>.bin, beside the loader. A build with no file is one the library
-// does not know, and nothing is hooked or read in it. A new build of the
-// game is a new file there, with neither the loader nor a plugin rebuilt.
+// file for the build that is running, beside the loader:
+// daolib\addresses\daoaddresses-<link stamp>-<image size>-<entry point>-
+// <base>.bin, named by all four of the exe's header fields, since Steam's
+// build has GOG's link stamp. A build with no file is one the library does
+// not know, and nothing is hooked or read in it. A new build of the game is
+// a new file there, with neither the loader nor a plugin rebuilt.
 //
 // Logs, the probe's call chains and the crash logger write addresses as the
 // GOG build's Ghidra listing shows them, whichever build is running, since
@@ -38,6 +40,11 @@ std::filesystem::path Path();
 
 // The fingerprint of the loaded image, read from its headers in memory.
 std::optional<core::Fingerprint> Fingerprint();
+
+// The running exe's headers as the address library names a build: the
+// four fields its file for the build is named by (daoaddr::FileName).
+// Nothing if the headers cannot be read or the exe is not 32-bit.
+std::optional<daoaddr::BuildInfo> Build();
 
 // The address library's file for the running build, read once; null if
 // there is none, or it is for another build than its name says. Every hook
