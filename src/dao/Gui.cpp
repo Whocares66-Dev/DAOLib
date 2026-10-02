@@ -590,6 +590,17 @@ void OnMovieLoad(std::wstring_view name, MoviePatch patch)
     }
 }
 
+bool MouseOverInterface()
+{
+    void *manager = Manager();
+    if (manager == nullptr)
+    {
+        return false;
+    }
+    using Fn = bool(__fastcall *)(void *, int);
+    return reinterpret_cast<Fn>(Module::Address(addr::kScaleformManager_MouseOverInterface))(manager, 0);
+}
+
 bool HasMovie(std::wstring_view file)
 {
     // As GUI::ScaleformResourceFile opens a movie: a resource of type 3.

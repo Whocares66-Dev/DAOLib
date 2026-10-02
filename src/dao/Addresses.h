@@ -541,6 +541,13 @@ DAO_ADDRESS(kMessageRegistry_Register, 5110)
 // its owner's +0x1C, slot 42 (GFx's SetExternalInterfaceRetVal). The
 // names are ours but for the GFx classes'.
 DAO_DATA(kGuiManager, 100415)
+// Whether the mouse is the interface's, read 2026-10-01 (dao/Gui.h,
+// MouseOverInterface): __thiscall on the manager, no arguments. False
+// before the manager is set up (its +0x15); else true unless the set of
+// movies the mouse is over (+0x80) is empty and no movie holds a mouse
+// press (+0xA0). Explore mode's chooser asks it through the GUI system's
+// slot 71 before it picks (dao/GameModes.h). The name is ours.
+DAO_ADDRESS(kScaleformManager_MouseOverInterface, 6593)
 DAO_ADDRESS(kEclipseGFxFSCommandHandler_Callback, 6584)
 DAO_ADDRESS(kEclipseGFxExternalInterface_Callback, 6585)
 DAO_ADDRESS(kGuiCommands_DispatchFSCommand, 6866)

@@ -294,6 +294,19 @@ bool CloseScreen(std::wstring_view name);
 // (L"turnorder.gfx"), as GFx would ask for it.
 bool HasMovie(std::wstring_view file);
 
+// Whether the mouse is over an element of one of the interface's movies,
+// or one of them holds a mouse press: the engine's own test, which explore
+// mode asks before it picks what is under the cursor, choosing nothing when
+// the answer is yes (dao/GameModes.h). A plugin that draws at the cursor
+// from the world's pick asks this to tell "over the interface" from "over
+// nothing"; and a plugin's own movie under the cursor makes it true as the
+// game's do. It changes with the mouse's events, not each frame. False
+// before the interface is up. Seen in play, 2026-10-01, in the GOG game
+// and the EA game alike (examples/world logs each change): yes at the main
+// menu, no with the cursor over the world, yes while the game's menu was
+// open and no when it closed.
+bool MouseOverInterface();
+
 // A movie of the game's own, changed as the game opens its file: the way
 // to add to a screen whose contents are written in its script, as the
 // controls screen's list of actions is (dao/Input.h does it with this).
