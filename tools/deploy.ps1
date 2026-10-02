@@ -144,8 +144,19 @@ $builtAddresses = Join-Path $build 'daolib\addresses'
 if (-not (Test-Path (Join-Path $builtAddresses '*.bin'))) { throw "No address files in $builtAddresses; the build makes them" }
 $addresses = Join-Path $daolib 'addresses'
 New-Item -ItemType Directory -Force $addresses | Out-Null
-foreach ($file in Get-ChildItem -Path $builtAddresses -Filter '*.bin') {
-    Copy-Item -Force $file.FullName (Join-Path $addresses $file.Name)
+$built = @(Get-ChildItem -Path $builtAddresses -Filter '*.bin' | ForEach-Object { $_.Name })
+foreach ($name in $built) {
+    Copy-Item -Force (Join-Path $builtAddresses $name) (Join-Path $addresses $name)
+}
+# The folder holds what this build has and nothing else: a file the address
+# library no longer writes (the names by link stamp alone, before its
+# ae992b3) would be stale here, and a loader that still asked for it would
+# read an old table.
+foreach ($file in Get-ChildItem -Path $addresses -Filter 'daoaddresses-*.bin') {
+    if ($built -notcontains $file.Name) {
+        Remove-Item -Force $file.FullName
+        Show-Info "removed $($file.Name): the build has no such file"
+    }
 }
 Show-Ok "addresses -> $addresses"
 $functions = Join-Path $repo 'game\ghidra\functions.tsv'
