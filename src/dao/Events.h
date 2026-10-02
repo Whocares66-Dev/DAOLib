@@ -27,6 +27,15 @@
 // before a frame's IsDead poll). For the moment of death itself, a plugin watches IsDead
 // or EVENT_TYPE_DAMAGED.
 //
+// EVENT_TYPE_DAMAGED is damage as it is taken: effect_damage_h.nss sends
+// it (events_h.nss, SendEventOnDamaged) straight after it lowers a
+// creature's health, the one place that does, once mana shields,
+// resistances and the friendly-fire scaling have had their say. Float(0)
+// is the damage, Int(0) its type (DAMAGE_TYPE_*, physical 1), Int(1) the
+// ability, the creator the attacker. Only for a blow that does not kill:
+// a fatal one sends the death instead. Read 2026-10-02 from the scripts;
+// the event itself not yet seen in play.
+//
 // Callbacks run on the scripts' thread, and see the event the target is
 // about to handle; they observe, they do not change or stop it.
 #pragma once

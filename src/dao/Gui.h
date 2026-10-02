@@ -160,8 +160,12 @@ static_assert(sizeof(Value) == 16);
 // GetUserData. No slots for GFx 3.1's CreateString and CreateObject sit
 // before SetVariable, so this is the 3.0 interface.
 //
-// Not yet seen in play. Call it on the thread the movie's own calls come
-// on (an FSCommand or ExternalInterface handler runs there).
+// SetArray and Invoke are seen in play: dao/Options.h delivers its
+// checkboxes' states with them (SetArray on TokenManager's two arrays, then
+// Invoke("TokenManager.PerformBatchTokenReplacements"), 2026-10-01), and the
+// boxes showed them. A path needs no "_root." in front. Call it on the
+// thread the movie's own calls come on (an FSCommand or ExternalInterface
+// handler runs there); the frame's thread is not shown to be that one.
 class Movie
 {
   public:
