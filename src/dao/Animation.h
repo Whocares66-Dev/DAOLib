@@ -34,8 +34,14 @@
 //   1.42 s for a follower and 1.58 to 1.62 s for the player.
 // - AimDuration read nothing at any time, a bow's shot included.
 // - An ability whose row has no CastAnim (Pinning Shot, a spider's
-//   Overwhelm) reads nothing here, though it plays something (1.7 s, 2.4 s):
-//   its animation comes from elsewhere, not read.
+//   Overwhelm) reads nothing here, though it plays something (1.7 s, 2.4 s).
+//   Read after: the use-ability step (0x007A7440) sends the ability's
+//   script EVENT_TYPE_ABILITY_CAST_START, and then, with a CastAnim, plays
+//   it and lets the impact come at its point; with none, it sends
+//   EVENT_TYPE_ABILITY_CAST_IMPACT at once and plays nothing. What such an
+//   ability takes is what its script does then: an archery talent's is a
+//   shot (Pinning Shot's 1.7 s, a shot's 1.4 to 1.6 s and the command's
+//   ends), a monster's special its own.
 //
 // From the frame's thread.
 #pragma once
