@@ -21,10 +21,43 @@ std::wstring TextAt(const std::wstring &prefix, std::wstring_view member)
     return attribute != nullptr ? attribute->Text() : std::wstring();
 }
 
+// Completed and Updated: bools that answer "1" or "0" as text and 0 as a
+// number either way (seen in play).
 bool FlagAt(const std::wstring &prefix, std::wstring_view member)
 {
     const data::Attribute *attribute = data::Find(prefix + std::wstring(member));
-    return attribute != nullptr && attribute->Number() != 0.0;
+    return attribute != nullptr && attribute->Text() == L"1";
+}
+
+// A description as the journal shows it: the objective between <emp> and
+// </emp>, which is taken out as well, and the marks dropped.
+void SplitDescription(const std::wstring &text, Quest &quest)
+{
+    constexpr std::wstring_view kOpen = L"<emp>";
+    constexpr std::wstring_view kClose = L"</emp>";
+    std::wstring plain;
+    std::size_t at = 0;
+    while (at < text.size())
+    {
+        const std::size_t open = text.find(kOpen, at);
+        if (open == std::wstring::npos)
+        {
+            plain += text.substr(at);
+            break;
+        }
+        plain += text.substr(at, open - at);
+        const std::size_t start = open + kOpen.size();
+        const std::size_t close = text.find(kClose, start);
+        const std::wstring marked =
+            text.substr(start, close == std::wstring::npos ? std::wstring::npos : close - start);
+        plain += marked;
+        if (quest.objective.empty())
+        {
+            quest.objective = marked;
+        }
+        at = close == std::wstring::npos ? text.size() : close + kClose.size();
+    }
+    quest.description = std::move(plain);
 }
 
 // The entry at a path that ends in '.', or nothing if there is none: every
@@ -39,7 +72,7 @@ std::optional<Quest> QuestAt(const std::wstring &prefix)
     Quest quest;
     quest.plot = resource->Text();
     quest.name = TextAt(prefix, L"Name");
-    quest.description = TextAt(prefix, L"Description");
+    SplitDescription(TextAt(prefix, L"Description"), quest);
     quest.parent = TextAt(prefix, L"ParentPlot");
     quest.group = TextAt(prefix, L"PlotGroup");
     quest.area = TextAt(prefix, L"AreaTag");

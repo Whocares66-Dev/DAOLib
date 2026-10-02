@@ -24,8 +24,16 @@
 // talk table, already in the player's language, and Completed and Updated
 // as bools.
 //
+// Seen in play 2026-10-02 by the Eluvian server, path by path, in Lyna's
+// save at the ruins: four quests under way (the main plot, the ruins', and
+// two parts of it, one with Completed set), the walk ending at the fifth
+// index, the active one the main plot's, one group. A part of a quest that
+// is done stays in PlotList with Completed set; CompletedPlots was empty.
+// Completed and Updated read as text, "1" or "0", and as the number 0
+// either way. A description marks its objective <emp>...</emp> and breaks
+// lines with \r\n.
+//
 // From the frame's thread (dao/Frame.h), where the engine reads its own.
-// Not yet seen in play.
 #pragma once
 
 #include <optional>
@@ -39,13 +47,14 @@ struct Quest
 {
     std::wstring plot;        // the plot's resource name, what GetPlotGUID takes
     std::wstring name;        // the title, in the player's language
-    std::wstring description; // the entry showing, the same
+    std::wstring description; // the entry showing, the same, without the marks
+    std::wstring objective;   // the part of it the journal marks: what to do now
     std::wstring parent;      // the plot it is a part of, if any
     std::wstring group;       // its plot group's resource name
     std::wstring area;        // the tag of the area it points the player to
     std::wstring offer;       // for a quest of content on offer: the offer's id
-    bool completed = false;
-    bool updated = false; // changed since the player last looked
+    bool completed = false;   // a part of a quest that is done, still listed
+    bool updated = false;     // changed since the player last looked
 };
 
 // The quests under way, in the journal's own order, and the ones finished.
