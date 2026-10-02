@@ -18,7 +18,9 @@
 // - The library's fields, each checked against the script command it was
 //   read from, every time a script calls it (ScriptChecks.h).
 // - Every event the engine's queue delivers, counted by kind (Events.h).
+// - A spell's sub-actions while its caster conjures (Conjure.h).
 #include "Census.h"
+#include "Conjure.h"
 #include "Events.h"
 #include "Recorder.h"
 #include "ScriptChecks.h"
@@ -281,6 +283,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_findSave, dao::addr::kSaveGame_FindSave, &FindSave, "SaveGame::FindSave");
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
+    probe::AttachConjureWatch();
 
     // The census, on everything but what is hooked above.
     const dao::AddressId hookedAbove[] = {

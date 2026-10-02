@@ -937,6 +937,21 @@ DAO_ADDRESS(kCCObject_GetCommandByIndex, 17539)
 // and End, slot 3 (object, command, result, flag); each thunk has one
 // caller. The names are ours.
 DAO_ADDRESS(kCCObject_StepCommands, 17558)
+// A command's run each update, read 2026-10-02 (dev/TURN_BASED.md, "A
+// command's timed phases"): RunCurrent, __thiscall (?, ?, ms), `ret 0xC`,
+// StepCommands' one call, given the object's own milliseconds since its
+// last update, walks the current command's sub-actions (a list reached
+// through the object's +0x2DC record) and spends the milliseconds on each
+// one's delay (+0x18) and then, for a timed one (a duration at +0x14), on
+// its elapsed time (+0xC), never past the duration; then it has the
+// sub-action handler (the event queue's +0x70, a CSSubActionHandler) run
+// it through its slot 2, Execute, __thiscall (object, sub-action), `ret
+// 8`, the sub-action's first word its type, the index of its handler in
+// the handler's table at +0x48. Once the milliseconds are spent no
+// sub-action runs that update. Not yet seen in play. The names are ours.
+DAO_ADDRESS(kCCObject_RunCurrentCommand, 17548)
+DAO_ADDRESS(kCSSubActionHandler_Execute, 19864)
+DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
 DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
 DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
 DAO_ADDRESS(kCommands_Start, 12731)

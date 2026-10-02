@@ -273,6 +273,7 @@ if(DAO_BUILD_PLUGINS)
         probe
         SOURCES
             src/plugins/probe/Census.cpp
+            src/plugins/probe/Conjure.cpp
             src/plugins/probe/Events.cpp
             src/plugins/probe/Probe.cpp
             src/plugins/probe/Recorder.cpp
