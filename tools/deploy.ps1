@@ -145,8 +145,27 @@ if (-not (Test-Path (Join-Path $builtAddresses '*.bin'))) { throw "No address fi
 $addresses = Join-Path $daolib 'addresses'
 New-Item -ItemType Directory -Force $addresses | Out-Null
 $built = @(Get-ChildItem -Path $builtAddresses -Filter '*.bin' | ForEach-Object { $_.Name })
+# How many IDs a file has an address for: the words after its 0x24-byte
+# header that are not 0xFFFFFFFF. IDs are only ever added, so of two files
+# for one build the one that knows more is the newer, and plugins built on
+# different DAOLibs share the folder: one already there that knows more is
+# kept, for the plugin that brought it.
+function Get-KnownIdCount([string] $path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $known = 0
+    for ($at = 0x24; $at + 4 -le $bytes.Length; $at += 4) {
+        if ([BitConverter]::ToUInt32($bytes, $at) -ne [uint32]::MaxValue) { $known++ }
+    }
+    return $known
+}
 foreach ($name in $built) {
-    Copy-Item -Force (Join-Path $builtAddresses $name) (Join-Path $addresses $name)
+    $from = Join-Path $builtAddresses $name
+    $to = Join-Path $addresses $name
+    if ((Test-Path $to) -and (Get-KnownIdCount $to) -gt (Get-KnownIdCount $from)) {
+        Show-Info "kept $name already there: it knows more IDs than this build's"
+        continue
+    }
+    Copy-Item -Force $from $to
 }
 # The folder holds what this build has and nothing else: a file the address
 # library no longer writes (the names by link stamp alone, before its
