@@ -169,6 +169,7 @@ add_library(
     src/dao/Abilities.cpp
     src/dao/Vfx.cpp
     src/dao/CommandEvents.cpp
+    src/dao/Conjure.cpp
     src/dao/Strings.cpp
     src/dao/Party.cpp
     src/dao/Resources.cpp
