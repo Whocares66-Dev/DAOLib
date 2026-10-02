@@ -17,12 +17,16 @@
 // it is loaded; every two seconds, how many of the area's rooms are in each
 // state.
 //
+// Each time the mouse goes over the interface or comes off it, a line says
+// so (dao/Gui.h, MouseOverInterface).
+//
 // Everything runs in a frame callback, on the game's thread, where the
 // world's queries must be asked. What it finds goes to example_world.log.
 #include "dao/World.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
+#include "dao/Gui.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 #include "dao/generated/ScriptApi.h"
@@ -272,6 +276,15 @@ void LogPath(dao::ObjectId self)
 
 void Frame()
 {
+    // Whether the mouse is the interface's, each time it changes: over a
+    // menu or the HUD it is, and the mode's pick is then nothing.
+    static std::optional<bool> overInterface;
+    if (const bool over = dao::gui::MouseOverInterface(); overInterface != over)
+    {
+        overInterface = over;
+        spdlog::info("the mouse is {} the interface", over ? "over" : "off");
+    }
+
     const dao::GameModeExplore *explore = dao::CClientExoApp::CurrentExplore();
     if (explore == nullptr)
     {
