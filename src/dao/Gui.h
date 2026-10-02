@@ -304,9 +304,7 @@ bool HasMovie(std::wstring_view file);
 // before the interface is up. Seen in play, 2026-10-01 and 02, in the GOG,
 // EA and Steam games alike (examples/world logs each change): yes at the
 // main menu, no with the cursor over the world, yes while the game's menu
-// was open and no when it closed. A screen is not all "interface": with the
-// options screen up, its right half's blank part read no, its left half's
-// yes (Steam's game; not tried at that spot in the others).
+// was open and no when it closed.
 bool MouseOverInterface();
 
 // A movie of the game's own, changed as the game opens its file: the way

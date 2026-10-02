@@ -120,7 +120,6 @@ The loader needs nothing of its own for it. Its test for a wrapped build, the en
 - The world on the screen: identical to GOG's and EA's to the pixel (the same feet and click pixels for both creatures, the same room). F11, the controls screen's two headings with a key bound and pressed, the options section with a click kept and a click refused, the preview's rings: as in GOG's.
 - The journal (`examples/journal`), the first sight of the wrapper: at the load 4 quests under way, 25 groups, the active one `shl000pt_main` "Sulcher's Pass"; the same two quests, titles and active one as the journal screen showed. The screen files the two parts of the ruins' quest as that quest's entries, by their texts, not under titles of their own; and shows the groups by name where a quest's `group` is the resource name.
 - The save needed the DLC items and Awakening content GOG's install has; the user installed them into Steam's game, and it then loaded plainly. No save was written.
-- Not the library's, perhaps: with the options screen up, the cursor on the blank part of its right half read `off the interface`, on the left half's `over`. Not tried at that spot in GOG's or EA's.
 
 The Steam folder was put back to stock after (`-Remove`).
 
