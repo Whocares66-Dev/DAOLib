@@ -380,4 +380,43 @@ std::uint64_t Presses(std::wstring_view name)
     return 0;
 }
 
+namespace
+{
+
+// The cursor's place a plugin has set, and the input the pick asks for.
+constexpr std::int32_t kCursorInput = 43;
+std::atomic<bool> g_cursorHeld{false};
+std::atomic<std::int64_t> g_cursorAt{0}; // x in the low half, y in the high
+
+using AxisPairFn = std::int32_t *(__fastcall *)(void *input, int edx, std::int32_t *out, const std::int32_t *id);
+Detour<AxisPairFn> g_axisPair;
+
+std::int32_t *__fastcall AxisPair(void *input, int edx, std::int32_t *out, const std::int32_t *id)
+{
+    std::int32_t *answer = g_axisPair.Original()(input, edx, out, id);
+    if (g_cursorHeld.load(std::memory_order_relaxed) && id != nullptr && *id == kCursorInput && answer != nullptr)
+    {
+        const std::int64_t at = g_cursorAt.load(std::memory_order_relaxed);
+        answer[0] = static_cast<std::int32_t>(at & 0xFFFFFFFF);
+        answer[1] = static_cast<std::int32_t>(at >> 32);
+    }
+    return answer;
+}
+
+} // namespace
+
+void PointCursor(std::int32_t x, std::int32_t y)
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_axisPair.Attach(addr::kInput_AxisPair, &AxisPair); });
+    g_cursorAt.store(static_cast<std::int64_t>(static_cast<std::uint32_t>(x)) | static_cast<std::int64_t>(y) << 32,
+                     std::memory_order_relaxed);
+    g_cursorHeld.store(true, std::memory_order_relaxed);
+}
+
+void ReleaseCursor()
+{
+    g_cursorHeld.store(false, std::memory_order_relaxed);
+}
+
 } // namespace dao::input

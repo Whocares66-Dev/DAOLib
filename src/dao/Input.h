@@ -123,4 +123,22 @@ ActionState StateOf(std::wstring_view name);
 // How often the action's key has been pressed where its mode allowed it.
 std::uint64_t Presses(std::wstring_view name);
 
+// The game's idea of where the mouse is, for its world pick, set by the
+// plugin: the place in the game's pixels (as dao::world::ToScreen gives
+// them) that explore mode casts its cursor ray through, so what it picks
+// there (GameModeExplore::CursorObject, CursorGround) is what the player
+// would have under a real cursor there, and whatever follows the pick (a
+// path preview, a cost caption) follows it. The real mouse is not moved,
+// nor read for the pick while this holds; the game's window need not be in
+// front. ReleaseCursor gives the pick back to the mouse.
+//
+// Read 2026-10-02 (dao/Addresses.h, kInput_AxisPair): the pick asks the
+// input system for input 43, an axis pair, and this answers it. Only the
+// world's pick follows: the Flash interface reads the mouse its own way,
+// so a movie under the real cursor still counts as the cursor being over
+// the interface (dao/Gui.h, MouseOverInterface), and the cursor drawn on
+// the screen stays where the mouse is. Not yet seen in play.
+void PointCursor(std::int32_t x, std::int32_t y);
+void ReleaseCursor();
+
 } // namespace dao::input

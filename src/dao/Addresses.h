@@ -526,6 +526,16 @@ DAO_ADDRESS(kInput_ResetKeys, 15458)
 DAO_ADDRESS(kInput_LoadKeyBindings, 15456)
 DAO_ADDRESS(kInput_SaveKeyBindings, 15457)
 DAO_ADDRESS(kInputModes_Get, 24303)
+// Where the game reads the mouse's place for its world pick, read
+// 2026-10-02: GameModeExplore::CastCursorRay asks the input system (a
+// singleton at 0x00C3B8E4, made by 0x00891C30) for input 43, an axis pair,
+// through this: __thiscall (int out[2], const int *input), returning out,
+// both 0 if the input is not allowed now. Its two axes are read from the
+// devices' state (0x0087DA50), not from Windows: the exe's one
+// GetCursorPos (Eclipse::PlatformWin32's slot 17, 0x004139C0) only says
+// whether the cursor is at the window's edge, for scrolling. The name is
+// ours.
+DAO_ADDRESS(kInput_AxisPair, 24340)
 DAO_DATA(kInputModes, 102761)
 DAO_ADDRESS(kInputModes_Group, 24295)
 DAO_ADDRESS(kInputModeGroup_Allow, 24272)
