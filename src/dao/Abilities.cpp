@@ -9,6 +9,7 @@
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/Tlk.h"
+#include "dao/core/Msvc8.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -100,6 +101,43 @@ std::optional<std::wstring> Name(std::int32_t ability)
         }
     }
     return Label(ability);
+}
+
+std::vector<std::int32_t> Known(ObjectId creature, Kind kind)
+{
+    constexpr std::size_t kLists = 0x150; // in the stats: four vectors of ids, a kind each
+    constexpr std::size_t kMost = 4096;   // more than any creature has; a list longer is not one
+    std::vector<std::int32_t> known;
+    const void *stats = Stats(creature);
+    if (stats == nullptr)
+    {
+        return known;
+    }
+    const auto first = kind == Kind::All ? std::size_t{1} : static_cast<std::size_t>(kind);
+    const auto last = kind == Kind::All ? std::size_t{4} : first;
+    if (first < 1 || last > 4)
+    {
+        return known;
+    }
+    for (std::size_t which = first; which <= last; ++which)
+    {
+        const std::uintptr_t list =
+            reinterpret_cast<std::uintptr_t>(stats) + kLists + (which - 1) * sizeof(core::VectorRep<std::int32_t>);
+        const auto begin = TryRead<std::uintptr_t>(list + offsetof(core::VectorRep<std::int32_t>, first));
+        const auto end = TryRead<std::uintptr_t>(list + offsetof(core::VectorRep<std::int32_t>, last));
+        if (!begin || !end || *begin == 0 || *end < *begin || (*end - *begin) / sizeof(std::int32_t) > kMost)
+        {
+            continue;
+        }
+        for (std::uintptr_t at = *begin; at < *end; at += sizeof(std::int32_t))
+        {
+            if (const auto id = TryRead<std::int32_t>(at))
+            {
+                known.push_back(*id);
+            }
+        }
+    }
+    return known;
 }
 
 } // namespace dao::abilities

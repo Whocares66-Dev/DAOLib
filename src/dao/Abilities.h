@@ -40,6 +40,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::abilities
 {
@@ -72,5 +73,28 @@ std::optional<Cooldown> GetCooldown(ObjectId creature, std::int32_t ability, std
 // that is not there or has no record for the ability, or a total of 0 or
 // less with time left. On the game's thread.
 bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float total, std::wstring_view itemTag = {});
+
+// The kinds of ability, as the scripts number them (ABILITY_TYPE_*,
+// 2da_constants_h): what a creature has of each is a list of its own.
+enum class Kind : std::int32_t
+{
+    All = 0,
+    Talent = 1,
+    Spell = 2,
+    Skill = 3,
+    Item = 4,
+};
+
+// Every ability a creature has, of one kind or of all four: the whole
+// sheet, where the quickbar holds only what was put in it. Each is an
+// ability's id (a row of the ability table: Name and Label above); a skill
+// with ranks is an id per rank the creature has. Empty for a creature that
+// is not there.
+//
+// Read 2026-10-01 from the scripts' GetAbilityCount (0x00668A20, on to
+// 0x0071A2F0), which counts them: the creature's stats keep four lists of
+// ids, one a kind in the kinds' order, at +0x150 and each 0x10 on (the
+// list of a kind is found by 0x007199D0). Not yet seen in play.
+std::vector<std::int32_t> Known(ObjectId creature, Kind kind = Kind::All);
 
 } // namespace dao::abilities
