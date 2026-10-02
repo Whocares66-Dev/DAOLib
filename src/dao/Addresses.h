@@ -268,6 +268,12 @@ DAO_ADDRESS(kCCCreatureStats_SetCooldown, 16554)
 DAO_ADDRESS(kCooldownManager_Find, 16526)
 DAO_ADDRESS(kCooldownManager_Tick, 16532)
 DAO_ADDRESS(kCCCreature_Movement, 14455)
+// A creature's animations (dao/Animation.h), read 2026-10-02: its
+// animation set (+0x154) answers whether it has an animation and how long
+// it is in milliseconds, __thiscall (id), `ret 4` each; the attack swing's
+// step (0x006A41A0) asks both. The names are ours.
+DAO_ADDRESS(kCCCreature_AnimationLength, 14048)
+DAO_ADDRESS(kCCCreature_HasAnimation, 14049)
 DAO_ADDRESS(kCCObject_RequestPath, 17573)
 DAO_ADDRESS(kMovementController_Step, 33560)
 // A search apart from any creature's (dao/World.h, FindPath), read

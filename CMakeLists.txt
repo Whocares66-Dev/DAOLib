@@ -163,6 +163,7 @@ add_library(
     src/dao/Data.cpp
     src/dao/Dialogue.cpp
     src/dao/Journal.cpp
+    src/dao/Animation.cpp
     src/dao/ScriptCall.cpp
     src/dao/Orders.cpp
     src/dao/Abilities.cpp

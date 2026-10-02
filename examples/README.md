@@ -13,6 +13,7 @@ They build with the library when DAOLib is the top-level project (`DAO_BUILD_EXA
 | [`input/`](input/Input.cpp) | A key of the plugin's own: two actions registered as the game registers its own, one on F11 and one for the player to bind in the controls screen, each press logged | `dao/Input.h` |
 | [`options/`](options/Options.cpp) | Settings of the plugin's own in the game's options screen: a section on the Game tab with three checkboxes, one of which refuses every click | `dao/Options.h` |
 | [`preview/`](preview/Preview.cpp) | Drawing in the world: the game's aiming ring follows the cursor, the in-reach or out-of-reach row by the distance | `dao/Vfx.h` |
+| [`animation/`](animation/Animation.cpp) | How long attacks and abilities take: for everyone in a fight, each attack's and ability's times as the library reads them when it starts, and how long it really took when it ends | `dao/Animation.h` |
 | [`journal/`](journal/Journal.cpp) | The journal: the quests under way and finished, each with its plot, title, group and the entry showing, and the active one, logged whenever any of it changes | `dao/Journal.h` |
 | [`dialogue/`](dialogue/Dialogue.cpp) | Conversations: each NPC line, the replies offered, and the replies whose condition hid them, with the plot flag or script that decided | `dao/Dialogue.h` |
 | [`world/`](world/World.cpp) | The world's geometry: whether the controlled creature can see what the cursor is on, and what a ray straight down meets, with each hit's collision groups | `dao/World.h` |
