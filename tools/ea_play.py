@@ -12,7 +12,9 @@ access until it is granted, dev/BUILDS.md).
                                              into the last save unattended, its missing content forced past
 
 The game runs one at a time, so this refuses while any DAOrigins.exe is
-running, the GOG install's included, unless told to wait.
+running, the GOG install's included, or while another session holds the
+claim on the game (tools/game_claim.py), unless told to wait. --owner NAME
+says who is starting it: a claim of that owner's does not stop it.
 
 What goes in is what tools/deploy.ps1 would deploy, staged in
 build\\<preset>\\play: the loader, the plugins that are not examples (the
@@ -53,6 +55,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(1, os.path.join(HERE, "..", "extern", "DAOAddressLibrary", "tools"))
 import daoexe  # noqa: E402
 import ea_dump  # noqa: E402
+import game_claim  # noqa: E402
 
 k32 = ea_dump.k32
 psapi = ctypes.WinDLL("psapi", use_last_error=True)
@@ -253,8 +256,13 @@ def main(argv):
     # The game runs one at a time: a second DAOrigins.exe, of either install,
     # exits within seconds of starting (0xffffffff, no crash; seen 2026-10-01
     # with the GOG game up), and the one already running is someone's.
+    owner = argv[argv.index("--owner") + 1] if "--owner" in argv else None
     already = games_running()
-    if already and "--when-free" in argv:
+    claim = game_claim.holder(owner)
+    if claim is not None and "--when-free" not in argv:
+        print(f"{game_claim.describe(claim)}; not started", file=sys.stderr)
+        return 2
+    if (already or claim is not None) and "--when-free" in argv:
         # Another session's tests start and end the game every few minutes;
         # a gap this long is not the moment between its deploy and its start.
         quiet = float(argv[argv.index("--when-free") + 1])
@@ -264,11 +272,11 @@ def main(argv):
         while free_since is None or time.monotonic() - free_since < quiet:
             if time.monotonic() > give_up:
                 print(
-                    f"a game was running for {WAIT_FOR_FREE_SECONDS} s; not started",
+                    f"a game was running, or the game was claimed, for {WAIT_FOR_FREE_SECONDS} s; not started",
                     file=sys.stderr,
                 )
                 return 2
-            if games_running():
+            if games_running() or game_claim.holder(owner) is not None:
                 free_since = None
             elif free_since is None:
                 free_since = time.monotonic()
