@@ -164,9 +164,16 @@ static_assert(sizeof(Value) == 16);
 // SetArray and Invoke are seen in play: dao/Options.h delivers its
 // checkboxes' states with them (SetArray on TokenManager's two arrays, then
 // Invoke("TokenManager.PerformBatchTokenReplacements"), 2026-10-01), and the
-// boxes showed them. A path needs no "_root." in front. Call it on the
-// thread the movie's own calls come on (an FSCommand or ExternalInterface
-// handler runs there); the frame's thread is not shown to be that one.
+// boxes showed them. A path needs no "_root." in front, and works with it.
+// Seen in play 2026-10-02 by the turn-based mod too: from inside its own
+// movie's ExternalInterface handler it invoked the quickbar movie's
+// XPBar_mc.SetValue(left, whole), SetTooltipSource and
+// EffectBar_mc.UpdateXP("GUI.SelectedChar"), the game's experience bar
+// showing what it set. Call it on the thread the movie's own calls come on
+// (an FSCommand or ExternalInterface handler runs there). In the GOG game
+// that was the frame's thread as well (the same thread id in the mod's
+// handler and its frame callback, two runs); a handler is still the
+// surer place.
 class Movie
 {
   public:
@@ -350,7 +357,9 @@ void OnMovieLoad(std::wstring_view name, MoviePatch patch);
 // graphics of its own, or more than a script can add, this is the way; a
 // few lines of script added to whichever movie the game has
 // (core::gfx::AppendDoAction, through OnMovieLoad) is the way that leaves
-// room for other plugins' changes to the same movie. The file is read now,
+// room for other plugins' changes to the same movie. A copy of the game's
+// movie is BioWare's file: a plugin published with it ships theirs, which a
+// patch in memory does not. The file is read now,
 // at the call; false, and the game's movie left alone, if it cannot be read
 // or is not a movie. A patch another plugin adds for that movie later
 // applies to this file; one added before is set aside by it. Not yet seen
