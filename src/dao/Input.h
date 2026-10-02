@@ -142,8 +142,13 @@ std::uint64_t Presses(std::wstring_view name);
 // nothing, the real mouse being off the game's window and the hover test
 // saying "over the interface". The Flash interface itself still follows
 // the real mouse (its own hovers, the cursor drawn on the screen), and
-// MouseOverInterface answers false while this holds. The pick's holding
-// at the pointed place is not yet seen.
+// MouseOverInterface answers false while this holds. Seen in play the same
+// day with that: the real mouse on another monitor and never moved, a
+// creature's pixel gave CursorObject that creature within 0.3 s, a ground
+// point gave CursorGround, and ReleaseCursor gave the pick back (the
+// Eluvian server); and with the turn-based mod's preview, the pointed
+// spiders each held the pick and its path, plate, caption and the cost on
+// the experience bar all drew.
 void PointCursor(std::int32_t x, std::int32_t y);
 void ReleaseCursor();
 
