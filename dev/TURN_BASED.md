@@ -149,6 +149,23 @@ The user's report from play: a poison gas trap in the Dalish origin's Elven Ruin
 
 `dao::timers` (2026-10-02) holds those two kinds of event with the clock and delivers them as it is advanced, each re-armed from when it came due: a 4 s round gives the poison two or three ticks, and it wears off after 30 s of rounds. Not yet seen in play.
 
+## A command's timed phases and the creature's clock (read 2026-10-02, not yet probed)
+
+Asked by the turn-based mod: can a spell be handed to the engine at once and held in its conjuring phase, moved on by its caster's clock, so the installed `rules_core` interrupts it itself? What the exe says, statically:
+
+- `CCObject::StepCommands` (0x0073D320, each update) runs the current command through 0x0073CB60, __thiscall (two of its own arguments, then the milliseconds), `ret 0xC`, handing it the creature's own milliseconds since its last update: its object timer's +8, the same figure its effects age by (`dao/Effects.h`).
+- 0x0073CB60 walks the command's actions, a list reached through the creature's +0x2DC record (its +0xC, by a key lookup, 0x004DF670). Each action has a delay at +0x18, a duration at +0x14 and an elapsed time at +0xC, all in milliseconds. A delay is spent first. A timed action (duration more than 0) has the milliseconds left added to its elapsed time, never past its duration. Then the commands system (the application's +0x1AC, its +0x70) runs the action through its slot 2 (creature, action), which answers whether the command goes on.
+- Once the frame's milliseconds are spent, an action is not run that frame: given 0, the current command does not move at all.
+- `IsConjuring` (`CCCreature::ForScript_IsConjuring`, 0x0073C7B0) reads the same list through the same lookup (0x00697BF0) and answers the first action's first word.
+
+So a timed phase of a command is counted in the creature's own milliseconds through one function. An intercept there, as AddElapsed is for effects, could hold a creature's current command and move it by its own clock. Not yet known, to be probed before anything is built:
+
+- which action of a UseAbility the conjure is, and whether its duration is the command's conjure time (CommandUseAbility's float 0, -1 for the ability's own);
+- what the other actions are (the move into range, the cast, the impact), and whether a hold should cover them;
+- what the first word `IsConjuring` reads is.
+
+The probe would log, for a creature whose current command is a UseAbility, each action's three times and `IsConjuring` on every run. The conjure's looping animation plays on the scene's clock and would go on looping while held.
+
 ## Next readings
 
 1. A fight with the next probe (queue hook, deeper stacks): what `0x0073CD10` is called on and with, from scripts and from player orders, and a `compare` of fighting against exploring that reaches the game's own frames.
