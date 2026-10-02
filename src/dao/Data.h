@@ -63,6 +63,13 @@ class Attribute
     bool Set(std::int32_t value); // an Int, Short or Byte attribute, narrowed to it
     bool Set(std::uint32_t value);
     bool Set(float value);
+
+    // Sets the attribute from text, as the Flash UI's SetValueUnicode does
+    // (0x0051F6E0, which hands the text to the attribute's slot 10): a
+    // string attribute takes it as it is, a number reads it. The way a
+    // screen's text field reaches the game (the save screen's
+    // SaveLoad.SaveName, dao/Saves.h). From the scripts' thread.
+    void SetText(std::wstring_view value);
 };
 
 // The attribute at a path, or null if the tree has none there.

@@ -2,6 +2,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Data.h"
 #include "dao/Events.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
@@ -323,6 +324,35 @@ bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
     if (proxy == 0)
     {
         return false;
+    }
+    if (kind == Kind::Manual && slot < 0)
+    {
+        // The game's next free slot is the save screen's to work out; the
+        // lowest the character has no save in is the same choice.
+        constexpr std::int32_t kManualSlots = 500;
+        const std::wstring character = Character();
+        std::vector<std::int32_t> taken;
+        for (const Slot &save : List(character))
+        {
+            if (save.kind == Kind::Manual)
+            {
+                taken.push_back(save.number);
+            }
+        }
+        slot = 1;
+        while (slot <= kManualSlots && std::ranges::find(taken, slot) != taken.end())
+        {
+            ++slot;
+        }
+        if (slot > kManualSlots)
+        {
+            return false;
+        }
+    }
+    // The save screen's name for it, which is the one the game writes.
+    if (data::Attribute *screenName = data::Find(L"SaveLoad.SaveName"))
+    {
+        screenName->SetText(name);
     }
     // The name as the engine's string, which the handler copies; this one
     // is freed here, by the engine's own functions (dao/String.h).

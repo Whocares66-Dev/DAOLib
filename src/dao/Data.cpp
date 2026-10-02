@@ -132,6 +132,14 @@ bool Attribute::Set(float value)
     return true;
 }
 
+void Attribute::SetText(std::wstring_view value)
+{
+    // Slot 10 takes the engine's own string, as SetValueUnicode passes it.
+    WString text(value);
+    using Fn = void(__fastcall *)(Attribute *, int, const core::WStringRep *);
+    Slot<Fn>(this, 10)(this, 0, text.Engine());
+}
+
 std::optional<std::wstring> Text(std::wstring_view path)
 {
     const Attribute *attribute = Find(path);

@@ -188,12 +188,24 @@ bool Load(const Slot &save);
 bool ForceLoad();
 
 // Saves, as the save screen does for a manual save and the quicksave key
-// for the quicksave: SaveGameMessage. A slot of -1 lets the game choose (the
-// next free manual slot; the quicksave and the autosave have their own),
-// and an empty name names the file "savegame". True if the game began the
-// save; it is written over the next frames, and OnSaved is called once it
-// is. False where the game allows no saving (in combat, in a cutscene) or
-// before the application is up.
+// for the quicksave: SaveGameMessage. A slot of -1 is the next free one:
+// for a manual save, the lowest slot of the character's with no save in it,
+// chosen here; the quicksave and the autosave have their own. The name is
+// what the save screen's text field gives, the save's name in the load
+// screen and its file's; an empty one names the file "savegame". True if
+// the game began the save; it is written over the next frames, and OnSaved
+// is called once it is. False where the game allows no saving (in combat,
+// in a cutscene) or before the application is up.
+//
+// Seen in play 2026-10-02 through the Eluvian server, and changed for it:
+// a manual save to a free slot was written, OnSaved called 23 s after; but
+// -1 was refused, the game's own next free slot (SaveLoad.OpenSlot, the
+// proxy's +0x6C) being worked out by the save screen alone, and the name
+// was lost, the file "savegame". The handler (0x006D1C60) hands the game
+// the save screen's SaveLoad.SaveName as well as the message's name, and
+// the screen's is the one written; so the name is set there first, as the
+// screen sets it, and -1 is a slot chosen here. Both changes are not yet
+// seen in play.
 bool Save(Kind kind, std::int32_t slot = -1, std::wstring_view name = {});
 
 } // namespace dao::saves
