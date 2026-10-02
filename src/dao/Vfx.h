@@ -64,8 +64,24 @@ struct Tint
 // descriptor's fourth word is a pointer to a colour of four floats, which
 // the set-up hands to the model (its slot 69) in place of the row's own
 // Tint column (a packed colour, made into the same four floats). So one
-// row can be placed in any colour: a marker gold where a move reaches and
-// red where it does not. Not yet seen in play.
+// row can be placed in any colour, if its material takes one.
+//
+// Which do, read 2026-10-01 after play showed one that does not. The
+// model's slot 69 (0x00546700) sets the material parameter
+// mml_vUserColorMultiplier on the model's meshes. The reticles' material,
+// GeneralGui.mat, has that parameter only in its "ReticalTint" semantic
+// (the pixel shader ReticleTint.psh, the parameter 1 1 1 1 by default);
+// its "Default" semantic has the texture alone. A model's material object
+// (.mao, a few lines of text) names the semantic. Four name ReticalTint:
+// fx_aoe_radius, fx_aoe_radius_no, fx_cone_radius and fx_aura_circle, the
+// aiming ring, its out-of-reach twin and the cone (rows 30017, 30019 and
+// 30018). So those take a tint. The selection reticles and the move marker
+// (row 30000, move_indicator.mao) name Default and ignore it: in play, the
+// turn-based mod's marker placed with a red tint was its usual pale gold.
+// A material object of the same name in the override folder that names
+// ReticalTint would make one of those take a tint, the game's own use of
+// it unchanged while no tint is given. A tinted ring is not yet seen in
+// play.
 //
 // The scale is one number, and not only here: the effect's graphics object
 // (GraphicsStructures::Object, its SetScale 0x00545330) keeps a single
