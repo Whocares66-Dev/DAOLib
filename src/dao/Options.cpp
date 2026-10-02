@@ -12,6 +12,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -52,11 +53,14 @@ std::uint32_t ObserverBase()
     return kFirstObserver | plugin << 15U;
 }
 
+// A checkbox or a choice; a checkbox's values are 0 and 1.
 struct Entry
 {
-    Toggle toggle;
+    std::optional<Toggle> toggle;
+    std::optional<Choice> choice;
     std::string option; // as the movie has it: "DAOLibTurnBasedCombat"
     std::size_t section = 0;
+    std::int32_t last = 0; // the value last got or set: what a GetValue is answered
 };
 
 struct Section
@@ -76,14 +80,14 @@ struct Observer
 struct Click
 {
     std::size_t entry = 0;
-    bool wanted = false;
+    std::int32_t wanted = 0;
 };
 
 struct Delivery
 {
     void *owner = nullptr;
     std::uint32_t id = 0;
-    bool value = false;
+    std::int32_t value = 0;
 };
 
 std::mutex g_mutex;
@@ -120,9 +124,23 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
             section.title = Utf8(g_sections[i].title);
             for (const Entry &entry : g_entries)
             {
-                if (entry.section == i)
+                if (entry.section != i)
                 {
-                    section.toggles.push_back({entry.option, Utf8(entry.toggle.label), Utf8(entry.toggle.tooltip)});
+                    continue;
+                }
+                if (entry.toggle)
+                {
+                    section.toggles.push_back({entry.option, Utf8(entry.toggle->label), Utf8(entry.toggle->tooltip)});
+                }
+                else if (entry.choice)
+                {
+                    core::options_movie::Choice choice{
+                        entry.option, Utf8(entry.choice->label), Utf8(entry.choice->tooltip), {}};
+                    for (const std::wstring &value : entry.choice->values)
+                    {
+                        choice.values.push_back(Utf8(value));
+                    }
+                    section.choices.push_back(std::move(choice));
                 }
             }
             sections.push_back(std::move(section));
@@ -169,8 +187,32 @@ bool OnAddTokenObserver(const gui::Call &call)
     return true;
 }
 
+// A choice asks its value as it is set up: ExternalInterface's
+// GetValue("ClientOptions.<option>"), answered at once, on the interface's
+// thread, so with the value last got or set rather than by `get`.
+bool OnGetValue(const gui::Call &call)
+{
+    if (call.args.empty())
+    {
+        return false;
+    }
+    const auto token = call.args[0].AsString();
+    if (!token || !token->starts_with(kToken))
+    {
+        return false;
+    }
+    const std::lock_guard lock(g_mutex);
+    const auto entry = EntryOf(token->substr(kToken.size()));
+    if (!entry)
+    {
+        return false;
+    }
+    call.Return(gui::Value::Number(g_entries[*entry].last));
+    return true;
+}
+
 // A click: the FSCommand SendMessage with "ClientOptions.
-// SetClientOptionMessage <option> 1" (or 0).
+// SetClientOptionMessage <option> 1" (or 0), or a choice's index.
 bool OnSendMessage(void * /*owner*/, std::string_view args)
 {
     if (!args.starts_with(kSetMessage))
@@ -190,7 +232,16 @@ bool OnSendMessage(void * /*owner*/, std::string_view args)
     {
         return false;
     }
-    g_clicks.push_back({*entry, value != "0"});
+    std::int32_t wanted = 0;
+    if (g_entries[*entry].toggle)
+    {
+        wanted = value != "0" ? 1 : 0;
+    }
+    else if (std::from_chars(value.data(), value.data() + value.size(), wanted).ec != std::errc{})
+    {
+        return true; // ours, and not a number: nothing to do
+    }
+    g_clicks.push_back({*entry, wanted});
     return true;
 }
 
@@ -228,18 +279,33 @@ void Frame()
     }
 
     std::vector<Delivery> deliveries;
+    std::vector<std::pair<std::size_t, std::int32_t>> values; // to remember, by entry
     for (const Observer &observer : asked)
     {
-        bool value = false;
-        detail::Guard("an option's get", [&] { value = entries[observer.entry].toggle.get(); });
+        const Entry &entry = entries[observer.entry];
+        std::int32_t value = entry.last;
+        detail::Guard("an option's get",
+                      [&] { value = entry.toggle ? (entry.toggle->get() ? 1 : 0) : entry.choice->get(); });
         deliveries.push_back({observer.owner, observer.id, value});
+        values.emplace_back(observer.entry, value);
     }
     for (const Click &click : clicks)
     {
-        // What the option now is goes to every box that shows it, the one
-        // clicked among them: a refusal draws it back.
-        bool value = !click.wanted;
-        detail::Guard("an option's set", [&] { value = entries[click.entry].toggle.set(click.wanted); });
+        // What the option now is goes to every control that shows it, the
+        // one clicked among them: a refusal draws it back.
+        const Entry &entry = entries[click.entry];
+        std::int32_t value = entry.last;
+        detail::Guard("an option's set", [&] {
+            if (entry.toggle)
+            {
+                value = entry.toggle->set(click.wanted != 0) ? 1 : 0;
+            }
+            else
+            {
+                const auto top = static_cast<std::int32_t>(entry.choice->values.size()) - 1;
+                value = entry.choice->set(std::clamp(click.wanted, 0, top));
+            }
+        });
         for (const Observer &observer : observers)
         {
             if (observer.entry == click.entry)
@@ -247,8 +313,13 @@ void Frame()
                 deliveries.push_back({observer.owner, observer.id, value});
             }
         }
+        values.emplace_back(click.entry, value);
     }
     const std::lock_guard lock(g_mutex);
+    for (const auto &[entry, value] : values)
+    {
+        g_entries[entry].last = value;
+    }
     g_deliveries.insert(g_deliveries.end(), deliveries.begin(), deliveries.end());
 }
 
@@ -263,7 +334,7 @@ void __fastcall Deliver(void *owner, int edx, std::uint32_t onlyIfReady)
 {
     g_deliver.Original()(owner, edx, onlyIfReady);
     std::vector<std::int32_t> ids;
-    std::vector<const wchar_t *> values;
+    std::vector<std::wstring> texts;
     {
         const std::lock_guard lock(g_mutex);
         if (g_deliveries.empty())
@@ -276,7 +347,7 @@ void __fastcall Deliver(void *owner, int edx, std::uint32_t onlyIfReady)
                 return false;
             }
             ids.push_back(static_cast<std::int32_t>(delivery.id));
-            values.push_back(delivery.value ? L"1" : L"0");
+            texts.push_back(std::to_wstring(delivery.value));
             return true;
         });
     }
@@ -284,6 +355,12 @@ void __fastcall Deliver(void *owner, int edx, std::uint32_t onlyIfReady)
     if (ids.empty() || !movie)
     {
         return;
+    }
+    std::vector<const wchar_t *> values;
+    values.reserve(texts.size());
+    for (const std::wstring &text : texts)
+    {
+        values.push_back(text.c_str());
     }
     movie.SetArray("TokenManager.BatchTokenReplacementCallbackIDs", std::span<const std::int32_t>(ids));
     movie.SetArray("TokenManager.BatchTokenReplacementValues", std::span<const wchar_t *const>(values));
@@ -300,6 +377,7 @@ bool Attach()
         {
             gui::OnMovieLoad(L"optionsmenu", &Patch);
             gui::InterceptExternalInterface("AddTokenObserver", &OnAddTokenObserver);
+            gui::InterceptExternalInterface("GetValue", &OnGetValue);
             gui::InterceptFSCommand("SendMessage", &OnSendMessage);
             OnFrame(&Frame);
         }
@@ -309,25 +387,35 @@ bool Attach()
 
 } // namespace
 
-bool AddSection(std::wstring title, std::vector<Toggle> toggles)
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices)
 {
-    if (toggles.empty())
+    if (toggles.empty() && choices.empty())
     {
         return false;
     }
-    for (std::size_t i = 0; i < toggles.size(); ++i)
+    std::vector<std::wstring> names;
+    for (const Toggle &toggle : toggles)
     {
-        const Toggle &toggle = toggles[i];
-        if (!core::ValidActionName(toggle.name) || !toggle.get || !toggle.set)
+        if (!toggle.get || !toggle.set)
         {
             return false;
         }
-        for (std::size_t j = 0; j < i; ++j)
+        names.push_back(toggle.name);
+    }
+    for (const Choice &choice : choices)
+    {
+        if (!choice.get || !choice.set || choice.values.size() < 2)
         {
-            if (toggles[j].name == toggle.name)
-            {
-                return false;
-            }
+            return false;
+        }
+        names.push_back(choice.name);
+    }
+    for (std::size_t i = 0; i < names.size(); ++i)
+    {
+        if (!core::ValidActionName(names[i]) || std::find(names.begin(), names.begin() + static_cast<std::ptrdiff_t>(i),
+                                                          names[i]) != names.begin() + static_cast<std::ptrdiff_t>(i))
+        {
+            return false;
         }
     }
     if (!Attach())
@@ -336,10 +424,10 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles)
     }
     const std::lock_guard lock(g_mutex);
     std::vector<std::string> options;
-    for (const Toggle &toggle : toggles)
+    for (const std::wstring &name : names)
     {
         std::string option(kOptionPrefix);
-        for (const wchar_t c : toggle.name)
+        for (const wchar_t c : name)
         {
             option.push_back(static_cast<char>(c)); // letters and digits
         }
@@ -351,9 +439,14 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles)
     }
     const std::size_t section = g_sections.size();
     g_sections.push_back({std::move(title), SectionState::Waiting});
-    for (std::size_t i = 0; i < toggles.size(); ++i)
+    std::size_t next = 0;
+    for (Toggle &toggle : toggles)
     {
-        g_entries.push_back({std::move(toggles[i]), std::move(options[i]), section});
+        g_entries.push_back({std::move(toggle), std::nullopt, std::move(options[next++]), section, 0});
+    }
+    for (Choice &choice : choices)
+    {
+        g_entries.push_back({std::nullopt, std::move(choice), std::move(options[next++]), section, 0});
     }
     return true;
 }

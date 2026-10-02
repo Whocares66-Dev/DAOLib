@@ -72,6 +72,7 @@ Value Register(std::int32_t number);
 
 // One push of these values, the strings written out in it.
 Bytes Push(std::initializer_list<Value> values);
+Bytes Push(std::span<const Value> values);
 
 // The actions with no operands that script here needs.
 enum class Op : std::uint8_t
@@ -79,6 +80,7 @@ enum class Op : std::uint8_t
     Pop = 0x17,
     GetVariable = 0x1C,
     CallFunction = 0x3D,
+    InitArray = 0x42,
     SetMember = 0x4F,
     CallMethod = 0x52,
 };

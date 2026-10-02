@@ -76,6 +76,8 @@ constexpr std::uint16_t kHeading = 64;
 constexpr std::uint16_t kGameTab = 297;
 constexpr std::uint16_t kBar = 294;
 constexpr std::uint16_t kHeadingText = 224;
+constexpr std::uint16_t kSlider = 171;
+constexpr std::uint16_t kVideoTab = 315;
 
 // The options movie in small: the game's own heading (its text clip
 // exported, over a bar), the Game tab with the last checkbox of each
@@ -114,8 +116,17 @@ Bytes OptionsMovie()
     Add(gameplay, ShortTag(1, {}));
     Put(gameplay, 0, 2);
 
+    // The Video tab's slider with named stops, whose symbol a choice is.
+    Bytes video;
+    Put(video, kVideoTab, 2);
+    Put(video, 1, 2);
+    Add(video, DesignerPlace(49, kSlider, 72, 161, "OptTextureQuality_mc"));
+    Add(video, ShortTag(1, {}));
+    Put(video, 0, 2);
+
     Bytes tags = Exports({{kHeading, "KeyBindingHeader"}, {kCheckbox, "checkbox_mc"}, {kHeadingText, "txt_Game"}});
     Add(tags, LongTag(39, gameplay));
+    Add(tags, LongTag(39, video));
     Add(tags, LongTag(39, tab));
     Add(tags, LongTag(59, script));
     return Movie(tags);
@@ -287,7 +298,7 @@ TEST_CASE("a section is the game's heading over its checkboxes, in one column", 
     CHECK(heading->x == 16);
     CHECK(heading->y == 282);
     CHECK(heading->depth > bar->depth);
-    const auto toggle = gfx::FindInstance(*patched, ToggleInstance("DAOLibTurnBasedCombat"));
+    const auto toggle = gfx::FindInstance(*patched, ControlInstance("DAOLibTurnBasedCombat"));
     REQUIRE(toggle);
     CHECK(toggle->character == kCheckbox);
     CHECK(toggle->x == 7);
@@ -297,8 +308,8 @@ TEST_CASE("a section is the game's heading over its checkboxes, in one column", 
     // has two left: it goes to the right column, whose bar is 37 left of
     // its checkboxes.
     const auto second = gfx::FindInstance(*patched, HeadingInstance({483, 201, 1}));
-    const auto a = gfx::FindInstance(*patched, ToggleInstance("DAOLibA"));
-    const auto b = gfx::FindInstance(*patched, ToggleInstance("DAOLibB"));
+    const auto a = gfx::FindInstance(*patched, ControlInstance("DAOLibA"));
+    const auto b = gfx::FindInstance(*patched, ControlInstance("DAOLibB"));
     REQUIRE((second && a && b));
     CHECK(second->x == 446 + 24);
     CHECK(second->y == 201 + 6 + 13);
@@ -351,8 +362,8 @@ TEST_CASE("a second plugin's sections go in the rows the first left", "[options]
     CHECK(shown == 1);
     // The first plugin's are where they were, the second's in the right
     // column, and the two headings have names of their own.
-    const auto one = gfx::FindInstance(*both, ToggleInstance("DAOLibOne"));
-    const auto three = gfx::FindInstance(*both, ToggleInstance("DAOLibThree"));
+    const auto one = gfx::FindInstance(*both, ControlInstance("DAOLibOne"));
+    const auto three = gfx::FindInstance(*both, ControlInstance("DAOLibThree"));
     const auto firstHeading = gfx::FindInstance(*both, HeadingInstance({7, 263, 0}));
     const auto secondHeading = gfx::FindInstance(*both, HeadingInstance({483, 201, 1}));
     REQUIRE((one && three && firstHeading && secondHeading));
@@ -443,14 +454,14 @@ TEST_CASE("a section with no room is left out, and those after it", "[options]")
     const auto patched = AddSections(movie, std::vector<Section>{four, three, small}, shown);
     REQUIRE(patched);
     CHECK(shown == 2);
-    const auto lastOfFour = gfx::FindInstance(*patched, ToggleInstance("DAOLibF3"));
-    const auto lastOfThree = gfx::FindInstance(*patched, ToggleInstance("DAOLibZ"));
+    const auto lastOfFour = gfx::FindInstance(*patched, ControlInstance("DAOLibF3"));
+    const auto lastOfThree = gfx::FindInstance(*patched, ControlInstance("DAOLibZ"));
     REQUIRE((lastOfFour && lastOfThree));
     CHECK(lastOfFour->x == 483);
     CHECK(lastOfFour->y == 376);
     CHECK(lastOfThree->x == 7);
     CHECK(lastOfThree->y == 403);
-    CHECK_FALSE(gfx::FindInstance(*patched, ToggleInstance("DAOLibS")));
+    CHECK_FALSE(gfx::FindInstance(*patched, ControlInstance("DAOLibS")));
     const auto none = FreeSlots(*patched);
     REQUIRE(none);
     CHECK(none->empty());
@@ -470,5 +481,63 @@ TEST_CASE("a section with no room is left out, and those after it", "[options]")
     CHECK_FALSE(AddSections(movie, std::vector<Section>{{"Empty", {}}}, shown));
     // A movie with no Game tab, and one whose heading is not the game's.
     CHECK_FALSE(AddSections(Movie(LongTag(12, Simple(0x17))), std::vector<Section>{small}, shown));
+    CHECK(shown == 0);
+}
+
+TEST_CASE("a choice is the game's slider with named stops, in two rows under the checkboxes", "[options]")
+{
+    using dao::core::options_movie::AddSections;
+    using dao::core::options_movie::Choice;
+    using dao::core::options_movie::ControlInstance;
+    using dao::core::options_movie::FreeSlots;
+    using dao::core::options_movie::Section;
+    const Bytes movie = OptionsMovie();
+    Section section{"Turn-based", {{"DAOLibTurnBased", "Turn-based combat", ""}}};
+    section.choices.push_back({"DAOLibSpeed", "Speed", "How fast turns play", {"0.5x", "1x", "1.5x", "2x"}});
+    std::size_t shown = 0;
+    const auto patched = AddSections(movie, std::vector<Section>{section}, shown);
+    REQUIRE(patched);
+    CHECK(shown == 1);
+
+    // The heading in the left column's first two free rows (263, 298), the
+    // checkbox in the third (333), the slider in the fourth and fifth (368,
+    // 403), 40 right of the column, as the Video tab's symbol.
+    const auto choice = gfx::FindInstance(*patched, ControlInstance("DAOLibSpeed"));
+    REQUIRE(choice);
+    CHECK(choice->sprite == kGameTab);
+    CHECK(choice->character == kSlider);
+    CHECK(choice->x == 47);
+    CHECK(choice->y == 368);
+
+    // Its set-up: the values' array made, then the game's helper called.
+    const Bytes setUp =
+        gfx::Join({gfx::Push({gfx::Register(2), gfx::Text("OptDAOLibSpeed_mc_init")}),
+                   gfx::Push({gfx::Text("2x"), gfx::Text("1.5x"), gfx::Text("1x"), gfx::Text("0.5x"), gfx::Integer(4)}),
+                   gfx::Do(gfx::Op::InitArray),
+                   gfx::Push({gfx::Text("How fast turns play"), gfx::Text("Speed"), gfx::Text("DAOLibSpeed"),
+                              gfx::Integer(4), gfx::Text("OptionsUtils")}),
+                   gfx::Do(gfx::Op::GetVariable), gfx::Push({gfx::Text("MakeSliderPickerInit")}),
+                   gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::SetMember)});
+    CHECK(Holds(*patched, setUp));
+
+    // Both of its rows are taken for whoever comes next: the left column is
+    // full, and the right's six rows are free still.
+    const auto after = FreeSlots(*patched);
+    REQUIRE(after);
+    CHECK(after->size() == 6);
+    CHECK(std::all_of(after->begin(), after->end(), [](const auto &slot) { return slot.column == 1; }));
+}
+
+TEST_CASE("a section with a choice that does not fit is left out", "[options]")
+{
+    using dao::core::options_movie::AddSections;
+    using dao::core::options_movie::Section;
+    // A heading, a checkbox and two choices are seven rows: more than
+    // either column has.
+    Section section{"Big", {{"DAOLibOne", "One", ""}}};
+    section.choices.push_back({"DAOLibA", "A", "", {"x", "y"}});
+    section.choices.push_back({"DAOLibB", "B", "", {"x", "y"}});
+    std::size_t shown = 0;
+    CHECK_FALSE(AddSections(OptionsMovie(), std::vector<Section>{section}, shown));
     CHECK(shown == 0);
 }

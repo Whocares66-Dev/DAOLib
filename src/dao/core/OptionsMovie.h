@@ -26,6 +26,16 @@
 //   language's words in. A bar is 15 to the left of the left column's
 //   checkboxes and 37 of the right's, and 69 above its first control.
 //
+// - A choice of a few named values is the movie's slider with named stops,
+//   the Video tab's OptTextureQuality_mc and OptGraphicsDetail_mc (one
+//   symbol with the volume and zoom sliders), set up by
+//   OptionsUtils.MakeSliderPickerInit(option, label, tooltip, new
+//   Array(names...)). It asks the option's value at once with
+//   ExternalInterface's GetValue, is told it after as a checkbox is, and
+//   sends "ClientOptions.SetClientOptionMessage <option> <index>" when it
+//   moves. On the tabs whose checkboxes stand at x 7 the sliders stand
+//   about 40 to the right of them, 40 to 46 apart: two rows.
+//
 // So a section is added by placing a heading and checkboxes in the Game
 // tab's sprite, in the rows it has free, and adding their set-up functions
 // before the first of the game's own. The heading is the game's: its bar,
@@ -64,10 +74,22 @@ struct Toggle
     std::string tooltip;
 };
 
+// A choice: the option it sends the index of and is told it, its label,
+// its tooltip, and its values' names, two or more. UTF-8.
+struct Choice
+{
+    std::string option;
+    std::string label;
+    std::string tooltip;
+    std::vector<std::string> values;
+};
+
+// A section's rows: its checkboxes, then its choices.
 struct Section
 {
     std::string title;
     std::vector<Toggle> toggles;
+    std::vector<Choice> choices = {};
 };
 
 // A row of the Game tab the game leaves empty: where a checkbox in it goes.
@@ -80,8 +102,9 @@ struct Slot
     bool operator==(const Slot &) const = default;
 };
 
-// How many rows a heading takes.
+// How many rows a heading takes, and a choice.
 inline constexpr std::size_t kHeadingRows = 2;
+inline constexpr std::size_t kChoiceRows = 2;
 
 // The free rows, in the order they are filled: down the left column from
 // under its last checkbox, then down the right, but for rows something is
@@ -91,15 +114,15 @@ inline constexpr std::size_t kHeadingRows = 2;
 // as read.
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie);
 
-// The name a checkbox for an option is placed under, and the name of a
-// heading's text in a row: by the row, so that no two plugins' headings
-// share one.
-std::string ToggleInstance(std::string_view option);
+// The name a control for an option is placed under, a checkbox or a
+// choice, and the name of a heading's text in a row: by the row, so that no
+// two plugins' headings share one.
+std::string ControlInstance(std::string_view option);
 std::string HeadingInstance(const Slot &slot);
 
 // The movie with as many of the sections as there are rows for, each a
-// heading and its checkboxes in rows one under the other in one column, a
-// section never split or begun without room for all of it; `shown` is how
+// heading, its checkboxes and its choices in rows one under the other in
+// one column, a section never split or begun without room for all of it; `shown` is how
 // many went in, from the first. Nothing, and
 // `shown` 0, if the movie is not as read or no section fits.
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,

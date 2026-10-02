@@ -15,6 +15,12 @@
 // mouse on one for its tooltip. Close with OK or Cancel and open again:
 // the boxes are as they were left (a change is made at the click). All of
 // it seen 2026-10-01 (dao/Options.h).
+//
+// A second section, "DAOLib example choice", has a choice of four named
+// values, the game's own slider with named stops: it goes under the right
+// column, since the left is full. It starts at "Normal"; the arrows and
+// the slider change it, the name beside it follows, and each change is
+// logged. Not yet seen in play.
 // What it does goes to example_options.log.
 #include "dao/Options.h"
 #include "dao/Frame.h"
@@ -25,14 +31,17 @@
 #include <spdlog/spdlog.h>
 
 #include <atomic>
+#include <cstdint>
 
 namespace
 {
 
 constexpr const wchar_t *kTitle = L"DAOLib example";
+constexpr const wchar_t *kChoiceTitle = L"DAOLib example choice";
 
 std::atomic<bool> g_plain{false};
 std::atomic<bool> g_startsOn{true};
+std::atomic<std::int32_t> g_speed{1};
 
 const char *Name(dao::options::SectionState state)
 {
@@ -73,11 +82,18 @@ dao::options::Toggle Kept(const wchar_t *name, const wchar_t *label, const wchar
 void Frame()
 {
     static dao::options::SectionState was = dao::options::SectionState::Unknown;
+    static dao::options::SectionState choiceWas = dao::options::SectionState::Unknown;
     const dao::options::SectionState now = dao::options::StateOf(kTitle);
     if (now != was)
     {
         spdlog::info("the section: {}", Name(now));
         was = now;
+    }
+    const dao::options::SectionState choiceNow = dao::options::StateOf(kChoiceTitle);
+    if (choiceNow != choiceWas)
+    {
+        spdlog::info("the choice's section: {}", Name(choiceNow));
+        choiceWas = choiceNow;
     }
 }
 
@@ -111,6 +127,28 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     const bool badName = dao::options::AddSection(L"Refused", {spaced});
     const bool empty = dao::options::AddSection(L"Empty", {});
     spdlog::info("added: {}; refused as they should be: {} {}", added, !badName, !empty);
+
+    dao::options::Choice speed;
+    speed.name = L"ExampleSpeed";
+    speed.label = L"A choice";
+    speed.tooltip = L"Four named stops; each change is logged";
+    speed.values = {L"Slow", L"Normal", L"Fast", L"Fastest"};
+    speed.get = [] {
+        spdlog::info("ExampleSpeed asked: {}", g_speed.load());
+        return g_speed.load();
+    };
+    speed.set = [](std::int32_t wanted) {
+        spdlog::info("ExampleSpeed changed: {} -> {}", g_speed.load(), wanted);
+        g_speed = wanted;
+        return wanted;
+    };
+    // A choice of one value is refused.
+    dao::options::Choice single = speed;
+    single.name = L"ExampleSingle";
+    single.values = {L"Only"};
+    const bool choiceAdded = dao::options::AddSection(kChoiceTitle, {}, {speed});
+    const bool singleRefused = !dao::options::AddSection(L"Refused choice", {}, {single});
+    spdlog::info("the choice added: {}; one value refused: {}", choiceAdded, singleRefused);
     dao::OnFrame(&Frame);
     return true;
 }

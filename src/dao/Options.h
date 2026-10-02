@@ -1,5 +1,5 @@
 // A plugin's own settings in the game's options screen: a section on the
-// Game tab, with a heading and checkboxes.
+// Game tab, with a heading, checkboxes, and choices of a few named values.
 //
 //   dao::options::AddSection(L"Turn-based", {{
 //       .name = L"TurnBasedCombat",
@@ -69,6 +69,7 @@
 // box, refused in a fight) was seen the same day too.
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -88,10 +89,42 @@ struct Toggle
     std::function<bool(bool wanted)> set;
 };
 
-// False, and nothing added, for a section with no toggles, a toggle with a
-// name that is not letters and digits or was given before, or one without
-// both callbacks.
-bool AddSection(std::wstring title, std::vector<Toggle> toggles);
+// A choice of a few named values: the game's own slider with named stops,
+// as the Video tab's texture and graphics detail are (the arrows either
+// side step it, the slider drags it, the value's name shows beside it).
+// `values` are the stops' names, two or more; `get` answers the index of
+// the one chosen, and `set` is given the index wanted and answers the one
+// that now holds, as a toggle's are. It takes two rows. The game asks the
+// value as the screen opens, before `get` can be run on the frame's
+// thread, so it is answered then with the last value `get` or `set` gave
+// (the first value until one has), and told `get`'s straight after, as a
+// checkbox is.
+//
+//   dao::options::AddSection(L"Turn-based", {/* toggles */}, {{
+//       .name = L"TurnBasedSpeed",
+//       .label = L"Turn speed",
+//       .tooltip = L"How fast the turns play",
+//       .values = {L"0.5x", L"1x", L"1.5x", L"2x"},
+//       .get = [] { return SpeedIndex(); },
+//       .set = [](std::int32_t wanted) { return SetSpeedIndex(wanted); },
+//   }});
+//
+// Read 2026-10-02 from the options movie (dao/core/OptionsMovie.h). Not yet
+// seen in play.
+struct Choice
+{
+    std::wstring name; // as a toggle's
+    std::wstring label;
+    std::wstring tooltip;
+    std::vector<std::wstring> values;
+    std::function<std::int32_t()> get;
+    std::function<std::int32_t(std::int32_t wanted)> set;
+};
+
+// False, and nothing added, for a section with neither toggles nor choices,
+// one with a name that is not letters and digits or was given before, one
+// without both callbacks, or a choice of fewer than two values.
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {});
 
 enum class SectionState
 {

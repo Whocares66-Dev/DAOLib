@@ -829,7 +829,7 @@ Value Register(std::int32_t number)
     return {Value::Kind::Register, {}, number};
 }
 
-Bytes Push(std::initializer_list<Value> values)
+Bytes Push(std::span<const Value> values)
 {
     Bytes body;
     for (const Value &value : values)
@@ -854,6 +854,11 @@ Bytes Push(std::initializer_list<Value> values)
     Append(code, static_cast<std::uint32_t>(body.size()), 2);
     code.insert(code.end(), body.begin(), body.end());
     return code;
+}
+
+Bytes Push(std::initializer_list<Value> values)
+{
+    return Push(std::span<const Value>(values.begin(), values.size()));
 }
 
 Bytes Do(Op op)
