@@ -5,12 +5,14 @@
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
+#include "dao/SafeRead.h"
 #include "dao/World.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 namespace dao::vfx
@@ -103,6 +105,46 @@ bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing
         Turn(object, Padded(*facing));
     }
     return true;
+}
+
+std::size_t Parts(ObjectId effect)
+{
+    // As the engine's own two calls find the model (0x007E9C40): the
+    // effect's part at +0x70 answers its slot 24 with a holder, whose +0x18
+    // points at a pair with the model second. The model's drawable nodes
+    // are a vector of pointers at its +0x5C (its slot 69 walks it).
+    constexpr std::size_t kPart = 0x70;
+    constexpr std::size_t kHolderSlot = 24;
+    constexpr std::size_t kPair = 0x18;
+    constexpr std::size_t kNodes = 0x5C;
+    constexpr std::size_t kMost = 4096; // more than any model has; a longer list is not one
+    void *object = Find(effect);
+    if (object == nullptr)
+    {
+        return 0;
+    }
+    void *part = static_cast<std::byte *>(object) + kPart;
+    using Fn = void *(__fastcall *)(void *, int);
+    const Fn *vtable = *static_cast<const Fn *const *>(part);
+    const void *holder = vtable[kHolderSlot](part, 0);
+    if (holder == nullptr)
+    {
+        return 0;
+    }
+    const auto pair = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(holder) + kPair);
+    const auto model = pair && *pair != 0 ? TryRead<std::uintptr_t>(*pair + sizeof(std::uintptr_t)) : std::nullopt;
+    if (!model || *model == 0)
+    {
+        return 0;
+    }
+    const auto begin = TryRead<std::uintptr_t>(*model + kNodes);
+    const auto end = TryRead<std::uintptr_t>(*model + kNodes + sizeof(std::uintptr_t));
+    if (!begin || !end || *begin == 0 || *end < *begin)
+    {
+        return 0;
+    }
+    const std::size_t count = (*end - *begin) / sizeof(std::uintptr_t);
+    return count <= kMost ? count : 0;
 }
 
 bool SetScale(ObjectId effect, float scale)

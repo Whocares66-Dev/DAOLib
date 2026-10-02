@@ -33,6 +33,7 @@
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -80,17 +81,37 @@ struct Tint
 // turn-based mod's marker placed with a red tint was its usual pale gold.
 // A material object of the same name in the override folder that names
 // ReticalTint would make one of those take a tint, the game's own use of
-// it unchanged while no tint is given. Tried in play that evening by the
-// turn-based mod, with both of the marker's material objects (move_indicator
-// and move_icon) so changed: the marker was still gold, which may be the
-// folder not being read for them or the colour not reaching that shader.
+// it unchanged while no tint is given.
 //
-// The colour is one the game uses itself, on other materials: the effect's
-// set-up (0x007EA550) takes the caller's tint or, with none, the row's own
-// from the table's Tint column (0xAARRGGBB; 137 of the 993 rows have one,
-// the crusts and auras on VFX.mat, whose shaders read the same parameter),
-// and hands either to the same call. A tinted ring is not yet seen in
-// play; examples/preview places one.
+// In play that evening neither showed. The turn-based mod's marker, with
+// both of its material objects (move_indicator and move_icon) so changed,
+// was still gold. And the aiming ring itself, placed with a red tint by
+// examples/preview, was its own pale gold: the play tester's bright
+// pixels had red, green and blue within a few points of each other.
+//
+// Read after that. The shader is not the trouble: ReticleTint.psh is the
+// texture times aur_vExternalColor times mml_vUserColorMultiplier. Nor is
+// the kind of node. Slot 69 keeps the colour in the model (+0x2CC) and
+// goes through the model's drawable nodes (the list at +0x5C); to each
+// that is a mesh, a sprite emitter, an emitter of meshes or a weapon
+// trail (kinds 1, 6, 7 and 0x13 to 0x15) and has a material instance
+// (+0x150), it gives a value for the parameter that points at that colour
+// (0x004F3F40). A node the model does not have at that moment gets
+// nothing, and nothing was found that gives it one later: the only other
+// code that names the parameter is the emitters' own (ObjectNodeEmitter's
+// slot 13, at 0x00541473), which sets it from a colour the model keeps as
+// text. So the guess is the moment: the set-up calls slot 69 as soon as
+// the model is there, which may be before its meshes are. If that is it,
+// SetTint below, a frame or more after placing, is what colours a mesh,
+// and Parts says when there is something to colour. examples/preview does
+// that; not yet seen in play. The other suspect is the ring's own
+// animation of its MaterialColor (animation target 0x24), not read.
+//
+// The colour is one the game uses itself: the effect's set-up (0x007EA550)
+// takes the caller's tint or, with none, the row's own from the table's
+// Tint column (0xAARRGGBB; 137 of the 993 rows have one, crusts and auras
+// on VFX.mat, whose shaders read the same parameter), and hands either to
+// the same call.
 //
 // The scale is one number, and not only here: the effect's graphics object
 // (GraphicsStructures::Object, its SetScale 0x00545330) keeps a single
@@ -106,12 +127,10 @@ ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
                const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
 // A ring of `radius` metres on the ground: the engine's aiming ring, or the
-// one it shows for a point out of reach, which looked the same in play. In
-// a colour if `tint` is given: the rings' material is one that takes it.
-inline ObjectId PlaceRing(const Vector &at, float radius, bool inReach = true,
-                          const std::optional<Tint> &tint = std::nullopt)
+// one it shows for a point out of reach, which looked the same in play.
+inline ObjectId PlaceRing(const Vector &at, float radius, bool inReach = true)
 {
-    return Place(inReach ? kAreaRing : kAreaRingOutOfReach, at, radius / kRingRadius, std::nullopt, tint);
+    return Place(inReach ? kAreaRing : kAreaRingOutOfReach, at, radius / kRingRadius);
 }
 
 // Moves a placed effect, and turns it if `facing` is given; false if it is
@@ -124,9 +143,16 @@ void Remove(ObjectId effect);
 // A placed effect's size or colour changed where it stands, as its set-up
 // set them when it was placed: a mark turned from gold to red without
 // taking it away and placing another. False if the effect is gone. A tint
-// shows only on a material that takes one (above). Not yet seen in play.
+// shows only on a material that takes one (above), and reaches only the
+// parts the model has when it is set. Not yet seen in play.
 bool SetScale(ObjectId effect, float scale);
 bool SetTint(ObjectId effect, const Tint &tint);
+
+// How many drawable parts (meshes, emitters and the like) a placed
+// effect's model has now: the list a tint is handed down (above). 0 for an
+// effect that is gone or whose model is not built yet. The list's place in
+// the model was read in the GOG build. Not yet seen in play.
+std::size_t Parts(ObjectId effect);
 
 // Leaves an effect out of the cursor's pick, or puts it back in.
 //
