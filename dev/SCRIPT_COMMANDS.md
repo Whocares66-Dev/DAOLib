@@ -44,13 +44,13 @@ So a registration number is a script function number. The table is verified agai
 
 | Found | Count | How |
 |---|---|---|
-| Object lookups by id | 9 | The shape of NWN's `GetCreatureByGameObjectID`: the application's object array (`+0xCC`), `CGameObjectArray::GetGameObject`, a type byte at `+0x14`, and a cast through a virtual slot. A cast slot's class is the one whose implementation of it is `mov eax, ecx; ret`. So `0x005D58C0` is `CClientExoApp::GetCreatureById`, and there are lookups for placeables, modules, projectiles and waypoints, the uncast `GetGameObjectById`, and `GetObjectById` for any object. |
-| Methods of a looked-up object | 42 | A direct call with the object as `this`, when it is the only method the command calls on it: `CCModule::ForScript_DoAreaTransition`, `CCCreature::ForScript_EndHeartbeat`, `CCObject::ForScript_IsDead`. |
+| Object lookups by id | 10 | The shape of NWN's `GetCreatureByGameObjectID`: the application's object array (`+0xCC`), `CGameObjectArray::GetGameObject`, a type byte at `+0x14`, and a cast through a virtual slot. A cast slot's class is the one whose implementation of it is `mov eax, ecx; ret`. So `0x005D58C0` is `CClientExoApp::GetCreatureById`, and there are lookups for areas, area-of-effect objects, placeables, modules, projectiles and waypoints, the uncast `GetGameObjectById`, and `GetObjectById` for any object. The area's and the area-of-effect object's were missed until 2026-10-01: their casts are slots 2 and 3, and the disassembler writes an offset below ten without `0x`. |
+| Methods of a looked-up object | 38 | A direct call with the object as `this`, when it is the only method the command calls on it: `CCModule::ForScript_DoAreaTransition`, `CCCreature::ForScript_EndHeartbeat`, `CCObject::ForScript_IsDead`. |
 | Methods through a vtable | 6 | The same, through the object's vtable. |
-| A command's sole callee | 187 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
-| Candidates, unnamed | 24 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
+| A command's sole callee | 180 | The one direct call left after the VM, the lookups and shared helpers are set aside: `ScriptBackend::ForScript_GetRemainingCooldown`, `ScriptBackend::ForScript_GetLocalEffect`. |
+| Candidates, unnamed | 25 | One of several methods a command calls on its object: the command's purpose is shared out among them. |
 
-The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. `tools/names.py --give` puts their names into the address library's table, from which Ghidra has them, and a name set by hand wins. `ForScript_X` means the engine function behind script command X. It says what the function does for scripts, not the engine's own name for it.
+The tables are `dev/object_lookups.csv` and `dev/script_backends.csv`. A function with a row in `Addresses.h` is left out of the second: it has the engine's own name by then, so the counts fall as the library grows. `tools/names.py --give` writes their names into this checkout's copy of the address library's table and prints a line for each to send to the library's session, which commits them; Ghidra has them from the table, and a name set by hand wins. `ForScript_X` means the engine function behind script command X. It says what the function does for scripts, not the engine's own name for it.
 
 ## Fields
 

@@ -64,7 +64,9 @@ REGISTERS = ("eax", "ebx", "ecx", "edx", "esi", "edi", "ebp")
 def as_slot(instructions):
     """The cast slot's offset in a typed lookup's body: the object's vtable
     loaded (`mov edx, [ecx]`), then a slot of it read or called (`mov eax,
-    [edx + 0x10]` / `call [edx + 0x10]`). None if the body has no such pair."""
+    [edx + 0x10]` / `call [edx + 0x10]`). None if the body has no such pair.
+    The disassembler writes an offset below ten without `0x` (`[edx + 8]`,
+    the area's cast), which this once missed."""
     vtables = set()
     for mnemonic, operands in instructions:
         ops = [o.strip() for o in operands.split(",")]
@@ -75,9 +77,9 @@ def as_slot(instructions):
         ):
             vtables.add(ops[0])
             continue
-        m = re.fullmatch(r"dword ptr \[(e\w\w) \+ (0x[0-9a-f]+)\]", ops[-1])
+        m = re.fullmatch(r"dword ptr \[(e\w\w) \+ (0x[0-9a-f]+|\d)\]", ops[-1])
         if m and m.group(1) in vtables and mnemonic in ("mov", "call"):
-            return int(m.group(2), 16)
+            return int(m.group(2), 0)
     return None
 
 
@@ -178,7 +180,7 @@ def cast_classes(img):
         ):
             classes[name] = (va, slots)
     out = {}
-    for offset in range(0x10, 0x60, 4):
+    for offset in range(0x8, 0x60, 4):
         k = offset // 4
         hits = []
         for name, (_, slots) in classes.items():

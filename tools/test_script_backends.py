@@ -35,6 +35,17 @@ class CastSlot(unittest.TestCase):
         body = [("mov", "eax, dword ptr [ecx]"), ("call", "dword ptr [eax + 0x24]")]
         self.assertEqual(as_slot(body), 0x24)
 
+    def test_a_slot_below_ten_is_written_without_0x(self):
+        # CClientExoApp::GetAreaById (0x005D5960): the area's cast is slot 2.
+        body = [
+            ("mov", "ecx, dword ptr [esp]"),
+            ("mov", "al, byte ptr [ecx + 0x14]"),
+            ("mov", "edx, dword ptr [ecx]"),
+            ("mov", "eax, dword ptr [edx + 8]"),
+            ("call", "eax"),
+        ]
+        self.assertEqual(as_slot(body), 8)
+
     def test_no_vtable_no_slot(self):
         self.assertIsNone(
             as_slot([("mov", "ecx, dword ptr [ecx + 0xcc]"), ("ret", "")])

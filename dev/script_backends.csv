@@ -4,6 +4,7 @@ function_va,name,how,class,ghidra_name,commands
 0x0047eb30,ScriptBackend::ForScript_IncrementAchievementCountByID,sole,,ScriptBackend::ForScript_IncrementAchievementCountByID,IncrementAchievementCountByID
 0x0047f5f0,ScriptBackend::ForScript_UpdateOnlineStatistic,sole,,ScriptBackend::ForScript_UpdateOnlineStatistic,UpdateOnlineStatistic
 0x00480980,ScriptBackend::ForScript_GetOnlineStatistic,sole,,ScriptBackend::ForScript_GetOnlineStatistic,GetOnlineStatistic
+0x0049d170,ScriptBackend::ForScript_GETABILITIESDUETOAOES,sole,,FUN_0049d170,GETABILITIESDUETOAOES
 0x004c0950,ScriptBackend::ForScript_StringToInt,sole,,ScriptBackend::ForScript_StringToInt,StringToInt | HexStringToInt
 0x004c09d0,ScriptBackend::ForScript_StringToFloat,sole,,ScriptBackend::ForScript_StringToFloat,StringToFloat
 0x004c0f70,ScriptBackend::ForScript_FindSubString,sole,,ScriptBackend::ForScript_FindSubString,FindSubString
@@ -15,7 +16,6 @@ function_va,name,how,class,ghidra_name,commands
 0x004c38e0,ScriptBackend::ForScript_StringUpperCase,sole,,ScriptBackend::ForScript_StringUpperCase,StringUpperCase
 0x004c3a50,ScriptBackend::ForScript_StringLowerCase,sole,,ScriptBackend::ForScript_StringLowerCase,StringLowerCase
 0x004d4d10,ScriptBackend::ForScript_GetAngleBetweenObjects,sole,,ScriptBackend::ForScript_GetAngleBetweenObjects,GetAngleBetweenObjects
-0x004e4990,ScriptBackend::ForScript_GetTlkTableString,sole,,ScriptBackend::ForScript_GetTlkTableString,GetTlkTableString
 0x004eae30,ScriptBackend::ForScript_Location,sole,,ScriptBackend::ForScript_Location,Location | SetLocationFacing | CommandTurn
 0x004ee570,ScriptBackend::ForScript_VectorToAngle,sole,,ScriptBackend::ForScript_VectorToAngle,VectorToAngle | GetFacing | GetFacingFromLocation
 0x0051b370,CCModule::ForScript_GetName,direct,CCModule,CCModule::ForScript_GetName,GetName
@@ -23,11 +23,10 @@ function_va,name,how,class,ghidra_name,commands
 0x005ba100,ScriptBackend::ForScript_StopSound,sole,,ScriptBackend::ForScript_StopSound,StopSound
 0x005bc7f0,ScriptBackend::ForScript_PlaySound,sole,,ScriptBackend::ForScript_PlaySound,PlaySound
 0x005fbc10,ScriptBackend::ForScript_ISPACKAGELOADED,sole,,ScriptBackend::ForScript_ISPACKAGELOADED,ISPACKAGELOADED
-0x005fe470,CCModule::ForScript_GetTeam,direct,CCModule,CCModule::ForScript_GetTeam,GetTeam
 0x005ff450,CCModule::ForScript_GetObjectByTag,direct,CCModule,CCModule::ForScript_GetObjectByTag,GetObjectByTag
 0x00600270,,direct,CCModule,FUN_00600270,SetTag
 0x00600a40,CCModule::ForScript_DoAreaTransition,direct,CCModule,CCModule::ForScript_DoAreaTransition,DoAreaTransition
-0x00601860,CCModule::ForScript_GETCREATURESINAOE,direct,CCModule,CCModule::ForScript_GETCREATURESINAOE,GETCREATURESINAOE | GetObjectsInArea
+0x00601860,,direct,CCModule,CCModule::ForScript_GETCREATURESINAOE,GETCREATURESINAOE | GetObjectsInArea
 0x00602650,,direct,CCModule,FUN_00602650,SetTag
 0x00602af0,CCModule::ForScript_LinkAreaMiniMaps,direct,CCModule,CCModule::ForScript_LinkAreaMiniMaps,LinkAreaMiniMaps
 0x0060ea60,ScriptBackend::ForScript_HighlightGuiElement,sole,,ScriptBackend::ForScript_HighlightGuiElement,HighlightGuiElement
@@ -78,7 +77,6 @@ function_va,name,how,class,ghidra_name,commands
 0x0066cf60,ScriptBackend::ForScript_GetCreatureAttribute,sole,,ScriptBackend::ForScript_GetCreatureAttribute,GetCreatureAttribute | GetCreatureProperty
 0x00670ba0,ScriptBackend::ForScript_ClearThreatTable,sole,,ScriptBackend::ForScript_ClearThreatTable,ClearThreatTable
 0x006741e0,ScriptBackend::ForScript_RemoveEffect,sole,,ScriptBackend::ForScript_RemoveEffect,RemoveEffect | RemoveAllItemVisualEffects
-0x0067c3f0,Math::CollisionOutputParameter::ForScript_CheckLineOfSightVector,sole,,Math::CollisionOutputParameter::ForScript_CheckLineOfSightVector,CheckLineOfSightVector | CheckLineOfSightObject
 0x006849c0,ScriptBackend::ForScript_UT_GetNearestObjectByTag,sole,,ScriptBackend::ForScript_UT_GetNearestObjectByTag,UT_GetNearestObjectByTag
 0x00684dd0,CGameObject::ForScript_GetNearestObjectByHostility,direct,CGameObject,CGameObject::ForScript_GetNearestObjectByHostility,GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup
 0x00692e90,ScriptBackend::ForScript_SetTrainingMode,sole,,ScriptBackend::ForScript_SetTrainingMode,SetTrainingMode
@@ -87,7 +85,6 @@ function_va,name,how,class,ghidra_name,commands
 0x00694e50,,direct,CCObject,FUN_00694e50,SetObjectActive
 0x00694fe0,,direct,CCObject,FUN_00694fe0,SetObjectActive
 0x00695300,CCObject::ForScript_IsDead,direct,CCObject,CCObject::ForScript_IsDead,IsDead | BeginConversation | FilterObjectsInShape | GetObjectsInShape
-0x00695540,,direct,CCObject,FUN_00695540,SetLocation
 0x006956b0,,direct,CCObject,FUN_006956b0,PlayAdditiveAnimation
 0x00695cd0,CCObject::ForScript_SetTeamId,virtual,CCObject,CCObject::ForScript_SetTeamId,SetTeamId
 0x00696a60,CCObject::ForScript_DestroyObject,virtual,CCObject,CCObject::ForScript_DestroyObject,DestroyObject
@@ -181,20 +178,18 @@ function_va,name,how,class,ghidra_name,commands
 0x0071c620,ScriptBackend::ForScript_GetQuickslot,sole,,ScriptBackend::ForScript_GetQuickslot,GetQuickslot
 0x0071ce60,ScriptBackend::ForScript_GetRemainingCooldown,sole,,ScriptBackend::ForScript_GetRemainingCooldown,GetRemainingCooldown
 0x0071da90,ScriptBackend::ForScript_Engine_SetModalAbilityGUI,sole,,ScriptBackend::ForScript_Engine_SetModalAbilityGUI,Engine_SetModalAbilityGUI
-0x0071dce0,ScriptBackend::ForScript_SetCooldown,sole,,ScriptBackend::ForScript_SetCooldown,SetCooldown
 0x0071dd10,ScriptBackend::ForScript_GetConditionedAbilities,sole,,ScriptBackend::ForScript_GetConditionedAbilities,GetConditionedAbilities
 0x0071f160,ScriptBackend::ForScript_CharGen_ClearAbilityList,sole,,ScriptBackend::ForScript_CharGen_ClearAbilityList,CharGen_ClearAbilityList
 0x0072b690,ScriptBackend::ForScript_SetTournamentScoreboardEntry,sole,,ScriptBackend::ForScript_SetTournamentScoreboardEntry,SetTournamentScoreboardEntry
 0x0072c210,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,sole,,ScriptBackend::ForScript_SetChampionshipScoreboardEntry,SetChampionshipScoreboardEntry
 0x0072d860,ScriptBackend::ForScript_AddGeneralScoreboardEntry,sole,,ScriptBackend::ForScript_AddGeneralScoreboardEntry,AddGeneralScoreboardEntry
 0x0073bf80,ScriptBackend::ForScript_SetGameCompletionPercentage,sole,,ScriptBackend::ForScript_SetGameCompletionPercentage,SetGameCompletionPercentage
-0x0073c730,CCObject::ForScript_ClearCurrentCommand,direct,CCObject,CCObject::ForScript_ClearCurrentCommand,ClearCurrentCommand
 0x0073c7b0,CCCreature::ForScript_IsConjuring,direct,CCCreature,CCCreature::ForScript_IsConjuring,IsConjuring
 0x0073c930,CCObject::ForScript_ClearAllCommands,direct,CCObject,CCObject::ForScript_ClearAllCommands,ClearAllCommands | SetObjectActive
 0x0073c9e0,CCObject::ForScript_RemoveCommand,direct,CCObject,CCObject::ForScript_RemoveCommand,RemoveCommand
 0x0073ca90,CCObject::ForScript_RemoveCommandByIndex,direct,CCObject,CCObject::ForScript_RemoveCommandByIndex,RemoveCommandByIndex
-0x0073de70,CGameObject::ForScript_IsLocationSafe,direct,CGameObject,CGameObject::ForScript_IsLocationSafe,IsLocationSafe
-0x0073e370,CGameObject::ForScript_GetSafeLocation,direct,CGameObject,CGameObject::ForScript_GetSafeLocation,GetSafeLocation
+0x0073de70,CGameObject::ForScript_IsLocationSafe,direct,CCArea,CGameObject::ForScript_IsLocationSafe,IsLocationSafe
+0x0073e370,CGameObject::ForScript_GetSafeLocation,direct,CCArea,CGameObject::ForScript_GetSafeLocation,GetSafeLocation
 0x00740cc0,ScriptBackend::ForScript_GetThreatEnemy,sole,,ScriptBackend::ForScript_GetThreatEnemy,GetThreatEnemy
 0x00740d10,ScriptBackend::ForScript_GetThreatValueByIndex,sole,,ScriptBackend::ForScript_GetThreatValueByIndex,GetThreatValueByIndex
 0x00740fa0,ScriptBackend::ForScript_GetThreatValueByObjectID,sole,,ScriptBackend::ForScript_GetThreatValueByObjectID,GetThreatValueByObjectID
@@ -234,6 +229,7 @@ function_va,name,how,class,ghidra_name,commands
 0x007c4930,CCWayPoint::ForScript_SetMapPinState,direct,CCWayPoint,CCWayPoint::ForScript_SetMapPinState,SetMapPinState
 0x007ca4f0,ScriptBackend::ForScript_SetMaxInventorySize,sole,,ScriptBackend::ForScript_SetMaxInventorySize,SetMaxInventorySize
 0x007ccc30,ScriptBackend::ForScript_GetMeleeRingPosition,sole,,ScriptBackend::ForScript_GetMeleeRingPosition,GetMeleeRingPosition
+0x007e5e60,,direct,CCAreaOfEffectObject,FUN_007e5e60,GETCREATURESINAOE | GetObjectsInArea
 0x008663a0,ScriptBackend::ForScript_IsInTrigger,sole,,ScriptBackend::ForScript_IsInTrigger,IsInTrigger | IsModalAbilityActive
 0x008e33e0,ScriptBackend::ForScript_log,sole,,ScriptBackend::ForScript_log,log
 0x008e5ed0,ScriptBackend::ForScript_acos,sole,,ScriptBackend::ForScript_acos,acos

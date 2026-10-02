@@ -37,7 +37,10 @@ earlier winning an address two of them name:
   ScriptBackend where no class is known. Only the rows it names.
 
 `--give` never changes a name the table has: run it after one of those
-tables has grown, then commit the table in extern/DAOAddressLibrary.
+tables has grown. It writes the names into this checkout's copy of the
+table and prints a line for each; the table has its own keeper (CLAUDE.md),
+so commit nothing there: send its session the lines, and take the commit
+it makes, as for a row of the source.
 """
 
 import csv
@@ -164,6 +167,10 @@ def give():
         if not row.name:
             row.name = name
             given += 1
+            print(
+                f"to send to the address library's session: ID {ids[0]}, {row.kind}, "
+                f"{name}, GOG {va:#010x}"
+            )
         elif row.name == name:
             already += 1
         else:
@@ -176,8 +183,8 @@ def give():
     )
     if given:
         print(
-            f"commit and push it in {os.path.relpath(address_ids.LIBRARY, address_ids.ROOT)}, "
-            "then commit the submodule here"
+            f"written into this checkout's copy in {os.path.relpath(address_ids.LIBRARY, address_ids.ROOT)}. "
+            "Commit nothing there: send its session the lines above, and take the commit it makes."
         )
     return 0
 
