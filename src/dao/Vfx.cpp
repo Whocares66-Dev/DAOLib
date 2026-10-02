@@ -105,6 +105,30 @@ bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing
     return true;
 }
 
+bool SetScale(ObjectId effect, float scale)
+{
+    void *object = Find(effect);
+    if (object == nullptr)
+    {
+        return false;
+    }
+    using Fn = void(__fastcall *)(void *, int, float);
+    reinterpret_cast<Fn>(Module::Address(addr::kVfxObject_SetScale))(object, 0, scale);
+    return true;
+}
+
+bool SetTint(ObjectId effect, const Tint &tint)
+{
+    void *object = Find(effect);
+    if (object == nullptr)
+    {
+        return false;
+    }
+    using Fn = void(__fastcall *)(void *, int, const Tint *);
+    reinterpret_cast<Fn>(Module::Address(addr::kVfxObject_SetTint))(object, 0, &tint);
+    return true;
+}
+
 namespace
 {
 

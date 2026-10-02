@@ -358,6 +358,14 @@ DAO_ADDRESS(kVfxManager_Get, 19701)
 DAO_ADDRESS(kVfxManager_Place, 19710)
 DAO_ADDRESS(kVfxManager_Find, 19676)
 DAO_ADDRESS(kVfxManager_Remove, 19704)
+// A placed effect's size and colour after it is placed, read 2026-10-01
+// (dao/Vfx.h): the two calls the effect's set-up (0x007EA550) makes on
+// the effect once its model is there. __thiscall on the effect's object,
+// (float scale) and (const colour *, four floats), `ret 4` each: they find
+// the model and call its slots 43 and 69. Nothing is done for an effect
+// whose model is not loaded yet. The names are ours.
+DAO_ADDRESS(kVfxObject_SetScale, 21152)
+DAO_ADDRESS(kVfxObject_SetTint, 21153)
 DAO_ADDRESS(kCCObject_SetPosition, 14084)
 DAO_ADDRESS(kGameModeExplore_AimRingEffect, 16149)
 DAO_ADDRESS(kGameModeExplore_UpdateAim, 16294)

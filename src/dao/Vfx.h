@@ -121,6 +121,13 @@ bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing
 // Takes a placed effect away; nothing for one already gone.
 void Remove(ObjectId effect);
 
+// A placed effect's size or colour changed where it stands, as its set-up
+// set them when it was placed: a mark turned from gold to red without
+// taking it away and placing another. False if the effect is gone. A tint
+// shows only on a material that takes one (above). Not yet seen in play.
+bool SetScale(ObjectId effect, float scale);
+bool SetTint(ObjectId effect, const Tint &tint);
+
 // Leaves an effect out of the cursor's pick, or puts it back in.
 //
 // Some rows have a shape the cursor's ray meets. Seen in play, 2026-10-01
