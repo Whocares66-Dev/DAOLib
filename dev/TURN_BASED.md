@@ -128,6 +128,16 @@ The mode's own clock is `dao::OnFrame`, which runs on the scripts' thread and ke
 
 Still to read: what else queues commands without `AddCommand` (effects, the engine's own reactions: `QueueCommand`'s other callers, `dev/TURN_BASED.md` above), and whether a command kept past a pause or an area change stays valid.
 
+## How close a melee attack strikes from (read 2026-10-02)
+
+The turn-based mod measured its player's dagger strikes against a giant spider landing from 2.4 m between centres, a metre closer than its own reach rule (the scripts' `AI_MELEE_RANGE`, 3.5, which is the AI's judgement of "a melee target", not the engine's reach). The engine's own, read in the exe:
+
+- **The attack command's step** (`0x00742FD0`, ID 17685) asks whether the weapon is ranged. Ranged: it queues an approach to the weapon's `Range` from `bitm_base` (capped at 60 m) plus both creatures' personal spaces. Melee: it queues a move to the target carrying the attacker's personal space, then the attack itself.
+- **A creature's personal space** is `PerSpace` from `apr_base`, read once per creature (`0x00748A40`, beside `Height`, or `Height_F` for a female body) into its size record (the creature's +0x7B0, `PerSpace` at +0x60, `Height` at +0x64); the creature's vtable slot 39 (`0x006A21A0`) answers it. Elves, humans and dwarves 0.35, children 0.30, giant spiders 0.70.
+- **In reach** (`0x006A3D00`, ID 14499, the creature's slot 33): the distance between centres at most **attacker's `PerSpace` + target's `PerSpace` + 1.2 m**, and a facing test beside it. The melee attack's own set-up (`0x00745E10`, ID 17720) places the swing at that same distance, `-(sum + 1.2)` along the attacker's facing, with 0.15 m of play.
+
+So Lyna against a giant spider: 0.35 + 0.70 + 1.2 = 2.25 m, and with the 0.15 m of play the 2.4 m measured; two humans 1.9 m. Weapons add nothing: every melee weapon's `Range` is 0. `MeleeRingOffset` (0.22 on the spiders) and the `meleering*` tables are the large monsters' rings of attackers' places (dragons, the archdemon), not this. Not yet checked in play against more than the one pair.
+
 ## Next readings
 
 1. A fight with the next probe (queue hook, deeper stacks): what `0x0073CD10` is called on and with, from scripts and from player orders, and a `compare` of fighting against exploring that reaches the game's own frames.
