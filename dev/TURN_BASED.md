@@ -158,13 +158,18 @@ Asked by the turn-based mod: can a spell be handed to the engine at once and hel
 - Once the frame's milliseconds are spent, an action is not run that frame: given 0, the current command does not move at all.
 - `IsConjuring` (`CCCreature::ForScript_IsConjuring`, 0x0073C7B0) reads the same list through the same lookup (0x00697BF0) and answers the first action's first word.
 
-So a timed phase of a command is counted in the creature's own milliseconds through one function. An intercept there, as AddElapsed is for effects, could hold a creature's current command and move it by its own clock. Not yet known, to be probed before anything is built:
+So a timed phase of a command is counted in the creature's own milliseconds through one function. An intercept there, as AddElapsed is for effects, could hold a creature's current command and move it by its own clock.
 
-- which action of a UseAbility the conjure is, and whether its duration is the command's conjure time (CommandUseAbility's float 0, -1 for the ability's own);
-- what the other actions are (the move into range, the cast, the impact), and whether a hold should cover them;
-- what the first word `IsConjuring` reads is.
+Seen in play the same day, by the probe's conjure watch (90a7ce8), run by the turn-based mod's session with the mod off, 16:29 to 16:33, Lyna's Chain Lightning (10211), its command's conjure time 0 (the ability's own):
 
-The probe would log, for a creature whose current command is a UseAbility, each action's three times and `IsConjuring` on every run. The conjure's looping animation plays on the scene's clock and would go on looping while held.
+- A UseAbility's sub-actions, in order: type 15, 39 (run twice, answering 0 then 1), 50, 7, 8, 37. All are untimed (duration 0) except 7 and 37.
+- **The conjure is type 7**, timed: duration 3,866 ms, the 3.87 s the animation files give for the draw-in spells. Its elapsed time counted up in game milliseconds (17 to 3,866 over 4.3 s of wall time), and it answered 1, done, when the elapsed time reached the duration.
+- **The cost is taken at type 8**, untimed, after the conjure: mana 120.0 through the whole conjure, 58.0 at type 8. Type 37 is the cast, 1,707 ms.
+- `IsConjuring` answers the running sub-action's type every time: 7 through the conjure.
+- A talent (Dirty Fighting, 603) has the same list with type 7 at duration 0, its stamina taken at type 8 (73 to 47), and type 37 for 1,440 ms. The ogre's specials (90066, 90036) begin with a type 4.
+- A conjure ended early (an ogre's knockdown about a second in, the caster's command going to ExecuteEffect) never reached type 8, and the mana stayed. `rules_core`'s interruption ends the command the same way while conjuring (`WR_ClearAllCommands`), so an interrupted spell costs nothing in the game as it is: not staged in this run (the caster's threshold was 16, the spiders bit for 7 or 8).
+
+So holding a spell in its conjure is holding sub-action type 7's elapsed time: the caster's own milliseconds as its time is paid, none otherwise. The sub-actions after it do not run until it is done.
 
 ## Next readings
 

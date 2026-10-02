@@ -948,7 +948,12 @@ DAO_ADDRESS(kCCObject_StepCommands, 17558)
 // it through its slot 2, Execute, __thiscall (object, sub-action), `ret
 // 8`, the sub-action's first word its type, the index of its handler in
 // the handler's table at +0x48. Once the milliseconds are spent no
-// sub-action runs that update. Not yet seen in play. The names are ours.
+// sub-action runs that update. Seen in play the same day, the probe's
+// conjure watch: a UseAbility's sub-actions are types 15, 39, 50, 7 (the
+// conjure, timed: 3,866 ms for Chain Lightning, its elapsed time counting
+// the caster's milliseconds), 8 (the cost taken) and 37 (the cast, timed);
+// IsConjuring answers the running sub-action's type (dev/TURN_BASED.md).
+// The names are ours.
 DAO_ADDRESS(kCCObject_RunCurrentCommand, 17548)
 DAO_ADDRESS(kCSSubActionHandler_Execute, 19864)
 DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
