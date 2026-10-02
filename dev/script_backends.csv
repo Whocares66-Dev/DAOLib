@@ -62,7 +62,6 @@ function_va,name,how,class,ghidra_name,commands
 0x00642e20,ScriptBackend::ForScript_GetCreatureStamina,sole,,ScriptBackend::ForScript_GetCreatureStamina,GetCreatureStamina | GetCreatureMana | SetCreatureStamina | SetCreatureMana | GetCreatureMaxStamina | GetCreatureMaxMana | SetCreatureMaxStamina | SetCreatureMaxMana
 0x00643570,ScriptBackend::ForScript_SetCheatUsedFlag,sole,,ScriptBackend::ForScript_SetCheatUsedFlag,SetCheatUsedFlag
 0x00643bf0,ScriptBackend::ForScript_LogStoryEvent,sole,,ScriptBackend::ForScript_LogStoryEvent,LogStoryEvent
-0x0064ad80,ScriptBackend::ForScript_SignalEvent,sole,,ScriptBackend::ForScript_SignalEvent,SignalEvent
 0x0064b480,ScriptBackend::ForScript_SetAILevel,sole,,ScriptBackend::ForScript_SetAILevel,SetAILevel
 0x0064b9a0,ScriptBackend::ForScript_GetGroupHostility,sole,,ScriptBackend::ForScript_GetGroupHostility,GetGroupHostility
 0x0064bb40,ScriptBackend::ForScript_IsObjectHostile,sole,,ScriptBackend::ForScript_IsObjectHostile,IsObjectHostile
@@ -82,7 +81,6 @@ function_va,name,how,class,ghidra_name,commands
 0x00692e90,ScriptBackend::ForScript_SetTrainingMode,sole,,ScriptBackend::ForScript_SetTrainingMode,SetTrainingMode
 0x00693190,ScriptBackend::ForScript_BeginTrainingStep,sole,,ScriptBackend::ForScript_BeginTrainingStep,BeginTrainingStep
 0x00694ce0,ScriptBackend::ForScript_SetOrientation,sole,,ScriptBackend::ForScript_SetOrientation,SetOrientation | SetLocation
-0x00694e50,,direct,CCObject,FUN_00694e50,SetObjectActive
 0x00694fe0,,direct,CCObject,FUN_00694fe0,SetObjectActive
 0x00695300,CCObject::ForScript_IsDead,direct,CCObject,CCObject::ForScript_IsDead,IsDead | BeginConversation | FilterObjectsInShape | GetObjectsInShape
 0x006956b0,,direct,CCObject,FUN_006956b0,PlayAdditiveAnimation

@@ -1229,6 +1229,28 @@ DAO_ADDRESS(kAIMaster_ProcessEvent, 12749) // (CAIEvent **), __thiscall
 DAO_ADDRESS(kAIMaster_ClearEvents, 12753)
 DAO_ADDRESS(kAIMaster_DeleteEventData, 12733) // (id, data)
 DAO_ADDRESS(kCAIEvent_Constructor, 19600)
+// The queue as it runs, read 2026-10-02 (dao/Timers.h). Update, __thiscall
+// (bool), `ret 4`, reads the world clock and has 0x0064AE30 deliver every
+// event due by then, earliest first, within a time budget; nine places
+// call it. Events wait in a linked list at the master's +0x64 (a pointer
+// to its head, the earliest, at +0, its tail at +4, the count at +8; a
+// node's +0 the one before it, +8 its CAIEvent), kept in order by
+// AddEventLater, which walks it from the tail. AddEventDeltaTime is the
+// one way in, from 50 places (DelayEvent among them): __thiscall (days,
+// ms, caller, target, id, data), `ret 0x18`, 1 when queued, it adds the
+// delay to the world time (WorldTimer::WorldTime, __thiscall (day *, ms
+// *), `ret 8`) and hands it to AddEventLater, or to AddEventNow for none,
+// each called from nowhere else. DelayEvent writes its seconds as whole
+// days of the world timer's +0x50 seconds and milliseconds
+// (dao/core/HeldEvents.h). DeliverNow, __thiscall (caller, target, id,
+// data), `ret 0x10`, builds a node due at 0 and hands it to ProcessEvent
+// at once: what SignalEvent does when told to process it immediately, and
+// 43 other places. An area of effect's first EVENT_TYPE_AOE_HEARTBEAT is
+// not queued: its update (0x007E4B6A) makes it once, flagged at the
+// object's +0x4D8, and runs its script with it straight away; every later
+// one is the script's own DelayEvent. The names are ours.
+DAO_ADDRESS(kAIMaster_Update, 12757)
+DAO_ADDRESS(kAIMaster_DeliverNow, 12755)
 // Where an object's script meets its event (dao/Events.h): __thiscall
 // (CScriptEvent **), `ret 4`. CCObject's handler (slot 50, 0x00698A50,
 // shared with the triggers, sounds, waypoints and more; CCCreature's,

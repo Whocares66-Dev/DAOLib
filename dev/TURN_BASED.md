@@ -138,6 +138,17 @@ The turn-based mod measured its player's dagger strikes against a giant spider l
 
 So Lyna against a giant spider: 0.35 + 0.70 + 1.2 = 2.25 m, and with the 0.15 m of play the 2.4 m measured; two humans 1.9 m. Weapons add nothing: every melee weapon's `Range` is 0. `MeleeRingOffset` (0.22 on the spiders) and the `meleering*` tables are the large monsters' rings of attackers' places (dragons, the archdemon), not this. Not yet checked in play against more than the one pair.
 
+## Traps' gas and damage over time on the turn clock (read 2026-10-02)
+
+The user's report from play: a poison gas trap in the Dalish origin's Elven Ruins (near the undead) kept hitting the party all through a turn-based fight. What it is, from the scripts and the exe:
+
+- The trap is `TRAP_GAS_TOXIC` (traps.gda row 207): an area of effect (`EffectAreaOfEffect`, 30 s, its script `trap_gas_toxic`). A creature entering it gets `TRAP_EFFECT_GAS` (row 420): `TRAP_EFFECT_DOT`, 30 damage of nature over 30 s (`sys_traps_h`, `ApplyEffectDamageOverTime`). The area itself does no damage each pulse; the poison does.
+- Damage over time is a script timer, not the effect's own clock: applying one sets the creature's `CREATURE_RULES_FLAG_DOT` and sends it `EVENT_TYPE_DOT_TICK` (1010) "next frame" (`DelayEvent(0.0)`); each tick hurts by every DoT effect on it and re-arms itself with `DelayEvent(1.5)` (`effect_dot2_h`, `CREATURE_RULES_TICK_DELAY`), until none is left. So with effects' time held (`dao::clock::Hold`) the poison never wore off, and its ticks went on every 1.5 s of real time: hurting while the player thought, and through every creature's turn.
+- A lasting area's pulses are the same kind of timer: the area's update runs its script once with `EVENT_TYPE_AOE_HEARTBEAT` (74) as it starts (0x007E4B6A), and every handler of it in the game's scripts (17 of them: the spells' and talents' clouds, `orz540_gas_aoe`, the fire traps) re-arms the next with `DelayEvent` at an interval of its own (4 s for the Anvil's gas).
+- `DelayEvent` counts on the world timer (`dao/Addresses.h`, "The queue as it runs"), which pause stops and the game's speed scales.
+
+`dao::timers` (2026-10-02) holds those two kinds of event with the clock and delivers them as it is advanced, each re-armed from when it came due: a 4 s round gives the poison two or three ticks, and it wears off after 30 s of rounds. Not yet seen in play.
+
 ## Next readings
 
 1. A fight with the next probe (queue hook, deeper stacks): what `0x0073CD10` is called on and with, from scripts and from player orders, and a `compare` of fighting against exploring that reaches the game's own frames.

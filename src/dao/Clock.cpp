@@ -6,6 +6,7 @@
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/Timers.h"
 #include "dao/TypeName.h"
 
 #include <atomic>
@@ -108,6 +109,7 @@ void Hold(bool held)
     Attach();
     g_held = held;
     effects::Hold(held);
+    timers::Hold(held);
 }
 
 bool Held()
@@ -123,6 +125,7 @@ void Advance(float seconds)
         g_advances.push_back(static_cast<std::int32_t>(seconds * 1000));
     }
     effects::Advance(seconds);
+    timers::Advance(seconds);
 }
 
 } // namespace dao::clock

@@ -8,6 +8,7 @@ add_executable(
     test_fingerprint.cpp
     test_gff4.cpp
     test_gfxmovie.cpp
+    test_heldevents.cpp
     test_inflate.cpp
     test_input.cpp
     test_msvc8.cpp

@@ -1,8 +1,9 @@
 // The game's clock for what wears off and what comes back: temporary
 // effects (buffs, debuffs, damage and healing over time, timed summons,
-// lasting areas) and the regeneration of health, mana and stamina. A
-// plugin that measures a fight in turns rather than seconds holds it, and
-// spends a round's worth at a time.
+// lasting areas), the regeneration of health, mana and stamina, and the
+// script timers that pace effects (a damage over time's ticks, a lasting
+// area's pulses: dao/Timers.h). A plugin that measures a fight in turns
+// rather than seconds holds it, and spends a round's worth at a time.
 //
 //   dao::clock::Hold(true);                 // a turn-based fight begins
 //   dao::clock::Advance(roundSeconds);      // each round, however long it took
@@ -20,9 +21,15 @@
 // UpdateRegeneration as dao/Effects.h hooks the effects' ageing, so a
 // round's worth given at once regenerates as many times as it holds.
 //
-// Not reached: timers a script keeps itself (DelayEvent), and cooldowns,
-// which have their own script commands (GetRemainingCooldown,
-// SetCooldown). On the game's thread. Not yet seen in play.
+// Timers, 2026-10-02 (dao/Timers.h): held, an effect did not wear off
+// while the script events that make it hurt went on in real time, so a
+// trap's poison (a damage over time each 1.5 s) hit a turn-based party for
+// as long as the fight lasted, seen by the user in the Dalish origin's
+// Elven Ruins. Its ticks, and a lasting area's pulses, now wait with the
+// clock. Not reached: other timers a script keeps itself (dao/Timers.h
+// says which kinds are held), and cooldowns, which have their own script
+// commands (GetRemainingCooldown, SetCooldown). On the game's thread. Not
+// yet seen in play.
 //
 // A consequence, seen by the turn-based mod in play, 2026-09-30: a
 // creature under an effect that holds it (a pin, a knockdown) is kept busy
@@ -40,14 +47,15 @@
 namespace dao::clock
 {
 
-// Stop effects wearing off and regeneration (true), or let both run
-// (false).
+// Stop effects wearing off, regeneration and the timers that pace effects
+// (true), or let them run (false).
 void Hold(bool held);
 bool Held();
 
-// Spend `seconds` of the clock on effects and regeneration at once: each
-// effect ages, and each creature regenerates, by that much more on its
-// next update. Works while held.
+// Spend `seconds` of the clock on effects, regeneration and timers at
+// once: each effect ages, and each creature regenerates, by that much more
+// on its next update, and the timers that fall due in them come in order.
+// Works while held.
 void Advance(float seconds);
 
 // How fast the game runs: 1 as it plays, 0.5 half speed, 2 twice; over
