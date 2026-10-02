@@ -205,6 +205,12 @@ target_compile_definitions(
     PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX DAO_VERSION_STRING="${PROJECT_VERSION}"
 )
 add_library(DAOLib::daolib ALIAS daolib)
+# The address files are built with whatever links daolib. On its own the
+# address library builds them as part of `all`, which a project that adds
+# DAOLib with EXCLUDE_FROM_ALL (as the plugins' own repos do) leaves out:
+# its build made a loader and plugins and no file for them to read, found
+# by the Eluvian server 2026-10-01.
+add_dependencies(daolib daoaddr_data)
 
 # ---------------------------------------------------------------------------
 # version.dll -- the loader. Dropped beside DAOrigins.exe it is loaded in
