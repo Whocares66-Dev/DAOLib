@@ -3,6 +3,8 @@
 #include "dao/Addresses.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Script.h"
+#include "dao/generated/ScriptApi.h"
 
 #include <atomic>
 #include <mutex>
@@ -106,6 +108,33 @@ void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t
     Attach();
     const std::lock_guard lock(g_lock);
     g_ageing.push_back(std::move(ageing));
+}
+
+std::vector<Standing> On(ObjectId object)
+{
+    std::vector<Standing> out;
+    const script::Array effects = script::api::GetEffects(object);
+    out.reserve(effects.Size());
+    for (std::size_t i = 0; i < effects.Size(); ++i)
+    {
+        const CGameEffect *effect = effects.Effect(i);
+        if (effect == nullptr)
+        {
+            continue;
+        }
+        Standing standing{.id = effect->Id(),
+                          .type = effect->Type(),
+                          .durationType = effect->DurationType(),
+                          .ability = effect->AbilityId(),
+                          .creator = effect->Creator()};
+        if (standing.durationType == script::EffectDurationType::Temporary)
+        {
+            standing.duration = effect->Duration();
+            standing.remaining = effect->Remaining();
+        }
+        out.push_back(standing);
+    }
+    return out;
 }
 
 } // namespace dao::effects

@@ -26,6 +26,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace dao::effects
 {
@@ -47,5 +48,23 @@ void Advance(float seconds);
 // often: keep it quick. After Hold and Advance, which it sees the result
 // of.
 void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t ms)> ageing);
+
+// An object's effects as they stand, with the time each has left: what the
+// scripts' GetEffects lists (type, ability, creator), and the duration and
+// time left that no script command gives, read from each effect
+// (CGameEffect::Duration, Remaining). A snapshot, taken from the copies the
+// command hands back: changing one changes nothing. From the frame's thread,
+// since it calls a script command. Not yet seen in play.
+struct Standing
+{
+    std::uint32_t id = 0;
+    script::EffectType type = script::EffectType::Invalid;
+    script::EffectDurationType durationType = script::EffectDurationType::Invalid;
+    std::int32_t ability = 0;          // the ability that applied it, 0 for none
+    ObjectId creator = kInvalidObject; // who applied it
+    float duration = 0;                // seconds; 0 for an effect that is not temporary
+    float remaining = 0;               // seconds; the same
+};
+std::vector<Standing> On(ObjectId object);
 
 } // namespace dao::effects
