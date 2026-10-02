@@ -140,7 +140,10 @@ std::optional<Bytes> InsertBefore(std::span<const std::byte> movie, const Member
 // movie's DoActions instead (InsertAfter), a pool would replace the movie's
 // for everything after it there. It runs after the frame's own script, so
 // the movie's functions and clips are there by then. Nothing if the movie's
-// layout is not understood or it has no frame.
+// layout is not understood or it has no frame. Seen in play 2026-10-02 by
+// the turn-based mod: its compiled script added to the quickbar movie
+// (240,740 bytes) through dao::gui::OnMovieLoad on every start, and its
+// function called and drawing.
 std::optional<Bytes> AppendDoAction(std::span<const std::byte> movie, std::span<const std::byte> actions);
 
 // --- What a movie shows
