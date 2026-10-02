@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+using dao::core::gfx::AppendDoAction;
 using dao::core::gfx::Call;
 using dao::core::gfx::InsertAfter;
 using dao::core::gfx::Statements;
@@ -300,4 +301,48 @@ TEST_CASE("a compressed movie unpacks to its header and what the stream inflates
     const auto fws = Unpack(flash);
     REQUIRE(fws);
     CHECK(std::string(reinterpret_cast<const char *>(fws->data()), 3) == "FWS");
+}
+
+TEST_CASE("a DoAction of a plugin's own goes on the first frame, after the frame's script", "[gfx]")
+{
+    // The movie: its own script with a pool, a frame, a second frame.
+    Bytes own = Pool({"Init", "a"});
+    Add(own, PooledCall(1, 0));
+    own.push_back(std::byte{0});
+    Bytes tags = LongTag(12, own);
+    Add(tags, ShortTag(1, {}));
+    Add(tags, ShortTag(1, {}));
+    const Bytes movie = Movie(tags);
+
+    // The plugin's, compiled with a pool of its own and no End action.
+    Bytes mine = Pool({"Mark", "b"});
+    Add(mine, PooledCall(1, 0));
+    const auto out = AppendDoAction(movie, mine);
+    REQUIRE(out.has_value());
+
+    // Its tag sits between the movie's script and the first ShowFrame, the
+    // End action added, and the header's length has grown by it.
+    const std::size_t ownEnd = kFirstTag + 6 + own.size();
+    CHECK(Get(*out, ownEnd, 2) == (12U << 6U | 0x3FU));
+    CHECK(Get(*out, ownEnd + 2, 4) == mine.size() + 1);
+    CHECK(Bytes(out->begin() + static_cast<std::ptrdiff_t>(ownEnd + 6),
+                out->begin() + static_cast<std::ptrdiff_t>(ownEnd + 6 + mine.size())) == mine);
+    CHECK((*out)[ownEnd + 6 + mine.size()] == std::byte{0});
+    const std::size_t showFrame = ownEnd + 6 + mine.size() + 1;
+    CHECK(Get(*out, showFrame, 2) == (1U << 6U));
+    CHECK(Get(*out, 4, 4) == out->size());
+    CHECK(out->size() == movie.size() + 6 + mine.size() + 1);
+
+    // A body that ends in End already gets no second.
+    Bytes closed = mine;
+    closed.push_back(std::byte{0});
+    const auto again = AppendDoAction(movie, closed);
+    REQUIRE(again.has_value());
+    CHECK(again->size() == out->size());
+}
+
+TEST_CASE("a movie with no frame, or none at all, takes no DoAction", "[gfx]")
+{
+    CHECK_FALSE(AppendDoAction(Movie(LongTag(12, Bytes{std::byte{0}})), Bytes{std::byte{0}}).has_value());
+    CHECK_FALSE(AppendDoAction(Bytes{}, Bytes{std::byte{0}}).has_value());
 }

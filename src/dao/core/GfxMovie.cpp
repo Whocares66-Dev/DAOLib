@@ -1129,4 +1129,51 @@ std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16
     return std::nullopt;
 }
 
+std::optional<Bytes> AppendDoAction(std::span<const std::byte> movie, std::span<const std::byte> actions)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    if (!first)
+    {
+        return std::nullopt;
+    }
+    std::size_t at = *first;
+    while (at < movie.size())
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > movie.size() - tag.body || tag.code == kEnd)
+        {
+            return std::nullopt;
+        }
+        if (tag.code == kShowFrame)
+        {
+            break;
+        }
+        at = tag.body + tag.length;
+    }
+    if (at >= movie.size())
+    {
+        return std::nullopt;
+    }
+    // The tag in the long form, whatever its size, as the game's movies
+    // write their script.
+    Bytes body(actions.begin(), actions.end());
+    if (body.empty() || body.back() != std::byte{0})
+    {
+        body.push_back(std::byte{0});
+    }
+    Bytes tag(6);
+    Write(tag, 0, kDoAction << 6U | 0x3FU, 2);
+    Write(tag, 2, static_cast<std::uint32_t>(body.size()), 4);
+    tag.insert(tag.end(), body.begin(), body.end());
+    if (tag.size() > UINT32_MAX - bytes.U32(4))
+    {
+        return std::nullopt;
+    }
+    Bytes out(movie.begin(), movie.end());
+    out.insert(out.begin() + static_cast<std::ptrdiff_t>(at), tag.begin(), tag.end());
+    Write(out, 4, bytes.U32(4) + static_cast<std::uint32_t>(tag.size()), 4);
+    return out;
+}
+
 } // namespace dao::core::gfx

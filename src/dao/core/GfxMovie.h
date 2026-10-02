@@ -129,6 +129,18 @@ struct MemberSet
 std::optional<Bytes> InsertBefore(std::span<const std::byte> movie, const MemberSet &before,
                                   std::span<const std::byte> code);
 
+// The uncompressed movie with a DoAction of its own on the main timeline's
+// first frame, after the frame's own script and before its ShowFrame, and
+// the header's length made to fit. `actions` is a DoAction tag's body, as a
+// compiler writes it (a block compiled with FFDec, say), with its closing
+// End action or without, which is then added. Its own tag, so it may open
+// with a constant pool of its own: inserted into the middle of one of the
+// movie's DoActions instead (InsertAfter), a pool would replace the movie's
+// for everything after it there. It runs after the frame's own script, so
+// the movie's functions and clips are there by then. Nothing if the movie's
+// layout is not understood or it has no frame.
+std::optional<Bytes> AppendDoAction(std::span<const std::byte> movie, std::span<const std::byte> actions);
+
 // --- What a movie shows
 
 // Something a sprite places: where the designer put a control.
