@@ -90,6 +90,8 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 
 ## Also
 
+- **An effect in another colour.** `dao::vfx::Place`'s tint and `SetTint` reach the engine's own call (the model's slot 69) and showed nothing on the aiming ring in two play tests, 2026-10-01 (`dao/Vfx.h`). To try: a tint on a row whose model has an emitter (93052, an aura with no sound), where the game's own Tint column shows. To read: what gives a mesh's shader `mml_vUserColorMultiplier` when it is drawn. A reticle in another colour without either: a copy of the model's hierarchy naming a material object of its own (a few lines of text naming another texture), and a `vfx_` table in the override folder with a row for it, which needs a GDA writer.
+
 - **Inventory and items.** Much is scriptable already (`GetItemsInInventory`, `CreateItemOnObject`). Native work waits for a need scripts cannot meet.
 - **Party and follower AI.** Members, tactics presets.
 - **Saves.** Why one quicksave in play wrote its files without `SaveGame::Write` (`dev/SAVES.md`).

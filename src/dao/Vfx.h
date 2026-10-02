@@ -65,7 +65,8 @@ struct Tint
 // descriptor's fourth word is a pointer to a colour of four floats, which
 // the set-up hands to the model (its slot 69) in place of the row's own
 // Tint column (a packed colour, made into the same four floats). So one
-// row can be placed in any colour, if its material takes one.
+// row might be placed in any colour. In play it has not been: see below
+// before relying on it.
 //
 // Which do, read 2026-10-01 after play showed one that does not. The
 // model's slot 69 (0x00546700) sets the material parameter
@@ -96,16 +97,23 @@ struct Tint
 // that is a mesh, a sprite emitter, an emitter of meshes or a weapon
 // trail (kinds 1, 6, 7 and 0x13 to 0x15) and has a material instance
 // (+0x150), it gives a value for the parameter that points at that colour
-// (0x004F3F40). A node the model does not have at that moment gets
-// nothing, and nothing was found that gives it one later: the only other
-// code that names the parameter is the emitters' own (ObjectNodeEmitter's
-// slot 13, at 0x00541473), which sets it from a colour the model keeps as
-// text. So the guess is the moment: the set-up calls slot 69 as soon as
-// the model is there, which may be before its meshes are. If that is it,
-// SetTint below, a frame or more after placing, is what colours a mesh,
-// and Parts says when there is something to colour. examples/preview does
-// that; not yet seen in play. The other suspect is the ring's own
-// animation of its MaterialColor (animation target 0x24), not read.
+// (0x004F3F40).
+//
+// Nor is it the moment. A second play test set the tint after placing,
+// every other frame (SetTint below): the ring's model had its one part
+// from the frame it was placed, the call answered each time, and the ring
+// was pale gold still. So a caller's tint has not been seen to colour
+// anything, and a reticle is not to be had in another colour this way.
+//
+// What the tint may be for. The game's auras (fxa_aura_p: rows 93052 and
+// 93054 are one model, blue and orange by their Tint) are built as the
+// aiming ring is, a plane on the same material and semantic, with an
+// emitter on VFX.mat beside it; an emitter sets the parameter itself from
+// a colour its model keeps (ObjectNodeEmitter's slot 13, at 0x00541473).
+// So the Tint column may show only in emitters, and a tint from a caller
+// may too. Not tried in play. Not read: what gives a mesh's shader the
+// parameter when it is drawn, and what the plane's animated MaterialColor
+// (animation target 0x24) writes.
 //
 // The colour is one the game uses itself: the effect's set-up (0x007EA550)
 // takes the caller's tint or, with none, the row's own from the table's
@@ -142,17 +150,11 @@ void Remove(ObjectId effect);
 
 // A placed effect's size or colour changed where it stands, as its set-up
 // set them when it was placed: a mark turned from gold to red without
-// taking it away and placing another. False if the effect is gone. A tint
-// shows only on a material that takes one (above), and reaches only the
-// parts the model has when it is set. Not yet seen in play.
+// taking it away and placing another. False if the effect is gone. SetScale
+// is not yet seen in play. SetTint ran in play without harm and without a
+// colour to show for it on the aiming ring (above).
 bool SetScale(ObjectId effect, float scale);
 bool SetTint(ObjectId effect, const Tint &tint);
-
-// How many drawable parts (meshes, emitters and the like) a placed
-// effect's model has now: the list a tint is handed down (above). 0 for an
-// effect that is gone or whose model is not built yet. The list's place in
-// the model was read in the GOG build. Not yet seen in play.
-std::size_t Parts(ObjectId effect);
 
 // Leaves an effect out of the cursor's pick, or puts it back in.
 //
