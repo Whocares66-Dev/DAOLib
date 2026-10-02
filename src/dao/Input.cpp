@@ -403,12 +403,30 @@ std::int32_t *__fastcall AxisPair(void *input, int edx, std::int32_t *out, const
     return answer;
 }
 
+// The interface's hover test, which explore mode asks before it keeps a
+// pick: while a plugin points the cursor, the world is under it, wherever
+// the real mouse is (dao/Gui.h, MouseOverInterface).
+using OverInterfaceFn = bool(__fastcall *)(void *manager, int edx);
+Detour<OverInterfaceFn> g_overInterface;
+
+bool __fastcall OverInterface(void *manager, int edx)
+{
+    if (g_cursorHeld.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    return g_overInterface.Original()(manager, edx);
+}
+
 } // namespace
 
 void PointCursor(std::int32_t x, std::int32_t y)
 {
     static std::once_flag once;
-    std::call_once(once, [] { g_axisPair.Attach(addr::kInput_AxisPair, &AxisPair); });
+    std::call_once(once, [] {
+        g_axisPair.Attach(addr::kInput_AxisPair, &AxisPair);
+        g_overInterface.Attach(addr::kScaleformManager_MouseOverInterface, &OverInterface);
+    });
     g_cursorAt.store(static_cast<std::int64_t>(static_cast<std::uint32_t>(x)) | static_cast<std::int64_t>(y) << 32,
                      std::memory_order_relaxed);
     g_cursorHeld.store(true, std::memory_order_relaxed);

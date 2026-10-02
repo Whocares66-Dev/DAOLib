@@ -133,11 +133,17 @@ std::uint64_t Presses(std::wstring_view name);
 // front. ReleaseCursor gives the pick back to the mouse.
 //
 // Read 2026-10-02 (dao/Addresses.h, kInput_AxisPair): the pick asks the
-// input system for input 43, an axis pair, and this answers it. Only the
-// world's pick follows: the Flash interface reads the mouse its own way,
-// so a movie under the real cursor still counts as the cursor being over
-// the interface (dao/Gui.h, MouseOverInterface), and the cursor drawn on
-// the screen stays where the mouse is. Not yet seen in play.
+// input system for input 43, an axis pair, and this answers it. While it
+// holds, the interface's hover test (dao/Gui.h, MouseOverInterface, which
+// explore mode asks before it keeps a pick) answers "not over the
+// interface" as well, so the pick holds wherever the real mouse is: seen
+// in play the same day, through the Eluvian server, the ray followed the
+// pointed pixel (four hits at a creature's, none before) but the pick kept
+// nothing, the real mouse being off the game's window and the hover test
+// saying "over the interface". The Flash interface itself still follows
+// the real mouse (its own hovers, the cursor drawn on the screen), and
+// MouseOverInterface answers false while this holds. The pick's holding
+// at the pointed place is not yet seen.
 void PointCursor(std::int32_t x, std::int32_t y);
 void ReleaseCursor();
 
