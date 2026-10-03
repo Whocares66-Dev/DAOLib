@@ -220,6 +220,17 @@ class Movie
     // of its own to release.
     bool Invoke(const char *method, std::span<const Value> args = {});
 
+    // A number or a bool at a path, read back (GFx's GetVariable, slot 12,
+    // __thiscall (out, path), `ret 8`): a list's scroll position, a
+    // checkbox's state. Nothing for a path the movie has nothing at, or that
+    // holds something else. Numbers and bools come back as plain values; a
+    // string or an object comes back as a reference GFx manages, and how to
+    // release one is not read, so this reads neither: asked of a path that
+    // holds one, it answers nothing and the reference stays held until the
+    // movie goes. Read 2026-10-03, not yet seen in play.
+    std::optional<double> GetNumber(const char *path) const;
+    std::optional<bool> GetBool(const char *path) const;
+
   private:
     void *view_;
 };
@@ -370,6 +381,30 @@ std::vector<Screen> Screens();
 std::vector<Screen> ShownScreens();
 // The full-screen GUI that is up, or nothing.
 std::optional<Screen> CurrentFullScreen();
+
+// A shown screen's movie, by the screen's name: for driving the screen's
+// own controls by its ActionScript, as a click would, where no engine
+// message does.
+//
+//   if (auto options = dao::gui::ScreenMovie(L"Options"))
+//   {
+//       const dao::gui::Value page[] = {dao::gui::Value::String("Controls")};
+//       options->Invoke("SceneManager.PlayScene", page); // optionsmenu.gfx's own
+//       const dao::gui::Value bottom[] = {dao::gui::Value::Number(100)};
+//       options->Invoke("_root.KeyBindings_mc.SetScrollPercentage", bottom);
+//   }
+//
+// The screen as Screens() finds it, and its movie through its record
+// (FindOwner, MovieOf). Nothing when the screen is not shown, or has no
+// movie. Call the movie on the thread its own calls come on; in the GOG
+// game that is the frame's (dao/Frame.h), the two seen as one thread, so a
+// frame callback will do there. Read 2026-10-03. Seen in play the same day
+// through the Eluvian server (GOG), from the frame's thread: the Options
+// screen found, SceneManager.PlayScene("Controls") showed its Controls
+// page and _root.KeyBindings_mc.SetScrollPercentage(100) scrolled the key
+// list to its end, for a picture taken with no mouse; a root-level
+// OptionTabAction, which the movie does not have, answered false.
+std::optional<Movie> ScreenMovie(std::wstring_view screen);
 
 // Whether the mouse is over an element of one of the interface's movies,
 // or one of them holds a mouse press: the engine's own test, which explore

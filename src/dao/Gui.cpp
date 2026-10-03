@@ -288,6 +288,41 @@ std::uint32_t Movie::ArraySize(const char *path) const
     return view_ != nullptr ? Slot<Fn>(view_, 15)(view_, 0, path) : 0;
 }
 
+namespace
+{
+
+// GetVariable, slot 12: the value at a path into `out`, true if there was
+// one. A value GFx manages is not released (Movie::GetNumber).
+std::optional<Value> GetPlain(void *view, const char *path)
+{
+    if (view == nullptr)
+    {
+        return std::nullopt;
+    }
+    constexpr std::uint32_t kManaged = 0x40;
+    Value out;
+    using Fn = bool(__fastcall *)(void *, int, Value *, const char *);
+    if (!Slot<Fn>(view, 12)(view, 0, &out, path) || (out.type & kManaged) != 0)
+    {
+        return std::nullopt;
+    }
+    return out;
+}
+
+} // namespace
+
+std::optional<double> Movie::GetNumber(const char *path) const
+{
+    const auto value = GetPlain(view_, path);
+    return value ? value->AsNumber() : std::nullopt;
+}
+
+std::optional<bool> Movie::GetBool(const char *path) const
+{
+    const auto value = GetPlain(view_, path);
+    return value ? value->AsBool() : std::nullopt;
+}
+
 bool Movie::Invoke(const char *method, std::span<const Value> args)
 {
     using Fn = bool(__fastcall *)(void *, int, const char *, Value *, const Value *, std::uint32_t);
@@ -464,6 +499,19 @@ std::vector<Screen> ShownScreens()
     std::erase_if(shown, [](const Screen &screen) { return !screen.shown; });
     std::ranges::stable_sort(shown, std::ranges::greater{}, &Screen::layer);
     return shown;
+}
+
+std::optional<Movie> ScreenMovie(std::wstring_view screen)
+{
+    for (const Screen &shown : ShownScreens())
+    {
+        if (shown.name == screen)
+        {
+            void *view = MovieOf(FindOwner(shown.movie));
+            return view != nullptr ? std::optional<Movie>(Movie{view}) : std::nullopt;
+        }
+    }
+    return std::nullopt;
 }
 
 std::optional<Screen> CurrentFullScreen()
