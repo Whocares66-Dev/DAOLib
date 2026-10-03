@@ -80,8 +80,11 @@ void Advance(float seconds);
 // (dao/Timers.h). Seen in play the same day by the turn-based mod: a
 // Walking Bomb's ticks on the ogre's own turns, and, once the effects'
 // owner was found right (dao/TypeName.h, CompleteObject), a spider's
-// Overwhelm run down by the spider's own advances alone; regeneration's
-// part not yet seen.
+// Overwhelm run down by the spider's own advances alone; and regeneration
+// (10ac778, two rounds of spiders, nobody in the party acting): Lyna, whose
+// in-combat health regeneration is 1.0, gained 2.0 once a round, six
+// rounds of six, each as her own clock ran out her turn's 4 s and at no
+// other creature's turn; Tamlen, whose is 0, gained nothing.
 void OwnClock(ObjectId object, bool own = true);
 void Advance(ObjectId object, float seconds);
 
