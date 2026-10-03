@@ -140,4 +140,43 @@ std::vector<std::int32_t> Known(ObjectId creature, Kind kind)
     return known;
 }
 
+std::wstring Use::Reason() const
+{
+    return reason > 0 ? tlk::String(static_cast<std::uint32_t>(reason)) : std::wstring{};
+}
+
+std::optional<Use> CanUse(ObjectId creature, std::int32_t ability, std::wstring_view itemTag)
+{
+    void *stats = Stats(creature);
+    if (stats == nullptr)
+    {
+        return std::nullopt;
+    }
+    // As the quickbar asks: the reason at -1 first.
+    Use use;
+    WString tag(itemTag);
+    using Fn = bool(__fastcall *)(void *, int, std::int32_t, std::int32_t *, const core::WStringRep *);
+    use.usable = reinterpret_cast<Fn>(Module::Address(addr::kCCCreatureStats_CanUseAbility))(stats, 0, ability,
+                                                                                             &use.reason, tag.Engine());
+    if (use.usable || use.reason == 0)
+    {
+        use.reason = -1;
+    }
+    return use;
+}
+
+std::optional<float> Cost(ObjectId creature, std::int32_t ability)
+{
+    constexpr std::int32_t kFatigue = 41; // properties.gda's "Fatique", an attribute
+    CClientExoApp *app = CClientExoApp::Get();
+    const CCCreature *object = app != nullptr ? app->GetCreatureById(creature) : nullptr;
+    const auto cost = gda::GetFloat(kTable, ability, "cost");
+    if (object == nullptr || !cost)
+    {
+        return std::nullopt;
+    }
+    const float fatigue = object->Property(kFatigue, script::PropertyValue::Modifier).value_or(0.0F);
+    return *cost * (1.0F + fatigue * 0.01F);
+}
+
 } // namespace dao::abilities

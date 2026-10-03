@@ -267,6 +267,23 @@ DAO_ADDRESS(kCCCreatureStats_Cooldowns, 16534)
 DAO_ADDRESS(kCCCreatureStats_SetCooldown, 16554)
 DAO_ADDRESS(kCooldownManager_Find, 16526)
 DAO_ADDRESS(kCooldownManager_Tick, 16532)
+// Whether a creature can use an ability now (dao/Abilities.h), read
+// 2026-10-03: the check the quickbar greys a button by (0x0071D1B0 asks it
+// for each slot of the page, the reason at -1 first) and the player's order
+// makes before it issues a command (GameModeExplore's PerformAbilityMessage
+// handler, 0x00711C38, and the function after it, 0x00711EF9); the
+// use-ability command's builder asks it too (0x00744166). __thiscall on the creature's stats (ability, int
+// *reason, const std::wstring *itemTag), `ret 0xC`, true if usable, else
+// the reason a string reference. In order: an item's ability needs the item
+// still held (244342); an ability in a set (0x008663A0, the active modal
+// ones, so a sustained one can be turned off) is usable with no more said;
+// disabled by effects (0x00A64740's flags, 223888); the cost, ABI_BASE's
+// "cost" times 1 + fatigue (property 41) / 100, against property 8's current
+// value (376268 stamina, 376267 mana), blood magic (10700) excusing it; the
+// ability's conditions (CanUseConditionedAbility); its cooldown; and not
+// the ability being cast already (395779). One failing path (0x0071CF69)
+// gives 0 for the reason. The name is ours.
+DAO_ADDRESS(kCCCreatureStats_CanUseAbility, 16539)
 DAO_ADDRESS(kCCCreature_Movement, 14455)
 // A creature's animations (dao/Animation.h), read 2026-10-02: its
 // animation set (+0x154) answers whether it has an animation and how long

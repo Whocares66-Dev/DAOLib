@@ -102,4 +102,57 @@ enum class Kind : std::int32_t
 // abilities (a poultice, elfroot), and a skill's ranks are an id each.
 std::vector<std::int32_t> Known(ObjectId creature, Kind kind = Kind::All);
 
+// Whether a creature can use an ability now, as the game decides it to grey
+// the ability's quickbar button, and what the ability costs it: for a tool
+// that orders abilities and wants to know first whether the order will do
+// anything.
+//
+//   if (const auto use = dao::abilities::CanUse(jory, ability); use && !*use)
+//       spdlog::info("not now: {}", dao::Utf8(use->Reason())); // "Insufficient stamina"
+//
+// Read 2026-10-03 (dao/Addresses.h, CanUseAbility): the engine's one check,
+// which the quickbar asks for each button and the player's order asks
+// before it issues a command, and which answers with the reason a string
+// reference. It looks, in order, at an item's ability's item, the active
+// modal abilities (usable, to turn off), being disabled by effects, the
+// cost, the ability's conditions (a weapon, a shield), its cooldown, and the
+// ability being cast already. The scripts' IsAbilityAvailable asks whether
+// the ability can be learned, not used: true for a 40-stamina Mighty Blow at
+// 12 stamina, whose order then did nothing (Eluvian, 2026-10-03).
+//
+// The scripts check the cost again when the command runs (ability_core's
+// Ability_CostCheck) a little differently: rounded, by the difficulty's
+// modifier for some ranks, and a modal ability's upkeep against the total
+// rather than its cost against what is left. So a modal ability this calls
+// usable can still fail. Seen in play 2026-10-03 through the Eluvian
+// server, on the Tower Guard (a bow, no shield) at full stamina, 115: Shield
+// Bash and Shield Block not usable, "No shield equipped"; Crippling Shot,
+// Pinning Shot, Shattering Shot and Taunt usable, costing 28.775, 23.02,
+// 28.775 and 46.04, the table's 25, 20, 25 and 40 times 1.151 (his
+// fatigue). At 12 stamina every one was not usable, "Insufficient stamina".
+// IsAbilityAvailable had said yes to all.
+struct Use
+{
+    bool usable = false;
+    std::int32_t reason = -1; // why not, a string reference; -1 when usable or none given (one path gives 0)
+    explicit operator bool() const
+    {
+        return usable;
+    }
+    // The reason in the player's language ("Insufficient stamina"); empty
+    // for none.
+    std::wstring Reason() const;
+};
+// Nothing for a creature that is not there. `itemTag` as for GetCooldown.
+// On the game's thread.
+std::optional<Use> CanUse(ObjectId creature, std::int32_t ability, std::wstring_view itemTag = {});
+
+// What an ability costs a creature now, in mana or stamina, as the check
+// above reckons it: the ability table's cost times one plus the creature's
+// fatigue in hundredths (property 41's modifier: armour's, a sustained
+// ability's). To set against its mana or stamina left
+// (CCCreature::ManaStamina). Nothing for a creature that is not there or an
+// ability with no row.
+std::optional<float> Cost(ObjectId creature, std::int32_t ability);
+
 } // namespace dao::abilities
