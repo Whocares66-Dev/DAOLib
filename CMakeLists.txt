@@ -172,6 +172,7 @@ add_library(
     src/dao/Conjure.cpp
     src/dao/Strings.cpp
     src/dao/Party.cpp
+    src/dao/Portraits.cpp
     src/dao/Resources.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp

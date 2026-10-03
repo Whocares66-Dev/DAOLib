@@ -831,6 +831,21 @@ DAO_ADDRESS(kCCCreature_ReleasePortrait, 14365)
 DAO_ADDRESS(kPortraitRenderer_Constructor, 21346)
 DAO_ADDRESS(kPortraitRenderer_Setup, 21347)
 DAO_ADDRESS(kPortraitRenderer_Render, 21350)
+// Where the portrait's camera goes, read 2026-10-02 (dao/Portraits.h):
+// PlaceCamera, __thiscall on the renderer (pitch, rotation, distance, Z
+// adjust, X adjust, light X, light Y, light Z), `ret 0x20`, Render's one
+// call. An argument of 65505.0, the "unset" Render passes for an ordinary
+// creature, is read from the portraits table (table 7, by the columns'
+// hashes) at the renderer's row (+0xD48, by the creature's tag, else the
+// Default row 1); any other value is used as given, unless the source
+// creature (+0xD40) is the one character creation frames, whose values
+// come from its own settings (+0x598) and the table. The camera is set
+// about the model's head: the clone's (+0x20, a CCCreature) node "head",
+// found by CCCreature::HeadTransform (0x006A1EF0, ID 14447, named by the
+// address library), which every creature's skeleton read has as "Head" (people,
+// the ogre, genlocks, shrieks, hurlocks, skeletons, werewolves), turned by
+// the rotation and pitch and backed off by the distance. The name is ours.
+DAO_ADDRESS(kPortraitRenderer_PlaceCamera, 21341)
 DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
