@@ -837,9 +837,17 @@ DAO_ADDRESS(kPortraitRenderer_Render, 21350)
 // call. An argument of 65505.0, the "unset" Render passes for an ordinary
 // creature, is read from the portraits table (table 7, by the columns'
 // hashes) at the renderer's row (+0xD48, by the creature's tag, else the
-// Default row 1); any other value is used as given, unless the source
-// creature (+0xD40) is the one character creation frames, whose values
-// come from its own settings (+0x598) and the table. The camera is set
+// Default row 1); any other value is used as given, unless PlaceCamera
+// forces the table: for a creature on the Default row whose appearance is
+// not 15 and whose tag is not the second of two strings it tests (and for
+// one whose appearance has changed), it reads every value from the table,
+// at the row whose Appearance column is the creature's if there is one.
+// So an ogre on the Default row is framed from the table whatever it is
+// given (seen in play 2026-10-02: a distance of 1.6 given, the portrait
+// unchanged; 0x004C0E50 is the strings' inequality, not their equality).
+// Render passes the source creature's (+0xD40) own settings (+0x598)
+// instead of the "unset" for a creature whose tag is either string, the
+// one character creation frames. The camera is set
 // about the model's head: the clone's (+0x20, a CCCreature) node "head",
 // found by CCCreature::HeadTransform (0x006A1EF0, ID 14447, named by the
 // address library), which every creature's skeleton read has as "Head" (people,

@@ -11,8 +11,12 @@
 // Read 2026-10-02 (dao/Addresses.h, PortraitRenderer::PlaceCamera): the
 // renderer places its camera through one function given the table's eight
 // values, each passed "unset" for an ordinary creature and so read from
-// the table; this gives the ones the plugin set, the rest still the
-// table's. The camera is set about the model's head node, turned by the
+// the table. This gives all eight, the plugin's and for the rest the
+// table's as that function would read them, and has the renderer's row be
+// the table's blank one for the call: on the Default row, a creature that
+// is not a person is otherwise framed from the table whatever it is given
+// (the first try in play gave an ogre 1.6 m and its portrait did not
+// change). The camera is set about the model's head node, turned by the
 // rotation and pitch (degrees) and backed off by the distance (metres),
 // then shifted by the Z and X adjusts; the light's three are the rig's
 // offset. Character creation's own creature keeps its own framing. Takes
