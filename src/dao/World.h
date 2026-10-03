@@ -274,7 +274,7 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // way (the game does that for the creature a mover follows), so a path to
 // an enemy ends at it rather than failing. A straight walk, where one will
 // do, is the two ends; else the search is run to its end, in slices, for at
-// most 30 ms. On the game's thread.
+// most 40 ms. On the game's thread.
 //
 // The engine's search is made for a walker: it works out only the stretch
 // ahead of the waypoint its walker heads for, and the next as the walker
@@ -314,6 +314,20 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 //   creatures past the door, the answer 1, 53.38 m of the way, and the
 //   blocker the door, in 25 slices; and the walk to the spider in the same
 //   room found as before.
+// Searched on again, 2026-10-03 (DAOLib #5): a walk of 244 m in the Korcari
+// Wilds found nothing, where 90 m to a point on the way and then the rest
+// were found. Read: the engine plans a stretch of fine path between each two
+// points of a coarse route, and two stretches in a row that fall short of
+// their point end the search as found (0x00A4D1F0). A walker's own search
+// does the same, a slice of 3 to 6 ms a frame (RequestPath, 0x0073EA80); how
+// a click's move reaches the end of so long a walk is not read. So where a
+// search gives up part way and no placeable lies ahead, it is searched on
+// from where it stopped, up to six searches in all, each getting at least 2
+// m nearer, within 40 ms. A door ahead still ends it. Seen in play
+// 2026-10-03 through the Eluvian server: from the Tower of Ishal's courtyard
+// to the Quartermaster, 229.5 m straight, a path of 276.4 m in one call,
+// which a single move then walked to the end. How many searches it took was
+// not shown.
 // Read after, 2026-10-01: RequestPath tells the pathfinding world its
 // mover's size and which stamps stop it before it asks, and the search
 // here did not, so its straight-walk check went by the last creature to
@@ -346,6 +360,9 @@ struct PathSearch
     // ran out on.
     std::int32_t result = 0;
     std::int32_t slices = 0; // slices of search it took; 0 for a straight walk
+    // Searches run: one, or more where a long walk gave up part way in the
+    // open and was searched on from where it stopped (FindPath, above).
+    std::int32_t legs = 0;
     // For telling why a search failed: each slice's answer in order, the
     // waypoints the engine's path held at the end, whether the creature fit
     // at each end (an end it did not fit at was moved to a free place

@@ -403,7 +403,9 @@ constexpr std::int32_t kSlices = 200;
 constexpr int kAhead = 5;               // points ahead of where a search gave up, looked at for a door
 constexpr float kAheadStep = 0.5F;      // metres between them
 constexpr std::size_t kBarredAt = 0x84; // in the path: a pointer to the barred cell's point, once noted
-constexpr auto kLongest = std::chrono::milliseconds(30); // of the game's frame, for one search
+constexpr auto kLongest = std::chrono::milliseconds(40); // of the game's frame, for one search
+constexpr int kMostLegs = 6;                             // searches in all, the first and those after
+constexpr float kLegProgress = 2.0F;                     // metres nearer a leg must get to search on
 constexpr float kArrived = 0.25F;                        // metres from the destination
 constexpr std::size_t kActive = 0x00;                    // in the path: a route is being worked out
 constexpr std::size_t kWhole = 0x01;                     // in the path: every stretch has been worked out
@@ -732,6 +734,31 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         return leg;
     };
 
+    // Where a search gave up part way, the placeable across the way: the
+    // engine answers 6 only to a walker standing in a door's barred cells,
+    // and a search that stops short of them gives up with what it has (in
+    // play, 1.2 m short of a shut door, 53 m along). So the same test of a
+    // placeable's footprint, on points ahead the way the path was heading.
+    const auto blockerAhead = [&](const std::vector<Vector> &walked) {
+        ObjectId found = kInvalidObject;
+        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
+        if (walked.size() >= 2)
+        {
+            const Vector &before = walked[walked.size() - 2];
+            heading = {walked.back().x - before.x, walked.back().y - before.y, 0};
+        }
+        const float span = std::hypot(heading.x, heading.y);
+        for (int ahead = 1; span > 1e-6F && ahead <= kAhead && found == kInvalidObject; ++ahead)
+        {
+            Vector at = walked.back();
+            at.x += heading.x / span * kAheadStep * static_cast<float>(ahead);
+            at.y += heading.y / span * kAheadStep * static_cast<float>(ahead);
+            found = Blocker(*app, area, at);
+        }
+        return found;
+    };
+    const auto toGoal = [&](const Vector &at) { return std::hypot(goal.x - at.x, goal.y - at.y); };
+
     Leg leg = runLeg(from, kSlices, true, 1);
     const std::string flags = leg.flags;
     std::vector<Vector> walked;
@@ -739,9 +766,60 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     {
         walked = leg.found->waypoints;
     }
-    if (leg.arrives)
+    bool arrives = leg.arrives;
+    answer.legs = 1;
+
+    // A long walk in the open gives up part way with nothing across it
+    // (DAOLib #5: 244 m in the Korcari Wilds, 2026-10-03, where 90 m to a
+    // point on the way and then the rest were found): the engine plans a
+    // stretch of fine path between each two points of its coarse route, and
+    // two stretches in a row that do not reach their point end the search
+    // (0x00A4D1F0, the path's +0x48). So it is searched on from where it
+    // stopped, as long as each leg gets nearer, no placeable lies across the
+    // way and time is left. A door stops a search the same each time
+    // (2026-10-01), which is why one ahead ends it.
+    while (!arrives && answer.result == kFound && walked.size() >= 2 && answer.legs < kMostLegs &&
+           std::chrono::steady_clock::now() - started < kLongest)
+    {
+        answer.blocker = blockerAhead(walked);
+        if (answer.blocker != kInvalidObject)
+        {
+            break;
+        }
+        Vector4 onFrom(walked.back());
+        onFrom.w = from.w;
+        if (!isFree(controller, 0, &onFrom, *number, 0, 0))
+        {
+            Vector4 toward1;
+            toward1.x = goal.x - onFrom.x;
+            toward1.y = goal.y - onFrom.y;
+            const float span = std::hypot(toward1.x, toward1.y);
+            if (span > 1e-6F)
+            {
+                toward1.x /= span;
+                toward1.y /= span;
+            }
+            Vector4 nearest = onFrom;
+            nearestFree(area, 0, &onFrom, &toward1, kNearStart, controller, 0, &nearest);
+            onFrom = nearest;
+        }
+        const float before = toGoal(walked.back());
+        Leg more = runLeg(onFrom, kSlices, true, answer.legs + 1);
+        if (!more.found || more.found->waypoints.size() < 2 ||
+            (!more.arrives && toGoal(more.found->waypoints.back()) > before - kLegProgress))
+        {
+            break;
+        }
+        ++answer.legs;
+        walked.insert(walked.end(), more.found->waypoints.begin() + 1, more.found->waypoints.end());
+        arrives = more.arrives;
+        leg = std::move(more);
+    }
+
+    if (arrives)
     {
         answer.path = WalkPath{walked, 0};
+        answer.blocker = kInvalidObject;
     }
     else if (!walked.empty())
     {
@@ -755,35 +833,18 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         const Vector at = leg.barredAt ? *leg.barredAt : !walked.empty() ? walked.back() : from.ToVector();
         answer.blocker = Blocker(*app, area, at);
     }
-    else if (!answer.path && answer.result == kFound && !walked.empty())
+    else if (!answer.path && answer.result == kFound && !walked.empty() && answer.blocker == kInvalidObject)
     {
-        // Given up part way. The engine answers 6 only to a walker standing
-        // in a door's barred cells; a search that stops short of them gives
-        // up with what it has (in play, 1.2 m short of a shut door, 53 m
-        // along). So the same test of a placeable's footprint, on points
-        // ahead the way the path was heading.
-        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
-        if (walked.size() >= 2)
-        {
-            const Vector &before = walked[walked.size() - 2];
-            heading = {walked.back().x - before.x, walked.back().y - before.y, 0};
-        }
-        const float span = std::hypot(heading.x, heading.y);
-        for (int ahead = 1; span > 1e-6F && ahead <= kAhead && answer.blocker == kInvalidObject; ++ahead)
-        {
-            Vector at = walked.back();
-            at.x += heading.x / span * kAheadStep * static_cast<float>(ahead);
-            at.y += heading.y / span * kAheadStep * static_cast<float>(ahead);
-            answer.blocker = Blocker(*app, area, at);
-        }
+        answer.blocker = blockerAhead(walked);
     }
 
     // What the search saw, for a log.
     const std::uintptr_t parameters0 = *parameters;
     answer.trace = std::format(
-        "start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, radius {:.2f}, size {}; {}",
+        "start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, "
+        "radius {:.2f}, size {}; {}; {} leg(s), the last: {}",
         answer.startFree, startFreeBefore, answer.goalFree, static_cast<std::uint32_t>(word(parameters0)),
-        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC), flags);
+        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC), flags, answer.legs, leg.flags);
 
     PlaceObstacle(mover);
     PlaceObstacle(target);
