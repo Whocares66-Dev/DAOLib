@@ -77,7 +77,11 @@ void Advance(float seconds);
 // Read 2026-10-02: an effect is aged by its owner's clock (the object it
 // is on, dao/Effects.h), regeneration by its creature's (CCCreature::Update
 // is UpdateRegeneration's one caller), a timer by its target's
-// (dao/Timers.h). Not yet seen in play.
+// (dao/Timers.h). Seen in play the same day by the turn-based mod: a
+// Walking Bomb's ticks on the ogre's own turns, and, once the effects'
+// owner was found right (dao/TypeName.h, CompleteObject), a spider's
+// Overwhelm run down by the spider's own advances alone; regeneration's
+// part not yet seen.
 void OwnClock(ObjectId object, bool own = true);
 void Advance(ObjectId object, float seconds);
 

@@ -42,7 +42,9 @@
 // creatures' commands, the AI, animation. What is held here is not in the
 // queue a save writes; the game refuses to save in combat, where a
 // turn-based fight is, and a plugin that holds outside one should let go
-// before a save. Not yet seen in play.
+// before a save. Seen in play 2026-10-02 by the turn-based mod: a Walking
+// Bomb's ticks came on the ogre's own turns, and the Elven Ruins' toxic gas
+// poisoned its victim through 8 rounds of the shared clock and no more.
 #pragma once
 
 #include "dao/ObjectId.h"

@@ -20,7 +20,10 @@
 // What this does not reach: regeneration of health, mana and stamina,
 // which dao/Clock.h holds and advances with the effects, and anything a
 // script times itself with DelayEvent. Only temporary effects age; permanent and
-// instant ones are not affected. Not yet seen in play.
+// instant ones are not affected. Hold and the shared Advance used in play
+// by the turn-based mod since 2026-09-30; an owner's own Advance seen in
+// play 2026-10-02, after its owner was found right (a spider's Overwhelm
+// ended by the spider's own clock).
 #pragma once
 
 #include "dao/Structures.h"
@@ -71,7 +74,9 @@ void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t
 // time left that no script command gives, read from each effect
 // (CGameEffect::Duration, Remaining). A snapshot, taken from the copies the
 // command hands back: changing one changes nothing. From the frame's thread,
-// since it calls a script command. Not yet seen in play.
+// since it calls a script command. Seen in play 2026-10-02 by the
+// turn-based mod: a giant spider's Overwhelm listed as type 1043, ability
+// 90133, its creator the spider, 6.10 of 6.10 s.
 struct Standing
 {
     std::uint32_t id = 0;

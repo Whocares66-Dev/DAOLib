@@ -20,7 +20,9 @@
 // rotation and pitch (degrees) and backed off by the distance (metres),
 // then shifted by the Z and X adjusts; the light's three are the rig's
 // offset. Character creation's own creature keeps its own framing. Takes
-// effect on the creature's next render. Not yet seen in play.
+// effect on the creature's next render. Seen in play the same day by the
+// turn-based mod, after the fix: an ogre framed from 2.56 m and 2.47 m
+// shows its face, horns and teeth.
 #pragma once
 
 #include "dao/ObjectId.h"
