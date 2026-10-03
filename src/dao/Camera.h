@@ -209,6 +209,32 @@ class CameraController
         return reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_Zoom))(this, 0);
     }
 
+    // The zoom the controller keeps and hands the scene camera each frame,
+    // read 2026-10-02: +0x48, from its least (+0x64, -1, the tactical view)
+    // to its most (+0x68, 1, close in), which the mouse wheel moves (each
+    // notch times +0x4C, 0.4, added through 0x007EDBD0). The controller's
+    // update (0x007EEB70) maps it to the scene camera's 0..1 (0x007EE770)
+    // and hands it to SceneCamera::SetZoom (0x006C2BF0), toward which the
+    // scene camera eases its own zoom (at most 2 a second, quicker as it
+    // goes), and below 0.5 there it is the tactical view. Setting this
+    // zooms as the wheel does. dao/CameraMoves.h eases it.
+    float ZoomSetting() const
+    {
+        return Read<float>(kZoomSetting);
+    }
+    void SetZoomSetting(float zoom)
+    {
+        Write(kZoomSetting, zoom);
+    }
+    float ZoomLeast() const
+    {
+        return Read<float>(kZoomLeast);
+    }
+    float ZoomMost() const
+    {
+        return Read<float>(kZoomMost);
+    }
+
     // How far the focus is from the followed object: in the tactical view,
     // where it was left when the target changed. Setting it moves the
     // focus from the next frame; easing it to nothing pans to the target.
@@ -246,6 +272,9 @@ class CameraController
 
     static constexpr std::size_t kSceneCamera = 0x04;
     static constexpr std::size_t kTarget = 0x08;
+    static constexpr std::size_t kZoomSetting = 0x48;
+    static constexpr std::size_t kZoomLeast = 0x64;
+    static constexpr std::size_t kZoomMost = 0x68;
     static constexpr std::size_t kFocus = 0x70;
     static constexpr std::size_t kViewFlag = 0x90;
     static constexpr std::size_t kPullSpeed = 0xEC;

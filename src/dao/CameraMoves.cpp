@@ -46,12 +46,57 @@ struct PanMove
     float tau = 0;
     ObjectId object = kInvalidObject; // what the camera is panning to
 };
+struct ZoomMove
+{
+    bool running = false;
+    float target = 0; // on the controller's scale (dao/Camera.h, ZoomSetting)
+    float tau = 0;
+    std::optional<float> left; // the zoom the last step set
+};
+// How far the controller's zoom may move between frames on its own before
+// it counts as the player's: less than a wheel notch (0.4 on its scale).
+constexpr float kZoomSlack = 0.001F;
+constexpr float kZoomDone = 0.0005F;
 // Only the game's thread touches these: the moves' callers, the frame and
 // the camera's own update.
 YawMove g_yaw;
 PanMove g_pan;
+ZoomMove g_zoom;
 std::optional<MoveEnd> g_yawEnd;
 std::optional<MoveEnd> g_panEnd;
+std::optional<MoveEnd> g_zoomEnd;
+// Where the last zoom ease left the controller's zoom, kept after it ends.
+std::optional<float> g_zoomLeft;
+
+bool &Running(Move move)
+{
+    switch (move)
+    {
+    case Move::Yaw:
+        return g_yaw.running;
+    case Move::Pan:
+        return g_pan.running;
+    case Move::Zoom:
+        break;
+    }
+    return g_zoom.running;
+}
+
+std::optional<MoveEnd> &EndOf(Move move)
+{
+    switch (move)
+    {
+    case Move::Yaw:
+        return g_yawEnd;
+    case Move::Pan:
+        return g_panEnd;
+    case Move::Zoom:
+        break;
+    }
+    return g_zoomEnd;
+}
+
+constexpr Move kMoves[] = {Move::Yaw, Move::Pan, Move::Zoom};
 bool g_playerPanned = false;
 Clock::time_point g_last;
 
@@ -60,8 +105,8 @@ std::vector<std::function<void(Move, MoveEnd)>> g_ended;
 
 void End(Move move, MoveEnd why)
 {
-    (move == Move::Yaw ? g_yaw.running : g_pan.running) = false;
-    (move == Move::Yaw ? g_yawEnd : g_panEnd) = why;
+    Running(move) = false;
+    EndOf(move) = why;
     std::vector<std::function<void(Move, MoveEnd)>> callbacks;
     {
         const std::lock_guard lock(g_endLock);
@@ -106,6 +151,26 @@ void StepYaw(CameraController &camera, float dt)
     if (there)
     {
         End(Move::Yaw, MoveEnd::Arrived);
+    }
+}
+
+void StepZoom(CameraController &camera, float dt)
+{
+    const float now = camera.ZoomSetting();
+    if (g_zoom.left && std::fabs(now - *g_zoom.left) > kZoomSlack)
+    {
+        End(Move::Zoom, MoveEnd::Player);
+        return;
+    }
+    const float d = g_zoom.target - now;
+    const bool there = std::fabs(d) < kZoomDone;
+    const float next = there ? g_zoom.target : now + d * Share(dt, g_zoom.tau);
+    camera.SetZoomSetting(next);
+    g_zoom.left = next;
+    g_zoomLeft = next;
+    if (there)
+    {
+        End(Move::Zoom, MoveEnd::Arrived);
     }
 }
 
@@ -190,16 +255,16 @@ void Step()
     const Clock::time_point now = Clock::now();
     const float dt = std::fmin(std::chrono::duration<float>(now - g_last).count(), 0.1F);
     g_last = now;
-    if (!g_yaw.running && !g_pan.running)
+    if (!g_yaw.running && !g_pan.running && !g_zoom.running)
     {
         return;
     }
     CameraController *camera = Current();
     if (camera == nullptr)
     {
-        for (const Move move : {Move::Yaw, Move::Pan})
+        for (const Move move : kMoves)
         {
-            if (move == Move::Yaw ? g_yaw.running : g_pan.running)
+            if (Running(move))
             {
                 End(move, MoveEnd::NoCamera);
             }
@@ -213,6 +278,10 @@ void Step()
     if (g_pan.running)
     {
         StepPan(*camera, dt);
+    }
+    if (g_zoom.running)
+    {
+        StepZoom(*camera, dt);
     }
 }
 
@@ -272,6 +341,39 @@ void EaseYaw(float radians, float seconds)
     g_yawEnd.reset();
 }
 
+void EaseZoom(float zoom, float seconds)
+{
+    Start();
+    CameraController *camera = Current();
+    if (camera == nullptr)
+    {
+        return;
+    }
+    if (g_zoom.running)
+    {
+        End(Move::Zoom, MoveEnd::Replaced);
+    }
+    // The scene camera's 0..1 onto the controller's scale, as the
+    // controller's Zoom maps the other way (dao/Camera.h).
+    const float least = camera->ZoomLeast();
+    const float most = camera->ZoomMost();
+    const float share = std::fmin(std::fmax(zoom, 0.0F), 1.0F);
+    g_zoom = ZoomMove{true, least + share * (most - least), Tau(seconds), std::nullopt};
+    g_zoomEnd.reset();
+    g_zoomLeft.reset();
+}
+
+bool PlayerZoomed()
+{
+    if (g_zoomEnd == MoveEnd::Player)
+    {
+        return true;
+    }
+    const CameraController *camera = Current();
+    return camera != nullptr && !g_zoom.running && g_zoomLeft &&
+           std::fabs(camera->ZoomSetting() - *g_zoomLeft) > kZoomSlack;
+}
+
 void PanTo(ObjectId object, float seconds)
 {
     Start();
@@ -304,14 +406,14 @@ std::optional<float> YawBehind(ObjectId object)
 
 bool Moving()
 {
-    return g_yaw.running || g_pan.running;
+    return g_yaw.running || g_pan.running || g_zoom.running;
 }
 
 void Stop()
 {
-    for (const Move move : {Move::Yaw, Move::Pan})
+    for (const Move move : kMoves)
     {
-        if (move == Move::Yaw ? g_yaw.running : g_pan.running)
+        if (Running(move))
         {
             End(move, MoveEnd::Stopped);
         }
@@ -346,7 +448,7 @@ void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback)
 
 std::optional<MoveEnd> LastEnd(Move move)
 {
-    return move == Move::Yaw ? g_yawEnd : g_panEnd;
+    return EndOf(move);
 }
 
 } // namespace dao::camera

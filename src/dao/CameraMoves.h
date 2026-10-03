@@ -6,6 +6,7 @@
 //   dao::camera::PanTo(creature, 0.6f);                    // tactical: glide there, no turning
 //   if (const auto behind = dao::camera::YawBehind(creature))
 //       dao::camera::EaseYaw(*behind, 0.6f);               // close in: come round behind it
+//   dao::camera::EaseZoom(0.7f, 0.8f);                     // pull back a little
 //
 // - From where the camera is. Each frame reads the camera's yaw and
 //   offset as they are, so a player who has turned or panned the camera
@@ -63,6 +64,19 @@ void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback
 // Turn the camera, close in, to a yaw (dao/Camera.h, SceneCamera::Yaw).
 void EaseYaw(float radians, float seconds);
 
+// Zoom the camera, as the mouse wheel does, to a zoom on the scene
+// camera's scale (dao/Camera.h, SceneCamera::Zoom: 1 close behind the
+// creature, 0 the tactical view high above). Below 0.5 the game turns to
+// the tactical view, where the camera does not follow a change of target
+// and pans differently (dao/Camera.h), so a plugin that means to stay in
+// the close view keeps to 0.5 and above. The player wins: a zoom the
+// player makes with the wheel while it runs stops it. Read 2026-10-02
+// (dao/Camera.h, CameraController::ZoomSetting); not yet seen in play.
+void EaseZoom(float zoom, float seconds);
+// Whether the player has zoomed since the last EaseZoom: its ease ended by
+// the player, or the zoom moved since it arrived. False before any.
+bool PlayerZoomed();
+
 // Follow a creature and glide the focus onto it. In the tactical view the
 // camera keeps its height and its turn, and only slides; close in, the
 // game pans by itself to a creature within 15 m (CameraController::
@@ -95,15 +109,16 @@ void Stop();
 
 enum class Move
 {
-    Yaw, // EaseYaw
-    Pan, // PanTo
+    Yaw,  // EaseYaw
+    Pan,  // PanTo
+    Zoom, // EaseZoom
 };
 
 // Why a move ended.
 enum class MoveEnd
 {
     Arrived,    // there, near enough (2 cm, or a thousandth of a turn)
-    Player,     // the player panned or turned the camera
+    Player,     // the player panned, turned or zoomed the camera
     Retargeted, // the camera began following something else
     Replaced,   // a new move of the same kind
     Stopped,    // Stop()

@@ -46,8 +46,8 @@ void Ended(dao::camera::Move move, dao::camera::MoveEnd why)
     const dao::CameraController *camera = dao::camera::Current();
     const dao::Vector offset = camera != nullptr ? camera->FocusOffset() : dao::Vector{};
     spdlog::info("the {} ended: {}; the focus {:.2f} m from what it follows",
-                 move == dao::camera::Move::Pan ? "pan" : "turn", dao::camera::Name(why),
-                 std::hypot(offset.x, offset.y));
+                 move == dao::camera::Move::Pan ? "pan" : (move == dao::camera::Move::Zoom ? "zoom" : "turn"),
+                 dao::camera::Name(why), std::hypot(offset.x, offset.y));
 }
 
 } // namespace
