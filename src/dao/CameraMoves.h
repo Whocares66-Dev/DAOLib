@@ -71,7 +71,10 @@ void EaseYaw(float radians, float seconds);
 // and pans differently (dao/Camera.h), so a plugin that means to stay in
 // the close view keeps to 0.5 and above. The player wins: a zoom the
 // player makes with the wheel while it runs stops it. Read 2026-10-02
-// (dao/Camera.h, CameraController::ZoomSetting); not yet seen in play.
+// (dao/Camera.h, CameraController::ZoomSetting). Seen in play the same
+// day, the turn-based mod's play test 34: pulled back on each actor's
+// turn by its size (an ogre, its victim and another in one frame), and
+// the party's turns back at the player's own zoom.
 void EaseZoom(float zoom, float seconds);
 // Whether the player has zoomed since the last EaseZoom: its ease ended by
 // the player, or the zoom moved since it arrived. False before any.

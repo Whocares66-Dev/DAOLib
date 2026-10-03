@@ -20,7 +20,12 @@
 // the elapsed time first to what has been fed, so the conjure runs as
 // ever, animation and IsConjuring with it, and completes only once fed its
 // whole duration. The cast (37) and what follows then run in real time.
-// The hold itself not yet seen in play.
+// The hold seen in play the same day, the turn-based mod's play test 33
+// (DAOTurnBased dev/PLAYTEST-2026-10-02-33.md): a caster's Chain Lightning
+// held conjuring through two spiders' turns, the lightning round her
+// frame after frame and the game's own action label up; an ogre's ability
+// cleared it before its time was paid; in the re-check, fed its whole
+// time, it was let go and the bolt flew at the start of her next turn.
 #pragma once
 
 #include "dao/ObjectId.h"
