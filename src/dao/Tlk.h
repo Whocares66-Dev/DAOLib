@@ -36,7 +36,8 @@ std::wstring String(std::uint32_t strref, bool female = false);
 // stay as they are. The text as given before the game is up. On the game's
 // thread. Seen in play 2026-10-03 through the Eluvian server, which passes
 // every conversation line and reply through it: the Quartermaster's lines
-// read clean, no stray markup. A line with <FirstName/> not yet seen.
+// read clean, no stray markup; and a reply's <FirstName/> came back as the
+// hero's name.
 std::wstring Resolve(std::wstring_view text);
 
 } // namespace dao::tlk
