@@ -82,14 +82,16 @@ class Conversation
     std::optional<std::uint32_t> CurrentLine() const;
 
     // Whose conversation it is: what its lines' OWNER names, the creature
-    // or placeable it was begun with (the conversation's +0x28).
+    // or placeable it was begun with, BeginConversation's oTarget (the
+    // conversation's +0x28).
     ObjectId Owner() const;
     // Who speaks a line, and to whom, as the engine resolves the line's
     // speaker and listener for the camera and the lip sync: OWNER the owner,
     // PLAYER the player, HENCH:<tag> or HENCH<n> a party member, any other
     // tag the creature by that tag about the owner. Where it resolves to
-    // nothing, the speaker is the owner, and the listener a second object
-    // the conversation keeps beside its owner (+0x2C; which is not read).
+    // nothing, the speaker is the owner, and the listener the other party:
+    // BeginConversation's oInitiator (the character the player controls when
+    // a creature was told to talk to itself), the conversation's +0x2C.
     // Nothing for a line past the file's. Read
     // 2026-10-03 (dao/Addresses.h, LineSpeaker), for a tool reading a
     // conversation whose every line says OWNER (the scripts' GetLastSpeaker

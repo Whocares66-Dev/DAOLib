@@ -1388,9 +1388,14 @@ DAO_ADDRESS(kConversation_End, 21312)
 // HENCH:<tag> and HENCH<n> the party's members; any other text a tag,
 // looked for about the owner (0x006973B0). What resolves to nothing (-1)
 // answers, for the speaker, the owner (+0x28), and for the listener the
-// conversation's +0x2C, a second object it is set up with beside the owner
-// (0x007EF34C sets the two from its first two arguments; which object is
-// not read). Called by PlayLine as it speaks a line, which the camera and
+// conversation's +0x2C, the other party. Read by the address library's
+// session, 2026-10-03: the scripts' BeginConversation(oInitiator, oTarget,
+// rDialogFile) calls 0x006976B0 on oTarget's object with oInitiator, which
+// loads the conversation (0x007EF310, __thiscall (id, id, name)) with its
+// own id first, to +0x28, and oInitiator second, to +0x2C; with no name it
+// takes the object's own conversation (+0x3D8). Where oInitiator is
+// oTarget, the character the player controls takes its place. So +0x28 is
+// oTarget, the owner, and +0x2C oInitiator. Called by PlayLine as it speaks a line, which the camera and
 // lip sync follow. The names are ours (the address library, bf39c18).
 DAO_ADDRESS(kConversation_LineSpeaker, 21297)
 DAO_ADDRESS(kConversation_LineListener, 21298)
