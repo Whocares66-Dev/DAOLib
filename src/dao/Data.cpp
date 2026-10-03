@@ -6,6 +6,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace dao::data
 {
@@ -132,6 +135,13 @@ bool Attribute::Set(float value)
     return true;
 }
 
+std::size_t Attribute::MemberCount() const
+{
+    using Fn = std::int32_t(__fastcall *)(const Attribute *, int);
+    const std::int32_t count = Slot<Fn>(this, 16)(this, 0);
+    return count > 0 ? static_cast<std::size_t>(count) : 0;
+}
+
 void Attribute::SetText(std::wstring_view value)
 {
     // Slot 10 takes the engine's own string, as SetValueUnicode passes it.
@@ -150,6 +160,32 @@ std::optional<double> Number(std::wstring_view path)
 {
     const Attribute *attribute = Find(path);
     return attribute != nullptr ? std::optional{attribute->Number()} : std::nullopt;
+}
+
+std::optional<std::size_t> MemberCount(std::wstring_view path)
+{
+    const Attribute *attribute = Find(path);
+    return attribute != nullptr ? std::optional{attribute->MemberCount()} : std::nullopt;
+}
+
+std::vector<std::wstring> Members(std::wstring_view path)
+{
+    std::vector<std::wstring> members;
+    const Attribute *attribute = Find(path);
+    if (attribute == nullptr)
+    {
+        return members;
+    }
+    const std::size_t count = attribute->MemberCount();
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        std::wstring member = std::wstring(path) + L"." + std::to_wstring(i);
+        if (Find(member) != nullptr)
+        {
+            members.push_back(std::move(member));
+        }
+    }
+    return members;
 }
 
 } // namespace dao::data

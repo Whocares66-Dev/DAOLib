@@ -17,13 +17,15 @@
 // too (the game modes, the application), with their attributes in the
 // tree. A plain attribute (a bool, a number) can be set, and setting one
 // tells its observers, the movies bound to it among them. Not yet seen in
-// play.
+// play. A list's members are read below (Members).
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::data
 {
@@ -64,6 +66,10 @@ class Attribute
     bool Set(std::uint32_t value);
     bool Set(float value);
 
+    // How many members it has, as the UI's GetNumMembers answers (its slot
+    // 16): a list's items, an object's members; 0 for a plain value.
+    std::size_t MemberCount() const;
+
     // Sets the attribute from text, as the Flash UI's SetValueUnicode does
     // (0x0051F6E0, which hands the text to the attribute's slot 10): a
     // string attribute takes it as it is, a number reads it. The way a
@@ -77,5 +83,34 @@ Attribute *Find(std::wstring_view path);
 
 std::optional<std::wstring> Text(std::wstring_view path);
 std::optional<double> Number(std::wstring_view path);
+
+// A list in the tree, as the screens read one: how many it holds, and each
+// member's path, the list's own with ".<index>" after it, whose members are
+// read the same way.
+//
+//   for (const std::wstring &chain : dao::data::Members(L"CharGenCreature.Stats.TalentChains"))
+//       for (const std::wstring &ability : dao::data::Members(chain))
+//           dao::data::Number(ability + L".DisplayState");
+//
+// Read 2026-10-03. The UI's GetNumMembers (an FSCommand, 0x0051BE40) finds
+// the path and answers its attribute's slot 16. A list is an
+// ECDynArray<T*> attribute (the level-up screen's chains, a container's
+// inventory, a store's stock, a conversation's lines), and every one of
+// the 49 such classes looks a member up (its slot 6, 0x007268E0) by the
+// path's component read as a number, so Find reaches "<list>.0" and on.
+// An object's members go by name and are not listed here. Members gives
+// only paths that Find reaches.
+//
+// The level-up screen's chains (FindAbilityChainsMessage, built by
+// 0x0062DCD0): each member an AbilityGUIInfo of AbilityTemplate, Column,
+// DisplayState and AbilityInstance. DisplayState is 1 for an ability the
+// creature has (0x0071BEC0), 2 for one it can learn now (0x0071BEF0, the
+// test behind the scripts' IsAbilityAvailable), 3 for one it cannot yet.
+// Nothing for a path with nothing there. Seen in play 2026-10-03 through
+// the Eluvian server: the world map's 58 pins read by their index paths,
+// with the map down. MemberCount and Members on the level-up chains not
+// yet seen.
+std::optional<std::size_t> MemberCount(std::wstring_view path);
+std::vector<std::wstring> Members(std::wstring_view path);
 
 } // namespace dao::data

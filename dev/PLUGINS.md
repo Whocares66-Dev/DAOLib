@@ -119,6 +119,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Which of the game's screens are up (the inventory, a store, the map), and the full-screen GUI open | `dao::gui::ShownScreens()`, each a `Screen` with its `name`, `movie`, `layer`; `Screens()` for all; `CurrentFullScreen()` | `dao/Gui.h` |
 | A creature's portrait for a movie (enemies too) | `creature->RenderPortrait()` gives `img://portrait_<tag><counter>`; `PortraitImage()` without rendering; `ReleasePortrait()` when done, as the game's screens do | `dao/Objects.h` |
 | Read or set a value in the engine's data tree, as the UI binds to it | `dao::data::Text(L"GUI.SelectedChar")`, `Number(path)`, `Find(path)->Kind()`, `->Set(value)` | `dao/Data.h` |
+| Read a list in the data tree as a screen lists it (the level-up screen's ability chains, a container's inventory) | `dao::data::MemberCount(path)`, `Members(path)`, then `Number(member + L".DisplayState")` | `dao/Data.h` |
 | React to the game's script events (damage, perception, mode changes, loads) | `dao::events::OnScriptEvent(EventType::Damaged, fn)` | `dao/Events.h` |
 | Run code every frame | `dao::OnFrame(fn)` | `dao/Frame.h` |
 | Hook any engine function | `dao::Detour<Fn>` on an ID from `dao/Addresses.h` | `dao/Hook.h` |
