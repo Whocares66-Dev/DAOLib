@@ -6,6 +6,7 @@
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 #include "dao/Script.h"
+#include "dao/TypeName.h"
 #include "dao/core/OwedTime.h"
 #include "dao/generated/ScriptApi.h"
 
@@ -37,7 +38,11 @@ std::vector<std::function<std::int32_t(const CGameEffect &, std::int32_t)>> g_ag
 constexpr std::size_t kForgetAfter = 20000;
 
 // The object whose effects are being aged, on this thread: SEffectsHolder::
-// AgeEffect, the one caller of AddElapsed, is handed it.
+// AgeEffect, the one caller of AddElapsed, is handed it, as a pointer to
+// its effects part inside it (dao/TypeName.h, CompleteObject): until
+// 2026-10-02 its +0x10 was read for the id there, which is not the id, so
+// no effect was aged by its owner's own clock (the turn-based mod: a
+// spider's Overwhelm, advanced on the spider's clock, never ran down).
 thread_local ObjectId t_owner = kInvalidObject;
 
 // SEffectsHolder::AgeEffect: __thiscall (owner, effect), `ret 8`.
@@ -46,8 +51,9 @@ Detour<AgeEffectFn> g_ageEffect;
 
 std::int32_t __fastcall AgeEffect(void *holder, int edx, void *owner, CGameEffect *effect)
 {
-    const auto id =
-        owner != nullptr ? TryRead<ObjectId>(reinterpret_cast<std::uintptr_t>(owner) + CGameObject::kId) : std::nullopt;
+    const void *object = CompleteObject(owner);
+    const auto id = object != nullptr ? TryRead<ObjectId>(reinterpret_cast<std::uintptr_t>(object) + CGameObject::kId)
+                                      : std::nullopt;
     const ObjectId outer = std::exchange(t_owner, id.value_or(kInvalidObject));
     const std::int32_t result = g_ageEffect.Original()(holder, edx, owner, effect);
     t_owner = outer;

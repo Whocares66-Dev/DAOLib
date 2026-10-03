@@ -37,6 +37,7 @@ std::uint32_t ReadWord(std::uintptr_t at, bool &ok)
 }
 
 // 32-bit MSVC layouts: pointers are absolute, not RVAs as on x64.
+constexpr std::size_t kLocatorOffset = 4;          // RTTICompleteObjectLocator::offset
 constexpr std::size_t kLocatorTypeDescriptor = 12; // RTTICompleteObjectLocator::pTypeDescriptor
 constexpr std::size_t kTypeDescriptorName = 8;     // TypeDescriptor::name, after vftable and spare
 constexpr std::size_t kMaxNameLength = 512;
@@ -87,6 +88,31 @@ std::string_view DecoratedTypeName(const void *object)
 std::string TypeName(const void *object)
 {
     return core::UndecorateClassName(DecoratedTypeName(object));
+}
+
+const void *CompleteObject(const void *object)
+{
+    if (object == nullptr)
+    {
+        return nullptr;
+    }
+    bool ok = true;
+    const auto vtable = ReadWord(reinterpret_cast<std::uintptr_t>(object), ok);
+    if (!ok || !InImage(vtable - sizeof(std::uint32_t), sizeof(std::uint32_t)))
+    {
+        return nullptr;
+    }
+    const auto locator = ReadWord(vtable - sizeof(std::uint32_t), ok);
+    if (!ok || !InImage(locator, kLocatorOffset + sizeof(std::uint32_t)))
+    {
+        return nullptr;
+    }
+    const auto offset = ReadWord(locator + kLocatorOffset, ok);
+    if (!ok)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<const void *>(reinterpret_cast<std::uintptr_t>(object) - offset);
 }
 
 } // namespace dao
