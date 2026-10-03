@@ -157,7 +157,11 @@ try {
 
     if ($Test) {
         Show-Line "`n== test ($Preset) ==" -Colour Cyan
-        ctest --preset $Preset
+        # As many at once as the build runs: the tests share no files (the
+        # Python ones make theirs in a temporary directory each) and none
+        # goes by the clock. 7 to 12 s one at a time, 4 to 5 s so, the
+        # floor the slowest, object_casts' read of the exe (2026-10-03).
+        ctest --preset $Preset --parallel $parallel
         if ($LASTEXITCODE -ne 0) { throw "tests failed ($LASTEXITCODE)" }
     }
 
