@@ -6,6 +6,7 @@
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Messages.h"
+#include "dao/Module.h"
 #include "dao/core/Msvc8.h"
 
 #include <mutex>
@@ -20,6 +21,7 @@ namespace
 // In the conversation (the engine's, no vtable).
 constexpr std::size_t kFileData = 0x20;
 constexpr std::size_t kFileSize = 0x24;
+constexpr std::size_t kOwner = 0x28;
 constexpr std::size_t kCurrentLine = 0x38;
 // In dialogue mode (GameModeDialog).
 constexpr std::size_t kReplies = 0x1A4; // a std::vector of line indices, its first at +0x1A8
@@ -178,6 +180,37 @@ std::optional<std::uint32_t> Conversation::CurrentLine() const
 {
     const auto line = At<std::uint32_t>(this, kCurrentLine);
     return line != kNone ? std::optional<std::uint32_t>(line) : std::nullopt;
+}
+
+ObjectId Conversation::Owner() const
+{
+    return At<ObjectId>(this, kOwner);
+}
+
+namespace
+{
+
+// LineSpeaker or LineListener: __thiscall (line), an object's id.
+std::optional<ObjectId> Resolve(const Conversation &conversation, AddressId function, std::uint32_t line)
+{
+    if (!conversation.LineAt(line))
+    {
+        return std::nullopt;
+    }
+    using Fn = ObjectId(__fastcall *)(const Conversation *, int, std::uint32_t);
+    return reinterpret_cast<Fn>(Module::Address(function))(&conversation, 0, line);
+}
+
+} // namespace
+
+std::optional<ObjectId> Conversation::Speaker(std::uint32_t line) const
+{
+    return Resolve(*this, addr::kConversation_LineSpeaker, line);
+}
+
+std::optional<ObjectId> Conversation::Listener(std::uint32_t line) const
+{
+    return Resolve(*this, addr::kConversation_LineListener, line);
 }
 
 Conversation *Current()

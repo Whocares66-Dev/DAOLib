@@ -50,6 +50,7 @@
 // them short, and make no conversation start or end from one.
 #pragma once
 
+#include "dao/ObjectId.h"
 #include "dao/core/Conversation.h"
 
 #include <cstddef>
@@ -79,6 +80,26 @@ class Conversation
     std::optional<Line> LineAt(std::uint32_t index) const;
     // The line spoken last, NPC's or player's; nothing before the first.
     std::optional<std::uint32_t> CurrentLine() const;
+
+    // Whose conversation it is: what its lines' OWNER names, the creature
+    // or placeable it was begun with (the conversation's +0x28).
+    ObjectId Owner() const;
+    // Who speaks a line, and to whom, as the engine resolves the line's
+    // speaker and listener for the camera and the lip sync: OWNER the owner,
+    // PLAYER the player, HENCH:<tag> or HENCH<n> a party member, any other
+    // tag the creature by that tag about the owner. Where it resolves to
+    // nothing, the speaker is the owner, and the listener a second object
+    // the conversation keeps beside its owner (+0x2C; which is not read).
+    // Nothing for a line past the file's. Read
+    // 2026-10-03 (dao/Addresses.h, LineSpeaker), for a tool reading a
+    // conversation whose every line says OWNER (the scripts' GetLastSpeaker
+    // has no implementation in this build). On the game's thread. Seen in
+    // play 2026-10-03 through the Eluvian server, in Redcliffe: a militia
+    // man's one-line conversation, its lines OWNER, gave him for each; the
+    // player's reply, PLAYER, gave the hero. Owner itself, the listener and
+    // a speaker named by tag not yet seen.
+    std::optional<ObjectId> Speaker(std::uint32_t line) const;
+    std::optional<ObjectId> Listener(std::uint32_t line) const;
 };
 
 // The conversation on the screen: dialogue mode's, while the game is in

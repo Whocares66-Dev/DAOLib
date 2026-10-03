@@ -1379,6 +1379,21 @@ DAO_ADDRESS(kConversation_PlayLine, 21328)
 DAO_ADDRESS(kConversation_OfferReplies, 21326)
 DAO_ADDRESS(kConversation_Advance, 21324)
 DAO_ADDRESS(kConversation_End, 21312)
+// Who speaks a line and to whom (dao/Dialogue.h), read 2026-10-03:
+// LineSpeaker and LineListener, __thiscall on the conversation (line),
+// `ret 4`, answering an object's id. Each reads the line's field from the
+// file (ConversationLineSpeaker 12202, ConversationLineListener 12203) and
+// resolves it (0x007F2D80, __cdecl (const std::wstring *text, owner, ...)):
+// OWNER is the conversation's owner, its +0x28; PLAYER the party's +0x1E8;
+// HENCH:<tag> and HENCH<n> the party's members; any other text a tag,
+// looked for about the owner (0x006973B0). What resolves to nothing (-1)
+// answers, for the speaker, the owner (+0x28), and for the listener the
+// conversation's +0x2C, a second object it is set up with beside the owner
+// (0x007EF34C sets the two from its first two arguments; which object is
+// not read). Called by PlayLine as it speaks a line, which the camera and
+// lip sync follow. The names are ours (the address library, bf39c18).
+DAO_ADDRESS(kConversation_LineSpeaker, 21297)
+DAO_ADDRESS(kConversation_LineListener, 21298)
 DAO_ADDRESS(kGameModeDialog_ShowResponses, 13949)
 DAO_ADDRESS(kGameModeDialog_AddResponse, 13948)
 DAO_ADDRESS(kConversationData_Constructor, 13933)
