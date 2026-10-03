@@ -32,6 +32,7 @@ A stall that ends leaves no crash log, so the loader also keeps a watchdog (DAOL
 - **The first sample** also has the system, the modules, the plugins and the last lines of every log, what led into the stall.
 - **The end.** When frames come back, the last line says after how long. `loader.log` says when a hang log was begun and when frames came back.
 - **When not.** Before the game has a mode, while loading and at the main menu's start-up, where frames may stop by design. Not with the window minimised, or gone, as the game closes.
+- **Seen in play**, 2026-10-03, in the turn-based playthrough (GOG): from 01:28 on, through four launches and three quits, five loads (two from inside a fight), two area transitions, a skipped cutscene, the Store screen and some six fights of up to 19 rounds, it wrote no hang log: none at launch, at exit, in a load or in a menu, and no stall came. The game was in front throughout, so whether frames stop with it behind another window is not yet seen. A real stall's log is not yet seen either.
 
 ## How it stays installed
 
