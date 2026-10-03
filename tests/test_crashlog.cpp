@@ -1,7 +1,16 @@
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
+#include "dao/core/StackText.h"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string>
+#include <string_view>
 
 using dao::core::AccessKind;
 using dao::core::ExceptionName;
@@ -55,4 +64,83 @@ TEST_CASE("exception codes have their names")
     CHECK(AccessKind(0) == "reading");
     CHECK(AccessKind(1) == "writing");
     CHECK(AccessKind(8) == "executing");
+}
+
+namespace
+{
+
+// An engine std::wstring as it lies in a frame: a word, the inline units or
+// the pointer, the length and the capacity.
+std::array<std::uint32_t, 7> StackString(std::wstring_view text, std::uint32_t capacity, std::uint32_t pointer = 0)
+{
+    std::array<std::uint32_t, 7> words{0xCCCCCCCC, 0, 0, 0, 0, static_cast<std::uint32_t>(text.size()), capacity};
+    if (capacity == 7)
+    {
+        std::array<wchar_t, 8> units{};
+        text.copy(units.data(), text.size());
+        std::memcpy(&words[1], units.data(), sizeof units);
+    }
+    else
+    {
+        words[1] = pointer;
+    }
+    return words;
+}
+
+} // namespace
+
+TEST_CASE("wide text is printable units up to a NUL")
+{
+    using dao::core::PrintableWide;
+    const std::array<wchar_t, 8> name{L'f', L'x', L'_', L'f', L'i', L'r', L'e', L'\0'};
+    CHECK(PrintableWide(name) == "fx_fire");
+    const std::array<wchar_t, 4> unended{L'a', L'b', L'c', L'd'};
+    CHECK_FALSE(PrintableWide(unended).has_value()); // no NUL in what was copied
+    const std::array<wchar_t, 4> brief{L'a', L'b', L'\0', L'x'};
+    CHECK_FALSE(PrintableWide(brief).has_value()); // shorter than four
+    CHECK(PrintableWide(brief, 2) == "ab");
+    const std::array<wchar_t, 6> binary{L'a', L'b', 0x4647, L'c', L'd', L'\0'};
+    CHECK_FALSE(PrintableWide(binary).has_value());
+}
+
+TEST_CASE("an engine string in a frame is found inline or by its pointer")
+{
+    using dao::core::WStringIn;
+    const auto inlined = WStringIn(StackString(L"mmh_x", 7));
+    REQUIRE(inlined.has_value());
+    CHECK(inlined->text == "mmh_x");
+    CHECK(inlined->pointer == 0);
+
+    const auto pointed = WStringIn(StackString(L"fxm_spider_web_long", 31, 0x26B546E0));
+    REQUIRE(pointed.has_value());
+    CHECK(pointed->size == 19);
+    CHECK(pointed->pointer == 0x26B546E0);
+    CHECK(pointed->text.empty());
+}
+
+TEST_CASE("words that only look like an engine string are not one")
+{
+    using dao::core::WStringIn;
+    CHECK_FALSE(WStringIn(StackString(L"ab", 7)).has_value());             // too short to tell
+    CHECK_FALSE(WStringIn(StackString(L"abcdefghij", 31, 0)).has_value()); // no text anywhere
+    auto longer = StackString(L"abcde", 7);
+    longer[5] = 6; // the length past the NUL
+    CHECK_FALSE(WStringIn(longer).has_value());
+    auto shrunk = StackString(L"abcdefghij", 31, 0x1000);
+    shrunk[6] = 4; // a capacity below the inline 7
+    CHECK_FALSE(WStringIn(shrunk).has_value());
+    const std::array<std::uint32_t, 7> numbers{1, 2, 3, 4, 5, 9, 8}; // longer than its capacity
+    CHECK_FALSE(WStringIn(numbers).has_value());
+}
+
+TEST_CASE("a GFF4 file is known by its first eight bytes")
+{
+    using dao::core::IsGff4;
+    const auto bytes = [](std::string_view text) {
+        return std::span(reinterpret_cast<const std::byte *>(text.data()), text.size());
+    };
+    CHECK(IsGff4(bytes("GFF V4.0PC  MMH V0.1")));
+    CHECK(IsGff4(bytes("GFF V4.1PC  CONV")));
+    CHECK_FALSE(IsGff4(bytes("GFF V3.2")));
+    CHECK_FALSE(IsGff4(bytes("GFF V4")));
 }

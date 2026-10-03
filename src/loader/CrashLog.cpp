@@ -3,11 +3,14 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/String.h"
 #include "dao/TypeName.h"
 #include "dao/core/CallSite.h"
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
+#include "dao/core/Gff4.h"
 #include "dao/core/Relocate.h"
+#include "dao/core/StackText.h"
 
 #include <Windows.h>
 
@@ -52,6 +55,15 @@ std::atomic<bool> g_crashing{false};    // one log per process, whatever else fa
 EXCEPTION_RECORD g_record{};
 CONTEXT g_context{};
 DWORD g_threadId = 0;
+
+// How much of the crashing thread's stack the scans read: 64 KiB.
+constexpr std::size_t kScanWords = 16384;
+// A GFF4 file's header is 0x20 bytes; a file past 4 MiB is not one the
+// stack holds a length for, or not one to copy in a dying process.
+constexpr std::size_t kGffHeader = 0x20;
+constexpr std::size_t kMostGff = 4 * 1024 * 1024;
+// A name, not a document.
+constexpr std::size_t kLongestString = 255;
 
 LONG WINAPI Filter(EXCEPTION_POINTERS *pointers);
 
@@ -133,6 +145,9 @@ class Report
         Registers(w);
         ReturnAddresses(w);
         Stack(w);
+        w.Flush();
+        GffFiles(w);
+        EngineStrings(w);
         w.Flush();
         Modules(w);
         Plugins(w);
@@ -242,6 +257,10 @@ class Report
         {
             return "(char*) \"" + *text + "\"";
         }
+        if (const auto text = WideAt(value))
+        {
+            return "(wchar_t*) L\"" + *text + "\"";
+        }
         if (value < 0x10000)
         {
             return fmt::format("[{}]", value);
@@ -266,6 +285,16 @@ class Report
             return std::nullopt;
         }
         return std::string(buffer.data(), n);
+    }
+
+    static std::optional<std::string> WideAt(std::uint32_t address)
+    {
+        std::array<wchar_t, 64> buffer{};
+        if (!dao::TryCopy(buffer.data(), address, sizeof buffer))
+        {
+            return std::nullopt;
+        }
+        return dao::core::PrintableWide(buffer);
     }
 
     // -- sections --
@@ -434,9 +463,9 @@ class Report
     void ReturnAddresses(Writer &w)
     {
         w.Line("RETURN ADDRESSES ON THE STACK (callers, innermost first; a few may be stale values):");
-        const auto words = StackWords(16384); // 64 KiB
+        const auto words = StackWords(kScanWords);
         int shown = 0;
-        for (std::size_t i = 0; i < words.size() && shown < 64; ++i)
+        for (std::size_t i = 0; i < words.size() && shown < 128; ++i)
         {
             const std::uint32_t value = words[i];
             const ModuleInfo *m = ModuleOf(value);
@@ -462,6 +491,132 @@ class Report
         for (std::size_t i = 0; i < words.size(); ++i)
         {
             w.Line("\t[ESP+{:<3X}] {:#010x}  {}", i * 4, words[i], Annotate(words[i]));
+        }
+        w.Blank();
+    }
+
+    // A GFF4 file a stack word points at: one the game is reading, and for
+    // a model (MMH) its name, which says which model it was. Its length is
+    // the word after it, as the game passes a file's bytes (2026-10-02:
+    // every frame of a model's parse held the buffer and then 7566), or else
+    // as far as the memory goes; parsed from a copy, every read checked.
+    void GffFiles(Writer &w)
+    {
+        w.Line("GFF4 FILES ON THE STACK (a file being read, its root's strings by label: dev/gff4_fields.csv):");
+        const auto words = StackWords(kScanWords);
+        std::vector<std::uint32_t> seen;
+        for (std::size_t i = 0; i < words.size() && seen.size() < 8; ++i)
+        {
+            const std::uint32_t at = words[i];
+            std::array<std::byte, 8> head{};
+            if (at < 0x10000 || std::ranges::find(seen, at) != seen.end() ||
+                !dao::TryCopy(head.data(), at, head.size()) || !dao::core::IsGff4(head))
+            {
+                continue;
+            }
+            seen.push_back(at);
+            const std::uint32_t next = i + 1 < words.size() ? words[i + 1] : 0;
+            const std::size_t length = next >= kGffHeader && next <= kMostGff ? next : Readable(at, kMostGff);
+            w.Line("\t[ESP+{:<5X}] {:#010x}, {} bytes: {}", i * 4, at, length, DescribeGff(at, length));
+        }
+        if (seen.empty())
+        {
+            w.Line("\tnone");
+        }
+        w.Blank();
+    }
+
+    static std::size_t Readable(std::uint32_t at, std::size_t most)
+    {
+        MEMORY_BASIC_INFORMATION region{};
+        if (VirtualQuery(reinterpret_cast<const void *>(at), &region, sizeof region) == 0)
+        {
+            return 0;
+        }
+        const auto end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+        return std::min<std::size_t>(most, end - at);
+    }
+
+    static std::string DescribeGff(std::uint32_t at, std::size_t length)
+    {
+        std::vector<std::byte> bytes(length);
+        if (length < kGffHeader || !dao::TryCopy(bytes.data(), at, bytes.size()))
+        {
+            return "could not be copied";
+        }
+        // The header's platform, type and version, four letters each.
+        const std::string header(reinterpret_cast<const char *>(bytes.data()) + 8, 12);
+        const auto file = dao::core::gff4::File::Parse(bytes);
+        if (!file)
+        {
+            return fmt::format("\"{}\", which does not parse", header);
+        }
+        std::string text = fmt::format("{} {}", file->Type(), file->TypeVersion());
+        const auto root = file->Root();
+        if (!root)
+        {
+            return text + ", no root";
+        }
+        text += fmt::format(", root {}", root->Label());
+        int shown = 0;
+        for (const auto &field : root->Shape().fields)
+        {
+            if (field.type != static_cast<std::uint16_t>(dao::core::gff4::Type::String) ||
+                (field.flags & dao::core::gff4::kList) != 0)
+            {
+                continue;
+            }
+            if (const auto value = root->String(field.label))
+            {
+                text += fmt::format(", {} \"{}\"", field.label, dao::Utf8(*value));
+                if (++shown == 4)
+                {
+                    break;
+                }
+            }
+        }
+        return text;
+    }
+
+    // The engine's std::wstrings lying in the stack's frames: a function's
+    // own strings, the name of what it is loading among them (2026-10-02:
+    // the model blueprint loader builds the name it asks for in its frame).
+    void EngineStrings(Writer &w)
+    {
+        w.Line("ENGINE STRINGS IN THE STACK'S FRAMES (innermost first; a few may be stale):");
+        const auto words = StackWords(kScanWords);
+        std::vector<std::string> seen;
+        for (std::size_t i = 0; i + 7 <= words.size() && seen.size() < 48; ++i)
+        {
+            const auto found = dao::core::WStringIn(std::span<const std::uint32_t, 7>(words.data() + i, 7));
+            if (!found || found->size > kLongestString)
+            {
+                continue;
+            }
+            std::string text = found->text;
+            if (found->pointer != 0)
+            {
+                std::array<wchar_t, kLongestString + 1> units{};
+                const std::size_t count = found->size + 1;
+                const auto read = dao::TryCopy(units.data(), found->pointer, count * sizeof(wchar_t))
+                                      ? dao::core::PrintableWide(std::span(units.data(), count), 3)
+                                      : std::nullopt;
+                if (!read || read->size() != found->size)
+                {
+                    continue;
+                }
+                text = *read;
+            }
+            if (std::ranges::find(seen, text) == seen.end())
+            {
+                w.Line("\t[ESP+{:<5X}] L\"{}\"", i * 4, text);
+                seen.push_back(std::move(text));
+            }
+            i += 6; // past this string's words
+        }
+        if (seen.empty())
+        {
+            w.Line("\tnone");
         }
         w.Blank();
     }
