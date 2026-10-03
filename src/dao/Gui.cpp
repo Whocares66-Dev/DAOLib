@@ -14,6 +14,7 @@
 #include "dao/core/GfxMovie.h"
 #include "dao/core/Msvc8.h"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -316,7 +317,24 @@ void *GuiSystem()
 }
 
 // The ids a plugin's screens take, past the game's 0-0x3F.
-std::uint32_t g_nextScreenId = 0x100;
+constexpr std::int32_t kFirstPluginScreen = 0x100;
+
+// The GUI system's scenes, id to GUI::GUIScene (dao/Addresses.h).
+const core::TreeRep<std::int32_t, std::byte *> &Scenes(const void *gui)
+{
+    return *reinterpret_cast<const core::TreeRep<std::int32_t, std::byte *> *>(static_cast<const std::byte *>(gui) +
+                                                                               0x58);
+}
+
+// The id for a plugin's new screen: past every id the GUI system has. Each
+// plugin links its own copy of this library, so a count of its own would
+// give two plugins' screens the same id, and AddScene ignores an id it has.
+std::int32_t FreeScreenId(const void *gui)
+{
+    std::int32_t id = kFirstPluginScreen;
+    Scenes(gui).ForEach([&](std::int32_t taken, const std::byte *) { id = taken >= id ? taken + 1 : id; });
+    return id;
+}
 
 // The GUI system's by-name slots (17 open, 18 close, 19 hide), each
 // __thiscall (const std::wstring &name), `ret 4`.
@@ -365,10 +383,10 @@ bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t lay
                                          std::int32_t, std::uint32_t);
     reinterpret_cast<SceneFn>(Module::Address(addr::kGUIScene_Constructor))(scene, 0, sceneName.Engine(),
                                                                             filename.Engine(), layer, 0, flags);
-    const std::uint32_t id = g_nextScreenId++;
-    using AddFn = void(__fastcall *)(void *, int, std::uint32_t, void *);
+    const std::int32_t id = FreeScreenId(gui);
+    using AddFn = void(__fastcall *)(void *, int, std::int32_t, void *);
     reinterpret_cast<AddFn>(Module::Address(addr::kGUISystem_AddScene))(gui, 0, id, scene);
-    return SceneId(gui, name) == static_cast<std::int32_t>(id);
+    return SceneId(gui, name) == id;
 }
 
 bool ShowScreen(std::wstring_view name)
@@ -384,6 +402,92 @@ bool HideScreen(std::wstring_view name)
 bool CloseScreen(std::wstring_view name)
 {
     return ByName(18, name);
+}
+
+namespace
+{
+
+// A GUI::GUIScene's fields (Screens, in dao/Gui.h).
+constexpr std::size_t kSceneName = 0x58;
+constexpr std::size_t kSceneMovie = 0x74 + 0xC; // the Filename attribute's text
+constexpr std::size_t kSceneLayer = 0x9C;
+constexpr std::size_t kSceneFlags = 0xA4;
+// A movie record's active byte.
+constexpr std::size_t kMovieActive = 0x28;
+// The GUI system's std::vector<int> of full-screen scenes shown.
+constexpr std::size_t kFullScreens = 0x1E4;
+
+template <class T> T Field(const std::byte *object, std::size_t offset)
+{
+    return *reinterpret_cast<const T *>(object + offset);
+}
+
+std::vector<Screen> ScreensOf(const void *gui)
+{
+    std::vector<Screen> screens;
+    const std::vector<void *> records = Owners();
+    Scenes(gui).ForEach([&](std::int32_t id, const std::byte *scene) {
+        if (scene == nullptr)
+        {
+            return;
+        }
+        Screen screen;
+        screen.id = id;
+        screen.name = reinterpret_cast<const core::WStringRep *>(scene + kSceneName)->View();
+        screen.movie = reinterpret_cast<const core::WStringRep *>(scene + kSceneMovie)->View();
+        screen.layer = Field<std::int32_t>(scene, kSceneLayer);
+        screen.flags = Field<std::uint32_t>(scene, kSceneFlags);
+        for (void *record : records)
+        {
+            if (NameOf(record) == screen.movie)
+            {
+                screen.shown = Field<std::uint8_t>(static_cast<const std::byte *>(record), kMovieActive) != 0;
+                break;
+            }
+        }
+        screens.push_back(std::move(screen));
+    });
+    return screens;
+}
+
+} // namespace
+
+std::vector<Screen> Screens()
+{
+    const void *gui = GuiSystem();
+    return gui != nullptr ? ScreensOf(gui) : std::vector<Screen>{};
+}
+
+std::vector<Screen> ShownScreens()
+{
+    std::vector<Screen> shown = Screens();
+    std::erase_if(shown, [](const Screen &screen) { return !screen.shown; });
+    std::ranges::stable_sort(shown, std::ranges::greater{}, &Screen::layer);
+    return shown;
+}
+
+std::optional<Screen> CurrentFullScreen()
+{
+    const void *gui = GuiSystem();
+    if (gui == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto ids =
+        reinterpret_cast<const core::VectorRep<std::int32_t> *>(static_cast<const std::byte *>(gui) + kFullScreens)
+            ->View();
+    if (ids.empty())
+    {
+        return std::nullopt;
+    }
+    for (Screen &screen : ScreensOf(gui))
+    {
+        if (screen.id == ids.back())
+        {
+            return std::move(screen);
+        }
+    }
+    return std::nullopt;
 }
 
 namespace

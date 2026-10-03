@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using dao::core::VectorRep;
 using dao::core::WStringRep;
@@ -65,6 +66,77 @@ TEST_CASE("an engine vector's elements run from first to last", "[msvc8]")
 
     const VectorRep<int> none{0, nullptr, nullptr, nullptr};
     CHECK(none.View().empty());
+}
+
+namespace
+{
+
+// An engine map of ints, built as MSVC 8 links one: the head is the end and
+// every missing child.
+struct TestTree
+{
+    using Node = dao::core::TreeNodeRep<std::int32_t, int>;
+    std::array<Node, 6> nodes{}; // the head first
+
+    // 4 at the root; 2 under it with 1 and 3; 6 on its right.
+    TestTree()
+    {
+        Node *head = &nodes[0];
+        for (Node &node : nodes)
+        {
+            node.left = node.right = node.parent = head;
+        }
+        head->isNil = 1;
+        const auto set = [&](std::size_t at, std::int32_t key, Node *parent, Node *left, Node *right) {
+            nodes.at(at) = Node{left, parent, right, key, key * 10, 0, 0};
+        };
+        set(1, 4, head, &nodes[2], &nodes[5]);
+        set(2, 2, &nodes[1], &nodes[3], &nodes[4]);
+        set(3, 1, &nodes[2], head, head);
+        set(4, 3, &nodes[2], head, head);
+        set(5, 6, &nodes[1], head, head);
+        head->parent = &nodes[1];
+        head->left = &nodes[3];
+        head->right = &nodes[5];
+    }
+    TestTree(const TestTree &) = delete;
+    TestTree &operator=(const TestTree &) = delete;
+
+    dao::core::TreeRep<std::int32_t, int> Map(std::uint32_t size)
+    {
+        return {0, &nodes[0], size};
+    }
+};
+
+} // namespace
+
+TEST_CASE("an engine map is walked in key order", "[msvc8]")
+{
+    TestTree tree;
+    std::vector<std::int32_t> keys;
+    tree.Map(5).ForEach([&](std::int32_t key, int value) {
+        CHECK(value == key * 10);
+        keys.push_back(key);
+    });
+    CHECK(keys == std::vector<std::int32_t>{1, 2, 3, 4, 6});
+}
+
+TEST_CASE("an engine map's walk stops at its count and at an empty map", "[msvc8]")
+{
+    TestTree tree;
+    std::vector<std::int32_t> keys;
+    tree.Map(2).ForEach([&](std::int32_t key, int) { keys.push_back(key); });
+    CHECK(keys == std::vector<std::int32_t>{1, 2});
+
+    TestTree::Node head{};
+    head.left = head.right = head.parent = &head;
+    head.isNil = 1;
+    bool any = false;
+    const dao::core::TreeRep<std::int32_t, int> empty{0, &head, 0};
+    empty.ForEach([&](std::int32_t, int) { any = true; });
+    const dao::core::TreeRep<std::int32_t, int> none{0, nullptr, 0};
+    none.ForEach([&](std::int32_t, int) { any = true; });
+    CHECK_FALSE(any);
 }
 
 TEST_CASE("a script array's tag says what it holds", "[arrays]")

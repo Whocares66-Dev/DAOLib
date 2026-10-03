@@ -328,6 +328,30 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         }
     });
 
+    // The screens shown, and the full-screen GUI, logged each time they
+    // change: open the inventory, a store or the map and the log says so.
+    // Read six times a second, since the walk copies every screen's names.
+    dao::OnFrame([] {
+        static std::uint32_t frames = 0;
+        static std::string last;
+        if (++frames % 10 != 0)
+        {
+            return;
+        }
+        std::string now;
+        for (const dao::gui::Screen &screen : dao::gui::ShownScreens())
+        {
+            now += fmt::format("{} ({:#x}, layer {}), ", dao::Utf8(screen.name), screen.id, screen.layer);
+        }
+        const auto full = dao::gui::CurrentFullScreen();
+        now += fmt::format("full-screen {}", full ? dao::Utf8(full->name) : std::string("none"));
+        if (now != last)
+        {
+            spdlog::info("screens shown: {}", now);
+            last = std::move(now);
+        }
+    });
+
     // Sending a message as the engine does: once the player has explored
     // for five seconds or so in all (300 frames), centre the camera on the creature
     // the player controls, and log whether the mode handled it. In combat

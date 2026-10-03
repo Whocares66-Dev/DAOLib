@@ -306,6 +306,71 @@ bool CloseScreen(std::wstring_view name);
 // (L"turnorder.gfx"), as GFx would ask for it.
 bool HasMovie(std::wstring_view file);
 
+// The screens the GUI system keeps, the game's and plugins', and which are
+// up: for a tool that cannot see the screen and wants to know whether it is
+// the inventory that is open, or a store, or the map.
+//
+//   for (const dao::gui::Screen &screen : dao::gui::ShownScreens())
+//       log(screen.name, screen.layer);
+//   if (const auto full = dao::gui::CurrentFullScreen()) ...  // full->name == L"Inventory"
+//
+// Read 2026-10-02. The GUI system keeps its scenes in a std::map at +0x58,
+// id to GUI::GUIScene (dao/core/Msvc8.h, TreeRep): the game's 60 have ids
+// 0-0x3F. A scene's name is the std::wstring at +0x58 (what SceneIdByName
+// compares), its movie's name the text of its Filename attribute (+0x74,
+// the text at +0xC in it), its layer +0x9C and flags +0xA4. The game's
+// scenes are each on a movie of their own ("Inventory" on inventory.gfx,
+// "Options" on OptionsMenu, "Main" on MainUI, the loot panel being the
+// inventory's). Showing a scene opens its movie by that name, and the
+// manager's record of the movie has an active byte at +0x28: set when it is
+// shown (OpenMovie, through 0x00518CB0), cleared when it is hidden (the GUI
+// system's slot 19, through the manager's 0x00511990, which takes the movie
+// off the renderer's list too, 0x005187F0), and cleared for every movie
+// when the interface is put away whole (0x005118F0's loop). So shown here
+// is the record's active byte: what is drawn, not what is logically open.
+//
+// A full-screen GUI is what ToggleFullScreenGUIMessage <name> opens and
+// GUI.HideFullScreenGUI closes: the inventory, the character record, the
+// map, the journal, mostly in the GUI game mode (dao::GameMode::Gui), the
+// level-up screen in character creation's (CharGen). The GUI system
+// shows its scene by id (its slot 13, which also signals the scripts) and
+// pushes the id on a std::vector<int> at +0x1E4 (0x00610CE0); hiding pops it
+// (0x0060F1E0, through slot 14), and closing all of them pops them all (slot
+// 16). Toggling a name hides it when its id is the vector's last, so the last
+// is the one up; opening one first closes the rest, so there is one at most.
+// GameModeGUI keeps the id at +0x98 as well.
+//
+// On the game's thread, as CurrentPopup. Seen in play 2026-10-02, GOG,
+// through the Eluvian server, every call answered at once:
+// - Exploring with nothing open, nine shown: Tooltips (layer 8), PopupLayer
+//   and Notifications (7), NavBar and Quickbar (4), ArmyControl, Minimap and
+//   Portraits (1), FloatyLayer (0); no full-screen GUI. "Main" is not among
+//   them. PopupLayer reads shown with no box up: its movie stays active, so
+//   CurrentPopup is what says a box is up.
+// - The loot panel: the full-screen GUI Inventory, in the GUI mode.
+// - The level-up screen (GUI.GoToLevelUp): the full-screen GUI LevelUp, in
+//   CharGen mode, LevelUp and BookBack among the shown and Notifications
+//   gone.
+// - After GUI.HideFullScreenGUI, and after the loot panel's Close: the nine
+//   again and no full-screen GUI.
+// Not yet seen: a store, the map, the inventory opened by its key, and two
+// plugins' screens taking ids of their own (AddScreen).
+struct Screen
+{
+    std::int32_t id = -1;   // the GUI system's: 0-0x3F the game's, from 0x100 plugins' (AddScreen)
+    std::wstring name;      // as ShowScreen and the full-screen messages name it: L"Inventory"
+    std::wstring movie;     // its movie, as NameOf names the record: L"inventory"
+    std::int32_t layer = 0; // the stacking order: kLayerHud and the rest
+    std::uint32_t flags = 0;
+    bool shown = false; // its movie open and active: on the screen
+};
+// Every screen, by id; nothing before the GUI system is up.
+std::vector<Screen> Screens();
+// The screens shown, the top layer first.
+std::vector<Screen> ShownScreens();
+// The full-screen GUI that is up, or nothing.
+std::optional<Screen> CurrentFullScreen();
+
 // Whether the mouse is over an element of one of the interface's movies,
 // or one of them holds a mouse press: the engine's own test, which explore
 // mode asks before it picks what is under the cursor, choosing nothing when

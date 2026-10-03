@@ -114,6 +114,7 @@ The game runs on several threads. Scripts run on one, the thread that filled the
 | Call into a movie: set a variable or an array, call an ActionScript function | `dao::gui::Movie{dao::gui::MovieOf(owner)}.SetVariable(path, value)`, `SetArray`, `Invoke("_root.Fn", args)`; `ReturnFSCommand(owner, ints)` | `dao/Gui.h` |
 | Find one of the game's movies by name, or list them | `dao::gui::FindOwner(L"name")`, `Owners()`, `NameOf(owner)`, `MovieOf(owner)` | `dao/Gui.h` |
 | Show a movie of the plugin's own, layered like the game's screens | `dao::gui::AddScreen(L"Name", L"movie", dao::gui::kLayerHud)`, `ShowScreen`, `HideScreen`, `CloseScreen` | `dao/Gui.h` |
+| Which of the game's screens are up (the inventory, a store, the map), and the full-screen GUI open | `dao::gui::ShownScreens()`, each a `Screen` with its `name`, `movie`, `layer`; `Screens()` for all; `CurrentFullScreen()` | `dao/Gui.h` |
 | A creature's portrait for a movie (enemies too) | `creature->RenderPortrait()` gives `img://portrait_<tag><counter>`; `PortraitImage()` without rendering; `ReleasePortrait()` when done, as the game's screens do | `dao/Objects.h` |
 | Read or set a value in the engine's data tree, as the UI binds to it | `dao::data::Text(L"GUI.SelectedChar")`, `Number(path)`, `Find(path)->Kind()`, `->Set(value)` | `dao/Data.h` |
 | React to the game's script events (damage, perception, mode changes, loads) | `dao::events::OnScriptEvent(EventType::Damaged, fn)` | `dao/Events.h` |

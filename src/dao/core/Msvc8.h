@@ -1,5 +1,5 @@
 // The C++ standard library types the engine was built with, as they lie in
-// memory: MSVC 2005's std::wstring and std::vector. The game passes these
+// memory: MSVC 2005's std::wstring, std::vector and std::map. The game passes these
 // between its functions (the script VM's strings, an effect's parameters),
 // and a plugin built with a later MSVC cannot use its own std::wstring for
 // them: the layout has changed since.
@@ -17,6 +17,14 @@
 // 0x00A5A220) read the first element's pointer at +4 and the end of the
 // elements at +8 of a vector and index from +4: an allocator word, then
 // first, last and the end of the storage.
+//
+// std::map, read 2026-10-02 from the GUI system's map of scenes (its
+// SceneIdByName, 0x00523ED0, and AddScene): a word, the head node at +4 and
+// the count at +8. A node is its left, parent and right, then the key and
+// the value, then its colour and a byte that is set only in the head. The
+// head is the end and every missing child: its left is the least node, its
+// parent the root. SceneIdByName starts at the head's left and steps
+// (0x0067A970) until it is back at the head.
 //
 // Only the layout is here; making or freeing one goes through the engine's
 // own functions (dao/String.h), since the memory is the engine's heap's.
@@ -89,5 +97,68 @@ template <class T> struct VectorRep
     }
 };
 static_assert(sizeof(VectorRep<int>) == 0x10);
+
+template <class Key, class Value> struct TreeNodeRep
+{
+    TreeNodeRep *left;
+    TreeNodeRep *parent;
+    TreeNodeRep *right;
+    Key key;
+    Value value;
+    char color;
+    char isNil; // the head's alone
+};
+using SceneNodeRep = TreeNodeRep<std::int32_t, void *>; // the GUI system's, as an example
+static_assert(offsetof(SceneNodeRep, key) == 0xC);
+static_assert(offsetof(SceneNodeRep, value) == 0x10);
+static_assert(offsetof(SceneNodeRep, isNil) == 0x15);
+
+template <class Key, class Value> struct TreeRep
+{
+    using Node = TreeNodeRep<Key, Value>;
+
+    std::uint32_t allocator;
+    Node *head;
+    std::uint32_t size;
+
+    // Each entry in key order, as the engine's own iterator steps (MSVC 8's
+    // _Tree::_Inc), and never more than the count says, so that a broken
+    // tree cannot keep the walk going.
+    template <class Fn> void ForEach(Fn &&fn) const
+    {
+        if (head == nullptr)
+        {
+            return;
+        }
+        const Node *node = head->left;
+        for (std::uint32_t i = 0; i < size && node != nullptr && node->isNil == 0; ++i)
+        {
+            fn(node->key, node->value);
+            node = Next(node);
+        }
+    }
+
+  private:
+    static const Node *Next(const Node *node)
+    {
+        if (node->right->isNil == 0)
+        {
+            node = node->right;
+            while (node->left->isNil == 0)
+            {
+                node = node->left;
+            }
+            return node;
+        }
+        const Node *parent = node->parent;
+        while (parent->isNil == 0 && node == parent->right)
+        {
+            node = parent;
+            parent = parent->parent;
+        }
+        return parent;
+    }
+};
+static_assert(sizeof(TreeRep<std::int32_t, void *>) == 0xC);
 
 } // namespace dao::core
