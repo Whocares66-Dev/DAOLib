@@ -1,6 +1,7 @@
 #include "dao/Tlk.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Module.h"
 #include "dao/String.h"
 
@@ -26,6 +27,19 @@ std::wstring String(std::uint32_t strref, bool female)
     reinterpret_cast<Fn>(Module::Address(addr::kCTlkTable_GetString))(table, 0, strref, text.Engine(), 0);
     gender = before;
     return std::wstring(text.View());
+}
+
+std::wstring Resolve(std::wstring_view text)
+{
+    // The replacer reads the application for the hero's names.
+    if (CClientExoApp::Get() == nullptr)
+    {
+        return std::wstring(text);
+    }
+    WString engine(text);
+    using Fn = void(__cdecl *)(core::WStringRep *);
+    reinterpret_cast<Fn>(Module::Address(addr::kReplaceDesignerTags))(engine.Engine());
+    return std::wstring(engine.View());
 }
 
 } // namespace dao::tlk

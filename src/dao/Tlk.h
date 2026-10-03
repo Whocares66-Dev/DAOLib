@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace dao::tlk
 {
@@ -20,5 +21,22 @@ namespace dao::tlk
 // The text of a string reference, the female form if asked and there is
 // one; empty for an unknown reference or before the tables are loaded.
 std::wstring String(std::uint32_t strref, bool female = false);
+
+// Text with the game's tokens resolved, as its screens show it: a
+// conversation's reply "<FirstName/>, wait!" as "Lyna, wait!", the keys a
+// tutorial names as the player has bound them. The talk tables' markup comes
+// back as the Flash HTML the movies show (<emp> as <b>, <desc> as <i>(); a
+// token the game does not know comes back as it was.
+//
+//   dao::tlk::Resolve(dao::tlk::String(strref))
+//
+// Read 2026-10-03 (dao/Addresses.h, ReplaceDesignerTags): the engine's one
+// replacer, which every movie asks for its bound text. The hero's names
+// come from the party's object, so before a game is loaded the name tokens
+// stay as they are. The text as given before the game is up. On the game's
+// thread. Seen in play 2026-10-03 through the Eluvian server, which passes
+// every conversation line and reply through it: the Quartermaster's lines
+// read clean, no stray markup. A line with <FirstName/> not yet seen.
+std::wstring Resolve(std::wstring_view text);
 
 } // namespace dao::tlk

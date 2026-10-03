@@ -879,6 +879,21 @@ DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
 // table's +0x1C first (0 male, 1 female).
 DAO_DATA(kTlkTable, 99738)
 DAO_ADDRESS(kCTlkTable_GetString, 5384)
+// Talk-table text as the screens show it (dao/Tlk.h), read 2026-10-03:
+// ReplaceDesignerTags, __cdecl (std::wstring *text), rewriting the string in
+// place. The engine registers it under that name as an ExternalInterface
+// call and an FSCommand (0x0051F2F0, 0x0051F410), which every movie's
+// ExternalCommands.ReplaceDesignerTags reaches: the conversation screen,
+// the journal, tooltips and popups ask it for bound text that holds a "<".
+// First the markup of the dialog_tags table (143) becomes Flash HTML
+// (<emp> to <b>, <desc> to <i>(, ...); then each <...> token is looked up
+// by its CRC-32 (0x0051D620): <FirstName/>, <LastName/>, <FullName/> and
+// <DogName/> from the party's object ([[app+0xD0]+0x58], its +0x454,
+// +0x470, +0x48C), the keys bound to actions (<InventoryKey/>,
+// <PauseKey/>, ...), and the mouse's wording; any other comes back as it
+// was. No creature and no gender: the gender's form is chosen when the line
+// is read (CTlkTable_GetString).
+DAO_ADDRESS(kReplaceDesignerTags, 6861)
 
 // A creature's properties, read 2026-09-30 from GetCreatureProperty and
 // SetCreatureProperty: the creature's +0x7C4 is a SmartData attribute
