@@ -61,8 +61,9 @@ std::vector<std::byte> MakeMeta(std::string_view type = "SVMT")
     b.U32(top + 0, b.String(u"You are the second child of Teyrn Bryce Cousland."));
     b.U32(top + 4, b.String(u"Castle Cousland"));
     b.U32(top + 8, 1125);
-    b.U32(top + 12, 1);
-    b.U32(top + 16, 1);
+    // Level, class and gender told apart, so each is read from its own field.
+    b.U32(top + 12, 7);
+    b.U32(top + 16, 2);
     b.U32(top + 20, 1);
     b.U32(top + 24, 3);
     b.U32(top + 28, 5);
@@ -84,8 +85,8 @@ TEST_CASE("a save's metadata, as the load screen shows it")
     CHECK(meta->name == L"Castle Cousland");
     CHECK(meta->story == L"You are the second child of Teyrn Bryce Cousland.");
     CHECK(meta->secondsPlayed == 1125);
-    CHECK(meta->level == 1);
-    CHECK(meta->characterClass == 1);
+    CHECK(meta->level == 7);
+    CHECK(meta->characterClass == 2);
     CHECK(meta->gender == 1);
     CHECK(meta->race == 3);
     CHECK(meta->background == 5);

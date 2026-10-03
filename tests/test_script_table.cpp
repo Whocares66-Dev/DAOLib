@@ -89,8 +89,12 @@ TEST_CASE("arguments left off take their defaults, and wrong ones are refused")
     CHECK_FALSE(CompleteArguments(*remove, {}, error));
     CHECK(error.find("no default") != std::string::npos);
 
-    const std::vector<ScriptValue> five(5, ScriptValue::Object(1));
+    // One argument too many, every one of the right type: refused for its
+    // count, not for a type (a call by name would otherwise drop the last).
+    std::vector<ScriptValue> five(full->begin(), full->end());
+    five.push_back(ScriptValue::Int(0));
     CHECK_FALSE(CompleteArguments(*remove, five, error));
+    CHECK(error.find("takes 4 arguments, 5 given") != std::string::npos);
 }
 
 TEST_CASE("an int is taken for a float, and OBJECT_SELF is left to the call")

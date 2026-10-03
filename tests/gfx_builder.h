@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace dao::test::gfx
@@ -112,6 +113,31 @@ inline Bytes Function(std::string_view name, const Bytes &body)
     Put(record, static_cast<std::uint32_t>(body.size()), 2);
     Bytes out = Record(0x9B, record);
     Add(out, body);
+    return out;
+}
+
+// Bit fields, most significant bit first and padded to a whole byte, as a
+// PlaceObject2's matrix and colour transform are packed: each a value and
+// how many bits it takes.
+inline Bytes PackBits(std::initializer_list<std::pair<std::uint32_t, int>> fields)
+{
+    Bytes out;
+    int bit = 0;
+    for (const auto &[value, count] : fields)
+    {
+        for (int i = count - 1; i >= 0; --i)
+        {
+            if (bit == 0)
+            {
+                out.push_back(std::byte{0});
+            }
+            if (((value >> i) & 1U) != 0)
+            {
+                out.back() |= static_cast<std::byte>(0x80U >> bit);
+            }
+            bit = (bit + 1) % 8;
+        }
+    }
     return out;
 }
 

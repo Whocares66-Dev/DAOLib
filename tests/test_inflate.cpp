@@ -78,6 +78,55 @@ const std::vector<std::byte> kDynamic = Of(
      0xC4, 0x30, 0x62, 0xB2, 0x22, 0xC2, 0xE5, 0x2D, 0xA0, 0xEA, 0x49, 0xB8, 0xD3, 0x5A, 0xF4, 0x0E, 0x6E, 0xCB, 0x49,
      0x77, 0x11, 0x7F, 0xE9, 0xD4, 0x78, 0xF4, 0x5C, 0x62, 0xD6, 0xDF, 0xB3, 0x13, 0xF7, 0x03, 0xD2, 0x51, 0x31, 0xB6});
 
+// zlib.compressobj(9) given b"first block, ", a Z_FULL_FLUSH, then
+// b"then the last.": a block of the fixed codes that is not the last, the
+// flush's empty stored block, then the last block. A movie of any size is
+// several blocks; a reader that stopped at the first would lose the rest.
+const std::vector<std::byte> kSeveral =
+    Of({0x78, 0xDA, 0x4A, 0xCB, 0x2C, 0x2A, 0x2E, 0x51, 0x48, 0xCA, 0xC9, 0x4F, 0xCE, 0xD6,
+        0x51, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x2B, 0xC9, 0x48, 0xCD, 0x53, 0x28, 0xC9,
+        0x48, 0x55, 0xC8, 0x49, 0x2C, 0x2E, 0xD1, 0x03, 0x00, 0x8B, 0x41, 0x09, 0xB2});
+
+// zlib.compress(b"a" * 600, 9): one literal, then matches of the longest
+// length deflate has, 258, at distance 1; any long run in a movie is sent so.
+const std::vector<std::byte> kLongest =
+    Of({0x78, 0xDA, 0x4B, 0x4C, 0x1C, 0x05, 0xA3, 0x80, 0xFA, 0x00, 0x00, 0xEE, 0xBA, 0xE3, 0x59});
+
+// zlib.compress(X + bytes(24600) + X, 9), X the twenty letters A to T: the
+// second X is a match 24620 bytes back, in the farthest distance code (24577
+// to 32768), which a movie larger than 24K comes to.
+const std::vector<std::byte> kFar = Of(
+    {0x78, 0xDA, 0xED, 0xDD, 0xC9, 0x01, 0x40, 0x30, 0x00, 0x00, 0x30, 0xAB, 0x55, 0xD1, 0xC3, 0x51, 0xC5, 0xFE, 0xB3,
+     0x58, 0xC0, 0xD7, 0x2F, 0x59, 0x24, 0x61, 0x8C, 0xD3, 0xBC, 0xA4, 0x5C, 0xEA, 0xBA, 0xED, 0x47, 0x3B, 0xFB, 0x75,
+     0x3F, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x9B, 0xF0, 0x71, 0x05, 0xBC, 0xB6, 0x30, 0x0B, 0xA5});
+
+std::vector<std::byte> FarText()
+{
+    std::vector<std::byte> text;
+    for (int round = 0; round < 2; ++round)
+    {
+        for (char c = 'A'; c <= 'T'; ++c)
+        {
+            text.push_back(static_cast<std::byte>(c));
+        }
+        if (round == 0)
+        {
+            text.insert(text.end(), 24600, std::byte{0});
+        }
+    }
+    return text;
+}
+
+// Built by hand (zlib refuses it: "too many length or distance symbols"): a
+// block of its own codes whose header says 286 length codes and 32 distance
+// codes, two more than deflate has, then code lengths for all 318 of them (a
+// code of 0 and 18, and 18's runs of zeros: 138, 138, 42). A reader that
+// took the 32 would write the last two past its array of 286 + 30: damaged
+// bytes in a movie must be refused, not written through.
+const std::vector<std::byte> kTooManyDistances =
+    Of({0x78, 0x9C, 0xED, 0x1F, 0x80, 0xE4, 0xFF, 0xFF, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+
 } // namespace
 
 TEST_CASE("Adler-32 is zlib's", "[inflate]")
@@ -106,6 +155,33 @@ TEST_CASE("a block with its own codes inflates", "[inflate]")
     const auto out = InflateZlib(kDynamic, 1024);
     REQUIRE(out);
     CHECK(Text(*out) == Skewed());
+}
+
+TEST_CASE("a stream of several blocks inflates to its last", "[inflate]")
+{
+    REQUIRE((std::to_integer<int>(kSeveral[2]) & 1) == 0); // the first block is not the last
+    const auto out = InflateZlib(kSeveral, 1024);
+    REQUIRE(out);
+    CHECK(Text(*out) == "first block, then the last.");
+}
+
+TEST_CASE("a match of the longest length inflates", "[inflate]")
+{
+    const auto out = InflateZlib(kLongest, 1024);
+    REQUIRE(out);
+    CHECK(Text(*out) == std::string(600, 'a'));
+}
+
+TEST_CASE("a match from the farthest distances inflates", "[inflate]")
+{
+    const auto out = InflateZlib(kFar, 32768);
+    REQUIRE(out);
+    CHECK(*out == FarText());
+}
+
+TEST_CASE("a block with more distance codes than deflate has is refused", "[inflate]")
+{
+    CHECK_FALSE(InflateZlib(kTooManyDistances, 1024));
 }
 
 TEST_CASE("bytes after the stream are ignored", "[inflate]")

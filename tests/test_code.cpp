@@ -44,6 +44,9 @@ TEST_CASE("the call forms the game's code uses end where they should")
     CHECK(EndsWithCall(Before({0xFF, 0x54, 0x24, 0x08})));                   // call [esp+8]
     CHECK(EndsWithCall(Before({0xFF, 0x94, 0x81, 0x00, 0x01, 0x00, 0x00}))); // call [ecx+eax*4+0x100]
     CHECK(EndsWithCall(Before({0xFF, 0x10})));                               // call [eax]
+    // call [eax*4+0x00C3EE5C], through a table of functions with no base
+    // register: the exe has it at 0x008E0DB9.
+    CHECK(EndsWithCall(Before({0xFF, 0x14, 0x85, 0x5C, 0xEE, 0xC3, 0x00})));
 }
 
 TEST_CASE("other instructions ending at an address are not calls")

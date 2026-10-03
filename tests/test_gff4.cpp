@@ -217,6 +217,108 @@ TEST_CASE("a file that is not a conversation is refused, and a broken one reads 
     }
 }
 
+namespace
+{
+
+// A file of two templates, ROOT with the fields given and ITEM of one U32,
+// the root struct 0x40 bytes at the data's start, for the tests to write
+// damaged slots into.
+struct Damaged
+{
+    Builder b;
+    std::size_t root = 0;
+};
+
+Damaged MakeDamaged(const std::vector<FieldSpec> &rootFields)
+{
+    Damaged d;
+    Builder &b = d.b;
+    b.Text(0, "GFF V4.0PC  TESTV0.1");
+    b.U32(20, 2);
+    std::size_t fields = 28 + 16 * 2;
+    const std::vector<FieldSpec> itemFields = {{1, 4, 0, 0}};
+    const std::vector<FieldSpec> *shapes[] = {&rootFields, &itemFields};
+    const char *labels[] = {"ROOT", "ITEM"};
+    const std::uint32_t sizes[] = {0x40, 4};
+    for (std::size_t i = 0; i < 2; ++i)
+    {
+        const std::size_t at = 28 + 16 * i;
+        b.Text(at, labels[i]);
+        b.U32(at + 4, static_cast<std::uint32_t>(shapes[i]->size()));
+        b.U32(at + 8, static_cast<std::uint32_t>(fields));
+        b.U32(at + 12, sizes[i]);
+        for (const FieldSpec &f : *shapes[i])
+        {
+            b.U32(fields, f.label);
+            b.U32(fields + 4, f.type | (std::uint32_t{f.flags} << 16));
+            b.U32(fields + 8, f.offset);
+            fields += 12;
+        }
+    }
+    b.data = fields;
+    b.U32(24, static_cast<std::uint32_t>(b.data));
+    d.root = b.data;
+    b.U8(d.root + 0x40 - 1, 0);
+    return d;
+}
+
+} // namespace
+
+TEST_CASE("a damaged file's counts and template numbers give nothing, never a read past its bytes")
+{
+    // What the crash log parses is whatever buffer a stack word points at,
+    // and a save or a mod's file can be damaged: a count or a template's
+    // number past what the file holds must give nothing, not a huge
+    // allocation or a read past the templates.
+    constexpr std::uint16_t kString = 14;
+    constexpr std::uint16_t kU32 = 4;
+    constexpr std::uint16_t kMissing = 2; // the file has templates 0 and 1
+    Damaged d = MakeDamaged({
+        {10, kString, 0, 0x00},                            // a string whose count runs past the file
+        {11, kString, 0, 0x04},                            // a string slot of 0xFFFFFFFF: empty
+        {12, 1, gff4::kList | gff4::kStruct, 0x08},        // a typed list with a huge count
+        {13, kMissing, gff4::kStruct, 0x0C},               // a child of a template the file lacks
+        {14, 0xFFFF, gff4::kList, 0x10},                   // a generic list, one element of each
+        {15, kMissing, gff4::kList | gff4::kStruct, 0x14}, // a typed list of a template the file lacks
+        {16, kU32, gff4::kList, 0x18},                     // a list, which is not a number
+        {17, kU32, gff4::kReference, 0x1C},                // a number held by reference
+    });
+    Builder &b = d.b;
+    const std::size_t root = d.root;
+    const std::size_t string = b.bytes.size();
+    b.U32(string, 0x7FFFFFFF);
+    b.U32(string + 4, 0x00410041);
+    b.U32(root + 0x00, static_cast<std::uint32_t>(string - b.data));
+    b.U32(root + 0x04, 0xFFFFFFFF);
+    const std::size_t huge = b.bytes.size();
+    b.U32(huge, 0x0FFFFFFF); // a count, and no structs after it
+    b.U32(root + 0x08, static_cast<std::uint32_t>(huge - b.data));
+    const std::size_t generic = b.bytes.size();
+    b.U32(generic, 2);
+    b.U32(generic + 4, kMissing | (std::uint32_t{gff4::kStruct} << 16));
+    b.U32(generic + 8, 0);
+    b.U32(generic + 12, 1 | (std::uint32_t{gff4::kStruct} << 16));
+    b.U32(generic + 16, 0x1234);
+    b.U32(root + 0x10, static_cast<std::uint32_t>(generic - b.data));
+    b.U32(root + 0x14, b.Numbers({1, 0}));
+    b.U32(root + 0x18, b.Numbers({5, 6}));
+    b.U32(root + 0x1C, b.Numbers({0xCAFE}) + 4); // the value, past its own count
+    const auto file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const auto top = file->Root();
+    REQUIRE(top);
+
+    CHECK_FALSE(top->String(10).has_value());
+    CHECK(top->String(11) == std::wstring());
+    CHECK(top->Structs(12).empty());
+    CHECK_FALSE(top->Child(13).has_value());
+    REQUIRE(top->Structs(14).size() == 1);
+    CHECK(top->Structs(14)[0].Get<std::uint32_t>(1) == 0x1234u);
+    CHECK(top->Structs(15).empty());
+    CHECK_FALSE(top->Get<std::uint32_t>(16).has_value());
+    CHECK(top->Get<std::uint32_t>(17) == 0xCAFEu);
+}
+
 TEST_CASE("a field read as the wrong type gives nothing")
 {
     const auto bytes = TwoLines();

@@ -139,6 +139,44 @@ TEST_CASE("an engine map's walk stops at its count and at an empty map", "[msvc8
     CHECK_FALSE(any);
 }
 
+TEST_CASE("an engine map's walk finds the least of a deep right subtree", "[msvc8]")
+{
+    // Seven keys: 2 at the root, 1 on its left; 6 on its right, 4 under 6
+    // with 3 and 5 below it, and 7. After 2 the walk steps right to 6, then
+    // left twice to 3. The GUI system's map of 60 scenes is deeper still
+    // (dao::gui::Screens).
+    using Node = dao::core::TreeNodeRep<std::int32_t, int>;
+    std::array<Node, 8> nodes{}; // the head, then each key at its own number
+    Node *head = &nodes[0];
+    for (Node &node : nodes)
+    {
+        node.left = node.right = node.parent = head;
+    }
+    head->isNil = 1;
+    const auto link = [&](std::int32_t key, std::int32_t parent, std::int32_t left, std::int32_t right) {
+        Node &node = nodes.at(static_cast<std::size_t>(key));
+        node.key = key;
+        node.value = key * 10;
+        node.parent = &nodes.at(static_cast<std::size_t>(parent));
+        node.left = &nodes.at(static_cast<std::size_t>(left));
+        node.right = &nodes.at(static_cast<std::size_t>(right));
+    };
+    link(2, 0, 1, 6);
+    link(1, 2, 0, 0);
+    link(6, 2, 4, 7);
+    link(4, 6, 3, 5);
+    link(3, 4, 0, 0);
+    link(5, 4, 0, 0);
+    link(7, 6, 0, 0);
+    head->parent = &nodes[2];
+    head->left = &nodes[1];
+    head->right = &nodes[7];
+    const dao::core::TreeRep<std::int32_t, int> map{0, head, 7};
+    std::vector<std::int32_t> keys;
+    map.ForEach([&](std::int32_t key, int) { keys.push_back(key); });
+    CHECK(keys == std::vector<std::int32_t>{1, 2, 3, 4, 5, 6, 7});
+}
+
 TEST_CASE("a script array's tag says what it holds", "[arrays]")
 {
     using dao::core::ArrayStructure;

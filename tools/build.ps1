@@ -30,6 +30,13 @@
     every C++ file, ruff over the Python, PSScriptAnalyzer over the PowerShell.
     The `tidy` target; a finding fails the run.
 
+.PARAMETER Mutants
+    After building, run tools\mutants.py: the core broken on purpose, one
+    promise at a time, each mutant built and tested in a worker's copy of the
+    tree under build\mutants, as many at once as -Jobs. With -Preset debug,
+    whose packages the workers use. A mutant the tests do not catch fails the
+    run. Minutes, not seconds: not part of the gate before every commit.
+
 .PARAMETER Jobs
     How many compilations to run at once. The default leaves two of the
     machine's cores to everything else. Also exported as
@@ -41,6 +48,7 @@
     .\tools\build.ps1 -Preset debug-asan -Test
     .\tools\build.ps1 -Preset debug-analyze
     .\tools\build.ps1 -Preset release
+    .\tools\build.ps1 -Preset debug -Mutants
 #>
 [CmdletBinding()]
 param(
@@ -49,12 +57,16 @@ param(
     [switch] $Test,
     [switch] $Format,
     [switch] $Lint,
+    [switch] $Mutants,
     [switch] $Fresh,
     [int] $Jobs = 0
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
+if ($Mutants -and $Preset -ne 'debug') {
+    throw 'the mutants build from the debug preset''s packages; run -Mutants with -Preset debug.'
+}
 if ($Lint -and $Preset -eq 'debug-analyze') {
     throw 'clang-tidy cannot read a compile database holding /analyze; lint with -Preset debug.'
 }
@@ -175,6 +187,12 @@ try {
         Show-Line "`n== lint ($Preset) ==" -Colour Cyan
         cmake --build --preset $Preset --parallel $parallel --target tidy
         if ($LASTEXITCODE -ne 0) { throw "lint failed ($LASTEXITCODE)" }
+    }
+
+    if ($Mutants) {
+        Show-Line "`n== mutants ==" -Colour Cyan
+        python (Join-Path $PSScriptRoot 'mutants.py') -j $parallel
+        if ($LASTEXITCODE -ne 0) { throw "mutants survived or did not build ($LASTEXITCODE)" }
     }
     Show-Line "`nOK" -Colour Green
 }

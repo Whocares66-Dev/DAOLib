@@ -36,6 +36,16 @@ TEST_CASE("Ghidra's function list parses, and an address finds its function")
     CHECK(table.Find(0x0073CD10)->offset == 0);
 }
 
+TEST_CASE("a function list in any order finds each function")
+{
+    // Ghidra writes the list by address; one edited or joined by hand may not
+    // be, and every crash log's names would then be wrong.
+    const auto table = FunctionTable::Parse("0073cd10\t0073cf11\tB\n005d6740\t005d6a43\tA\n");
+    REQUIRE(table.Size() == 2);
+    CHECK(table.Find(0x005D67D4)->name == "A");
+    CHECK(table.Find(0x0073CD20)->name == "B");
+}
+
 TEST_CASE("an address outside every function finds none")
 {
     const auto table = FunctionTable::Parse("005d6740\t005d6a43\tA\n0073cd10\t0073cf11\tB\n");
@@ -111,6 +121,10 @@ TEST_CASE("an engine string in a frame is found inline or by its pointer")
     REQUIRE(inlined.has_value());
     CHECK(inlined->text == "mmh_x");
     CHECK(inlined->pointer == 0);
+    // All seven inline characters used, the NUL in the eighth.
+    const auto full = WStringIn(StackString(L"mmh_dog", 7));
+    REQUIRE(full.has_value());
+    CHECK(full->text == "mmh_dog");
 
     const auto pointed = WStringIn(StackString(L"fxm_spider_web_long", 31, 0x26B546E0));
     REQUIRE(pointed.has_value());
@@ -141,6 +155,7 @@ TEST_CASE("a GFF4 file is known by its first eight bytes")
         return std::span(reinterpret_cast<const std::byte *>(text.data()), text.size());
     };
     CHECK(IsGff4(bytes("GFF V4.0PC  MMH V0.1")));
+    CHECK(IsGff4(bytes("GFF V4.0"))); // the eight bytes the crash log copies to look
     CHECK(IsGff4(bytes("GFF V4.1PC  CONV")));
     CHECK_FALSE(IsGff4(bytes("GFF V3.2")));
     CHECK_FALSE(IsGff4(bytes("GFF V4")));

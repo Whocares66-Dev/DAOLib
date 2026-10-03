@@ -47,7 +47,7 @@ examples/       small plugins, one per part of daolib, to read and copy from and
 tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
-                names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, gen_message_handlers.py, messages.py, gff4.py, gda.py, tlk.py, address_ids.py (the IDs in the source are the address library's), ea_play.py (the EA game with the build's loader, nothing deployed), ghidra/
+                names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, gen_message_handlers.py, messages.py, gff4.py, gda.py, tlk.py, address_ids.py (the IDs in the source are the address library's), ea_play.py (the EA game with the build's loader, nothing deployed), mutants.py (the core broken on purpose), ghidra/
 dev/            plan, reading, tables
 extern/         DAOAddressLibrary (a submodule): the IDs, each build's addresses, the reader daolib links, the files it reads
 game/           the exe and its Ghidra project (ignored)
@@ -64,6 +64,7 @@ toolset/        the toolset installer and what is extracted from it (ignored)
 .\tools\build.ps1 -Preset debug-asan -Test      # the tests under AddressSanitizer
 .\tools\build.ps1 -Preset debug-analyze        # our own targets under MSVC's /analyze
 .\tools\build.ps1 -Preset release
+.\tools\build.ps1 -Preset debug -Mutants      # the core broken on purpose, one promise at a time: minutes
 ```
 
 Output is `build\<preset>\version.dll` and `build\<preset>\daolib\plugins\*.dll`, a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `-Remove` returns the install to stock: `version.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
@@ -87,6 +88,8 @@ Tests first, then the formatters (clang-format, ruff format, gersemi for CMake) 
 - ruff check over the Python, PSScriptAnalyzer over the PowerShell.
 - AddressSanitizer over the tests (`debug-asan`). Only the tests: a sanitized DLL in the game would need the ASan runtime beside the exe. The STL's container annotations are off there, since vcpkg's libraries are built without them.
 - MSVC's static analyser (`debug-analyze`), in its own tree because clang-tidy reads the debug tree's compile database and clang rejects `/analyze`. A finding is fixed, not suppressed, unless the code is a hook doing what hooks do; then the suppression says why.
+
+**Mutation testing** (`tools/mutants.py`, `build.ps1 -Mutants`) is not part of the gate: run it after changing `src/dao/core` or its tests. Each mutant is one promise of the core broken by a small edit, written by hand where a failure would cost in play: a bound on damaged bytes, a size fixed around code put into a movie, an address one off. Each is built and tested in a worker's copy of the tree under `build\mutants`, a worker a core, below normal priority; the working tree is never written. A survivor is a promise no test holds. It gets a test if the promise matters, or the mutant goes, with a line in the tool saying why (the user, 2026-10-03: "make sure tests and mutations earn their keep"). First run, 2026-10-03: 45 of 82 caught; after tests for what mattered and five mutants left out, 77 of 77, in under four minutes on twenty cores.
 
 ## Reading the executable
 
