@@ -1,5 +1,6 @@
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
+#include "dao/core/Pages.h"
 #include "dao/core/StackText.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -143,4 +144,19 @@ TEST_CASE("a GFF4 file is known by its first eight bytes")
     CHECK(IsGff4(bytes("GFF V4.1PC  CONV")));
     CHECK_FALSE(IsGff4(bytes("GFF V3.2")));
     CHECK_FALSE(IsGff4(bytes("GFF V4")));
+}
+
+TEST_CASE("a page is read only when committed, readable and no guard page")
+{
+    using namespace dao::core;
+    STATIC_REQUIRE(IsReadablePage(kMemCommit, kPageReadWrite));
+    CHECK(IsReadablePage(kMemCommit, kPageReadOnly));
+    CHECK(IsReadablePage(kMemCommit, kPageExecuteRead));
+    CHECK(IsReadablePage(kMemCommit, kPageExecuteReadWrite));
+    CHECK(IsReadablePage(kMemCommit, kPageWriteCopy));
+    CHECK_FALSE(IsReadablePage(kMemCommit, kPageReadWrite | kPageGuard)); // a stack's guard page
+    CHECK_FALSE(IsReadablePage(kMemCommit, kPageNoAccess));
+    CHECK_FALSE(IsReadablePage(kMemCommit, kPageExecute));
+    CHECK_FALSE(IsReadablePage(0x2000, kPageReadWrite)); // reserved, not committed
+    CHECK_FALSE(IsReadablePage(0x10000, 0));             // free
 }

@@ -4,12 +4,14 @@
 // process, which is as good a place as any to fault.
 #include "dao/SafeRead.h"
 #include "dao/TypeName.h"
+#include "dao/core/Pages.h"
 
 #include <Windows.h>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -57,4 +59,57 @@ TEST_CASE("the type name of a pointer to nothing is empty")
     CHECK(dao::TypeName(nullptr).empty());
     const std::uint32_t notAnObject = 0x12345678;
     CHECK(dao::TypeName(&notAnObject).empty());
+}
+
+namespace
+{
+
+// TryCopy over a guard page, the exception it lets through caught here: 0 if
+// none came.
+DWORD GuardCopyRaises(std::uintptr_t page)
+{
+    std::array<std::byte, 8> out{};
+    DWORD code = 0;
+    __try
+    {
+        dao::TryCopy(out.data(), page, out.size());
+    }
+    __except (code = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER)
+    {
+        return code;
+    }
+    return 0;
+}
+
+} // namespace
+
+// The cause of DAOLib issue #9: TryCopy catches access violations only, and
+// a guard page raises its own exception, which goes on past it.
+TEST_CASE("a copy over a guard page is not caught by TryCopy")
+{
+    void *page = VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE | PAGE_GUARD);
+    REQUIRE(page != nullptr);
+    CHECK(GuardCopyRaises(reinterpret_cast<std::uintptr_t>(page)) == STATUS_GUARD_PAGE_VIOLATION);
+    VirtualFree(page, 0, MEM_RELEASE);
+}
+
+// What a stack's guard page looks like to VirtualQuery, which the crash and
+// hang logs ask before they read where a stack word points (DAOLib issue
+// #9): reading one raises STATUS_GUARD_PAGE_VIOLATION, which TryCopy does
+// not catch, so the page must be known for one beforehand. Not read here.
+TEST_CASE("a guard page is known for one before it is read")
+{
+    void *page = VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE | PAGE_GUARD);
+    REQUIRE(page != nullptr);
+    MEMORY_BASIC_INFORMATION region{};
+    REQUIRE(VirtualQuery(page, &region, sizeof region) != 0);
+    CHECK((region.Protect & PAGE_GUARD) != 0);
+    CHECK_FALSE(dao::core::IsReadablePage(region.State, region.Protect));
+    VirtualFree(page, 0, MEM_RELEASE);
+
+    void *plain = VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    REQUIRE(plain != nullptr);
+    REQUIRE(VirtualQuery(plain, &region, sizeof region) != 0);
+    CHECK(dao::core::IsReadablePage(region.State, region.Protect));
+    VirtualFree(plain, 0, MEM_RELEASE);
 }

@@ -12,6 +12,7 @@
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
 #include "dao/core/Gff4.h"
+#include "dao/core/Pages.h"
 #include "dao/core/Relocate.h"
 #include "dao/core/StackText.h"
 
@@ -84,6 +85,43 @@ struct Sample
     DWORD thread = 0;
     std::vector<std::uint32_t> stack;
 };
+
+// Whether [address, address + size) lies in pages that can be read without
+// a fault (dao/core/Pages.h), asked of Windows region by region. The scans
+// follow every stack word that looks like a pointer, and some point into a
+// thread's stack guard page, whose read raises an exception TryCopy does not
+// catch (DAOLib issue #9: a crash log ended mid-way). Allocates nothing, so
+// it serves while a thread is suspended too.
+bool CanRead(std::uintptr_t address, std::size_t size)
+{
+    const std::uintptr_t end = address + size;
+    if (size == 0 || end < address)
+    {
+        return false;
+    }
+    for (std::uintptr_t at = address; at < end;)
+    {
+        MEMORY_BASIC_INFORMATION region{};
+        if (VirtualQuery(reinterpret_cast<const void *>(at), &region, sizeof region) == 0 ||
+            !dao::core::IsReadablePage(region.State, region.Protect))
+        {
+            return false;
+        }
+        const auto regionEnd = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+        if (regionEnd <= at)
+        {
+            return false;
+        }
+        at = regionEnd;
+    }
+    return true;
+}
+
+// A copy of memory a stack word points at, where CanRead says it may be read.
+bool ScanCopy(void *out, std::uintptr_t address, std::size_t size)
+{
+    return CanRead(address, size) && dao::TryCopy(out, address, size);
+}
 
 // The stack from esp up, to its region's end or out's, into out, with
 // nothing allocated: a hang's thread is suspended meanwhile and may hold the
@@ -321,7 +359,12 @@ class Report
         {
             return "(" + where + ")";
         }
-        if (const std::string type = dao::TypeName(reinterpret_cast<const void *>(value)); !type.empty())
+        // TypeName keeps every read after the object's own first word in the
+        // exe's image; that first word is the one to ask about.
+        if (const std::string type = CanRead(value, sizeof(std::uint32_t))
+                                         ? dao::TypeName(reinterpret_cast<const void *>(value))
+                                         : std::string();
+            !type.empty())
         {
             return "(" + type + "*)";
         }
@@ -343,7 +386,7 @@ class Report
     static std::optional<std::string> AsciiAt(std::uint32_t address)
     {
         std::array<char, 64> buffer{};
-        if (!dao::TryCopy(buffer.data(), address, buffer.size()))
+        if (!ScanCopy(buffer.data(), address, buffer.size()))
         {
             return std::nullopt;
         }
@@ -362,7 +405,7 @@ class Report
     static std::optional<std::string> WideAt(std::uint32_t address)
     {
         std::array<wchar_t, 64> buffer{};
-        if (!dao::TryCopy(buffer.data(), address, sizeof buffer))
+        if (!ScanCopy(buffer.data(), address, sizeof buffer))
         {
             return std::nullopt;
         }
@@ -403,7 +446,7 @@ class Report
                    Annotate(target));
         }
         std::array<std::uint8_t, 16> bytes{};
-        if (dao::TryCopy(bytes.data(), at, bytes.size()))
+        if (ScanCopy(bytes.data(), at, bytes.size()))
         {
             std::string hex;
             for (const std::uint8_t b : bytes)
@@ -535,7 +578,7 @@ class Report
                 continue;
             }
             std::array<std::byte, 7> before{};
-            if (!dao::TryCopy(before.data(), value - 7, before.size()) || !dao::core::EndsWithCall(before))
+            if (!ScanCopy(before.data(), value - 7, before.size()) || !dao::core::EndsWithCall(before))
             {
                 continue;
             }
@@ -570,8 +613,8 @@ class Report
         {
             const std::uint32_t at = words[i];
             std::array<std::byte, 8> head{};
-            if (at < 0x10000 || std::ranges::find(seen, at) != seen.end() ||
-                !dao::TryCopy(head.data(), at, head.size()) || !dao::core::IsGff4(head))
+            if (at < 0x10000 || std::ranges::find(seen, at) != seen.end() || !ScanCopy(head.data(), at, head.size()) ||
+                !dao::core::IsGff4(head))
             {
                 continue;
             }
@@ -601,7 +644,7 @@ class Report
     static std::string DescribeGff(std::uint32_t at, std::size_t length)
     {
         std::vector<std::byte> bytes(length);
-        if (length < kGffHeader || !dao::TryCopy(bytes.data(), at, bytes.size()))
+        if (length < kGffHeader || !ScanCopy(bytes.data(), at, bytes.size()))
         {
             return "could not be copied";
         }
@@ -659,7 +702,7 @@ class Report
             {
                 std::array<wchar_t, kLongestString + 1> units{};
                 const std::size_t count = found->size + 1;
-                const auto read = dao::TryCopy(units.data(), found->pointer, count * sizeof(wchar_t))
+                const auto read = ScanCopy(units.data(), found->pointer, count * sizeof(wchar_t))
                                       ? dao::core::PrintableWide(std::span(units.data(), count), 3)
                                       : std::nullopt;
                 if (!read || read->size() != found->size)
