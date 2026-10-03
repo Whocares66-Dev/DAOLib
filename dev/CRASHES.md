@@ -22,6 +22,17 @@ Names come from three places:
 - **Windows DLLs:** their exports.
 - **The game:** `bin_ship\daolib\functions.tsv`, Ghidra's function list, which deploy also copies (`dev/PROBE.md` says how to export it). With it, `0x0073D054` reads as `FUN_0073d000+0x54` or `GameModeGUI::vfunction7+0x1c`. Without it, the game's addresses stay bare. The names are of the GOG build's addresses. In the EA app's build (`dev/BUILDS.md`) an address in the game is given as that build's own, then as GOG's, by which the name is found: `DAOrigins.exe 0x004c1770 (GOG 0x005d6740) CClientExoApp::SetPaused+0x0`, or `(not in the GOG build)` for code EA's build alone has. Written 2026-10-01 and not yet seen: no crash has been made in the EA game.
 
+## Hang logs
+
+A stall that ends leaves no crash log, so the loader also keeps a watchdog (DAOLib issue #4, for a 32-second stall in a turn-based fight, 2026-10-03). It counts frames with `dao::OnFrame` and checks once a second from a thread of its own. When no frame has come for 5 seconds (`DAOLIB_HANG_SECONDS` in the game's environment; 0 turns it off), it writes `hang-<date>-<time>.log` beside the crash logs:
+
+- **A sample.** The frame thread is suspended for as long as it takes to copy its registers and its stack's first 64 KiB, and nothing is allocated meanwhile, since the thread may hold the heap's lock. The log is written from the copy while the game runs on: the registers, the return addresses, the stack, the GFF4 files and engine strings on the stack, as a crash log has them. There is no call stack walk, since dbghelp would walk the live thread. Memory the stack points at, a file's bytes or a string's heap text, is read after the thread is let go, so it may have changed.
+- **What the game was doing.** Each sample says the game's mode, and whether its window was in front, not in front, or what Windows calls not responding.
+- **While it lasts.** Another sample every 5 seconds, twelve at most. A sample whose return addresses match the one before is a loop or a wait; one that differs is the thread making slow progress.
+- **The first sample** also has the system, the modules, the plugins and the last lines of every log, what led into the stall.
+- **The end.** When frames come back, the last line says after how long. `loader.log` says when a hang log was begun and when frames came back.
+- **When not.** Before the game has a mode, while loading and at the main menu's start-up, where frames may stop by design. Not with the window minimised, or gone, as the game closes.
+
 ## How it stays installed
 
 It is an unhandled-exception filter, and the game's C runtime installs one of its own at start-up. So the logger also detours `SetUnhandledExceptionFilter`. A filter the game sets afterwards is remembered and called after ours, so the game's own handling still happens, and Windows Error Reporting still records the crash. The log is written on a new thread, because the crashing thread may be out of stack. The crashing thread waits up to a minute for it.

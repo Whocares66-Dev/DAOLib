@@ -125,6 +125,7 @@ void LoadPlugins()
 void __stdcall EntryHook()
 {
     spdlog::info("entry point reached; loading plugins");
+    loader::crashlog::StartWatchdog();
     LoadPlugins();
     spdlog::info("starting the game");
     g_entry.Original()();
@@ -146,6 +147,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
     {
         spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
                      dao::Module::ImageAddress(caller));
+        loader::crashlog::StartWatchdog();
         LoadPlugins();
         spdlog::info("starting the game");
     }

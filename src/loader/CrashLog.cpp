@@ -1,5 +1,8 @@
 #include "loader/CrashLog.h"
 
+#include "dao/ClientExoApp.h"
+#include "dao/Frame.h"
+#include "dao/GameModes.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
@@ -25,11 +28,13 @@
 #include <array>
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <deque>
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -64,6 +69,36 @@ constexpr std::size_t kGffHeader = 0x20;
 constexpr std::size_t kMostGff = 4 * 1024 * 1024;
 // A name, not a document.
 constexpr std::size_t kLongestString = 255;
+// A hang's samples, at most, however long it lasts.
+constexpr int kMostSamples = 12;
+// How long without a frame is a hang (DAOLIB_HANG_SECONDS).
+std::uint32_t g_hangSeconds = 5;
+
+// The thread a log is about, as it was: its registers and its stack's first
+// 64 KiB from ESP up, copied while it stood still. A crash's thread waits in
+// the filter; a hang's is suspended for the copy and runs on while the log
+// is written from it.
+struct Sample
+{
+    CONTEXT context{};
+    DWORD thread = 0;
+    std::vector<std::uint32_t> stack;
+};
+
+// The stack from esp up, to its region's end or out's, into out, with
+// nothing allocated: a hang's thread is suspended meanwhile and may hold the
+// heap's lock. The words copied.
+std::size_t CopyStack(std::uintptr_t esp, std::span<std::uint32_t> out)
+{
+    MEMORY_BASIC_INFORMATION region{};
+    if (VirtualQuery(reinterpret_cast<const void *>(esp), &region, sizeof region) == 0)
+    {
+        return 0;
+    }
+    const auto end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+    const std::size_t words = std::min<std::size_t>(out.size(), (end - esp) / 4);
+    return words != 0 && dao::TryCopy(out.data(), esp, words * 4) ? words : 0;
+}
 
 LONG WINAPI Filter(EXCEPTION_POINTERS *pointers);
 
@@ -134,9 +169,10 @@ class Report
         }
     }
 
-    void Write(Writer &w)
+    void WriteCrash(Writer &w, const Sample &sample)
     {
-        Header(w);
+        sample_ = &sample;
+        Header(w, "crash logger");
         Exception(w);
         w.Flush();
         System(w);
@@ -153,6 +189,42 @@ class Report
         Plugins(w);
         LastLogLines(w);
         w.Flush();
+        sample_ = nullptr;
+    }
+
+    // One sample of a stall: the thread's state, then, with the first, what
+    // the process is and what the logs said leading in. No call stack walk:
+    // dbghelp would walk the live thread, which has moved on.
+    void WriteHangSample(Writer &w, const Sample &sample, int number, double seconds, std::string_view state)
+    {
+        sample_ = &sample;
+        if (number == 1)
+        {
+            Header(w, "hang logger");
+            w.Line("No frame for {:.1f} s on the frame thread {}. The game {}.", seconds, sample.thread, state);
+            w.Line("Sampled every {} s while it lasts, up to {} times: a sample whose return addresses", g_hangSeconds,
+                   kMostSamples);
+            w.Line("match the one before is a loop or a wait, one that differs is the thread making slow progress.");
+            w.Blank();
+            System(w);
+        }
+        w.Line("=== SAMPLE {}, {:.1f} s since the last frame, the game {} ===", number, seconds, state);
+        w.Blank();
+        Registers(w);
+        ReturnAddresses(w);
+        Stack(w);
+        w.Flush();
+        GffFiles(w);
+        EngineStrings(w);
+        w.Flush();
+        if (number == 1)
+        {
+            Modules(w);
+            Plugins(w);
+            LastLogLines(w);
+            w.Flush();
+        }
+        sample_ = nullptr;
     }
 
   private:
@@ -299,7 +371,7 @@ class Report
 
     // -- sections --
 
-    static void Header(Writer &w)
+    static void Header(Writer &w, std::string_view logger)
     {
         const auto fingerprint = dao::Module::Fingerprint();
         w.Line("Dragon Age: Origins, DAOrigins.exe link stamp {:#x}, image size {:#x}, entry rva {:#x}{}",
@@ -312,7 +384,7 @@ class Report
         std::tm local{};
         localtime_s(&local, &now);
         std::strftime(when.data(), when.size(), "%Y-%m-%d %H:%M:%S", &local);
-        w.Line("DAOLib crash logger {}, {}", DAO_VERSION_STRING, when.data());
+        w.Line("DAOLib {} {}, {}", logger, DAO_VERSION_STRING, when.data());
         w.Blank();
     }
 
@@ -340,7 +412,7 @@ class Report
             }
             w.Line("\tcode at the fault: {}", hex);
         }
-        w.Line("\tthread {}", g_threadId);
+        w.Line("\tthread {}", sample_->thread);
         w.Blank();
     }
 
@@ -390,7 +462,7 @@ class Report
             w.Blank();
             return;
         }
-        CONTEXT context = g_context;
+        CONTEXT context = sample_->context;
         STACKFRAME64 frame{};
         frame.AddrPC.Offset = context.Eip;
         frame.AddrPC.Mode = AddrModeFlat;
@@ -398,7 +470,7 @@ class Report
         frame.AddrFrame.Mode = AddrModeFlat;
         frame.AddrStack.Offset = context.Esp;
         frame.AddrStack.Mode = AddrModeFlat;
-        HANDLE thread = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, g_threadId);
+        HANDLE thread = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, sample_->thread);
         for (int i = 0; i < 48; ++i)
         {
             if (!StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(),
@@ -424,16 +496,16 @@ class Report
     {
         w.Line("REGISTERS:");
         const std::array<std::pair<const char *, std::uint32_t>, 10> registers{{
-            {"EAX", g_context.Eax},
-            {"EBX", g_context.Ebx},
-            {"ECX", g_context.Ecx},
-            {"EDX", g_context.Edx},
-            {"ESI", g_context.Esi},
-            {"EDI", g_context.Edi},
-            {"EBP", g_context.Ebp},
-            {"ESP", g_context.Esp},
-            {"EIP", g_context.Eip},
-            {"EFL", g_context.EFlags},
+            {"EAX", sample_->context.Eax},
+            {"EBX", sample_->context.Ebx},
+            {"ECX", sample_->context.Ecx},
+            {"EDX", sample_->context.Edx},
+            {"ESI", sample_->context.Esi},
+            {"EDI", sample_->context.Edi},
+            {"EBP", sample_->context.Ebp},
+            {"ESP", sample_->context.Esp},
+            {"EIP", sample_->context.Eip},
+            {"EFL", sample_->context.EFlags},
         }};
         for (const auto &[name, value] : registers)
         {
@@ -442,22 +514,11 @@ class Report
         w.Blank();
     }
 
-    std::vector<std::uint32_t> StackWords(std::size_t most) const
+    // The sample's stack, its first `most` words.
+    std::span<const std::uint32_t> StackWords(std::size_t most) const
     {
-        const std::uintptr_t esp = g_context.Esp;
-        MEMORY_BASIC_INFORMATION region{};
-        if (VirtualQuery(reinterpret_cast<const void *>(esp), &region, sizeof region) == 0)
-        {
-            return {};
-        }
-        const auto end = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
-        const std::size_t words = std::min<std::size_t>(most, (end - esp) / 4);
-        std::vector<std::uint32_t> out(words);
-        if (words == 0 || !dao::TryCopy(out.data(), esp, words * 4))
-        {
-            return {};
-        }
-        return out;
+        const std::span<const std::uint32_t> stack = sample_->stack;
+        return stack.first(std::min(most, stack.size()));
     }
 
     void ReturnAddresses(Writer &w)
@@ -731,21 +792,22 @@ class Report
     std::vector<ModuleInfo> modules_;
     dao::core::FunctionTable functions_;
     bool symbols_ = false;
+    const Sample *sample_ = nullptr; // the one being written
 };
 
-std::filesystem::path LogPath()
+std::filesystem::path LogPath(const char *kind)
 {
     std::array<char, 40> name{};
     const std::time_t now = std::time(nullptr);
     std::tm local{};
     localtime_s(&local, &now);
-    std::strftime(name.data(), name.size(), "crash-%Y-%m-%d-%H-%M-%S.log", &local);
-    return dao::LogDirectory() / name.data();
+    std::strftime(name.data(), name.size(), "-%Y-%m-%d-%H-%M-%S.log", &local);
+    return dao::LogDirectory() / (std::string(kind) + name.data());
 }
 
 void WriteLog()
 {
-    const auto path = LogPath();
+    const auto path = LogPath("crash");
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     FILE *file = nullptr;
@@ -754,8 +816,13 @@ void WriteLog()
         return;
     }
     Writer w(file);
+    Sample sample;
+    sample.context = g_context;
+    sample.thread = g_threadId;
+    sample.stack.resize(kScanWords);
+    sample.stack.resize(CopyStack(g_context.Esp, sample.stack));
     Report report;
-    report.Write(w);
+    report.WriteCrash(w, sample);
     std::fclose(file);
     spdlog::critical("the game crashed; the crash log is {}", path.string());
 }
@@ -792,7 +859,216 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
     return g_chained != nullptr && pointers != nullptr ? g_chained(pointers) : EXCEPTION_CONTINUE_SEARCH;
 }
 
+// ---------------------------------------------------------------------------
+// The hang watchdog
+// ---------------------------------------------------------------------------
+
+std::atomic<std::uint64_t> g_lastFrame{0}; // GetTickCount64 at the last frame; 0 before the first
+
+std::uint32_t HangSeconds()
+{
+    std::array<char, 16> text{};
+    const DWORD n = GetEnvironmentVariableA("DAOLIB_HANG_SECONDS", text.data(), static_cast<DWORD>(text.size()));
+    if (n == 0 || n >= text.size())
+    {
+        return 5;
+    }
+    char *end = nullptr;
+    const unsigned long value = std::strtoul(text.data(), &end, 10);
+    return end != text.data() ? static_cast<std::uint32_t>(std::min(value, 3600UL)) : 5;
+}
+
+// The game's window: visible, of this process, owned by no other.
+HWND GameWindow()
+{
+    struct Find
+    {
+        DWORD process = 0;
+        HWND found = nullptr;
+    } find{GetCurrentProcessId(), nullptr};
+    EnumWindows(
+        [](HWND window, LPARAM param) -> BOOL {
+            auto *f = reinterpret_cast<Find *>(param);
+            DWORD process = 0;
+            GetWindowThreadProcessId(window, &process);
+            if (process != f->process || !IsWindowVisible(window) || GetWindow(window, GW_OWNER) != nullptr)
+            {
+                return TRUE;
+            }
+            f->found = window;
+            return FALSE;
+        },
+        reinterpret_cast<LPARAM>(&find));
+    return find.found;
+}
+
+// What the game is doing, in words, and whether a stall now is one to log:
+// not before the game has a mode, while loading or at the main menu's
+// start-up, nor with the window minimised or gone. Read while the frame
+// thread may run: a glance, not a lock.
+struct GameState
+{
+    std::string text;
+    bool worth = true;
+};
+
+GameState State()
+{
+    static constexpr std::array<const char *, 13> kModes{"Explore",  "Combat",  "Dead",       "Gui",     "Dialog",
+                                                         "Cutscene", "FlyCam",  "Fixed",      "Pregame", "Loading",
+                                                         "Movie",    "CharGen", "PartyPicker"};
+    GameState state;
+    const auto *app = dao::CClientExoApp::Get();
+    const auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    const auto mode = modes != nullptr ? static_cast<std::int32_t>(modes->Mode()) : -1;
+    const std::string name = mode >= 0 && mode < static_cast<std::int32_t>(kModes.size())
+                                 ? std::string(kModes[static_cast<std::size_t>(mode)]) + " mode"
+                                 : fmt::format("mode {}", mode);
+    HWND window = GameWindow();
+    const bool minimised = window != nullptr && IsIconic(window) != FALSE;
+    const bool front = window != nullptr && GetForegroundWindow() == window;
+    const bool hung = window != nullptr && IsHungAppWindow(window) != FALSE;
+    state.text = fmt::format("in {}, its window {}{}", name,
+                             window == nullptr ? "not found"
+                             : minimised       ? "minimised"
+                             : front           ? "in front"
+                                               : "not in front",
+                             hung ? ", which Windows calls not responding" : "");
+    // Loading and the main menu's start-up may hold frames back by design,
+    // and with no window the game is closing.
+    state.worth = mode >= 0 && mode != static_cast<std::int32_t>(dao::GameMode::Loading) &&
+                  mode != static_cast<std::int32_t>(dao::GameMode::Pregame) && window != nullptr && !minimised;
+    return state;
+}
+
+// The frame thread stopped for a moment: its registers and its stack copied
+// into `buffer`, then let go. Nothing is allocated while it is stopped, since
+// it may hold the heap's lock; the sample takes its copy after.
+bool Capture(DWORD threadId, Sample &sample, std::span<std::uint32_t> buffer)
+{
+    HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, threadId);
+    if (thread == nullptr)
+    {
+        return false;
+    }
+    bool taken = false;
+    std::size_t words = 0;
+    if (SuspendThread(thread) != static_cast<DWORD>(-1))
+    {
+        sample.context.ContextFlags = CONTEXT_FULL;
+        taken = GetThreadContext(thread, &sample.context) != FALSE;
+        words = taken ? CopyStack(sample.context.Esp, buffer) : 0;
+        ResumeThread(thread);
+    }
+    CloseHandle(thread);
+    if (taken)
+    {
+        sample.thread = threadId;
+        sample.stack.assign(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(words));
+    }
+    return taken;
+}
+
+// One stall, from its first sample to the frame that ends it: one file, a
+// sample every g_hangSeconds up to kMostSamples, and how long it lasted.
+void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
+{
+    const std::uint64_t interval = std::uint64_t{g_hangSeconds} * 1000;
+    FILE *file = nullptr;
+    std::optional<Report> report;
+    int samples = 0;
+    std::uint64_t next = 0;
+    while (g_lastFrame.load() == last && !g_crashing)
+    {
+        const std::uint64_t now = GetTickCount64();
+        if (samples < kMostSamples && now >= next)
+        {
+            next = now + interval;
+            const GameState state = State();
+            Sample sample;
+            if (Capture(static_cast<DWORD>(dao::FrameThreadId()), sample, buffer))
+            {
+                if (file == nullptr)
+                {
+                    const auto path = LogPath("hang");
+                    std::error_code ec;
+                    std::filesystem::create_directories(path.parent_path(), ec);
+                    if (_wfopen_s(&file, path.c_str(), L"w") != 0 || file == nullptr)
+                    {
+                        return;
+                    }
+                    report.emplace();
+                    spdlog::warn("no frame for {:.1f} s; the hang log is {}", static_cast<double>(now - last) / 1000.0,
+                                 path.string());
+                }
+                Writer w(file);
+                report->WriteHangSample(w, sample, ++samples, static_cast<double>(now - last) / 1000.0, state.text);
+            }
+        }
+        Sleep(250);
+    }
+    if (file != nullptr)
+    {
+        const double seconds = static_cast<double>(GetTickCount64() - last) / 1000.0;
+        Writer w(file);
+        if (g_crashing)
+        {
+            w.Line("=== The game crashed {:.1f} s after the last frame; its crash log is beside this ===", seconds);
+        }
+        else
+        {
+            w.Line("=== Frames came back {:.1f} s after the last one; {} sample(s) ===", seconds, samples);
+            spdlog::info("frames came back after {:.1f} s", seconds);
+        }
+        std::fclose(file);
+    }
+}
+
+DWORD WINAPI Watchdog(LPVOID)
+{
+    // Made once, before any stall: nothing may be allocated while the frame
+    // thread is suspended.
+    static std::array<std::uint32_t, kScanWords> buffer{};
+    const std::uint64_t limit = std::uint64_t{g_hangSeconds} * 1000;
+    while (!g_crashing)
+    {
+        Sleep(1000);
+        const std::uint64_t last = g_lastFrame.load();
+        if (last == 0 || dao::FrameThreadId() == 0 || GetTickCount64() - last < limit || !State().worth)
+        {
+            continue;
+        }
+        Stall(last, buffer);
+    }
+    return 0;
+}
+
 } // namespace
+
+void StartWatchdog()
+{
+    g_hangSeconds = HangSeconds();
+    if (g_hangSeconds == 0)
+    {
+        spdlog::info("hang watchdog: off (DAOLIB_HANG_SECONDS is 0)");
+        return;
+    }
+    if (!dao::Module::IsKnownExecutable())
+    {
+        spdlog::info("hang watchdog: off, the game is not a build the address library knows");
+        return;
+    }
+    dao::OnFrame([] { g_lastFrame = GetTickCount64(); });
+    HANDLE thread = CreateThread(nullptr, 0, &Watchdog, nullptr, 0, nullptr);
+    if (thread == nullptr)
+    {
+        spdlog::warn("hang watchdog: its thread could not start, error {}", GetLastError());
+        return;
+    }
+    CloseHandle(thread);
+    spdlog::info("hang watchdog: no frame for {} s writes hang-<time>.log in {}", g_hangSeconds,
+                 dao::LogDirectory().string());
+}
 
 void Install(const std::filesystem::path &loaderFolder)
 {
