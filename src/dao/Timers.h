@@ -55,10 +55,6 @@
 namespace dao::timers
 {
 
-// The damage-over-time tick, a script's own event type (events_h.nss:
-// EVENT_TYPE_DOT_TICK, 1010), not one of the engine's.
-inline constexpr script::EventType kDotTick = static_cast<script::EventType>(1010);
-
 // Hold the timers of the kinds held (true), or let them run again, giving
 // back what waits with the time it has left (false). On the game's thread.
 void Hold(bool held);
@@ -79,10 +75,19 @@ void OwnClock(ObjectId object, bool own = true);
 // not held.
 void Advance(ObjectId object, float seconds);
 
-// Which kinds of script event are held: kDotTick and AOE_HEARTBEAT unless
+// Which kinds of script event are held: DotTick and AoeHeartbeat unless
 // a plugin says otherwise; a plugin's own timers may be added. Takes
 // effect for events sent after it.
 void HoldKind(script::EventType type, bool held = true);
+
+// Log every script event the engine queues with a delay above nothing, of
+// any kind, held or not (true), or stop (false): its type (the number and
+// the name the generated constants give it), its target and sender (id,
+// and tag on the scripts' thread), its delay and the world clock; and each
+// as it is delivered, how long after it was sent. To find what a script
+// times with DelayEvent, before deciding whether to hold its kind
+// (DAOLib issue #14). Lines go to the plugin's log, at info.
+void Trace(bool on);
 
 // How many events wait here now, in all and for one object.
 std::size_t Waiting();

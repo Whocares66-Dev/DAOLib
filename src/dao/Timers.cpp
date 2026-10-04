@@ -3,15 +3,23 @@
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Hook.h"
+#include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/ScriptHooks.h"
+#include "dao/String.h"
 #include "dao/core/HeldEvents.h"
+#include "dao/generated/ScriptApi.h"
+
+#include <Windows.h>
 
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <format>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -75,17 +83,23 @@ bool g_readBefore = false;
 std::vector<core::HeldByTarget<Held>::Left> g_released;
 
 std::mutex g_kindsLock;
-std::vector<std::int32_t> g_kinds{static_cast<std::int32_t>(kDotTick),
+std::vector<std::int32_t> g_kinds{static_cast<std::int32_t>(script::EventType::DotTick),
                                   static_cast<std::int32_t>(script::EventType::AoeHeartbeat)};
 
-bool IsHeldKind(std::int32_t id, std::uint32_t data)
+// A script event's EVENT_TYPE_*, or nothing for any other event.
+std::optional<std::int32_t> ScriptEventType(std::int32_t id, std::uint32_t data)
 {
     if (id != kScriptEvent || data == 0 ||
         TryRead<std::uint32_t>(data) != static_cast<std::uint32_t>(Module::Address(addr::kCScriptEvent_Vftable)))
     {
-        return false;
+        return std::nullopt;
     }
-    const auto type = TryRead<std::int32_t>(data + kScriptEventType);
+    return TryRead<std::int32_t>(data + kScriptEventType);
+}
+
+bool IsHeldKind(std::int32_t id, std::uint32_t data)
+{
+    const auto type = ScriptEventType(id, data);
     const std::lock_guard lock(g_kindsLock);
     return type && std::find(g_kinds.begin(), g_kinds.end(), *type) != g_kinds.end();
 }
@@ -104,6 +118,103 @@ std::uint32_t DayLength(std::uintptr_t timer)
     return length && *length > 0 ? static_cast<std::uint32_t>(*length) : 0;
 }
 
+// --- The trace -------------------------------------------------------------
+
+std::atomic<bool> g_tracing{false};
+
+// A traced event sent and not yet delivered, by its data: its type and
+// target, and the world clock it was sent at, in seconds.
+struct Sent
+{
+    std::int32_t type = 0;
+    std::uint32_t target = 0;
+    double at = 0;
+};
+std::mutex g_sentLock;
+std::unordered_map<std::uint32_t, Sent> g_sent;
+// As many as are remembered: an event dropped without being delivered (an
+// area's going) is forgotten past this.
+constexpr std::size_t kMostSent = 10000;
+
+// The world clock now, as its day and milliseconds and in seconds.
+struct WorldNow
+{
+    std::uint32_t day = 0;
+    std::uint32_t ms = 0;
+    double seconds = 0;
+};
+
+WorldNow ReadWorldNow()
+{
+    WorldNow now;
+    const std::uintptr_t timer = WorldTimer();
+    if (timer == 0)
+    {
+        return now;
+    }
+    // EC::WorldTimer::WorldTime: __thiscall (day *, ms *), `ret 8`.
+    using WorldTimeFn = void(__fastcall *)(std::uintptr_t timer, int edx, std::uint32_t *day, std::uint32_t *ms);
+    reinterpret_cast<WorldTimeFn>(Module::Address(addr::kWorldTimer_WorldTime))(timer, 0, &now.day, &now.ms);
+    now.seconds = static_cast<double>(now.day) * DayLength(timer) + now.ms / 1000.0;
+    return now;
+}
+
+// An object as a trace names it: its id, and its tag where a script command
+// may be called (on the scripts' thread, dao/ScriptHooks.h).
+std::string Named(std::uint32_t object)
+{
+    const std::uint32_t scripts = script::ScriptThreadId();
+    if (scripts == 0 || scripts != GetCurrentThreadId())
+    {
+        return std::format("{:#010x}", object);
+    }
+    return std::format("{:#010x} \"{}\"", object, Utf8(script::api::GetTag(object)));
+}
+
+std::string TypeName(std::int32_t type)
+{
+    const std::string_view name = script::Name(static_cast<script::EventType>(type));
+    return name.empty() ? std::to_string(type) : std::format("{} {}", type, name);
+}
+
+void TraceSent(std::uint32_t days, std::uint32_t ms, std::uint32_t caller, std::uint32_t target, std::int32_t id,
+               std::uint32_t data, bool heldHere)
+{
+    const auto type = ScriptEventType(id, data);
+    if (!type)
+    {
+        return;
+    }
+    const WorldNow now = ReadWorldNow();
+    const double delay = static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0;
+    spdlog::info("timers: event {} sent to {} by {}, in {:.3f} s, world {}:{:08}{}", TypeName(*type), Named(target),
+                 Named(caller), delay, now.day, now.ms, heldHere ? ", held on the plugin's clock" : "");
+    const std::lock_guard lock(g_sentLock);
+    if (g_sent.size() >= kMostSent)
+    {
+        g_sent.clear();
+    }
+    g_sent[data] = Sent{*type, target, now.seconds};
+}
+
+void TraceDelivered(std::uint32_t data, const char *how)
+{
+    Sent sent;
+    {
+        const std::lock_guard lock(g_sentLock);
+        const auto found = g_sent.find(data);
+        if (found == g_sent.end())
+        {
+            return;
+        }
+        sent = found->second;
+        g_sent.erase(found);
+    }
+    const WorldNow now = ReadWorldNow();
+    spdlog::info("timers: event {} delivered to {}{}, {:.3f} s of the world's clock after it was sent, world {}:{:08}",
+                 TypeName(sent.type), Named(sent.target), how, now.seconds - sent.at, now.day, now.ms);
+}
+
 // AIMaster::AddEventDeltaTime: __thiscall (days, ms, caller, target, id,
 // data), `ret 0x18`, 1 when queued.
 using AddEventDeltaTimeFn = std::int32_t(__fastcall *)(void *queue, int edx, std::uint32_t days, std::uint32_t ms,
@@ -115,15 +226,31 @@ std::int32_t __fastcall AddEventDeltaTime(void *queue, int edx, std::uint32_t da
                                           std::uint32_t caller, std::uint32_t target, std::int32_t id,
                                           std::uint32_t data)
 {
+    const bool traced = g_tracing.load(std::memory_order_relaxed) && (days != 0 || ms != 0);
     if (g_holding.load(std::memory_order_relaxed) && (days != 0 || ms != 0) && IsHeldKind(id, data))
     {
         const double delay = static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0;
-        const std::lock_guard lock(g_lock);
-        if (g_held)
+        bool heldHere = false;
         {
-            g_events.Add(target, delay, Held{caller, target, id, data});
+            const std::lock_guard lock(g_lock);
+            if (g_held)
+            {
+                g_events.Add(target, delay, Held{caller, target, id, data});
+                heldHere = true;
+            }
+        }
+        if (heldHere)
+        {
+            if (traced)
+            {
+                TraceSent(days, ms, caller, target, id, data, true);
+            }
             return 1;
         }
+    }
+    if (traced)
+    {
+        TraceSent(days, ms, caller, target, id, data, false);
     }
     return g_addEventDeltaTime.Original()(queue, edx, days, ms, caller, target, id, data);
 }
@@ -183,6 +310,16 @@ void __fastcall ProcessEvent(void *queue, int edx, std::uint32_t *slot)
     if (TakeQueued(slot))
     {
         return;
+    }
+    if (g_tracing.load(std::memory_order_relaxed) && slot != nullptr)
+    {
+        // Read before the original, which frees the node.
+        const auto at = TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(slot));
+        Node node{};
+        if (at && *at != 0 && TryCopy(&node, *at, sizeof node))
+        {
+            TraceDelivered(node.data, "");
+        }
     }
     g_processEvent.Original()(queue, edx, slot);
 }
@@ -278,6 +415,10 @@ void BeforeUpdate(void *queue)
             break;
         }
         const Held &event = next->second;
+        if (g_tracing.load(std::memory_order_relaxed))
+        {
+            TraceDelivered(event.data, " from the plugin's clock");
+        }
         deliverNow(queue, 0, event.caller, event.target, event.id, event.data);
     }
 }
@@ -311,6 +452,10 @@ void __fastcall ClearEvents(void *queue, int edx)
             dropped.push_back(left);
         }
         g_before.clear();
+    }
+    {
+        const std::lock_guard lock(g_sentLock);
+        g_sent.clear();
     }
     using DeleteEventDataFn = void(__fastcall *)(void *queue, int edx, std::int32_t id, std::uint32_t data);
     const auto deleteData = reinterpret_cast<DeleteEventDataFn>(Module::Address(addr::kAIMaster_DeleteEventData));
@@ -409,6 +554,13 @@ void HoldKind(script::EventType type, bool held)
     {
         g_kinds.erase(at);
     }
+}
+
+void Trace(bool on)
+{
+    Attach();
+    g_tracing = on;
+    spdlog::info("timers: the trace of delayed script events {}", on ? "begins" : "ends");
 }
 
 std::size_t Waiting()

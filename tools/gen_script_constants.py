@@ -4,8 +4,11 @@ A script's numbers mean what its constants say: an event of type 1003 is
 EVENT_TYPE_COMMAND_COMPLETE, an effect of type 32 is EFFECT_TYPE_DAMAGE.
 The engine's own are declared in script.ldf (dev/SCRIPT_COMMANDS.md), 480
 of them; the effect types are the scripts' own, in effect_constants_h.nss
-among the toolset's script sources (tools/toolset_scripts.py). This turns
-both into
+among the toolset's script sources (tools/toolset_scripts.py), and so are
+the event types the scripts add to the engine's (events_h.nss: a damage
+over time's tick, EVENT_TYPE_DOT_TICK, and the plots' EVENT_TYPE_CUSTOM_
+EVENT_*, which a script sends itself by DelayEvent). This turns them all
+into
 
 - one typed enum per group of three or more sharing a prefix: EVENT_TYPE_*
   becomes `enum class EventType`, EVENT_TYPE_COMMAND_COMPLETE its member
@@ -53,6 +56,13 @@ EFFECTS = os.path.join(
 FROM_TABLES = ("TABLE_", "DAMAGE_TYPE_")
 TABLES = os.path.join(
     ROOT, "toolset", "extract", "scripts", "_Core Includes", "2da_constants_h.nss"
+)
+# The scripts' own event types, beside the engine's: only that group is
+# taken from it. Where one shares the engine's value (1070), the engine's
+# name comes first and Name() gives it.
+FROM_EVENTS = ("EVENT_TYPE_",)
+EVENTS = os.path.join(
+    ROOT, "toolset", "extract", "scripts", "_Core Includes", "events_h.nss"
 )
 
 CONSTANT = re.compile(
@@ -278,7 +288,7 @@ def header(constants, sources, notes):
 def main(argv):
     ldf, name = script_ldf()
     table = properties()
-    have_effects = os.path.exists(EFFECTS) and os.path.exists(TABLES)
+    have_effects = all(os.path.exists(p) for p in (EFFECTS, TABLES, EVENTS))
     if ldf is None or table is None or not have_effects:
         missing = (
             "the game's scripts.erf and 2da.erf"
@@ -300,11 +310,23 @@ def main(argv):
         for k, v in tables.items():
             if k.startswith(FROM_TABLES):
                 raw.setdefault(k, v)
+    with open(EVENTS, encoding="latin-1") as f:
+        events = {}
+        parse(f.read(), "events_h.nss", events)
+        for k, v in events.items():
+            if k.startswith(FROM_EVENTS):
+                raw.setdefault(k, v)
     constants = resolve(raw)
     notes = property_notes(constants, table)
     text = header(
         constants,
-        [name, "effect_constants_h.nss", "2da_constants_h.nss", "properties.gda"],
+        [
+            name,
+            "effect_constants_h.nss",
+            "2da_constants_h.nss",
+            "events_h.nss",
+            "properties.gda",
+        ],
         notes,
     )
     if "--check" in argv:
