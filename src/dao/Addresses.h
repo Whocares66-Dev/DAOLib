@@ -1165,6 +1165,37 @@ DAO_ADDRESS(kCSSubActionHandler_ApproachMelee, 19889)
 DAO_ADDRESS(kCSSubActionHandler_ApproachRanged, 19887)
 DAO_ADDRESS(kCSSubActionHandler_Swing, 19879)
 DAO_ADDRESS(kCCCreature_SignalAttackPending, 14503)
+// A creature's melee rings kept up to date, read 2026-10-04 (DAOLib #19;
+// corrected by the address library's session): CCCreature::Update calls
+// RefreshMeleeRing (__thiscall (ring index), `ret 4`) for each of its
+// rings every frame. It places every ring's centre about the creature
+// (0x006A3060, for each ring on each call); then, unless the ring has a
+// claimant (the count at +0x38 of its claimants' list at +0x30: a claim
+// adds the attacker, 0x00698C30, a release takes it away, 0x00745230) or
+// its keep byte at +0x28 is set, it empties the ring (MeleeRing::Clear: flags 0, holders
+// none, +0x10 65505.0) and stops. Else it marks the places a wall
+// (0x00A471E0) or a slope over 60 degrees cuts off as near-only (+9), and
+// records the creatures in the std::set of ids at the creature's +0xC18
+// as standing on the places their bodies cover (0x007CC870: the id at +0xC
+// with its distance at +0x10, a run each side at +0x14 through
+// 0x007CB920, and any claim there (+0x18) and +0x1C cleared), the walk
+// stopping at the creature's own id. So a ring nobody has claimed is empty,
+// and once claimed it fills with who stands round it. The rings are made
+// by 0x007CB400 from 0x006AC2A0. The names are ours.
+DAO_ADDRESS(kCCCreature_RefreshMeleeRing, 14701)
+DAO_ADDRESS(kMeleeRing_Clear, 20604)
+DAO_ADDRESS(kScriptBackend_ForScript_VectorToAngle, 5703)
+// The angles an attack's turn and blow test, read 2026-10-04 (DAOLib #19):
+// the turn (TurnToward, which sub-actions 39, 40 and 42 call with a
+// direction of their own; 39's, 0x007A69E0, to the target's slot 29
+// point for melee) is done at once when the
+// difference of two VectorToAngle angles, wrapped to -180..180 by Wrap
+// (__cdecl (angle, min, max), adding or taking 360), is at most 1 degree;
+// the blow tests the attacker-to-target direction's Elevation (__cdecl
+// (const Vector4 *), atan2 of z against the length in x and y, in degrees)
+// against 60. The names are ours.
+DAO_ADDRESS(kAngle_Wrap, 5693)
+DAO_ADDRESS(kVector_Elevation, 5704)
 DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
 DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
 DAO_ADDRESS(kCommands_Start, 12731)

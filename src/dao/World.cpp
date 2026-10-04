@@ -1017,4 +1017,19 @@ Sight LineOfSight(ObjectId viewer, ObjectId target)
     return Ask(area, eye, seen, kInvalidObject);
 }
 
+std::optional<bool> ObstaclePlaced(ObjectId creature)
+{
+    // The movement controller's parameters (+0x10), their +0x40 the
+    // obstacle's placed flag.
+    constexpr std::uintptr_t kPlaced = 0x40;
+    CClientExoApp *app = CClientExoApp::Get();
+    const std::uintptr_t movement = app != nullptr ? Movement(app->GetCreatureById(creature)) : 0;
+    const auto parameters = movement != 0 ? TryRead<std::uint32_t>(movement + kParameters) : std::nullopt;
+    if (!parameters || *parameters == 0)
+    {
+        return std::nullopt;
+    }
+    return TryRead<std::uint8_t>(*parameters + kPlaced).value_or(0) != 0;
+}
+
 } // namespace dao::world

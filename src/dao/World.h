@@ -255,6 +255,15 @@ struct WalkPath
 // Nothing for a creature not walking a path, or not there.
 std::optional<WalkPath> CurrentPath(ObjectId creature);
 
+// Whether a creature's body stands stamped on the pathfinding grid now
+// (its obstacle placed: the byte at its movement parameters' +0x40,
+// which MeleeRingSpot reads before lifting it). A stamp marks the cells
+// under it (kind 6), which the melee rings' fit test and the straight-walk
+// check refuse; a creature places it in its own update, so while the world
+// is held a creature that has just stopped may stand unstamped (DAOLib
+// #19). Nothing for no creature. On the game's thread.
+std::optional<bool> ObstaclePlaced(ObjectId creature);
+
 // The path a creature would walk to a point, found now by the game's
 // pathfinder, the creature left as it is: its own path, its walking and
 // its orders are not touched.

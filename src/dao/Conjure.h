@@ -69,9 +69,10 @@ std::optional<Conjuring> Conjure(ObjectId caster);
 // 2026-10-04 (the turn-based mod, Zevran's ambush, 160 attacks) and read
 // in their handlers: an approach, 4 for melee or 15 for a ranged weapon
 // (dao/Attack.h), the only ones in which the attacker walks; then the
-// attack's own. A melee blow is 1, which waits until the attacker faces
-// its target within 60 degrees and sees it, then sends EVENT_TYPE_COMMAND_
-// PENDING for the scripts to resolve it. A shot runs 39 (turn to face,
+// attack's own. A melee blow is 1 (after a turn to face, 39, to within 1
+// degree), which waits while the target is more than 60 degrees above or
+// below the attacker or out of sight, then sends EVENT_TYPE_COMMAND_PENDING
+// for the scripts to resolve it. A shot runs 39 (turn to face,
 // 0x007A69E0), 37 (a timed animation, 0x007A4390), 6 (the aim, 0x007A2410:
 // a timed wait that holds while the target is out of sight or more than
 // 67.5 degrees off the facing) and 2 (the shot, 0x007A6490, which sends

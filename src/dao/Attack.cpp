@@ -175,6 +175,137 @@ std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, 
     return std::nullopt;
 }
 
+// A creature's rings (Rings, below): the std::vector of pointers at its
+// +0xB44, its first and last at +0xB48 and +0xB4C.
+std::vector<std::uintptr_t> RingsOf(const CCObject *creature)
+{
+    std::vector<std::uintptr_t> rings;
+    const auto first = TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(creature) + 0xB48);
+    const auto last = TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(creature) + 0xB4C);
+    constexpr std::uint32_t kMostRings = 16;
+    for (std::uint32_t i = 0;
+         first && last && *first != 0 && *last > *first && i < (*last - *first) / 4 && i < kMostRings; ++i)
+    {
+        rings.push_back(TryRead<std::uint32_t>(*first + i * 4).value_or(0));
+    }
+    return rings;
+}
+
+// While it lives, the target's unclaimed rings are filled as the engine
+// fills an active one: each ring's keep byte (+0x28) set where it held
+// no claimant (the count at +0x38, of its claimants' list at +0x30) and was
+// not kept, then the engine's
+// own RefreshMeleeRing run for every ring, as CCCreature::Update runs it;
+// on going, the keep bytes put back and those rings cleared by the
+// engine's own MeleeRing::Clear, as the next update would leave them.
+class FilledRings
+{
+  public:
+    explicit FilledRings(CCObject *creature) : creature_(creature)
+    {
+        const std::vector<std::uintptr_t> rings = RingsOf(creature);
+        for (const std::uintptr_t ring : rings)
+        {
+            const auto claimants = ring != 0 ? TryRead<std::uint32_t>(ring + kClaimants) : std::nullopt;
+            const auto kept = ring != 0 ? TryRead<std::uint8_t>(ring + kKeep) : std::nullopt;
+            if (claimants && *claimants == 0 && kept && *kept == 0)
+            {
+                *reinterpret_cast<std::uint8_t *>(ring + kKeep) = 1;
+                opened_.push_back(ring);
+            }
+        }
+        if (opened_.empty())
+        {
+            return;
+        }
+        // CCCreature::RefreshMeleeRing: __thiscall (ring index), `ret 4`.
+        using RefreshFn = void(__fastcall *)(CCObject *, int, std::uint32_t);
+        const auto refresh = At<RefreshFn>(addr::kCCCreature_RefreshMeleeRing);
+        for (std::uint32_t i = 0; i < rings.size(); ++i)
+        {
+            refresh(creature_, 0, i);
+        }
+    }
+    FilledRings(const FilledRings &) = delete;
+    FilledRings &operator=(const FilledRings &) = delete;
+    ~FilledRings()
+    {
+        // MeleeRing::Clear: __thiscall, no arguments.
+        using ClearFn = void(__fastcall *)(std::uintptr_t, int);
+        const auto clear = At<ClearFn>(addr::kMeleeRing_Clear);
+        for (const std::uintptr_t ring : opened_)
+        {
+            *reinterpret_cast<std::uint8_t *>(ring + kKeep) = 0;
+            clear(ring, 0);
+        }
+    }
+
+  private:
+    static constexpr std::uintptr_t kKeep = 0x28;
+    static constexpr std::uintptr_t kClaimants = 0x38; // the claimants' count
+    CCObject *creature_;
+    std::vector<std::uintptr_t> opened_;
+};
+
+// Whether a melee attacker in reach strikes in its command's first update,
+// as the engine runs it: the turn (sub-action 39, 0x007A69E0, through
+// CSSubActionHandler::TurnToward) done at
+// once, the facing within 1 degree of the direction to the target's point
+// for it (the target's slot 29 given the attacker's place, flattened), each
+// an angle by the engine's VectorToAngle and their difference by its
+// Angle::Wrap to -180..180; then the blow's own tests (0x007A87C0): the
+// target within 60 degrees of level (Vector::Elevation) and in sight.
+bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
+{
+    constexpr float kTurnDone = 1.0F;
+    constexpr float kMostElevation = 60.0F;
+    constexpr std::uintptr_t kFacing = 0x130;
+    using PointFn = Vector4 *(__fastcall *)(CCObject *, int, Vector4 *, const Vector4 *);
+    using AngleFn = float(__cdecl *)(const Vector4 *);
+    using WrapFn = float(__cdecl *)(float, float, float);
+    using ElevationFn = float(__cdecl *)(const Vector4 *);
+    const Vector4 at = ToVector4(from->Position());
+    // The target's slot 29: the point a melee attacker at `at` turns to.
+    using Slot = PointFn;
+    const Slot *vtable = *reinterpret_cast<const Slot *const *>(to);
+    constexpr std::size_t kPointSlot = 29;
+    Vector4 point;
+    const Vector4 *aim = vtable[kPointSlot](to, 0, &point, &at);
+    Vector4 toward{aim->x - at.x, aim->y - at.y, 0, 0};
+    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
+    if (length < 1e-3F)
+    {
+        return false;
+    }
+    toward.x /= length;
+    toward.y /= length;
+    const auto facing = TryRead<Vector4>(reinterpret_cast<std::uintptr_t>(from) + kFacing);
+    if (!facing)
+    {
+        return false;
+    }
+    const auto angle = At<AngleFn>(addr::kScriptBackend_ForScript_VectorToAngle);
+    const float turn = At<WrapFn>(addr::kAngle_Wrap)(angle(&toward) - angle(&*facing), -180.0F, 180.0F);
+    if (std::fabs(turn) > kTurnDone)
+    {
+        return false;
+    }
+    const Vector4 aimAt = ToVector4(to->Position());
+    Vector4 rise{aimAt.x - at.x, aimAt.y - at.y, aimAt.z - at.z, 0};
+    const float span = std::sqrt(rise.x * rise.x + rise.y * rise.y + rise.z * rise.z);
+    if (span > 1e-3F)
+    {
+        rise.x /= span;
+        rise.y /= span;
+        rise.z /= span;
+    }
+    if (std::fabs(At<ElevationFn>(addr::kVector_Elevation)(&rise)) > kMostElevation)
+    {
+        return false;
+    }
+    return At<SightFn>(addr::kCombat_LineOfSight)(from, to, target, nullptr);
+}
+
 } // namespace
 
 bool IsRanged(ObjectId attacker)
@@ -218,13 +349,29 @@ std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
     using SpotFn = bool(__fastcall *)(CCObject *, int, ObjectId, Vector4 *, float, std::int32_t, std::int32_t);
     using ReachFn = std::int32_t(__fastcall *)(CCObject *, int, CCObject *, const Vector4 *);
     const float space = At<SpaceFn>(addr::kCCCreature_PersonalSpace)(from, 0);
-    Vector4 spot;
-    if (!At<SpotFn>(addr::kCCCreature_MeleeRingSpot)(to, 0, attacker, &spot, space, 0, 0))
+    const auto spot = At<SpotFn>(addr::kCCCreature_MeleeRingSpot);
+    const auto reach = At<ReachFn>(addr::kCCCreature_InMeleeReach);
+    // The ring as the first claim meets it, as it stands now: with no
+    // place there the engine's approach fails at its first run.
+    Vector4 now;
+    const bool roomNow = spot(to, 0, attacker, &now, space, 0, 0);
+    approach.inReach = roomNow && reach(to, 0, from, &now) != 0;
+    approach.strikesAtOnce = approach.inReach && StrikesAtOnce(from, to, target);
+    // The ring as it stands once the claim has made it active.
+    Vector4 filled;
     {
-        return std::nullopt;
+        const FilledRings fill(to);
+        approach.roomOnceFilled = spot(to, 0, attacker, &filled, space, 0, 0);
     }
-    approach.goal = Vector{spot.x, spot.y, spot.z};
-    approach.inReach = At<ReachFn>(addr::kCCCreature_InMeleeReach)(to, 0, from, &spot) != 0;
+    approach.findsRoom = roomNow && (approach.strikesAtOnce || approach.roomOnceFilled);
+    if (approach.roomOnceFilled)
+    {
+        approach.goal = Vector{filled.x, filled.y, filled.z};
+    }
+    else
+    {
+        approach.goal = roomNow ? Vector{now.x, now.y, now.z} : to->Position();
+    }
     return approach;
 }
 
@@ -232,6 +379,12 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
 {
     const auto approach = ApproachOf(attacker, target);
     if (!approach)
+    {
+        return std::nullopt;
+    }
+    // A blow that will find no room is given up, at its first run or on
+    // the way, so it has no walk.
+    if (!approach->ranged && !approach->findsRoom)
     {
         return std::nullopt;
     }
@@ -252,6 +405,115 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
     }
     return RangedWalk(Creature(attacker), Creature(target), target, path->waypoints, approach->stopWithin,
                       approach->spaces);
+}
+
+std::vector<Ring> Rings(ObjectId target)
+{
+    // The rings: a std::vector of pointers at the creature's +0xB44 (its
+    // first and last at +4 and +8); each ring's radius at +0x10 and its
+    // places a pointer array at +0x48, the count at +0x4C.
+    constexpr std::uintptr_t kRings = 0xB44;
+    constexpr std::uintptr_t kFirst = 4;
+    constexpr std::uintptr_t kLast = 8;
+    constexpr std::uintptr_t kRadius = 0x10;
+    constexpr std::uintptr_t kPlaces = 0x48;
+    constexpr std::uintptr_t kCount = 0x4C;
+    constexpr std::uint32_t kMostRings = 16;
+    constexpr std::uint32_t kMostPlaces = 256;
+    constexpr std::array<std::uintptr_t, 4> kHolders{0xC, 0x14, 0x18, 0x1C};
+    std::vector<Ring> rings;
+    CCObject *creature = Creature(target);
+    if (creature == nullptr)
+    {
+        return rings;
+    }
+    const std::uintptr_t vector = reinterpret_cast<std::uintptr_t>(creature) + kRings;
+    const auto first = TryRead<std::uint32_t>(vector + kFirst);
+    const auto last = TryRead<std::uint32_t>(vector + kLast);
+    if (!first || !last || *first == 0 || *last < *first)
+    {
+        return rings;
+    }
+    const std::uint32_t count = std::min((*last - *first) / 4, kMostRings);
+    for (std::uint32_t r = 0; r < count; ++r)
+    {
+        const auto ring = TryRead<std::uint32_t>(*first + r * 4);
+        if (!ring || *ring == 0)
+        {
+            continue;
+        }
+        Ring out;
+        out.radius = TryRead<float>(*ring + kRadius).value_or(0);
+        const auto array = TryRead<std::uint32_t>(*ring + kPlaces);
+        const auto places = TryRead<std::uint32_t>(*ring + kCount);
+        for (std::uint32_t i = 0; array && *array != 0 && places && i < std::min(*places, kMostPlaces); ++i)
+        {
+            const auto at = TryRead<std::uint32_t>(*array + i * 4);
+            if (!at || *at == 0)
+            {
+                continue;
+            }
+            RingPlace place;
+            place.blocked = TryRead<std::uint8_t>(*at + 8).value_or(0) != 0;
+            place.nearOnly = TryRead<std::uint8_t>(*at + 9).value_or(0) != 0;
+            for (std::size_t h = 0; h < kHolders.size(); ++h)
+            {
+                place.holders[h] = TryRead<ObjectId>(*at + kHolders[h]).value_or(kInvalidObject);
+            }
+            out.places.push_back(place);
+        }
+        rings.push_back(std::move(out));
+    }
+    return rings;
+}
+
+std::vector<ObjectId> RingNeighbours(ObjectId target)
+{
+    // A std::set<ObjectId> at +0xC18: its head at +4, the count at +8; a
+    // node's left, parent and right at +0, +4 and +8, the id at +0xC and
+    // the nil byte at +0x11 (the step at 0x00510D40). In order, as the
+    // engine's own step walks it.
+    constexpr std::uintptr_t kSet = 0xC18;
+    constexpr std::uint32_t kMost = 256;
+    std::vector<ObjectId> found;
+    CCObject *creature = Creature(target);
+    if (creature == nullptr)
+    {
+        return found;
+    }
+    const std::uintptr_t set = reinterpret_cast<std::uintptr_t>(creature) + kSet;
+    const auto head = TryRead<std::uint32_t>(set + 4);
+    const auto count = TryRead<std::uint32_t>(set + 8);
+    if (!head || *head == 0 || !count)
+    {
+        return found;
+    }
+    const auto nil = [](std::uint32_t node) { return TryRead<std::uint8_t>(node + 0x11).value_or(1) != 0; };
+    auto node = TryRead<std::uint32_t>(*head).value_or(0); // the head's left: the first
+    for (std::uint32_t i = 0; i < std::min(*count, kMost) && node != 0 && !nil(node); ++i)
+    {
+        found.push_back(TryRead<ObjectId>(node + 0xC).value_or(kInvalidObject));
+        // The next in order.
+        const std::uint32_t right = TryRead<std::uint32_t>(node + 8).value_or(0);
+        if (right != 0 && !nil(right))
+        {
+            node = right;
+            for (std::uint32_t left = TryRead<std::uint32_t>(node).value_or(0); left != 0 && !nil(left);
+                 left = TryRead<std::uint32_t>(node).value_or(0))
+            {
+                node = left;
+            }
+            continue;
+        }
+        std::uint32_t parent = TryRead<std::uint32_t>(node + 4).value_or(0);
+        while (parent != 0 && !nil(parent) && node == TryRead<std::uint32_t>(parent + 8).value_or(0))
+        {
+            node = parent;
+            parent = TryRead<std::uint32_t>(node + 4).value_or(0);
+        }
+        node = parent;
+    }
+    return found;
 }
 
 } // namespace dao::attack
