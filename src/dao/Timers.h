@@ -34,7 +34,8 @@
 // goes back into the queue with the time it has left. The queue's own
 // clearing (a game loaded) drops what is held here too.
 //
-// Events of other kinds, and any sent with no delay, are left alone: the
+// Events of other kinds (but see HoldFrom), and any sent with no delay, are
+// left alone: the
 // scripts sequence much by DelayEvent (plots, cutscenes, the first tick of
 // a damage over time, sent "next frame" with 0), and holding those would
 // stop the game. An area's first pulse is not a delayed event: its update
@@ -75,10 +76,24 @@ void OwnClock(ObjectId object, bool own = true);
 // not held.
 void Advance(ObjectId object, float seconds);
 
-// Which kinds of script event are held: DotTick and AoeHeartbeat unless
-// a plugin says otherwise; a plugin's own timers may be added. Takes
-// effect for events sent after it.
+// Which kinds of script event are held whatever their delay (true), or
+// never, by kind or by delay (false): DotTick and AoeHeartbeat held, and
+// DelayedGmChange left out, unless a plugin says otherwise. The scripts end
+// a fight with that one (combat_h, player_core: 1 to 3 s after the last
+// enemy goes); held on a fight's clock it would wait for rounds no longer
+// played. A plugin's own timers may be added. Takes effect for events sent
+// after it, and for those in the queue when a hold begins.
 void HoldKind(script::EventType type, bool held = true);
+
+// Hold, beside the kinds held, every script event sent with a delay of at
+// least `seconds`, whatever its kind; 0 or less, none by delay (the
+// default). A plot's timers are seconds long (the Harrowing's Uldred: 2, 10
+// and 35 s, cir240cr_uldred), and what the scripts put one thing after
+// another with is 0 to 0.01 s, which must run as it does: 1 holds the
+// first and not the second. An event in the queue when a hold begins is
+// held by the time it has left. A kind HoldKind(type, false) left out
+// stays out (DAOLib issue #15).
+void HoldFrom(float seconds);
 
 // Log every script event the engine queues with a delay above nothing, of
 // any kind, held or not (true), or stop (false): its type (the number and

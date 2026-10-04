@@ -8,6 +8,7 @@
 
 using Catch::Approx;
 using dao::core::HeldEvents;
+using dao::core::HoldRule;
 using dao::core::ToWorldDelay;
 using dao::core::WorldSeconds;
 
@@ -232,4 +233,31 @@ TEST_CASE("clocks nothing waits on are dropped")
     held.Prune();
     CHECK(held.Size() == 0);
     CHECK(held.Now(1) == Approx(0.0));
+}
+
+TEST_CASE("a hold keeps a kind held, any kind by its delay, and never one left out")
+{
+    HoldRule rule;
+    rule.Hold(1010, true);
+    rule.Hold(2000, false);
+
+    // No delay rule: only the held kind, whatever its delay.
+    CHECK(rule.Holds(1010, 0.5));
+    CHECK_FALSE(rule.Holds(50006, 10.0));
+
+    rule.from = 1.0;
+    CHECK(rule.Holds(50006, 10.0));
+    CHECK(rule.Holds(50008, 1.0)); // at the bound itself
+    CHECK_FALSE(rule.Holds(50009, 0.01));
+    CHECK(rule.Holds(1010, 0.5));       // held whatever its delay
+    CHECK_FALSE(rule.Holds(2000, 3.0)); // left out wins over the delay
+
+    // Held again, it is no longer left out; left out, no longer held.
+    rule.Hold(2000, true);
+    CHECK(rule.Holds(2000, 0.0));
+    rule.Hold(1010, false);
+    CHECK_FALSE(rule.Holds(1010, 5.0));
+
+    rule.from = 0;
+    CHECK_FALSE(rule.Holds(50006, 10.0));
 }

@@ -531,6 +531,38 @@ MUTANTS: list[Mutant] = [
         "events_.begin()->first >= target_",
     ),
     Mutant(
+        "hold-rule: a kind left out stays out of a hold by delay",
+        HELD,
+        """        if (leftOut.contains(type))
+        {
+            return false;
+        }
+        if (held.contains(type))
+        {
+            return true;
+        }""",
+        """        if (held.contains(type))
+        {
+            return true;
+        }
+        if (leftOut.contains(type) && false)
+        {
+            return false;
+        }""",
+    ),
+    Mutant(
+        "hold-rule: a delay at the bound itself is held",
+        HELD,
+        "return from > 0 && delay >= from;",
+        "return from > 0 && delay > from;",
+    ),
+    Mutant(
+        "hold-rule: no delay rule at 0",
+        HELD,
+        "return from > 0 && delay >= from;",
+        "return from >= 0 && delay >= from;",
+    ),
+    Mutant(
         "held-release: a released event keeps only the time it has left",
         HELD,
         "left.emplace_back(due - now, std::move(event));",

@@ -143,6 +143,47 @@ template <typename Event> class HeldEvents
     std::multimap<double, Event> events_;
 };
 
+// Which script events a hold keeps (dao/Timers.h), by their EVENT_TYPE_*
+// and the delay they are sent with: a kind left out never, a kind held
+// always, and any other kind when its delay is at least `from` seconds (0 or
+// less: none by delay). Left out wins, so a kind that must run as it does
+// (a fight's end, EVENT_TYPE_DELAYED_GM_CHANGE) stays out of a hold by
+// delay.
+struct HoldRule
+{
+    std::set<std::int32_t> held;
+    std::set<std::int32_t> leftOut;
+    double from = 0;
+
+    bool Holds(std::int32_t type, double delay) const
+    {
+        if (leftOut.contains(type))
+        {
+            return false;
+        }
+        if (held.contains(type))
+        {
+            return true;
+        }
+        return from > 0 && delay >= from;
+    }
+
+    // Held always (true), or left out always (false).
+    void Hold(std::int32_t type, bool hold)
+    {
+        if (hold)
+        {
+            held.insert(type);
+            leftOut.erase(type);
+        }
+        else
+        {
+            held.erase(type);
+            leftOut.insert(type);
+        }
+    }
+};
+
 // Held events on a clock per target, the object each is sent to: the
 // shared Advance moves every target's clock but those on clocks of their
 // own, which only Advance(target, ...) moves. A clock's time counts only

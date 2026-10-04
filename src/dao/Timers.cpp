@@ -82,9 +82,16 @@ bool g_readBefore = false;
 // What was let go, to queue again on the queue's next update.
 std::vector<core::HeldByTarget<Held>::Left> g_released;
 
+// Which events are held (dao/core/HeldEvents.h): a damage over time's tick
+// and an area's pulse, and none by delay, unless a plugin says otherwise;
+// the module's game mode change left out, which the scripts end a fight
+// with (combat_h, player_core: 1 to 3 s after the last enemy goes), held
+// on a fight's clock it would wait for rounds no longer played.
 std::mutex g_kindsLock;
-std::vector<std::int32_t> g_kinds{static_cast<std::int32_t>(script::EventType::DotTick),
-                                  static_cast<std::int32_t>(script::EventType::AoeHeartbeat)};
+core::HoldRule g_rule{
+    {static_cast<std::int32_t>(script::EventType::DotTick), static_cast<std::int32_t>(script::EventType::AoeHeartbeat)},
+    {static_cast<std::int32_t>(script::EventType::DelayedGmChange)},
+    0};
 
 // A script event's EVENT_TYPE_*, or nothing for any other event.
 std::optional<std::int32_t> ScriptEventType(std::int32_t id, std::uint32_t data)
@@ -97,11 +104,13 @@ std::optional<std::int32_t> ScriptEventType(std::int32_t id, std::uint32_t data)
     return TryRead<std::int32_t>(data + kScriptEventType);
 }
 
-bool IsHeldKind(std::int32_t id, std::uint32_t data)
+// Whether a script event sent with this delay is held, by its kind and its
+// delay.
+bool IsHeld(std::int32_t id, std::uint32_t data, double delay)
 {
     const auto type = ScriptEventType(id, data);
     const std::lock_guard lock(g_kindsLock);
-    return type && std::find(g_kinds.begin(), g_kinds.end(), *type) != g_kinds.end();
+    return type && g_rule.Holds(*type, delay);
 }
 
 std::uintptr_t WorldTimer()
@@ -227,9 +236,9 @@ std::int32_t __fastcall AddEventDeltaTime(void *queue, int edx, std::uint32_t da
                                           std::uint32_t data)
 {
     const bool traced = g_tracing.load(std::memory_order_relaxed) && (days != 0 || ms != 0);
-    if (g_holding.load(std::memory_order_relaxed) && (days != 0 || ms != 0) && IsHeldKind(id, data))
+    const double delay = days != 0 || ms != 0 ? static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0 : 0;
+    if (g_holding.load(std::memory_order_relaxed) && (days != 0 || ms != 0) && IsHeld(id, data, delay))
     {
-        const double delay = static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0;
         bool heldHere = false;
         {
             const std::lock_guard lock(g_lock);
@@ -288,7 +297,7 @@ bool TakeQueued(std::uint32_t *slot)
         }
     }
     Node node{};
-    if (!due || !TryCopy(&node, *at, sizeof node) || !IsHeldKind(node.id, node.data))
+    if (!due || !TryCopy(&node, *at, sizeof node) || !ScriptEventType(node.id, node.data))
     {
         return false;
     }
@@ -324,8 +333,8 @@ void __fastcall ProcessEvent(void *queue, int edx, std::uint32_t *slot)
     g_processEvent.Original()(queue, edx, slot);
 }
 
-// An event of a held kind in the queue: its node, its target, and how long
-// after now it comes due.
+// An event in the queue that a hold keeps: its node, its target, and how
+// long after now it comes due.
 struct Queued
 {
     std::uint32_t node = 0;
@@ -333,8 +342,9 @@ struct Queued
     double inSeconds = 0;
 };
 
-// The events of a held kind in the queue now (dao/Addresses.h: the list,
-// walked from its tail as AddEventLater does).
+// The events in the queue now that a hold keeps, by their kind and the
+// time they have left (dao/Addresses.h: the list, walked from its tail as
+// AddEventLater does).
 std::vector<Queued> ReadQueue(std::uintptr_t queue)
 {
     std::vector<Queued> found;
@@ -355,9 +365,13 @@ std::vector<Queued> ReadQueue(std::uintptr_t queue)
     {
         const auto event = TryRead<std::uint32_t>(*position + 8);
         Node node{};
-        if (event && *event != 0 && TryCopy(&node, *event, sizeof node) && IsHeldKind(node.id, node.data))
+        if (event && *event != 0 && TryCopy(&node, *event, sizeof node))
         {
-            found.push_back(Queued{*event, node.target, core::WorldSeconds(day, ms, node.day, node.time, dayLength)});
+            const double left = core::WorldSeconds(day, ms, node.day, node.time, dayLength);
+            if (IsHeld(node.id, node.data, left))
+            {
+                found.push_back(Queued{*event, node.target, left});
+            }
         }
         position = TryRead<std::uint32_t>(*position);
     }
@@ -544,16 +558,13 @@ void Advance(ObjectId object, float seconds)
 void HoldKind(script::EventType type, bool held)
 {
     const std::lock_guard lock(g_kindsLock);
-    const auto kind = static_cast<std::int32_t>(type);
-    const auto at = std::find(g_kinds.begin(), g_kinds.end(), kind);
-    if (held && at == g_kinds.end())
-    {
-        g_kinds.push_back(kind);
-    }
-    else if (!held && at != g_kinds.end())
-    {
-        g_kinds.erase(at);
-    }
+    g_rule.Hold(static_cast<std::int32_t>(type), held);
+}
+
+void HoldFrom(float seconds)
+{
+    const std::lock_guard lock(g_kindsLock);
+    g_rule.from = seconds;
 }
 
 void Trace(bool on)
