@@ -173,6 +173,7 @@ add_library(
     src/dao/CommandEvents.cpp
     src/dao/Conjure.cpp
     src/dao/Strings.cpp
+    src/dao/SubActions.cpp
     src/dao/Party.cpp
     src/dao/Portraits.cpp
     src/dao/Resources.cpp
