@@ -146,4 +146,16 @@ std::optional<Conjuring> Conjure(ObjectId caster)
     return Conjuring{static_cast<float>(seen->second.elapsed) / 1000, static_cast<float>(seen->second.duration) / 1000};
 }
 
+std::uint32_t RunningSubAction(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    const CCObject *object = app != nullptr ? app->GetObjectById(creature) : nullptr;
+    if (object == nullptr || object->Type() != core::ObjectType::Creature)
+    {
+        return 0;
+    }
+    using IsConjuringFn = std::uint32_t(__fastcall *)(const CCObject *, int);
+    return reinterpret_cast<IsConjuringFn>(Module::Address(addr::kCCCreature_IsConjuring))(object, 0);
+}
+
 } // namespace dao::commands

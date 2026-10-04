@@ -30,6 +30,7 @@
 
 #include "dao/ObjectId.h"
 
+#include <cstdint>
 #include <optional>
 
 namespace dao::commands
@@ -56,5 +57,31 @@ struct Conjuring
     float duration = 0; // seconds
 };
 std::optional<Conjuring> Conjure(ObjectId caster);
+
+// The type of the sub-action a creature's current command is at, as the
+// engine's IsConjuring answers it (dev/TURN_BASED.md, "A command's timed
+// phases"): the type of the first sub-action left on its current command's
+// list (IsConjuring reads it through 0x00697BF0), the one running or about
+// to run, so never 0 between two of them; 0 only when the creature has no
+// current command, or none of its sub-actions is left, or it is no
+// creature. A UseAbility's run 15, 39, 50,
+// 7 (the conjure), 8, 37 (seen in play). An attack's, seen in play
+// 2026-10-04 (the turn-based mod, Zevran's ambush, 160 attacks) and read
+// in their handlers: an approach, 4 for melee or 15 for a ranged weapon
+// (dao/Attack.h), the only ones in which the attacker walks; then the
+// attack's own. A melee blow is 1, which waits until the attacker faces
+// its target within 60 degrees and sees it, then sends EVENT_TYPE_COMMAND_
+// PENDING for the scripts to resolve it. A shot runs 39 (turn to face,
+// 0x007A69E0), 37 (a timed animation, 0x007A4390), 6 (the aim, 0x007A2410:
+// a timed wait that holds while the target is out of sight or more than
+// 67.5 degrees off the facing) and 2 (the shot, 0x007A6490, which sends
+// COMMAND_PENDING), with 37 again; not every shot runs every one. The
+// command's 50, which puts the attack's own in, runs within the same
+// update (several sub-actions run in one while its time lasts,
+// 0x0073CB60), so it is not seen between frames. 0 between the last of
+// them and the command's end, seen; whether it can be 0 for a frame
+// before the command's step puts its sub-actions in is not read. On the
+// game's thread.
+std::uint32_t RunningSubAction(ObjectId creature);
 
 } // namespace dao::commands

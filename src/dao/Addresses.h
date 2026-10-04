@@ -1116,6 +1116,55 @@ DAO_ADDRESS(kCCObject_StepCommands, 17558)
 DAO_ADDRESS(kCCObject_RunCurrentCommand, 17548)
 DAO_ADDRESS(kCSSubActionHandler_Execute, 19864)
 DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
+// An attack's reach (dao/Attack.h), read 2026-10-04 for the turn-based mod
+// (DAOLib #16). The attack command's step (AttackStep) asks whether the
+// weapon is ranged (HasRangedWeapon, __thiscall, no arguments: a creature passing
+// 0x006A25A0, not read, whose main-hand base item's Type, hash
+// 0x12A02374, is 5, a staff, or 6, a bow or crossbow; corrected, first
+// read as the wield type) and queues an approach and then
+// the attack, sub-action 50; it tests no reach itself. Ranged: sub-action
+// 15 with the weapon's Range (bitm_base's, hash 0x81F2A384, from the main
+// hand: the creature's +0xBE0 is a SmartData::Attribute<Equipment *>, its
+// value (Attribute::Get, `mov eax, [ecx+0xC]`) the Equipment, whose +0x24
+// is a SlotItemLocation; ItemIn (0) on that, the item's base row its word at +0x464; 65505 without
+// one) capped at 60 (0x0069F330), and both personal spaces (PersonalSpaces,
+// the sum of each one's slot 39, PersonalSpace). Its handler
+// (ApproachRanged) ends at once when WithinBand (the distance between min
+// - 0.05 and max + 0.05) holds for the range and the spaces and
+// LineOfSight from the attacker to the target holds; else it walks toward
+// the target, its stop distance Range less the spaces. Melee: sub-action
+// 4 with the attacker's space; its handler (ApproachMelee) asks the target
+// for the attacker's place on its melee ring (MeleeRingSpot, slot 38,
+// __thiscall (attacker id, out, unread, claim, unread), `ret 0x14`, the
+// ring given the attacker's own PersonalSpace, its obstacle lifted for it; claim set,
+// as the handler sets it, lets go of the attacker's places (0x007CC060)
+// and claims the one found (0x007CC2B0 writes the attacker's id into the
+// ring's entries); 0 only finds it), then the target's InMeleeReach (slot
+// 33, __thiscall (attacker, place), `ret 8`: the centres at most both
+// spaces and 1.2 apart in x, y and z, and the attacker within 1.25 of the
+// place in x and y alone, WithinBand being flat), and
+// ends at once if so, else walks to the place. The swing, sub-action 1
+// (Swing), waits until the target is within 60 degrees of the attacker's
+// facing and in its line of sight, then sends EVENT_TYPE_COMMAND_PENDING
+// (SignalAttackPending: integers 1 and 1, objects self and target).
+// CSSubActionHandler keeps its handlers, its own __thiscall (object,
+// sub-action) members, `ret 8`, by type at +0x48 (filled by 0x007AB8D0).
+// Corrected by the address library's session, 2026-10-04. The names are
+// ours.
+DAO_ADDRESS(kCommands_AttackStep, 17685)
+DAO_ADDRESS(kCCCreature_InMeleeReach, 14499)
+DAO_ADDRESS(kCCCreature_MeleeRingSpot, 14620)
+DAO_ADDRESS(kCCCreature_PersonalSpace, 14451)
+DAO_ADDRESS(kCCCreature_HasRangedWeapon, 14466)
+DAO_ADDRESS(kCCObject_PersonalSpaces, 14072)
+DAO_ADDRESS(kSubActions_WithinBand, 19820)
+DAO_ADDRESS(kCombat_LineOfSight, 13639)
+DAO_ADDRESS(kSmartDataAttribute_Get, 7596)
+DAO_ADDRESS(kSlotItemLocation_ItemIn, 21362)
+DAO_ADDRESS(kCSSubActionHandler_ApproachMelee, 19889)
+DAO_ADDRESS(kCSSubActionHandler_ApproachRanged, 19887)
+DAO_ADDRESS(kCSSubActionHandler_Swing, 19879)
+DAO_ADDRESS(kCCCreature_SignalAttackPending, 14503)
 DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
 DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
 DAO_ADDRESS(kCommands_Start, 12731)
