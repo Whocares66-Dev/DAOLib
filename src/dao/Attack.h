@@ -33,7 +33,17 @@
 //   reach both spaces, where the engine gives the attack up.
 // The ring place is asked for without claiming it: the engine's own
 // approach claims it (and lets go of the attacker's last), which a
-// question here must not.
+// question here must not. The search is the same either way, so the
+// answer is the approach's first run's at the moment it is asked: nothing
+// exactly where that run fails with COMMAND_FAILED_NO_SPACE_IN_MELEE_RING
+// (-5). A place found can be gone later, the ring filled by others: the
+// approach asks it again, claiming, whenever the target moves or each 1.5
+// s, and the blow asks again if the target does not hold the attacker as
+// its own (+0xC60); each fails the command with -5 on a full ring. Seen in
+// play 2026-10-04 (the turn-based mod, dragonlings swarming one creature
+// above Haven, 18 failures): 6 at the first run, each where ApproachOf had
+// answered nothing; 8 during the approach (sub-action 4); 4 at the turn to
+// face (39), the blow not yet begun.
 #pragma once
 
 #include "dao/ObjectId.h"
