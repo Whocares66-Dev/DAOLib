@@ -230,6 +230,7 @@ add_library(
     version
     SHARED
     src/loader/CrashLog.cpp
+    src/fix/ArchiveRead.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
 )

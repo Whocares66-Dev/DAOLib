@@ -29,6 +29,9 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 
 ```
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
+src/fix/        corrections to the engine's own faults, one file each, built into version.dll and put in by the loader
+                before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
+                offset in its archive's file (ArchiveRead). dev/CRASHES.md has the crash each one fixed
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h), drawing in the world (Vfx.h), commands starting and ending (CommandEvents.h), a plugin's own text (Strings.h), the party's selection (Party.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),

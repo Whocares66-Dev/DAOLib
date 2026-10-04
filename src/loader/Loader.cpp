@@ -32,6 +32,7 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
+#include "fix/ArchiveRead.h"
 #include "loader/CrashLog.h"
 #include "loader/Proxy.h"
 
@@ -126,6 +127,7 @@ void __stdcall EntryHook()
 {
     spdlog::info("entry point reached; loading plugins");
     loader::crashlog::StartWatchdog();
+    fix::InstallArchiveReadFix();
     LoadPlugins();
     spdlog::info("starting the game");
     g_entry.Original()();
@@ -148,6 +150,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
                      dao::Module::ImageAddress(caller));
         loader::crashlog::StartWatchdog();
+        fix::InstallArchiveReadFix();
         LoadPlugins();
         spdlog::info("starting the game");
     }

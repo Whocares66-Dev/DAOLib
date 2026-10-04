@@ -729,11 +729,115 @@ DAO_ADDRESS(kResources_Release, 5021)
 // library's session, reading GOG and EA the same day). The third argument of Find is a mode, not a file
 // type: the file's name carries its extension, and the movie file asks
 // with 3 (the global at 0x00AF046C, beside 1 and 2), which has its bytes
-// there on return. The type numbers of the engine's older table
+// there on return, except on the main thread exploring or in a fight
+// (below). The type numbers of the engine's older table
 // (0x004C9E3E, ncs 2010, 2da 2017: NWN's) are not what Find takes. The
 // names are ours.
 DAO_ADDRESS(kResources_Data, 5018)
 DAO_ADDRESS(kResources_Size, 5019)
+// Find's fast way, read 2026-10-03 for the model-load crash (DAOLib issue #3,
+// issue #3). On the main thread (the id in 0x00C2B590, set at
+// start-up) with the game exploring or in a fight (GameModeController's
+// mode 0 or 1, through 0x005D5E70), Find looks the file up by name
+// (0x004D5A90) and hands it back as it is, its mode not passed on. On every
+// other thread and in every other mode it waits: WaitLoaded, __cdecl
+// (handle *), loops while the resource's State is 1, loading, pumping
+// 0x004E6160, and answers whether it reached 2, loaded. State, __thiscall on
+// the handle, answers 0 for none; the engine's own words for its states
+// (the table at 0x004D5798) are Not Loaded, Loading, Loaded, Error On Load,
+// the state at the resource's +0x34. LoadModelHierarchy, __thiscall (const
+// std::wstring *name), `ret 4`, true if it read the model (called by
+// GraphicsStructuresManager's slot 39, 0x0057A6F0, for a model not yet
+// cached), parses what Size and Data answer (0x00596830, which refuses null
+// bytes, too few, or no "GFF V4.0") without asking the state. Its view of
+// the bytes (0x004D5360) is zeroed when the header's data offset (+0x18) is
+// 0 or past the size, and nothing after checks it: the fault at 0x004D53B4
+// reading 0x24 is that zeroed view, so the bytes there began "GFF V4.0" but
+// the header was not whole (read by the address library's session,
+// 2026-10-03). A file read while it streams in fits; so does one freed under
+// the parse. The names are ours.
+DAO_ADDRESS(kGraphicsStructures_LoadModelHierarchy, 9345)
+DAO_ADDRESS(kResources_WaitLoaded, 5028)
+DAO_ADDRESS(kResources_State, 5013)
+// A resource's first read, read 2026-10-03 (issue #3):
+// ReadOnFirstUse, __thiscall on the resource, run by Data (through
+// 0x004BF060) when the state is 2. If the read flag (+0x3D) is 0 it takes
+// the archive's lock (0x004E6580 on [res+0x1C], waiting; a critical
+// section that refuses a second entry by its holder unless its +0x1C
+// says so), reads the bytes into +0x20 through the archive's slot 6 (data,
+// size +0x2C), finds a processor for the type (0x004E6EE0, 0x004E6F30),
+// which may replace +0x20 with a buffer of its own, deleting the old
+// unless +0x3C, then sets the flag and unlocks (0x004E65A0). The flag is not
+// checked again under the lock: two threads asking for one unread resource
+// both read it, unless both come through Resources::Data, which takes the
+// same lock around it; ReplaceBuffer calls it holding the lock too. The name
+// is ours.
+DAO_ADDRESS(kResource_ReadOnFirstUse, 4435)
+// A resource's buffer replaced, read by the address library's session
+// 2026-10-03 (issue #3): ReplaceBuffer, __thiscall on the
+// resource with three arguments, `ret 0xC`. Under the archive's lock
+// (0x004BEF83) it frees +0x20 and installs a new buffer with the read flag
+// cleared, when +0x38 and +0x3C are 0, then reads it (ReadOnFirstUse at
+// 0x004BEFCD); called by IDs 4860, 4861 and 5438. Resources::Data takes the
+// same lock around ReadOnFirstUse but gives it back before its caller uses
+// the bytes, so a parse reads them unlocked. The name is ours.
+DAO_ADDRESS(kResource_ReplaceBuffer, 4441)
+// A resource's handles, read by the address library's session 2026-10-03:
+// the word at +0x38 counts them (raised by the manager's lookup, which
+// Find's fast way goes through too, and by a handle's copy; lowered by
+// 0x004BF010, never below 0). At 0 it runs FreeWhenUnused, __thiscall on
+// the resource, no arguments: under the source's lock, with the count 0 and
+// +0x3C 0, it cancels a load still pending or frees +0x20 and sets the state
+// to 0. A held handle is the pin: ReplaceBuffer and this refuse while the
+// count is above 0, and LoadModelHierarchy holds its handle across the
+// parse. The source (+0x1C) is an ECResMan::ResourceSource, its lock built
+// re-entrant (0x004E6C50). The name is ours.
+DAO_ADDRESS(kResource_FreeWhenUnused, 4440)
+// A resource moved in its array, read 2026-10-03 (issue #3). A
+// resource is 0x40 bytes: its name, the engine's std::wstring, at +0 (the
+// constructor 0x004BE890), the source +0x1C, the buffer +0x20, a pending
+// load +0x24, the size +0x2C, the state +0x34, the handles +0x38, the flags
+// +0x3A to +0x3D. It is held by value in a std::vector at the source's
+// +0xBC, whose helpers copy it field by field, all __cdecl (first, last,
+// third): std::copy (third the destination: an erase), std::copy_backward
+// (the destination's end: an insert), std::fill (a value) and
+// std::_Uninit_copy (new storage: a regrowth). The names are ours.
+DAO_ADDRESS(kResourceArray_Copy, 4769)
+DAO_ADDRESS(kResourceArray_CopyBackward, 4770)
+DAO_ADDRESS(kResourceArray_Fill, 4778)
+DAO_ADDRESS(kResourceArray_CopyToNew, 4786)
+// A resource destroyed and a source closed, read by the address library's
+// session 2026-10-03 (issue #3). ~Resource, __thiscall, no
+// arguments: stops or drops a load at +0x24, then frees the buffer unless
+// +0x3C, whatever the count of handles, which it leaves as it was. An
+// ErfSource (RIMSource derives from it) holds its resources in a std::vector
+// at +0xBC, built once from the archive's table, and its name, a
+// std::wstring, at +4. Close (slot 7, __thiscall, no arguments) sets +0x68,
+// which makes the manager's lookup skip the source; it and Empty (slot 3,
+// bool __thiscall (bool, bool), `ret 8`, the arguments unread, true on every
+// path) erase each resource without handles, or with handles but Loading,
+// and resize the array to 0 unless one was kept, destroying them all. Add
+// (slot 4, bool __thiscall (const std::wstring *name, void *), `ret 8`)
+// grows the array by one for a name not in the source's map.
+DAO_ADDRESS(kResource_Destroy, 4437)
+DAO_ADDRESS(kErfSource_Close, 4861)
+DAO_ADDRESS(kErfSource_Empty, 4860)
+DAO_ADDRESS(kErfSource_Add, 4864)
+// A resource's bytes read from its archive, read 2026-10-03
+// (src/fix/ArchiveRead.h): ReadRequestTask::Run, slot 2 of its vftable
+// (0x00AF1418), __thiscall (float, unread), `ret 4`, a status (3 read, 5
+// failed, 4 stopped). Under only its own load's lock (0x004CB2B0 on
+// [[this+8]+8]) it seeks the file at +0x18, the source's, shared (or one it
+// opens itself through 0x004C9170 and deletes), to the resource's +0x28
+// (0x004E9F05), allocates +0x2C bytes into its +0x20 and reads them
+// (0x004E9F2C). FileAccess (the vftable 0x00AF0474) holds a handle at +4:
+// Seek, __thiscall (uint8 origin, int32 low, int32 high), `ret 0xC`,
+// SetFilePointer, the new position's low half or -1; Read, __thiscall (void
+// *buffer, uint32 size, uint32 count), `ret 0xC`, ReadFile at the file's
+// position with no OVERLAPPED, the bytes read, counted at 0x00C2BE50.
+DAO_ADDRESS(kReadRequestTask_Run, 5555)
+DAO_ADDRESS(kFileAccess_Seek, 4678)
+DAO_ADDRESS(kFileAccess_Read, 4681)
 
 // Saving and loading (dev/SAVES.md), read 2026-09-30. SaveLoadProxy's
 // SaveGameMessage and LoadGameMessage handlers take a slot and a kind (0 a
