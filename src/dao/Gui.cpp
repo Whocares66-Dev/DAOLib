@@ -3,6 +3,7 @@
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Data.h"
+#include "dao/Frame.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Messages.h"
@@ -24,6 +25,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -907,6 +909,92 @@ bool HasMovie(std::wstring_view file)
     // this plugin's folder, as OpenFile serves its own.
     std::error_code ec;
     return resources::Exists(file) || std::filesystem::is_regular_file(Module::OwnFolder() / file, ec);
+}
+
+namespace
+{
+
+std::mutex g_fullScreenLock;
+std::vector<std::function<void(std::wstring_view, bool)>> g_fullScreenObservers;
+std::optional<std::wstring> g_fullScreen; // as the last frame found it
+
+void CompareFullScreen()
+{
+    const auto now = CurrentFullScreen();
+    std::optional<std::wstring> name = now ? std::optional(now->name) : std::nullopt;
+    if (name == g_fullScreen)
+    {
+        return;
+    }
+    const std::optional<std::wstring> before = std::exchange(g_fullScreen, std::move(name));
+    std::vector<std::function<void(std::wstring_view, bool)>> observers;
+    {
+        const std::lock_guard lock(g_fullScreenLock);
+        observers = g_fullScreenObservers;
+    }
+    for (const auto &observer : observers)
+    {
+        if (before)
+        {
+            detail::Guard("a full-screen callback", [&] { observer(*before, false); });
+        }
+        if (g_fullScreen)
+        {
+            detail::Guard("a full-screen callback", [&] { observer(*g_fullScreen, true); });
+        }
+    }
+}
+
+} // namespace
+
+void OnFullScreen(std::function<void(std::wstring_view name, bool shown)> observer)
+{
+    static std::once_flag once;
+    std::call_once(once, [] { OnFrame(&CompareFullScreen); });
+    const std::lock_guard lock(g_fullScreenLock);
+    g_fullScreenObservers.push_back(std::move(observer));
+}
+
+bool LoadInto(Movie movie, std::string_view clip, std::wstring_view ownMovie)
+{
+    if (!movie || clip.empty() || ownMovie.empty())
+    {
+        return false;
+    }
+    const std::string path = "_root." + std::string(clip);
+    // Set on the clip before its load: a movie loaded into a clip replaces
+    // what the clip held, its variables too, so the mark still there means
+    // the load never came (DAOLib #27, found by the turn-based mod).
+    const std::string pending = path + ".DAOLib_LoadPending";
+    if (movie.IsAvailable(path.c_str()))
+    {
+        if (!movie.GetBool(pending.c_str()).value_or(false))
+        {
+            return true;
+        }
+        movie.Invoke((path + ".removeMovieClip").c_str());
+    }
+    // The plugin's own movie, served from its folder as GFx opens it.
+    std::error_code ec;
+    const std::filesystem::path own = Module::OwnFolder() / ownMovie;
+    if (!std::filesystem::is_regular_file(own.wstring() + L".gfx", ec) &&
+        !std::filesystem::is_regular_file(own.wstring() + L".swf", ec))
+    {
+        return false;
+    }
+    AttachOpenFile();
+    const auto depth = movie.Call("_root.getNextHighestDepth");
+    const std::string name(clip);
+    const Value make[] = {Value::String(name.c_str()),
+                          Value::Number(depth && depth->type == Value::Type::Number ? depth->number : 0)};
+    if (!movie.Call("_root.createEmptyMovieClip", make) || !movie.IsAvailable(path.c_str()))
+    {
+        return false;
+    }
+    movie.SetVariable(pending.c_str(), Value::Bool(true), Movie::SetType::Normal);
+    const std::string url = Utf8(ownMovie) + ".swf";
+    const Value load[] = {Value::String(url.c_str())};
+    return movie.Invoke((path + ".loadMovie").c_str(), load);
 }
 
 bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)

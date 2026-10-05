@@ -437,6 +437,56 @@ std::optional<Screen> CurrentFullScreen();
 // OptionTabAction, which the movie does not have, answered false.
 std::optional<Movie> ScreenMovie(std::wstring_view screen);
 
+// Told when a full-screen interface opens and closes, whatever opened it:
+// the inventory, the character record, the map, the journal, the tactics
+// screen ("Tactics"), the level-up screen, by the names CurrentFullScreen
+// gives. Compared each frame, as the GUI system keeps them (its stack of
+// full-screen ids, the last the one up), so a callback runs at the first
+// frame after, on the game's thread, the screen's movie open: ScreenMovie
+// and LoadInto work from inside it. One closing as another opens is told
+// in that order. Read 2026-10-05 (DAOLib #27); not yet seen in play.
+void OnFullScreen(std::function<void(std::wstring_view name, bool shown)> observer);
+
+// A movie of this plugin's own loaded into a clip of a game movie's root,
+// for an element of its own on a game screen with the screen's own art:
+// the loaded movie's _root is the game movie's, so its script can
+// attachMovie the game movie's exported symbols (the tactics screen's
+// "OnOffButton") and read the screen's data tree tokens, and it talks to
+// the plugin through fscommand and ExternalInterface (OnFSCommand,
+// OnExternalInterface).
+//
+//   dao::gui::OnFullScreen([](std::wstring_view name, bool shown) {
+//       if (name == L"Tactics" && shown)
+//           if (auto movie = dao::gui::ScreenMovie(L"Tactics"))
+//               dao::gui::LoadInto(*movie, "MyPluginTactics_mc", L"myplugin_tactics");
+//   });
+//
+// The clip is made with the movie's own createEmptyMovieClip at its next
+// free depth, and the movie <ownMovie>.swf is loaded into it with
+// loadMovie, served from the plugin's folder (as AddScreen's are). The
+// load arrives with the movie's next advance: true here says it was asked
+// for, or that the clip is there with its movie loaded (a screen only
+// hidden keeps both; one closed loses both, so call this each time the
+// screen opens). A clip whose load never came is made again: a mark set on
+// it before the load, which the load clears, says which. False for a movie
+// the plugin's folder does not have.
+//
+// For the loaded movie's script, from the turn-based mod's tactics box
+// (its issue 46, 2026-10-05):
+// - The clip and anything the script attaches need names of their own: an
+//   element attached inside the clip by the clip's name would shadow it.
+// - A game element attached by attachMovie is not usable in the frame it
+//   is attached, and an element of the screen's own may be there before it
+//   is set up: wait for its m_bLoaded, as the screen's own rows do, not
+//   only for it to exist.
+// - Anything attached at the root draws over the screen's drop-down lists,
+//   and the screen's own swapDepths(1) moves whatever sits at depth 1.
+// - The screen's token observers keep ids of their own (the tactics
+//   screen's 2303, 2308, 2600 to 2609); a script's own observer takes an id
+//   of its own (TokenManager.AddTokenObserverWithID, as the screen does).
+// Read 2026-10-05 (DAOLib #27); not yet seen in play.
+bool LoadInto(Movie movie, std::string_view clip, std::wstring_view ownMovie);
+
 // Whether the mouse is over an element of one of the interface's movies,
 // or one of them holds a mouse press: the engine's own test, which explore
 // mode asks before it picks what is under the cursor, choosing nothing when
