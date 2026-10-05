@@ -290,7 +290,10 @@ std::optional<bool> ObstaclePlaced(ObjectId creature);
 // the top (a bone at the neck). An ogre's, 4.00 by 1.19 and 4.60 high, is
 // its upright arms-out rest pose, where it stands about 3 m as drawn. So
 // across is a body's length for a creature that is not a person, and
-// twice a person's shoulders for a person.
+// twice a person's shoulders for a person. The high dragon's (seen
+// 2026-10-05, its body on the mountain top, the save after its fight) is
+// 31.07 by 21.75 and 14.82 high, its wings spread, where the body a player
+// looks at is 8 to 10 m: for a winged model the box is the wings'.
 struct ModelBox
 {
     Vector min; // model space: x and y across, z up from the model's place
