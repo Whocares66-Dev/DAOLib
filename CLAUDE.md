@@ -70,7 +70,7 @@ toolset/        the toolset installer and what is extracted from it (ignored)
 .\tools\build.ps1 -Preset debug -Mutants      # the core broken on purpose, one promise at a time: minutes
 ```
 
-Output is `build\<preset>\version.dll` and `build\<preset>\daolib\plugins\<name>\`, each plugin a folder of its own (its DLL and its files), a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `-Remove` returns the install to stock: `version.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
+Output is `build\<preset>\version.dll` and `build\<preset>\daolib\plugins\<name>\`, each plugin a folder of its own (its DLL and its files), a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `.	ools\package.ps1` makes the zip a player installs from (`build\package\DAOLib-<version>.zip`, the loader and the address files laid out as the game folder, with a README), after a `release` build. `-Remove` returns the install to stock: `version.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
 
 The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x86, which takes a few minutes, and so does the first of each other preset. Last verified green 2026-09-30: build, tests, format, lint, the tests under ASan, and /analyze.
 

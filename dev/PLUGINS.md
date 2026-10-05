@@ -168,3 +168,7 @@ g_setPaused.Attach(dao::addr::kCClientExoApp_SetPaused, &SetPaused); // in DAOLi
 ```
 
 A wrong signature leaves the stack off by the arguments' size at the return, so the crash comes after the hook, not in it; `ret N` at the function's end says N bytes of arguments. The crash logger in the loader writes `crash-<time>.log` beside the logs with the stack and the names it knows.
+
+## Shipping a plugin
+
+A player installs DAOLib from its release zip (`tools\package.ps1`: `bin_shipersion.dll` and `bin_ship\daolibddresses\`, extracted into the game's install folder, as SKSE is). A plugin ships the same way, a zip holding its one folder, `bin_ship\daolib\plugins\<name>\`, with its DLL and its files: a `.dazip` cannot hold either, since DAUpdater unpacks into the Documents folder and never the game's.

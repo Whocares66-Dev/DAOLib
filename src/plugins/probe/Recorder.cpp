@@ -118,7 +118,8 @@ class Recorder
         return true;
     }
 
-    void Run()
+    // The sampler runs for the life of the process.
+    [[noreturn]] void Run()
     {
         const ULONGLONG start = GetTickCount64();
         ULONGLONG lastCensus = 0;
@@ -424,7 +425,6 @@ DWORD WINAPI RecorderThread(LPVOID parameter)
 {
     auto *recorder = static_cast<Recorder *>(parameter);
     recorder->Run();
-    return 0;
 }
 
 } // namespace
