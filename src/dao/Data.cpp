@@ -3,6 +3,7 @@
 #include "dao/Addresses.h"
 #include "dao/Module.h"
 #include "dao/String.h"
+#include "dao/core/Msvc8.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -142,6 +143,37 @@ std::size_t Attribute::MemberCount() const
     return count > 0 ? static_cast<std::size_t>(count) : 0;
 }
 
+std::vector<std::wstring> Attribute::MemberNames() const
+{
+    std::vector<std::wstring> names;
+    // As SmartData::MemberIterator does: the attribute's own iterator, made
+    // on the engine's heap and freed by its own slot 0.
+    using MakeFn = void *(__fastcall *)(const Attribute *, int);
+    void *iterator = Slot<MakeFn>(this, 17)(this, 0);
+    if (iterator == nullptr)
+    {
+        return names;
+    }
+    using AtMemberFn = bool(__fastcall *)(void *, int);
+    using StepFn = void(__fastcall *)(void *, int);
+    using KeyFn = std::uint32_t(__fastcall *)(void *, int);
+    using NameFn = const core::WStringRep *(__fastcall *)(const Attribute *, int, std::uint32_t);
+    using FreeFn = void(__fastcall *)(void *, int, std::int32_t);
+    // Past this many, something is wrong: a screen's list has dozens.
+    constexpr std::size_t kMost = 100000;
+    for (std::size_t i = 0; i < kMost && Slot<AtMemberFn>(iterator, 2)(iterator, 0); ++i)
+    {
+        const std::uint32_t key = Slot<KeyFn>(iterator, 3)(iterator, 0);
+        if (const core::WStringRep *name = Slot<NameFn>(this, 7)(this, 0, key))
+        {
+            names.emplace_back(name->View());
+        }
+        Slot<StepFn>(iterator, 1)(iterator, 0);
+    }
+    Slot<FreeFn>(iterator, 0)(iterator, 0, 1);
+    return names;
+}
+
 void Attribute::SetText(std::wstring_view value)
 {
     // Slot 10 takes the engine's own string, as SetValueUnicode passes it.
@@ -168,6 +200,12 @@ std::optional<std::size_t> MemberCount(std::wstring_view path)
     return attribute != nullptr ? std::optional{attribute->MemberCount()} : std::nullopt;
 }
 
+std::vector<std::wstring> MemberNames(std::wstring_view path)
+{
+    const Attribute *attribute = Find(path);
+    return attribute != nullptr ? attribute->MemberNames() : std::vector<std::wstring>{};
+}
+
 std::vector<std::wstring> Members(std::wstring_view path)
 {
     std::vector<std::wstring> members;
@@ -176,10 +214,9 @@ std::vector<std::wstring> Members(std::wstring_view path)
     {
         return members;
     }
-    const std::size_t count = attribute->MemberCount();
-    for (std::size_t i = 0; i < count; ++i)
+    for (const std::wstring &name : attribute->MemberNames())
     {
-        std::wstring member = std::wstring(path) + L"." + std::to_wstring(i);
+        std::wstring member = std::wstring(path) + L"." + name;
         if (Find(member) != nullptr)
         {
             members.push_back(std::move(member));

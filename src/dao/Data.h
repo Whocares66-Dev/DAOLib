@@ -69,6 +69,9 @@ class Attribute
     // How many members it has, as the UI's GetNumMembers answers (its slot
     // 16): a list's items, an object's members; 0 for a plain value.
     std::size_t MemberCount() const;
+    // Their names, as the UI's ListMemberNames gives them: a list's
+    // indices as text, an object's members' names.
+    std::vector<std::wstring> MemberNames() const;
 
     // Sets the attribute from text, as the Flash UI's SetValueUnicode does
     // (0x0051F6E0, which hands the text to the attribute's slot 10): a
@@ -84,9 +87,10 @@ Attribute *Find(std::wstring_view path);
 std::optional<std::wstring> Text(std::wstring_view path);
 std::optional<double> Number(std::wstring_view path);
 
-// A list in the tree, as the screens read one: how many it holds, and each
-// member's path, the list's own with ".<index>" after it, whose members are
-// read the same way.
+// A list or an object in the tree, as the screens read one: how many
+// members it has, their names, and each member's path, the parent's own
+// with ".<name>" after it (a list's names are its indices), whose members
+// are read the same way.
 //
 //   for (const std::wstring &chain : dao::data::Members(L"CharGenCreature.Stats.TalentChains"))
 //       for (const std::wstring &ability : dao::data::Members(chain))
@@ -98,19 +102,31 @@ std::optional<double> Number(std::wstring_view path);
 // inventory, a store's stock, a conversation's lines), and every one of
 // the 49 such classes looks a member up (its slot 6, 0x007268E0) by the
 // path's component read as a number, so Find reaches "<list>.0" and on.
-// An object's members go by name and are not listed here. Members gives
-// only paths that Find reaches.
+// An object's members go by name: the UI's ListMemberNames (an FSCommand,
+// 0x00520340) walks them with SmartData::MemberIterator (0x005C7D60), a
+// thin wrapper over an iterator the attribute makes (its slot 17, on the
+// engine's heap: slot 0 frees it, 1 steps, 2 says whether it is at a
+// member, 3 gives the member's key), each key named by the attribute's slot
+// 7, an engine std::wstring; MemberNames does the same. Members gives only
+// paths that Find reaches.
 //
 // The level-up screen's chains (FindAbilityChainsMessage, built by
-// 0x0062DCD0): each member an AbilityGUIInfo of AbilityTemplate, Column,
-// DisplayState and AbilityInstance. DisplayState is 1 for an ability the
+// 0x0062DCD0), each an AbilityGUIInfo of AbilityTemplate, Column,
+// DisplayState and AbilityInstance. Seen in play 2026-10-03 through the
+// Eluvian server, on Sten's level-up: TalentChains had 56 members, read by
+// index, and each chain 5, whose members go by name, so not by index; the
+// screen's movie walks them with ListMemberNames, as MemberNames does here. DisplayState is 1 for an ability the
 // creature has (0x0071BEC0), 2 for one it can learn now (0x0071BEF0, the
 // test behind the scripts' IsAbilityAvailable), 3 for one it cannot yet.
 // Nothing for a path with nothing there. Seen in play 2026-10-03 through
 // the Eluvian server: the world map's 58 pins read by their index paths,
-// with the map down. MemberCount and Members on the level-up chains not
-// yet seen.
+// with the map down. MemberNames seen in play 2026-10-04 and 10-05 through
+// the Eluvian server: Lyna's four level-ups, each chain's members listed
+// by name and read (AbilityTemplate, AbilityInstance, DisplayState, Column,
+// Row), the talents, spells and skills offered and then spent by id; and
+// GUICrafting.Recipes.0's eleven named members.
 std::optional<std::size_t> MemberCount(std::wstring_view path);
+std::vector<std::wstring> MemberNames(std::wstring_view path);
 std::vector<std::wstring> Members(std::wstring_view path);
 
 } // namespace dao::data
