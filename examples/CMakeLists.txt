@@ -49,3 +49,6 @@ dao_apply_warnings(example_animation)
 
 add_daolib_plugin(example_options SOURCES options/Options.cpp)
 dao_apply_warnings(example_options)
+
+add_daolib_plugin(example_party SOURCES party/Party.cpp)
+dao_apply_warnings(example_party)

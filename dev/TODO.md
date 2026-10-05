@@ -15,6 +15,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Why native:** every message class a plugin can read is a hook point (`dao/Messages.h`). 11 of the 296 have fields in C++.
 - **Leads:** `dev/messages.csv`, with each class's size from its clone (`tools/messages.py`); each handler's reads.
 - **Done when:** the messages for abilities, the party, inventory and dialogue are typed, and each field has been seen in play.
+- **Asked for (2026-10-04, by the Eluvian server):** who has control and when it changes, and what goes on or comes off whom. Both are met by events at the engine's own functions rather than by typed messages, since a message catches only the player's own clicks (DAOLib #22: `dao::party::OnControlChanged`, `dao::equipment::OnEquip` and `OnUnequip`), seen in play 2026-10-04 and wired into the Eluvian server's bus. Nothing else asked for; the rest waits for a plugin that needs it.
 
 ## 2. The hang logger: a load or a room's streaming, told from a hang
 

@@ -994,6 +994,16 @@ DAO_ADDRESS(kPortraitRenderer_Render, 21350)
 // the rotation and pitch and backed off by the distance. The name is ours.
 DAO_ADDRESS(kPortraitRenderer_PlaceCamera, 21341)
 DAO_ADDRESS(kCCCreature_HeadTransform, 14447)
+// A creature's equipment changing (dao/Equipment.h), read 2026-10-04
+// (DAOLib #22): every path to equip an item meets in the equip,
+// __thiscall (CCItem *item, slot, weapon set), `ret 0xC`, success in al,
+// which EquipItemMessage's handler (0x006BE330) and the scripts' EquipItem
+// (0x0065CDA0) call; and every path to take one off in the unequip,
+// __thiscall (Result *out, CCItem *item), `ret 8`, answering out with its
+// first byte the success, which the scripts' UnequipItem calls and the
+// equip calls for what it displaces. The names are ours.
+DAO_ADDRESS(kCCCreature_Equip, 14937)
+DAO_ADDRESS(kCCCreature_Unequip, 14877)
 DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
