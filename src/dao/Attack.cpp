@@ -253,10 +253,17 @@ class FilledRings
 // once, the facing within 1 degree of the direction to the target's point
 // for it (the target's slot 29 given the attacker's place, flattened), each
 // an angle by the engine's VectorToAngle and their difference by its
-// Angle::Wrap to -180..180; then the blow's own tests (0x007A87C0): the
-// target within 60 degrees of level (Vector::Elevation) and in sight.
+// Angle::Wrap to -180..180; then the blow's own tests (0x007A87C0), as it
+// asks them: InStrikingReach, the target within 60 degrees of level
+// (Vector::Elevation) and in sight (DAOLib #23).
 bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
 {
+    // CCCreature::InStrikingReach: __thiscall (target), `ret 4`.
+    using StrikingReachFn = bool(__fastcall *)(CCObject *, int, CCObject *);
+    if (!At<StrikingReachFn>(addr::kCCCreature_InStrikingReach)(from, 0, to))
+    {
+        return false;
+    }
     constexpr float kTurnDone = 1.0F;
     constexpr float kMostElevation = 60.0F;
     constexpr std::uintptr_t kFacing = 0x130;

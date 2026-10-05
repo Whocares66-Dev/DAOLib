@@ -17,7 +17,6 @@ function_va,name,how,class,ghidra_name,commands
 0x004c3a50,ScriptBackend::ForScript_StringLowerCase,sole,,ScriptBackend::ForScript_StringLowerCase,StringLowerCase
 0x004d4d10,ScriptBackend::ForScript_GetAngleBetweenObjects,sole,,ScriptBackend::ForScript_GetAngleBetweenObjects,GetAngleBetweenObjects
 0x004eae30,ScriptBackend::ForScript_Location,sole,,ScriptBackend::ForScript_Location,Location | SetLocationFacing | CommandTurn
-0x004ee570,ScriptBackend::ForScript_VectorToAngle,sole,,ScriptBackend::ForScript_VectorToAngle,VectorToAngle | GetFacing | GetFacingFromLocation
 0x0051b370,CCModule::ForScript_GetName,direct,CCModule,CCModule::ForScript_GetName,GetName
 0x005b6cd0,ScriptBackend::ForScript_SetMusicIntensity,sole,,ScriptBackend::ForScript_SetMusicIntensity,SetMusicIntensity
 0x005ba100,ScriptBackend::ForScript_StopSound,sole,,ScriptBackend::ForScript_StopSound,StopSound
@@ -225,7 +224,6 @@ function_va,name,how,class,ghidra_name,commands
 0x007c3770,ScriptBackend::ForScript_GetAttackImpactDamageEffect,sole,,ScriptBackend::ForScript_GetAttackImpactDamageEffect,GetAttackImpactDamageEffect
 0x007c4930,CCWayPoint::ForScript_SetMapPinState,direct,CCWayPoint,CCWayPoint::ForScript_SetMapPinState,SetMapPinState
 0x007ca4f0,ScriptBackend::ForScript_SetMaxInventorySize,sole,,ScriptBackend::ForScript_SetMaxInventorySize,SetMaxInventorySize
-0x007ccc30,ScriptBackend::ForScript_GetMeleeRingPosition,sole,,ScriptBackend::ForScript_GetMeleeRingPosition,GetMeleeRingPosition
 0x007e5e60,,direct,CCAreaOfEffectObject,FUN_007e5e60,GETCREATURESINAOE | GetObjectsInArea
 0x008663a0,ScriptBackend::ForScript_IsInTrigger,sole,,ScriptBackend::ForScript_IsInTrigger,IsInTrigger | IsModalAbilityActive
 0x008e33e0,ScriptBackend::ForScript_log,sole,,ScriptBackend::ForScript_log,log

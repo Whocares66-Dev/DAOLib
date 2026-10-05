@@ -87,9 +87,10 @@ struct Approach
     bool inReach = false;
     // Melee: the blow comes in the command's first update, before the
     // ring is filled (below): in reach, already facing the target within
-    // the turn's 1 degree (sub-action 39, 0x007A69E0, through TurnToward), the
-    // target within 60 degrees of level (the blow's elevation test,
-    // 0x007A87C0) and in sight.
+    // the turn's 1 degree (sub-action 39, 0x007A69E0, through TurnToward),
+    // then the blow's own tests (0x007A87C0): its reach (InStrikingReach,
+    // the flat distance to the target's point within both spaces and 2.2),
+    // the target within 60 degrees of level and in sight.
     bool strikesAtOnce = false;
     // Melee: whether the ring still has a place for the attacker once it
     // is filled with who stands round the target, as it is a frame after

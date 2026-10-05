@@ -1173,9 +1173,19 @@ DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
 // spaces and 1.2 apart in x, y and z, and the attacker within 1.25 of the
 // place in x and y alone, WithinBand being flat), and
 // ends at once if so, else walks to the place. The swing, sub-action 1
-// (Swing), waits until the target is within 60 degrees of the attacker's
-// facing and in its line of sight, then sends EVENT_TYPE_COMMAND_PENDING
-// (SignalAttackPending: integers 1 and 1, objects self and target).
+// (Swing), tests on its first run, in order: the target found and not
+// dead; the attacker's InStrikingReach (below); the direction to the
+// target within 60 degrees of level (Vector::Elevation); and line of
+// sight (Combat::LineOfSight, the target's id the one hit it lets
+// through). Then it sends EVENT_TYPE_COMMAND_PENDING (SignalAttackPending:
+// integers 1 and 1, objects self and target) unless the sub-action's
+// integer 2 is set. It answers -8 at once where the attacker's disabled
+// flags (0x00A64740 on its +0x70) have bit 4. There is no facing test in
+// the swing: the turn before it is sub-action 39's. InStrikingReach
+// (0x006A3DC0), __thiscall (target), `ret 4`: true unless the target is a
+// creature (type byte 6) farther in x and y from the attacker's place
+// than PersonalSpaces + 1.2 + the constant at 0x00ADE218, to the target's
+// slot 29 point.
 // CSSubActionHandler keeps its handlers, its own __thiscall (object,
 // sub-action) members, `ret 8`, by type at +0x48 (filled by 0x007AB8D0).
 // Corrected by the address library's session, 2026-10-04. The names are
@@ -1194,6 +1204,7 @@ DAO_ADDRESS(kCSSubActionHandler_ApproachMelee, 19889)
 DAO_ADDRESS(kCSSubActionHandler_ApproachRanged, 19887)
 DAO_ADDRESS(kCSSubActionHandler_Swing, 19879)
 DAO_ADDRESS(kCCCreature_SignalAttackPending, 14503)
+DAO_ADDRESS(kCCCreature_InStrikingReach, 14500)
 // A creature's melee rings kept up to date, read 2026-10-04 (DAOLib #19;
 // corrected by the address library's session): CCCreature::Update calls
 // RefreshMeleeRing (__thiscall (ring index), `ret 4`) for each of its
@@ -1201,18 +1212,27 @@ DAO_ADDRESS(kCCCreature_SignalAttackPending, 14503)
 // (0x006A3060, for each ring on each call); then, unless the ring has a
 // claimant (the count at +0x38 of its claimants' list at +0x30: a claim
 // adds the attacker, 0x00698C30, a release takes it away, 0x00745230) or
-// its keep byte at +0x28 is set, it empties the ring (MeleeRing::Clear: flags 0, holders
-// none, +0x10 65505.0) and stops. Else it marks the places a wall
-// (0x00A471E0) or a slope over 60 degrees cuts off as near-only (+9), and
-// records the creatures in the std::set of ids at the creature's +0xC18
-// as standing on the places their bodies cover (0x007CC870: the id at +0xC
-// with its distance at +0x10, a run each side at +0x14 through
-// 0x007CB920, and any claim there (+0x18) and +0x1C cleared), the walk
-// stopping at the creature's own id. So a ring nobody has claimed is empty,
-// and once claimed it fills with who stands round it. The rings are made
-// by 0x007CB400 from 0x006AC2A0. The names are ours.
+// its byte at +0x28 is set, it empties the ring (MeleeRing::Clear: flags
+// 0, holders none, +0x10 65505.0) and stops. Else it marks the places a
+// wall (0x00A471E0) or a slope over 60 degrees cuts off as near-only
+// (+9), and records the creatures this creature perceives (its perception
+// list, the std::set of ids at its +0xC18, which IsPerceiving and
+// GetPerceivedCreatureList read) as standing on the places their bodies
+// cover (0x007CC870: a place keeps the nearer creature, its id at +0xC
+// and distance at +0x10; +0x14, +0x18 and +0x1C set to -1, so any claim
+// there is gone; a run each side through 0x007CB920). So a ring nobody
+// has claimed is empty, and once claimed it fills with who stands round it
+// and is perceived. The rings are made from the appearance row (0x006AC2A0,
+// ID 14700): ring 0 from apr_base, rings 1 to 9 from meleering1 to 9 where
+// they have the row; each ring's radius at +0x10 its PersonalSpace (ring 0)
+// or Radius, plus 1.2, and its +0x28 the row's MeleeRingUpdateAlways, a
+// ring always filled. Their places by 0x007CB400; the ring at an index,
+// made if absent, by MeleeRings::At (0x007CCC30, __thiscall (index) on
+// the creature's +0xB44, the vector of rings, `ret 4`). Corrected by the address
+// library's session, 2026-10-04. The names are ours.
 DAO_ADDRESS(kCCCreature_RefreshMeleeRing, 14701)
 DAO_ADDRESS(kMeleeRing_Clear, 20604)
+DAO_ADDRESS(kMeleeRings_At, 20622)
 DAO_ADDRESS(kScriptBackend_ForScript_VectorToAngle, 5703)
 // The angles an attack's turn and blow test, read 2026-10-04 (DAOLib #19):
 // the turn (TurnToward, which sub-actions 39, 40 and 42 call with a
