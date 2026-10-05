@@ -291,36 +291,69 @@ std::uint32_t Movie::ArraySize(const char *path) const
 namespace
 {
 
-// GetVariable, slot 12: the value at a path into `out`, true if there was
-// one. A value GFx manages is not released (Movie::GetNumber).
-std::optional<Value> GetPlain(void *view, const char *path)
+// A value as GFx handed it out, its text copied before the movie's next
+// GetVariable or answered Invoke empties the pool it is in. `out` is given
+// with type 0, so GFx gives each value its own type (0x10 with a type
+// would ask for that one).
+Movie::Answer ToAnswer(const Value &value)
 {
-    if (view == nullptr)
+    Movie::Answer answer;
+    answer.type = value.Kind();
+    answer.number = value.AsNumber().value_or(0);
+    answer.boolean = value.AsBool().value_or(false);
+    if (const auto text = value.AsString())
     {
-        return std::nullopt;
+        answer.text = std::string(*text);
     }
-    constexpr std::uint32_t kManaged = 0x40;
-    Value out;
-    using Fn = bool(__fastcall *)(void *, int, Value *, const char *);
-    if (!Slot<Fn>(view, 12)(view, 0, &out, path) || (out.type & kManaged) != 0)
+    else if (const auto wide = value.AsWString())
     {
-        return std::nullopt;
+        answer.text = Utf8(*wide);
     }
-    return out;
+    return answer;
 }
 
 } // namespace
 
+std::optional<Movie::Answer> Movie::Get(const char *path) const
+{
+    if (view_ == nullptr)
+    {
+        return std::nullopt;
+    }
+    Value out;
+    using Fn = bool(__fastcall *)(void *, int, Value *, const char *);
+    if (!Slot<Fn>(view_, 12)(view_, 0, &out, path))
+    {
+        return std::nullopt;
+    }
+    return ToAnswer(out);
+}
+
+std::optional<Movie::Answer> Movie::Call(const char *method, std::span<const Value> args)
+{
+    if (view_ == nullptr)
+    {
+        return std::nullopt;
+    }
+    Value out;
+    using Fn = bool(__fastcall *)(void *, int, const char *, Value *, const Value *, std::uint32_t);
+    if (!Slot<Fn>(view_, 18)(view_, 0, method, &out, args.data(), static_cast<std::uint32_t>(args.size())))
+    {
+        return std::nullopt;
+    }
+    return ToAnswer(out);
+}
+
 std::optional<double> Movie::GetNumber(const char *path) const
 {
-    const auto value = GetPlain(view_, path);
-    return value ? value->AsNumber() : std::nullopt;
+    const auto value = Get(path);
+    return value && value->type == Value::Type::Number ? std::optional{value->number} : std::nullopt;
 }
 
 std::optional<bool> Movie::GetBool(const char *path) const
 {
-    const auto value = GetPlain(view_, path);
-    return value ? value->AsBool() : std::nullopt;
+    const auto value = Get(path);
+    return value && value->type == Value::Type::Boolean ? std::optional{value->boolean} : std::nullopt;
 }
 
 bool Movie::Invoke(const char *method, std::span<const Value> args)

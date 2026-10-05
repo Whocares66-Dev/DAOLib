@@ -21,7 +21,7 @@ GFx calls the game's one FSCommand handler and one ExternalInterface handler. Bo
 
 ## The game calling movies
 
-`dao::gui::Owners()` lists the records through the engine's own iterator over the set. `FindOwner(name)` finds one, `NameOf` reads a record's name, and `MovieOf` gives its movie. `dao::gui::Movie` wraps a movie's `IsAvailable`, `SetVariable`, the array setters and `Invoke`. Values are not read back yet: GFx hands strings and objects out as references of its own to release, and how to release them is not read.
+`dao::gui::Owners()` lists the records through the engine's own iterator over the set. `FindOwner(name)` finds one, `NameOf` reads a record's name, and `MovieOf` gives its movie. `dao::gui::Movie` wraps a movie's `IsAvailable`, `SetVariable`, the array setters and `Invoke`, and reads values back with `Get` (a path) and `Call` (a function's answer). This game's GFx is 3.0, which has no objects in a GFxValue (read 2026-10-04, DAOLib #24): what it hands out, from `GetVariable` and `Invoke`'s answer through one converter (`0x00954910`), is undefined, null, a bool, a number or a string, the string copied into a pool the movie empties at its next such call, and an object, an array or a clip as its string. `Invoke` passes any argument that is not null, bool, number or string to ActionScript as undefined (`0x00956E80`). Nothing is reference-counted. So a call cannot be given an object, and a function that wants one (the level-up screen's `AbilityScene.SpendPoint(oClass, ...)`) is reached through something of the movie's that takes none, such as a button's own handler.
 
 ## Loading a movie
 
@@ -85,7 +85,7 @@ Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's p
 - GFx runs both kinds of handler during a movie's `Advance` or an `Invoke` on it.
 - `SetVariable`'s sticky mode is the default and waits for a variable not yet there.
 
-`SetArrayType` is the same in 4.x: 0 int, 1 double, 2 float, 3 string, 4 wide string, 5 value, which matches what the game passes. The value type numbers are not the same: 4.x inserted `VT_Int` and `VT_UInt` at 3 and 4, and the game's code uses 3.x's numbering (3 number, 4 string, 5 wide string). A managed value (a string or object GFx hands out) must be released before its movie goes.
+`SetArrayType` is the same in 4.x: 0 int, 1 double, 2 float, 3 string, 4 wide string, 5 value, which matches what the game passes. The value type numbers are not the same: 4.x inserted `VT_Int` and `VT_UInt` at 3 and 4, and the game's code uses 3.x's numbering (3 number, 4 string, 5 wide string). Scaleform's later versions hand out managed values (0x40 beside the type) to be released; this game's 3.0 has none (above).
 
 ## Still to read
 

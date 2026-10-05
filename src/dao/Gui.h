@@ -59,14 +59,21 @@ namespace dao::gui
 // GFx's GFxValue, as ExternalInterface calls pass their arguments and
 // take their answer: 16 bytes, the type at +0 and the value at +8 (the
 // game's handlers read argument i at 16 * i + 8, and answer a number as
-// type 3, the value a double at +8). Only the types a call passes by value
-// are read here; objects, arrays and display objects are GFx's own. The
-// numbering is GFx 3.x's, and the game's code agrees on three of them (3
-// a number, 4 a string argument, 5 a wide string answer); Scaleform 4
-// inserted Int and UInt at 3 and 4, so its documentation's numbers do not
-// apply here. A string or object GFx hands out is managed (0x40 beside the
-// type) and must be released through GFx before its movie goes; how is not
-// read yet, which is why nothing here reads a movie's values back.
+// type 3, the value a double at +8). The numbering is GFx 3.x's, and the
+// game's code agrees on three of them (3 a number, 4 a string argument, 5
+// a wide string answer); Scaleform 4 inserted Int and UInt at 3 and 4, so
+// its documentation's numbers do not apply here.
+//
+// This game's GFx is 3.0, which has no objects in a GFxValue (read
+// 2026-10-04, DAOLib #24): the values it hands out, from GetVariable and
+// from Invoke's answer (both through 0x00954910), are undefined, null, a
+// bool, a number or a string, the string copied into a pool the movie
+// keeps and empties at its next GetVariable or answered Invoke; an object,
+// an array or a clip comes back as its string. And Invoke takes null,
+// bool, number, string and wide string arguments, passing any other type,
+// an object's included, to ActionScript as undefined (0x00956E80). Nothing
+// is reference-counted, and +4 is not used. So Object, Array and
+// DisplayObject below are never given or taken.
 struct Value
 {
     enum class Type : std::uint32_t
@@ -215,19 +222,39 @@ class Movie
                   SetType type = SetType::Sticky);
     bool SetArraySize(const char *path, std::uint32_t count, SetType type = SetType::Sticky);
     std::uint32_t ArraySize(const char *path) const;
-    // Calls an ActionScript function by its path; true if it ran. What it
-    // returns is not read: GFx hands strings and objects out as references
-    // of its own to release.
+    // Calls an ActionScript function by its path; true if it ran. Call
+    // (below) also reads what it returned.
     bool Invoke(const char *method, std::span<const Value> args = {});
 
-    // A number or a bool at a path, read back (GFx's GetVariable, slot 12,
-    // __thiscall (out, path), `ret 8`): a list's scroll position, a
-    // checkbox's state. Nothing for a path the movie has nothing at, or that
-    // holds something else. Numbers and bools come back as plain values; a
-    // string or an object comes back as a reference GFx manages, and how to
-    // release one is not read, so this reads neither: asked of a path that
-    // holds one, it answers nothing and the reference stays held until the
-    // movie goes. Read 2026-10-03, not yet seen in play.
+    // What a movie hands back, from a path or a call: its type, and a
+    // number, a bool or text. An object, an array or a clip comes as its
+    // text, as ActionScript's String() gives it (this GFx has nothing else
+    // to give, above).
+    struct Answer
+    {
+        Value::Type type = Value::Type::Undefined;
+        double number = 0;
+        bool boolean = false;
+        std::string text; // a string's, UTF-8 as GFx keeps it, copied out
+    };
+    // The value at a path (GFx's GetVariable, slot 12, __thiscall (out,
+    // path), `ret 8`): a list's scroll position, a checkbox's state, a
+    // label. Nothing for a path the movie has nothing at.
+    std::optional<Answer> Get(const char *path) const;
+    // Calls an ActionScript function by its path and answers what it
+    // returned (Invoke, slot 18, its answer given), Undefined for a
+    // function that returns nothing; nothing if it did not run.
+    std::optional<Answer> Call(const char *method, std::span<const Value> args = {});
+    // A number or a bool at a path, as Get reads them; nothing for one of
+    // another type.
+    //
+    // Get and Call seen in play 2026-10-05 through the Eluvian server, over
+    // seven rounds of the level-up screen's reads: numbers (nPointsToSpend
+    // 3, m_nMode 1), booleans (bLevelUp, _visible), a string
+    // (m_sRootToken "CharGenCreature.Stats.TalentChains"), null and
+    // undefined each where expected; Call's answer to
+    // Scrollable_mc.getNextHighestDepth a number, 3. A clip comes back as
+    // a String holding its path, never as DisplayObject.
     std::optional<double> GetNumber(const char *path) const;
     std::optional<bool> GetBool(const char *path) const;
 
