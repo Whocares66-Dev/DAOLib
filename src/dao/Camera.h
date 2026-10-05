@@ -123,6 +123,19 @@ class SceneCamera
     {
         return Read<float>(kPitch);
     }
+    // Tilt the camera at once, as the engine's own SetPitch does (the
+    // orbit's kept pitch, +0x20 and +0x50); it holds until the player
+    // tilts. In the close view (zoom above 0.5) the explore controller
+    // keeps the tilt between 30 and 150 degrees from straight above every
+    // frame (0x0076F1B0, its globals at 0x00C0E050 and 0x00C0E054); a
+    // smaller angle looks down more steeply, over a big creature's back.
+    // Read the player's first and set it back after. Not yet seen in play
+    // (2026-10-04). On the game's thread.
+    void SetPitch(float radians)
+    {
+        using Fn = void(__fastcall *)(SceneCamera *, int, float);
+        reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetPitch))(this, 0, radians);
+    }
     // 1 close behind the creature, 0 the tactical view.
     float Zoom() const
     {

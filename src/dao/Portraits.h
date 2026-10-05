@@ -26,6 +26,7 @@
 #pragma once
 
 #include "dao/ObjectId.h"
+#include "dao/Structures.h"
 
 #include <optional>
 
@@ -49,5 +50,18 @@ struct Camera
 void SetCamera(ObjectId creature, const Camera &camera);
 // Back to the table's.
 void ClearCamera(ObjectId creature);
+
+// Where a creature's head is: its model's node "head", as the portrait
+// camera finds it (CCCreature::HeadTransform; the point comes back with a
+// fourth coordinate, which the portrait divides by, and so does this).
+// Nothing for no such creature, or a skeleton with no node of that name
+// (eleven appearance rows in the turn-based mod's sweep: the deepstalker,
+// the deer, the chicken and others), where the portrait camera aims at the
+// point PlaceCamera began with, (0, 0, 0) of its clone's scene, the clone's
+// feet: seen in play 2026-10-04, the deepstalker framed from there by fixed
+// adjusts (Camera's zAdjust and xAdjust). In the world: seen in play
+// 2026-10-04 (DAOLib #17), the high dragon's head 6.8 to 7.2 m from its
+// position as it stood, 20 m above it as it landed. On the game's thread.
+std::optional<Vector> HeadPosition(ObjectId creature);
 
 } // namespace dao::portraits

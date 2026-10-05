@@ -133,6 +133,20 @@ std::string_view Name(MoveEnd why);
 // go of the camera: a callback may start another.
 void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback);
 
+// The camera's distance from its pivot at zoom 1, in metres: the game's
+// 3.0, or what a plugin sets (nothing: the game's back). Read 2026-10-04
+// (DAOLib #17, dao/Addresses.h "The camera's distances"): the orbit's
+// radius each frame is zoom x close + (1 - zoom) x far, the two from
+// globals the explore controller's update copies into the orbit every
+// frame. So a larger close distance pulls the camera back at the same
+// zoom, and the zoom's view flag and the tactical view are left alone; for
+// a creature too big to frame. Nothing stops the camera at a wall or the
+// ground (the orbit tests no collision); keep it modest where there is
+// little room. The game's own is kept at the first change. On the game's
+// thread.
+void SetCloseDistance(std::optional<float> metres);
+float CloseDistance();
+
 // Why the last move of a kind ended; nothing while one runs or before the
 // first.
 std::optional<MoveEnd> LastEnd(Move move);

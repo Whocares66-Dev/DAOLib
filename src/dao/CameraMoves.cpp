@@ -6,6 +6,7 @@
 #include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 #include "dao/core/Angle.h"
 #include "dao/generated/ScriptApi.h"
 
@@ -449,6 +450,32 @@ void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback)
 std::optional<MoveEnd> LastEnd(Move move)
 {
     return EndOf(move);
+}
+
+namespace
+{
+// The game's close distance, kept as it was before a plugin first set one.
+std::optional<float> g_gameClose;
+} // namespace
+
+void SetCloseDistance(std::optional<float> metres)
+{
+    float *close = At<float>(addr::kCameraControllerExplore_CloseDistance);
+    if (close == nullptr)
+    {
+        return;
+    }
+    if (!g_gameClose)
+    {
+        g_gameClose = *close;
+    }
+    *close = metres.value_or(*g_gameClose);
+}
+
+float CloseDistance()
+{
+    const float *close = At<float>(addr::kCameraControllerExplore_CloseDistance);
+    return close != nullptr ? *close : 0.0F;
 }
 
 } // namespace dao::camera

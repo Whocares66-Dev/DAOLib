@@ -1,10 +1,13 @@
 #include "dao/Portraits.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Gda.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
+#include "dao/core/ObjectType.h"
 
 #include <cstdint>
 #include <mutex>
@@ -140,6 +143,33 @@ void ClearCamera(ObjectId creature)
 {
     const std::lock_guard lock(g_lock);
     g_cameras.erase(creature);
+}
+
+std::optional<Vector> HeadPosition(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    CCObject *object = app != nullptr ? app->GetObjectById(creature) : nullptr;
+    if (object == nullptr || object->Type() != core::ObjectType::Creature)
+    {
+        return std::nullopt;
+    }
+    // CCCreature::HeadTransform: __thiscall (out), `ret 4`; the portrait
+    // camera gives it 32 bytes and reads a homogeneous point from them.
+    struct alignas(16) Out
+    {
+        float x;
+        float y;
+        float z;
+        float w;
+        float rest[4];
+    } out{};
+    using Fn = bool(__fastcall *)(CCObject *, int, Out *);
+    if (!reinterpret_cast<Fn>(Module::Address(addr::kCCCreature_HeadTransform))(object, 0, &out))
+    {
+        return std::nullopt;
+    }
+    const float w = out.w != 0 ? out.w : 1.0F;
+    return Vector{out.x / w, out.y / w, out.z / w};
 }
 
 } // namespace dao::portraits

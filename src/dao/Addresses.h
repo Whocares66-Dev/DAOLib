@@ -920,6 +920,19 @@ DAO_ADDRESS(kSceneCameraManager_Update, 15038)
 DAO_ADDRESS(kSceneCamera_SetPitch, 15001)
 DAO_ADDRESS(kSceneCamera_Update, 15003)
 DAO_ADDRESS(kSceneCamera_SetYaw, 15000)
+// The camera's distances, read 2026-10-04 (dao/CameraMoves.h,
+// SetCloseDistance; DAOLib #17). The orbit (SceneCamera's update) takes its
+// radius each frame as zoom x close + (1 - zoom) x far (0x006C2360; mode
+// 1 blends the pitch the same way, the behaviour's +0x48 with the camera's
+// +0x50). Close and far are the orbit behaviour's +0x40 and +0x30, set
+// every frame by SetOrbit (__thiscall (const Vector4 *focus, float close,
+// float far, float pitch, const Vector4 *), `ret 0x14`) from the explore
+// controller's +0x1C, +0x0C and +0x20 (ApplyOrbit, ID 18490), which its
+// Update loads first from two globals: g_closeDistance, 3.0, and
+// g_farDistance, 20.0. Nothing else writes the globals. The orbit tests no
+// collision. The names are ours.
+DAO_DATA(kCameraControllerExplore_CloseDistance, 98108)
+DAO_DATA(kCameraControllerExplore_FarDistance, 98107)
 
 // Portraits, read 2026-09-30. A creature's portrait is rendered live into
 // a texture of its own, as the party's are. UpdatePortrait, a CCCreature
@@ -975,6 +988,7 @@ DAO_ADDRESS(kPortraitRenderer_Render, 21350)
 // the ogre, genlocks, shrieks, hurlocks, skeletons, werewolves), turned by
 // the rotation and pitch and backed off by the distance. The name is ours.
 DAO_ADDRESS(kPortraitRenderer_PlaceCamera, 21341)
+DAO_ADDRESS(kCCCreature_HeadTransform, 14447)
 DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
