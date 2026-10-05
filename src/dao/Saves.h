@@ -47,8 +47,12 @@
 //   from the one loaded before it.
 //
 // Seen in play: Write and FindSave with their slots, and the load event
-// once per load. Not yet seen: the module's start event for a new game,
-// and this file's callbacks themselves. An early quicksave in play wrote
+// once per load. The callbacks, seen 2026-10-05 by the turn-based mod (its
+// file of each companion's choice): launching straight into a save, a
+// manual save written with its file (OnSaved, the slot right), and three
+// loads in a running game in a row, each told once with its slot, a save
+// with no file of the plugin's read as nothing. Not yet seen: an autosave,
+// a quicksave, and the module's start event for a new game. An early quicksave in play wrote
 // its files without Write being heard; read 2026-10-05, Write is the only
 // code that names a save's files and the loading mode's worker its only
 // caller, so every save of every kind goes through it, and that one was
