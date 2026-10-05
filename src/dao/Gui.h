@@ -319,7 +319,11 @@ void *MovieOf(const void *owner);
 // The movie is found as the game finds its own: a scene "turnorder" is the
 // resource "turnorder.gfx", looked up by the engine's resource system in
 // the places it looks for every resource (its override folders and the
-// game's archives; HasMovie says whether it finds one). Add a
+// game's archives). Where the game has none by that name, the plugin's own
+// folder is the place: daolib\plugins\<name>\turnorder.gfx (or .swf),
+// read once and handed to GFx as the file the game's opener made, so the
+// whole plugin is one folder (DAOLib #26; add_daolib_plugin's FILES puts it
+// there). HasMovie says whether either has it. Add a
 // screen once the game is up (the GUI system exists from the first frame
 // of the main menu: a frame callback will do); show, hide and close it
 // from the scripts' thread. Read 2026-09-30, not yet seen in play.

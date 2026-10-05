@@ -741,8 +741,10 @@ class Report
         w.Line("DAOLIB PLUGINS:");
         for (const auto &m : modules_)
         {
-            if (m.path.parent_path().filename() == L"plugins" &&
-                m.path.parent_path().parent_path().filename() == L"daolib")
+            // daolib\plugins\<name>\<name>.dll (DAOLib #26).
+            const auto folder = m.path.parent_path();
+            if (folder.parent_path().filename() == L"plugins" &&
+                folder.parent_path().parent_path().filename() == L"daolib")
             {
                 w.Line("\t{}", m.name);
             }
@@ -824,10 +826,20 @@ class Report
 
     void InitSymbols()
     {
-        // Our PDBs sit beside our DLLs; the search path names those folders
-        // and nothing else, so no symbol server is asked and nothing waits
-        // on the network in a dying process.
-        const std::wstring search = g_folder.wstring() + L";" + (g_folder / L"daolib" / L"plugins").wstring();
+        // Our PDBs sit beside our DLLs: the loader's beside the exe, each
+        // plugin's in its own folder, daolib\plugins\<name> (DAOLib #26). The
+        // search path names those folders and nothing else, so no symbol
+        // server is asked and nothing waits on the network in a dying
+        // process.
+        std::wstring search = g_folder.wstring();
+        std::error_code ec;
+        for (const auto &entry : std::filesystem::directory_iterator(g_folder / L"daolib" / L"plugins", ec))
+        {
+            if (entry.is_directory(ec))
+            {
+                search += L";" + entry.path().wstring();
+            }
+        }
         SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_FAIL_CRITICAL_ERRORS |
                       SYMOPT_NO_PROMPTS);
         symbols_ = SymInitializeW(GetCurrentProcess(), search.c_str(), TRUE) != FALSE;

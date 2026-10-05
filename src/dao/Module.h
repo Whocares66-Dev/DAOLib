@@ -56,9 +56,15 @@ inline bool IsKnownExecutable()
 }
 
 // Where the library's files are looked for: daolib\addresses beside the
-// loader, which for a plugin in daolib\plugins is the folder next to its
-// own. The first of the candidates that holds the running build's file.
+// loader, which for a plugin in its folder daolib\plugins\<name> is two
+// levels up. The first of the candidates that holds the running build's
+// file.
 std::filesystem::path AddressFolder();
+
+// The folder of the DLL this copy of the library is linked into: a
+// plugin's own folder, daolib\plugins\<name>, where its files sit beside it
+// (DAOLib #26), or the loader's.
+std::filesystem::path OwnFolder();
 
 // An ID from dao/Addresses.h as an address in the running process. Zero
 // where the running build has no such thing, or its build is not known: At

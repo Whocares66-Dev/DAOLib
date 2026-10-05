@@ -1,6 +1,6 @@
 # Examples
 
-Small plugins, one per part of DAOLib, written to be read and copied from. Each is also a check of its part in the game: `tools\deploy.ps1 -Examples <part>` puts it in `bin_ship\daolib\plugins\` with the rest (`-Examples *` for all of them), and each logs what it does to `example_<part>.log` in the daolib log folder (`Documents\BioWare\Dragon Age\daolib\`). They go in only when named, since each changes the game in its own way: `camera/` moves the camera, and would fight another plugin that does. A deploy that does not name one takes it out.
+Small plugins, one per part of DAOLib, written to be read and copied from. Each is also a check of its part in the game: `tools\deploy.ps1 -Examples <part>` puts it in its own folder in `bin_ship\daolib\plugins\` with the rest (`-Examples *` for all of them), and each logs what it does to `example_<part>.log` in the daolib log folder (`Documents\BioWare\Dragon Age\daolib\`). They go in only when named, since each changes the game in its own way: `camera/` moves the camera, and would fight another plugin that does. A deploy that does not name one takes it out.
 
 They build with the library when DAOLib is the top-level project (`DAO_BUILD_EXAMPLES`), and each is one `add_daolib_plugin` line in `examples/CMakeLists.txt`, as a plugin in its own repository would be (`dev/PLUGINS.md`).
 

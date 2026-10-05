@@ -47,7 +47,7 @@ In GOG's build the loader detours the entry point from `DllMain` and loads the p
 
 `daorigins.exe` started by anything but the EA app decrypts nothing: it asks the EA app to start the game and exits. That run never gets there, and loads nothing.
 
-The loader looks for `daolib\plugins` and `daolib\addresses` beside itself, which deployed is beside the exe.
+The loader looks for `daolib\plugins` (a folder per plugin) and `daolib\addresses` beside itself, which deployed is beside the exe.
 
 ## Seen in play
 

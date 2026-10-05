@@ -1,6 +1,6 @@
 # Writing a plugin
 
-A plugin is a 32-bit DLL in the game's `bin_ship\daolib\plugins\` that exports `DAOLib_Load`. The loader (`version.dll`) loads every such DLL when the game starts, before any game code runs, and calls `DAOLib_Load` once. A plugin links `daolib`, the library in `src/dao`, which gives it the engine as C++. `src/plugins/example/Example.cpp` is a whole plugin to copy from; `src/plugins/probe` is a larger one.
+A plugin is a 32-bit DLL that exports `DAOLib_Load`, in a folder of its own: `bin_ship\daolib\plugins\<name>\<name>.dll`, with the plugin's own files beside it (its movies, talk tables and data), so that a plugin is installed and removed as one folder. The loader (`version.dll`) loads the DLL of every such folder, in the order of their names, when the game starts, before any game code runs, and calls `DAOLib_Load` once. A plugin links `daolib`, the library in `src/dao`, which gives it the engine as C++. `src/plugins/example/Example.cpp` is a whole plugin to copy from; `src/plugins/probe` is a larger one.
 
 Worked examples are in `examples/`, one small plugin per part of the library, each a whole plugin to read and copy from (`examples/README.md` lists them).
 
@@ -27,7 +27,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
 }
 ```
 
-Declare it with `add_daolib_plugin(name SOURCES ...)` (`cmake/DAOLib.cmake`), as the example is: a DLL named `name.dll`, linked to `DAOLib::daolib`, written to `daolib/plugins` in the build tree. Build with `.\tools\build.ps1`, and `.\tools\deploy.ps1` copies every plugin into the game (with the game closed).
+Declare it with `add_daolib_plugin(name SOURCES ...)` (`cmake/DAOLib.cmake`), as the example is: a DLL named `name.dll`, linked to `DAOLib::daolib`, written to `daolib/plugins/name/` in the build tree. `FILES` lists the plugin's own files to copy beside it after each build: a movie of its own there is served to the game when the game has none by that name (`dao::gui::AddScreen` turns this on, `HasMovie` sees it), and its talk tables are read from there (`dao/Strings.h`), so nothing goes into the game's override folder. A DLL loose in `daolib\plugins\` is not loaded; the loader's log says where it goes. Build with `.\tools\build.ps1`, and `.\tools\deploy.ps1` copies every plugin into the game (with the game closed).
 
 ## A plugin in its own repository
 

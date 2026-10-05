@@ -1,5 +1,6 @@
-// The contract between the loader (version.dll) and a plugin DLL in
-// bin_ship\daolib\plugins\. A plugin exports one function:
+// The contract between the loader (version.dll) and a plugin DLL in its
+// own folder, bin_ship\daolib\plugins\<name>\<name>.dll, its files beside
+// it (DAOLib #26). A plugin exports one function:
 //
 //     extern "C" __declspec(dllexport) bool DAOLib_Load(const dao::LoaderInfo* info);
 //

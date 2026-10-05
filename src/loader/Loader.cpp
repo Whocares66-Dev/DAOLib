@@ -84,12 +84,27 @@ void LoadPlugins()
         spdlog::info("no plugin folder at {}", folder.string());
         return;
     }
+    // Each plugin is a folder of its own, daolib\plugins\<name>, holding
+    // <name>.dll and the plugin's files (DAOLib #26): its movies, talk tables
+    // and data, so that installing or removing a plugin is one folder. A DLL
+    // loose in the plugins folder is not loaded, and the log says where it
+    // goes.
     std::vector<std::filesystem::path> plugins;
     for (const auto &entry : std::filesystem::directory_iterator(folder, ec))
     {
-        if (entry.is_regular_file(ec) && entry.path().extension() == L".dll")
+        if (entry.is_directory(ec))
         {
-            plugins.push_back(entry.path());
+            const auto dll = entry.path() / (entry.path().filename().wstring() + L".dll");
+            if (std::filesystem::is_regular_file(dll, ec))
+            {
+                plugins.push_back(dll);
+            }
+        }
+        else if (entry.is_regular_file(ec) && entry.path().extension() == L".dll")
+        {
+            const auto stem = entry.path().stem().string();
+            spdlog::warn("{}: not loaded; a plugin goes in a folder of its own, daolib\\plugins\\{}\\{}.dll",
+                         entry.path().filename().string(), stem, stem);
         }
     }
     std::ranges::sort(plugins);

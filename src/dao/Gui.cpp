@@ -429,6 +429,12 @@ std::int32_t SceneId(void *gui, std::wstring_view name)
 
 } // namespace
 
+namespace
+{
+// Below, with the movie file's detour.
+void AttachOpenFile();
+} // namespace
+
 bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t layer, std::uint32_t flags)
 {
     void *gui = GuiSystem();
@@ -451,6 +457,15 @@ bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t lay
                                          std::int32_t, std::uint32_t);
     reinterpret_cast<SceneFn>(Module::Address(addr::kGUIScene_Constructor))(scene, 0, sceneName.Engine(),
                                                                             filename.Engine(), layer, 0, flags);
+    // A movie in this plugin's own folder is served from there, as the
+    // screen opens it (DAOLib #26).
+    std::error_code ec;
+    const std::filesystem::path own = Module::OwnFolder() / movie;
+    if (std::filesystem::is_regular_file(own.wstring() + L".gfx", ec) ||
+        std::filesystem::is_regular_file(own.wstring() + L".swf", ec))
+    {
+        AttachOpenFile();
+    }
     const std::int32_t id = FreeScreenId(gui);
     using AddFn = void(__fastcall *)(void *, int, std::int32_t, void *);
     reinterpret_cast<AddFn>(Module::Address(addr::kGUISystem_AddScene))(gui, 0, id, scene);
@@ -580,6 +595,10 @@ constexpr std::size_t kFileBegin = 0x30;
 constexpr std::size_t kFileAt = 0x34;
 constexpr std::size_t kFileSlots = 19;
 constexpr std::size_t kFileLengthSlot = 6;
+// Its error code, slot 8: 0x1001 for a file with no resource or no bytes,
+// so one the library serves from a plugin's folder answers for itself.
+constexpr std::size_t kFileErrorSlot = 8;
+constexpr std::int32_t kFileNotFound = 0x1001;
 
 using Patched = std::shared_ptr<const std::vector<std::byte>>;
 
@@ -587,7 +606,9 @@ std::mutex g_movieMutex;
 std::vector<std::pair<std::string, MoviePatch>> g_moviePatches; // by name, lower case
 std::map<std::string, Patched, std::less<>> g_patchedMovies;    // null for a movie no patch changed; kept for good
 std::map<const std::byte *, std::size_t> g_patchedLengths;
-// The file's vtable with the length's slot ours, its RTTI word before it.
+std::map<std::string, Patched, std::less<>> g_ownMovies; // this plugin's folder's, by name; null for none
+// The file's vtable with the length's and the error's slots ours, its RTTI
+// word before it.
 std::array<void *, kFileSlots + 1> g_patchedFileVtable{};
 bool g_patchedFileVtableMade = false;
 
@@ -625,6 +646,51 @@ std::int32_t __fastcall PatchedLength(void *file, int /*edx*/)
     const std::lock_guard lock(g_movieMutex);
     const auto found = g_patchedLengths.find(begin);
     return found != g_patchedLengths.end() ? static_cast<std::int32_t>(found->second) : 0;
+}
+
+// The file's slot 8, __thiscall with no arguments: its error code, none
+// while it has bytes to read (the game's answers 0x1001 for a file with no
+// resource handle, which one served from a plugin's folder has not).
+std::int32_t __fastcall PatchedError(void *file, int /*edx*/)
+{
+    return FileBegin(file) != nullptr ? 0 : kFileNotFound;
+}
+
+// A movie of this plugin's own, from its folder (Module::OwnFolder,
+// daolib\plugins\<name>, DAOLib #26): <name>.gfx, else <name>.swf, read once.
+Patched OwnMovie(const std::string &name)
+{
+    {
+        const std::lock_guard lock(g_movieMutex);
+        if (const auto found = g_ownMovies.find(name); found != g_ownMovies.end())
+        {
+            return found->second;
+        }
+    }
+    Patched movie;
+    const std::filesystem::path folder = Module::OwnFolder();
+    for (const wchar_t *extension : {L".gfx", L".swf"})
+    {
+        std::ifstream in(folder / (std::filesystem::path(name).wstring() + extension), std::ios::binary);
+        if (!in)
+        {
+            continue;
+        }
+        std::vector<char> read((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (!read.empty())
+        {
+            const auto *bytes = reinterpret_cast<const std::byte *>(read.data());
+            movie = std::make_shared<const std::vector<std::byte>>(bytes, bytes + read.size());
+            break;
+        }
+    }
+    const std::lock_guard lock(g_movieMutex);
+    const auto [made, first] = g_ownMovies.try_emplace(name, movie);
+    if (first && movie)
+    {
+        g_patchedLengths[movie->data()] = movie->size();
+    }
+    return made->second;
 }
 
 // The movie as its patches leave it: made the first time, the same after.
@@ -694,8 +760,8 @@ using OpenFileFn = void *(__fastcall *)(void *opener, int edx, const char *url);
 Detour<OpenFileFn> g_openFile;
 
 // Whether a file is the game's own over a resource: its vtable the game's,
-// or the game's in every slot but the length's. The second is a file
-// another plugin has patched already. Each plugin links its own copy of
+// or the game's in every slot but the length's and the error's. The second
+// is a file another plugin has patched or served already. Each plugin links its own copy of
 // this library, each copy detours OpenFile, and the copies run one inside
 // the other; the inner one's file has that copy's vtable. (Seen in play,
 // 2026-10-01: with two plugins patching the options movie, the outer copy
@@ -715,7 +781,8 @@ bool IsMovieFile(void *file)
     for (std::size_t slot = 0; slot < kFileSlots; ++slot)
     {
         const auto function = TryRead<std::uintptr_t>(*slots + slot * sizeof(void *));
-        if (!function || (slot != kFileLengthSlot && *function != reinterpret_cast<std::uintptr_t>(game[slot])))
+        if (!function || (slot != kFileLengthSlot && slot != kFileErrorSlot &&
+                          *function != reinterpret_cast<std::uintptr_t>(game[slot])))
         {
             return false;
         }
@@ -723,39 +790,64 @@ bool IsMovieFile(void *file)
     return true;
 }
 
-void *__fastcall OpenFile(void *opener, int edx, const char *url)
+// Has the file read the bytes given, from their start, and answer their
+// length and no error. Its resource, if it found one, stays held and is let
+// go as ever; one with none has nothing to let go.
+void PointFileAt(void *file, const Patched &bytes)
 {
-    void *file = g_openFile.Original()(opener, edx, url);
-    // Only the game's own file over a resource it found is one to point
-    // elsewhere.
-    if (file == nullptr || url == nullptr || !IsMovieFile(file) || FileBegin(file) == nullptr)
-    {
-        return file;
-    }
-    const Patched patched = PatchedMovie(file, MovieName(url));
-    if (!patched)
-    {
-        return file;
-    }
     {
         const std::lock_guard lock(g_movieMutex);
         if (!g_patchedFileVtableMade)
         {
             // The game's vtable, its RTTI word before it, with the length's
-            // slot ours.
+            // and the error's slots ours.
             const auto game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
             std::copy(game - 1, game + kFileSlots, g_patchedFileVtable.begin());
             g_patchedFileVtable[1 + kFileLengthSlot] = reinterpret_cast<void *>(&PatchedLength);
+            g_patchedFileVtable[1 + kFileErrorSlot] = reinterpret_cast<void *>(&PatchedError);
             g_patchedFileVtableMade = true;
         }
     }
-    // The file reads from the patched bytes, from their start, and answers
-    // their length. Its resource stays held and is let go as ever.
     auto *fields = static_cast<std::byte *>(file);
-    *reinterpret_cast<const std::byte **>(fields + kFileBegin) = patched->data();
-    *reinterpret_cast<const std::byte **>(fields + kFileAt) = patched->data();
+    *reinterpret_cast<const std::byte **>(fields + kFileBegin) = bytes->data();
+    *reinterpret_cast<const std::byte **>(fields + kFileAt) = bytes->data();
     *static_cast<void *const **>(file) = &g_patchedFileVtable[1];
+}
+
+void *__fastcall OpenFile(void *opener, int edx, const char *url)
+{
+    void *file = g_openFile.Original()(opener, edx, url);
+    if (file == nullptr || url == nullptr || !IsMovieFile(file))
+    {
+        return file;
+    }
+    // A movie the game's resource system has none of: this plugin's own,
+    // from its folder, if it has one by that name. The game's own come first.
+    if (FileBegin(file) == nullptr)
+    {
+        if (const Patched own = OwnMovie(MovieName(url)))
+        {
+            PointFileAt(file, own);
+        }
+        return file;
+    }
+    // A movie the game found, as the patches for it leave it.
+    if (const Patched patched = PatchedMovie(file, MovieName(url)))
+    {
+        PointFileAt(file, patched);
+    }
     return file;
+}
+
+// The detour, once: OnMovieLoad's patches and a plugin's own movies both
+// need it.
+void AttachOpenFile()
+{
+    const std::lock_guard lock(g_movieMutex);
+    if (g_openFile.Original() == nullptr)
+    {
+        g_openFile.Attach(addr::kEclipseGFxFileOpener_OpenFile, &OpenFile);
+    }
 }
 
 } // namespace
@@ -771,12 +863,11 @@ void OnMovieLoad(std::wstring_view name, MoviePatch patch)
     {
         narrow.push_back(c < 0x80 ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '?');
     }
-    const std::lock_guard lock(g_movieMutex);
-    g_moviePatches.emplace_back(std::move(narrow), std::move(patch));
-    if (g_openFile.Original() == nullptr)
     {
-        g_openFile.Attach(addr::kEclipseGFxFileOpener_OpenFile, &OpenFile);
+        const std::lock_guard lock(g_movieMutex);
+        g_moviePatches.emplace_back(std::move(narrow), std::move(patch));
     }
+    AttachOpenFile();
 }
 
 bool ReplaceMovie(std::wstring_view name, const std::filesystem::path &file)
@@ -812,8 +903,10 @@ bool MouseOverInterface()
 
 bool HasMovie(std::wstring_view file)
 {
-    // As GUI::ScaleformResourceFile opens a movie (dao/Resources.h).
-    return resources::Exists(file);
+    // As GUI::ScaleformResourceFile opens a movie (dao/Resources.h), then
+    // this plugin's folder, as OpenFile serves its own.
+    std::error_code ec;
+    return resources::Exists(file) || std::filesystem::is_regular_file(Module::OwnFolder() / file, ec);
 }
 
 bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)

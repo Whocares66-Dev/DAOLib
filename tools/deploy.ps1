@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     After `.\tools\build.ps1 -Preset <preset>`, puts build\<preset>\version.dll beside
-    DAOrigins.exe and build\<preset>\daolib\plugins\*.dll under bin_ship\daolib\plugins,
-    each with its .pdb, so the crash logger can name our frames (dev/CRASHES.md), and
+    DAOrigins.exe and each plugin's folder, build\<preset>\daolib\plugins\<name>\ (its DLL,
+    its .pdb, so the crash logger can name our frames (dev/CRASHES.md), and its own files),
+    under bin_ship\daolib\plugins, and
     the address library's files (build\<preset>\daolib\addresses\*.bin, one per build
     of the game) under bin_ship\daolib\addresses, where the loader reads its own. With
     game\ghidra\functions.tsv present (dev/PROBE.md), copies it to bin_ship\daolib too,
@@ -119,24 +120,32 @@ Copy-Item -Force $builtLoader $loader
 $builtPdb = Join-Path $build 'version.pdb'
 if (Test-Path $builtPdb) { Copy-Item -Force $builtPdb $loaderPdb }
 Show-Ok "loader  -> $loader"
-foreach ($dll in Get-ChildItem -Path (Join-Path $build 'daolib\plugins') -Filter '*.dll') {
-    if ($dll.BaseName -like 'example_*') {
-        $part = $dll.BaseName.Substring('example_'.Length)
+# Each plugin is a folder of its own, its DLL and its files (DAOLib #26);
+# the loader loads daolib\plugins\<name>\<name>.dll from each.
+foreach ($folder in Get-ChildItem -Path (Join-Path $build 'daolib\plugins') -Directory) {
+    $name = $folder.Name
+    if (-not (Test-Path (Join-Path $folder.FullName "$name.dll"))) { continue }
+    $there = Join-Path $plugins $name
+    # The old layout's loose DLL, which the loader no longer loads.
+    foreach ($loose in @("$name.dll", "$name.pdb")) {
+        $old = Join-Path $plugins $loose
+        if (Test-Path $old) { Remove-Item -Force $old; Show-Ok "removed $old (a plugin is a folder now)" }
+    }
+    if ($name -like 'example_*') {
+        $part = $name.Substring('example_'.Length)
         $wanted = $Examples | Where-Object { $part -like $_ }
         if (-not $wanted) {
-            $there = Join-Path $plugins $dll.Name
             if (Test-Path $there) {
-                Remove-Item -Force $there
-                Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($there, '.pdb'))
+                Remove-Item -Recurse -Force $there
                 Show-Ok "example $part taken out (not named with -Examples)"
             }
             continue
         }
     }
-    Copy-Item -Force $dll.FullName (Join-Path $plugins $dll.Name)
-    $pdb = [IO.Path]::ChangeExtension($dll.FullName, '.pdb')
-    if (Test-Path $pdb) { Copy-Item -Force $pdb $plugins }
-    Show-Ok "plugin  -> $(Join-Path $plugins $dll.Name)"
+    New-Item -ItemType Directory -Force $there | Out-Null
+    # The plugin and its files, not the linker's leftovers.
+    Copy-Item -Force -Recurse (Join-Path $folder.FullName '*') $there -Exclude '*.ilk', '*.exp', '*.lib'
+    Show-Ok "plugin  -> $there"
 }
 # The address library's files, one per build of the game: the loader and every
 # plugin read the one for the game they are in, and load nothing without it.

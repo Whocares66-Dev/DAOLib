@@ -11,6 +11,19 @@
 namespace dao::Module
 {
 
+std::filesystem::path OwnFolder()
+{
+    HMODULE module = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&OwnFolder), &module) == FALSE)
+    {
+        return {};
+    }
+    std::array<wchar_t, MAX_PATH> buffer{};
+    const DWORD length = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
+    return std::filesystem::path(std::wstring_view(buffer.data(), length)).parent_path();
+}
+
 namespace
 {
 
@@ -24,21 +37,6 @@ constexpr daoaddr::BuildInfo kListing{
 // from a running address back to the listing's: no function of the game's is
 // this long, and past it the nearest ID below says nothing.
 constexpr std::uint32_t kFarthest = 0x10000;
-
-// The folder of the DLL this code is linked into: the loader's, or a
-// plugin's.
-std::filesystem::path OwnFolder()
-{
-    HMODULE module = nullptr;
-    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                           reinterpret_cast<LPCWSTR>(&OwnFolder), &module) == FALSE)
-    {
-        return {};
-    }
-    std::array<wchar_t, MAX_PATH> buffer{};
-    const DWORD length = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
-    return std::filesystem::path(std::wstring_view(buffer.data(), length)).parent_path();
-}
 
 struct Libraries
 {
@@ -60,9 +58,10 @@ const Libraries &Loaded()
         }
         const std::string name = daoaddr::FileName(*want);
         const auto own = OwnFolder();
-        // Beside the loader: for the loader itself, for a plugin in
-        // daolib\plugins, and for either when the loader sits beside the exe.
-        for (const auto &folder : {own / L"daolib" / L"addresses", own.parent_path() / L"addresses",
+        // Beside the loader: for the loader itself, for a plugin in its folder
+        // daolib\plugins\<name> (DAOLib #26), and for either when the loader
+        // sits beside the exe.
+        for (const auto &folder : {own / L"daolib" / L"addresses", own.parent_path().parent_path() / L"addresses",
                                    Path().parent_path() / L"daolib" / L"addresses"})
         {
             auto library = daoaddr::Library::Load(folder / name);
