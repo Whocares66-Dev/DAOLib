@@ -48,9 +48,11 @@
 //
 // Seen in play: Write and FindSave with their slots, and the load event
 // once per load. Not yet seen: the module's start event for a new game,
-// and this file's callbacks themselves. One gap: an early quicksave in
-// play wrote its files without Write being called, for a reason not read,
-// and such a save would not be heard. A save deleted from the game's menu
+// and this file's callbacks themselves. An early quicksave in play wrote
+// its files without Write being heard; read 2026-10-05, Write is the only
+// code that names a save's files and the loading mode's worker its only
+// caller, so every save of every kind goes through it, and that one was
+// most likely made before the hook was in place. A save deleted from the game's menu
 // takes its folder with it, and the plugin's file too.
 #pragma once
 
