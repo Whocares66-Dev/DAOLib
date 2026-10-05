@@ -170,6 +170,11 @@ DAO_DATA(kWorld_RaycastResults, 101265)
 // four floats, aligned for SSE. The names are ours.
 DAO_DATA(kGraphics, 100485)
 DAO_DATA(kPerspectiveCamera_Vftable, 74603)
+// A model's box (dao/World.h, ModelBoxOf), read 2026-10-04 (DAOLib #21):
+// a GraphicsStructures::Object's Graphics::IRenderable, at its +4, answers
+// the model's box by its slot 5 (0x00549B80, ID 7935); only an interface
+// with this table is asked.
+DAO_DATA(kGraphicsStructures_Object_RenderableVftable, 63977)
 DAO_ADDRESS(kWorld_CurrentScene, 12699)
 DAO_ADDRESS(kCCArea_LineOfSight, 13635)
 DAO_ADDRESS(kCCPlaceable_BlocksSight, 13576)

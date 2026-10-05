@@ -1032,4 +1032,53 @@ std::optional<bool> ObstaclePlaced(ObjectId creature)
     return TryRead<std::uint8_t>(*parameters + kPlaced).value_or(0) != 0;
 }
 
+std::optional<ModelBox> ModelBoxOf(ObjectId creature)
+{
+    constexpr std::uintptr_t kAnimationSet = 0x154; // in the creature
+    constexpr std::uintptr_t kHolder = 0x18;        // in the animation set
+    constexpr std::uintptr_t kModel = 0x4;          // in that: the object's +8
+    constexpr std::size_t kObjectSlot = 19;         // answers the object
+    constexpr std::uintptr_t kRenderable = 0x4;     // in the object
+    constexpr std::size_t kBoxSlot = 5;
+    constexpr std::uintptr_t kScale = 0x58; // in the renderable
+    CClientExoApp *app = CClientExoApp::Get();
+    CCObject *object = app != nullptr ? app->GetObjectById(creature) : nullptr;
+    if (object == nullptr || object->Type() != core::ObjectType::Creature || !OnGameThread())
+    {
+        return std::nullopt;
+    }
+    const auto set = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(object) + kAnimationSet);
+    const auto holder = set && *set != 0 ? TryRead<std::uintptr_t>(*set + kHolder) : std::nullopt;
+    const auto model = holder && *holder != 0 ? TryRead<std::uintptr_t>(*holder + kModel) : std::nullopt;
+    const auto modelTable = model && *model != 0 ? TryRead<std::uintptr_t>(*model) : std::nullopt;
+    if (!modelTable || *modelTable == 0)
+    {
+        return std::nullopt;
+    }
+    // __thiscall, no arguments: the object the interface is part of.
+    using ObjectFn = std::uintptr_t(__fastcall *)(std::uintptr_t, int);
+    const auto objectOf = TryRead<std::uintptr_t>(*modelTable + kObjectSlot * sizeof(void *));
+    const std::uintptr_t graphics = objectOf && *objectOf != 0 ? reinterpret_cast<ObjectFn>(*objectOf)(*model, 0) : 0;
+    const std::uintptr_t renderable = graphics != 0 ? graphics + kRenderable : 0;
+    // Only GraphicsStructures::Object's own interface: the slot read.
+    const auto table = renderable != 0 ? TryRead<std::uintptr_t>(renderable) : std::nullopt;
+    if (!table || *table != Module::Address(addr::kGraphicsStructures_Object_RenderableVftable))
+    {
+        return std::nullopt;
+    }
+    using BoxFn = void(__fastcall *)(std::uintptr_t, int, Vector4 *, Vector4 *, bool);
+    const auto box = reinterpret_cast<const BoxFn *>(*table)[kBoxSlot];
+    Vector4 low;
+    Vector4 high;
+    box(renderable, 0, &low, &high, false);
+    ModelBox answer;
+    answer.min = low.ToVector();
+    answer.max = high.ToVector();
+    answer.scale = TryRead<float>(renderable + kScale).value_or(1.0F);
+    box(renderable, 0, &low, &high, true);
+    answer.worldMin = low.ToVector();
+    answer.worldMax = high.ToVector();
+    return answer;
+}
+
 } // namespace dao::world

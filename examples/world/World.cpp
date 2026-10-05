@@ -17,6 +17,12 @@
 // it is loaded; every two seconds, how many of the area's rooms are in each
 // state.
 //
+// For a creature under the cursor, and the controlled one and its nearest
+// every ten seconds, the model's box as the engine keeps it for drawing
+// (ModelBoxOf): its size in metres, the box in model space and the scale,
+// and beside it the head's height above the feet (dao/Portraits.h), which
+// the box's top should stand a little above.
+//
 // Each time the mouse goes over the interface or comes off it, a line says
 // so (dao/Gui.h, MouseOverInterface).
 //
@@ -29,6 +35,7 @@
 #include "dao/Gui.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
+#include "dao/Portraits.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <spdlog/spdlog.h>
@@ -197,6 +204,28 @@ void LogScreenOf(dao::ObjectId object)
                      : std::string("no pixel found"));
 }
 
+// A creature's model's box, and its head's height to judge it by.
+void LogModelBox(dao::ObjectId creature)
+{
+    const auto box = dao::world::ModelBoxOf(creature);
+    if (!box)
+    {
+        spdlog::info("  model box of 0x{:x}: none", creature);
+        return;
+    }
+    const dao::Vector size = box->Size();
+    const dao::CCObject *found = dao::CClientExoApp::Get()->GetObjectById(creature);
+    const auto head = dao::portraits::HeadPosition(creature);
+    spdlog::info("  model box of 0x{:x}: {:.2f} by {:.2f}, {:.2f} high; model space ({:.2f}, {:.2f}, {:.2f}) to "
+                 "({:.2f}, {:.2f}, {:.2f}), scale {:.3f}; world corners ({:.2f}, {:.2f}, {:.2f}) and ({:.2f}, {:.2f}, "
+                 "{:.2f}); head {}",
+                 creature, size.x, size.y, size.z, box->min.x, box->min.y, box->min.z, box->max.x, box->max.y,
+                 box->max.z, box->scale, box->worldMin.x, box->worldMin.y, box->worldMin.z, box->worldMax.x,
+                 box->worldMax.y, box->worldMax.z,
+                 head && found != nullptr ? std::format("{:.2f} above the feet", head->z - found->Position().z)
+                                          : std::string("none"));
+}
+
 void LogWalksNearby(dao::ObjectId self)
 {
     const dao::script::Array nearest =
@@ -206,6 +235,7 @@ void LogWalksNearby(dao::ObjectId self)
         spdlog::info("the view is {} by {}; 0x{:x} itself:", size->width, size->height, self);
         LogScreenOf(self);
     }
+    LogModelBox(self);
     spdlog::info("the {} creature(s) nearest 0x{:x}:", nearest.Size(), self);
     for (std::size_t i = 0; i < nearest.Size(); ++i)
     {
@@ -213,6 +243,7 @@ void LogWalksNearby(dao::ObjectId self)
         {
             LogWalkTo(self, creature);
             LogScreenOf(creature);
+            LogModelBox(creature);
         }
     }
 }
@@ -239,6 +270,7 @@ void LookAtCursor(dao::ObjectId self, dao::ObjectId seen)
     }
     LogWalkTo(self, seen);
     LogRoomOf("under the cursor", seen);
+    LogModelBox(seen);
 }
 
 void LookDown(dao::ObjectId self)

@@ -10,26 +10,19 @@ DAOLib earns its place where those cannot reach:
 
 Each item says why it needs native work, what is known, and when it is done. Most valuable first. A finished item moves to `dev/LIBRARY.md`'s table, and gets an example in `examples/` when it is something a plugin would use (`dev/PLUGINS.md` says how). Refreshed 2026-10-04: much below was read on 2026-09-30 and has been built and played since, and the turn-based mod's needs of that week (attack reach, the melee ring, script timers, held time, the camera's distance) were met as they came (DAOLib #14 to #19).
 
-## 1. A creature's size
-
-- **Why native:** the turn-based mod stands its camera back by a creature's size and frames portraits by it; the appearance table's personal space is a poor measure of a high dragon or a deepstalker. Scripts have no size (`GetCreatureSize` has no handler in this build).
-- **Read so far (2026-10-04, DAOLib #17):** no bounds API was found. `dao::portraits::HeadPosition` (the model's "head" node, in the world) serves the mod meanwhile.
-- **Leads:** the picking's selection volumes (the cursor's ray hits them, `dao/GameModes.h`); a creature's PhysX shape (`dao::world::Raycast`'s groups); the renderer's culling bounds on the creature's scene object.
-- **Done when:** a creature's extent (a box or a sphere) read from the engine agrees with what is drawn, for a person, an ogre and the high dragon.
-
-## 2. The engine's messages, typed
+## 1. The engine's messages, typed
 
 - **Why native:** every message class a plugin can read is a hook point (`dao/Messages.h`). 11 of the 296 have fields in C++.
 - **Leads:** `dev/messages.csv`, with each class's size from its clone (`tools/messages.py`); each handler's reads.
 - **Done when:** the messages for abilities, the party, inventory and dialogue are typed, and each field has been seen in play.
 
-## 3. The hang logger: a load or a room's streaming, told from a hang
+## 2. The hang logger: a load or a room's streaming, told from a hang
 
 - **Why:** the hang logger's first two real stalls (2026-10-04, `dev/CRASHES.md`) were a save's first frames with the mode already reading Explore, and rooms streaming in after the turn-based mod's camera jumped; both recovered. A sample that said "rooms loading" would tell such stalls from real hangs at a glance.
 - **Leads:** the area layout's rooms and their load states (`dao::world::Rooms`, `dao/Addresses.h` "Rooms and their streaming"): a room whose load was asked and is not done; read from the watchdog's thread after the frame thread is let go.
 - **Done when:** a hang sample during a room's streaming says so.
 
-## 4. Effects: duration and time left
+## 3. Effects: duration and time left
 
 **In use (2026-10-04):** the turn-based mod reads the time left of five kinds of effect through `dao::effects::On` to charge a held fighter's turn, and holds the effects' clock with the timers'. **Read (2026-09-30):** `CGameEffect::Duration`, `Remaining`, `SetRemaining`, and the clock every temporary effect ages on, `dao/Effects.h` (`Hold`, `Advance`, `OnAgeing`), through one engine function, `AddElapsed`. Regeneration read too, and held and advanced with the effects by `dao/Clock.h`. Left: comparing `Duration` and `Remaining` with what each effect was applied with, one by one; giving `OnAgeing` the object the effect is on (AgeEffect, `0x007A0B10`, has it as its first argument, and AddElapsed does not); an example.
 
@@ -37,7 +30,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Leads:** `CGameEffect` (`dao/Structures.h`, fields from the effect getter commands); `Engine_ApplyEffectOnObject`'s handler, which takes the duration; the object's effect list (`SEffectsHolder`); whatever expires effects each frame.
 - **Done when:** `CGameEffect::Duration()` and `Remaining()` read in play agree with what the effect was applied with, and fall as the game runs.
 
-## 5. World queries
+## 4. World queries
 
 - **Why native:** line of sight, path length and what lies between two points are engine questions. Scripts have a little of this, but not the pathfinder's path or a raycast.
 - **Leads:** `World::Raycast` (`0x006497A0`, arguments read, `dao/Addresses.h`); the pick's hits (`dao/GameModes.h`, `PickHit`); explore mode's walkable test (`0x0070C840`) and the area's check (`0x0073DE70`).
@@ -48,7 +41,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Seen in play, 2026-09-30 (the second play test):** `CurrentPath` read a walked path right (5 waypoints, 10.33 m, what was left falling as the creature walked). A `FindPath` that called `RequestPath` until it answered was taken out: `RequestPath` takes new ends only when no search is in progress (`0x0073D6E0`), so its answers came a call late, a search it left unfinished held one answer through a whole fight, and the search it left stood as the creature's path, after which the creature would not walk a click. A path on demand needs a search object of the plugin's own (the `Pathfinding` environments over the area's mesh) or the creature's search saved and put back.
 - **A search of the library's own (2026-09-30), not yet seen in play:** the movement controller is a plain record (the pathfinding world, the mover's parameters, its path, the two ends), and the script command `IsLocationSafe` makes one on its stack, so `dao::world::FindPath(creature, to, toward)` makes its own with the creature's size and follows `RequestPath`'s order: the destination made a free place, the ends set, the mover's own obstacle lifted, a straight walk tried, then the search in slices until it answers. The creature's own search is not touched. `examples/world` logs a walk to whatever is under the cursor. Seen in play 2026-10-01, after a second version that moves the search's walker along and counts a path only if it arrives (`dao/World.h`). The search's answers as read and seen: 4 a coarse route found, 3 a stretch worked out, 7 both ends in one sector, 6 a door in the way, 1 done. Left: 2.
 
-## 6. Dialogue
+## 5. Dialogue
 
 - **Why native:** scripts run inside a conversation's callbacks, and conversations are authored in the toolset. Changing a conversation at run time (a line, a choice, a condition) is out of their reach.
 - **Leads:** `GameModeDialog`; the dialogue's messages (`SelectResponseMessage`); the conversation resource, a GFF file (`tools/gff4.py` reads the format).
@@ -59,6 +52,7 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 
 Read, built and seen in play; what is left of each is small, and kept here.
 
+- **A creature's size** (`dao::world::ModelBoxOf`, DAOLib #21, seen 2026-10-04): the box the renderer keeps for a creature's model, its meshes' bounds in the model's rest pose. Seen for four of the party, an ogre, a bronto, a deepstalker and a giant spider: the long bodies' lengths as drawn, a person's width arms out, an ogre's height upright. The model file's own `bbox` chunk and the PhysX shapes were looked at and left. Left: the high dragon, and a box in the creature's current pose if a plugin needs one.
 - **Combat at the scripts' boundary** (`CommandCall::SetFloat`, `examples/damage`, seen 2026-10-04): the party's damage halved where the scripts hand the engine the new health, beside the turn-based mod and the Eluvian server. Left: a killing blow, which the scripts turn into a death effect instead, and two plugins changing the same command at once in play.
 - **Input and key bindings** (`dao/Input.h`, 2026-10-01): a plugin's action, bound in the controls screen. Left: a held key (a callback on the release) and the mouse's codes.
 - **Time: the game's speed and the clock** (`dao::clock::SetSpeed`, `dao/Clock.h`, `dao/Timers.h`, 2026-09-30 to 10-04). The reading of the three clocks is in `dao/Addresses.h` and the git history.

@@ -264,6 +264,54 @@ std::optional<WalkPath> CurrentPath(ObjectId creature);
 // #19). Nothing for no creature. On the game's thread.
 std::optional<bool> ObstaclePlaced(ObjectId creature);
 
+// A creature's model's box, as the engine keeps it for drawing (DAOLib #21).
+// Read 2026-10-04: the model is a GraphicsStructures::Object, reached as
+// CCCreature::HeadTransform reaches it (the animation set at the
+// creature's +0x154, its +0x18, that one's +4, whose slot 19 answers the
+// object). Its Graphics::IRenderable (at +4) answers the box by its slot 5
+// (0x00549B80, __thiscall (Vector4 *min, Vector4 *max, bool world), `ret
+// 0xC`): the box cached at the object's +0x140 and +0x150, made on the
+// first ask (0x00549140) from the model's meshes, each mesh's own box at
+// its node's place less the object's; with `world`, its two corners put
+// through the object's place, rotation and uniform scale (the interface's
+// +0x58). So the box is in model space, about the model's place on the
+// ground, unscaled and unturned, and made once: the model's rest box, its
+// meshes' own bounds, not following the creature's pose as it animates
+// (a creature's skinned meshes sit at the model's root). A creature that
+// changes its gear keeps the box it had (not yet seen either way). Its
+// largest extent across is the larger of Size().x and Size().y, the box
+// being in the model's own axes.
+//
+// Seen in play 2026-10-04 (the turn-based mod, examples/world, Ortan
+// Thaig, all at scale 1): a bronto 1.37 by 3.80 and 2.44 high, a giant
+// spider 1.76 by 2.30 and 1.19, a deepstalker 0.82 by 2.54 and 0.90, the
+// long bodies as drawn. A person's is its rest pose's, arms out: 1.05 to
+// 1.24 m across, 1.60 to 1.83 m high, its head node 0.45 to 0.5 m under
+// the top (a bone at the neck). An ogre's, 4.00 by 1.19 and 4.60 high, is
+// its upright arms-out rest pose, where it stands about 3 m as drawn. So
+// across is a body's length for a creature that is not a person, and
+// twice a person's shoulders for a person.
+struct ModelBox
+{
+    Vector min; // model space: x and y across, z up from the model's place
+    Vector max;
+    float scale = 1; // the model's uniform scale
+    // The engine's own two corners in the world: min and max through the
+    // model's place, rotation and scale. Turned with the model, so not the
+    // world box's corners unless it faces along an axis.
+    Vector worldMin;
+    Vector worldMax;
+
+    // The box's extent in metres, as drawn: (max - min) times the scale.
+    Vector Size() const
+    {
+        return {(max.x - min.x) * scale, (max.y - min.y) * scale, (max.z - min.z) * scale};
+    }
+};
+// Nothing if the id is not a creature here or its model is not the kind
+// read. On the game's thread.
+std::optional<ModelBox> ModelBoxOf(ObjectId creature);
+
 // The path a creature would walk to a point, found now by the game's
 // pathfinder, the creature left as it is: its own path, its walking and
 // its orders are not touched.
