@@ -8,6 +8,7 @@
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
+#include "dao/World.h"
 #include "dao/core/CallSite.h"
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
@@ -907,6 +908,34 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
 // ---------------------------------------------------------------------------
 
 std::atomic<std::uint64_t> g_lastFrame{0}; // GetTickCount64 at the last frame; 0 before the first
+// GetTickCount64 at the first frame after a gap of the hang limit or more:
+// a stall's end as the frames came back, not as the watchdog, still writing
+// its sample, noticed them (DAOLib #20).
+std::atomic<std::uint64_t> g_resumed{0};
+// The current area's rooms at the last frame, counted on the frame thread:
+// those wanted (kWanted or kWantedNow) and not loaded, and those whose load
+// in the background is under way. A stall with rooms owed is most likely
+// their streaming: the second stall seen, 2026-10-04 16:11, began 0.6 s
+// after a camera jump, the frame thread setting up materials and
+// textures (dev/CRASHES.md); this says so in the log instead of leaving it
+// to be reasoned out. Outdoor areas' terrain cells (state 6) are left out:
+// their load never reads loaded.
+std::atomic<std::int32_t> g_roomsOwed{0};
+std::atomic<std::int32_t> g_roomsLoading{0};
+
+void CountRooms()
+{
+    std::int32_t owed = 0;
+    std::int32_t loading = 0;
+    for (const dao::world::Room &room : dao::world::Rooms())
+    {
+        const bool wanted = room.state == dao::world::Room::kWanted || room.state == dao::world::Room::kWantedNow;
+        owed += wanted && !room.Loaded() ? 1 : 0;
+        loading += room.loading ? 1 : 0;
+    }
+    g_roomsOwed = owed;
+    g_roomsLoading = loading;
+}
 
 std::uint32_t HangSeconds()
 {
@@ -971,12 +1000,13 @@ GameState State()
     const bool minimised = window != nullptr && IsIconic(window) != FALSE;
     const bool front = window != nullptr && GetForegroundWindow() == window;
     const bool hung = window != nullptr && IsHungAppWindow(window) != FALSE;
-    state.text = fmt::format("in {}, its window {}{}", name,
-                             window == nullptr ? "not found"
-                             : minimised       ? "minimised"
-                             : front           ? "in front"
-                                               : "not in front",
-                             hung ? ", which Windows calls not responding" : "");
+    state.text =
+        fmt::format("in {}, its window {}{}; at the last frame {} room(s) wanted and not loaded, {} loading", name,
+                    window == nullptr ? "not found"
+                    : minimised       ? "minimised"
+                    : front           ? "in front"
+                                      : "not in front",
+                    hung ? ", which Windows calls not responding" : "", g_roomsOwed.load(), g_roomsLoading.load());
     // Loading and the main menu's start-up may hold frames back by design,
     // and with no window the game is closing.
     state.worth = mode >= 0 && mode != static_cast<std::int32_t>(dao::GameMode::Loading) &&
@@ -1052,7 +1082,9 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
     }
     if (file != nullptr)
     {
-        const double seconds = static_cast<double>(GetTickCount64() - last) / 1000.0;
+        const std::uint64_t resumed = g_resumed.load();
+        const std::uint64_t end = resumed > last ? resumed : GetTickCount64();
+        const double seconds = static_cast<double>(end - last) / 1000.0;
         Writer w(file);
         if (g_crashing)
         {
@@ -1101,7 +1133,15 @@ void StartWatchdog()
         spdlog::info("hang watchdog: off, the game is not a build the address library knows");
         return;
     }
-    dao::OnFrame([] { g_lastFrame = GetTickCount64(); });
+    dao::OnFrame([] {
+        const std::uint64_t now = GetTickCount64();
+        const std::uint64_t before = g_lastFrame.exchange(now);
+        if (before != 0 && now - before >= std::uint64_t{g_hangSeconds} * 1000)
+        {
+            g_resumed = now;
+        }
+        CountRooms();
+    });
     HANDLE thread = CreateThread(nullptr, 0, &Watchdog, nullptr, 0, nullptr);
     if (thread == nullptr)
     {
