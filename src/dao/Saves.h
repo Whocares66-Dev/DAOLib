@@ -101,6 +101,27 @@ constexpr std::string_view Name(Kind kind)
     }
 }
 
+// The highest slot number the engine saves to for a kind; the lowest is 1
+// (0 for a manual save, which the check lets through). Read 2026-10-05
+// (DAOLib #37) in SaveLoadProxy::HandleMessage_SaveGameMessage
+// (0x006D1C60), which refuses any other: a manual save asked for "a new
+// slot" (below 0) takes the next number from the proxy's +0x6C, so a
+// character with slots 1 to 500 taken can make no more manual saves, and
+// the game starts none (seen by the turn-based mod's session). The numbers
+// are literals in that code, not data.
+constexpr std::int32_t MostSlot(Kind kind)
+{
+    switch (kind)
+    {
+    case Kind::Manual:
+        return 500;
+    case Kind::Auto:
+        return 4;
+    default:
+        return 1;
+    }
+}
+
 struct Slot
 {
     std::wstring character; // the character's folder, "Aedan"
