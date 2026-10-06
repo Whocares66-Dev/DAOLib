@@ -10,9 +10,7 @@ A claim stands while `until` is later than now. While another's stands,
 start no game, deploy nothing and change nothing in a game folder: tell its
 owner, or wait. A file that cannot be read is no claim. The owner writes it
 whole, renews it by writing it again and releases it by deleting it. The
-player at the keyboard is not held by it. Until every long-running bridge
-has restarted, the old name, eluvian.claim.json, is read as well (the
-Eluvian server's README, "The claim").
+player at the keyboard is not held by it.
 
 tools/ea_play.py honours it here; tools/deploy.ps1 does the same in
 PowerShell.
@@ -23,7 +21,7 @@ import json
 import os
 import time
 
-NAMES = ("game.claim.json", "eluvian.claim.json")
+NAME = "game.claim.json"
 
 
 def folder():
@@ -60,17 +58,12 @@ def standing(text, now, owner=None):
 def holder(owner=None, now=None):
     """The claim that stands against `owner` now, or None."""
     now = time.time() if now is None else now
-    base = folder()
-    for name in NAMES:
-        try:
-            with open(os.path.join(base, name), encoding="utf-8-sig") as f:
-                text = f.read()
-        except OSError:
-            continue
-        claim = standing(text, now, owner)
-        if claim is not None:
-            return claim
-    return None
+    try:
+        with open(os.path.join(folder(), NAME), encoding="utf-8-sig") as f:
+            text = f.read()
+    except OSError:
+        return None
+    return standing(text, now, owner)
 
 
 def describe(claim, now=None):

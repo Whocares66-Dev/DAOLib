@@ -31,8 +31,8 @@
     -Game names a bin_ship folder that is none of them.
 
     Nothing is copied while another session holds the claim on the game
-    (Documents\BioWare\Dragon Age\daolib\game.claim.json, and its old name
-    eluvian.claim.json; tools/game_claim.py has the rules). -Owner says who is
+    (Documents\BioWare\Dragon Age\daolib\game.claim.json; tools/game_claim.py
+    has the rules). -Owner says who is
     deploying, whose own claim does not stop it; -IgnoreClaim is for the player
     at the keyboard, whom the claim does not hold.
 
@@ -73,11 +73,12 @@ if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.ex
 # this caller's stops the copy. A file that cannot be read is no claim.
 if (-not $IgnoreClaim) {
     $claimFolder = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'BioWare\Dragon Age\daolib'
-    foreach ($claimFile in @((Join-Path $claimFolder 'game.claim.json'), (Join-Path $claimFolder 'eluvian.claim.json'))) {
-        if (-not (Test-Path $claimFile)) { continue }
-        $claim = $null
+    $claimFile = Join-Path $claimFolder 'game.claim.json'
+    $claim = $null
+    if (Test-Path $claimFile) {
         try { $claim = Get-Content $claimFile -Raw | ConvertFrom-Json } catch { Show-Info "$claimFile is not readable; taken as no claim" }
-        if ($null -eq $claim -or $null -eq $claim.until) { continue }
+    }
+    if ($null -ne $claim -and $null -ne $claim.until) {
         $left = [double]$claim.until - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         if ($left -gt 0 -and $claim.owner -ne $Owner) {
             throw "the game is claimed by $($claim.owner) for another $([math]::Round($left / 60, 1)) minutes ($($claim.note)); nothing deployed"
