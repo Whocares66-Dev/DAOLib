@@ -9,6 +9,11 @@
 #   PowerShell  PSScriptAnalyzer's Invoke-Formatter and Invoke-ScriptAnalyzer
 #   CMake       gersemi, a formatter only
 #
+# What clang-tidy checks is what the build compiles, under the including
+# project's src/, tests/ and examples/: a plugin's repository that includes
+# this file has its tests linted as DAOLib's are, with nothing to set
+# (DAOLib #34).
+#
 # Each formatter runs its stock style, and each linter the checks that find
 # bugs and costs, nothing stylistic: .clang-format, .clang-tidy, ruff.toml and
 # .gersemirc say which; PSScriptAnalyzer runs its defaults.
@@ -226,145 +231,182 @@ if(DAO_FORMAT_COMMANDS)
     )
 endif()
 
-if(DAO_CLANG_TIDY)
-    message(STATUS "clang-tidy: ${DAO_CLANG_TIDY}")
+# The C++ sources the including project's targets compile, under its own
+# src/, tests/ and examples/: every directory's targets, the subdirectories'
+# too (a plugin's DAOLib among them, whose sources lie outside those three
+# and are left out).
+function(_dao_built_sources out)
+    set(result "")
+    set(dirs "${CMAKE_SOURCE_DIR}")
+    while(dirs)
+        list(POP_FRONT dirs dir)
+        get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+        list(APPEND dirs ${subdirs})
+        get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(target IN LISTS targets)
+            get_target_property(type ${target} TYPE)
+            if(type STREQUAL "INTERFACE_LIBRARY" OR type STREQUAL "UTILITY")
+                continue()
+            endif()
+            get_target_property(sources ${target} SOURCES)
+            get_target_property(base ${target} SOURCE_DIR)
+            foreach(source IN LISTS sources)
+                if(NOT source MATCHES "\\.cpp$" OR source MATCHES "\\$<")
+                    continue()
+                endif()
+                cmake_path(
+                    ABSOLUTE_PATH source
+                    BASE_DIRECTORY "${base}"
+                    NORMALIZE
+                )
+                foreach(root IN ITEMS src tests examples)
+                    string(FIND "${source}" "${CMAKE_SOURCE_DIR}/${root}/" at)
+                    if(at EQUAL 0)
+                        list(APPEND result "${source}")
+                    endif()
+                endforeach()
+            endforeach()
+        endforeach()
+    endwhile()
+    list(REMOVE_DUPLICATES result)
+    list(SORT result)
+    set(${out} "${result}" PARENT_SCOPE)
+endfunction()
 
-    # One custom command per file, not one command over all of them: the
-    # files run in parallel across cores, and a stamp per file means an
-    # unchanged file is not checked again. The stamps deliberately do NOT
-    # depend on the compile database, which is rewritten on every configure.
-    # Delete build/<preset>/tidy to force a full pass.
-    file(
-        GLOB_RECURSE DAO_TIDY_SOURCES
-        CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/src/*.cpp"
-    )
-    if(DAO_BUILD_TESTS)
-        file(
-            GLOB_RECURSE DAO_TIDY_TESTS
-            CONFIGURE_DEPENDS
-            "${CMAKE_SOURCE_DIR}/tests/*.cpp"
-        )
-        list(APPEND DAO_TIDY_SOURCES ${DAO_TIDY_TESTS})
-    endif()
-    if(DAO_BUILD_EXAMPLES)
-        file(
-            GLOB_RECURSE DAO_TIDY_EXAMPLES
-            CONFIGURE_DEPENDS
-            "${CMAKE_SOURCE_DIR}/examples/*.cpp"
-        )
-        list(APPEND DAO_TIDY_SOURCES ${DAO_TIDY_EXAMPLES})
-    endif()
-    file(
-        GLOB_RECURSE DAO_TIDY_HEADERS
-        CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/src/*.h"
-        "${CMAKE_SOURCE_DIR}/tests/*.h"
-        "${CMAKE_SOURCE_DIR}/examples/*.h"
-    )
+# The lint target, made once the including project has defined all its
+# targets, so that their sources are known (cmake_language DEFER).
+function(_dao_quality_tidy)
+    if(DAO_CLANG_TIDY)
+        message(STATUS "clang-tidy: ${DAO_CLANG_TIDY}")
 
-    # Reports from any header under this tree's src/, tests/ or examples/, by absolute
-    # path, so a vendored library's src/ never matches. clang-tidy prints
-    # mixed separators (src\dao/Log.h), hence either slash.
-    set(DAO_TIDY_HEADER_FILTER "${CMAKE_SOURCE_DIR}")
-    foreach(
-        _c
-        .
-        +
-        *
-        ?
-        ^
-        $
-        "("
-        ")"
-        "|"
-        "{"
-        "}"
-        "["
-    )
+        # One custom command per file, not one command over all of them: the
+        # files run in parallel across cores, and a stamp per file means an
+        # unchanged file is not checked again. The stamps deliberately do NOT
+        # depend on the compile database, which is rewritten on every configure.
+        # Delete build/<preset>/tidy to force a full pass.
+        # What is linted is what the build compiles: every C++ source of a
+        # target the including project defines, under its own src/, tests/ and
+        # examples/ (DAOLib #34). Not a glob, since clang-tidy needs a file's
+        # entry in the compile database and a file no target builds has none;
+        # and not DAOLib's own build options, which a plugin's repository that
+        # includes this file never sets, so its tests went unlinted.
+        _dao_built_sources(DAO_TIDY_SOURCES)
+        file(
+            GLOB_RECURSE DAO_TIDY_HEADERS
+            CONFIGURE_DEPENDS
+            "${CMAKE_SOURCE_DIR}/src/*.h"
+            "${CMAKE_SOURCE_DIR}/tests/*.h"
+            "${CMAKE_SOURCE_DIR}/examples/*.h"
+        )
+
+        file(
+            GLOB DAO_TIDY_CONFIGS
+            "${CMAKE_SOURCE_DIR}/.clang-tidy"
+            "${CMAKE_SOURCE_DIR}/src/.clang-tidy"
+            "${CMAKE_SOURCE_DIR}/tests/.clang-tidy"
+            "${CMAKE_SOURCE_DIR}/examples/.clang-tidy"
+        )
+
+        # Reports from any header under this tree's src/, tests/ or examples/, by absolute
+        # path, so a vendored library's src/ never matches. clang-tidy prints
+        # mixed separators (src\dao/Log.h), hence either slash.
+        set(DAO_TIDY_HEADER_FILTER "${CMAKE_SOURCE_DIR}")
+        foreach(
+            _c
+            .
+            +
+            *
+            ?
+            ^
+            $
+            "("
+            ")"
+            "|"
+            "{"
+            "}"
+            "["
+        )
+            string(
+                REPLACE "${_c}"
+                "\\${_c}"
+                DAO_TIDY_HEADER_FILTER
+                "${DAO_TIDY_HEADER_FILTER}"
+            )
+        endforeach()
+        string(APPEND DAO_TIDY_HEADER_FILTER "/(src|tests|examples)/")
         string(
-            REPLACE "${_c}"
-            "\\${_c}"
+            REPLACE "/"
+            "[/\\]"
             DAO_TIDY_HEADER_FILTER
             "${DAO_TIDY_HEADER_FILTER}"
         )
-    endforeach()
-    string(APPEND DAO_TIDY_HEADER_FILTER "/(src|tests|examples)/")
-    string(
-        REPLACE "/"
-        "[/\\]"
-        DAO_TIDY_HEADER_FILTER
-        "${DAO_TIDY_HEADER_FILTER}"
-    )
-    unset(_c)
+        unset(_c)
 
-    set(DAO_TIDY_STAMPS "")
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tidy")
-    foreach(_src IN LISTS DAO_TIDY_SOURCES)
-        file(RELATIVE_PATH _rel "${CMAKE_SOURCE_DIR}" "${_src}")
-        string(REPLACE "/" "_" _stampname "${_rel}")
-        set(_stamp "${CMAKE_BINARY_DIR}/tidy/${_stampname}.stamp")
-        # The compile database is MSVC's; clang takes /Zc:preprocessor and
-        # /external:anglebrackets without using them, and under
-        # WarningsAsErrors that note would fail every file. And it is a
-        # 32-bit build: cl.exe's command line does not say so (the x86
-        # cl.exe is the whole of it), so clang would assume the host's
-        # x86_64 and reject the proxy's naked functions; the target is
-        # named outright.
-        add_custom_command(
-            OUTPUT "${_stamp}"
+        set(DAO_TIDY_STAMPS "")
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tidy")
+        foreach(_src IN LISTS DAO_TIDY_SOURCES)
+            file(RELATIVE_PATH _rel "${CMAKE_SOURCE_DIR}" "${_src}")
+            string(REPLACE "/" "_" _stampname "${_rel}")
+            set(_stamp "${CMAKE_BINARY_DIR}/tidy/${_stampname}.stamp")
+            # The compile database is MSVC's; clang takes /Zc:preprocessor and
+            # /external:anglebrackets without using them, and under
+            # WarningsAsErrors that note would fail every file. And it is a
+            # 32-bit build: cl.exe's command line does not say so (the x86
+            # cl.exe is the whole of it), so clang would assume the host's
+            # x86_64 and reject the proxy's naked functions; the target is
+            # named outright.
+            add_custom_command(
+                OUTPUT "${_stamp}"
+                COMMAND
+                    "${DAO_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}"
+                    "--header-filter=${DAO_TIDY_HEADER_FILTER}"
+                    --extra-arg=--target=i386-pc-windows-msvc
+                    --extra-arg=-Wno-unused-command-line-argument "${_src}"
+                COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
+                DEPENDS "${_src}" ${DAO_TIDY_HEADERS} ${DAO_TIDY_CONFIGS}
+                COMMENT "clang-tidy ${_rel}"
+                VERBATIM
+            )
+            list(APPEND DAO_TIDY_STAMPS "${_stamp}")
+        endforeach()
+        unset(_src)
+        unset(_rel)
+        unset(_stampname)
+        unset(_stamp)
+    else()
+        set(DAO_TIDY_STAMPS "")
+        message(STATUS "clang-tidy: NOT FOUND -- C++ is not linted")
+    endif()
+
+    # ruff check runs every time: it takes well under a second. PSScriptAnalyzer
+    # takes seconds to load, so its script keeps a stamp and returns at once while
+    # no script has changed.
+    set(DAO_LINT_COMMANDS "")
+    if(DAO_RUFF)
+        list(APPEND DAO_LINT_COMMANDS COMMAND ${DAO_RUFF} check --quiet)
+    endif()
+    if(DAO_PSCHECK)
+        list(
+            APPEND DAO_LINT_COMMANDS
             COMMAND
-                "${DAO_CLANG_TIDY}" -p "${CMAKE_BINARY_DIR}"
-                "--header-filter=${DAO_TIDY_HEADER_FILTER}"
-                --extra-arg=--target=i386-pc-windows-msvc
-                --extra-arg=-Wno-unused-command-line-argument "${_src}"
-            COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
-            DEPENDS
-                "${_src}"
-                ${DAO_TIDY_HEADERS}
-                "${CMAKE_SOURCE_DIR}/.clang-tidy"
-                "${CMAKE_SOURCE_DIR}/tests/.clang-tidy"
-            COMMENT "clang-tidy ${_rel}"
+            ${DAO_PSCHECK}
+            -Mode
+            Lint
+            -Stamp
+            "${CMAKE_BINARY_DIR}/tidy/powershell.stamp"
+        )
+    endif()
+    if(DAO_TIDY_STAMPS OR DAO_LINT_COMMANDS)
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tidy")
+        add_custom_target(
+            tidy
+            ${DAO_LINT_COMMANDS}
+            DEPENDS ${DAO_TIDY_STAMPS}
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             VERBATIM
         )
-        list(APPEND DAO_TIDY_STAMPS "${_stamp}")
-    endforeach()
-    unset(_src)
-    unset(_rel)
-    unset(_stampname)
-    unset(_stamp)
-else()
-    set(DAO_TIDY_STAMPS "")
-    message(STATUS "clang-tidy: NOT FOUND -- C++ is not linted")
-endif()
-
-# ruff check runs every time: it takes well under a second. PSScriptAnalyzer
-# takes seconds to load, so its script keeps a stamp and returns at once while
-# no script has changed.
-set(DAO_LINT_COMMANDS "")
-if(DAO_RUFF)
-    list(APPEND DAO_LINT_COMMANDS COMMAND ${DAO_RUFF} check --quiet)
-endif()
-if(DAO_PSCHECK)
-    list(
-        APPEND DAO_LINT_COMMANDS
-        COMMAND
-        ${DAO_PSCHECK}
-        -Mode
-        Lint
-        -Stamp
-        "${CMAKE_BINARY_DIR}/tidy/powershell.stamp"
-    )
-endif()
-if(DAO_TIDY_STAMPS OR DAO_LINT_COMMANDS)
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tidy")
-    add_custom_target(
-        tidy
-        ${DAO_LINT_COMMANDS}
-        DEPENDS ${DAO_TIDY_STAMPS}
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        VERBATIM
-    )
-endif()
+    endif()
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _dao_quality_tidy)
 
 unset(_llvm_hints)
