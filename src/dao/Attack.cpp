@@ -247,6 +247,90 @@ class FilledRings
     std::vector<std::uintptr_t> opened_;
 };
 
+// The creature's movement controller and what TurnTo and FaceExactly read
+// of it (dao/Addresses.h has the reading, 2026-10-05): its own facing (its
+// wanted one, +0x90, SetDesiredFacing's), its state (0 idle, 3 and 4
+// turning), its motion record, and the angle beyond
+// which SetDesiredFacing starts a turn, in degrees, and the squared length
+// below which it takes its own facing for none.
+constexpr std::uintptr_t kController = 0xA30;
+constexpr std::uintptr_t kControllerFacing = 0xA0;
+constexpr std::uintptr_t kControllerState = 0xF0;
+constexpr std::uintptr_t kControllerMotion = 0x70;
+constexpr std::uintptr_t kControllerHasMotion = 0x74;
+constexpr float kTurnStarts = 0.99999899F;
+constexpr float kNoLength = 1e-6F;
+
+// The turn of TurnTo (Attack.h): the target's slot 29 for a melee attacker,
+// its position for a ranged one; each direction an angle by the engine's
+// VectorToAngle and their difference by its Angle::Wrap to -180..180.
+std::optional<FacingTurn> TurnFor(CCObject *from, CCObject *to)
+{
+    constexpr float kTurnDone = 1.0F;
+    constexpr std::uintptr_t kFacing = 0x130;
+    using PointFn = Vector4 *(__fastcall *)(CCObject *, int, Vector4 *, const Vector4 *);
+    using AngleFn = float(__cdecl *)(const Vector4 *);
+    using WrapFn = float(__cdecl *)(float, float, float);
+    const Vector4 at = ToVector4(from->Position());
+    Vector4 point = ToVector4(to->Position());
+    if (!HasRangedWeapon(from))
+    {
+        // The target's slot 29: the point a melee attacker at `at` turns to.
+        using Slot = PointFn;
+        const Slot *vtable = *reinterpret_cast<const Slot *const *>(to);
+        constexpr std::size_t kPointSlot = 29;
+        Vector4 out;
+        point = *vtable[kPointSlot](to, 0, &out, &at);
+    }
+    Vector4 toward{point.x - at.x, point.y - at.y, 0, 0};
+    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
+    if (length < 1e-3F)
+    {
+        return std::nullopt;
+    }
+    toward.x /= length;
+    toward.y /= length;
+    const auto facing = TryRead<Vector4>(reinterpret_cast<std::uintptr_t>(from) + kFacing);
+    if (!facing)
+    {
+        return std::nullopt;
+    }
+    const auto angle = At<AngleFn>(addr::kScriptBackend_ForScript_VectorToAngle);
+    FacingTurn turn;
+    turn.point = {point.x, point.y, point.z};
+    turn.toward = {toward.x, toward.y, 0};
+    turn.degrees = At<WrapFn>(addr::kAngle_Wrap)(angle(&toward) - angle(&*facing), -180.0F, 180.0F);
+    turn.done = std::fabs(turn.degrees) <= kTurnDone;
+    // As SetDesiredFacing judges it: the controller idle, and its own
+    // facing within its 1 degree of the aim by the engine's AngleBetween;
+    // a controller facing of no length starts a turn, as it does there.
+    if (!turn.done)
+    {
+        using AngleBetweenFn = float(__cdecl *)(const Vector4 *, const Vector4 *);
+        const auto controller = reinterpret_cast<std::uintptr_t>(from) + kController;
+        const auto state = TryRead<std::int32_t>(controller + kControllerState);
+        const auto own = TryRead<Vector4>(controller + kControllerFacing);
+        if (state && *state == 0)
+        {
+            // SetDesiredFacing's two refusals from an idle controller: its own
+            // facing already within the angle of the aim (one of no length is
+            // never within it), or its motion record busy, the byte at +0x74
+            // set and the record's +0x10 holding a nonzero +0xC0 (the
+            // address library's session, 2026-10-05).
+            const bool within = own && own->x * own->x + own->y * own->y + own->z * own->z > kNoLength &&
+                                At<AngleBetweenFn>(addr::kVector_AngleBetween)(&toward, &*own) <= kTurnStarts;
+            const auto hasMotion = TryRead<std::uint8_t>(controller + kControllerHasMotion);
+            const auto motion = TryRead<std::uintptr_t>(controller + kControllerMotion);
+            const auto inner = motion && *motion != 0 ? TryRead<std::uintptr_t>(*motion + 0x10) : std::nullopt;
+            const auto busyWord = inner && *inner != 0 ? TryRead<std::uint32_t>(*inner + 0xC0) : std::nullopt;
+            const bool busy = hasMotion && *hasMotion != 0 && busyWord && *busyWord != 0;
+            turn.stalls = within;
+            turn.waits = !within && busy;
+        }
+    }
+    return turn;
+}
+
 // Whether a melee attacker in reach strikes in its command's first update,
 // as the engine runs it: the turn (sub-action 39, 0x007A69E0, through
 // CSSubActionHandler::TurnToward) done at
@@ -264,39 +348,14 @@ bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
     {
         return false;
     }
-    constexpr float kTurnDone = 1.0F;
     constexpr float kMostElevation = 60.0F;
-    constexpr std::uintptr_t kFacing = 0x130;
-    using PointFn = Vector4 *(__fastcall *)(CCObject *, int, Vector4 *, const Vector4 *);
-    using AngleFn = float(__cdecl *)(const Vector4 *);
-    using WrapFn = float(__cdecl *)(float, float, float);
     using ElevationFn = float(__cdecl *)(const Vector4 *);
+    const auto turn = TurnFor(from, to);
+    if (!turn || !turn->done)
+    {
+        return false;
+    }
     const Vector4 at = ToVector4(from->Position());
-    // The target's slot 29: the point a melee attacker at `at` turns to.
-    using Slot = PointFn;
-    const Slot *vtable = *reinterpret_cast<const Slot *const *>(to);
-    constexpr std::size_t kPointSlot = 29;
-    Vector4 point;
-    const Vector4 *aim = vtable[kPointSlot](to, 0, &point, &at);
-    Vector4 toward{aim->x - at.x, aim->y - at.y, 0, 0};
-    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
-    if (length < 1e-3F)
-    {
-        return false;
-    }
-    toward.x /= length;
-    toward.y /= length;
-    const auto facing = TryRead<Vector4>(reinterpret_cast<std::uintptr_t>(from) + kFacing);
-    if (!facing)
-    {
-        return false;
-    }
-    const auto angle = At<AngleFn>(addr::kScriptBackend_ForScript_VectorToAngle);
-    const float turn = At<WrapFn>(addr::kAngle_Wrap)(angle(&toward) - angle(&*facing), -180.0F, 180.0F);
-    if (std::fabs(turn) > kTurnDone)
-    {
-        return false;
-    }
     const Vector4 aimAt = ToVector4(to->Position());
     Vector4 rise{aimAt.x - at.x, aimAt.y - at.y, aimAt.z - at.z, 0};
     const float span = std::sqrt(rise.x * rise.x + rise.y * rise.y + rise.z * rise.z);
@@ -319,6 +378,43 @@ bool IsRanged(ObjectId attacker)
 {
     CCObject *creature = Creature(attacker);
     return creature != nullptr && HasRangedWeapon(creature);
+}
+
+std::optional<FacingTurn> TurnTo(ObjectId attacker, ObjectId target)
+{
+    CCObject *from = Creature(attacker);
+    CCObject *to = Creature(target);
+    if (from == nullptr || to == nullptr)
+    {
+        return std::nullopt;
+    }
+    return TurnFor(from, to);
+}
+
+bool FaceExactly(ObjectId creature, Vector toward)
+{
+    CCObject *object = Creature(creature);
+    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
+    if (object == nullptr || length < 1e-3F)
+    {
+        return false;
+    }
+    const auto controller = reinterpret_cast<std::uintptr_t>(object) + kController;
+    const auto state = TryRead<std::int32_t>(controller + kControllerState);
+    if (!state || *state != 0)
+    {
+        return false;
+    }
+    const Vector4 facing{toward.x / length, toward.y / length, 0, 0};
+    // The controller's own facing first, so that SetDesiredFacing finds the
+    // wanted one on it and starts nothing; then the creature's, by the
+    // writer that tells the model. SetDesiredFacing and SetOrientation:
+    // __thiscall (const Vector4 *), `ret 4`.
+    using SetFn = void(__fastcall *)(void *, int, const Vector4 *);
+    *reinterpret_cast<Vector4 *>(controller + kControllerFacing) = facing;
+    At<SetFn>(addr::kMovementController_SetDesiredFacing)(reinterpret_cast<void *>(controller), 0, &facing);
+    At<SetFn>(addr::kScriptBackend_ForScript_SetOrientation)(object, 0, &facing);
+    return true;
 }
 
 std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)

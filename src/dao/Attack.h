@@ -130,6 +130,67 @@ struct Approach
 // the game's thread.
 std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target);
 
+// The turn an attacker's command makes to face its target before the blow
+// (sub-action 39, 0x007A69E0, through CSSubActionHandler::TurnToward), as
+// the engine would compute it now (DAOLib #32). For a melee attacker the
+// point is the target's slot 29 given the attacker's place: where it
+// stands for a person, a point of one of its melee rings for a creature
+// whose rings give one (0x007CC1A0). For a ranged one it is where the
+// target stands, as the turn-based mod's builder read it (2026-10-05).
+struct FacingTurn
+{
+    // Where the attacker turns to, and the flat direction there from the
+    // attacker, unit length.
+    Vector point;
+    Vector toward;
+    // The turn left, in degrees, -180..180: the engine's VectorToAngle of
+    // `toward` less that of the attacker's facing (+0x130), by its
+    // Angle::Wrap. Positive is counter-clockwise seen from above.
+    float degrees = 0;
+    // Within the turn's 1 degree, TurnToward's own `<=`: the command goes
+    // past the turn at its first run.
+    bool done = false;
+    // Not done, and the engine will never start the turn: the creature's
+    // movement controller is idle (state 0) and its own facing is within
+    // the 1 degree SetDesiredFacing allows of `toward`, so nothing turns the
+    // creature and the command waits at sub-action 39 for ever (DAOLib
+    // #25). The controller keeps a facing apart from the creature's and
+    // follows it only at times, so the two drift apart: a snap of the
+    // creature's alone, or the engine's own. FaceExactly mends it.
+    bool stalls = false;
+    // Not done, and the engine starts no turn yet, only because the idle
+    // controller's motion record is busy (an animation of the creature's
+    // own playing out), which SetDesiredFacing also refuses. TurnToward
+    // asks again at each update, so the turn begins when the record is
+    // free: this passes by itself, and is no reason to face the creature.
+    // Seen in play 2026-10-05 (the turn-based mod): read as `stalls`, it
+    // had a creature 159 degrees off, just out of an ability's animation.
+    bool waits = false;
+};
+
+// Nothing if either is not a creature, or the point is where the attacker
+// stands. On the game's thread. The answer to a hang at sub-action 39 on a
+// creature at rest (DAOLib #25): when `done` is false and the turn is
+// small, the scripts' SetOrientation of `toward` faces it exactly (their
+// SetFacing commands only ask the controller, which turns nothing there).
+std::optional<FacingTurn> TurnTo(ObjectId attacker, ObjectId target);
+
+// Faces a creature exactly along a flat direction and leaves the engine's
+// two facings equal (DAOLib #32): the creature's own by the engine's
+// writer, the scripts' SetOrientation's, which tells the model; the
+// movement controller's own facing, which no engine function sets but its
+// update copies from the creature's while following it; and its wanted
+// facing by the engine's SetDesiredFacing, which then starts no turn. Only
+// on an idle controller: false, and nothing written, for one walking or
+// turning, or for no creature or no direction. On the game's thread. The
+// cure for `FacingTurn::stalls`:
+//
+//   if (const auto turn = dao::attack::TurnTo(attacker, target); turn && turn->stalls)
+//   {
+//       dao::attack::FaceExactly(attacker, turn->toward);
+//   }
+bool FaceExactly(ObjectId creature, Vector toward);
+
 // A target's melee rings as the engine holds them now, read only (DAOLib
 // #19). A creature keeps a std::vector of rings at its +0xB44, each a
 // radius (+0x10) and a pointer array of places (+0x48, the count +0x4C);

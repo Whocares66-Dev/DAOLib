@@ -1245,6 +1245,27 @@ DAO_ADDRESS(kScriptBackend_ForScript_VectorToAngle, 5703)
 // against 60. The names are ours.
 DAO_ADDRESS(kAngle_Wrap, 5693)
 DAO_ADDRESS(kVector_Elevation, 5704)
+// The two facings an attack's turn reads, read 2026-10-05 (DAOLib #25, #32).
+// The creature's own (+0x130) is TurnToward's; ForScript_SetOrientation
+// (__thiscall (const Vector4 *) on the creature, `ret 4`) writes it and
+// tells the model (the creature's vtable slot 32). The movement controller
+// (creature+0xA30, MovementController, vtable 0x00B596C0) keeps a facing
+// of its own at +0xA0, written only by its update (0x00A644E0) while its
+// byte +0x75 is set, and a wanted facing at +0x90 that SetDesiredFacing
+// (__thiscall (const Vector4 *), `ret 4`) writes. That starts a turn
+// (state 4, +0xF0) only when the wanted facing is more than about 1
+// degree from the controller's own (0.99999899 degrees, as AngleBetween
+// measures it: __cdecl (const Vector4 *, const Vector4 *), the unsigned
+// angle on the ground between two directions in degrees, x and y only),
+// the state is 0, and the motion record is not busy (the byte at +0x74 set
+// and +0xC0 of [[+0x70]+0x10] nonzero); read in full by the address
+// library's session, which counts nine callers. The scripts' SetFacing
+// commands go through SetDesiredFacing for a live creature, and so turn
+// nothing when the controller's facing is already on the aim. The names
+// SetDesiredFacing and AngleBetween are ours.
+DAO_ADDRESS(kScriptBackend_ForScript_SetOrientation, 14042)
+DAO_ADDRESS(kMovementController_SetDesiredFacing, 33602)
+DAO_ADDRESS(kVector_AngleBetween, 4976)
 DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
 DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
 DAO_ADDRESS(kCommands_Start, 12731)
