@@ -234,7 +234,8 @@ class Report
     // One sample of a stall: the thread's state, then, with the first, what
     // the process is and what the logs said leading in. No call stack walk:
     // dbghelp would walk the live thread, which has moved on.
-    void WriteHangSample(Writer &w, const Sample &sample, int number, double seconds, std::string_view state)
+    void WriteHangSample(Writer &w, const Sample &sample, int number, double seconds, std::string_view state,
+                         std::span<const Sample> others = {})
     {
         sample_ = &sample;
         if (number == 1)
@@ -256,6 +257,8 @@ class Report
         GffFiles(w);
         EngineStrings(w);
         w.Flush();
+        OtherThreads(w, others);
+        sample_ = &sample;
         if (number == 1)
         {
             Modules(w);
@@ -565,12 +568,36 @@ class Report
         return stack.first(std::min(most, stack.size()));
     }
 
-    void ReturnAddresses(Writer &w)
+    // The process's other threads, sampled just after the frame thread: a
+    // frame thread waiting for a lock (the process heap's, in a debug
+    // free) shows the lock's holder among them, inside the same heap
+    // functions (DAOLib #30).
+    void OtherThreads(Writer &w, std::span<const Sample> others)
     {
-        w.Line("RETURN ADDRESSES ON THE STACK (callers, innermost first; a few may be stale values):");
+        if (others.empty())
+        {
+            return;
+        }
+        w.Line("OTHER THREADS ({}), sampled just after the frame thread; each its instruction and first callers:",
+               others.size());
+        for (const Sample &other : others)
+        {
+            sample_ = &other;
+            w.Line("  thread {}: EIP {:#010x} {}", other.thread, other.context.Eip, Describe(other.context.Eip));
+            ReturnAddresses(w, 12, false);
+        }
+        w.Flush();
+    }
+
+    void ReturnAddresses(Writer &w, int most = 128, bool heading = true)
+    {
+        if (heading)
+        {
+            w.Line("RETURN ADDRESSES ON THE STACK (callers, innermost first; a few may be stale values):");
+        }
         const auto words = StackWords(kScanWords);
         int shown = 0;
-        for (std::size_t i = 0; i < words.size() && shown < 128; ++i)
+        for (std::size_t i = 0; i < words.size() && shown < most; ++i)
         {
             const std::uint32_t value = words[i];
             const ModuleInfo *m = ModuleOf(value);
@@ -1061,6 +1088,41 @@ bool Capture(DWORD threadId, Sample &sample, std::span<std::uint32_t> buffer)
     return taken;
 }
 
+// Every thread of the process but the frame thread and this one, each
+// stopped in turn and its stack copied as Capture does (nothing allocated
+// while it is stopped). The snapshot is taken before any is stopped.
+std::vector<Sample> OtherThreads(DWORD frameThread, std::span<std::uint32_t> buffer)
+{
+    std::vector<DWORD> ids;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot != INVALID_HANDLE_VALUE)
+    {
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        const DWORD process = GetCurrentProcessId();
+        const DWORD self = GetCurrentThreadId();
+        for (BOOL more = Thread32First(snapshot, &entry); more != FALSE; more = Thread32Next(snapshot, &entry))
+        {
+            if (entry.th32OwnerProcessID == process && entry.th32ThreadID != self && entry.th32ThreadID != frameThread)
+            {
+                ids.push_back(entry.th32ThreadID);
+            }
+        }
+        CloseHandle(snapshot);
+    }
+    std::vector<Sample> others;
+    others.reserve(ids.size());
+    for (const DWORD id : ids)
+    {
+        Sample sample;
+        if (Capture(id, sample, buffer))
+        {
+            others.push_back(std::move(sample));
+        }
+    }
+    return others;
+}
+
 // One stall, from its first sample to the frame that ends it: one file, a
 // sample every g_hangSeconds up to kMostSamples, and how long it lasted.
 void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
@@ -1078,8 +1140,16 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
             next = now + interval;
             const GameState state = State();
             Sample sample;
-            if (Capture(static_cast<DWORD>(dao::FrameThreadId()), sample, buffer))
+            const auto frameThread = static_cast<DWORD>(dao::FrameThreadId());
+            if (Capture(frameThread, sample, buffer))
             {
+                // The other threads, at once, while whatever holds the
+                // frame thread still holds it; the first sample only.
+                std::vector<Sample> others;
+                if (samples == 0)
+                {
+                    others = OtherThreads(frameThread, buffer);
+                }
                 if (file == nullptr)
                 {
                     const auto path = LogPath("hang");
@@ -1094,7 +1164,8 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
                                  path.string());
                 }
                 Writer w(file);
-                report->WriteHangSample(w, sample, ++samples, static_cast<double>(now - last) / 1000.0, state.text);
+                report->WriteHangSample(w, sample, ++samples, static_cast<double>(now - last) / 1000.0, state.text,
+                                        others);
             }
         }
         Sleep(250);
