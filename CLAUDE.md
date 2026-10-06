@@ -141,4 +141,4 @@ A hook that wants its caller logs `_ReturnAddress()` rebased to the preferred ba
 
 ## Style
 
-Formatting is clang-format's stock Microsoft style (`.clang-format`, one line), and lint is correctness only. Neither is up for discussion per file. Comments say why and what was read, with dates, not what the code does. A file's head says what the file is for and how it fits.
+Formatting is clang-format's stock Microsoft style (`.clang-format`, one line), and lint is correctness, cost and readability, with the checks of taste left out and each exclusion's reason in `.clang-tidy` (the user, 2026-10-05: "We want to write good clean code, avoid complexity"). A function over a cognitive complexity of 25 is split where it has parts with a meaning of their own, not for the number. Neither is up for discussion per file. Comments say why and what was read, with dates, not what the code does. A file's head says what the file is for and how it fits.

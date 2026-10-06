@@ -151,12 +151,12 @@ std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, 
         const float dx = b.x - a.x;
         const float dy = b.y - a.y;
         const float dz = b.z - a.z;
-        const float length = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const float length = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
         const int steps = std::max(1, static_cast<int>(std::ceil(length / kWalkStep)));
         for (int step = 1; step <= steps; ++step)
         {
             const float t = static_cast<float>(step) / static_cast<float>(steps);
-            const Vector point{a.x + t * dx, a.y + t * dy, a.z + t * dz};
+            const Vector point{a.x + (t * dx), a.y + (t * dy), a.z + (t * dz)};
             const auto ends = endsAt(point);
             if (!ends)
             {
@@ -186,7 +186,7 @@ std::vector<std::uintptr_t> RingsOf(const CCObject *creature)
     for (std::uint32_t i = 0;
          first && last && *first != 0 && *last > *first && i < (*last - *first) / 4 && i < kMostRings; ++i)
     {
-        rings.push_back(TryRead<std::uint32_t>(*first + i * 4).value_or(0));
+        rings.push_back(TryRead<std::uint32_t>(*first + (i * 4)).value_or(0));
     }
     return rings;
 }
@@ -283,7 +283,7 @@ std::optional<FacingTurn> TurnFor(CCObject *from, CCObject *to)
         point = *vtable[kPointSlot](to, 0, &out, &at);
     }
     Vector4 toward{point.x - at.x, point.y - at.y, 0, 0};
-    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
+    const float length = std::sqrt((toward.x * toward.x) + (toward.y * toward.y));
     if (length < 1e-3F)
     {
         return std::nullopt;
@@ -317,7 +317,7 @@ std::optional<FacingTurn> TurnFor(CCObject *from, CCObject *to)
             // never within it), or its motion record busy, the byte at +0x74
             // set and the record's +0x10 holding a nonzero +0xC0 (the
             // address library's session, 2026-10-05).
-            const bool within = own && own->x * own->x + own->y * own->y + own->z * own->z > kNoLength &&
+            const bool within = own && (own->x * own->x) + (own->y * own->y) + (own->z * own->z) > kNoLength &&
                                 At<AngleBetweenFn>(addr::kVector_AngleBetween)(&toward, &*own) <= kTurnStarts;
             const auto hasMotion = TryRead<std::uint8_t>(controller + kControllerHasMotion);
             const auto motion = TryRead<std::uintptr_t>(controller + kControllerMotion);
@@ -358,7 +358,7 @@ bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
     const Vector4 at = ToVector4(from->Position());
     const Vector4 aimAt = ToVector4(to->Position());
     Vector4 rise{aimAt.x - at.x, aimAt.y - at.y, aimAt.z - at.z, 0};
-    const float span = std::sqrt(rise.x * rise.x + rise.y * rise.y + rise.z * rise.z);
+    const float span = std::sqrt((rise.x * rise.x) + (rise.y * rise.y) + (rise.z * rise.z));
     if (span > 1e-3F)
     {
         rise.x /= span;
@@ -394,7 +394,7 @@ std::optional<FacingTurn> TurnTo(ObjectId attacker, ObjectId target)
 bool FaceExactly(ObjectId creature, Vector toward)
 {
     CCObject *object = Creature(creature);
-    const float length = std::sqrt(toward.x * toward.x + toward.y * toward.y);
+    const float length = std::sqrt((toward.x * toward.x) + (toward.y * toward.y));
     if (object == nullptr || length < 1e-3F)
     {
         return false;
@@ -540,7 +540,7 @@ std::vector<Ring> Rings(ObjectId target)
     const std::uint32_t count = std::min((*last - *first) / 4, kMostRings);
     for (std::uint32_t r = 0; r < count; ++r)
     {
-        const auto ring = TryRead<std::uint32_t>(*first + r * 4);
+        const auto ring = TryRead<std::uint32_t>(*first + (r * 4));
         if (!ring || *ring == 0)
         {
             continue;
@@ -551,7 +551,7 @@ std::vector<Ring> Rings(ObjectId target)
         const auto places = TryRead<std::uint32_t>(*ring + kCount);
         for (std::uint32_t i = 0; array && *array != 0 && places && i < std::min(*places, kMostPlaces); ++i)
         {
-            const auto at = TryRead<std::uint32_t>(*array + i * 4);
+            const auto at = TryRead<std::uint32_t>(*array + (i * 4));
             if (!at || *at == 0)
             {
                 continue;

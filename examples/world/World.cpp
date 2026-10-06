@@ -106,11 +106,11 @@ void LogRooms(dao::ObjectId self)
     static int lastWanted = -1;
     static int lastLoaded = -1;
     static int lastSeen = -1;
-    if (wanted != lastWanted || loaded != lastLoaded || inView + 100 * seenBefore != lastSeen)
+    if (wanted != lastWanted || loaded != lastLoaded || inView + (100 * seenBefore) != lastSeen)
     {
         lastWanted = wanted;
         lastLoaded = loaded;
-        lastSeen = inView + 100 * seenBefore;
+        lastSeen = inView + (100 * seenBefore);
         spdlog::info("{} rooms: {} in view, {} seen before, {} never seen; {} wanted now, {} wanted, {} dropped; {} "
                      "loaded",
                      rooms.size(), inView, seenBefore, static_cast<int>(rooms.size()) - inView - seenBefore, now,

@@ -67,7 +67,7 @@ CensusResult AttachCensus(std::span<const dao::AddressId> except)
     const auto common = reinterpret_cast<std::uintptr_t>(&ProbeCountAndContinue);
     for (std::size_t i = 0; i < kTargetCount; ++i)
     {
-        std::uint8_t *stub = stubs + i * kStubSize;
+        std::uint8_t *stub = stubs + (i * kStubSize);
         // mov eax, imm32 ; jmp rel32 ; int3 padding
         const auto index = static_cast<std::uint32_t>(i);
         const auto rel = static_cast<std::int32_t>(common - (reinterpret_cast<std::uintptr_t>(stub) + 10));
@@ -103,7 +103,7 @@ CensusResult AttachCensus(std::span<const dao::AddressId> except)
             continue;
         }
         DetourUpdateThread(GetCurrentThread());
-        const LONG attach = DetourAttach(&g_probeOriginals[i], stubs + i * kStubSize);
+        const LONG attach = DetourAttach(&g_probeOriginals[i], stubs + (i * kStubSize));
         const LONG commit = attach == NO_ERROR ? DetourTransactionCommit() : DetourTransactionAbort();
         if (attach == NO_ERROR && commit == NO_ERROR)
         {

@@ -35,6 +35,7 @@ such constant says so in a comment, from the table.
                                                     0 with a note when a source is missing
 """
 
+import math
 import os
 import re
 import sys
@@ -274,7 +275,12 @@ def header(constants, sources, notes):
         if name in SKIPPED:
             continue
         if kind == "float":
-            lines.append(f"inline constexpr float {name} = {value!r}f;")
+            line = f"inline constexpr float {name} = {value!r}f;"
+            # The scripts' own value, which clang-tidy would replace with
+            # std::numbers' (PI is 3.141592, not pi; DAOLib #33).
+            if any(abs(value - c) < 1e-3 for c in (math.pi, math.e)):
+                line += " // NOLINT(modernize-use-std-numbers): the scripts' own value"
+            lines.append(line)
         elif value > 0x7FFFFFFF:
             lines.append(f"inline constexpr std::uint32_t {name} = {value}u;")
         else:

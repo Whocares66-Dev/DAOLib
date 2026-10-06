@@ -139,7 +139,7 @@ struct BitReader
 std::size_t FirstTag(Reader &bytes)
 {
     const std::size_t bits = bytes.U8(kHeader) >> 3U;
-    return kHeader + (5 + 4 * bits + 7) / 8 + 4;
+    return kHeader + ((5 + (4 * bits) + 7) / 8) + 4;
 }
 
 // An uncompressed movie's tags, or nothing for bytes that are no such
@@ -365,6 +365,28 @@ enum class Search
     Bad,
 };
 
+// A ConstantPool action's strings, which the actions after it index.
+void ReadPool(Reader &bytes, const Action &action, std::vector<std::string_view> &pool)
+{
+    std::size_t text = action.body + 2;
+    pool.clear();
+    for (std::size_t i = bytes.U16(action.body); i > 0 && bytes.good; --i)
+    {
+        pool.push_back(bytes.Text(text, action.next));
+    }
+}
+
+// Where the anchor puts the code, if this Push is the anchor's.
+std::optional<std::size_t> PushPlace(Reader &bytes, const Anchor &anchor, std::size_t at, const Action &action,
+                                     std::size_t end, const std::vector<std::string_view> &pool)
+{
+    if (const auto values = ReadPush(bytes, action, pool))
+    {
+        return PlaceAt(bytes, anchor, at, action, end, *values);
+    }
+    return std::nullopt;
+}
+
 Search InActions(Reader &bytes, std::size_t begin, std::size_t end, const std::vector<std::string_view> &outer,
                  const Anchor &anchor, Place &place)
 {
@@ -381,24 +403,16 @@ Search InActions(Reader &bytes, std::size_t begin, std::size_t end, const std::v
         std::size_t next = action.next;
         if (action.code == kConstantPool)
         {
-            std::size_t text = action.body + 2;
-            own.clear();
-            for (std::size_t i = bytes.U16(action.body); i > 0 && bytes.good; --i)
-            {
-                own.push_back(bytes.Text(text, action.next));
-            }
+            ReadPool(bytes, action, own);
             pool = &own;
         }
         else if (action.code == kPush)
         {
-            if (const auto values = ReadPush(bytes, action, *pool))
+            if (const auto where = PushPlace(bytes, anchor, at, action, end, *pool))
             {
-                if (const auto where = PlaceAt(bytes, anchor, at, action, end, *values))
-                {
-                    place.at = *where;
-                    place.runs.emplace_back(begin, end);
-                    return Search::Found;
-                }
+                place.at = *where;
+                place.runs.emplace_back(begin, end);
+                return Search::Found;
             }
         }
         else if (action.code == kDefineFunction || action.code == kDefineFunction2)
@@ -484,6 +498,40 @@ struct Branch
     bool forward = true;
 };
 
+// A Jump or If whose span from its end to its target holds the place:
+// forward if it jumps over it, back if it jumps from after it to before.
+std::optional<Branch> BranchAcross(Reader &bytes, const Action &action, std::size_t place)
+{
+    const auto offset = static_cast<std::int16_t>(bytes.U16(action.body));
+    const std::int64_t target = static_cast<std::int64_t>(action.next) + offset;
+    const auto here = static_cast<std::int64_t>(place);
+    if (std::cmp_less_equal(action.next, here) && here < target)
+    {
+        return Branch{action.body, true};
+    }
+    if (target <= here && std::cmp_less(here, action.next))
+    {
+        return Branch{action.body, false};
+    }
+    return std::nullopt;
+}
+
+// The size of the block a With or a Try opens after it; nothing for
+// another action.
+std::optional<std::size_t> BlockSize(Reader &bytes, const Action &action)
+{
+    if (action.code == kWith)
+    {
+        return bytes.U16(action.body);
+    }
+    if (action.code == kTry)
+    {
+        // Flags, then the sizes of the try, the catch and the finally.
+        return std::size_t{bytes.U16(action.body + 1)} + bytes.U16(action.body + 3) + bytes.U16(action.body + 5);
+    }
+    return std::nullopt;
+}
+
 // The branches across the place in one run, not looking into the functions
 // in it (a branch stays in its own function). False for a `with` or a
 // `try` around the place, whose sizes are not handled.
@@ -504,35 +552,15 @@ bool BranchesAcross(Reader &bytes, std::size_t begin, std::size_t end, std::size
         }
         else if (action.code == kJump || action.code == kIf)
         {
-            const auto offset = static_cast<std::int16_t>(bytes.U16(action.body));
-            const std::int64_t target = static_cast<std::int64_t>(action.next) + offset;
-            const auto here = static_cast<std::int64_t>(place);
-            if (static_cast<std::int64_t>(action.next) <= here && here < target)
+            if (const auto branch = BranchAcross(bytes, action, place))
             {
-                out.push_back({action.body, true});
-            }
-            else if (target <= here && here < static_cast<std::int64_t>(action.next))
-            {
-                out.push_back({action.body, false});
+                out.push_back(*branch);
             }
         }
-        else if (action.code == kWith)
+        else if (const auto size = BlockSize(bytes, action);
+                 size && action.next <= place && place < action.next + *size)
         {
-            const std::size_t size = bytes.U16(action.body);
-            if (action.next <= place && place < action.next + size)
-            {
-                return false;
-            }
-        }
-        else if (action.code == kTry)
-        {
-            // Flags, then the sizes of the try, the catch and the finally.
-            const std::size_t size =
-                std::size_t{bytes.U16(action.body + 1)} + bytes.U16(action.body + 3) + bytes.U16(action.body + 5);
-            if (action.next <= place && place < action.next + size)
-            {
-                return false;
-            }
+            return false;
         }
         if (!bytes.good || next > end)
         {
@@ -922,6 +950,68 @@ std::optional<Bytes> InsertBefore(std::span<const std::byte> movie, const Member
     return Insert(movie, anchor, code);
 }
 
+namespace
+{
+
+// The instances a DefineSprite's own timeline places, each told the deepest
+// depth placed there.
+std::vector<Instance> SpriteInstances(Reader &bytes, const Tag &tag, std::uint16_t sprite)
+{
+    std::vector<Instance> instances;
+    std::uint16_t deepest = 0;
+    std::size_t inner = tag.body + 4;
+    const std::size_t end = tag.body + tag.length;
+    while (inner < end)
+    {
+        const Tag placed = ReadTag(bytes, inner);
+        if (!bytes.good || placed.length > end - placed.body || placed.code == kEnd)
+        {
+            break;
+        }
+        if (placed.code == kPlaceObject2 && placed.length >= 3)
+        {
+            const Placed what = ReadPlaced(bytes, placed);
+            deepest = std::max(deepest, what.depth);
+            if (bytes.good && what.character)
+            {
+                instances.push_back(
+                    {std::string(what.name), sprite, *what.character, what.depth, 0, what.x / 20, what.y / 20});
+            }
+            bytes.good = true; // a placement not understood is none of these
+        }
+        inner = placed.body + placed.length;
+    }
+    for (Instance &instance : instances)
+    {
+        instance.deepest = deepest;
+    }
+    return instances;
+}
+
+// Where a DefineSprite's first ShowFrame begins; nothing if its timeline
+// does not read or has none.
+std::optional<std::size_t> FirstShowFrame(Reader &bytes, const Tag &tag)
+{
+    const std::size_t end = tag.body + tag.length;
+    std::size_t inner = tag.body + 4;
+    while (inner < end)
+    {
+        const Tag placed = ReadTag(bytes, inner);
+        if (!bytes.good || placed.length > end - placed.body || placed.code == kEnd)
+        {
+            return std::nullopt;
+        }
+        if (placed.code == kShowFrame)
+        {
+            return inner;
+        }
+        inner = placed.body + placed.length;
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
 std::vector<Instance> InstancesOf(std::span<const std::byte> movie, std::uint16_t sprite)
 {
     std::vector<Instance> instances;
@@ -941,34 +1031,7 @@ std::vector<Instance> InstancesOf(std::span<const std::byte> movie, std::uint16_
         }
         if (tag.code == kDefineSprite && tag.length >= 4 && bytes.U16(tag.body) == sprite)
         {
-            std::uint16_t deepest = 0;
-            std::size_t inner = tag.body + 4;
-            const std::size_t end = tag.body + tag.length;
-            while (inner < end)
-            {
-                const Tag placed = ReadTag(bytes, inner);
-                if (!bytes.good || placed.length > end - placed.body || placed.code == kEnd)
-                {
-                    break;
-                }
-                if (placed.code == kPlaceObject2 && placed.length >= 3)
-                {
-                    const Placed what = ReadPlaced(bytes, placed);
-                    deepest = std::max(deepest, what.depth);
-                    if (bytes.good && what.character)
-                    {
-                        instances.push_back(
-                            {std::string(what.name), sprite, *what.character, what.depth, 0, what.x / 20, what.y / 20});
-                    }
-                    bytes.good = true; // a placement not understood is none of these
-                }
-                inner = placed.body + placed.length;
-            }
-            for (Instance &instance : instances)
-            {
-                instance.deepest = deepest;
-            }
-            break;
+            return SpriteInstances(bytes, tag, sprite);
         }
         at = tag.body + tag.length;
     }
@@ -1026,8 +1089,8 @@ std::optional<std::uint16_t> SpritePlacing(std::span<const std::byte> movie, std
         {
             const std::uint16_t sprite = bytes.U16(tag.body);
             const std::vector<Instance> placed = InstancesOf(movie, sprite);
-            if (std::any_of(placed.begin(), placed.end(),
-                            [character](const Instance &instance) { return instance.character == character; }))
+            if (std::ranges::any_of(placed,
+                                    [character](const Instance &instance) { return instance.character == character; }))
             {
                 return sprite;
             }
@@ -1094,25 +1157,12 @@ std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16
         {
             // Before the sprite's first ShowFrame: on its first frame, over
             // what it places already.
-            const std::size_t end = tag.body + tag.length;
-            std::size_t inner = tag.body + 4;
-            while (inner < end)
-            {
-                const Tag placed = ReadTag(bytes, inner);
-                if (!bytes.good || placed.length > end - placed.body || placed.code == kEnd)
-                {
-                    return std::nullopt;
-                }
-                if (placed.code == kShowFrame)
-                {
-                    break;
-                }
-                inner = placed.body + placed.length;
-            }
-            if (inner >= end || tag.longLength == 0)
+            const auto showFrame = FirstShowFrame(bytes, tag);
+            if (!showFrame || tag.longLength == 0)
             {
                 return std::nullopt;
             }
+            const std::size_t inner = *showFrame;
             Bytes tags;
             for (const Placement &placement : placements)
             {

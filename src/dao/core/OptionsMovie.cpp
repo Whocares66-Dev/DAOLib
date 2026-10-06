@@ -17,7 +17,7 @@ constexpr std::int32_t kLastRow = 403;      // the lowest a row can start, the s
 constexpr std::int32_t kControlHeight = 30; // what a checkbox takes of its row
 // A choice: the slider, right of the column's checkboxes, in two rows.
 constexpr std::int32_t kChoiceRight = 40;
-constexpr std::int32_t kChoiceHeight = static_cast<std::int32_t>(kChoiceRows) * kRow - (kRow - kControlHeight);
+constexpr std::int32_t kChoiceHeight = (static_cast<std::int32_t>(kChoiceRows) * kRow) - (kRow - kControlHeight);
 constexpr std::uint16_t kDepthStep = 6;    // as the designer's own placements are apart
 constexpr std::int32_t kSetUpRegister = 2; // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
 
@@ -131,10 +131,16 @@ std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
         {
             // Taken by whatever of the column's reaches into the row: a
             // bar is higher than a row, and lies in two.
-            const bool taken = std::any_of(placed.begin(), placed.end(), [&](const gfx::Instance &instance) {
-                const std::int32_t height = heading && instance.character == heading->bar       ? kBarHeight
-                                            : slider && instance.character == slider->character ? kChoiceHeight
-                                                                                                : kControlHeight;
+            const bool taken = std::ranges::any_of(placed, [&](const gfx::Instance &instance) {
+                std::int32_t height = kControlHeight;
+                if (heading && instance.character == heading->bar)
+                {
+                    height = kBarHeight;
+                }
+                else if (slider && instance.character == slider->character)
+                {
+                    height = kChoiceHeight;
+                }
                 return instance.x >= last.x - kColumnReach && instance.x <= last.x + kColumnReach &&
                        instance.y < y + kRow && instance.y + height > y;
             });
@@ -147,6 +153,32 @@ std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
     }
     return slots;
 }
+
+namespace
+{
+
+// The first of `rows` free slots one under the other in one column; the
+// slots' count if there is no such run.
+std::size_t FirstRun(const std::vector<Slot> &slots, std::size_t rows)
+{
+    for (std::size_t i = 0; i + rows <= slots.size(); ++i)
+    {
+        bool together = true;
+        for (std::size_t j = 1; j < rows && together; ++j)
+        {
+            const Slot &above = slots[i + j - 1];
+            const Slot &below = slots[i + j];
+            together = below.column == above.column && below.y == above.y + kRow;
+        }
+        if (together)
+        {
+            return i;
+        }
+    }
+    return slots.size();
+}
+
+} // namespace
 
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
                                       std::size_t &shown)
@@ -173,22 +205,8 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
     {
         // The first rows free one under the other in one column, enough
         // for the heading and every checkbox.
-        const std::size_t rows = kHeadingRows + section.toggles.size() + kChoiceRows * section.choices.size();
-        std::size_t first = slots->size();
-        for (std::size_t i = 0; i + rows <= slots->size() && first == slots->size(); ++i)
-        {
-            bool together = true;
-            for (std::size_t j = 1; j < rows && together; ++j)
-            {
-                const Slot &above = (*slots)[i + j - 1];
-                const Slot &below = (*slots)[i + j];
-                together = below.column == above.column && below.y == above.y + kRow;
-            }
-            if (together)
-            {
-                first = i;
-            }
-        }
+        const std::size_t rows = kHeadingRows + section.toggles.size() + (kChoiceRows * section.choices.size());
+        const std::size_t first = FirstRun(*slots, rows);
         const bool choicesFit = section.choices.empty() || slider.has_value();
         if ((section.toggles.empty() && section.choices.empty()) || !choicesFit || first == slots->size())
         {
@@ -212,7 +230,7 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
         for (std::size_t i = 0; i < section.choices.size(); ++i)
         {
             // A choice is the game's slider with named stops, in two rows.
-            const Slot &row = (*slots)[first + kHeadingRows + section.toggles.size() + kChoiceRows * i];
+            const Slot &row = (*slots)[first + kHeadingRows + section.toggles.size() + (kChoiceRows * i)];
             place(ControlInstance(section.choices[i].option), sliderCharacter, row.x + kChoiceRight, row.y);
             const gfx::Bytes setUp = ChoiceSetUp(section.choices[i]);
             setUps.insert(setUps.end(), setUp.begin(), setUp.end());

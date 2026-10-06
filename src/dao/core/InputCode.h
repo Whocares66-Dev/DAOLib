@@ -18,6 +18,7 @@
 // engine looks for a message of that name.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -141,14 +142,7 @@ constexpr bool ValidActionName(std::wstring_view name)
     {
         return false;
     }
-    for (const wchar_t c : name)
-    {
-        if (!letter(c) && !(c >= L'0' && c <= L'9'))
-        {
-            return false;
-        }
-    }
-    return true;
+    return std::ranges::all_of(name, [&](wchar_t c) { return letter(c) || (c >= L'0' && c <= L'9'); });
 }
 
 // The text an action is bound to: "DAOLibAction <name>".
@@ -164,8 +158,7 @@ inline std::wstring ActionText(std::wstring_view name)
 // game's own, "UserTogglePauseMessage").
 constexpr std::optional<std::wstring_view> ActionOfText(std::wstring_view text)
 {
-    if (text.size() <= kActionWord.size() + 1 || text.substr(0, kActionWord.size()) != kActionWord ||
-        text[kActionWord.size()] != L' ')
+    if (text.size() <= kActionWord.size() + 1 || !text.starts_with(kActionWord) || text[kActionWord.size()] != L' ')
     {
         return std::nullopt;
     }

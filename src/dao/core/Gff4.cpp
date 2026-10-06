@@ -92,7 +92,7 @@ std::optional<File> File::Parse(std::span<const std::byte> bytes)
             }
             for (std::uint32_t j = 0; j < *fields; ++j)
             {
-                const std::size_t f = *offset + std::size_t{12} * j;
+                const std::size_t f = *offset + (std::size_t{12} * j);
                 const auto label = ReadAt<std::uint32_t>(bytes, f);
                 const auto typeAndFlags = ReadAt<std::uint32_t>(bytes, f + 4);
                 const auto fieldOffset = ReadAt<std::uint32_t>(bytes, f + 8);
@@ -143,7 +143,7 @@ std::optional<std::wstring> File::StringAt(std::size_t at) const
     std::wstring text(*count, L'\0');
     for (std::uint32_t i = 0; i < *count; ++i)
     {
-        text[i] = static_cast<wchar_t>(ReadAt<std::uint16_t>(bytes_, p + 4 + std::size_t{2} * i).value_or(0));
+        text[i] = static_cast<wchar_t>(ReadAt<std::uint16_t>(bytes_, p + 4 + (std::size_t{2} * i)).value_or(0));
     }
     while (!text.empty() && text.back() == L'\0')
     {
@@ -231,6 +231,53 @@ std::optional<Struct> Struct::Child(std::uint32_t label) const
     return Struct(*file_, field->type, at);
 }
 
+namespace
+{
+
+// Where a list's element puts its struct: in place at `p`, or, for a list
+// of references, at the offset `p` holds; nothing for a null reference.
+std::optional<std::size_t> StructAt(const File &file, std::size_t p, bool reference)
+{
+    if (!reference)
+    {
+        return p;
+    }
+    const auto offset = file.U32(p);
+    if (!offset || *offset == kNull)
+    {
+        return std::nullopt;
+    }
+    return file.DataOffset() + *offset;
+}
+
+// A generic list's structs: each element a type and flags, then the struct
+// in place or its offset. Only the structs among them are given.
+void GenericStructs(const File &file, std::size_t at, std::uint32_t count, bool reference, std::vector<Struct> &out)
+{
+    const auto &templates = file.Templates();
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+        const std::size_t element = at + 4 + (kGenericSize * i);
+        const auto typeAndFlags = file.U32(element);
+        if (!typeAndFlags)
+        {
+            break;
+        }
+        const auto type = static_cast<std::uint16_t>(*typeAndFlags & 0xFFFF);
+        const auto flags = static_cast<std::uint16_t>(*typeAndFlags >> 16);
+        if ((flags & kStruct) == 0 || type >= templates.size())
+        {
+            continue;
+        }
+        if (const auto p = StructAt(file, element + 4, reference))
+        {
+            out.emplace_back(file, type, *p);
+        }
+    }
+}
+
+} // namespace
+
 std::vector<Struct> Struct::Structs(std::uint32_t label) const
 {
     std::vector<Struct> out;
@@ -254,34 +301,7 @@ std::vector<Struct> Struct::Structs(std::uint32_t label) const
     const bool reference = (field->flags & kReference) != 0;
     if (field->type == static_cast<std::uint16_t>(Type::Generic) && (field->flags & kStruct) == 0)
     {
-        // Each element: a type and flags, then the struct in place or its
-        // offset. Only the structs among them are given.
-        for (std::uint32_t i = 0; i < *count; ++i)
-        {
-            const std::size_t element = at + 4 + kGenericSize * i;
-            const auto typeAndFlags = file_->U32(element);
-            if (!typeAndFlags)
-            {
-                break;
-            }
-            const auto type = static_cast<std::uint16_t>(*typeAndFlags & 0xFFFF);
-            const auto flags = static_cast<std::uint16_t>(*typeAndFlags >> 16);
-            if ((flags & kStruct) == 0 || type >= templates.size())
-            {
-                continue;
-            }
-            std::size_t p = element + 4;
-            if (reference)
-            {
-                const auto offset = file_->U32(p);
-                if (!offset || *offset == kNull)
-                {
-                    continue;
-                }
-                p = file_->DataOffset() + *offset;
-            }
-            out.emplace_back(*file_, type, p);
-        }
+        GenericStructs(*file_, at, *count, reference, out);
         return out;
     }
     if ((field->flags & kStruct) == 0 || field->type >= templates.size())
@@ -291,17 +311,10 @@ std::vector<Struct> Struct::Structs(std::uint32_t label) const
     const std::size_t size = reference ? 4 : templates[field->type].size;
     for (std::uint32_t i = 0; i < *count; ++i)
     {
-        std::size_t p = at + 4 + size * i;
-        if (reference)
+        if (const auto p = StructAt(*file_, at + 4 + (size * i), reference))
         {
-            const auto offset = file_->U32(p);
-            if (!offset || *offset == kNull)
-            {
-                continue;
-            }
-            p = file_->DataOffset() + *offset;
+            out.emplace_back(*file_, field->type, *p);
         }
-        out.emplace_back(*file_, field->type, p);
     }
     return out;
 }
@@ -328,7 +341,7 @@ std::vector<std::uint32_t> Struct::Numbers(std::uint32_t label) const
     }
     for (std::uint32_t i = 0; i < *count; ++i)
     {
-        const auto value = file_->U32(at + 4 + std::size_t{4} * i);
+        const auto value = file_->U32(at + 4 + (std::size_t{4} * i));
         if (!value)
         {
             break;

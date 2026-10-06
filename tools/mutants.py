@@ -383,8 +383,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "callsite-disp8: call [reg+disp8] is three bytes",
         CALLSITE,
-        "mod == 1 ? 1 :",
-        "mod == 1 ? 4 :",
+        "displacement = 1;",
+        "displacement = 4;",
     ),
     Mutant(
         "callsite-sib-disp32: call [index*scale+disp32] is seven bytes",
@@ -601,8 +601,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "path-z: a path's length counts height",
         PATH,
-        "dx * dx + dy * dy + dz * dz",
-        "dx * dx + dy * dy + 0 * dz",
+        "(dx * dx) + (dy * dy) + (dz * dz)",
+        "(dx * dx) + (dy * dy) + (0 * dz)",
     ),
     Mutant(
         "angle-wrap: a turn past pi goes the other way round",
@@ -625,7 +625,7 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "input-space: the action word is followed by a space",
         INPUT,
-        " ||\n        text[kActionWord.size()] != L' ')",
+        " || text[kActionWord.size()] != L' ')",
         ")",
     ),
 ]

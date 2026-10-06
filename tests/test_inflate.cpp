@@ -66,7 +66,7 @@ std::string Skewed()
     std::uint32_t x = 1;
     for (int i = 0; i < 120; ++i)
     {
-        x = (x * 1103515245U + 12345U) & 0x7FFFFFFFU;
+        x = ((x * 1103515245U) + 12345U) & 0x7FFFFFFFU;
         text.push_back(kLetters[(x >> 16U) & 15U]);
     }
     return text;

@@ -61,7 +61,7 @@ float DistanceSquared(const Vector &a, const Vector &b)
     const float dx = a.x - b.x;
     const float dy = a.y - b.y;
     const float dz = a.z - b.z;
-    return dx * dx + dy * dy + dz * dz;
+    return (dx * dx) + (dy * dy) + (dz * dz);
 }
 
 Sight Ask(CCArea *area, const Vector &from, const Vector &to, ObjectId ignore)
@@ -528,6 +528,261 @@ std::optional<WalkPath> CurrentPath(ObjectId creature)
     return PathOf(Movement(app->GetCreatureById(creature)));
 }
 
+namespace
+{
+
+// The unit direction from one point toward another, in x and y alone when
+// `flat`; as it is where the two are one point.
+Vector4 UnitToward(const Vector4 &from, const Vector4 &to, bool flat)
+{
+    Vector4 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = flat ? 0.0F : to.z - from.z;
+    const float length =
+        std::sqrt((direction.x * direction.x) + (direction.y * direction.y) + (direction.z * direction.z));
+    if (length > 1e-6F)
+    {
+        direction.x /= length;
+        direction.y /= length;
+        direction.z /= length;
+    }
+    return direction;
+}
+
+// As RequestPath begins (0x0073EB24): the pathfinding world is told which
+// creatures' stamps stop this mover and how wide it is, which the
+// straight-walk check goes by. Left unset, they are the last creature's to
+// ask.
+void TellWorldOfMover(std::uintptr_t world, CCCreature *mover)
+{
+    using SizeFn = float(__fastcall *)(CCCreature *);
+    const auto *slots = *reinterpret_cast<SizeFn **>(mover);
+    *reinterpret_cast<std::uint8_t *>(world + kWorldStamps) =
+        TryRead<std::int32_t>(reinterpret_cast<std::uintptr_t>(mover) + kMoverStamps).value_or(0) != 0 ? 1 : 0;
+    *reinterpret_cast<float *>(world + kWorldSize) = slots[kSizeSlot](mover);
+}
+
+// One search from a point to the destination (Searcher::Run).
+struct Leg
+{
+    std::optional<WalkPath> found;
+    bool arrives = false;
+    std::optional<Vector> barredAt; // with the answer 6, the barred cell the engine notes
+    std::string flags;
+};
+
+// One Pathfind's searches: the mover's place in the pathfinding world, the
+// destination as settled, the engine's calls, and the answer they fill in.
+class Searcher
+{
+  public:
+    // `facing` and `goal` are Pathfind's own, the goal settled before the
+    // first leg; the searcher refers to them, as SSE-aligned members would
+    // pad it.
+    Searcher(CClientExoApp &app, CCArea *area, std::uintptr_t world, std::uintptr_t parameters, std::int32_t number,
+             const Vector4 &facing, const Vector4 &goal, PathSearch &answer)
+        : app_(app), area_(area), world_(world), parameters_(parameters), number_(number), facing_(facing), goal_(goal),
+          answer_(answer)
+    {
+    }
+
+    bool IsFree(void *controller, const Vector4 &at) const
+    {
+        return isFree_(controller, 0, &at, number_, 0, 0);
+    }
+    // The nearest place within `within` metres of `at` along `toward`
+    // where the mover fits; `at` if there is none.
+    Vector4 NearestFree(void *controller, const Vector4 &at, const Vector4 &toward, float within) const
+    {
+        Vector4 nearest = at;
+        nearestFree_(area_, 0, &at, &toward, within, controller, 0, &nearest);
+        return nearest;
+    }
+    // The searches' time is counted from here, the start and the goal
+    // settled.
+    void StartClock()
+    {
+        started_ = std::chrono::steady_clock::now();
+    }
+    bool OutOfTime() const
+    {
+        return std::chrono::steady_clock::now() - started_ >= kLongest;
+    }
+    float ToGoal(const Vector &at) const
+    {
+        return std::hypot(goal_.x - at.x, goal_.y - at.y);
+    }
+    static std::int32_t Word(std::uintptr_t at)
+    {
+        return TryRead<std::int32_t>(at).value_or(0);
+    }
+
+    // A search from `from` to the goal, with a controller of its own: a
+    // straight walk if one will do, else the search stepped until it
+    // answers, the time runs out or the slices are spent.
+    Leg Run(const Vector4 &from, int legNumber)
+    {
+        Leg leg;
+        OwnSearch search(world_, parameters_);
+        if (!search.Made())
+        {
+            return leg;
+        }
+        void *controller = search.Controller();
+        const Vector4 toward = UnitToward(from, goal_, false);
+        setStart_(controller, 0, number_, &from, &facing_);
+        setGoal_(controller, 0, number_, &goal_, &toward);
+        const std::uintptr_t path =
+            TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(controller) + kSearch).value_or(0);
+        if (direct_(controller, 0, 0, 0))
+        {
+            answer_.result = kFound;
+            leg.found = WalkPath{{from.ToVector(), goal_.ToVector()}, 0};
+            leg.arrives = true;
+        }
+        else
+        {
+            Step(controller, path, leg);
+            Judge(path, leg);
+        }
+        const auto flag = [path](std::size_t at) {
+            return path != 0 ? TryRead<std::uint8_t>(path + at).value_or(0) : std::uint8_t{0};
+        };
+        leg.flags =
+            std::format("leg {}: path active {}, whole {}, gave up {}, wide {}, near {}", legNumber, flag(kActive),
+                        flag(kWhole), path != 0 ? Word(path + kGaveUp) : 0, flag(kWide), flag(kNearGoalFlag));
+        return leg;
+    }
+
+    // Where a search gave up part way, the placeable across the way: the
+    // engine answers 6 only to a walker standing in a door's barred cells,
+    // and a search that stops short of them gives up with what it has (in
+    // play, 1.2 m short of a shut door, 53 m along). So the same test of a
+    // placeable's footprint, on points ahead the way the path was heading.
+    ObjectId BlockerAhead(const std::vector<Vector> &walked) const
+    {
+        ObjectId found = kInvalidObject;
+        Vector heading{goal_.x - walked.back().x, goal_.y - walked.back().y, 0};
+        if (walked.size() >= 2)
+        {
+            const Vector &before = walked[walked.size() - 2];
+            heading = {walked.back().x - before.x, walked.back().y - before.y, 0};
+        }
+        const float span = std::hypot(heading.x, heading.y);
+        for (int ahead = 1; span > 1e-6F && ahead <= kAhead && found == kInvalidObject; ++ahead)
+        {
+            Vector at = walked.back();
+            at.x += heading.x / span * kAheadStep * static_cast<float>(ahead);
+            at.y += heading.y / span * kAheadStep * static_cast<float>(ahead);
+            found = Blocker(app_, area_, at);
+        }
+        return found;
+    }
+
+    // The placeable that stopped the walk, once the legs are done: about the
+    // barred cell the engine noted with a 6, as the game looks; ahead of
+    // where a search that found its way part way gave up; else what the
+    // legs found already.
+    ObjectId Stopper(const Leg &leg, const std::vector<Vector> &walked, const Vector &from) const
+    {
+        if (answer_.result == kBarred)
+        {
+            Vector at = from;
+            if (leg.barredAt)
+            {
+                at = *leg.barredAt;
+            }
+            else if (!walked.empty())
+            {
+                at = walked.back();
+            }
+            return Blocker(app_, area_, at);
+        }
+        if (!answer_.path && answer_.result == kFound && !walked.empty() && answer_.blocker == kInvalidObject)
+        {
+            return BlockerAhead(walked);
+        }
+        return answer_.blocker;
+    }
+
+  private:
+    // The search stepped a slice at a time until it answers, or the slices
+    // or the time run out.
+    void Step(void *controller, std::uintptr_t path, Leg &leg)
+    {
+        while (path != 0 && answer_.slices < kSlices && !OutOfTime())
+        {
+            ++answer_.slices;
+            answer_.result = step_(controller, 0, kSlice);
+            answer_.answers.push_back(answer_.result);
+            leg.found = PathOf(reinterpret_cast<std::uintptr_t>(controller));
+            if (answer_.result == kFound || answer_.result == kNone || answer_.result == kNoMesh ||
+                answer_.result == kBarred)
+            {
+                break;
+            }
+            // The search keeps only two waypoints ahead of the one its
+            // walker is heading for (0x00A4C520), and works out the next
+            // stretch as the walker nears the end of what it has. No one
+            // walks this path, so its walker is put at the last waypoint.
+            if (leg.found && !leg.found->waypoints.empty())
+            {
+                *reinterpret_cast<std::int32_t *>(path + kNext) =
+                    static_cast<std::int32_t>(leg.found->waypoints.size() - 1);
+            }
+        }
+    }
+
+    // Whether the leg's path gets there, and where a 6 says it is barred.
+    void Judge(std::uintptr_t path, Leg &leg) const
+    {
+        // A path counts only if it gets there (0x00A4D1F0 ends one it gave
+        // up on "found").
+        if (leg.found && leg.found->waypoints.size() >= 2)
+        {
+            const Vector &last = leg.found->waypoints.back();
+            const bool there = std::hypot(last.x - goal_.x, last.y - goal_.y) < kArrived;
+            const bool whole = TryRead<std::uint8_t>(path + kWhole).value_or(0) != 0;
+            leg.arrives = there && (answer_.result == kFound || whole);
+        }
+        // With a 6 the engine notes the barred cell in the path, for the
+        // creature's PathBlocker to look about (0x00A4D1F0).
+        if (answer_.result == kBarred)
+        {
+            if (const auto noted = TryRead<std::uintptr_t>(path + kBarredAt); noted && *noted != 0)
+            {
+                leg.barredAt = TryRead<Vector>(*noted);
+            }
+        }
+    }
+
+    using IsFreeFn = bool(__fastcall *)(void *, int, const Vector4 *, std::int32_t, std::int32_t, std::int32_t);
+    using NearestFn = std::int32_t(__fastcall *)(CCArea *, int, const Vector4 *, const Vector4 *, float, void *,
+                                                 std::int32_t, Vector4 *);
+    using SetEndFn = bool(__fastcall *)(void *, int, std::int32_t, const Vector4 *, const Vector4 *);
+    using DirectFn = bool(__fastcall *)(void *, int, std::int32_t, std::int32_t);
+    using StepFn = std::int32_t(__fastcall *)(void *, int, float);
+
+    CClientExoApp &app_;
+    CCArea *area_;
+    std::uintptr_t world_;
+    std::uintptr_t parameters_;
+    std::int32_t number_;
+    const Vector4 &facing_;
+    const Vector4 &goal_;
+    PathSearch &answer_;
+    std::chrono::steady_clock::time_point started_;
+    IsFreeFn isFree_ = reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree));
+    NearestFn nearestFree_ = reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree));
+    SetEndFn setStart_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetStart));
+    SetEndFn setGoal_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetGoal));
+    DirectFn direct_ = reinterpret_cast<DirectFn>(Module::Address(addr::kMovementController_Direct));
+    StepFn step_ = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
+};
+
+} // namespace
+
 PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
 {
     PathSearch answer;
@@ -561,58 +816,29 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
         return answer;
     }
     void *controller = search.Controller();
-
-    // As RequestPath begins (0x0073EB24): the pathfinding world is told
-    // which creatures' stamps stop this mover and how wide it is, which
-    // the straight-walk check goes by. Left unset, they are the last
-    // creature's to ask.
-    {
-        using SizeFn = float(__fastcall *)(CCCreature *);
-        const auto *slots = *reinterpret_cast<SizeFn **>(mover);
-        *reinterpret_cast<std::uint8_t *>(*world + kWorldStamps) =
-            TryRead<std::int32_t>(reinterpret_cast<std::uintptr_t>(mover) + kMoverStamps).value_or(0) != 0 ? 1 : 0;
-        *reinterpret_cast<float *>(*world + kWorldSize) = slots[kSizeSlot](mover);
-    }
-
+    TellWorldOfMover(*world, mover);
     Vector4 goal(to);
     goal.w = from.w;
-    Vector4 direction;
-    direction.x = goal.x - from.x;
-    direction.y = goal.y - from.y;
-    direction.z = goal.z - from.z;
-    const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
-    if (length > 1e-6F)
-    {
-        direction.x /= length;
-        direction.y /= length;
-        direction.z /= length;
-    }
-
-    using IsFreeFn = bool(__fastcall *)(void *, int, const Vector4 *, std::int32_t, std::int32_t, std::int32_t);
-    using NearestFn = std::int32_t(__fastcall *)(CCArea *, int, const Vector4 *, const Vector4 *, float, void *,
-                                                 std::int32_t, Vector4 *);
-    const auto isFree = reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree));
-    const auto nearestFree = reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree));
+    Searcher searcher(*app, area, *world, *parameters, *number, facing, goal, answer);
+    const Vector4 direction = UnitToward(from, goal, false);
 
     // The destination, as RequestPath settles it, the obstacles still in
     // place: where the mover does not fit, the nearest place within 2 m
     // back toward the start, so a walk to a creature ends beside it.
-    answer.goalFree = isFree(controller, 0, &goal, *number, 0, 0);
+    answer.goalFree = searcher.IsFree(controller, goal);
     if (!answer.goalFree)
     {
         Vector4 back;
         back.x = -direction.x;
         back.y = -direction.y;
         back.z = -direction.z;
-        Vector4 nearest = goal;
-        nearestFree(area, 0, &goal, &back, kNearGoal, controller, 0, &nearest);
-        goal = nearest;
+        goal = searcher.NearestFree(controller, goal, back, kNearGoal);
     }
 
     // The mover's own obstacle, and that of a creature it walks toward, out
     // of the way for the search, as RequestPath lifts them.
     CCCreature *target = toward != kInvalidObject ? app->GetCreatureById(toward) : nullptr;
-    const bool startFreeBefore = isFree(controller, 0, &from, *number, 0, 0);
+    const bool startFreeBefore = searcher.IsFree(controller, from);
     LiftObstacle(own);
     LiftObstacle(Movement(target));
 
@@ -620,146 +846,16 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     // (others stand against it), the nearest place within 5 m toward the
     // destination. RequestPath then puts the creature there; this only
     // starts the search there.
-    answer.startFree = isFree(controller, 0, &from, *number, 0, 0);
+    answer.startFree = searcher.IsFree(controller, from);
     if (!answer.startFree)
     {
-        Vector4 nearest = from;
-        nearestFree(area, 0, &from, &direction, kNearStart, controller, 0, &nearest);
-        from = nearest;
+        from = searcher.NearestFree(controller, from, direction, kNearStart);
     }
     answer.start = from.ToVector();
     answer.goal = goal.ToVector();
 
-    using SetEndFn = bool(__fastcall *)(void *, int, std::int32_t, const Vector4 *, const Vector4 *);
-    using DirectFn = bool(__fastcall *)(void *, int, std::int32_t, std::int32_t);
-    using StepFn = std::int32_t(__fastcall *)(void *, int, float);
-    const auto setStart = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetStart));
-    const auto setGoal = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetGoal));
-    const auto direct = reinterpret_cast<DirectFn>(Module::Address(addr::kMovementController_Direct));
-    const auto step = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
-    const auto word = [](std::uintptr_t at) { return TryRead<std::int32_t>(at).value_or(0); };
-
-    // One search from a point to the destination, with a controller of its
-    // own: a straight walk if one will do, else the search stepped until it
-    // answers, the time runs out (`timed`) or `most` slices are spent.
-    struct Leg
-    {
-        std::optional<WalkPath> found;
-        bool arrives = false;
-        std::optional<Vector> barredAt; // with the answer 6, the barred cell the engine notes
-        std::string flags;
-    };
-    const auto started = std::chrono::steady_clock::now();
-    const auto runLeg = [&](const Vector4 &legFrom, std::int32_t most, bool timed, int number0) {
-        Leg leg;
-        OwnSearch legSearch(*world, *parameters);
-        if (!legSearch.Made())
-        {
-            return leg;
-        }
-        void *leg0 = legSearch.Controller();
-        Vector4 toward0;
-        toward0.x = goal.x - legFrom.x;
-        toward0.y = goal.y - legFrom.y;
-        toward0.z = goal.z - legFrom.z;
-        const float span = std::sqrt(toward0.x * toward0.x + toward0.y * toward0.y + toward0.z * toward0.z);
-        if (span > 1e-6F)
-        {
-            toward0.x /= span;
-            toward0.y /= span;
-            toward0.z /= span;
-        }
-        setStart(leg0, 0, *number, &legFrom, &facing);
-        setGoal(leg0, 0, *number, &goal, &toward0);
-        const std::uintptr_t path =
-            TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(leg0) + kSearch).value_or(0);
-        if (direct(leg0, 0, 0, 0))
-        {
-            answer.result = kFound;
-            leg.found = WalkPath{{legFrom.ToVector(), goal.ToVector()}, 0};
-            leg.arrives = true;
-        }
-        else
-        {
-            std::int32_t spent = 0;
-            while (path != 0 && spent < most && answer.slices < kSlices &&
-                   (!timed || std::chrono::steady_clock::now() - started < kLongest))
-            {
-                ++spent;
-                ++answer.slices;
-                answer.result = step(leg0, 0, kSlice);
-                answer.answers.push_back(answer.result);
-                leg.found = PathOf(reinterpret_cast<std::uintptr_t>(leg0));
-                if (answer.result == kFound || answer.result == kNone || answer.result == kNoMesh ||
-                    answer.result == kBarred)
-                {
-                    break;
-                }
-                // The search keeps only two waypoints ahead of the one its
-                // walker is heading for (0x00A4C520), and works out the
-                // next stretch as the walker nears the end of what it has.
-                // No one walks this path, so its walker is put at the last
-                // waypoint.
-                if (leg.found && !leg.found->waypoints.empty())
-                {
-                    *reinterpret_cast<std::int32_t *>(path + kNext) =
-                        static_cast<std::int32_t>(leg.found->waypoints.size() - 1);
-                }
-            }
-            // A path counts only if it gets there (0x00A4D1F0 ends one it
-            // gave up on "found").
-            if (leg.found && leg.found->waypoints.size() >= 2)
-            {
-                const Vector &last = leg.found->waypoints.back();
-                const bool there = std::hypot(last.x - goal.x, last.y - goal.y) < kArrived;
-                const bool whole = TryRead<std::uint8_t>(path + kWhole).value_or(0) != 0;
-                leg.arrives = there && (answer.result == kFound || whole);
-            }
-            // With a 6 the engine notes the barred cell in the path, for
-            // the creature's PathBlocker to look about (0x00A4D1F0).
-            if (answer.result == kBarred)
-            {
-                if (const auto noted = TryRead<std::uintptr_t>(path + kBarredAt); noted && *noted != 0)
-                {
-                    leg.barredAt = TryRead<Vector>(*noted);
-                }
-            }
-        }
-        const auto flag = [path](std::size_t at) {
-            return path != 0 ? TryRead<std::uint8_t>(path + at).value_or(0) : std::uint8_t{0};
-        };
-        leg.flags =
-            std::format("leg {}: path active {}, whole {}, gave up {}, wide {}, near {}", number0, flag(kActive),
-                        flag(kWhole), path != 0 ? word(path + kGaveUp) : 0, flag(kWide), flag(kNearGoalFlag));
-        return leg;
-    };
-
-    // Where a search gave up part way, the placeable across the way: the
-    // engine answers 6 only to a walker standing in a door's barred cells,
-    // and a search that stops short of them gives up with what it has (in
-    // play, 1.2 m short of a shut door, 53 m along). So the same test of a
-    // placeable's footprint, on points ahead the way the path was heading.
-    const auto blockerAhead = [&](const std::vector<Vector> &walked) {
-        ObjectId found = kInvalidObject;
-        Vector heading{goal.x - walked.back().x, goal.y - walked.back().y, 0};
-        if (walked.size() >= 2)
-        {
-            const Vector &before = walked[walked.size() - 2];
-            heading = {walked.back().x - before.x, walked.back().y - before.y, 0};
-        }
-        const float span = std::hypot(heading.x, heading.y);
-        for (int ahead = 1; span > 1e-6F && ahead <= kAhead && found == kInvalidObject; ++ahead)
-        {
-            Vector at = walked.back();
-            at.x += heading.x / span * kAheadStep * static_cast<float>(ahead);
-            at.y += heading.y / span * kAheadStep * static_cast<float>(ahead);
-            found = Blocker(*app, area, at);
-        }
-        return found;
-    };
-    const auto toGoal = [&](const Vector &at) { return std::hypot(goal.x - at.x, goal.y - at.y); };
-
-    Leg leg = runLeg(from, kSlices, true, 1);
+    searcher.StartClock();
+    Leg leg = searcher.Run(from, 1);
     const std::string flags = leg.flags;
     std::vector<Vector> walked;
     if (leg.found)
@@ -779,34 +875,23 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     // way and time is left. A door stops a search the same each time
     // (2026-10-01), which is why one ahead ends it.
     while (!arrives && answer.result == kFound && walked.size() >= 2 && answer.legs < kMostLegs &&
-           std::chrono::steady_clock::now() - started < kLongest)
+           !searcher.OutOfTime())
     {
-        answer.blocker = blockerAhead(walked);
+        answer.blocker = searcher.BlockerAhead(walked);
         if (answer.blocker != kInvalidObject)
         {
             break;
         }
         Vector4 onFrom(walked.back());
         onFrom.w = from.w;
-        if (!isFree(controller, 0, &onFrom, *number, 0, 0))
+        if (!searcher.IsFree(controller, onFrom))
         {
-            Vector4 toward1;
-            toward1.x = goal.x - onFrom.x;
-            toward1.y = goal.y - onFrom.y;
-            const float span = std::hypot(toward1.x, toward1.y);
-            if (span > 1e-6F)
-            {
-                toward1.x /= span;
-                toward1.y /= span;
-            }
-            Vector4 nearest = onFrom;
-            nearestFree(area, 0, &onFrom, &toward1, kNearStart, controller, 0, &nearest);
-            onFrom = nearest;
+            onFrom = searcher.NearestFree(controller, onFrom, UnitToward(onFrom, goal, true), kNearStart);
         }
-        const float before = toGoal(walked.back());
-        Leg more = runLeg(onFrom, kSlices, true, answer.legs + 1);
+        const float before = searcher.ToGoal(walked.back());
+        Leg more = searcher.Run(onFrom, answer.legs + 1);
         if (!more.found || more.found->waypoints.size() < 2 ||
-            (!more.arrives && toGoal(more.found->waypoints.back()) > before - kLegProgress))
+            (!more.arrives && searcher.ToGoal(more.found->waypoints.back()) > before - kLegProgress))
         {
             break;
         }
@@ -827,24 +912,16 @@ PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
     }
     answer.waypoints = walked.size();
 
-    if (answer.result == kBarred)
-    {
-        // About the barred cell the engine noted, as the game looks.
-        const Vector at = leg.barredAt ? *leg.barredAt : !walked.empty() ? walked.back() : from.ToVector();
-        answer.blocker = Blocker(*app, area, at);
-    }
-    else if (!answer.path && answer.result == kFound && !walked.empty() && answer.blocker == kInvalidObject)
-    {
-        answer.blocker = blockerAhead(walked);
-    }
+    answer.blocker = searcher.Stopper(leg, walked, from.ToVector());
 
     // What the search saw, for a log.
     const std::uintptr_t parameters0 = *parameters;
-    answer.trace = std::format(
-        "start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, "
-        "radius {:.2f}, size {}; {}; {} leg(s), the last: {}",
-        answer.startFree, startFreeBefore, answer.goalFree, static_cast<std::uint32_t>(word(parameters0)),
-        TryRead<float>(parameters0 + 4).value_or(0.0F), word(parameters0 + 0xC), flags, answer.legs, leg.flags);
+    answer.trace = std::format("start free {} (with its own obstacle {}), destination free {}; mover's id {:#x}, "
+                               "radius {:.2f}, size {}; {}; {} leg(s), the last: {}",
+                               answer.startFree, startFreeBefore, answer.goalFree,
+                               static_cast<std::uint32_t>(Searcher::Word(parameters0)),
+                               TryRead<float>(parameters0 + 4).value_or(0.0F), Searcher::Word(parameters0 + 0xC), flags,
+                               answer.legs, leg.flags);
 
     PlaceObstacle(mover);
     PlaceObstacle(target);
@@ -892,7 +969,7 @@ std::vector<std::uintptr_t> RoomPointers()
     }
     for (std::uint32_t i = 0; i < *count; ++i)
     {
-        const auto room = TryRead<std::uintptr_t>(*first + i * sizeof(std::uintptr_t));
+        const auto room = TryRead<std::uintptr_t>(*first + (i * sizeof(std::uintptr_t)));
         if (room && *room != 0)
         {
             rooms.push_back(*room);
@@ -1057,7 +1134,7 @@ std::optional<ModelBox> ModelBoxOf(ObjectId creature)
     }
     // __thiscall, no arguments: the object the interface is part of.
     using ObjectFn = std::uintptr_t(__fastcall *)(std::uintptr_t, int);
-    const auto objectOf = TryRead<std::uintptr_t>(*modelTable + kObjectSlot * sizeof(void *));
+    const auto objectOf = TryRead<std::uintptr_t>(*modelTable + (kObjectSlot * sizeof(void *)));
     const std::uintptr_t graphics = objectOf && *objectOf != 0 ? reinterpret_cast<ObjectFn>(*objectOf)(*model, 0) : 0;
     const std::uintptr_t renderable = graphics != 0 ? graphics + kRenderable : 0;
     // Only GraphicsStructures::Object's own interface: the slot read.

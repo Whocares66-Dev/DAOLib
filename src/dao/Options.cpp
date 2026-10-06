@@ -152,9 +152,14 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
     const bool readable = core::options_movie::FreeSlots(movie).has_value();
     for (std::size_t i = 0; i < g_sections.size(); ++i)
     {
-        g_sections[i].state = i < shown             ? SectionState::Shown
-                              : readable && patched ? SectionState::NoRoom
-                                                    : SectionState::Failed;
+        if (i < shown)
+        {
+            g_sections[i].state = SectionState::Shown;
+        }
+        else
+        {
+            g_sections[i].state = readable && patched ? SectionState::NoRoom : SectionState::Failed;
+        }
     }
     return patched;
 }
@@ -252,6 +257,35 @@ bool OnSendMessage(void * /*owner*/, std::string_view args)
 
 // Each frame: the callbacks, on the frame's thread, and what they answer
 // queued for the movies.
+// An option's value as the plugin's get says it, 0 or 1 for a toggle; the
+// last known if the get throws.
+std::int32_t ValueOf(const Entry &entry)
+{
+    std::int32_t value = entry.last;
+    detail::Guard("an option's get",
+                  [&] { value = entry.toggle ? static_cast<std::int32_t>(entry.toggle->get()) : entry.choice->get(); });
+    return value;
+}
+
+// A click's wanted value given to the plugin's set, a choice's kept to its
+// stops; the value the option then has, which a refusal leaves as it was.
+std::int32_t Apply(const Entry &entry, std::int32_t wanted)
+{
+    std::int32_t value = entry.last;
+    detail::Guard("an option's set", [&] {
+        if (entry.toggle)
+        {
+            value = entry.toggle->set(wanted != 0) ? 1 : 0;
+        }
+        else
+        {
+            const auto top = static_cast<std::int32_t>(entry.choice->values.size()) - 1;
+            value = entry.choice->set(std::clamp(wanted, 0, top));
+        }
+    });
+    return value;
+}
+
 void Frame()
 {
     std::vector<Observer> asked;
@@ -267,11 +301,11 @@ void Frame()
         // A closed movie's observers are let go: its record is gone.
         const std::vector<void *> owners = gui::Owners();
         std::erase_if(g_observers, [&](const Observer &observer) {
-            return std::find(owners.begin(), owners.end(), observer.owner) == owners.end();
+            return std::ranges::find(owners, observer.owner) == owners.end();
         });
         for (const Observer &observer : g_observers)
         {
-            if (std::find(g_asked.begin(), g_asked.end(), observer.id) != g_asked.end())
+            if (std::ranges::find(g_asked, observer.id) != g_asked.end())
             {
                 asked.push_back(observer);
             }
@@ -287,10 +321,7 @@ void Frame()
     std::vector<std::pair<std::size_t, std::int32_t>> values; // to remember, by entry
     for (const Observer &observer : asked)
     {
-        const Entry &entry = entries[observer.entry];
-        std::int32_t value = entry.last;
-        detail::Guard("an option's get",
-                      [&] { value = entry.toggle ? (entry.toggle->get() ? 1 : 0) : entry.choice->get(); });
+        const std::int32_t value = ValueOf(entries[observer.entry]);
         deliveries.push_back({observer.owner, observer.id, value});
         values.emplace_back(observer.entry, value);
     }
@@ -298,19 +329,7 @@ void Frame()
     {
         // What the option now is goes to every control that shows it, the
         // one clicked among them: a refusal draws it back.
-        const Entry &entry = entries[click.entry];
-        std::int32_t value = entry.last;
-        detail::Guard("an option's set", [&] {
-            if (entry.toggle)
-            {
-                value = entry.toggle->set(click.wanted != 0) ? 1 : 0;
-            }
-            else
-            {
-                const auto top = static_cast<std::int32_t>(entry.choice->values.size()) - 1;
-                value = entry.choice->set(std::clamp(click.wanted, 0, top));
-            }
-        });
+        const std::int32_t value = Apply(entries[click.entry], click.wanted);
         for (const Observer &observer : observers)
         {
             if (observer.entry == click.entry)

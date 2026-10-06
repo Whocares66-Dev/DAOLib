@@ -46,7 +46,7 @@ std::optional<Section> FindSection(std::span<const std::byte> image, std::string
     const std::size_t table = nt + kOptionalHeader + *optionalSize;
     for (std::size_t i = 0; i < *count; ++i)
     {
-        const std::size_t at = table + i * kSectionHeaderSize;
+        const std::size_t at = table + (i * kSectionHeaderSize);
         const auto raw = ReadAt<std::array<char, 8>>(image, at + kSectionName);
         const auto size = ReadAt<std::uint32_t>(image, at + kSectionVirtualSize);
         const auto rva = ReadAt<std::uint32_t>(image, at + kSectionVirtualAddress);

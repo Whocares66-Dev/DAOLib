@@ -213,6 +213,11 @@ def table_default(value, t, constants):
 
 
 def cpp_string(text):
+    # A raw string where escapes would be needed, as clang-tidy's
+    # modernize-raw-string-literal asks (DAOLib #33); the delimiter is one
+    # no signature holds.
+    if ("\\" in text or '"' in text) and ')"' not in text:
+        return 'R"(' + text + ')"'
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 

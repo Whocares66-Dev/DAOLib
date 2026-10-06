@@ -55,7 +55,7 @@ std::optional<SlotFolderName> SlotFolderName::Parse(std::wstring_view folder)
             {
                 return std::nullopt;
             }
-            number = number * 10 + (c - L'0');
+            number = (number * 10) + (c - L'0');
         }
         return SlotFolderName{static_cast<std::int32_t>(kind), number};
     }

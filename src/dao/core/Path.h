@@ -21,7 +21,7 @@ inline float Distance(const Point3 &a, const Point3 &b)
     const float dx = a.x - b.x;
     const float dy = a.y - b.y;
     const float dz = a.z - b.z;
-    return std::sqrt(dx * dx + dy * dy + dz * dz);
+    return std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 }
 
 // Along the points, first to last.

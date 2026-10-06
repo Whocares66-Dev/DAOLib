@@ -93,7 +93,7 @@ void Install(int command)
 int RunLink(int command, int paramCount, int link, void *commands, int edx)
 {
     Chain &chain = g_chains.at(static_cast<std::size_t>(command));
-    if (link < static_cast<int>(chain.intercepts.size()))
+    if (std::cmp_less(link, chain.intercepts.size()))
     {
         CommandCall call(command, paramCount, link);
         int result = kInvalidCommand;
@@ -172,6 +172,12 @@ bool InterceptCommand(int command, Intercept intercept)
 
 // -- CommandCall ---------------------------------------------------------------
 
+// A call's arguments and answer are on the script VM's stack, not in the
+// CommandCall, so most of these do not touch `this`. They stay members all
+// the same: a CommandCall exists only while a command is intercepted, and a
+// static reader could be called with no command running (DAOLib #33).
+// NOLINTBEGIN(readability-convert-member-functions-to-static)
+
 std::optional<std::int32_t> CommandCall::Int(int n) const
 {
     const auto word = VmStack().Word(n, static_cast<std::int32_t>(core::VmTag::Int));
@@ -214,7 +220,7 @@ std::uint32_t *ArgumentWord(int n, core::VmTag tag)
 
 } // namespace
 
-bool CommandCall::SetInt(int n, std::int32_t value)
+bool CommandCall::SetInt(int n, std::int32_t value) const
 {
     std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Int);
     if (word == nullptr)
@@ -225,7 +231,7 @@ bool CommandCall::SetInt(int n, std::int32_t value)
     return true;
 }
 
-bool CommandCall::SetFloat(int n, float value)
+bool CommandCall::SetFloat(int n, float value) const
 {
     std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Float);
     if (word == nullptr)
@@ -236,7 +242,7 @@ bool CommandCall::SetFloat(int n, float value)
     return true;
 }
 
-bool CommandCall::SetObject(int n, ObjectId value)
+bool CommandCall::SetObject(int n, ObjectId value) const
 {
     std::uint32_t *word = proceeded_ ? nullptr : ArgumentWord(n, core::VmTag::Object);
     if (word == nullptr)
@@ -324,5 +330,7 @@ bool CommandCall::SetObjectAnswer(ObjectId value)
 {
     return Replace(core::VmTag::Object, value, &Stack::PopObject, &Stack::PushObject);
 }
+
+// NOLINTEND(readability-convert-member-functions-to-static)
 
 } // namespace dao::script

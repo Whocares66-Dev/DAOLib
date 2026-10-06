@@ -96,8 +96,8 @@ void __fastcall PlaceCamera(void *renderer, int edx, float pitch, float rotation
     // reads every value again when its row is 1, dao/Addresses.h). So every
     // value is given here, the plugin's or the table's as PlaceCamera would
     // have read it, and the renderer's row is the blank one for the call.
-    const std::int32_t tableRow = TableRow(*source, *row);
-    const auto give = [tableRow](float &value, const std::optional<float> &given, std::string_view column) {
+    const std::int32_t rowIndex = TableRow(*source, *row);
+    const auto give = [rowIndex](float &value, const std::optional<float> &given, std::string_view column) {
         if (value != kUnset)
         {
             return;
@@ -106,7 +106,7 @@ void __fastcall PlaceCamera(void *renderer, int edx, float pitch, float rotation
         {
             value = *given;
         }
-        else if (const auto table = gda::GetFloat(kTable, tableRow, core::GdaColumnHash(column)))
+        else if (const auto table = gda::GetFloat(kTable, rowIndex, core::GdaColumnHash(column)))
         {
             value = *table;
         }

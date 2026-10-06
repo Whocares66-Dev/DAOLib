@@ -81,9 +81,9 @@ class CommandCall
     // another type, the call has fewer, or Proceed has run (the arguments
     // are gone by then). Any intercept later in the chain, and the engine,
     // see the new value.
-    bool SetInt(int n, std::int32_t value);
-    bool SetFloat(int n, float value);
-    bool SetObject(int n, ObjectId value);
+    bool SetInt(int n, std::int32_t value) const;
+    bool SetFloat(int n, float value) const;
+    bool SetObject(int n, ObjectId value) const;
 
     // Runs the handler this intercept replaced: another plugin's intercept,
     // or the engine's command. Its result is the handler's.

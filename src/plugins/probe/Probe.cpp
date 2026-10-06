@@ -215,7 +215,7 @@ int __fastcall WriteSave(void *self, int edx, std::int32_t slot, std::int32_t ki
 {
     const int result = g_writeSave.Original()(self, edx, slot, kind, name, fourth);
     const auto *character = reinterpret_cast<const dao::core::WStringRep *>(static_cast<std::byte *>(self) + 0x18);
-    spdlog::info("SaveGame::Write on {} ({}): character \"{}\", slot {}, kind {}, name \"{}\", fourth {}, result {:#x}",
+    spdlog::info(R"(SaveGame::Write on {} ({}): character "{}", slot {}, kind {}, name "{}", fourth {}, result {:#x})",
                  self, dao::TypeName(self), dao::Utf8(character->View()), slot, kind,
                  name != nullptr ? dao::Utf8(name->View()) : std::string("none"), fourth, result);
     return result;

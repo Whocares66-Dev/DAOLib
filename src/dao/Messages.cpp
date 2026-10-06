@@ -74,7 +74,7 @@ bool Handles(void *registry, const void *receiver, const Message *message)
 
 bool Nested(const Message *message)
 {
-    return std::find(t_delivering.begin(), t_delivering.end(), message) != t_delivering.end();
+    return std::ranges::find(t_delivering, message) != t_delivering.end();
 }
 
 bool __fastcall Dispatch(void *registry, int edx, void *receiver, const Message *message)

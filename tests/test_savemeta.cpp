@@ -50,11 +50,11 @@ std::vector<std::byte> MakeMeta(std::string_view type = "SVMT")
     b.U32(templates + 12, 0x30);
     for (std::size_t i = 0; i < decls.size(); ++i)
     {
-        b.U32(fields + 12 * i, decls[i].label);
-        b.U32(fields + 12 * i + 4, decls[i].type);
-        b.U32(fields + 12 * i + 8, static_cast<std::uint32_t>(4 * i));
+        b.U32(fields + (12 * i), decls[i].label);
+        b.U32(fields + (12 * i) + 4, decls[i].type);
+        b.U32(fields + (12 * i) + 8, static_cast<std::uint32_t>(4 * i));
     }
-    b.data = fields + 12 * decls.size();
+    b.data = fields + (12 * decls.size());
     b.U32(24, static_cast<std::uint32_t>(b.data));
     b.U8(b.data + 0x30 - 1, 0);
     const std::size_t top = b.data;

@@ -496,7 +496,7 @@ class CCCreature : public CCObject
 
     // As SetCreatureProperty does: Total and Base both set the base.
     // False for a creature with no stats. Not yet exercised in play.
-    bool SetProperty(std::int32_t property, float amount, script::PropertyValue value)
+    bool SetProperty(std::int32_t property, float amount, script::PropertyValue value) const
     {
         void *stats = Stats();
         if (stats == nullptr)

@@ -121,7 +121,7 @@ void End(Move move, MoveEnd why)
 
 float Length(Vector v)
 {
-    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return std::sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
 }
 
 // An ease-out: the share of what is left to cover this frame.
@@ -146,7 +146,7 @@ void StepYaw(CameraController &camera, float dt)
     }
     const float d = core::ShortestTurn(now, g_yaw.target);
     const bool there = std::fabs(d) < kYawDone;
-    const float next = there ? now + d : now + d * Share(dt, g_yaw.tau);
+    const float next = there ? now + d : now + (d * Share(dt, g_yaw.tau));
     scene->SetYaw(next);
     g_yaw.left = next;
     if (there)
@@ -165,7 +165,7 @@ void StepZoom(CameraController &camera, float dt)
     }
     const float d = g_zoom.target - now;
     const bool there = std::fabs(d) < kZoomDone;
-    const float next = there ? g_zoom.target : now + d * Share(dt, g_zoom.tau);
+    const float next = there ? g_zoom.target : now + (d * Share(dt, g_zoom.tau));
     camera.SetZoomSetting(next);
     g_zoom.left = next;
     g_zoomLeft = next;
@@ -359,7 +359,7 @@ void EaseZoom(float zoom, float seconds)
     const float least = camera->ZoomLeast();
     const float most = camera->ZoomMost();
     const float share = std::fmin(std::fmax(zoom, 0.0F), 1.0F);
-    g_zoom = ZoomMove{true, least + share * (most - least), Tau(seconds), std::nullopt};
+    g_zoom = ZoomMove{true, least + (share * (most - least)), Tau(seconds), std::nullopt};
     g_zoomEnd.reset();
     g_zoomLeft.reset();
 }
@@ -460,7 +460,7 @@ std::optional<float> g_gameClose;
 
 void SetCloseDistance(std::optional<float> metres)
 {
-    float *close = At<float>(addr::kCameraControllerExplore_CloseDistance);
+    auto *close = At<float>(addr::kCameraControllerExplore_CloseDistance);
     if (close == nullptr)
     {
         return;

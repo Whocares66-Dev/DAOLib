@@ -36,7 +36,11 @@ unsigned CallLength(unsigned modrm, unsigned sib)
     // A 32-bit displacement: [reg+disp32], [disp32], or [index*scale+disp32]
     // (a SIB with no base).
     const bool disp32 = mod == 2 || (mod == 0 && (rm == 5 || (hasSib && (sib & 7) == 5)));
-    const unsigned displacement = mod == 1 ? 1 : (disp32 ? 4 : 0);
+    unsigned displacement = disp32 ? 4 : 0;
+    if (mod == 1)
+    {
+        displacement = 1;
+    }
     return 2 + (hasSib ? 1 : 0) + displacement;
 }
 

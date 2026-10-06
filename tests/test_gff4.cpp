@@ -71,10 +71,10 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
     const char *labels[] = {"CONV", "NTRY", "RPLY", "PLOT"};
     const std::uint32_t sizes[] = {0x20, 0x68, 0x68, 0x14};
     b.U32(20, static_cast<std::uint32_t>(templates.size()));
-    std::size_t fields = 28 + 16 * templates.size();
+    std::size_t fields = 28 + (16 * templates.size());
     for (std::size_t i = 0; i < templates.size(); ++i)
     {
-        const std::size_t at = 28 + 16 * i;
+        const std::size_t at = 28 + (16 * i);
         b.Text(at, labels[i]);
         b.U32(at + 4, static_cast<std::uint32_t>(templates[i].size()));
         b.U32(at + 8, static_cast<std::uint32_t>(fields));
@@ -93,11 +93,11 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
     // The top struct, then the lines, then what they point at.
     const std::size_t root = b.data;
     const std::size_t first = root + 0x20;
-    b.U8(first + 0x68 * lines.size() - 1, 0);
+    b.U8(first + (0x68 * lines.size()) - 1, 0);
     for (std::size_t i = 0; i < lines.size(); ++i)
     {
         const LineSpec &l = lines[i];
-        const std::size_t at = first + 0x68 * i;
+        const std::size_t at = first + (0x68 * i);
         b.U32(at, l.text);
         b.U32(at + 4, 0);
         b.U32(at + 0x08, b.String(l.speaker));
@@ -118,8 +118,8 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
     for (std::size_t i = 0; i < lines.size(); ++i)
     {
         const std::uint32_t shape = replies[i] ? 2 : 1;
-        b.U32(list + 4 + 8 * i, shape | (std::uint32_t{gff4::kStruct} << 16));
-        b.U32(list + 8 + 8 * i, static_cast<std::uint32_t>(first + 0x68 * i - b.data));
+        b.U32(list + 4 + (8 * i), shape | (std::uint32_t{gff4::kStruct} << 16));
+        b.U32(list + 8 + (8 * i), static_cast<std::uint32_t>(first + (0x68 * i) - b.data));
     }
     b.U32(root + 0x04, static_cast<std::uint32_t>(list - b.data));
     b.U32(root + 0x00, b.Numbers({0}));
@@ -235,14 +235,14 @@ Damaged MakeDamaged(const std::vector<FieldSpec> &rootFields)
     Builder &b = d.b;
     b.Text(0, "GFF V4.0PC  TESTV0.1");
     b.U32(20, 2);
-    std::size_t fields = 28 + 16 * 2;
+    std::size_t fields = 28 + (16 * 2);
     const std::vector<FieldSpec> itemFields = {{1, 4, 0, 0}};
     const std::vector<FieldSpec> *shapes[] = {&rootFields, &itemFields};
     const char *labels[] = {"ROOT", "ITEM"};
     const std::uint32_t sizes[] = {0x40, 4};
     for (std::size_t i = 0; i < 2; ++i)
     {
-        const std::size_t at = 28 + 16 * i;
+        const std::size_t at = 28 + (16 * i);
         b.Text(at, labels[i]);
         b.U32(at + 4, static_cast<std::uint32_t>(shapes[i]->size()));
         b.U32(at + 8, static_cast<std::uint32_t>(fields));

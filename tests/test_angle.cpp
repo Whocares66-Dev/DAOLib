@@ -19,8 +19,8 @@ TEST_CASE("a turn toward a yaw goes the shorter way round")
     CHECK(ShortestTurn(1.0F, 0.0F) == Approx(-1.0F));
     // Across the seam: from just short of 2 pi to just past 0 is a small
     // turn forward, not most of a circle back.
-    CHECK(ShortestTurn(6.2F, 0.1F) == Approx(0.1F + 2 * kPi - 6.2F).margin(1e-5));
-    CHECK(ShortestTurn(0.1F, 6.2F) == Approx(6.2F - 2 * kPi - 0.1F).margin(1e-5));
+    CHECK(ShortestTurn(6.2F, 0.1F) == Approx(0.1F + (2 * kPi) - 6.2F).margin(1e-5));
+    CHECK(ShortestTurn(0.1F, 6.2F) == Approx(6.2F - (2 * kPi) - 0.1F).margin(1e-5));
 }
 
 TEST_CASE("a yaw the player has turned past 2 pi is met the same way")
@@ -33,12 +33,12 @@ TEST_CASE("a yaw the player has turned past 2 pi is met the same way")
     CHECK(turn > -kPi);
     CHECK(turn <= kPi);
     CHECK(std::remainder(from + turn - to, 2 * kPi) == Approx(0.0F).margin(1e-4));
-    CHECK(ShortestTurn(from + 4 * kPi, to) == Approx(turn).margin(1e-4));
+    CHECK(ShortestTurn(from + (4 * kPi), to) == Approx(turn).margin(1e-4));
 }
 
 TEST_CASE("no turn, and a half turn, are what they are")
 {
     CHECK(ShortestTurn(2.0F, 2.0F) == Approx(0.0F).margin(1e-6));
-    CHECK(ShortestTurn(2.0F, 2.0F + 2 * kPi) == Approx(0.0F).margin(1e-5));
+    CHECK(ShortestTurn(2.0F, 2.0F + (2 * kPi)) == Approx(0.0F).margin(1e-5));
     CHECK(std::abs(ShortestTurn(0.0F, kPi)) == Approx(kPi));
 }

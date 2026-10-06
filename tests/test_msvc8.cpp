@@ -81,7 +81,7 @@ struct TestTree
     // 4 at the root; 2 under it with 1 and 3; 6 on its right.
     TestTree()
     {
-        Node *head = &nodes[0];
+        Node *head = nodes.data();
         for (Node &node : nodes)
         {
             node.left = node.right = node.parent = head;
@@ -104,7 +104,7 @@ struct TestTree
 
     dao::core::TreeRep<std::int32_t, int> Map(std::uint32_t size)
     {
-        return {0, &nodes[0], size};
+        return {0, nodes.data(), size};
     }
 };
 
@@ -147,7 +147,7 @@ TEST_CASE("an engine map's walk finds the least of a deep right subtree", "[msvc
     // (dao::gui::Screens).
     using Node = dao::core::TreeNodeRep<std::int32_t, int>;
     std::array<Node, 8> nodes{}; // the head, then each key at its own number
-    Node *head = &nodes[0];
+    Node *head = nodes.data();
     for (Node &node : nodes)
     {
         node.left = node.right = node.parent = head;

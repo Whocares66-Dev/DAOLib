@@ -131,7 +131,7 @@ std::filesystem::path Path()
 {
     std::array<wchar_t, MAX_PATH> buffer{};
     const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    return std::filesystem::path(std::wstring_view(buffer.data(), length));
+    return {std::wstring_view(buffer.data(), length)};
 }
 
 std::optional<core::Fingerprint> Fingerprint()

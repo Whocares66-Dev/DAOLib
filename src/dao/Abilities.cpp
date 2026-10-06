@@ -122,7 +122,7 @@ std::vector<std::int32_t> Known(ObjectId creature, Kind kind)
     for (std::size_t which = first; which <= last; ++which)
     {
         const std::uintptr_t list =
-            reinterpret_cast<std::uintptr_t>(stats) + kLists + (which - 1) * sizeof(core::VectorRep<std::int32_t>);
+            reinterpret_cast<std::uintptr_t>(stats) + kLists + ((which - 1) * sizeof(core::VectorRep<std::int32_t>));
         const auto begin = TryRead<std::uintptr_t>(list + offsetof(core::VectorRep<std::int32_t>, first));
         const auto end = TryRead<std::uintptr_t>(list + offsetof(core::VectorRep<std::int32_t>, last));
         if (!begin || !end || *begin == 0 || *end < *begin || (*end - *begin) / sizeof(std::int32_t) > kMost)
@@ -176,7 +176,7 @@ std::optional<float> Cost(ObjectId creature, std::int32_t ability)
         return std::nullopt;
     }
     const float fatigue = object->Property(kFatigue, script::PropertyValue::Modifier).value_or(0.0F);
-    return *cost * (1.0F + fatigue * 0.01F);
+    return *cost * (1.0F + (fatigue * 0.01F));
 }
 
 } // namespace dao::abilities

@@ -190,10 +190,10 @@ class Recorder
         std::uintptr_t i = 0;
         for (; i < dao::GameModeController::kMaxModes; ++i)
         {
-            const auto mode = dao::TryRead<std::uintptr_t>(*modes + 4 * i);
+            const auto mode = dao::TryRead<std::uintptr_t>(*modes + (4 * i));
             const std::string type =
                 mode && *mode != 0 ? dao::TypeName(reinterpret_cast<const void *>(*mode)) : std::string("-");
-            if (type != "-" && type.rfind("GameMode", 0) != 0)
+            if (type != "-" && !type.starts_with("GameMode"))
             {
                 break;
             }
@@ -216,7 +216,7 @@ class Recorder
         }
         THREADENTRY32 entry{};
         entry.dwSize = sizeof entry;
-        for (BOOL ok = Thread32First(snapshot, &entry); ok; ok = Thread32Next(snapshot, &entry))
+        for (BOOL ok = Thread32First(snapshot, &entry); ok != 0; ok = Thread32Next(snapshot, &entry))
         {
             if (entry.th32OwnerProcessID != pid || entry.th32ThreadID == self)
             {
@@ -274,6 +274,33 @@ class Recorder
         return ok;
     }
 
+    // The return addresses on the captured stack, into the exe's code just
+    // after a call, each once; how many were found.
+    std::size_t CallersOnStack(std::array<std::uint32_t, kMaxReturnsPerSample> &found) const
+    {
+        std::size_t count = 0;
+        for (std::size_t i = 0; i < capture_.words && count < found.size(); ++i)
+        {
+            const std::uint32_t value = capture_.stack[i];
+            if (!text_.Contains(value) || value < text_.begin + 7)
+            {
+                continue;
+            }
+            std::array<std::byte, 7> before{};
+            std::memcpy(before.data(), reinterpret_cast<const void *>(value - 7), before.size());
+            if (!dao::core::EndsWithCall(before))
+            {
+                continue;
+            }
+            const auto seen = std::span(found.data(), count);
+            if (std::ranges::find(seen, value) == seen.end())
+            {
+                found[count++] = value;
+            }
+        }
+        return count;
+    }
+
     void SampleAll()
     {
         for (const auto &[tid, h] : threads_)
@@ -290,26 +317,7 @@ class Recorder
             }
             // Return addresses on the stack, each counted once per sample.
             std::array<std::uint32_t, kMaxReturnsPerSample> found{};
-            std::size_t count = 0;
-            for (std::size_t i = 0; i < capture_.words && count < found.size(); ++i)
-            {
-                const std::uint32_t value = capture_.stack[i];
-                if (!text_.Contains(value) || value < text_.begin + 7)
-                {
-                    continue;
-                }
-                std::array<std::byte, 7> before{};
-                std::memcpy(before.data(), reinterpret_cast<const void *>(value - 7), before.size());
-                if (!dao::core::EndsWithCall(before))
-                {
-                    continue;
-                }
-                const auto seen = std::span(found.data(), count);
-                if (std::ranges::find(seen, value) == seen.end())
-                {
-                    found[count++] = value;
-                }
-            }
+            const std::size_t count = CallersOnStack(found);
             bool update = false;
             for (std::size_t i = 0; i < count; ++i)
             {

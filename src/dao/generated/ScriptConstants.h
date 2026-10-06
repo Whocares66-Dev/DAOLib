@@ -2571,7 +2571,7 @@ constexpr std::string_view Name(WmLocation value)
 namespace constants
 {
 
-inline constexpr float PI = 3.141592f;
+inline constexpr float PI = 3.141592f; // NOLINT(modernize-use-std-numbers): the scripts' own value
 inline constexpr float DIRECTION_NORTH = 180.0f;
 inline constexpr float DIRECTION_EAST = 270.0f;
 inline constexpr float DIRECTION_SOUTH = 0.0f;

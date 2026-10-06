@@ -34,7 +34,7 @@ std::optional<std::uint32_t> Hex(std::string_view text)
         {
             return std::nullopt;
         }
-        value = value * 16 + digit;
+        value = (value * 16) + digit;
     }
     return value;
 }

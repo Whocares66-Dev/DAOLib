@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace probe
 {
@@ -408,13 +409,12 @@ void PeekString(PeekState &state)
     {
         Matched(state, fmt::format("\"{}\", {} characters, round trip the same", dao::Utf8(first), first.size()));
         const std::int32_t length = dao::script::api::GetStringLength(first);
-        InvokeResult(g_stringLength, length == static_cast<std::int32_t>(first.size()),
+        InvokeResult(g_stringLength, std::cmp_equal(length, first.size()),
                      fmt::format("\"{}\": {} from the command, {} characters", dao::Utf8(first), length, first.size()));
     }
     else
     {
-        Mismatched(state,
-                   fmt::format("popped \"{}\", then \"{}\" after our push", dao::Utf8(first), dao::Utf8(second)));
+        Mismatched(state, fmt::format(R"(popped "{}", then "{}" after our push)", dao::Utf8(first), dao::Utf8(second)));
     }
 }
 
@@ -499,35 +499,38 @@ void PeekEvent(PeekState &state)
 
 // An array answer: popped with the library's wrapper, its elements checked,
 // pushed back (the VM makes its own copy; ours is freed on return).
-void PeekArray(PeekState &state, std::optional<std::int32_t> team)
+// How many of an effect array's elements are effects; `first` describes
+// the first.
+std::size_t GoodEffects(const dao::script::Array &array, std::string &first)
 {
-    dao::script::Array array = dao::script::Stack::PopArray();
-    if (!array || !dao::script::Stack::PushArray(array))
-    {
-        ++state.failed;
-        return;
-    }
-    const PeekKind kind = state.peek->kind;
-    auto *app = dao::CClientExoApp::Get();
     std::size_t good = 0;
-    std::string first;
     for (std::size_t i = 0; i < array.Size(); ++i)
     {
-        if (kind == PeekKind::EffectArray)
+        const std::string type = dao::TypeName(array.Effect(i));
+        good += type == "CGameEffect" ? 1 : 0;
+        if (i == 0)
         {
-            const std::string type = dao::TypeName(array.Effect(i));
-            good += type == "CGameEffect" ? 1 : 0;
-            if (i == 0)
-            {
-                first = fmt::format(", the first {} of type {}", type,
-                                    array.Effect(0) != nullptr ? static_cast<int>(array.Effect(0)->Type()) : -1);
-            }
-            continue;
+            first = fmt::format(", the first {} of type {}", type,
+                                array.Effect(0) != nullptr ? static_cast<int>(array.Effect(0)->Type()) : -1);
         }
+    }
+    return good;
+}
+
+// How many of an object array's elements are game objects, or, for a team's
+// array, objects of `team` (none if the team was not read); `first`
+// describes the first.
+std::size_t GoodObjects(const dao::script::Array &array, bool byTeam, std::optional<std::int32_t> team,
+                        std::string &first)
+{
+    auto *app = dao::CClientExoApp::Get();
+    std::size_t good = 0;
+    for (std::size_t i = 0; i < array.Size(); ++i)
+    {
         const dao::ObjectId id = array.Object(i);
         dao::CGameObject *object = app != nullptr ? app->GetGameObjectById(id) : nullptr;
         dao::CCObject *asObject = object != nullptr ? object->AsObject() : nullptr;
-        if (kind == PeekKind::TeamArray)
+        if (byTeam)
         {
             good += asObject != nullptr && team && asObject->TeamId() == *team ? 1 : 0;
         }
@@ -540,6 +543,28 @@ void PeekArray(PeekState &state, std::optional<std::int32_t> team)
             first =
                 fmt::format(", the first {:#010x} ({})", id, object != nullptr ? static_cast<int>(object->Type()) : -1);
         }
+    }
+    return good;
+}
+
+void PeekArray(PeekState &state, std::optional<std::int32_t> team)
+{
+    dao::script::Array array = dao::script::Stack::PopArray();
+    if (!array || !dao::script::Stack::PushArray(array))
+    {
+        ++state.failed;
+        return;
+    }
+    const PeekKind kind = state.peek->kind;
+    std::size_t good = 0;
+    std::string first;
+    if (kind == PeekKind::EffectArray)
+    {
+        good = GoodEffects(array, first);
+    }
+    else
+    {
+        good = GoodObjects(array, kind == PeekKind::TeamArray, team, first);
     }
     const std::string shown = fmt::format("tag {:#x}, {} elements, {} as expected{}{}", array.Tag(), array.Size(), good,
                                           team ? fmt::format(", team {}", *team) : std::string(), first);
@@ -554,39 +579,80 @@ void PeekArray(PeekState &state, std::optional<std::int32_t> team)
     }
 }
 
+// An event field's check: the event peeked off the stack before the
+// command runs, its field read beside the engine's answer.
+int PeekEventField(PeekState &state, void *commands, int edx, int id, int paramCount)
+{
+    const PeekCommand &peek = *state.peek;
+    dao::script::OwnedEvent event = dao::script::Stack::PopEvent();
+    const bool peeked = event && dao::script::Stack::PushEvent(*event.get());
+    const int result = state.previous(commands, edx, id, paramCount);
+    ++state.calls;
+    if (!peeked || result != dao::script::kOk)
+    {
+        ++state.failed;
+        return result;
+    }
+    const auto answer = PeekAnswer(peek.returnsObject);
+    if (!answer)
+    {
+        ++state.failed;
+        return result;
+    }
+    const std::uint32_t ours = peek.eventField(*event.get());
+    if (ours == *answer)
+    {
+        Matched(state,
+                fmt::format("event of type {}, engine and field both {:#x}", fmt::underlying(event->Type()), ours));
+    }
+    else
+    {
+        Mismatched(state, fmt::format("event of type {}: engine said {:#x}, field reads {:#x}",
+                                      fmt::underlying(event->Type()), *answer, ours));
+    }
+    return result;
+}
+
+// An effect field's check, as an event field's.
+int PeekEffectField(PeekState &state, void *commands, int edx, int id, int paramCount)
+{
+    const PeekCommand &peek = *state.peek;
+    dao::script::OwnedEffect effect = dao::script::Stack::PopEffect();
+    const bool peeked = effect && dao::script::Stack::PushEffect(*effect.get());
+    const int result = state.previous(commands, edx, id, paramCount);
+    ++state.calls;
+    if (!peeked || result != dao::script::kOk)
+    {
+        ++state.failed;
+        return result;
+    }
+    const auto answer = PeekAnswer(peek.returnsObject);
+    if (!answer)
+    {
+        ++state.failed;
+        return result;
+    }
+    const std::uint32_t ours = peek.field(*effect.get());
+    if (ours == *answer)
+    {
+        Matched(state, fmt::format("effect {} of type {}, engine and field both {:#x}", effect->Id(),
+                                   fmt::underlying(effect->Type()), ours));
+    }
+    else
+    {
+        Mismatched(state, fmt::format("effect {} of type {}: engine said {:#x}, field reads {:#x}", effect->Id(),
+                                      fmt::underlying(effect->Type()), *answer, ours));
+    }
+    return result;
+}
+
 int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
 {
     PeekState &state = g_peeks.at(static_cast<std::size_t>(id));
     const PeekCommand &peek = *state.peek;
     if (peek.kind == PeekKind::EventField)
     {
-        dao::script::OwnedEvent event = dao::script::Stack::PopEvent();
-        const bool peeked = event && dao::script::Stack::PushEvent(*event.get());
-        const int result = state.previous(commands, edx, id, paramCount);
-        ++state.calls;
-        if (!peeked || result != dao::script::kOk)
-        {
-            ++state.failed;
-            return result;
-        }
-        const auto answer = PeekAnswer(peek.returnsObject);
-        if (!answer)
-        {
-            ++state.failed;
-            return result;
-        }
-        const std::uint32_t ours = peek.eventField(*event.get());
-        if (ours == *answer)
-        {
-            Matched(state,
-                    fmt::format("event of type {}, engine and field both {:#x}", fmt::underlying(event->Type()), ours));
-        }
-        else
-        {
-            Mismatched(state, fmt::format("event of type {}: engine said {:#x}, field reads {:#x}",
-                                          fmt::underlying(event->Type()), *answer, ours));
-        }
-        return result;
+        return PeekEventField(state, commands, edx, id, paramCount);
     }
     std::optional<std::int32_t> team;
     if (peek.kind == PeekKind::TeamArray)
@@ -599,33 +665,7 @@ int __fastcall PeekShadow(void *commands, int edx, int id, int paramCount)
     }
     if (peek.kind == PeekKind::EffectField)
     {
-        dao::script::OwnedEffect effect = dao::script::Stack::PopEffect();
-        const bool peeked = effect && dao::script::Stack::PushEffect(*effect.get());
-        const int result = state.previous(commands, edx, id, paramCount);
-        ++state.calls;
-        if (!peeked || result != dao::script::kOk)
-        {
-            ++state.failed;
-            return result;
-        }
-        const auto answer = PeekAnswer(peek.returnsObject);
-        if (!answer)
-        {
-            ++state.failed;
-            return result;
-        }
-        const std::uint32_t ours = peek.field(*effect.get());
-        if (ours == *answer)
-        {
-            Matched(state, fmt::format("effect {} of type {}, engine and field both {:#x}", effect->Id(),
-                                       fmt::underlying(effect->Type()), ours));
-        }
-        else
-        {
-            Mismatched(state, fmt::format("effect {} of type {}: engine said {:#x}, field reads {:#x}", effect->Id(),
-                                          fmt::underlying(effect->Type()), *answer, ours));
-        }
-        return result;
+        return PeekEffectField(state, commands, edx, id, paramCount);
     }
     const int result = state.previous(commands, edx, id, paramCount);
     ++state.calls;

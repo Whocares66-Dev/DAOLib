@@ -40,6 +40,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace loader::crashlog
@@ -285,7 +286,7 @@ class Report
         return nullptr;
     }
 
-    bool IsExe(const ModuleInfo *m) const
+    static bool IsExe(const ModuleInfo *m)
     {
         return m != nullptr && m->base == dao::Module::Base();
     }
@@ -326,7 +327,7 @@ class Report
         return text;
     }
 
-    std::optional<std::string> Symbol(std::uintptr_t address)
+    std::optional<std::string> Symbol(std::uintptr_t address) const
     {
         if (!symbols_)
         {
@@ -337,7 +338,7 @@ class Report
         info->SizeOfStruct = sizeof(SYMBOL_INFO);
         info->MaxNameLen = 256;
         DWORD64 displacement = 0;
-        if (!SymFromAddr(GetCurrentProcess(), address, &displacement, info))
+        if (SymFromAddr(GetCurrentProcess(), address, &displacement, info) == 0)
         {
             return std::nullopt;
         }
@@ -345,7 +346,7 @@ class Report
         IMAGEHLP_LINE64 line{};
         line.SizeOfStruct = sizeof line;
         DWORD column = 0;
-        if (SymGetLineFromAddr64(GetCurrentProcess(), address, &column, &line) && line.FileName != nullptr)
+        if ((SymGetLineFromAddr64(GetCurrentProcess(), address, &column, &line) != 0) && line.FileName != nullptr)
         {
             text += fmt::format(" ({}:{})", std::filesystem::path(line.FileName).filename().string(), line.LineNumber);
         }
@@ -481,7 +482,7 @@ class Report
         }
         MEMORYSTATUSEX memory{};
         memory.dwLength = sizeof memory;
-        if (GlobalMemoryStatusEx(&memory))
+        if (GlobalMemoryStatusEx(&memory) != 0)
         {
             constexpr double kMiB = 1024.0 * 1024.0;
             w.Line("\tphysical memory: {:.0f} of {:.0f} MiB in use",
@@ -521,9 +522,9 @@ class Report
         HANDLE thread = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, sample_->thread);
         for (int i = 0; i < 48; ++i)
         {
-            if (!StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(),
+            if ((StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(),
                              thread != nullptr ? thread : GetCurrentThread(), &frame, &context, nullptr,
-                             SymFunctionTableAccess64, SymGetModuleBase64, nullptr) ||
+                             SymFunctionTableAccess64, SymGetModuleBase64, nullptr) == 0) ||
                 frame.AddrPC.Offset == 0)
             {
                 break;
@@ -824,7 +825,7 @@ class Report
         }
         MODULEENTRY32W entry{};
         entry.dwSize = sizeof entry;
-        for (BOOL ok = Module32FirstW(snapshot, &entry); ok; ok = Module32NextW(snapshot, &entry))
+        for (BOOL ok = Module32FirstW(snapshot, &entry); ok != 0; ok = Module32NextW(snapshot, &entry))
         {
             const auto base = reinterpret_cast<std::uintptr_t>(entry.modBaseAddr);
             modules_.push_back(ModuleInfo{.base = base,
@@ -916,7 +917,7 @@ void WriteLog()
     spdlog::critical("the game crashed; the crash log is {}", path.string());
 }
 
-DWORD WINAPI WriterThread(LPVOID)
+DWORD WINAPI WriterThread(LPVOID /*unused*/)
 {
     WriteLog();
     return 0;
@@ -1036,6 +1037,19 @@ struct GameState
     bool worth = true;
 };
 
+const char *WindowWord(bool found, bool minimised, bool front)
+{
+    if (!found)
+    {
+        return "not found";
+    }
+    if (minimised)
+    {
+        return "minimised";
+    }
+    return front ? "in front" : "not in front";
+}
+
 GameState State()
 {
     static constexpr std::array<const char *, 13> kModes{"Explore",  "Combat",  "Dead",       "Gui",     "Dialog",
@@ -1045,7 +1059,7 @@ GameState State()
     const auto *app = dao::CClientExoApp::Get();
     const auto *modes = app != nullptr ? app->GameModes() : nullptr;
     const auto mode = modes != nullptr ? static_cast<std::int32_t>(modes->Mode()) : -1;
-    const std::string name = mode >= 0 && mode < static_cast<std::int32_t>(kModes.size())
+    const std::string name = mode >= 0 && std::cmp_less(mode, kModes.size())
                                  ? std::string(kModes[static_cast<std::size_t>(mode)]) + " mode"
                                  : fmt::format("mode {}", mode);
     HWND window = GameWindow();
@@ -1054,11 +1068,8 @@ GameState State()
     const bool hung = window != nullptr && IsHungAppWindow(window) != FALSE;
     state.text =
         fmt::format("in {}, its window {}{}; at the last frame {} room(s) wanted and not loaded, {} loading", name,
-                    window == nullptr ? "not found"
-                    : minimised       ? "minimised"
-                    : front           ? "in front"
-                                      : "not in front",
-                    hung ? ", which Windows calls not responding" : "", g_roomsOwed.load(), g_roomsLoading.load());
+                    WindowWord(window != nullptr, minimised, front), hung ? ", which Windows calls not responding" : "",
+                    g_roomsOwed.load(), g_roomsLoading.load());
     // Loading and the main menu's start-up may hold frames back by design,
     // and with no window the game is closing.
     state.worth = mode >= 0 && mode != static_cast<std::int32_t>(dao::GameMode::Loading) &&
@@ -1131,6 +1142,41 @@ std::vector<Sample> OtherThreads(DWORD frameThread, std::span<std::uint32_t> buf
 
 // One stall, from its first sample to the frame that ends it: one file, a
 // sample every g_hangSeconds up to kMostSamples, and how long it lasted.
+// A stall's hang log, begun at its first sample, and said in loader.log.
+FILE *OpenHangLog(double seconds)
+{
+    const auto path = LogPath("hang");
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    // Shared: a peer reads a log while the game still writes it (DAOLib #31).
+    FILE *file = _wfsopen(path.c_str(), L"w", _SH_DENYNO);
+    if (file == nullptr)
+    {
+        return nullptr;
+    }
+    spdlog::warn("no frame for {:.1f} s; the hang log is {}", seconds, path.string());
+    return file;
+}
+
+// The hang log's last line: how the stall ended, frames back or a crash.
+void CloseHangLog(FILE *file, std::uint64_t last, int samples)
+{
+    const std::uint64_t resumed = g_resumed.load();
+    const std::uint64_t end = resumed > last ? resumed : GetTickCount64();
+    const double seconds = static_cast<double>(end - last) / 1000.0;
+    Writer w(file);
+    if (g_crashing)
+    {
+        w.Line("=== The game crashed {:.1f} s after the last frame; its crash log is beside this ===", seconds);
+    }
+    else
+    {
+        w.Line("=== Frames came back {:.1f} s after the last one; {} sample(s) ===", seconds, samples);
+        spdlog::info("frames came back after {:.1f} s", seconds);
+    }
+    std::fclose(file);
+}
+
 void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
 {
     const std::uint64_t interval = std::uint64_t{g_hangSeconds} * 1000;
@@ -1158,17 +1204,12 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
                 }
                 if (file == nullptr)
                 {
-                    const auto path = LogPath("hang");
-                    std::error_code ec;
-                    std::filesystem::create_directories(path.parent_path(), ec);
-                    file = _wfsopen(path.c_str(), L"w", _SH_DENYNO);
+                    file = OpenHangLog(static_cast<double>(now - last) / 1000.0);
                     if (file == nullptr)
                     {
                         return;
                     }
                     report.emplace();
-                    spdlog::warn("no frame for {:.1f} s; the hang log is {}", static_cast<double>(now - last) / 1000.0,
-                                 path.string());
                 }
                 Writer w(file);
                 report->WriteHangSample(w, sample, ++samples, static_cast<double>(now - last) / 1000.0, state.text,
@@ -1179,24 +1220,11 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
     }
     if (file != nullptr)
     {
-        const std::uint64_t resumed = g_resumed.load();
-        const std::uint64_t end = resumed > last ? resumed : GetTickCount64();
-        const double seconds = static_cast<double>(end - last) / 1000.0;
-        Writer w(file);
-        if (g_crashing)
-        {
-            w.Line("=== The game crashed {:.1f} s after the last frame; its crash log is beside this ===", seconds);
-        }
-        else
-        {
-            w.Line("=== Frames came back {:.1f} s after the last one; {} sample(s) ===", seconds, samples);
-            spdlog::info("frames came back after {:.1f} s", seconds);
-        }
-        std::fclose(file);
+        CloseHangLog(file, last, samples);
     }
 }
 
-DWORD WINAPI Watchdog(LPVOID)
+DWORD WINAPI Watchdog(LPVOID /*unused*/)
 {
     // Made once, before any stall: nothing may be allocated while the frame
     // thread is suspended.

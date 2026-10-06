@@ -25,7 +25,7 @@ std::vector<std::byte> MakeTalkTable(const std::vector<std::pair<std::uint32_t, 
     b.Text(16, version);
     b.U32(20, 2); // templates
     const std::size_t templates = 28;
-    const std::size_t fields = templates + 2 * 16;
+    const std::size_t fields = templates + (2 * 16);
     // TLK: one field, the string list (a list of template 1, in place).
     b.Text(templates, "TLK ");
     b.U32(templates + 4, 1);
@@ -52,11 +52,11 @@ std::vector<std::byte> MakeTalkTable(const std::vector<std::pair<std::uint32_t, 
     b.U32(b.data, static_cast<std::uint32_t>(list - b.data));
     b.U32(list, static_cast<std::uint32_t>(strings.size()));
     const std::size_t first = list + 4;
-    b.U8(first + 8 * strings.size() - 1, 0);
+    b.U8(first + (8 * strings.size()) - 1, 0);
     for (std::size_t i = 0; i < strings.size(); ++i)
     {
-        b.U32(first + 8 * i, strings[i].first);
-        b.U32(first + 8 * i + 4, b.String(strings[i].second));
+        b.U32(first + (8 * i), strings[i].first);
+        b.U32(first + (8 * i) + 4, b.String(strings[i].second));
     }
     return b.bytes;
 }

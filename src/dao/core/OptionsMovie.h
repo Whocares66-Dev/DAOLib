@@ -89,7 +89,9 @@ struct Section
 {
     std::string title;
     std::vector<Toggle> toggles;
-    std::vector<Choice> choices = {};
+    // `= {}` so that a section written {title, toggles} leaves it out
+    // without clang's missing-field-initializers.
+    std::vector<Choice> choices = {}; // NOLINT(readability-redundant-member-init)
 };
 
 // A row of the Game tab the game leaves empty: where a checkbox in it goes.

@@ -41,13 +41,26 @@ void Selected(dao::ObjectId now, dao::ObjectId /*before*/)
     spdlog::info("now following {:#010x}: {}", now, camera->Tactical() ? "gliding over" : "coming round behind");
 }
 
+const char *MoveName(dao::camera::Move move)
+{
+    switch (move)
+    {
+    case dao::camera::Move::Pan:
+        return "pan";
+    case dao::camera::Move::Zoom:
+        return "zoom";
+    case dao::camera::Move::Yaw:
+        return "turn";
+    }
+    return "move";
+}
+
 void Ended(dao::camera::Move move, dao::camera::MoveEnd why)
 {
     const dao::CameraController *camera = dao::camera::Current();
     const dao::Vector offset = camera != nullptr ? camera->FocusOffset() : dao::Vector{};
-    spdlog::info("the {} ended: {}; the focus {:.2f} m from what it follows",
-                 move == dao::camera::Move::Pan ? "pan" : (move == dao::camera::Move::Zoom ? "zoom" : "turn"),
-                 dao::camera::Name(why), std::hypot(offset.x, offset.y));
+    spdlog::info("the {} ended: {}; the focus {:.2f} m from what it follows", MoveName(move), dao::camera::Name(why),
+                 std::hypot(offset.x, offset.y));
 }
 
 } // namespace

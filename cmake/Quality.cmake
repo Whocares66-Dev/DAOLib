@@ -15,8 +15,9 @@
 # (DAOLib #34).
 #
 # Each formatter runs its stock style, and each linter the checks that find
-# bugs and costs, nothing stylistic: .clang-format, .clang-tidy, ruff.toml and
-# .gersemirc say which; PSScriptAnalyzer runs its defaults.
+# bugs, costs and code that reads worse than it need, but no matter of taste
+# (DAOLib #33): .clang-format, .clang-tidy, ruff.toml and .gersemirc say
+# which; PSScriptAnalyzer runs its defaults.
 #
 # clang-format and clang-tidy are LLVM's own release, 22 or later
 # (`winget install LLVM.LLVM`, into Program Files\LLVM, or where LLVM_ROOT

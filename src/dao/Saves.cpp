@@ -367,14 +367,8 @@ bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
 bool Slot::Exists() const
 {
     std::error_code error;
-    for (const auto &entry : std::filesystem::directory_iterator(Folder(), error))
-    {
-        if (entry.path().extension() == L".das")
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(std::filesystem::directory_iterator(Folder(), error),
+                               [](const auto &entry) { return entry.path().extension() == L".das"; });
 }
 
 std::optional<core::SaveMeta> Slot::Meta() const
@@ -403,7 +397,7 @@ std::filesystem::path Slot::Folder() const
     using Fn = void(__cdecl *)(core::WStringRep *, const core::WStringRep *, std::int32_t, std::int32_t);
     reinterpret_cast<Fn>(Module::Address(addr::kSaveGame_SlotFolder))(folder.Engine(), name.Engine(), number,
                                                                       static_cast<std::int32_t>(kind));
-    return std::filesystem::path(std::wstring(folder.View()));
+    return {std::wstring(folder.View())};
 }
 
 std::filesystem::path Slot::File(std::string_view plugin) const

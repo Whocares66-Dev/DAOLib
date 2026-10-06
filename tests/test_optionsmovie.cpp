@@ -134,7 +134,7 @@ Bytes OptionsMovie()
 
 bool Holds(const Bytes &movie, const Bytes &code)
 {
-    return std::search(movie.begin(), movie.end(), code.begin(), code.end()) != movie.end();
+    return !std::ranges::search(movie, code).empty();
 }
 
 } // namespace
@@ -286,8 +286,8 @@ TEST_CASE("a section is the game's heading over its checkboxes, in one column", 
     // of the checkboxes and 6 down, the heading's text in the bar at (24,
     // 13), and the checkbox in the third row.
     const auto placed = gfx::InstancesOf(*patched, kGameTab);
-    const auto bar = std::find_if(placed.begin(), placed.end(),
-                                  [](const gfx::Instance &instance) { return instance.character == kBar; });
+    const auto bar =
+        std::ranges::find_if(placed, [](const gfx::Instance &instance) { return instance.character == kBar; });
     REQUIRE(bar != placed.end());
     CHECK(bar->x == -8);
     CHECK(bar->y == 269);

@@ -482,7 +482,16 @@ TEST_CASE("a statement whose strings are pushed by a 16-bit pool index is found"
     Put(poolBody, kStrings, 2);
     for (std::uint32_t i = 0; i < kStrings; ++i)
     {
-        PutText(poolBody, i == 260 ? "AddKeyBinding" : i == 261 ? "HideMainInterface" : "s" + std::to_string(i));
+        std::string text = "s" + std::to_string(i);
+        if (i == 260)
+        {
+            text = "AddKeyBinding";
+        }
+        else if (i == 261)
+        {
+            text = "HideMainInterface";
+        }
+        PutText(poolBody, text);
     }
     Bytes push;
     push.push_back(std::byte{9});

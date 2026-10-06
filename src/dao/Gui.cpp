@@ -383,7 +383,7 @@ void *GuiSystem()
         return nullptr;
     }
     void *gui = reinterpret_cast<void *>(*system);
-    return TypeName(gui).rfind("GUI::", 0) == 0 ? gui : nullptr;
+    return TypeName(gui).starts_with("GUI::") ? gui : nullptr;
 }
 
 // The ids a plugin's screens take, past the game's 0-0x3F.
@@ -770,7 +770,7 @@ Detour<OpenFileFn> g_openFile;
 // took the inner's file for a stranger and left it alone.)
 bool IsMovieFile(void *file)
 {
-    const auto game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
+    const auto *const game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
     const auto slots = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(file));
     if (!slots || *slots == 0)
     {
@@ -782,7 +782,7 @@ bool IsMovieFile(void *file)
     }
     for (std::size_t slot = 0; slot < kFileSlots; ++slot)
     {
-        const auto function = TryRead<std::uintptr_t>(*slots + slot * sizeof(void *));
+        const auto function = TryRead<std::uintptr_t>(*slots + (slot * sizeof(void *)));
         if (!function || (slot != kFileLengthSlot && slot != kFileErrorSlot &&
                           *function != reinterpret_cast<std::uintptr_t>(game[slot])))
         {
@@ -803,7 +803,8 @@ void PointFileAt(void *file, const Patched &bytes)
         {
             // The game's vtable, its RTTI word before it, with the length's
             // and the error's slots ours.
-            const auto game = reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
+            const auto *const game =
+                reinterpret_cast<void *const *>(Module::Address(addr::kScaleformResourceFile_Vftable));
             std::copy(game - 1, game + kFileSlots, g_patchedFileVtable.begin());
             g_patchedFileVtable[1 + kFileLengthSlot] = reinterpret_cast<void *>(&PatchedLength);
             g_patchedFileVtable[1 + kFileErrorSlot] = reinterpret_cast<void *>(&PatchedError);

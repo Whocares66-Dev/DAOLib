@@ -58,7 +58,7 @@ std::filesystem::path SelfPath()
 {
     std::array<wchar_t, MAX_PATH> buffer{};
     const DWORD length = GetModuleFileNameW(g_self, buffer.data(), static_cast<DWORD>(buffer.size()));
-    return std::filesystem::path(std::wstring_view(buffer.data(), length));
+    return {std::wstring_view(buffer.data(), length)};
 }
 
 bool IsGameProcess()
@@ -103,7 +103,7 @@ void LoadPlugins()
         else if (entry.is_regular_file(ec) && entry.path().extension() == L".dll")
         {
             const auto stem = entry.path().stem().string();
-            spdlog::warn("{}: not loaded; a plugin goes in a folder of its own, daolib\\plugins\\{}\\{}.dll",
+            spdlog::warn(R"({}: not loaded; a plugin goes in a folder of its own, daolib\plugins\{}\{}.dll)",
                          entry.path().filename().string(), stem, stem);
         }
     }
@@ -249,7 +249,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID /*reserved*/) // NO
     {
         g_self = instance;
         DisableThreadLibraryCalls(instance);
-        if (DetourIsHelperProcess())
+        if (DetourIsHelperProcess() != 0)
         {
             return TRUE;
         }

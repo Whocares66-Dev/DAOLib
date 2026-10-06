@@ -38,7 +38,7 @@ TEST_CASE("a template's decorated name is returned as it came")
 
 TEST_CASE("text that is not a decorated name is returned as it came")
 {
-    CHECK(UndecorateClassName("") == "");
+    CHECK(UndecorateClassName("").empty());
     CHECK(UndecorateClassName("Ability") == "Ability");
     CHECK(UndecorateClassName(".?AVAbility") == ".?AVAbility");
 }

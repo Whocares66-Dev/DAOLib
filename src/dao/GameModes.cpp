@@ -16,13 +16,13 @@ void *GameModeController::ModeObject(GameMode mode) const
     {
         return nullptr;
     }
-    const auto entry = TryRead<std::uintptr_t>(*modes + 4 * index);
+    const auto entry = TryRead<std::uintptr_t>(*modes + (4 * index));
     if (!entry || *entry == 0)
     {
         return nullptr;
     }
     auto *object = reinterpret_cast<void *>(*entry);
-    return TypeName(object).rfind("GameMode", 0) == 0 ? object : nullptr;
+    return TypeName(object).starts_with("GameMode") ? object : nullptr;
 }
 
 CameraController *GameModeController::Camera() const

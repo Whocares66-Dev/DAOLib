@@ -294,8 +294,8 @@ std::optional<std::vector<std::byte>> ListActions(std::span<const std::byte> mov
                 continue;
             }
             const std::string title = Utf8(entry.action.section);
-            auto section = std::find_if(sections.begin(), sections.end(),
-                                        [&](const core::options_movie::KeySection &s) { return s.title == title; });
+            auto section = std::ranges::find_if(
+                sections, [&](const core::options_movie::KeySection &s) { return s.title == title; });
             if (section == sections.end())
             {
                 section = sections.insert(sections.end(), {title, {}});

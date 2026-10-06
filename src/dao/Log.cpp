@@ -97,7 +97,7 @@ bool OwnsLogs()
         }
         DWORD code = 0;
         HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(current));
-        const bool alive = process != nullptr && GetExitCodeProcess(process, &code) && code == STILL_ACTIVE;
+        const bool alive = process != nullptr && (GetExitCodeProcess(process, &code) != 0) && code == STILL_ACTIVE;
         if (process != nullptr)
         {
             CloseHandle(process);

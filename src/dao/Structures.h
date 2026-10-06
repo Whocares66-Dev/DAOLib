@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace dao
 {
@@ -123,11 +124,11 @@ class CDataArrays
     std::optional<::dao::Vector> Vector(std::int32_t index) const
     {
         const auto *list = Read<const VectorList *>(0x18);
-        if (list == nullptr || list->data == nullptr || index < 0 || static_cast<std::uint32_t>(index) >= list->size)
+        if (list == nullptr || list->data == nullptr || index < 0 || std::cmp_greater_equal(index, list->size))
         {
             return std::nullopt;
         }
-        return *reinterpret_cast<const ::dao::Vector *>(list->data + static_cast<std::size_t>(index) * 16);
+        return *reinterpret_cast<const ::dao::Vector *>(list->data + (static_cast<std::size_t>(index) * 16));
     }
 
     // The engine's own setters: each makes its list if there is none and
@@ -256,7 +257,16 @@ class CGameEffect : public CDataArrays
     {
         const auto left = static_cast<std::int32_t>(seconds * 1000);
         const std::int32_t duration = DurationMs();
-        Write(kElapsed, left <= 0 ? duration : (left >= duration ? 0 : duration - left));
+        std::int32_t elapsed = duration - left;
+        if (left <= 0)
+        {
+            elapsed = duration;
+        }
+        else if (left >= duration)
+        {
+            elapsed = 0;
+        }
+        Write(kElapsed, elapsed);
     }
 
     static constexpr std::size_t kDuration = 0x2C;

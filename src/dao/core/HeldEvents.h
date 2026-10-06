@@ -55,7 +55,7 @@ inline double WorldSeconds(std::uint32_t fromDay, std::uint32_t fromMs, std::uin
 {
     const double days = static_cast<double>(toDay) - static_cast<double>(fromDay);
     const double ms = static_cast<double>(toMs) - static_cast<double>(fromMs);
-    return days * dayLength + ms / 1000;
+    return (days * dayLength) + (ms / 1000);
 }
 
 // The held events and the plugin's clock they wait on, in seconds from

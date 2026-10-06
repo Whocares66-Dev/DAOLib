@@ -38,7 +38,8 @@ int SetCreatureProperty(dao::script::CommandCall &call)
     const auto creature = call.Object(0);
     const auto newHealth = call.Float(2);
     if (creature && newHealth && call.Int(1) == constants::PROPERTY_DEPLETABLE_HEALTH &&
-        call.Int(3) == constants::PROPERTY_VALUE_CURRENT && (api::IsHero(*creature) || api::IsFollower(*creature)))
+        call.Int(3) == constants::PROPERTY_VALUE_CURRENT &&
+        ((api::IsHero(*creature) != 0) || (api::IsFollower(*creature) != 0)))
     {
         const float health = api::GetCreatureProperty(*creature, constants::PROPERTY_DEPLETABLE_HEALTH,
                                                       constants::PROPERTY_VALUE_CURRENT);

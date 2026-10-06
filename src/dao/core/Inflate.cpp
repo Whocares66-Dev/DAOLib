@@ -97,7 +97,7 @@ bool Build(Huffman &code, std::span<const std::uint8_t> lengths)
     int left = 1;
     for (int length = 1; length <= kMaxBits; ++length)
     {
-        left = left * 2 - code.count[static_cast<std::size_t>(length)];
+        left = (left * 2) - code.count[static_cast<std::size_t>(length)];
         if (left < 0)
         {
             return false;
@@ -216,12 +216,26 @@ bool Stored(Bits &bits, std::vector<std::byte> &out, std::size_t limit)
     return bits.Copy(length, out);
 }
 
+// The fixed code's length of a literal or length symbol (RFC 1951 3.2.6).
+std::uint8_t FixedLength(std::size_t symbol)
+{
+    if (symbol < 144)
+    {
+        return 8;
+    }
+    if (symbol < 256)
+    {
+        return 9;
+    }
+    return symbol < 280 ? 7 : 8;
+}
+
 bool Fixed(Bits &bits, std::vector<std::byte> &out, std::size_t limit)
 {
     std::array<std::uint8_t, kMaxSymbols> lengths{};
     for (std::size_t s = 0; s < lengths.size(); ++s)
     {
-        lengths[s] = s < 144 ? 8 : s < 256 ? 9 : s < 280 ? 7 : 8;
+        lengths[s] = FixedLength(s);
     }
     std::array<std::uint8_t, 30> distances{};
     distances.fill(5);
@@ -339,9 +353,9 @@ std::optional<std::vector<std::byte>> InflateZlib(std::span<const std::byte> str
     {
         return std::nullopt;
     }
-    const std::uint32_t method = std::to_integer<std::uint32_t>(stream[0]);
-    const std::uint32_t flags = std::to_integer<std::uint32_t>(stream[1]);
-    if ((method & 0x0FU) != 8 || (method >> 4) > 7 || (method * 256 + flags) % 31 != 0 || (flags & 0x20U) != 0)
+    const auto method = std::to_integer<std::uint32_t>(stream[0]);
+    const auto flags = std::to_integer<std::uint32_t>(stream[1]);
+    if ((method & 0x0FU) != 8 || (method >> 4) > 7 || ((method * 256) + flags) % 31 != 0 || (flags & 0x20U) != 0)
     {
         return std::nullopt;
     }
@@ -357,10 +371,21 @@ std::optional<std::vector<std::byte>> InflateZlib(std::span<const std::byte> str
         {
             return std::nullopt;
         }
-        const bool good = type == 0   ? Stored(bits, out, limit)
-                          : type == 1 ? Fixed(bits, out, limit)
-                          : type == 2 ? Dynamic(bits, out, limit)
-                                      : false;
+        bool good = false;
+        switch (type)
+        {
+        case 0:
+            good = Stored(bits, out, limit);
+            break;
+        case 1:
+            good = Fixed(bits, out, limit);
+            break;
+        case 2:
+            good = Dynamic(bits, out, limit);
+            break;
+        default:
+            break;
+        }
         if (!good)
         {
             return std::nullopt;

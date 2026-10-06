@@ -164,7 +164,7 @@ WorldNow ReadWorldNow()
     // EC::WorldTimer::WorldTime: __thiscall (day *, ms *), `ret 8`.
     using WorldTimeFn = void(__fastcall *)(std::uintptr_t timer, int edx, std::uint32_t *day, std::uint32_t *ms);
     reinterpret_cast<WorldTimeFn>(Module::Address(addr::kWorldTimer_WorldTime))(timer, 0, &now.day, &now.ms);
-    now.seconds = static_cast<double>(now.day) * DayLength(timer) + now.ms / 1000.0;
+    now.seconds = (static_cast<double>(now.day) * DayLength(timer)) + (now.ms / 1000.0);
     return now;
 }
 
@@ -195,7 +195,7 @@ void TraceSent(std::uint32_t days, std::uint32_t ms, std::uint32_t caller, std::
         return;
     }
     const WorldNow now = ReadWorldNow();
-    const double delay = static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0;
+    const double delay = (static_cast<double>(days) * DayLength(WorldTimer())) + (ms / 1000.0);
     spdlog::info("timers: event {} sent to {} by {}, in {:.3f} s, world {}:{:08}{}", TypeName(*type), Named(target),
                  Named(caller), delay, now.day, now.ms, heldHere ? ", held on the plugin's clock" : "");
     const std::lock_guard lock(g_sentLock);
@@ -236,7 +236,8 @@ std::int32_t __fastcall AddEventDeltaTime(void *queue, int edx, std::uint32_t da
                                           std::uint32_t data)
 {
     const bool traced = g_tracing.load(std::memory_order_relaxed) && (days != 0 || ms != 0);
-    const double delay = days != 0 || ms != 0 ? static_cast<double>(days) * DayLength(WorldTimer()) + ms / 1000.0 : 0;
+    const double delay =
+        days != 0 || ms != 0 ? (static_cast<double>(days) * DayLength(WorldTimer())) + (ms / 1000.0) : 0;
     if (g_holding.load(std::memory_order_relaxed) && (days != 0 || ms != 0) && IsHeld(id, data, delay))
     {
         bool heldHere = false;

@@ -42,8 +42,8 @@ class Builder
         for (std::size_t i = 0; i <= text.size(); ++i)
         {
             const std::uint16_t unit = i < text.size() ? text[i] : 0;
-            Grow(at + 4 + 2 * i + 2);
-            std::memcpy(bytes.data() + at + 4 + 2 * i, &unit, 2);
+            Grow(at + 4 + (2 * i) + 2);
+            std::memcpy(bytes.data() + at + 4 + (2 * i), &unit, 2);
         }
         return static_cast<std::uint32_t>(at - data);
     }
@@ -53,7 +53,7 @@ class Builder
         U32(at, static_cast<std::uint32_t>(values.size()));
         for (std::size_t i = 0; i < values.size(); ++i)
         {
-            U32(at + 4 + 4 * i, values[i]);
+            U32(at + 4 + (4 * i), values[i]);
         }
         return static_cast<std::uint32_t>(at - data);
     }

@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
 #include <set>
 #include <string>
 #include <string_view>
@@ -39,9 +40,9 @@ TEST_CASE("every command in the table has a name and a number of its own")
         CHECK(ids.insert(command.id).second);
         // Defaults trail, as C++'s must: none before a parameter without one.
         bool required = false;
-        for (auto it = command.params.rbegin(); it != command.params.rend(); ++it)
+        for (const auto &param : std::views::reverse(command.params))
         {
-            if (it->defaultKind == DefaultKind::None)
+            if (param.defaultKind == DefaultKind::None)
             {
                 required = true;
             }

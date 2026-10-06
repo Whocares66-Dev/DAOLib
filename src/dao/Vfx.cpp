@@ -160,7 +160,7 @@ void __fastcall CastCursorRay(void *mode, int edx)
     std::int32_t kept = 0;
     for (std::int32_t i = 0; i < had; ++i)
     {
-        if (std::find(unpicked.begin(), unpicked.end(), hits[i].object) != unpicked.end())
+        if (std::ranges::find(unpicked, hits[i].object) != unpicked.end())
         {
             continue;
         }
@@ -182,7 +182,7 @@ void SetPickable(ObjectId effect, bool pickable)
         return;
     }
     const std::lock_guard lock(g_mutex);
-    const auto found = std::find(g_unpicked.begin(), g_unpicked.end(), effect);
+    const auto found = std::ranges::find(g_unpicked, effect);
     if (pickable)
     {
         if (found != g_unpicked.end())
@@ -204,7 +204,7 @@ void SetPickable(ObjectId effect, bool pickable)
 bool IsPickable(ObjectId effect)
 {
     const std::lock_guard lock(g_mutex);
-    return std::find(g_unpicked.begin(), g_unpicked.end(), effect) == g_unpicked.end();
+    return std::ranges::find(g_unpicked, effect) == g_unpicked.end();
 }
 
 void Remove(ObjectId effect)
