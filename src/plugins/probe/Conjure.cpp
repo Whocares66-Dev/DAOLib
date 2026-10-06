@@ -94,13 +94,13 @@ std::int32_t __fastcall Execute(void *handler, int edx, dao::CCObject *object, s
         }
         seen = Seen{subAction, words[kType], duration, delay, elapsed, conjuring, result, mana, command->Sequence()};
     }
-    spdlog::info("conjure: {:#010x} command {} ability {} conjure time {:.2f}; sub-action {:#010x} type {} elapsed "
-                 "{} duration {} delay {} words [{:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x}]; IsConjuring {}, "
-                 "mana {:.1f}; run answered {}",
-                 id, command->Sequence(), command->Ability().value_or(-1),
-                 command->Parameters() != nullptr ? command->Parameters()->Float(0) : -1.0F, subAction, words[kType],
-                 elapsed, duration, delay, words[0], words[1], words[2], words[3], words[4], words[5], words[6],
-                 words[7], conjuring, mana, result);
+    spdlog::debug("conjure: {:#010x} command {} ability {} conjure time {:.2f}; sub-action {:#010x} type {} elapsed "
+                  "{} duration {} delay {} words [{:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x}]; IsConjuring {}, "
+                  "mana {:.1f}; run answered {}",
+                  id, command->Sequence(), command->Ability().value_or(-1),
+                  command->Parameters() != nullptr ? command->Parameters()->Float(0) : -1.0F, subAction, words[kType],
+                  elapsed, duration, delay, words[0], words[1], words[2], words[3], words[4], words[5], words[6],
+                  words[7], conjuring, mana, result);
     return result;
 }
 

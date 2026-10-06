@@ -27,6 +27,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
 }
 ```
 
+The log costs the game's frame nothing on disk: a line goes into a buffer that a writer thread of the log's own writes out every quarter of a second, and at once for a warning or an error (`dao/Log.h`). A line still costs its formatting, so pick its level by who it is for. `error` is something that failed. `warn` is something a player or a developer should look at. `info` is what a session did, a line or a few per event the player caused, not per frame. `debug` is the trace an investigation wanted, off unless `DAOLIB_LOG_LEVEL=debug`. When the investigation is closed, its lines go, or stay at `debug`.
+
 Declare it with `add_daolib_plugin(name SOURCES ...)` (`cmake/DAOLib.cmake`), as the example is: a DLL named `name.dll`, linked to `DAOLib::daolib`, written to `daolib/plugins/name/` in the build tree. `FILES` lists the plugin's own files to copy beside it after each build: a movie of its own there is served to the game when the game has none by that name (`dao::gui::AddScreen` turns this on, `HasMovie` sees it), and its talk tables are read from there (`dao/Strings.h`), so nothing goes into the game's override folder. A DLL loose in `daolib\plugins\` is not loaded; the loader's log says where it goes. Build with `.\tools\build.ps1`, and `.\tools\deploy.ps1` copies every plugin into the game (with the game closed).
 
 ## A plugin in its own repository

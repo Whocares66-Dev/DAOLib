@@ -144,7 +144,7 @@ void __stdcall EntryHook()
     loader::crashlog::StartWatchdog();
     fix::InstallArchiveReadFix();
     LoadPlugins();
-    spdlog::info("starting the game");
+    spdlog::debug("starting the game");
     g_entry.Original()();
 }
 
@@ -167,7 +167,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         loader::crashlog::StartWatchdog();
         fix::InstallArchiveReadFix();
         LoadPlugins();
-        spdlog::info("starting the game");
+        spdlog::debug("starting the game");
     }
     g_systemTime(time);
 }

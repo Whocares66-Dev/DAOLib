@@ -3,11 +3,19 @@
 #include <Windows.h>
 
 #include <ShlObj.h>
-#include <spdlog/sinks/basic_file_sink.h>
+#include <share.h>
+#include <spdlog/sinks/base_sink.h>
 
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <mutex>
+#include <stdexcept>
 #include <string>
+#include <thread>
+#include <utility>
 
 namespace dao
 {
@@ -105,6 +113,142 @@ bool OwnsLogs()
     }
 }
 
+// A log file written on a thread of its own. A plugin logs from the game's
+// frame thread, and a line written and flushed there is a disk write the
+// frame waits for, into a folder OneDrive may watch; so a line is formatted
+// and appended to a buffer in memory, and a writer thread writes the buffer
+// out: every quarter of a second, at once for a warning or an error, and
+// when it passes 64 KB. The thread is never joined: at the game's exit
+// Windows has ended it before the library's statics go, and joining it
+// there could hang the exit; the sink's destructor writes what is left if
+// it can take the lock. A crash leaves it running while the crash logger
+// works, so the last lines reach the disk. Lines past 32 MB unwritten (a
+// disk that stopped) are dropped and counted.
+class Writer
+{
+  public:
+    explicit Writer(std::FILE *file) : file_(file)
+    {
+    }
+    Writer(const Writer &) = delete;
+    Writer &operator=(const Writer &) = delete;
+    ~Writer()
+    {
+        std::fclose(file_);
+    }
+
+    void Append(std::string_view line, bool urgent)
+    {
+        {
+            const std::lock_guard lock(mutex_);
+            if (pending_.size() + line.size() > kMostPending)
+            {
+                ++dropped_;
+                return;
+            }
+            pending_.append(line);
+            urgent_ = urgent_ || urgent || pending_.size() >= kEager;
+        }
+        if (urgent)
+        {
+            wake_.notify_one();
+        }
+    }
+    void Urge()
+    {
+        {
+            const std::lock_guard lock(mutex_);
+            urgent_ = true;
+        }
+        wake_.notify_one();
+    }
+    // The writer thread's loop.
+    void Run()
+    {
+        std::string out;
+        for (;;)
+        {
+            std::size_t dropped = 0;
+            {
+                std::unique_lock lock(mutex_);
+                wake_.wait_for(lock, kLogLatency, [this] { return urgent_; });
+                urgent_ = false;
+                out.swap(pending_);
+                dropped = std::exchange(dropped_, 0);
+            }
+            Write(out, dropped);
+            out.clear();
+        }
+    }
+    // At the DLL's end: what is left, if no one holds the lock.
+    void Finish()
+    {
+        std::unique_lock lock(mutex_, std::try_to_lock);
+        if (lock.owns_lock())
+        {
+            Write(pending_, dropped_);
+            pending_.clear();
+        }
+    }
+
+  private:
+    static constexpr std::size_t kEager = 64 * 1024;
+    static constexpr std::size_t kMostPending = 32 * 1024 * 1024;
+
+    void Write(const std::string &text, std::size_t dropped)
+    {
+        if (!text.empty())
+        {
+            std::fwrite(text.data(), 1, text.size(), file_);
+        }
+        if (dropped != 0)
+        {
+            std::fprintf(file_, "[log] %zu line(s) dropped: the log could not be written fast enough\n", dropped);
+        }
+        if (!text.empty() || dropped != 0)
+        {
+            std::fflush(file_);
+        }
+    }
+
+    std::FILE *file_;
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    std::string pending_;
+    std::size_t dropped_ = 0;
+    bool urgent_ = false;
+};
+
+class BackgroundFileSink final : public spdlog::sinks::base_sink<std::mutex>
+{
+  public:
+    explicit BackgroundFileSink(std::shared_ptr<Writer> writer) : writer_(std::move(writer))
+    {
+        std::thread([writer = writer_] { writer->Run(); }).detach();
+    }
+    BackgroundFileSink(const BackgroundFileSink &) = delete;
+    BackgroundFileSink &operator=(const BackgroundFileSink &) = delete;
+    ~BackgroundFileSink() override
+    {
+        writer_->Finish();
+    }
+
+  protected:
+    void sink_it_(const spdlog::details::log_msg &message) override
+    {
+        spdlog::memory_buf_t line;
+        formatter_->format(message, line);
+        writer_->Append({line.data(), line.size()}, message.level >= spdlog::level::warn);
+    }
+    void flush_() override
+    {
+        writer_->Urge();
+    }
+
+  private:
+    std::shared_ptr<Writer> writer_;
+};
+
 } // namespace
 
 void OpenLog(std::string_view name)
@@ -122,11 +266,22 @@ void OpenLog(std::string_view name)
         const std::string stem =
             OwnsLogs() ? std::string(name) : std::string(name) + "." + std::to_string(GetCurrentProcessId());
         const auto file = directory / (stem + ".log");
-        auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(file.string(), true);
+        // Shared, as spdlog's own file sink opened it: a log is read while
+        // the game writes it, by a player tailing it and by the tools that
+        // watch a session (_wfopen_s denies every other opener, which made
+        // the logs unreadable while the game ran, DAOLib #31).
+        std::FILE *stream = _wfsopen(file.c_str(), L"wb", _SH_DENYNO);
+        if (stream == nullptr)
+        {
+            throw std::runtime_error("cannot open " + file.string());
+        }
+        auto sink = std::make_shared<BackgroundFileSink>(std::make_shared<Writer>(stream));
         auto logger = std::make_shared<spdlog::logger>(std::string(name), std::move(sink));
         const auto level = LevelFromEnvironment();
         logger->set_level(level);
-        logger->flush_on(spdlog::level::trace);
+        // A warning or an error goes out at once (the sink wakes its writer
+        // for those); the rest within a quarter of a second.
+        logger->flush_on(spdlog::level::warn);
         logger->set_pattern("[%H:%M:%S.%e] [%t] [%l] %v");
         spdlog::set_default_logger(std::move(logger));
         spdlog::info("{} {} (daolib {}), level {}", name, DAO_VERSION_STRING, DAO_VERSION_STRING,

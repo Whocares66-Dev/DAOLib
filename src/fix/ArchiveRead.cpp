@@ -126,9 +126,9 @@ std::uint32_t __fastcall SeekFile(std::byte *file, int edx, std::uint32_t origin
         constexpr std::uint32_t kThenEvery = 100;
         if (races <= kSaidEach || races % kThenEvery == 0)
         {
-            spdlog::warn("file {}: thread {} seeks it while thread {} is between its seek and its read; each reads "
-                         "at its own offset ({} so far, issue #3)",
-                         static_cast<const void *>(file), me, other, races);
+            spdlog::debug("file {}: thread {} seeks it while thread {} is between its seek and its read; each reads "
+                          "at its own offset ({} so far, issue #3)",
+                          static_cast<const void *>(file), me, other, races);
         }
     }
     return low;
@@ -175,8 +175,8 @@ std::uint32_t __fastcall ReadFromFile(std::byte *file, int edx, void *buffer, st
     if (!g_saidFirst.exchange(true))
     {
         // Once a session: the fix is in the path the engine takes.
-        spdlog::info("fixes: the first archive read at its own offset, {} bytes at {} of file {}, thread {}", read,
-                     t_seek.offset, static_cast<const void *>(file), GetCurrentThreadId());
+        spdlog::debug("fixes: the first archive read at its own offset, {} bytes at {} of file {}, thread {}", read,
+                      t_seek.offset, static_cast<const void *>(file), GetCurrentThreadId());
     }
     t_seek.offset += read;
     {

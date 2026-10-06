@@ -23,6 +23,7 @@
 #include <Psapi.h>
 #include <TlHelp32.h>
 #include <detours/detours.h>
+#include <share.h>
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
@@ -781,6 +782,10 @@ class Report
 
     static void LastLogLines(Writer &w)
     {
+        // Each DLL's log writes its lines out on a thread of its own, up to
+        // kLogLatency after they were logged; those threads run on through a
+        // crash or a stall, so waiting that long finds the last lines on disk.
+        Sleep(static_cast<DWORD>(dao::kLogLatency.count()) + 50);
         std::error_code ec;
         for (const auto &entry : std::filesystem::directory_iterator(dao::LogDirectory(), ec))
         {
@@ -893,8 +898,9 @@ void WriteLog()
     const auto path = LogPath("crash");
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
-    FILE *file = nullptr;
-    if (_wfopen_s(&file, path.c_str(), L"w") != 0 || file == nullptr)
+    // Shared: a peer reads a log while the game still writes it (DAOLib #31).
+    FILE *file = _wfsopen(path.c_str(), L"w", _SH_DENYNO);
+    if (file == nullptr)
     {
         return;
     }
@@ -1155,7 +1161,8 @@ void Stall(std::uint64_t last, std::span<std::uint32_t> buffer)
                     const auto path = LogPath("hang");
                     std::error_code ec;
                     std::filesystem::create_directories(path.parent_path(), ec);
-                    if (_wfopen_s(&file, path.c_str(), L"w") != 0 || file == nullptr)
+                    file = _wfsopen(path.c_str(), L"w", _SH_DENYNO);
+                    if (file == nullptr)
                     {
                         return;
                     }

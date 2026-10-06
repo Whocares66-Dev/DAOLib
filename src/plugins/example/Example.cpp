@@ -323,8 +323,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             last = now;
             const auto focus = camera->Focus();
             const auto at = scene->Position();
-            spdlog::info("camera: {}; focus ({:.1f}, {:.1f}, {:.1f}), camera at ({:.1f}, {:.1f}, {:.1f})", now, focus.x,
-                         focus.y, focus.z, at.x, at.y, at.z);
+            spdlog::debug("camera: {}; focus ({:.1f}, {:.1f}, {:.1f}), camera at ({:.1f}, {:.1f}, {:.1f})", now,
+                          focus.x, focus.y, focus.z, at.x, at.y, at.z);
         }
     });
 

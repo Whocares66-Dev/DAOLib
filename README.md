@@ -22,7 +22,7 @@ Visual Studio 2022 with the C++ workload, CMake and Ninja (both come with it), [
 .\tools\deploy.ps1 -Remove                     # back to stock
 ```
 
-Logs land in `Documents\BioWare\Dragon Age\daolib\`; `DAOLIB_LOG_LEVEL=debug` in the environment turns them up.
+Logs land in `Documents\BioWare\Dragon Age\daolib\`; `DAOLIB_LOG_LEVEL=debug` in the environment turns them up. A log is written on a thread of its own, so logging does not cost the game's frame a disk write.
 
 DAOLib is free software under the GNU General Public License, version 3 (`LICENSE`).
 

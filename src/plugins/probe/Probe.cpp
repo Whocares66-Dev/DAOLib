@@ -158,10 +158,10 @@ int __fastcall QueueCommand(void *self, int edx, void *command, int second, int 
     // All five words: the last is player issued (dao::Command).
     std::array<std::uint32_t, 5> words{};
     dao::TryCopy(words.data(), reinterpret_cast<std::uintptr_t>(command), sizeof words);
-    spdlog::info("QueueCommand from {:#010x} via {:#010x} {:#010x} {:#010x}: object {} at {}, command {} at {} "
-                 "[{:08x} {:08x} {:08x} {:08x} {:08x}], args {} {}, result {}",
-                 chain[0], chain[1], chain[2], chain[3], dao::TypeName(self), self, dao::TypeName(command), command,
-                 words[0], words[1], words[2], words[3], words[4], second, third, result);
+    spdlog::debug("QueueCommand from {:#010x} via {:#010x} {:#010x} {:#010x}: object {} at {}, command {} at {} "
+                  "[{:08x} {:08x} {:08x} {:08x} {:08x}], args {} {}, result {}",
+                  chain[0], chain[1], chain[2], chain[3], dao::TypeName(self), self, dao::TypeName(command), command,
+                  words[0], words[1], words[2], words[3], words[4], second, third, result);
     return result;
 }
 
@@ -196,11 +196,11 @@ void __fastcall OpenMovie(void *manager, int edx, void *screen, const dao::core:
     const std::wstring movie = name != nullptr ? std::wstring(name->View()) : std::wstring();
     g_openMovie.Original()(manager, edx, screen, name, layer, flags);
     void *record = dao::gui::FindOwner(movie);
-    spdlog::info("OpenMovie \"{}\" from {:#010x} on thread {}: screen {} at {}, layer {}, flags {:#x}; record {}, "
-                 "movie {}",
-                 dao::Utf8(movie), caller, GetCurrentThreadId(),
-                 screen != nullptr ? dao::TypeName(screen) : std::string("none"), screen, layer, flags, record,
-                 dao::gui::MovieOf(record));
+    spdlog::debug("OpenMovie \"{}\" from {:#010x} on thread {}: screen {} at {}, layer {}, flags {:#x}; record {}, "
+                  "movie {}",
+                  dao::Utf8(movie), caller, GetCurrentThreadId(),
+                  screen != nullptr ? dao::TypeName(screen) : std::string("none"), screen, layer, flags, record,
+                  dao::gui::MovieOf(record));
 }
 
 // The game writing a save and finding one to load (dao/Addresses.h,
