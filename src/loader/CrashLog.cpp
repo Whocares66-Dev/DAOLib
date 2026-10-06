@@ -930,8 +930,8 @@ std::atomic<std::uint64_t> g_resumed{0};
 // their streaming: the second stall seen, 2026-10-04 16:11, began 0.6 s
 // after a camera jump, the frame thread setting up materials and
 // textures (dev/CRASHES.md); this says so in the log instead of leaving it
-// to be reasoned out. Outdoor areas' terrain cells (state 6) are left out:
-// their load never reads loaded.
+// to be reasoned out. Outdoor areas' terrain cells (state 6) are left out
+// of both: their load never reads loaded.
 std::atomic<std::int32_t> g_roomsOwed{0};
 std::atomic<std::int32_t> g_roomsLoading{0};
 
@@ -941,6 +941,13 @@ void CountRooms()
     std::int32_t loading = 0;
     for (const dao::world::Room &room : dao::world::Rooms())
     {
+        // An indoor room alone: outdoors the rooms are the terrain's cells,
+        // state 6, whose load never reads loaded and whose loading byte
+        // stood for 179 of them in two stalls 90 s apart (DAOLib #29).
+        if (room.state < dao::world::Room::kDropped || room.state > dao::world::Room::kWantedNow)
+        {
+            continue;
+        }
         const bool wanted = room.state == dao::world::Room::kWanted || room.state == dao::world::Room::kWantedNow;
         owed += wanted && !room.Loaded() ? 1 : 0;
         loading += room.loading ? 1 : 0;
