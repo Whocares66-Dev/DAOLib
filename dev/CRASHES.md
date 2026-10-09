@@ -68,4 +68,4 @@ The log from that test (2026-09-30) named `CrashIfTesting` at `Probe.cpp:63`, th
 
 ## Crashes not yet explained
 
-None.
+- **A material's texture at a bad address, after an encounter's exit** (DAOLib #40). 2026-10-08 20:33:32, the turn-based mod's session: an access violation reading `0xBD9400CC` at `0x008698A0` (`D3DDriver::D3DGraphicsDriver` slot 72), on the frame thread, under `Graphics::MaterialTextureParam`, `MaterialPass`, `MaterialObjectInstance`, `ObjectNodeMesh`, the renderer's submission queue and umbra's visibility pass; the plugins only as the frame callback passing through. 13 s after the party used a random encounter's City Map exit (`den921ar_wide_1`). The first in hundreds of area changes. A leaving area's texture freed under an object still drawn would fit; one log does not show it.
