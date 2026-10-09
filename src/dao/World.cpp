@@ -400,9 +400,17 @@ constexpr float kNearGoal = 2.0F;             // metres, as RequestPath asks
 constexpr float kNearStart = 5.0F;            // metres, as RequestPath asks
 constexpr float kSlice = 0.01F;               // seconds of search a step
 constexpr std::int32_t kSlices = 200;
-constexpr int kAhead = 5;               // points ahead of where a search gave up, looked at for a door
-constexpr float kAheadStep = 0.5F;      // metres between them
-constexpr std::size_t kBarredAt = 0x84; // in the path: a pointer to the barred cell's point, once noted
+// Points ahead of where a search gave up, looked at for a door, and the
+// metres between them: 2.5 m in all, in steps finer than a door is thick
+// (a 0.5 m step passed over a cell door 2.2 m off, DAOLib #39).
+constexpr int kAhead = 25;
+constexpr float kAheadStep = 0.1F;
+// A closed door this near where a search stopped, whose footprint the
+// line there crosses, is taken for what stopped it (DAOLib #39).
+constexpr float kDoorNear = 3.0F;
+constexpr std::uint8_t kDoorBaseType = 1;      // placeable_basetypes: Door
+constexpr std::uint16_t kDoorClosedLocked = 1; // statecnt_door: 0 closed, 1 locked; 2 on open or dead
+constexpr std::size_t kBarredAt = 0x84;        // in the path: a pointer to the barred cell's point, once noted
 constexpr auto kLongest = std::chrono::milliseconds(40); // of the game's frame, for one search
 constexpr int kMostLegs = 6;                             // searches in all, the first and those after
 constexpr float kLegProgress = 2.0F;                     // metres nearer a leg must get to search on
@@ -701,12 +709,72 @@ class Searcher
         }
         if (!answer_.path && answer_.result == kFound && !walked.empty() && answer_.blocker == kInvalidObject)
         {
-            return BlockerAhead(walked);
+            const ObjectId ahead = BlockerAhead(walked);
+            return ahead != kInvalidObject ? ahead : ClosedDoorNear(walked.back());
         }
         return answer_.blocker;
     }
 
+    // The nearest closed door within kDoorNear of where a search stopped
+    // whose footprint the straight line from there to it crosses. A locked
+    // door's cells are not the barred cells a shut one's are: the engine's
+    // search answers "found" with a path that ends where it can get, which
+    // may be beside the door or at an angle to it, and notes no barred cell,
+    // so nothing of the engine's names it (seen in play 2026-10-06, the
+    // Arl of Denerim's dungeon: locked, a one-point path where the mover
+    // stood 2.2 m off; unlocked and shut, answer 6 at the door).
+    ObjectId ClosedDoorNear(const Vector &stop) const
+    {
+        constexpr std::size_t kAreaObjects = 0x690; // in the area: a vector of ids
+        const auto objects = TryRead<core::VectorRep<ObjectId>>(reinterpret_cast<std::uintptr_t>(area_) + kAreaObjects);
+        if (!objects || objects->first == nullptr || objects->last < objects->first ||
+            objects->last - objects->first > 100000)
+        {
+            return kInvalidObject;
+        }
+        using CoversFn = bool(__fastcall *)(CCPlaceable *, int, const Vector4 *);
+        const auto covers = reinterpret_cast<CoversFn>(Module::Address(addr::kCCPlaceable_Covers));
+        ObjectId nearest = kInvalidObject;
+        float best = kDoorNear * kDoorNear;
+        for (const ObjectId id : objects->View())
+        {
+            CCPlaceable *door = app_.GetPlaceableById(id);
+            if (door == nullptr || door->BaseType() != kDoorBaseType || door->State() > kDoorClosedLocked)
+            {
+                continue;
+            }
+            const Vector at = door->Position();
+            const float distance = DistanceSquared(at, stop);
+            if (distance > best || !Crosses(covers, door, stop, at))
+            {
+                continue;
+            }
+            best = distance;
+            nearest = id;
+        }
+        return nearest;
+    }
+
   private:
+    // Whether the line from `from` to `to` passes through a placeable's
+    // footprint, tested every kAheadStep along it.
+    template <class Covers>
+    static bool Crosses(Covers covers, CCPlaceable *placeable, const Vector &from, const Vector &to)
+    {
+        const float span = std::hypot(to.x - from.x, to.y - from.y);
+        const int steps = std::max(1, static_cast<int>(span / kAheadStep));
+        for (int i = 0; i <= steps; ++i)
+        {
+            const float t = static_cast<float>(i) / static_cast<float>(steps);
+            const Vector4 at(Vector{from.x + ((to.x - from.x) * t), from.y + ((to.y - from.y) * t), to.z});
+            if (covers(placeable, 0, &at))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The search stepped a slice at a time until it answers, or the slices
     // or the time run out.
     void Step(void *controller, std::uintptr_t path, Leg &leg)
