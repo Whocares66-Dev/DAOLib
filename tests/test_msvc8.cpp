@@ -5,10 +5,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using dao::core::VectorRep;
@@ -235,4 +238,72 @@ TEST_CASE("a GDA column is the CRC32 of its lowercased UTF-16 name", "[gda]")
     CHECK(GdaColumnHash("AutoTarget") == 0x1C7CA631u);
     CHECK(GdaColumnHash("AOE_Type") == 0x2EB7565Cu);
     CHECK(GdaColumnHash("targettype") == GdaColumnHash("TARGETTYPE")); // case does not matter
+}
+
+namespace
+{
+
+// A process's memory as words, for a list laid out at made-up addresses.
+struct Words
+{
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> at;
+    void Set(std::uint32_t address, std::uint32_t word)
+    {
+        at.emplace_back(address, word);
+    }
+    void Forget(std::uint32_t address)
+    {
+        std::erase_if(at, [address](const auto &entry) { return entry.first == address; });
+    }
+    std::optional<std::uint32_t> operator()(std::uint32_t address) const
+    {
+        const auto found = std::ranges::find(at, address, &std::pair<std::uint32_t, std::uint32_t>::first);
+        return found == at.end() ? std::nullopt : std::optional{found->second};
+    }
+};
+
+// A list at 0x100 whose head is 0x200, holding `values` in nodes at 0x300,
+// 0x310, ... (next, prev, value), the last's next the head.
+Words List(const std::vector<std::uint32_t> &values, std::uint32_t size)
+{
+    Words words;
+    words.Set(0x100 + dao::core::kListHead, 0x200);
+    words.Set(0x100 + dao::core::kListSize, size);
+    // The head's own value is unused, and readable, as in the engine's lists:
+    // a walk that went past the head would read it as a record.
+    words.Set(0x200 + dao::core::kListNodeValue, 0xDEAD);
+    std::uint32_t previous = 0x200;
+    for (std::size_t i = 0; i < values.size(); ++i)
+    {
+        const auto node = static_cast<std::uint32_t>(0x300 + (0x10 * i));
+        words.Set(previous, node);
+        words.Set(node + 4, previous);
+        words.Set(node + dao::core::kListNodeValue, values[i]);
+        previous = node;
+    }
+    words.Set(previous, 0x200);
+    return words;
+}
+
+} // namespace
+
+TEST_CASE("an engine list's values come front to back", "[msvc8]")
+{
+    const Words words = List({7, 8, 9}, 3);
+    CHECK(dao::core::ListValues(0x100, words) == std::vector<std::uint32_t>{7, 8, 9});
+    CHECK(dao::core::ListValues(0x100, List({}, 0)).empty());
+}
+
+TEST_CASE("an engine list's walk stops at its count, a word that will not read, and the head", "[msvc8]")
+{
+    // A count short of the nodes: the count wins.
+    CHECK(dao::core::ListValues(0x100, List({7, 8, 9}, 2)) == std::vector<std::uint32_t>{7, 8});
+    // A count past the nodes: the walk ends back at the head.
+    CHECK(dao::core::ListValues(0x100, List({7, 8}, 50)) == std::vector<std::uint32_t>{7, 8});
+    // A node whose next will not read ends the walk after its value.
+    Words broken = List({7, 8, 9}, 3);
+    broken.Forget(0x310);
+    CHECK(dao::core::ListValues(0x100, broken) == std::vector<std::uint32_t>{7, 8});
+    // A list that will not read at all.
+    CHECK(dao::core::ListValues(0x100, Words{}).empty());
 }

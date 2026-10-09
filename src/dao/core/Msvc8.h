@@ -32,8 +32,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace dao::core
 {
@@ -160,5 +162,42 @@ template <class Key, class Value> struct TreeRep
     }
 };
 static_assert(sizeof(TreeRep<std::int32_t, void *>) == 0xC);
+
+// A std::list of 32-bit values, as MSVC 8 lays it out: an allocator word,
+// the head node at +4 (its own value unused) and the count at +8; a node
+// is the next node, the previous one, then the value. A creature's cooldown
+// manager keeps the records that tick in one (DAOLib #38).
+inline constexpr std::uint32_t kListHead = 4;
+inline constexpr std::uint32_t kListSize = 8;
+inline constexpr std::uint32_t kListNodeValue = 8;
+
+// The values of the list at `list`, front to back, read through `read`
+// (an address to its 32-bit word, nothing where it cannot be read): as the
+// engine's own iterator steps, from the head's next round to the head, and
+// never more than the count says or past a word that will not read, so a
+// broken list cannot keep the walk going. Empty for a list that will not
+// read.
+template <class Read> std::vector<std::uint32_t> ListValues(std::uint32_t list, Read &&read)
+{
+    std::vector<std::uint32_t> values;
+    const std::optional<std::uint32_t> head = read(list + kListHead);
+    const std::optional<std::uint32_t> size = read(list + kListSize);
+    if (!head || !size || *head == 0)
+    {
+        return values;
+    }
+    std::optional<std::uint32_t> node = read(*head);
+    for (std::uint32_t i = 0; i < *size && node && *node != 0 && *node != *head; ++i)
+    {
+        const std::optional<std::uint32_t> value = read(*node + kListNodeValue);
+        if (!value)
+        {
+            break;
+        }
+        values.push_back(*value);
+        node = read(*node);
+    }
+    return values;
+}
 
 } // namespace dao::core

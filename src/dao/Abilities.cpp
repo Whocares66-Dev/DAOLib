@@ -34,10 +34,15 @@ void *Stats(ObjectId creature)
     return object != nullptr ? object->Stats() : nullptr;
 }
 
-std::uintptr_t Record(void *stats, std::int32_t ability, std::wstring_view itemTag)
+void *Manager(void *stats)
 {
     using CooldownsFn = void *(__fastcall *)(void *);
-    void *manager = reinterpret_cast<CooldownsFn>(Module::Address(addr::kCCCreatureStats_Cooldowns))(stats);
+    return reinterpret_cast<CooldownsFn>(Module::Address(addr::kCCCreatureStats_Cooldowns))(stats);
+}
+
+std::uintptr_t Record(void *stats, std::int32_t ability, std::wstring_view itemTag)
+{
+    void *manager = Manager(stats);
     if (manager == nullptr)
     {
         return 0;
@@ -46,7 +51,55 @@ std::uintptr_t Record(void *stats, std::int32_t ability, std::wstring_view itemT
     using FindFn = std::uintptr_t(__fastcall *)(void *, int, std::int32_t, const core::WStringRep *);
     return reinterpret_cast<FindFn>(Module::Address(addr::kCooldownManager_Find))(manager, 0, ability, tag.Engine());
 }
+constexpr std::size_t kTicking = 0x10; // in the manager: the records that tick, a std::list
+constexpr std::size_t kItemTag = 4;    // in a record: a std::wstring
+constexpr std::size_t kMostTag = 256;  // characters read of a tag
+
+// An engine string in the process, copied out through reads that may fail.
+std::optional<std::wstring> ReadText(std::uintptr_t at)
+{
+    const auto rep = TryRead<core::WStringRep>(at);
+    if (!rep || rep->size > kMostTag)
+    {
+        return std::nullopt;
+    }
+    if (rep->capacity <= core::WStringRep::kInlineCapacity)
+    {
+        return std::wstring(rep->data.buffer, rep->size);
+    }
+    std::wstring text(rep->size, L'\0');
+    if (!TryCopy(text.data(), reinterpret_cast<std::uintptr_t>(rep->data.pointer), rep->size * sizeof(wchar_t)))
+    {
+        return std::nullopt;
+    }
+    return text;
+}
+
 } // namespace
+
+std::vector<RunningCooldown> Cooldowns(ObjectId creature)
+{
+    std::vector<RunningCooldown> running;
+    void *stats = Stats(creature);
+    void *manager = stats != nullptr ? Manager(stats) : nullptr;
+    if (manager == nullptr)
+    {
+        return running;
+    }
+    const auto read = [](std::uint32_t at) { return TryRead<std::uint32_t>(at); };
+    for (const std::uint32_t record : core::ListValues(reinterpret_cast<std::uintptr_t>(manager) + kTicking, read))
+    {
+        const auto ability = TryRead<std::int32_t>(record);
+        const auto total = TryRead<float>(record + kTotal);
+        const auto remaining = TryRead<float>(record + kRemaining + kAttributeValue);
+        auto tag = ReadText(record + kItemTag);
+        if (ability && total && remaining && tag)
+        {
+            running.push_back({*ability, std::move(*tag), Cooldown{*remaining, *total}});
+        }
+    }
+    return running;
+}
 
 std::optional<Cooldown> GetCooldown(ObjectId creature, std::int32_t ability, std::wstring_view itemTag)
 {
@@ -80,6 +133,13 @@ bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float
     {
         return false;
     }
+    // The engine's Set acts only on the records of the creature's own
+    // abilities (the manager's first list); an item's record, which an
+    // item's use starts and only the ticking list holds (a poultice's,
+    // shared by the group), it leaves as it was. So the total is written
+    // here as Set writes it, a plain float (DAOLib #38; seen in play
+    // 2026-10-06, a poultice's hold read 2895 s left of 5).
+    *reinterpret_cast<float *>(record + kTotal) = remaining > 0 ? total : 0.0F;
     auto *left = reinterpret_cast<data::Attribute *>(record + kRemaining);
     auto *share = reinterpret_cast<data::Attribute *>(record + kShare);
     return left->Set(remaining) && share->Set(remaining > 0 ? std::min(remaining / total, 1.0F) : 0.0F);

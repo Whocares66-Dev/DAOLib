@@ -37,6 +37,10 @@
     whose packages the workers use. A mutant the tests do not catch fails the
     run. Minutes, not seconds: not part of the gate before every commit.
 
+.PARAMETER MutantNames
+    With -Mutants, only the mutants whose name holds one of these: one
+    mutant checked again after its test was mended, in seconds.
+
 .PARAMETER Jobs
     How many compilations to run at once. The default leaves two of the
     machine's cores to everything else. Also exported as
@@ -49,6 +53,7 @@
     .\tools\build.ps1 -Preset debug-analyze
     .\tools\build.ps1 -Preset release
     .\tools\build.ps1 -Preset debug -Mutants
+    .\tools\build.ps1 -Preset debug -Mutants -MutantNames msvc8-list
 #>
 [CmdletBinding()]
 param(
@@ -59,7 +64,8 @@ param(
     [switch] $Lint,
     [switch] $Mutants,
     [switch] $Fresh,
-    [int] $Jobs = 0
+    [int] $Jobs = 0,
+    [string[]] $MutantNames = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,7 +197,7 @@ try {
 
     if ($Mutants) {
         Show-Line "`n== mutants ==" -Colour Cyan
-        python (Join-Path $PSScriptRoot 'mutants.py') -j $parallel
+        python (Join-Path $PSScriptRoot 'mutants.py') -j $parallel @MutantNames
         if ($LASTEXITCODE -ne 0) { throw "mutants survived or did not build ($LASTEXITCODE)" }
     }
     Show-Line "`nOK" -Colour Green

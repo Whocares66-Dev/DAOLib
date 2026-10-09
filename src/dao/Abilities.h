@@ -74,6 +74,28 @@ std::optional<Cooldown> GetCooldown(ObjectId creature, std::int32_t ability, std
 // less with time left. On the game's thread.
 bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float total, std::wstring_view itemTag = {});
 
+// A cooldown running on a creature: which ability, the tag of the item it
+// comes from (empty for one of the creature's own), and its time.
+struct RunningCooldown
+{
+    std::int32_t ability = 0;
+    std::wstring itemTag;
+    Cooldown cooldown;
+};
+
+// Every cooldown running on a creature, whatever started it: the ability's
+// own use, a mode that would not stand, a script's SetCooldown, an item's.
+// Nothing for a creature that is not there or has none running. On the
+// game's thread.
+//
+// Read 2026-10-06 (DAOLib #38): the cooldown manager keeps, at its +0x10,
+// a std::list of the records that tick (core::ListValues), which its Tick
+// (0x0071C840) walks each frame, taking the time from each and dropping
+// one that has run out (0x0071C190). So the list is exactly what is
+// cooling, an item's ability's record among the rest. A cooldown set with
+// SetCooldown joins it as the engine's do.
+std::vector<RunningCooldown> Cooldowns(ObjectId creature);
+
 // The kinds of ability, as the scripts number them (ABILITY_TYPE_*,
 // 2da_constants_h): what a creature has of each is a list of its own.
 enum class Kind : std::int32_t

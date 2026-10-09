@@ -477,6 +477,18 @@ MUTANTS: list[Mutant] = [
         "if (text.size() < kInlineCapacity)",
     ),
     Mutant(
+        "msvc8-list-count: the list walk stops at its count",
+        MSVC8,
+        "i < *size && node",
+        "i <= *size && node",
+    ),
+    Mutant(
+        "msvc8-list-head: the list walk stops back at its head",
+        MSVC8,
+        " && *node != *head;",
+        ";",
+    ),
+    Mutant(
         "msvc8-count: the map walk stops at its count",
         MSVC8,
         "i < size && node != nullptr",

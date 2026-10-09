@@ -107,7 +107,7 @@ std::uint32_t Preferred(AddressId id);
 //   const auto caller = dao::Module::Containing(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
 //   if (caller && caller->id == kTheScriptsAddCommand) ...
 //
-// `python toolsddress_ids.py 0x0066E1B4` says the ID and offset of an
+// `python tools\address_ids.py 0x0066E1B4` says the ID and offset of an
 // address read in the GOG listing. The library does not know where a
 // function ends, only where the next ID begins; every function the
 // analysis found has an ID, so an address in code is in the function

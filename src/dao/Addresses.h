@@ -264,7 +264,11 @@ DAO_ADDRESS(kBounds_DistanceSquared, 4918)
 // SetCooldown, __thiscall on the stats (ability, float seconds, const
 // std::wstring &tag), `ret 0xC`, sets +0x20 and the seconds left to the
 // time, the share to 1, and puts the record among those that tick; it does
-// nothing for an ability with no record. Tick (0x0071C840, __thiscall on
+// nothing for an ability with no record, nor for a record outside the
+// manager's first list (its +0, the creature's own abilities' records):
+// an item's record, which only the ticking list (+0x10) holds, is left
+// as it was (0x0071D630, read 2026-10-06, DAOLib #38). Find looks in
+// both lists. Tick (0x0071C840, __thiscall on
 // the manager (float seconds), from Cooldowns' own caller) takes the time
 // from each, sets the share to what is left over +0x20, and drops a record
 // that has run out from the ticking ones. The names are ours.
