@@ -37,6 +37,7 @@
 #include "dao/ObjectId.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -95,6 +96,44 @@ struct RunningCooldown
 // cooling, an item's ability's record among the rest. A cooldown set with
 // SetCooldown joins it as the engine's do.
 std::vector<RunningCooldown> Cooldowns(ObjectId creature);
+
+// A cooldown just set by the scripts' SetCooldown: the creature, the
+// ability, the item's tag (empty for the creature's own), the seconds asked
+// (0 ends a cooldown), and the record as it reads once the engine has
+// written it.
+struct CooldownSet
+{
+    ObjectId creature = kInvalidObject;
+    std::int32_t ability = 0;
+    std::wstring itemTag;
+    float seconds = 0;
+    Cooldown cooldown;
+    // Whether the record's total is now the seconds asked: the engine's
+    // write acted. It does not on an item's record (see SetCooldown).
+    bool took = false;
+};
+
+// Calls `observer` after each cooldown the scripts set, on the game's
+// thread, the engine's write done: a hold set from it lands last. Not for
+// this library's own SetCooldown.
+//
+// Read 2026-10-08 (DAOLib #41): the cooldown manager's Set (0x0071D630) has
+// one caller, CCCreatureStats::SetCooldown, and that one, the scripts'
+// SetCooldown command; so every ability's cooldown the game starts passes
+// here, the scripts' Ability_SetCooldown as a cast begins among them,
+// whatever command or none is running. The stats keep their creature at
+// +0x5C (their constructor's argument, which the creature passes as itself,
+// 0x006B4070), checked each time against the creature's own Stats(). An
+// item's cooldown comes the same way: its record is made, like every
+// record, in the manager's first list (0x0071D6D0, the record's only
+// maker), so the drink's set takes; only once the item is spent does its
+// record leave that list (why SetCooldown writes the total itself).
+//
+// Seen in play 2026-10-09 (the turn-based mod, the Cultist Overseer's
+// fight): 87 cooldowns, every one through here, the Overseer's sustained
+// spells at 1.5 s as each cast began, and a mana potion's 5 s with its
+// item's tag, `took` true.
+void OnCooldownSet(std::function<void(const CooldownSet &)> observer);
 
 // The kinds of ability, as the scripts number them (ABILITY_TYPE_*,
 // 2da_constants_h): what a creature has of each is a list of its own.

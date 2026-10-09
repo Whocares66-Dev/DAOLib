@@ -4,6 +4,8 @@
 #include "dao/ClientExoApp.h"
 #include "dao/Data.h"
 #include "dao/Gda.h"
+#include "dao/Guard.h"
+#include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
@@ -12,7 +14,10 @@
 #include "dao/core/Msvc8.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <functional>
+#include <mutex>
 
 namespace dao::abilities
 {
@@ -75,7 +80,74 @@ std::optional<std::wstring> ReadText(std::uintptr_t at)
     return text;
 }
 
+// The scripts' SetCooldown, watched (OnCooldownSet). __thiscall on the
+// stats (ability, float seconds, const std::wstring *tag), `ret 0xC`.
+using SetCooldownFn = void(__fastcall *)(void *, int, std::int32_t, float, const core::WStringRep *);
+constexpr std::size_t kStatsCreature = 0x5C; // in the stats: the creature they belong to
+std::mutex g_setLock;
+std::vector<std::function<void(const CooldownSet &)>> g_setObservers;
+Detour<SetCooldownFn> g_setCooldown;
+thread_local bool t_ourSet = false; // in this library's own SetCooldown
+
+// The creature the stats belong to, if it reads and its own Stats() are
+// these.
+ObjectId CreatureOf(void *stats)
+{
+    const auto owner = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(stats) + kStatsCreature);
+    if (!owner || *owner == 0)
+    {
+        return kInvalidObject;
+    }
+    const auto back = TryRead<std::uintptr_t>(*owner + CCCreature::kStats);
+    const auto id = TryRead<ObjectId>(*owner + 4 + kAttributeValue);
+    return back && *back == reinterpret_cast<std::uintptr_t>(stats) && id ? *id : kInvalidObject;
+}
+
+void __fastcall SetCooldownHook(void *stats, int edx, std::int32_t ability, float seconds, const core::WStringRep *tag)
+{
+    g_setCooldown.Original()(stats, edx, ability, seconds, tag);
+    if (t_ourSet)
+    {
+        return;
+    }
+    std::vector<std::function<void(const CooldownSet &)>> observers;
+    {
+        const std::lock_guard lock(g_setLock);
+        observers = g_setObservers;
+    }
+    const ObjectId creature = observers.empty() ? kInvalidObject : CreatureOf(stats);
+    if (creature == kInvalidObject)
+    {
+        return;
+    }
+    CooldownSet set;
+    set.creature = creature;
+    set.ability = ability;
+    set.seconds = seconds;
+    set.itemTag = tag != nullptr ? std::wstring(tag->View()) : std::wstring();
+    const std::uintptr_t record = Record(stats, ability, set.itemTag);
+    const auto total = record != 0 ? TryRead<float>(record + kTotal) : std::nullopt;
+    const auto remaining = record != 0 ? TryRead<float>(record + kRemaining + kAttributeValue) : std::nullopt;
+    if (total && remaining)
+    {
+        set.cooldown = Cooldown{*remaining, *total};
+        set.took = std::fabs(*total - std::max(seconds, 0.0F)) < 1e-3F;
+    }
+    for (const auto &observer : observers)
+    {
+        detail::Guard("a cooldown callback", [&] { observer(set); });
+    }
+}
+
 } // namespace
+
+void OnCooldownSet(std::function<void(const CooldownSet &)> observer)
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_setCooldown.Attach(addr::kCCCreatureStats_SetCooldown, &SetCooldownHook); });
+    const std::lock_guard lock(g_setLock);
+    g_setObservers.push_back(std::move(observer));
+}
 
 std::vector<RunningCooldown> Cooldowns(ObjectId creature)
 {
@@ -126,8 +198,10 @@ bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float
     // record tick; then what is left and its share, as its tick sets them.
     WString tag(itemTag);
     using SetFn = void(__fastcall *)(void *, int, std::int32_t, float, const core::WStringRep *);
+    t_ourSet = true; // not told to OnCooldownSet's observers
     reinterpret_cast<SetFn>(Module::Address(addr::kCCCreatureStats_SetCooldown))(
         stats, 0, ability, remaining > 0 ? total : 0.0F, tag.Engine());
+    t_ourSet = false;
     const std::uintptr_t record = Record(stats, ability, itemTag);
     if (record == 0)
     {

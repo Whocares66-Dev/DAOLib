@@ -98,6 +98,16 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         Log(watched, "after setting");
         g_watched = watched;
     });
+    // Every cooldown the scripts set on the controlled creature, as they
+    // set it: the moment a cast begins, not when its command ends.
+    dao::abilities::OnCooldownSet([](const dao::abilities::CooldownSet &set) {
+        if (set.creature == dao::script::api::GetMainControlled())
+        {
+            spdlog::info("the scripts set ability {}{}'s cooldown to {:.2f} s: the record reads {:.2f} of {:.2f}{}",
+                         set.ability, set.itemTag.empty() ? std::string() : " (" + dao::Utf8(set.itemTag) + ")",
+                         set.seconds, set.cooldown.remaining, set.cooldown.total, set.took ? "" : ", not taken");
+        }
+    });
     dao::OnFrame(&Frame);
     return true;
 }
