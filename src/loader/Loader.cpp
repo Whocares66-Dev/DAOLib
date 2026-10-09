@@ -32,6 +32,7 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
+#include "dao/String.h"
 #include "fix/ArchiveRead.h"
 #include "loader/CrashLog.h"
 #include "loader/Proxy.h"
@@ -66,6 +67,72 @@ bool IsGameProcess()
     auto name = dao::Module::Path().filename().wstring();
     std::ranges::transform(name, name.begin(), ::towlower);
     return name == L"daorigins.exe";
+}
+
+// Each plugin's override\ subfolder (daolib\plugins\<name>\override\) is a
+// source of the engine's resource manager, as packages\core\override is
+// (DAOLib #43): its files found by name, a texture, a model, a table, and
+// its M2DA_ tables merged, by the engine itself. The subfolder, not the
+// plugin's own folder, so that a source holds the game's kinds of file
+// alone, not the plugin's DLL and its pdb. Added just after the engine adds its own sources at start, at a
+// priority just past the override folder's, so the player's override still
+// wins over a plugin and a plugin over the game's archives.
+// SetUpSources answers whether the resource manager is set up, and
+// ECWinApp's Initialize ends the game when it is not ("Failed to
+// initialize ResourceManager", 0x0040E9B6). A first form of this hook
+// answered nothing, so what was left in al was taken for the answer: the
+// game exited at start whenever a source was added (2026-10-09, the
+// turn-based mod's play checks; the exit log of DAOLib #44 showed WinMain
+// returning -1).
+using SetUpSourcesFn = bool(__cdecl *)();
+dao::Detour<SetUpSourcesFn> g_setUpSources;
+std::vector<std::filesystem::path> g_pluginFolders;
+constexpr std::int32_t kPluginPriority = 2; // OVERRIDE: is 1, PATCH: 100000; a tie is not decided by it
+constexpr std::int32_t kDirectoryKind = 1;  // a folder with its subfolders and any .erf or .rim in it
+constexpr std::int32_t kWatch = 0;          // read once; OVERRIDE:'s 1 re-lists it every fifth frame
+
+bool __cdecl SetUpSources()
+{
+    const bool setUp = g_setUpSources.Original()();
+    if (!setUp)
+    {
+        return setUp;
+    }
+    using ManagerFn = void *(__cdecl *)();
+    using AddSourceFn = bool(__fastcall *)(void *, int, const dao::core::WStringRep *, std::int32_t, std::int32_t,
+                                           std::int32_t, void **, std::int32_t, std::int32_t);
+    void *manager = reinterpret_cast<ManagerFn>(dao::Module::Address(dao::addr::kResMan_Manager))();
+    const auto add = reinterpret_cast<AddSourceFn>(dao::Module::Address(dao::addr::kResMan_AddSource));
+    if (manager == nullptr || add == nullptr)
+    {
+        spdlog::warn("resources: no resource manager; the plugins' folders are not sources");
+        return setUp;
+    }
+    for (const auto &folder : g_pluginFolders)
+    {
+        dao::WString path(folder.wstring() + L"\\");
+        const bool added = add(manager, 0, path.Engine(), kDirectoryKind, kPluginPriority, 0, nullptr, kWatch, 0);
+        spdlog::info("resources: {}\\override {}", folder.parent_path().filename().string(),
+                     added ? "is a source, as the override folder is" : "was not added as a source");
+    }
+    return setUp;
+}
+
+void ServePluginFolders(const std::vector<std::filesystem::path> &plugins)
+{
+    std::error_code ec;
+    for (const auto &dll : plugins)
+    {
+        auto folder = dll.parent_path() / L"override";
+        if (std::filesystem::is_directory(folder, ec))
+        {
+            g_pluginFolders.push_back(std::move(folder));
+        }
+    }
+    if (!g_pluginFolders.empty() && !g_setUpSources.Attach(dao::addr::kResMan_SetUpSources, &SetUpSources))
+    {
+        spdlog::warn("resources: could not detour the resource manager's set-up; the plugins' folders are not sources");
+    }
 }
 
 void LoadPlugins()
@@ -108,6 +175,7 @@ void LoadPlugins()
         }
     }
     std::ranges::sort(plugins);
+    ServePluginFolders(plugins);
 
     for (const auto &path : plugins)
     {

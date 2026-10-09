@@ -19,11 +19,14 @@
 # there yet, made by another tool, warns and is skipped): the
 # plugin's own movies (served from there when the game has none by that
 # name, dao/Gui.h), talk tables (dao/Strings.h) and data, so the whole
-# plugin is that one folder (DAOLib #26). Warnings are the caller's to set:
+# plugin is that one folder (DAOLib #26). OVERRIDE files go to its
+# override\ subfolder, which the game takes as a source of its own
+# resources, as packages\core\override (DAOLib #43): textures, materials,
+# models, M2DA_ tables. Warnings are the caller's to set:
 # DAOLib's own plugins add dao_apply_warnings.
 
 function(add_daolib_plugin name)
-    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "" "SOURCES;FILES")
+    cmake_parse_arguments(PARSE_ARGV 1 ARG "" "" "SOURCES;FILES;OVERRIDE")
     if(NOT ARG_SOURCES)
         message(FATAL_ERROR "add_daolib_plugin(${name}): no SOURCES given")
     endif()
@@ -39,8 +42,25 @@ function(add_daolib_plugin name)
     # though nothing relinks, and one not there yet warns and is skipped.
     # The script is found beside this file, from whichever repository calls
     # the function.
+    set(copies "")
+    foreach(file IN LISTS ARG_OVERRIDE)
+        cmake_path(
+            ABSOLUTE_PATH file
+            BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+        list(
+            APPEND copies
+            COMMAND
+            ${CMAKE_COMMAND}
+            -D
+            "src=${file}"
+            -D
+            "dst=${folder}/override"
+            -P
+            "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/CopyPluginFile.cmake"
+        )
+    endforeach()
     if(ARG_FILES)
-        set(copies "")
         foreach(file IN LISTS ARG_FILES)
             cmake_path(
                 ABSOLUTE_PATH file
@@ -58,6 +78,8 @@ function(add_daolib_plugin name)
                 "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/CopyPluginFile.cmake"
             )
         endforeach()
+    endif()
+    if(copies)
         add_custom_target(${name}_files ALL ${copies} VERBATIM)
         add_dependencies(${name} ${name}_files)
     endif()

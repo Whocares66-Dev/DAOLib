@@ -724,6 +724,32 @@ DAO_DATA(kScaleformResourceFile_Vftable, 63755)
 // function that calls each id's callback with its value. The name is ours.
 DAO_ADDRESS(kGuiMovie_DeliverTokens, 6777)
 DAO_ADDRESS(kResources_Find, 5034)
+// The resource manager's sources, read 2026-10-09 (DAOLib #43). At start
+// SetUpSources (__cdecl, no arguments; answers in al whether the manager
+// is set up, and ECWinApp's Initialize ends the game if not) adds the
+// game's folders and
+// archives to the manager, each by an alias and a kind and a priority,
+// a lower priority looked in first: WRITE_OVERRIDE: 0 and OVERRIDE: 1
+// (packages\core\override, kind 1, a folder walked with its
+// subfolders), PATCH: 100000, DATA: 100005. Manager (__cdecl, no
+// arguments) answers the manager, made on first use. AddSource,
+// __thiscall on it (const std::wstring *path, kind, priority, 0, void
+// **source or null, 1, 0) as OVERRIDE: is added, `ret 0x1C`: a path it
+// has already is that source again, its count one more (released by
+// name through 0x004C80F0, one count a call); otherwise it makes the
+// source by the kind's factory (kind 1, a DirectorySource, which walks
+// its folder as it is made), files it by priority and indexes its
+// resources at once (0x004C7C50, ID 4670). True for a source made or
+// joined; false for an empty path or a kind with no factory. Read in
+// full by the address library's session. Its fourth argument is a list
+// of names to skip (a std::vector<std::wstring> *, null for none), its
+// sixth whether the folder is watched for changes (re-listed every fifth
+// frame); kind 1 takes in subfolders and makes any .erf or .rim inside a
+// source of its own, kind 0 (ENV: alone) loose files only. A tie in
+// priority is broken by the source's slot 8. The names are ours.
+DAO_ADDRESS(kResMan_SetUpSources, 343)
+DAO_ADDRESS(kResMan_Manager, 4667)
+DAO_ADDRESS(kResMan_AddSource, 4671)
 DAO_ADDRESS(kResources_Release, 5021)
 // A resource's bytes (dao/Resources.h), read 2026-10-02 from the movie
 // file's constructor (its call at 0x00523412) and its length (slot 6,
