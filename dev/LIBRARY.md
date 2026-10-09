@@ -270,7 +270,7 @@ The event queue delivered 824 events: script events (queue id 10) by `EVENT_TYPE
 From the turn-based mod's side, in the same sessions (DAOTurnBased's `dev/DAOLIB_NEEDS.md`):
 
 - A plugin's screen is added from the frame callback and its movie found in the override folder.
-- An event signalled with `bProcessImmediate` from the frame callback runs the creature's script inside the call, and its `AddCommand` reaches the queue before `SignalEvent` returns.
+- An event signalled with `bProcessImmediate` from the frame callback runs the creature's script inside the call, and its `AddCommand` reaches the queue before `SignalEvent` returns. Only the script the event goes to runs at once: what that script hands on goes the usual way. A gift (`EVENT_TYPE_GIFT_ITEM` to a follower, Eluvian 2026-10-09) runs the follower's `rules_core` at once, but it only reckons the approval and signals the module (`SendHandleModuleGift`), whose handler moves the item and changes the approval a frame or more later.
 - The player's orders reach `QueueCommand` at once while the game is paused, on the scripts' thread.
 
 ## The tenth session
