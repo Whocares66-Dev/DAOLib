@@ -210,6 +210,34 @@ class Report
         }
     }
 
+    // The game ending itself (ExitProcess, or TerminateProcess on itself)
+    // before its first frame, with no exception for the crash log to see
+    // (DAOLib #44): who called, from the calling thread's own stack.
+    void WriteExit(Writer &w, const Sample &sample, std::string_view how, unsigned code)
+    {
+        sample_ = &sample;
+        Header(w, "exit logger");
+        w.Line("The game called {} with code {} ({:#x}) before its first frame: it ended itself, with no", how, code,
+               code);
+        w.Line("exception for the crash logger. The call stack below is the calling thread's, from the call.");
+        w.Blank();
+        w.Flush();
+        System(w);
+        CallStack(w);
+        w.Flush();
+        ReturnAddresses(w);
+        Stack(w);
+        w.Flush();
+        GffFiles(w);
+        EngineStrings(w);
+        w.Flush();
+        Modules(w);
+        Plugins(w);
+        LastLogLines(w);
+        w.Flush();
+        sample_ = nullptr;
+    }
+
     void WriteCrash(Writer &w, const Sample &sample)
     {
         sample_ = &sample;
@@ -1278,11 +1306,103 @@ void StartWatchdog()
                  dao::LogDirectory().string());
 }
 
+// ---------------------------------------------------------------------------
+// The exit logger
+// ---------------------------------------------------------------------------
+
+// The game ending itself. Before its first frame that is a start that
+// failed, which leaves no crash log and, until this, no word at all (the
+// game exited at start with a plugin's folder as a resource source, DAOLib
+// #43): an exit log with the caller. After it, a quit, which gets a line in
+// loader.log.
+namespace
+{
+
+using ExitProcessFn = void(WINAPI *)(UINT);
+using TerminateProcessFn = BOOL(WINAPI *)(HANDLE, UINT);
+ExitProcessFn g_exitProcess = nullptr;
+TerminateProcessFn g_terminateProcess = nullptr;
+std::atomic<bool> g_exiting{false};
+
+void WriteExitLog(const char *how, unsigned code)
+{
+    if (g_exiting.exchange(true) || g_crashing)
+    {
+        return;
+    }
+    if (g_lastFrame.load() != 0)
+    {
+        spdlog::info("the game is ending: {}({}), after its frames had begun", how, code);
+        return;
+    }
+    const auto path = LogPath("exit");
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    FILE *file = _wfsopen(path.c_str(), L"w", _SH_DENYNO);
+    if (file == nullptr)
+    {
+        return;
+    }
+    Sample sample;
+    RtlCaptureContext(&sample.context);
+    sample.thread = GetCurrentThreadId();
+    sample.stack.resize(kScanWords);
+    sample.stack.resize(CopyStack(sample.context.Esp, sample.stack));
+    Writer w(file);
+    Report report;
+    report.WriteExit(w, sample, how, code);
+    std::fclose(file);
+    spdlog::critical("the game ended itself before its first frame: {}({}); the exit log is {}", how, code,
+                     path.string());
+}
+
+void WINAPI ExitProcessHook(UINT code)
+{
+    WriteExitLog("ExitProcess", code);
+    g_exitProcess(code);
+}
+
+BOOL WINAPI TerminateProcessHook(HANDLE process, UINT code)
+{
+    if (process == GetCurrentProcess() || GetProcessId(process) == GetCurrentProcessId())
+    {
+        WriteExitLog("TerminateProcess", code);
+    }
+    return g_terminateProcess(process, code);
+}
+
+void InstallExitLogger(HMODULE kernel32)
+{
+    g_exitProcess = reinterpret_cast<ExitProcessFn>(GetProcAddress(kernel32, "ExitProcess"));
+    g_terminateProcess = reinterpret_cast<TerminateProcessFn>(GetProcAddress(kernel32, "TerminateProcess"));
+    if (g_exitProcess == nullptr || g_terminateProcess == nullptr || DetourTransactionBegin() != NO_ERROR)
+    {
+        spdlog::warn("exit logger: not installed; an exit at start leaves no word");
+        return;
+    }
+    DetourUpdateThread(GetCurrentThread());
+    if (DetourAttach(reinterpret_cast<PVOID *>(&g_exitProcess), reinterpret_cast<PVOID>(&ExitProcessHook)) !=
+            NO_ERROR ||
+        DetourAttach(reinterpret_cast<PVOID *>(&g_terminateProcess), reinterpret_cast<PVOID>(&TerminateProcessHook)) !=
+            NO_ERROR ||
+        DetourTransactionCommit() != NO_ERROR)
+    {
+        DetourTransactionAbort();
+        spdlog::warn("exit logger: not installed; an exit at start leaves no word");
+    }
+}
+
+} // namespace
+
 void Install(const std::filesystem::path &loaderFolder)
 {
     g_folder = loaderFolder;
     g_chained = SetUnhandledExceptionFilter(&Filter);
     const HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    if (kernel32 != nullptr)
+    {
+        InstallExitLogger(kernel32);
+    }
     g_setFilter = kernel32 != nullptr
                       ? reinterpret_cast<SetFilterFn>(GetProcAddress(kernel32, "SetUnhandledExceptionFilter"))
                       : nullptr;
