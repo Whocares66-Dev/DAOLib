@@ -61,3 +61,13 @@ Logs are written to `Documents\BioWare\Dragon Age\daolib\`. A plugin in a reposi
 ## License
 
 GPLv3 ([LICENSE](LICENSE)).
+
+## Thanks
+
+- [SKSE](https://skse.silverlock.org/) and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG), whose split between a loader and a library DAOLib follows, and Skyrim's [Address Library](https://www.nexusmods.com/skyrimspecialedition/mods/32444), the idea behind the [DAO address library](https://github.com/Whocares66-Dev/DAOAddressLibrary).
+- [NWNX:EE](https://github.com/nwnxee/unified) and [NWNX2 for Linux](https://github.com/NWNX/nwnx2-linux), for the names and shapes of the classes Dragon Age inherited from Neverwinter Nights' engine, and for how a plugin hooks its scripting.
+- [xoreos](https://xoreos.org/) ([source](https://github.com/xoreos/xoreos)), for the GFF4, GDA and talk-table formats and their field names, used under the GPL with its notices.
+- The [Dragon Age Toolset Wiki](https://www.datoolset.net/wiki/Main_Page) and the [Dragon Age Wiki](https://dragonage.fandom.com/), for what the scripts and the game mean.
+- The tools that made the reading possible: [Ghidra](https://ghidra-sre.org/) and [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler).
+- The libraries DAOLib builds on: [Microsoft Detours](https://github.com/microsoft/Detours), [spdlog](https://github.com/gabime/spdlog), [Catch2](https://github.com/catchorg/Catch2) and [Doxygen](https://www.doxygen.nl/).
+- BioWare, for the game and its toolset.
