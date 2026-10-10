@@ -136,6 +136,27 @@ def fix_outline_escape(output):
     navtree.write_text(text.replace("'=': '&#x3D;'", "'=': '='"), encoding="utf-8")
 
 
+# Pages given a short name of their own on the site, for links from outside it
+# (the README): Doxygen's name, without its extension, to the site's.
+PAGE_NAMES = {"md_dev_2_p_l_u_g_i_n_s": "guide"}
+
+
+def rename_pages(output):
+    """Renames each page in PAGE_NAMES, and the files Doxygen made for it, and
+    points every reference across the site at the new name."""
+    for old, new in PAGE_NAMES.items():
+        for path in output.glob(f"{old}*"):
+            path.rename(path.with_name(new + path.name[len(old) :]))
+        for path in [
+            *output.glob("*.html"),
+            *output.glob("*.js"),
+            *output.glob("search/*.js"),
+        ]:
+            text = path.read_text(encoding="utf-8")
+            if old in text:
+                path.write_text(text.replace(old, new), encoding="utf-8")
+
+
 def run_doxygen(cwd, output, warnings, ref):
     """Doxygen over docs/Doxyfile in `cwd`, its HTML into `output`, its source
     links to GitHub at `ref`."""
@@ -150,6 +171,7 @@ def run_doxygen(cwd, output, warnings, ref):
         sys.exit(f"Doxygen failed ({result.returncode}) in {cwd}")
     readable_anchors(output)
     fix_outline_escape(output)
+    rename_pages(output)
 
 
 def releases():

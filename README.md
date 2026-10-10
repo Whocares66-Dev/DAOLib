@@ -30,7 +30,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
 }
 ```
 
-The library covers the game's script commands (all 661, callable and interceptable from C++), its objects, effects and events, the Flash interface, the camera, the world's geometry, saves, key bindings and the options screen, and the engine's messages. [Writing a plugin](dev/PLUGINS.md) is the place to start; `examples/` has a small plugin for each part of the library.
+The library covers the game's script commands (all 661, callable and interceptable from C++), its objects, effects and events, the Flash interface, the camera, the world's geometry, saves, key bindings and the options screen, and the engine's messages. [Writing a plugin](https://whocares66-dev.github.io/DAOLib/guide.html) is the place to start; `examples/` has a small plugin for each part of the library.
 
 ## What is here
 
@@ -38,7 +38,7 @@ The library covers the game's script commands (all 661, callable and interceptab
 - `src/dao`: the library plugins link. Its public headers are the API the docs site documents.
 - `src/plugins`: the example plugin, and the probe, which checks the library against the game in play.
 - `examples/`: one small plugin per part of the library.
-- `dev/`: what has been learned about the engine, and the plan ([dev/PLAN.md](dev/PLAN.md)).
+- `dev/`: notes for working on DAOLib: what has been learned about the engine, and the plan.
 - `tools/`: building, deploying, the docs site, and reading the executable.
 
 ## Building
@@ -52,11 +52,11 @@ Visual Studio 2022 with the C++ workload, [vcpkg](https://github.com/microsoft/v
 python tools\build_docs.py --serve      # the docs site, at http://127.0.0.1:8045
 ```
 
-Logs are written to `Documents\BioWare\Dragon Age\daolib\`. A plugin in a repository of its own brings DAOLib in as a git submodule ([Writing a plugin](dev/PLUGINS.md#a-plugin-in-its-own-repository)).
+Logs are written to `Documents\BioWare\Dragon Age\daolib\`. A plugin in a repository of its own brings DAOLib in as a git submodule; the [guide](https://whocares66-dev.github.io/DAOLib/guide.html) says how.
 
 ## Working on DAOLib
 
-[CLAUDE.md](CLAUDE.md) has the project's rules: building, the checks every commit passes, and how the executable is read (with `tools\daoexe.py`, Ghidra, and the address library's IDs). [dev/LIBRARY.md](dev/LIBRARY.md) is how the library fits together and what has been checked in play, and [dev/TODO.md](dev/TODO.md) is what to reverse engineer next.
+[CLAUDE.md](CLAUDE.md) has the project's rules: building, the checks every commit passes, how the executable is read (with `tools\daoexe.py`, Ghidra, and the address library's IDs), and where the notes in `dev/` are.
 
 ## License
 

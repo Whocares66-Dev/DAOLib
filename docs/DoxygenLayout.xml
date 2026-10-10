@@ -7,7 +7,7 @@
   <navindex>
     <tab type="mainpage" visible="yes" title=""/>
     <tab type="pages" visible="no" title="" intro=""/>
-    <tab type="user" visible="yes" url="md_dev_2_p_l_u_g_i_n_s.html" title="Guide"/>
+    <tab type="user" visible="yes" url="guide.html" title="Guide"/>
     <tab type="topics" visible="yes" title="" intro=""/>
     <tab type="modules" visible="yes" title="" intro="">
       <tab type="modulelist" visible="yes" title="" intro=""/>
