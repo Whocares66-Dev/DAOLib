@@ -6,6 +6,16 @@ Native C++ plugins for **Dragon Age: Origins**: a loader that loads them when th
 
 It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each store's executable is different, and the [address library](https://github.com/Whocares66-Dev/DAOAddressLibrary) maps every function and global DAOLib uses in each of them, so one plugin runs in all three.
 
+## Installing
+
+Players install the loader and the address files, nothing else. A DAOLib release is a zip of `bin_ship\version.dll` (the loader) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build.
+
+## Using the library
+
+The library is a static C++ library, not a DLL: a plugin compiles it in. Add DAOLib to the plugin's repository as a git submodule and declare the plugin with `add_daolib_plugin` (the [guide](https://whocares66-dev.github.io/DAOLib/guide.html) has the details).
+
+Each plugin carries its own copy of the library, so plugins built against different versions of DAOLib run side by side. All a plugin shares with the loader is the `DAOLib_Load` call and its `kPluginApiVersion`: a plugin works with any loader of the same API version, and needs rebuilding only to use something new in the library.
+
 ## A plugin
 
 ```cpp

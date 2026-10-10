@@ -1,6 +1,6 @@
 # Writing a plugin
 
-A DAOLib plugin is a 32-bit DLL that the loader loads when Dragon Age: Origins starts. It exports one function, `DAOLib_Load`, and uses the library in `src/dao` to work with the game from C++.
+A DAOLib plugin is a 32-bit DLL that the loader loads when Dragon Age: Origins starts. It exports one function, `DAOLib_Load`, and works with the game from C++ through the library in `src/dao`, which is a static library compiled into the plugin, not a DLL of its own.
 
 To start, copy `src/plugins/example/Example.cpp`, or one of the small plugins in `examples/` (one per part of the library; `examples/README.md` lists them).
 
