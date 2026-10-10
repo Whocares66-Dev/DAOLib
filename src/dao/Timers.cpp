@@ -547,7 +547,7 @@ void OwnClock(ObjectId object, bool own)
     }
 }
 
-void Advance(ObjectId object, float seconds)
+void AdvanceObject(ObjectId object, float seconds)
 {
     const std::lock_guard lock(g_lock);
     if (g_held)
@@ -581,7 +581,7 @@ std::size_t Waiting()
     return g_events.Size() + g_released.size();
 }
 
-std::size_t Waiting(ObjectId object)
+std::size_t WaitingFor(ObjectId object)
 {
     const std::lock_guard lock(g_lock);
     return g_events.Size(object);

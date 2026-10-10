@@ -86,7 +86,7 @@ Handler Set(int id, Handler handler);
 
 // Call a handler as ExecuteCommand would: for a replacement calling on the
 // handler it replaced.
-int Call(Handler handler, int id, int paramCount);
+int CallHandler(Handler handler, int id, int paramCount);
 
 // Destroy an engine structure through the engine (the commands object's
 // DestroyGameDefinedStructure), which frees it on the engine's heap.

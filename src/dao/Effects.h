@@ -60,7 +60,7 @@ void OwnClock(ObjectId owner, bool own = true);
 // its own owner's clock). Read 2026-10-02: SEffectsHolder::AgeEffect,
 // AddElapsed's one caller, is __thiscall on the object's effects holder
 // (the object, the effect), and this follows it.
-void Advance(ObjectId owner, float seconds);
+void AdvanceObject(ObjectId owner, float seconds);
 
 // Decide per effect how much it ages: called with each temporary effect
 // and the milliseconds the engine would age it by, and returns the

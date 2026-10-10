@@ -150,15 +150,15 @@ void OwnClock(ObjectId object, bool own)
     timers::OwnClock(object, own);
 }
 
-void Advance(ObjectId object, float seconds)
+void AdvanceObject(ObjectId object, float seconds)
 {
     Attach();
     {
         const std::lock_guard lock(g_lock);
         g_owed.Advance(object, static_cast<double>(seconds) * 1000);
     }
-    effects::Advance(object, seconds);
-    timers::Advance(object, seconds);
+    effects::AdvanceObject(object, seconds);
+    timers::AdvanceObject(object, seconds);
 }
 
 } // namespace dao::clock

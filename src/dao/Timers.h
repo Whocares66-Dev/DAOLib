@@ -74,7 +74,7 @@ void OwnClock(ObjectId object, bool own = true);
 // Spend `seconds` on what is held for one object, whether or not it is on
 // its own clock: in small steps if wanted, fractions kept. Nothing while
 // not held.
-void Advance(ObjectId object, float seconds);
+void AdvanceObject(ObjectId object, float seconds);
 
 // Which kinds of script event are held whatever their delay (true), or
 // never, by kind or by delay (false): DotTick and AoeHeartbeat held, and
@@ -106,6 +106,6 @@ void Trace(bool on);
 
 // How many events wait here now, in all and for one object.
 std::size_t Waiting();
-std::size_t Waiting(ObjectId object);
+std::size_t WaitingFor(ObjectId object);
 
 } // namespace dao::timers

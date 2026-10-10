@@ -113,7 +113,7 @@ Handler Set(int id, Handler handler)
     return reinterpret_cast<Handler>(static_cast<std::uintptr_t>(previous));
 }
 
-int Call(Handler handler, int id, int paramCount)
+int CallHandler(Handler handler, int id, int paramCount)
 {
     const auto *app = CClientExoApp::Get();
     return handler(app != nullptr ? app->Commands() : nullptr, 0, id, paramCount);
@@ -539,7 +539,7 @@ template <> std::optional<Array> Pop<Array>()
 int Run(int command, int paramCount)
 {
     Handler handler = Get(command);
-    return handler != nullptr ? Call(handler, command, paramCount) : kInvalidCommand;
+    return handler != nullptr ? CallHandler(handler, command, paramCount) : kInvalidCommand;
 }
 
 } // namespace detail

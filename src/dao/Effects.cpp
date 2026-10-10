@@ -127,7 +127,7 @@ void OwnClock(ObjectId owner, bool own)
     g_owed.SetOwn(owner, own);
 }
 
-void Advance(ObjectId owner, float seconds)
+void AdvanceObject(ObjectId owner, float seconds)
 {
     Attach();
     const std::lock_guard lock(g_lock);

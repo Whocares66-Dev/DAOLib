@@ -76,7 +76,7 @@ void Log()
         }
     }
     spdlog::info("timers waiting: {}, {} of them the creature's; its effects:{}", dao::timers::Waiting(),
-                 dao::timers::Waiting(g_creature), effects.empty() ? std::string(" none timed") : effects);
+                 dao::timers::WaitingFor(g_creature), effects.empty() ? std::string(" none timed") : effects);
 }
 
 void Frame()
@@ -107,7 +107,7 @@ void Frame()
     {
         const float seconds = wall * dao::clock::Speed();
         dao::clock::Advance(seconds);
-        dao::clock::Advance(g_creature, seconds * kOwnPace);
+        dao::clock::AdvanceObject(g_creature, seconds * kOwnPace);
     }
     if (now - g_lastLog >= std::chrono::seconds(1))
     {
