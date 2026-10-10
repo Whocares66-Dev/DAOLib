@@ -1,6 +1,6 @@
-# DAOLib's documentation site (DAOLib #45): built by tools/build_docs.py with
-# Doxygen 1.18 and published to GitHub Pages on a push to master or a release
-# tag. The site's root is master's docs ("Current"); each vX.Y.Z tag is built
+# DAOLib's documentation site (DAOLib #45, #49): built by tools/build_docs.py
+# (Doxygen 1.18 for the headers' XML, Jekyll with Just the Docs for the site)
+# and published to GitHub Pages on a push to master or a release tag. The site's root is master's docs ("Current"); each vX.Y.Z tag is built
 # from its own headers into X.Y.Z/ for the version selector. A pull request
 # that touches the docs builds the site without publishing it.
 
@@ -17,6 +17,7 @@ on:
       - 'src/dao/*.h'
       - 'tools/build_docs.py'
       - 'tools/doxygen_filter.py'
+      - 'tools/doxygen_xml.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -40,12 +41,16 @@ jobs:
           # site from master plus all release tags.
           fetch-depth: 0
           ref: ${{ startsWith(github.ref, 'refs/tags/') && 'master' || github.ref }}
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: docs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Doxygen
-        # The theme's page header is Doxygen 1.18's: the distribution's older
-        # Doxygen would not match it.
+        # The version the XML was read with here; the distribution's is older.
         run: |
           version_tag="Release_${DOXYGEN_VERSION//./_}"
           curl -sSL "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz" \
@@ -61,7 +66,7 @@ jobs:
           fi
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: build/docs-site/html
+          path: build/docs-site/DAOLib
 
   deploy:
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
