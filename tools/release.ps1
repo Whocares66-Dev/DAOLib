@@ -143,6 +143,11 @@ $prerelease = $major -eq 0
 
 Show-Line "release $github  $from -> $version  (tag $tag)" -Colour Cyan
 Show-Info "address files: DAOAddressLibrary $addressVersion"
+# A commit origin's master is at already has had its site deployed, without this tag,
+# and the tag's deploy of the same commit replaces nothing (the one push, below).
+if ($Bump -eq 'none' -and (git -C $repo rev-parse origin/master).Trim() -eq (git -C $repo rev-parse HEAD).Trim()) {
+    Show-Warn "origin's master is at this commit already: the site gets $version's pages with the next push to master, not this one"
+}
 if ($prerelease) { Show-Info 'marked prerelease (0.x)' }
 if ($Draft) { Show-Info 'draft: published by hand' }
 
@@ -152,7 +157,7 @@ if ($DryRun) {
     if ($Bump -ne 'none') { $steps += "set $name VERSION to $version in CMakeLists.txt" }
     $steps += @('build the release preset and run its tests', "run tools\package.ps1 -> $zip")
     if ($Bump -ne 'none') { $steps += "commit CMakeLists.txt as `"$name $version`"" }
-    $steps += @("tag $tag, push master and the tag (the tag's push builds the site's $version pages)",
+    $steps += @("tag $tag, push master and the tag in one push (the site built for the commit then has $version's pages)",
         "gh release create $tag on $github, CHANGELOG.md's $version section its notes, the zip attached")
     $steps | ForEach-Object { Show-Info "- $_" }
     # Not return: ls-remote's 2, its "no such tag", would be left as the
@@ -190,10 +195,12 @@ New-Item -ItemType Directory -Force (Split-Path -Parent $notesFile) | Out-Null
 [IO.File]::WriteAllText($notesFile, "$notes`n", [Text.UTF8Encoding]::new($false))
 git -C $repo tag -a $tag -m "$name $version"
 if ($LASTEXITCODE -ne 0) { throw "Could not create tag $tag." }
-git -C $repo push --quiet origin HEAD
-if ($LASTEXITCODE -ne 0) { throw "Could not push master; tag $tag exists here and nothing was published." }
-git -C $repo push --quiet origin $tag
-if ($LASTEXITCODE -ne 0) { throw "Master was pushed, but tag $tag was not; push the tag before creating the release." }
+# One push for both. GitHub Pages deploys a commit's site once: each ref's push starts
+# a Documentation run for the same commit, and whichever deploys second is reported
+# done without replacing the first. Pushed apart, master's run can check out before the
+# tag is there and deploy the commit without this version's pages (DAOLib #59).
+git -C $repo push --quiet --atomic origin HEAD $tag
+if ($LASTEXITCODE -ne 0) { throw "Could not push master and tag $tag; the tag exists here and nothing was published." }
 
 $arguments = @('release', 'create', $tag, '--repo', $github, '--title', "$name $version",
     '--notes-file', $notesFile, '--verify-tag')
