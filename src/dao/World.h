@@ -271,8 +271,10 @@ struct PathSearch
     // it gave up.
     std::optional<WalkPath> partial;
     // When there is no path, the placeable in the way if one was found, usually a closed
-    // door; otherwise kInvalidObject. If the search gave up part way (`result` 1), this is
-    // whatever lies across the path just ahead, which may not be what stopped it.
+    // door; otherwise kInvalidObject. A placeable that is not active is never named, and a shut
+    // door is named before anything else in the same place. If the search gave up part way
+    // (`result` 1), this is whatever lies across the path just ahead, which may not be what
+    // stopped it.
     ObjectId blocker = kInvalidObject;
     // The pathfinder's last result code:
     // - 1: found, or gave up part way if `path` is empty

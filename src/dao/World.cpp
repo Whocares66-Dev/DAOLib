@@ -29,6 +29,7 @@
 #include "dao/Vfx.h"
 #include "dao/core/Msvc8.h"
 #include "dao/core/Path.h"
+#include "dao/generated/ScriptApi.h"
 
 #include <Windows.h>
 
@@ -543,8 +544,27 @@ class OwnSearch
     bool made_ = false;
 };
 
-// The placeable in the way at a point, as CCCreature::PathBlocker finds it
-// (dao/Addresses.h).
+// Whether a placeable is a door that is shut: closed or locked.
+bool IsShutDoor(const CCPlaceable *placeable)
+{
+    return placeable->BaseType() == kDoorBaseType && placeable->State() <= kDoorClosedLocked;
+}
+
+// The placeable in the way at a point, found as CCCreature::PathBlocker
+// finds it (dao/Addresses.h): among the area's placeables within 5 m, one
+// whose footprint holds the point. The engine answers the first such and
+// asks nothing more of it (read again 2026-10-10: CCPlaceable::Covers is
+// the footprint alone), so it names a placeable the story has made
+// inactive, which bars nothing, where a shut door beside it does: seen in
+// play 2026-10-10, Witch Hunt's Mage Tower basement, a removed barrier
+// 1.2 m from the door (DAOLib #53). So here, parting from the engine: an
+// inactive placeable is left out, and a shut door wins over any other that
+// covers the point, a 6 being a door's barred cells. Seen at that save the
+// same day (Eluvian's build, the turn-based mod's session): from 23 m down
+// the corridor the search answered 6 with the door, where it had named the
+// barrier, and the travel used the door and went through. Not seen: an
+// active placeable that is no door and a shut door on the same point, and
+// a search that gives up short of an inactive one.
 ObjectId Blocker(CClientExoApp &app, const CCArea *area, const Vector &point)
 {
     constexpr std::size_t kAreaObjects = 0x690; // in the area: a vector of ids
@@ -558,19 +578,25 @@ ObjectId Blocker(CClientExoApp &app, const CCArea *area, const Vector &point)
     const Vector4 at(point);
     using CoversFn = bool(__fastcall *)(CCPlaceable *, int, const Vector4 *);
     const auto covers = reinterpret_cast<CoversFn>(Module::Address(addr::kCCPlaceable_Covers));
+    ObjectId first = kInvalidObject;
     for (const ObjectId id : objects->View())
     {
         CCPlaceable *placeable = app.GetPlaceableById(id);
-        if (placeable == nullptr)
+        if (placeable == nullptr || DistanceSquared(placeable->Position(), point) > kReach * kReach ||
+            !covers(placeable, 0, &at) || script::api::GetObjectActive(id) == 0)
         {
             continue;
         }
-        if (DistanceSquared(placeable->Position(), point) <= kReach * kReach && covers(placeable, 0, &at))
+        if (IsShutDoor(placeable))
         {
             return id;
         }
+        if (first == kInvalidObject)
+        {
+            first = id;
+        }
     }
-    return kInvalidObject;
+    return first;
 }
 
 void LiftObstacle(std::uintptr_t controller)
@@ -816,7 +842,7 @@ class Searcher
         for (const ObjectId id : objects->View())
         {
             CCPlaceable *door = app_.GetPlaceableById(id);
-            if (door == nullptr || door->BaseType() != kDoorBaseType || door->State() > kDoorClosedLocked)
+            if (door == nullptr || !IsShutDoor(door) || script::api::GetObjectActive(id) == 0)
             {
                 continue;
             }
