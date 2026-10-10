@@ -18,6 +18,9 @@ OUTPUT_DIRECTORY       = build/docs-site
 CREATE_SUBDIRS         = NO
 FULL_PATH_NAMES        = YES
 STRIP_FROM_PATH        = . src/
+# File names as Windows makes them on Linux too (capitals escaped), so links
+# written by name, such as the menu's Guide, hold in the published build.
+CASE_SENSE_NAMES       = NO
 STRIP_FROM_INC_PATH    = src/
 MARKDOWN_SUPPORT       = YES
 AUTOLINK_SUPPORT       = YES
