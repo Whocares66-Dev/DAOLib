@@ -65,25 +65,65 @@ bool __fastcall HandleTogglePause(void *self, int edx, const void *message)
 // A crash on purpose, to test the crash logger (dev/CRASHES.md): with
 // DAOLIB_PROBE_CRASH_TEST=1 in the environment, the first SetPaused -- the
 // engine's own, at start-up, on the game's thread with engine frames below
-// it -- writes to an address nothing is mapped at. Off otherwise.
-bool g_crashTest = false;
+// it -- writes to an address nothing is mapped at. Off otherwise. With 2,
+// the address space is filled first, the crash a long session ends in where
+// the exe is not large-address-aware (Steam's, EA's): the crash logger must
+// write its log in what it kept back (DAOLib #56).
+enum class CrashTest : std::uint8_t
+{
+    kOff,
+    kCrash,
+    kFullThenCrash,
+};
+CrashTest g_crashTest = CrashTest::kOff;
 volatile std::uintptr_t g_crashTarget = 0x10; // volatile: the analyser cannot see it is bad
 
-void CrashIfTesting()
+// Every free block of address space a VirtualAlloc could still be given,
+// reserved, the largest first: 64 KiB is the smallest it hands out. Nothing
+// is committed, so no memory is used.
+void FillAddressSpace()
 {
-    if (g_crashTest)
+    constexpr std::size_t kLargest = 0x40000000;
+    constexpr std::size_t kSmallest = 0x10000;
+    for (std::size_t size = kLargest; size >= kSmallest; size /= 2)
     {
-        spdlog::warn("DAOLIB_PROBE_CRASH_TEST: crashing now, on purpose");
-        *reinterpret_cast<volatile std::uint32_t *>(g_crashTarget) = 0xDEAD;
+        while (VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS) != nullptr)
+        {
+        }
     }
 }
 
-bool CrashTestRequested()
+void CrashIfTesting()
+{
+    if (g_crashTest == CrashTest::kOff)
+    {
+        return;
+    }
+    spdlog::warn("DAOLIB_PROBE_CRASH_TEST: crashing now, on purpose");
+    if (g_crashTest == CrashTest::kFullThenCrash)
+    {
+        FillAddressSpace();
+    }
+    *reinterpret_cast<volatile std::uint32_t *>(g_crashTarget) = 0xDEAD;
+}
+
+CrashTest CrashTestRequested()
 {
     std::array<char, 8> value{};
     std::size_t length = 0;
-    return getenv_s(&length, value.data(), value.size(), "DAOLIB_PROBE_CRASH_TEST") == 0 && length > 1 &&
-           value[0] == '1';
+    if (getenv_s(&length, value.data(), value.size(), "DAOLIB_PROBE_CRASH_TEST") != 0 || length <= 1)
+    {
+        return CrashTest::kOff;
+    }
+    switch (value[0])
+    {
+    case '1':
+        return CrashTest::kCrash;
+    case '2':
+        return CrashTest::kFullThenCrash;
+    default:
+        return CrashTest::kOff;
+    }
 }
 
 // CClientExoApp::SetPaused(bool paused, bool second): __thiscall, `ret 8`.
@@ -265,9 +305,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     g_crashTest = CrashTestRequested();
-    if (g_crashTest)
+    if (g_crashTest != CrashTest::kOff)
     {
-        spdlog::warn("DAOLIB_PROBE_CRASH_TEST is set: the first SetPaused will crash the game on purpose");
+        spdlog::warn("DAOLIB_PROBE_CRASH_TEST is set: the first SetPaused will crash the game on purpose{}",
+                     g_crashTest == CrashTest::kFullThenCrash ? ", with the address space filled first" : "");
     }
     // No game object exists yet: the app is made on first use, after this.
     spdlog::info("CClientExoApp at load: {}", static_cast<void *>(dao::CClientExoApp::Get()));

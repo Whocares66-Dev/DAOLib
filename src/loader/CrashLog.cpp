@@ -65,6 +65,33 @@ EXCEPTION_RECORD g_record{};
 CONTEXT g_context{};
 DWORD g_threadId = 0;
 
+// Address space kept back for the log from the start, and released by the
+// filter before anything else. A 32-bit game that crashes with its address
+// space full leaves the report nothing to allocate in, and the log was an
+// empty file (DAOLib #56: Steam's game, which is not large-address-aware, at
+// 1,999 of 2,048 MiB with a largest free block of 3 MiB, 2026-10-10).
+// Reserved and not committed, so it costs no memory, and at the top, away
+// from where the game's own allocations grow.
+constexpr std::size_t kReserveBytes = 16 * 1024 * 1024;
+void *g_reserve = nullptr;
+
+// The process's address space as the crash found it: measured in the filter
+// before the reserve is released, with nothing allocated.
+struct AddressSpace
+{
+    std::uint64_t total = 0;
+    std::uint64_t free = 0;
+    std::uint64_t largestFree = 0;
+
+    // No room for an allocation the size of the reserve: one that failed is
+    // then the likely cause of the crash.
+    [[nodiscard]] bool AllButFull() const
+    {
+        return total != 0 && largestFree < kReserveBytes;
+    }
+};
+AddressSpace g_addressSpace;
+
 // How much of the crashing thread's stack the scans read: 64 KiB.
 constexpr std::size_t kScanWords = 16384;
 // A GFF4 file's header is 0x20 bytes; a file past 4 MiB is not one the
@@ -243,6 +270,7 @@ class Report
         sample_ = &sample;
         Header(w, "crash logger");
         Exception(w);
+        AddressSpaceAtCrash(w);
         w.Flush();
         System(w);
         CallStack(w);
@@ -490,6 +518,30 @@ class Report
             w.Line("\tcode at the fault: {}", hex);
         }
         w.Line("\tthread {}", sample_->thread);
+        w.Blank();
+    }
+
+    // The crash's own numbers, not SYSTEM's: by the time that section asks,
+    // the reserve has been released and the report has allocated.
+    static void AddressSpaceAtCrash(Writer &w)
+    {
+        if (g_addressSpace.total == 0)
+        {
+            return;
+        }
+        constexpr double kMiB = 1024.0 * 1024.0;
+        w.Line("ADDRESS SPACE AT THE CRASH:");
+        w.Line("\t{:.0f} of {:.0f} MiB in use, largest free block {:.1f} MiB",
+               static_cast<double>(g_addressSpace.total - g_addressSpace.free) / kMiB,
+               static_cast<double>(g_addressSpace.total) / kMiB,
+               static_cast<double>(g_addressSpace.largestFree) / kMiB);
+        if (g_addressSpace.AllButFull())
+        {
+            w.Line("\tAll but full: the game had nowhere left to put an allocation, and one that failed is the");
+            w.Line("\tlikely cause of this crash, whatever code it came in. This log was written in {} MiB the",
+                   kReserveBytes >> 20);
+            w.Line("\tloader had kept back for it.");
+        }
         w.Blank();
     }
 
@@ -934,16 +986,67 @@ void WriteLog()
     {
         return;
     }
-    Writer w(file);
-    Sample sample;
-    sample.context = g_context;
-    sample.thread = g_threadId;
-    sample.stack.resize(kScanWords);
-    sample.stack.resize(CopyStack(g_context.Esp, sample.stack));
-    Report report;
-    report.WriteCrash(w, sample);
+    if (g_addressSpace.AllButFull())
+    {
+        constexpr double kMiB = 1024.0 * 1024.0;
+        spdlog::critical("the game crashed with its address space all but full: {:.0f} of {:.0f} MiB in use, "
+                         "largest free block {:.1f} MiB",
+                         static_cast<double>(g_addressSpace.total - g_addressSpace.free) / kMiB,
+                         static_cast<double>(g_addressSpace.total) / kMiB,
+                         static_cast<double>(g_addressSpace.largestFree) / kMiB);
+    }
+    // An allocation can fail yet, the reserve notwithstanding. Uncaught on
+    // this thread it would end the process with whatever of the log had not
+    // been flushed lost; caught, the log says where it stopped.
+    try
+    {
+        Writer w(file);
+        Sample sample;
+        sample.context = g_context;
+        sample.thread = g_threadId;
+        sample.stack.resize(kScanWords);
+        sample.stack.resize(CopyStack(g_context.Esp, sample.stack));
+        Report report;
+        report.WriteCrash(w, sample);
+    }
+    catch (const std::exception &error)
+    {
+        std::fputs("\nThe log ends here: writing it failed (", file);
+        std::fputs(error.what(), file);
+        std::fputs(").\n", file);
+    }
     std::fclose(file);
     spdlog::critical("the game crashed; the crash log is {}", path.string());
+}
+
+// Every free region between the lowest and highest addresses a process may
+// use, asked of Windows one region at a time: nothing is allocated, so it
+// runs in the filter with the address space as the crash left it.
+AddressSpace MeasureAddressSpace()
+{
+    SYSTEM_INFO system{};
+    GetSystemInfo(&system);
+    const auto low = reinterpret_cast<std::uintptr_t>(system.lpMinimumApplicationAddress);
+    const auto high = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
+    AddressSpace space;
+    space.total = static_cast<std::uint64_t>(high - low) + 1;
+    MEMORY_BASIC_INFORMATION region{};
+    std::uintptr_t at = low;
+    while (at < high && VirtualQuery(reinterpret_cast<LPCVOID>(at), &region, sizeof region) != 0)
+    {
+        if (region.State == MEM_FREE)
+        {
+            space.free += region.RegionSize;
+            space.largestFree = std::max<std::uint64_t>(space.largestFree, region.RegionSize);
+        }
+        const std::uintptr_t next = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+        if (next <= at)
+        {
+            break;
+        }
+        at = next;
+    }
+    return space;
 }
 
 DWORD WINAPI WriterThread(LPVOID /*unused*/)
@@ -960,6 +1063,13 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
         g_record = *pointers->ExceptionRecord;
         g_context = *pointers->ContextRecord;
         g_threadId = GetCurrentThreadId();
+        // Before the writer's thread, whose stack is itself an allocation.
+        g_addressSpace = MeasureAddressSpace();
+        if (g_reserve != nullptr)
+        {
+            VirtualFree(g_reserve, 0, MEM_RELEASE);
+            g_reserve = nullptr;
+        }
         // The log is written on a thread of its own: this one may be out of
         // stack, and it is the one whose stack the log reads.
         HANDLE writer = CreateThread(nullptr, 0, &WriterThread, nullptr, 0, nullptr);
@@ -1398,6 +1508,7 @@ void InstallExitLogger(HMODULE kernel32)
 void Install(const std::filesystem::path &loaderFolder)
 {
     g_folder = loaderFolder;
+    g_reserve = VirtualAlloc(nullptr, kReserveBytes, MEM_RESERVE | MEM_TOP_DOWN, PAGE_NOACCESS);
     g_chained = SetUnhandledExceptionFilter(&Filter);
     const HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
     if (kernel32 != nullptr)

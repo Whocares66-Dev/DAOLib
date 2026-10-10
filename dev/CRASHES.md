@@ -8,6 +8,7 @@ The loader (`src/loader/CrashLog.cpp`) installs a crash logger before anything e
 |---|---|
 | Header | The exe's link stamp, whether it is the build DAOLib knows, the time |
 | Unhandled exception | The code by name, the address and what it is, for an access violation the address read or written, and the first bytes of code at the fault |
+| ADDRESS SPACE AT THE CRASH | How much of the process's address space was in use and its largest free block, measured in the filter before anything is allocated. When the largest free block is under 16 MiB it says the space was all but full and that a failed allocation is the likely cause ("Out of address space", below). |
 | SYSTEM | Windows, physical memory, and the process's address space. DAO is 32-bit, so address space runs out long before memory does. |
 | PROBABLE CALL STACK | dbghelp's walk of the crashing thread. Exact through our DLLs and Windows, with file and line for ours. It can stop early in the game's own code, which has no frame data. |
 | RETURN ADDRESSES ON THE STACK | Every value in the stack's first 64 KiB that is a return address into any module (`dao/core/CallSite.h`), the first 128 of them (64 until 2026-10-02, which stopped one crash's list a frame short of the caller that mattered). This keeps going where the walk stops: the game's callers, innermost first. A few may be stale values from earlier calls. |
@@ -46,6 +47,12 @@ A stall that ends leaves no crash log, so the loader also keeps a watchdog (DAOL
 
 It is an unhandled-exception filter, and the game's C runtime installs one of its own at start-up. So the logger also detours `SetUnhandledExceptionFilter`. A filter the game sets afterwards is remembered and called after ours, so the game's own handling still happens, and Windows Error Reporting still records the crash. The log is written on a new thread, because the crashing thread may be out of stack. The crashing thread waits up to a minute for it.
 
+## Out of address space
+
+The game is 32-bit, and Steam's and EA's executables are not large-address-aware: 2 GiB of address space, where GOG's has 4. A long session there ends with the space full and an allocation failing, and the crash that follows can be in any code: the play tester's, 2026-10-10 in Steam's game, was an access violation in `D3DDriver::D3DTextureVolume::vfunction22+0x27` (GOG `0x00874AB7`) with the process at 1,999 of 2,048 MiB and a largest free block of 3 MiB. The log of it was an empty file (DAOLib #56): the report allocates (the module list, the function names, dbghelp's symbols, every line it formats), and an allocation failing on the writer's thread ended the process with nothing written.
+
+So the loader reserves 16 MiB of address space when the crash logger is installed, before any game code runs: reserved and not committed, so it costs no memory, and at the top of the space, away from where the game's allocations grow. The filter measures the address space (a walk of `VirtualQuery`, which allocates nothing), releases the reserve, and only then starts the writer's thread. The measurement is the log's ADDRESS SPACE AT THE CRASH section, and when the space was all but full `loader.log` says so in one line as well. An allocation that fails even so ends the log with "The log ends here: writing it failed", not the process.
+
 ## Testing it
 
 With `DAOLIB_PROBE_CRASH_TEST=1` in the game's environment, the probe crashes on purpose on the game's thread, in the first `SetPaused` at start-up. Start the game with the variable set only for that run:
@@ -55,6 +62,16 @@ $env:DAOLIB_PROBE_CRASH_TEST = '1'; Start-Process "...\bin_ship\DAOrigins.exe" -
 ```
 
 The log from that test (2026-09-30) named `CrashIfTesting` at `Probe.cpp:63`, the hook at `Probe.cpp:87`, the engine's `FUN_005DD310` below it, and the chain down to `Eclipse::UpdateTask` on a `Multithreading::Thread`.
+
+With `DAOLIB_PROBE_CRASH_TEST=2` the probe fills the address space first: it reserves every free block of 64 KiB or more, the largest first, so no `VirtualAlloc` can succeed, and then crashes the same way. The log must be whole all the same, written in the 16 MiB the loader kept back, with "All but full" in its ADDRESS SPACE AT THE CRASH section.
+
+**Seen in play 2026-10-10**, by the play tester with the release build that became 0.1.0 (`version.dll` SHA-256 `46B57896...1A2CF`), the first time a release build ran in the game:
+
+- **`1`, GOG's game:** a log of 1,063 lines. "1643 of 4096 MiB in use, largest free block 2030.3 MiB", and no "All but full". The call stack's first frame is `probe.dll+7D26 SetPaused+0x136 (Probe.cpp:142)`, then the engine's `FUN_005dd310+0x3f`: a release build inlines `CrashIfTesting` into the hook, so the frame has the hook's name, with the file and line of the write. The release PDBs name our frames.
+- **`2`, GOG's game:** a whole log, 1,066 lines through its LAST LINES sections. "4089 of 4096 MiB in use, largest free block 0.1 MiB", "All but full", the same call stack, and `loader.log`'s line.
+- **`2`, Steam's game**, the build the fix is for: a whole log, 1,066 lines. "2042 of 2048 MiB in use, largest free block 0.1 MiB", "All but full", the probe's frame named the same way.
+
+So 16 MiB is enough for the report with the loader's PDB and two plugins' (8 MiB each) to read. It was not tried with more plugins than that, nor with `functions.tsv` in Steam's folder.
 
 ## The crashes it has explained
 
