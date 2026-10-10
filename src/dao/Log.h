@@ -22,8 +22,9 @@ std::filesystem::path LogDirectory();
 // reading another DLL's log for its latest lines.
 inline constexpr std::chrono::milliseconds kLogLatency{250};
 
-// Opens <name>.log in LogDirectory(), replacing the previous run's file, and makes it this DLL's
-// default spdlog logger. The first line says which log level is in effect.
+// Opens <name>.log in LogDirectory() and makes it this DLL's default spdlog logger. The previous
+// run's file is kept as <name>.previous.log, one generation. The first line says which log level is
+// in effect.
 // @param name the start of the file name, usually the plugin's name
 //
 // Call it once per DLL; later calls do nothing. Lines are written by a background thread, so

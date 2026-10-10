@@ -819,7 +819,8 @@ class Report
         for (const auto &entry : std::filesystem::directory_iterator(dao::LogDirectory(), ec))
         {
             const auto name = entry.path().filename().string();
-            if (entry.path().extension() != ".log" || name.starts_with("crash-"))
+            // Not a crash log, nor the session before's (DAOLib #47).
+            if (entry.path().extension() != ".log" || name.starts_with("crash-") || name.ends_with(".previous.log"))
             {
                 continue;
             }

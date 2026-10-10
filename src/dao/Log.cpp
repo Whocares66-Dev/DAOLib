@@ -275,9 +275,20 @@ void OpenLog(std::string_view name)
     {
         const auto directory = LogDirectory();
         std::filesystem::create_directories(directory);
+        const bool owner = OwnsLogs();
         const std::string stem =
-            OwnsLogs() ? std::string(name) : std::string(name) + "." + std::to_string(GetCurrentProcessId());
+            owner ? std::string(name) : std::string(name) + "." + std::to_string(GetCurrentProcessId());
         const auto file = directory / (stem + ".log");
+        if (owner)
+        {
+            // The last session's log is kept, one generation, as
+            // <name>.previous.log: a game that crashed and was started again at
+            // once lost the log of the very session that crashed (DAOLib #47).
+            // A reader holding the file open without sharing delete keeps the
+            // rename from happening; then the log starts over, as before.
+            std::error_code kept;
+            std::filesystem::rename(file, directory / (stem + ".previous.log"), kept);
+        }
         // Shared, as spdlog's own file sink opened it: a log is read while
         // the game writes it, by a player tailing it and by the tools that
         // watch a session (_wfopen_s denies every other opener, which made

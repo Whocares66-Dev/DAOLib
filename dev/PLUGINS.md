@@ -31,7 +31,7 @@ This plugin opens its own log, refuses to load into a loader or game it wasn't b
 
 Declare it in CMake with `add_daolib_plugin(myplugin SOURCES Plugin.cpp)` (`cmake/DAOLib.cmake`). Build with `.\tools\build.ps1`, and copy every plugin into the game with `.\tools\deploy.ps1` while the game is closed.
 
-**Logging.** Writing a log line doesn't slow the game: lines are buffered and written by the log's own thread every quarter of a second, and at once for a warning or an error. Formatting a line still costs a little, so choose its level by who it is for:
+**Logging.** Each start writes a fresh `<name>.log` and keeps the previous session's as `<name>.previous.log`, so a crash's log survives the next start. Writing a log line doesn't slow the game: lines are buffered and written by the log's own thread every quarter of a second, and at once for a warning or an error. Formatting a line still costs a little, so choose its level by who it is for:
 
 - `error`: something failed.
 - `warn`: something a player or a developer should look at.
