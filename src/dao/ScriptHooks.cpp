@@ -1,3 +1,19 @@
+// Intercepting script commands.
+//
+// An intercept takes the command's slot in the engine's table (dao/Script.h)
+// and keeps the handler it found there, which Proceed runs, so intercepts
+// from several plugins chain: each Proceeds into the one installed before it,
+// the last into the engine. One that answers without Proceed pops the
+// arguments itself (Stack::Pop*) and pushes its answer.
+//
+// The table is filled after plugins load, so an intercept made at load is
+// installed the moment the engine has made it (OnCommandsReady, which detours
+// CVirtualMachineCommands::InitializeCommands, dao/Addresses.h); one made
+// later is installed at once. Intercepts run on the scripts' thread, in the
+// middle of a script.
+//
+// The scripts' thread is the one that ran InitializeCommands: seen in play
+// 2026-09-30, every script command came on it.
 #include "dao/ScriptHooks.h"
 
 #include "dao/Addresses.h"

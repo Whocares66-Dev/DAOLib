@@ -1,16 +1,9 @@
-// A plugin's own code on every frame of the game's update.
+// Runs a plugin's code once every frame, on the game thread.
+//
+// The callbacks run on the same thread as the game's scripts, so they may call script commands
+// and send messages. The rest of the library calls this thread the game thread.
 //
 //   dao::OnFrame([] { overlay.Refresh(); });
-//
-// The game updates as a task on the engine's worker threads (Eclipse::
-// UpdateTask, whose slot 3 calls the per-frame update, dao/Addresses.h).
-// OnFrame detours that update and runs its callbacks just before it, on
-// the thread that runs it, once per frame. That is the thread the scripts
-// run on (FrameThreadId() equalled dao::script::ScriptThreadId() in play,
-// 2026-09-30), so a callback may call script commands and send messages;
-// and the update runs while the game is paused too.
-//
-// A callback runs inside the frame: keep it short, and do not block.
 #pragma once
 
 #include <cstdint>
@@ -19,13 +12,16 @@
 namespace dao
 {
 
-// Adds a callback; the first call detours the update. At plugin load or later.
+// Adds a callback to run once per frame, just before the game's update.
+// @param callback runs inside the frame, so keep it short and never block
+//
+// Call it when the plugin loads or later. Callbacks also run while the game is paused.
 void OnFrame(std::function<void()> callback);
 
-// The thread the last frame ran on, 0 before the first.
+// Returns the ID of the game thread, the one the last frame ran on; 0 before the first frame.
 std::uint32_t FrameThreadId();
 
-// Frames since the first callback was added.
+// Returns how many frames have run since the first callback was added.
 std::uint64_t FrameCount();
 
 } // namespace dao

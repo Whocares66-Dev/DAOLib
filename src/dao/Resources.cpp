@@ -1,3 +1,11 @@
+// The game's files, through the engine's resource system.
+//
+// Read 2026-10-02 (dao/Addresses.h, "A resource's bytes"): what the Flash
+// interface's movie file does to open a movie, Resources::Find with the
+// name and the mode it asks with, then the resource's Data and Size, and
+// Release. Seen in play 2026-10-02 by the turn-based mod: rules_core.ncs
+// read as 251,960 bytes, the size of the shipped one in
+// designerscripts.rim.
 #include "dao/Resources.h"
 
 #include "dao/Addresses.h"

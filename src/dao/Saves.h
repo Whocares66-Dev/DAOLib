@@ -1,65 +1,20 @@
-// A plugin's own data with the game's saves, as SKSE's co-saves keep a
-// plugin's beside a Skyrim save: a file of the plugin's own in each save's
-// folder, written when the game saves and read when a playthrough is
-// loaded.
+// Stores a plugin's own data alongside the game's saves, like SKSE's co-saves in Skyrim: each
+// plugin gets a file in the save's folder, written when the game saves and read when a save is
+// loaded. It can also list the saves and tell the game to save or load, for tools that drive the
+// game.
 //
-//   std::string g_notes;   // the plugin's state, for the playthrough loaded now
+//   std::string g_notes;   // the plugin's state for the game loaded now
 //
 //   dao::saves::OnGameLoaded([](const std::optional<dao::saves::Slot> &save) {
-//       // Nothing for a new game, or a save from before the plugin.
+//       // Nothing for a new game, or for a save this plugin never wrote to.
 //       g_notes = save ? save->Read("myplugin").value_or("") : "";
 //   });
 //   dao::saves::OnSaved([](const dao::saves::Slot &save) { save.Write("myplugin", g_notes); });
 //
-// examples/saves/ is a whole plugin that does this.
+//   dao::saves::Load({L"Aedan", 1, dao::saves::Kind::Manual}); // OnGameLoaded runs once loaded
+//   dao::saves::Save(dao::saves::Kind::Quick);                  // OnSaved runs once written
 //
-// And asking the game to save or load, as its menus and keys do, for a
-// tool that drives the game (a test harness loading the same save each
-// run):
-//
-//   dao::saves::Load({L"Aedan", 1, dao::saves::Kind::Manual}); // OnGameLoaded says when it is in
-//   dao::saves::Save(dao::saves::Kind::Quick);                  // OnSaved says when it is written
-//
-// What goes in the file is the plugin's own: text, JSON, binary. Each
-// plugin has its own file per save, <slot folder>\<plugin>.daolib, so
-// there is nothing to share and no framing; a plugin that may change its
-// format keeps a version in it. Both callbacks run on the game's thread,
-// one at a time, as the game's own saving and loading do, so plugin state
-// they share needs no lock. They must not throw: an exception has no way
-// back through the game's code.
-//
-// Read 2026-09-30 (dev/SAVES.md):
-//
-// - Saving. SaveGame::Write (dao/Addresses.h) writes a save with the
-//   character, the slot and the kind resolved; in play a quicksave asked
-//   for "any slot" and Write was called for slot 1, kind 2, and returned
-//   1. OnSaved runs after Write returns and has succeeded.
-// - Loading. A load looks for its file with SaveGame::FindSave, with the
-//   same three (in play once per load), before the game reads the save;
-//   the world is built after. OnGameLoaded runs at the module's load
-//   event (EVENT_TYPE_MODULE_LOAD) that follows, with the save's slot, the
-//   world there. The event alone is not enough: BioWare's module_core.nss
-//   says it "can fire more than once for a single module", so a load
-//   event with no save found before it is not a load and calls nothing.
-// - A new game. module_core.nss: EVENT_TYPE_MODULE_START happens "only
-//   once for a single game instance". OnGameLoaded runs there with no
-//   slot, so a plugin starts a new playthrough from nothing rather than
-//   from the one loaded before it.
-//
-// Seen in play: Write and FindSave with their slots, and the load event
-// once per load. The callbacks, seen 2026-10-05 by the turn-based mod (its
-// file of each companion's choice): launching straight into a save, a
-// manual save written with its file (OnSaved, the slot right), and three
-// loads in a running game in a row, each told once with its slot, a save
-// with no file of the plugin's read as nothing; then an autosave on a first
-// entry into a new area (its slot, AutoSave_3, and its file written in the
-// same second as the game's) and that autosave loaded. Not yet seen: a
-// quicksave, and the module's start event for a new game. An early quicksave in play wrote
-// its files without Write being heard; read 2026-10-05, Write is the only
-// code that names a save's files and the loading mode's worker its only
-// caller, so every save of every kind goes through it, and that one was
-// most likely made before the hook was in place. A save deleted from the game's menu
-// takes its folder with it, and the plugin's file too.
+// examples/saves/ is a complete plugin that stores its data with the saves.
 #pragma once
 
 #include "dao/core/SaveMeta.h"
@@ -75,17 +30,16 @@
 namespace dao::saves
 {
 
-// The scripts have no constants for these; the engine's checks and the
-// folder names say what they are.
+// The kinds of save. The numbers are the engine's own; the scripts have no constants for them.
 enum class Kind : std::int32_t
 {
-    Manual = 0, // Slot_<n>, a save the player named or chose
-    Auto = 1,   // AutoSave_<n>, 1 to 4
+    Manual = 0, // Slot_<n>: a save the player named, or a slot the player chose
+    Auto = 1,   // AutoSave_<n>, numbered 1 to 4
     Quick = 2,  // QuickSave_<n>
-    Other = 3,  // a fourth kind the checks allow, not seen
+    Other = 3,  // a fourth kind the engine accepts; the game does not appear to use it
 };
 
-// "manual", "auto", "quick" or "other", for logs.
+// Returns "manual", "auto", "quick" or "other", for logging.
 constexpr std::string_view Name(Kind kind)
 {
     switch (kind)
@@ -101,14 +55,14 @@ constexpr std::string_view Name(Kind kind)
     }
 }
 
-// The highest slot number the engine saves to for a kind; the lowest is 1
-// (0 for a manual save, which the check lets through). Read 2026-10-05
-// (DAOLib #37) in SaveLoadProxy::HandleMessage_SaveGameMessage
-// (0x006D1C60), which refuses any other: a manual save asked for "a new
-// slot" (below 0) takes the next number from the proxy's +0x6C, so a
-// character with slots 1 to 500 taken can make no more manual saves, and
-// the game starts none (seen by the turn-based mod's session). The numbers
-// are literals in that code, not data.
+// Notes on MostSlot: read 2026-10-05 (DAOLib #37) in SaveLoadProxy::HandleMessage_SaveGameMessage
+// (0x006D1C60), which refuses any other slot. A manual save asked for "a new slot" (below 0)
+// takes the next number from the proxy's +0x6C, so a character with slots 1 to 500 taken can make
+// no more manual saves, and the game starts none (seen by the turn-based mod's session). The
+// numbers are literals in that code, not data.
+
+// Returns the highest slot number the game saves to for a kind. The lowest is 1, though the game
+// also accepts a manual save to slot 0.
 constexpr std::int32_t MostSlot(Kind kind)
 {
     switch (kind)
@@ -122,119 +76,111 @@ constexpr std::int32_t MostSlot(Kind kind)
     }
 }
 
+// One save slot of one character.
 struct Slot
 {
-    std::wstring character; // the character's folder, "Aedan"
+    std::wstring character; // the character's folder name, for example "Aedan"
     std::int32_t number = 0;
     Kind kind = Kind::Manual;
 
-    // The plugin's data in this save, the whole file; nothing if it has
-    // none (a save from before the plugin, or one it never wrote to).
+    // Reads this plugin's data from the save: the whole of its file.
+    // @param plugin the plugin's name, which is also the name of its file
+    // @return the data, or nullopt if the save has none, because it is older than the plugin or
+    // the plugin never wrote to it
     std::optional<std::string> Read(std::string_view plugin) const;
-    // Writes the plugin's data for this save, replacing any. The file is
-    // written beside and then moved into place, so a save never holds half
-    // of one. False if it could not be written.
+
+    // Writes this plugin's data for the save, replacing what was there.
+    // @param plugin the plugin's name, which is also the name of its file
+    // @param data any bytes: text, JSON or binary
+    // @return false if the file could not be written
+    //
+    // The data goes to a temporary file that is then moved into place, so a save never holds a
+    // half-written file. Each plugin has its own file in each save, so the data needs no framing.
+    // If your format may change, store a version number in the data.
     bool Write(std::string_view plugin, std::string_view data) const;
 
-    // The file itself, <slot folder>\<plugin>.daolib, for a plugin that
-    // would rather stream it.
+    // Returns the path of this plugin's file in the save, <slot folder>\<plugin>.daolib, for a
+    // plugin that would rather stream it.
     std::filesystem::path File(std::string_view plugin) const;
-    // The slot's folder, as the game names it (SaveGame::SlotFolder):
-    // <documents>\BioWare\Dragon Age\Characters\<character>\Saves\
-    // <Slot_|AutoSave_|QuickSave_><n>. The engine's own answer, so it
-    // follows wherever the game keeps its saves.
+
+    // Returns the slot's folder, for example
+    // <documents>\BioWare\Dragon Age\Characters\<character>\Saves\Slot_<n>. The path comes from
+    // the game itself, so it is right wherever the game keeps its saves.
     std::filesystem::path Folder() const;
 
-    // Whether there is a save in the slot: a .das in its folder.
+    // Returns whether the slot holds a save, that is, a .das file in its folder.
     bool Exists() const;
-    // The save's metadata (its .das.met), what the load screen shows of
-    // it: the area, the time played, the character's level and the save's
-    // name. Nothing if the slot has none, or it cannot be read.
+
+    // Reads the save's metadata from its .das.met file: what the load screen shows, such as the
+    // area, the time played, the character's level and the save's name.
+    // @return the metadata, or nullopt if the slot has none or it cannot be read
     std::optional<core::SaveMeta> Meta() const;
 };
 
-// After the game has written a save, with its slot.
+// Registers a callback that runs each time the game writes a save, once the save is written.
+// @param callback receives the slot that was written
+//
+// Callbacks run on the game thread, one at a time, so state shared with OnGameLoaded callbacks
+// needs no lock. They must not throw.
 void OnSaved(std::function<void(const Slot &saved)> callback);
 
-// When a playthrough is in the world: after a save has loaded, with the
-// slot it came from, or when a new game starts, with none.
+// Registers a callback that runs each time a game starts in the world: a save loaded, or a new
+// game.
+// @param callback receives the slot the save came from, or nullopt for a new game
+//
+// Callbacks run on the game thread, one at a time, and must not throw. They run while the game
+// mode still reads as loading; if you need the world in play, also wait for explore mode.
 void OnGameLoaded(std::function<void(const std::optional<Slot> &loaded)> callback);
 
-// Asking the game to save or load: the messages its menus and keys send to
-// its save proxy (SaveLoadProxy, the application's +0x150; dev/SAVES.md),
-// read 2026-09-30. From the main menu or in the world, on the game's thread
-// (a frame callback). Seen in play, 2026-10-01, through the Eluvian server:
-// Characters, List and Meta listed the ten saves there, and Load of a
-// manual save, asked at the main menu, had it loaded and in explore mode 14
-// s later with no menu touched, OnGameLoaded called. A second, with no
-// add-ins in the way, was asked 2 s after the menu came up and was loaded
-// 11 s after the process started. OnGameLoaded is called while the game's
-// mode still reads loading, explore mode coming a moment after: a caller
-// that wants the world in play waits for the mode as well. Save is not yet
-// seen.
-
-// The characters the game has saves for, by their folders' names, as its
-// load screen lists them. Read from the save proxy's list, which the game
-// fills from the folders when its load screen opens; asking refreshes it
-// first if it is empty.
+// Returns the characters that have saves, by folder name, as the load screen lists them.
+// @return the names, or an empty vector before the game has finished starting
+//
+// Call it on the game thread, at the main menu or in the world.
 std::vector<std::wstring> Characters();
 
-// The character a save or load means now: the one played, in the world;
-// at the main menu, the one the load screen chose last, else the first.
+// Returns the character that a save or load applies to now. In the world, that is the character
+// being played; at the main menu, it is the one last chosen in the load screen, or else the first.
+// @return the folder name, or an empty string before the game has finished starting
 std::wstring Character();
 
-// The slots a character has saves in, from its folders, manual saves
-// first, then autosaves and the quicksave, each by number.
+// Returns a character's save slots: manual saves first, then autosaves, then quicksaves, each in
+// order of number.
+// @param character the character's folder name
 std::vector<Slot> List(std::wstring_view character);
 
-// Loads a save, as the load screen does: the load screen's mode set, the
-// character chosen, then LoadGameMessage. False, and nothing asked, if the
-// slot has no save, the game knows no such character, or the application
-// is not up; true if the game was asked, which it may still decline (in a
-// cutscene, say). When the world is there, OnGameLoaded is called with the
-// slot. A character's own name chooses it, empty the one Character() says.
-// A save that needs content the game does not have registered stops at the
-// game's own "requires the following content" dialog (Force Load or
-// Cancel): Load has answered true and nothing follows until the player
-// answers it (in play, 2026-10-01, after another install of the game had
-// rewritten Settings\AddIns.xml). Seeing that dialog from a plugin is not
-// read; a caller that must know waits for OnGameLoaded with a time limit.
+// Loads a save, the same way the load screen does.
+// @param save the slot to load; an empty `character` means the one Character() returns
+// @return true if the request went to the game, which may still refuse it (in a cutscene, for
+// example); false, with no request made, if the slot holds no save, the game knows no such
+// character, or the game has not finished starting
+//
+// Call it on the game thread, at the main menu or in the world. OnGameLoaded runs once the world
+// is loaded. If the save needs content the game does not have, loading stops at the game's
+// "requires the following content" dialog and goes no further until it is answered; see
+// ForceLoad.
 bool Load(const Slot &save);
 
-// A save made with content this install lacks is not loaded when asked for:
-// the game puts up "This saved game cannot be loaded. It requires the
-// following content", with Force Load and Cancel, and waits. Seen
-// 2026-10-01: a save made in the GOG install, asked for in the EA app's,
-// which has no Collector's Edition content (dev/BUILDS.md). This is the
-// Force Load button, the dialog's answer to the application
-// (GUIDialogResultMessage, 3): the dialog closes and the game makes the
-// load it was last asked for again, this time without that content, so a
-// save made from the game then loaded no longer has it. Call it only when
-// a Load just asked for has not started, since the game keeps what it was
-// last asked for and would load it again. True if the game took the
-// answer; false, and nothing sent, if no load was ever asked for. Not for
-// a plugin to decide on a player's behalf: for a tool that drives the game.
+// Answers the game's "requires the following content" dialog with Force Load, so the most
+// recently requested save loads without that content.
+// @return true if the game accepted the answer; false, with nothing sent, if no load was ever
+// requested
+//
+// Call it only while a load you just requested has not started, since the game loads whatever it
+// was last asked to load. A save made after a forced load no longer has the missing content. This
+// is meant for tools that drive the game, not for a plugin to decide on the player's behalf.
 bool ForceLoad();
 
-// Saves, as the save screen does for a manual save and the quicksave key
-// for the quicksave: SaveGameMessage. A slot of -1 is the next free one:
-// for a manual save, the lowest slot of the character's with no save in it,
-// chosen here; the quicksave and the autosave have their own. The name is
-// what the save screen's text field gives, the save's name in the load
-// screen and its file's; an empty one names the file "savegame". True if
-// the game began the save; it is written over the next frames, and OnSaved
-// is called once it is. False where the game allows no saving (in combat,
-// in a cutscene) or before the application is up.
+// Saves the game, the same way the save screen does for a manual save and the quicksave key does
+// for a quicksave.
+// @param slot the slot number, or -1 for the next free one; for a manual save, that is the
+// current character's lowest slot with no save in it
+// @param name the save's name, shown in the load screen and used in its file name; if empty, the
+// file is named "savegame"
+// @return true if the game started the save; false where the game allows no saving (in combat or
+// a cutscene), before the game has finished starting, or when all 500 manual slots are taken
 //
-// Seen in play 2026-10-02 through the Eluvian server, and changed for it:
-// a manual save to a free slot was written, OnSaved called 23 s after; but
-// -1 was refused, the game's own next free slot (SaveLoad.OpenSlot, the
-// proxy's +0x6C) being worked out by the save screen alone, and the name
-// was lost, the file "savegame". The handler (0x006D1C60) hands the game
-// the save screen's SaveLoad.SaveName as well as the message's name, and
-// the screen's is the one written; so the name is set there first, as the
-// screen sets it, and -1 is a slot chosen here. Both changes are not yet
-// seen in play.
+// Call it on the game thread. The save is written over the next few frames, and OnSaved runs once
+// it is done.
 bool Save(Kind kind, std::int32_t slot = -1, std::wstring_view name = {});
 
 } // namespace dao::saves

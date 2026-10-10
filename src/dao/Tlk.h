@@ -1,14 +1,9 @@
-// The game's text by string reference, from the talk tables the engine
-// has loaded (the game's, its DLC's and add-ins'), in the player's
-// language: what a data table's NameStrRef or a script's strref names.
+// Turns string references into the game's text. A string reference (strref) is the number that
+// data tables and scripts use in place of text, for example an ability's NameStrRef. Lookups use
+// the talk tables the game has loaded (its own, its DLC's and add-ins') in the player's language,
+// and Resolve fills in the game's tokens.
 //
 //   const std::wstring name = dao::tlk::String(379897); // "Shield Pummel"
-//
-// Read 2026-09-30 from the script command GetTlkTableString: the engine's
-// CTlkTable (the object in 0x00C1D08C) answers a string reference with its
-// text through GetString, __thiscall (strref, std::wstring &out, flag),
-// `ret 0xC`, choosing the male or female form by its +0x1C. tools/tlk.py
-// reads the same tables from the files. Not yet seen in play.
 #pragma once
 
 #include <cstdint>
@@ -18,26 +13,23 @@
 namespace dao::tlk
 {
 
-// The text of a string reference, the female form if asked and there is
-// one; empty for an unknown reference or before the tables are loaded.
+// Returns the text of a string reference.
+// @param strref the string reference, as a data table or a script holds it
+// @param female true for the female form where the table has one; false for the male form
+// @return the text, or an empty string for an unknown reference or before the talk tables load
 std::wstring String(std::uint32_t strref, bool female = false);
 
-// Text with the game's tokens resolved, as its screens show it: a
-// conversation's reply "<FirstName/>, wait!" as "Lyna, wait!", the keys a
-// tutorial names as the player has bound them. The talk tables' markup comes
-// back as the Flash HTML the movies show (<emp> as <b>, <desc> as <i>(); a
-// token the game does not know comes back as it was.
+// Replaces the game's tokens in a text, the same way the game's screens do.
+// For example, a reply's "<FirstName/>, wait!" becomes "Lyna, wait!", and a tutorial's key tokens
+// become the keys the player has bound. The talk tables' markup becomes the Flash HTML the movies
+// show: `<emp>` becomes `<b>` and `<desc>` becomes `<i>`. Tokens the game does not know are left
+// as they are.
 //
 //   dao::tlk::Resolve(dao::tlk::String(strref))
 //
-// Read 2026-10-03 (dao/Addresses.h, ReplaceDesignerTags): the engine's one
-// replacer, which every movie asks for its bound text. The hero's names
-// come from the party's object, so before a game is loaded the name tokens
-// stay as they are. The text as given before the game is up. On the game's
-// thread. Seen in play 2026-10-03 through the Eluvian server, which passes
-// every conversation line and reply through it: the Quartermaster's lines
-// read clean, no stray markup; and a reply's <FirstName/> came back as the
-// hero's name.
+// @return the resolved text, or the text unchanged before the game is up
+//
+// Call it on the game thread. Until a game is loaded, the hero's name tokens are left in place.
 std::wstring Resolve(std::wstring_view text);
 
 } // namespace dao::tlk

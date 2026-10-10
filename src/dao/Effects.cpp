@@ -1,3 +1,21 @@
+// The clock temporary effects run on (dao/Effects.h).
+//
+// Read 2026-09-30 (dao/Addresses.h, "How a temporary effect runs out").
+// Every temporary effect on every object ages through one engine function,
+// AddElapsed, each time its owner updates, by the milliseconds since the
+// owner's last update; the effect ends once its whole duration has
+// elapsed. This hooks AddElapsed, so the engine's own check still ends an
+// effect, on its owner's next update after its time runs out. An effect's
+// own figures are CGameEffect::Duration, Remaining and SetRemaining
+// (dao/Structures.h).
+//
+// What this does not reach: regeneration of health, mana and stamina,
+// which dao/Clock.h holds and advances with the effects, and anything a
+// script times itself with DelayEvent. Only temporary effects age; permanent and
+// instant ones are not affected. Hold and Advance used in play
+// by the turn-based mod since 2026-09-30; an owner's own Advance seen in
+// play 2026-10-02, after its owner was found right (a spider's Overwhelm
+// ended by the spider's own clock).
 #include "dao/Effects.h"
 
 #include "dao/Addresses.h"
@@ -127,6 +145,11 @@ void OwnClock(ObjectId owner, bool own)
     g_owed.SetOwn(owner, own);
 }
 
+// The owner is the object the effect is on, not its creator (a spider's
+// Overwhelm holds attacker and victim by an effect on each, each aged by
+// its own owner's clock). Read 2026-10-02: SEffectsHolder::AgeEffect,
+// AddElapsed's one caller, is __thiscall on the object's effects holder
+// (the object, the effect), and this follows it.
 void AdvanceObject(ObjectId owner, float seconds)
 {
     Attach();
@@ -141,6 +164,11 @@ void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t
     g_ageing.push_back(std::move(ageing));
 }
 
+// What the scripts' GetEffects lists (type, ability, creator), and the
+// duration and time left that no script command gives, read from each
+// effect (CGameEffect::Duration, Remaining). Seen in play 2026-10-02 by the
+// turn-based mod: a giant spider's Overwhelm listed as type 1043, ability
+// 90133, its creator the spider, 6.10 of 6.10 s.
 std::vector<Standing> On(ObjectId object)
 {
     std::vector<Standing> out;

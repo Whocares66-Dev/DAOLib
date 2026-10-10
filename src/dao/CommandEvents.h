@@ -1,47 +1,10 @@
-// When any creature or object starts a command from its queue, and when it
-// ends one, and how: what a plugin otherwise polls for (busy two frames
-// running means done), and what EVENT_TYPE_COMMAND_COMPLETE reaches a
-// script with only sometimes (dev/LIBRARY.md, the fifth session).
+// Tells a plugin when any creature or object starts or ends a command from its queue, and how
+// the command ended. Use it instead of polling a creature's queue, and instead of
+// EVENT_TYPE_COMMAND_COMPLETE, which does not fire for every command that ends.
 //
 //   dao::commands::OnEnd([](dao::ObjectId who, const dao::Command &command, std::int32_t result) {
 //       if (result != dao::commands::kSuccess) spdlog::info("{} failed: {}", who, dao::commands::ResultName(result));
 //   });
-//
-// Read 2026-09-30. An object's command step (0x0073D320, each frame) ends
-// the command at the head of its queue when it is done (ClearCurrentCommand,
-// 0x0073C730, with 1) or failed (with the failure), and starts the next
-// (0x0073C7D0); ClearAllCommands and the scripts' ClearCurrentCommand end
-// it through ClearCurrentCommand too, with -2. Each tells the commands
-// system (the application's +0x1AC): a start through one thunk (0x0064A500,
-// __thiscall (object, command), to the system's slot 2), an end through
-// another (0x0064A510, __thiscall (object, command, result, flag), to its
-// slot 3), and each thunk has that one caller. The hooks are on the thunks:
-// a start is seen before the command runs, an end before the command is let
-// go, so the Command is whole in both.
-//
-// Seen in play, 2026-09-30 (the Eluvian server's session of 66 minutes and
-// eight fights, 1,699 ends): 1,286 successes, 315 cleared, 29
-// COMMAND_FAILED_INVALID_PATH, 5 COMMAND_FAILED_TIMEOUT, 3
-// COMMAND_FAILED_PATH_ACTION_REQUIRED, and 61 with result 2, every one a
-// PlayAnimation: COMMAND_LOOPING. A later session had 5 with -1,
-// COMMAND_FAILED. A start has its end for every
-// type but ExecuteEffect: the one a dying creature starts, the frame it
-// dies, never ends (40 of 136 starts), so a plugin pairing the two must
-// not wait on those. EVENT_TYPE_COMMAND_COMPLETE came 2,094 times in the
-// session, so the event and the end are not one to one.
-//
-// And from the turn-based mod's play, 2026-10-01: eight melee attackers on
-// one human-sized target all had room, each attacking from 1.9 m; with
-// fourteen, attacks ended COMMAND_FAILED_NO_SPACE_IN_MELEE_RING 15 to 90 ms
-// after they were queued, and the game's AI then queued a move to the
-// target and a second attack itself, the move often ending
-// COMMAND_FAILED_INVALID_PATH at once. A use-object ended COMMAND_FAILED
-// (-1) all five times in that session, the two that opened their door
-// among them: for that command -1 is how it ends, not a failure, and what
-// the object did is the test of it.
-//
-// Callbacks run on the game's thread, inside the command step: keep them
-// short, and queue or clear no commands from one.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -54,21 +17,35 @@
 namespace dao::commands
 {
 
-// The results an end carries, as script.ldf names them: COMMAND_SUCCESSFUL,
-// COMMAND_LOOPING (a looping animation's end), COMMAND_FAILED, or a
-// COMMAND_FAILED_* saying why, -2 for a command cleared.
-inline constexpr std::int32_t kSuccess = 1;
-inline constexpr std::int32_t kLooping = 2;
-inline constexpr std::int32_t kFailed = -1;
-inline constexpr std::int32_t kCleared = -2;
+// Results a command can end with, under their names in script.ldf. The other failures are the
+// COMMAND_FAILED_* values of script::CommandFailed.
+inline constexpr std::int32_t kSuccess = 1;  // COMMAND_SUCCESSFUL
+inline constexpr std::int32_t kLooping = 2;  // COMMAND_LOOPING: a looping animation ended
+inline constexpr std::int32_t kFailed = -1;  // COMMAND_FAILED
+inline constexpr std::int32_t kCleared = -2; // COMMAND_FAILED_COMMAND_CLEARED: cleared from the queue
 
-// "success", "looping", "COMMAND_FAILED", or the failure's script name
-// (COMMAND_FAILED_TIMEOUT); empty for a result no constant names. A name is
-// the scripts' word for the number, not a verdict: a use-object that works
-// ends COMMAND_FAILED (above).
+// Returns a name for a result, for logging: "success", "looping", "COMMAND_FAILED", or the
+// script name of a failure, such as "COMMAND_FAILED_TIMEOUT".
+// @return an empty view for a result that has no constant
+//
+// The name only translates the number; it does not tell you whether the command worked. A
+// use-object command that opens its door still ends with COMMAND_FAILED, for example.
 std::string_view ResultName(std::int32_t result);
 
+// Calls `observer` each time a creature or object starts a command, before the command runs.
+// @param observer receives the object and the command it is starting
+//
+// The observer runs on the game thread while the object's queue is being processed, so keep it
+// short, and don't add or clear commands from it. A command can start and never end; see OnEnd.
 void OnStart(std::function<void(ObjectId object, const Command &command)> observer);
+
+// Calls `observer` each time a creature or object ends a command, before the command is freed.
+// @param observer receives the object, the command and its result: kSuccess, kLooping, kFailed,
+// kCleared or a script::CommandFailed value
+//
+// The observer runs on the game thread while the object's queue is being processed, so keep it
+// short, and don't add or clear commands from it. The ExecuteEffect command that a dying creature
+// starts never ends, so don't wait for it.
 void OnEnd(std::function<void(ObjectId object, const Command &command, std::int32_t result)> observer);
 
 } // namespace dao::commands

@@ -1,51 +1,15 @@
-// The timers the game's scripts keep themselves, on a plugin's clock: the
-// script events they send an object after a delay (DelayEvent), above all
-// the ones that pace effects. A damage-over-time effect hurts its creature
-// once each 1.5 s by an event the creature's script re-arms each time
-// (EVENT_TYPE_DOT_TICK, effect_dot2_h), and a lasting area of effect (a
-// trap's gas, a spell's cloud) pulses by an EVENT_TYPE_AOE_HEARTBEAT its
-// script re-arms each pulse, at an interval of its own. Held, those wait;
-// advanced, those that fall due come in order, each re-armed from the time
-// it came due, so a round's four seconds give a 1.5 s tick at 1.5 and 3.0
-// and the next waits for 4.5. dao/Clock.h holds and advances this with
-// effects and regeneration; a plugin that measures a fight in rounds wants
-// all three.
+// Holds back the delayed script events that pace effects, and moves their time on when you
+// choose.
+//
+// A damage-over-time effect ticks every 1.5 seconds, and a lasting area of effect, such as a
+// trap's gas or a spell's cloud, pulses. Both are driven by script events sent with a delay
+// (DelayEvent). Hold keeps those events waiting, and Advance delivers the ones that fall due, in
+// order. dao/Clock.h holds and advances these timers together with effects and regeneration,
+// and is usually what a plugin wants.
 //
 //   dao::timers::Hold(true);       // a turn-based fight begins
 //   dao::timers::Advance(4.0f);    // each round
-//   dao::timers::Hold(false);      // what is still waiting is queued again
-//
-// Read 2026-10-02 (dao/Addresses.h, "The queue as it runs"). Every delayed
-// event enters the engine's queue through one function with its delay,
-// and leaves it when the world clock passes its time. While held, a script
-// event of a held kind sent with a delay is kept here instead, due that
-// delay from now on this clock; one already in the queue when the hold
-// began is taken out as it comes due, due as long after the hold began as
-// it was then. Each update of the queue first delivers what has come due
-// here, earliest first, the clock moved to each one's time as it goes, as
-// the engine itself would deliver it (DeliverNow).
-//
-// Each object the events are sent to has its clock here: a damage over
-// time's ticks are sent to its victim, an area's pulses to the area. The
-// shared Advance moves them all; OwnClock takes an object off it, to move
-// by Advance(object, seconds) alone (a creature's own time in a fight
-// measured per creature). A clock's time counts from its first event: an
-// object advanced with nothing held for it is not owed that time. Released, what is left
-// goes back into the queue with the time it has left. The queue's own
-// clearing (a game loaded) drops what is held here too.
-//
-// Events of other kinds (but see HoldFrom), and any sent with no delay, are
-// left alone: the
-// scripts sequence much by DelayEvent (plots, cutscenes, the first tick of
-// a damage over time, sent "next frame" with 0), and holding those would
-// stop the game. An area's first pulse is not a delayed event: its update
-// runs the script with it once, at once. The world's own time still runs:
-// creatures' commands, the AI, animation. What is held here is not in the
-// queue a save writes; the game refuses to save in combat, where a
-// turn-based fight is, and a plugin that holds outside one should let go
-// before a save. Seen in play 2026-10-02 by the turn-based mod: a Walking
-// Bomb's ticks came on the ogre's own turns, and the Elven Ruins' toxic gas
-// poisoned its victim through 8 rounds of the shared clock and no more.
+//   dao::timers::Hold(false);      // events still waiting go back to the game's queue
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -56,56 +20,69 @@
 namespace dao::timers
 {
 
-// Hold the timers of the kinds held (true), or let them run again, giving
-// back what waits with the time it has left (false). On the game's thread.
+// Holds delayed script events of the held kinds, or lets them run again.
+// @param held true to hold them; false to put the waiting events back in the game's queue, each
+//  with the time it had left
+//
+// Call it on the game thread. Only events of the held kinds (see HoldKind and HoldFrom) that
+// were sent with a delay are held. The rest of the world's time, such as commands, the AI and
+// animation, still runs. Held events are not written to a save, so release them before the game
+// saves.
 void Hold(bool held);
+
+// Returns whether the timers are held.
 bool Held();
 
-// Spend `seconds` on what is held for every object not on a clock of its
-// own: what falls due in them is delivered on the queue's next update, in
-// order. Nothing while not held.
+// Moves time on for the held events of every object that is not on its own clock.
+// @param seconds the time to add, in game seconds
+//
+// The events that fall due are delivered in order at the event queue's next update. When a
+// script sends its event again, the new delay counts from the time the old one came due, so four
+// seconds give a 1.5-second tick at 1.5 and at 3.0. Does nothing while the timers are not held.
 void Advance(float seconds);
 
-// Put an object on a clock of its own (true), which the shared Advance
-// passes by, or back on the shared one (false). While held; Hold(false)
-// gives every object back.
+// Puts an object's held events on a clock of their own, or back on the shared one.
+// @param own true for its own clock, which Advance leaves out; false for the shared one
+//
+// Does nothing while the timers are not held. Hold(false) returns every object to the shared
+// clock.
 void OwnClock(ObjectId object, bool own = true);
 
-// Spend `seconds` on what is held for one object, whether or not it is on
-// its own clock: in small steps if wanted, fractions kept. Nothing while
-// not held.
+// Moves time on for one object's held events, whether or not it is on its own clock.
+// @param seconds the time to add, in game seconds; fractions carry over
+//
+// Does nothing while the timers are not held.
 void AdvanceObject(ObjectId object, float seconds);
 
-// Which kinds of script event are held whatever their delay (true), or
-// never, by kind or by delay (false): DotTick and AoeHeartbeat held, and
-// DelayedGmChange left out, unless a plugin says otherwise. The scripts end
-// a fight with that one (combat_h, player_core: 1 to 3 s after the last
-// enemy goes); held on a fight's clock it would wait for rounds no longer
-// played. A plugin's own timers may be added. Takes effect for events sent
-// after it, and for those in the queue when a hold begins.
+// Sets whether script events of one kind are held, whatever their delay.
+// @param held true to hold the kind; false never to hold it, either by kind or by HoldFrom's
+//  delay
+//
+// By default EventType::DotTick and AoeHeartbeat are held, and DelayedGmChange, which the
+// scripts use to end a fight, is never held. A plugin may add the kinds its own timers use. The
+// change applies to events sent after the call, and to those already queued when a hold begins.
 void HoldKind(script::EventType type, bool held = true);
 
-// Hold, beside the kinds held, every script event sent with a delay of at
-// least `seconds`, whatever its kind; 0 or less, none by delay (the
-// default). A plot's timers are seconds long (the Harrowing's Uldred: 2, 10
-// and 35 s, cir240cr_uldred), and what the scripts put one thing after
-// another with is 0 to 0.01 s, which must run as it does: 1 holds the
-// first and not the second. An event in the queue when a hold begins is
-// held by the time it has left. A kind HoldKind(type, false) left out
-// stays out (DAOLib issue #15).
+// Also holds every script event sent with a delay of at least `seconds`, whatever its kind.
+// @param seconds the shortest delay to hold; 0 or less to hold none by delay (the default)
+//
+// Plot timers wait for seconds at a time, while the scripts also chain steps with delays of 0 to
+// 0.01 seconds that must not wait. A value of 1 holds the first and not the second. Kinds
+// excluded with HoldKind(type, false) stay excluded.
 void HoldFrom(float seconds);
 
-// Log every script event the engine queues with a delay above nothing, of
-// any kind, held or not (true), or stop (false): its type (the number and
-// the name the generated constants give it), its target and sender (id,
-// and tag on the scripts' thread), its delay and the world clock; and each
-// as it is delivered, how long after it was sent. To find what a script
-// times with DelayEvent, before deciding whether to hold its kind
-// (DAOLib issue #14). Lines go to the plugin's log, at info.
+// Starts or stops logging every script event the game queues with a delay, held or not.
+// @param on true to start, false to stop
+//
+// Each event is logged at info level when it is queued, with its type, target, sender, delay and
+// the world clock, and again when it is delivered. Use it to find out what a script times with
+// DelayEvent before deciding whether to hold that kind.
 void Trace(bool on);
 
-// How many events wait here now, in all and for one object.
+// Returns how many events are held in all.
 std::size_t Waiting();
+
+// Returns how many events are held for one object.
 std::size_t WaitingFor(ObjectId object);
 
 } // namespace dao::timers

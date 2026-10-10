@@ -1,3 +1,60 @@
+// An attack's reach and approach (dao/Attack.h), each answered by calling the attack command's
+// own code, so a plugin keeps no copy of the rule (DAOLib issue #16; the turn-based mod's copy
+// drifted, and stopped 67 archers' shots in one ambush).
+//
+// Read 2026-10-04 (dao/Addresses.h, "An attack's reach"). The attack
+// command's step makes no reach test: it queues an approach, sub-action 15
+// for a ranged weapon or 4 for melee, then the attack, 50; the approach,
+// on its first run, ends at once when the attacker is in reach, and else
+// walks.
+// - Melee: the target gives the attacker a place on its melee ring (every
+//   creature has one), and the attacker is in reach when the centres are
+//   at most both personal spaces and 1.2 m apart and it stands within 1.25
+//   m of that place, on the ground (x and y; the centres' distance counts
+//   height too). The walk is to the place. There is no facing test
+//   here: the attack turns to face its target (sub-action 39, to within
+//   1 degree), and the blow (1) waits while the target is more than 60
+//   degrees above or below it or out of sight, then sends EVENT_TYPE_
+//   COMMAND_PENDING for the scripts to resolve it; a shot turns to face,
+//   aims (within 67.5 degrees, in sight) and then shoots (2), which sends
+//   it (dao/Conjure.h, RunningSubAction). Corrected 2026-10-04: the 60
+//   degrees were first read here as facing; they are elevation
+//   (0x004EE5A0).
+// - Ranged (a staff, bow or crossbow in the main hand): in range when the
+//   distance on the ground (x and y) is at most the weapon's Range
+//   (bitm_base, capped at 60 m) and at least both personal spaces, and the
+//   attacker has line of sight. The walk is toward the target until within
+//   Range less both spaces of it, on the ground, with a line of sight
+//   from there; without one there, 1 m nearer, and so on until that would
+//   reach both spaces, where the engine gives the attack up.
+// The ring place is asked for without claiming it: the engine's own
+// approach claims it (and lets go of the attacker's last), which a
+// question here must not. And as an active ring holds it: a ring nobody
+// has claimed is emptied by its creature's update every frame
+// (RefreshMeleeRing's early exit, MeleeRing::Clear), and filled with
+// whoever stands round it only once an attacker has claimed on it, after
+// which the places they stand on are no longer free and the claim on them
+// is gone; so in a crowd the engine's first claim finds room and the blow
+// then finds none (DAOLib #19). Here an unclaimed ring is filled as the
+// engine fills an active one (its keep byte, +0x28, set for the engine's
+// own refresh), asked, and emptied again as the engine would have. Both
+// rings are asked: the first claim meets the one standing now, and an
+// attacker that strikes in its first update strikes on that claim; one
+// that must turn or walk meets the filled one. Seen in play 2026-10-04 (the
+// turn-based mod's staged crowd): answering by the filled ring alone, no
+// attack it gave an approach failed for room (0 of 106), but three it gave
+// none landed, each striking in its first update. The search is the same
+// either way, so the answer is the approach's first run's at the moment it
+// is asked: nothing exactly where that run fails with
+// COMMAND_FAILED_NO_SPACE_IN_MELEE_RING (-5). A place found can be gone
+// later, the ring filled by others: the approach asks it again, claiming,
+// whenever the target moves or each 1.5 s, and the blow asks again if the
+// target does not hold the attacker as its own (+0xC60); each fails the
+// command with -5 on a full ring. Seen in play 2026-10-04 (the turn-based
+// mod, dragonlings swarming one creature above Haven, 18 failures): 6 at
+// the first run, each where ApproachOf had answered nothing; 8 during the
+// approach (sub-action 4); 4 at the turn to face (39), the blow not yet
+// begun.
 #include "dao/Attack.h"
 
 #include "dao/Addresses.h"
@@ -374,12 +431,35 @@ bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
 
 } // namespace
 
+// A creature whose main-hand item's base type (bitm_base's Type) is 5, a staff, or 6, a bow or
+// crossbow; a staff's Range is 45 m, as a bow's.
 bool IsRanged(ObjectId attacker)
 {
     CCObject *creature = Creature(attacker);
     return creature != nullptr && HasRangedWeapon(creature);
 }
 
+// The turn of sub-action 39 (0x007A69E0, through CSSubActionHandler::TurnToward), as the engine
+// would compute it now (DAOLib #32). For a melee attacker the point is the target's slot 29 given
+// the attacker's place: where it stands for a person, a point of one of its melee rings for a
+// creature whose rings give one (0x007CC1A0). For a ranged one it is where the target stands, as
+// the turn-based mod's builder read it (2026-10-05). The degrees are the engine's VectorToAngle of
+// `toward` less that of the attacker's facing (+0x130), by its Angle::Wrap; `done` is
+// TurnToward's own `<=` of 1 degree, the command going past the turn at its first run.
+//
+// `stalls`: the creature's movement controller is idle (state 0) and its own facing is within the
+// 1 degree SetDesiredFacing allows of `toward`, so nothing turns the creature and the command
+// waits at sub-action 39 for ever (DAOLib #25). The controller keeps a facing apart from the
+// creature's and follows it only at times, so the two drift apart: a snap of the creature's
+// alone, or the engine's own. When `done` is false and the turn is small, the scripts'
+// SetOrientation of `toward` faces it exactly (their SetFacing commands only ask the controller,
+// which turns nothing there).
+//
+// `waits`: the idle controller's motion record is busy (an animation of the creature's own
+// playing out), which SetDesiredFacing also refuses. TurnToward asks again at each update, so the
+// turn begins when the record is free: this passes by itself, and is no reason to face the
+// creature. Seen in play 2026-10-05 (the turn-based mod): read as `stalls`, it had a creature 159
+// degrees off, just out of an ability's animation.
 std::optional<FacingTurn> TurnTo(ObjectId attacker, ObjectId target)
 {
     CCObject *from = Creature(attacker);
@@ -391,6 +471,11 @@ std::optional<FacingTurn> TurnTo(ObjectId attacker, ObjectId target)
     return TurnFor(from, to);
 }
 
+// Leaves the engine's two facings equal (DAOLib #32): the creature's own by the engine's writer,
+// the scripts' SetOrientation's, which tells the model; the movement controller's own facing,
+// which no engine function sets but its update copies from the creature's while following it;
+// and its wanted facing by the engine's SetDesiredFacing, which then starts no turn. Only on an
+// idle controller.
 bool FaceExactly(ObjectId creature, Vector toward)
 {
     CCObject *object = Creature(creature);
@@ -417,6 +502,20 @@ bool FaceExactly(ObjectId creature, Vector toward)
     return true;
 }
 
+// Approach's melee fields, as read 2026-10-04:
+// - strikesAtOnce: the blow comes in the command's first update, before the ring is filled: in
+//   reach, already facing the target within the turn's 1 degree (sub-action 39, 0x007A69E0,
+//   through TurnToward), then the blow's own tests (0x007A87C0): its reach (InStrikingReach, the
+//   flat distance to the target's point within both spaces and 2.2), the target within 60
+//   degrees of level and in sight.
+// - roomOnceFilled: the ring as it is a frame after the attacker's claim; the place the approach
+//   then walks to, and the place the blow asks for if it comes later.
+// - findsRoom: where it is false, the attack fails COMMAND_FAILED_NO_SPACE_IN_MELEE_RING after
+//   its first update (DAOLib #19), or at the approach's first run where the ring as it stands now
+//   has no place. Seen in play 2026-10-04 (the turn-based mod's staged crowd of dragonlings): it
+//   matched the engine for 184 attacks of 184, false for all 24 that failed for want of room,
+//   true for the 160 that did not.
+// - range: melee is 0, its reach being the engine's own test, InMeleeReach.
 std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
 {
     CCObject *from = Creature(attacker);
@@ -478,6 +577,10 @@ std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
     return approach;
 }
 
+// The engine's path to the goal (dao/World.h, FindPath), to its end for melee; for a ranged
+// attack, along it to where the engine's move update would end it, its own tests (WithinBand,
+// LineOfSight from each point) asked every 0.25 m, its 1 m step nearer without a line of sight
+// copied (RangedWalk).
 std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
 {
     const auto approach = ApproachOf(attacker, target);
@@ -510,6 +613,15 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
                       approach->spaces);
 }
 
+// Read only (DAOLib #19). A creature keeps a std::vector of rings at its +0xB44, each a radius
+// (+0x10) and a pointer array of places (+0x48, the count +0x4C); MeleeRingSpot tries them
+// nearest first by how far the attacker is from each one's radius. A place is free to an
+// attacker (0x007CAED0) when it is not blocked (+8), not near-only (+9) unless the attacker stands
+// inside the radius, and every holder (+0xC, +0x14, +0x18, +0x1C) is none or the attacker; a run
+// of places as wide as the attacker must be free, and the place's point must pass the fit test
+// (0x007CB0E0: on ground under a 60 degree slope, and no cell about it unwalkable or under a
+// creature's stamp, 0x00A46FC0 with stamps counted). A claim writes holders[2] (+0x18) over the
+// run.
 std::vector<Ring> Rings(ObjectId target)
 {
     // The rings: a std::vector of pointers at the creature's +0xB44 (its
@@ -570,6 +682,7 @@ std::vector<Ring> Rings(ObjectId target)
     return rings;
 }
 
+// The std::set<ObjectId> at the creature's +0xC18, as the ring refresh walks it.
 std::vector<ObjectId> RingNeighbours(ObjectId target)
 {
     // A std::set<ObjectId> at +0xC18: its head at +4, the count at +8; a

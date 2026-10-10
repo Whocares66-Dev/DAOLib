@@ -1,10 +1,11 @@
-// The camera in explore and combat mode: what it follows, where it looks,
-// and switching what it follows the way the game does, with its own pan.
+// The camera in explore and combat mode: read where it is and what it looks at, make it
+// follow any object, and turn, tilt and zoom it. For smooth, eased moves, see
+// dao/CameraMoves.h.
 //
 //   auto *camera = app->GameModes()->Camera();
-//   camera->Follow(enemy);   // pans there if within 15 m, else cuts
-//
-// Read 2026-09-30. The game mode controller's +0x60 is a
+//   camera->Follow(enemy);   // pans there if within 15 m, otherwise cuts
+
+// Notes on the camera, read 2026-09-30. The game mode controller's +0x60 is a
 // CameraControllerExplore (vftable 0x00B1D954, built by 0x0076F890), whose
 // base is CameraControllerBase (0x00B2456C, constructor 0x007EE9B0). The
 // base keeps the scene's camera it drives at +0x04 and the id of the
@@ -93,8 +94,9 @@
 namespace dao
 {
 
-// The scene's camera (the header above): where it is, the angles it keeps
-// about the focus, and its zoom.
+// The game's scene camera, which the CameraController drives: its position, its angles
+// around the point it looks at (the focus), and its zoom. Get it from
+// CameraController::Scene.
 class SceneCamera
 {
   public:
@@ -103,53 +105,64 @@ class SceneCamera
     SceneCamera &operator=(const SceneCamera &) = delete;
     ~SceneCamera() = delete;
 
-    // The direction from the focus to the camera, from +x toward +y, in
-    // radians. A camera behind a creature has the yaw atan2(-fy, -fx) of
-    // its forward vector (GetOrientation), or radians(90 - GetFacing), seen
-    // in play; not radians(GetFacing) + pi.
+    // Returns the direction from the focus to the camera, in radians, measured from +x
+    // toward +y. The value is not wrapped, so it can grow past 2 pi as the player turns.
+    //
+    // To put the camera behind a creature, use atan2(-fy, -fx) of the creature's forward
+    // vector (GetOrientation), or radians(90 - GetFacing). radians(GetFacing) + pi does
+    // not work.
     float Yaw() const
     {
         return Read<float>(kYaw);
     }
-    // Turn the camera about its focus at once; ease by calling it each
-    // frame. On the game's thread.
+    // Turns the camera around its focus immediately. To ease a turn, call it every frame,
+    // or use dao::camera::EaseYaw.
+    // @param radians the new yaw, measured as Yaw is
+    //
+    // Call on the game thread.
     void SetYaw(float radians)
     {
         using Fn = void(__fastcall *)(SceneCamera *, int, float);
         reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetYaw))(this, 0, radians);
     }
-    // From straight above, in radians.
+    // Returns the camera's tilt in radians, measured from straight above.
     float Pitch() const
     {
         return Read<float>(kPitch);
     }
-    // Tilt the camera at once, as the engine's own SetPitch does (the
-    // orbit's kept pitch, +0x20 and +0x50); it holds until the player
-    // tilts. In the close view (zoom above 0.5) the explore controller
-    // keeps the tilt between 30 and 150 degrees from straight above every
-    // frame (0x0076F1B0, its globals at 0x00C0E050 and 0x00C0E054); a
-    // smaller angle looks down more steeply, over a big creature's back.
-    // Read the player's first and set it back after. Not yet seen in play
-    // (2026-10-04). On the game's thread.
+
+    // Notes on SetPitch: it does what the engine's own SetPitch does, writing the
+    // orbit's kept pitch (+0x20 and +0x50). The close view's clamp is the explore
+    // controller's (0x0076F1B0, its globals at 0x00C0E050 and 0x00C0E054). Not yet
+    // seen in play (2026-10-04).
+
+    // Tilts the camera immediately. The tilt holds until the player tilts the camera.
+    // @param radians the angle from straight above; smaller values look down more steeply
+    //
+    // In the close view (Zoom above 0.5), the game clamps the tilt to between 30 and 150
+    // degrees every frame. Read the player's pitch first and restore it afterwards. Call
+    // on the game thread. Not yet tested in the game.
     void SetPitch(float radians)
     {
         using Fn = void(__fastcall *)(SceneCamera *, int, float);
         reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetPitch))(this, 0, radians);
     }
-    // 1 close behind the creature, 0 the tactical view.
+    // Returns the zoom: 1 is close behind the creature, 0 is the tactical view high above.
+    // Below 0.5 the camera is in the tactical view.
     float Zoom() const
     {
         return Read<float>(kZoom);
     }
+    // Returns the camera's position in the world.
     Vector Position() const
     {
         return Read<Vector>(kPosition);
     }
 
-    static constexpr std::size_t kYaw = 0x1C;
-    static constexpr std::size_t kPitch = 0x20;
-    static constexpr std::size_t kZoom = 0x24;
-    static constexpr std::size_t kPosition = 0x80;
+    static constexpr std::size_t kYaw = 0x1C;      // offset of the yaw
+    static constexpr std::size_t kPitch = 0x20;    // offset of the pitch
+    static constexpr std::size_t kZoom = 0x24;     // offset of the zoom
+    static constexpr std::size_t kPosition = 0x80; // offset of the position
 
   private:
     template <class T> const T &Read(std::size_t offset) const
@@ -158,6 +171,8 @@ class SceneCamera
     }
 };
 
+// The controller of the camera in explore and combat mode: what the camera follows, where
+// it looks, and the zoom the player has set. Get it from GameModes::Camera.
 class CameraController
 {
   public:
@@ -166,133 +181,149 @@ class CameraController
     CameraController &operator=(const CameraController &) = delete;
     ~CameraController() = delete;
 
-    // The id of the object the camera follows: the selected party member,
-    // unless a plugin said otherwise.
+    // Returns the id of the object the camera follows: the selected party member,
+    // unless a plugin has called Follow.
     ObjectId Target() const
     {
         return Read<ObjectId>(kTarget);
     }
 
-    // Follow another object, as selecting a party member does: the camera
-    // pans to it if it is within 15 m of the last, and cuts otherwise.
-    // Nothing is selected. On the game's thread (a frame callback).
+    // Makes the camera follow an object, as selecting a party member does, but without
+    // selecting it. Any object works, including an enemy.
+    //
+    // In the close view, the camera pans to the object if it is within 15 m of the previous
+    // one, and cuts to it otherwise. In the tactical view the camera stays where it is (see
+    // SetFocusOffset). Call on the game thread, for example from a frame callback.
     void Follow(ObjectId object)
     {
         using Fn = void(__fastcall *)(CameraController *, int, ObjectId);
         reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_SetTarget))(this, 0, object);
     }
 
-    // Where the camera looks: the followed object's position and the
-    // controller's offset, as of the last update. Not where it is headed:
-    // while the game pans from one creature to the next, close in, this is
-    // a point between them, and after an offset is set it is a frame
-    // behind.
+    // Returns the point the camera looked at in the last update: the followed object's
+    // position plus the controller's offset.
+    //
+    // This is not where the camera is heading: while the game pans between creatures it is
+    // a point between them, and after SetFocusOffset it lags a frame behind.
     Vector Focus() const
     {
         return Read<Vector>(kFocus);
     }
 
-    // Put the camera on its focus at once, as CenterOnObjectMessage does.
+    // Moves the camera onto its focus immediately, as CenterOnObjectMessage does.
     void SnapToTarget()
     {
         using Fn = void(__fastcall *)(CameraController *, int);
         reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerExplore_SnapToTarget))(this, 0);
     }
 
-    // Turn the camera to an object's heading at once, the engine's own way:
-    // what the controller's reset does for the object it follows (its slot
-    // 9). The yaw is the object's heading, read from its orientation (the
-    // graphics object's +0x130), plus 270 degrees, normalised. Meant to put
-    // the camera behind the object; not yet seen in play.
+    // Notes on TurnBehind: it is what the controller's reset does for the object it
+    // follows (its slot 9). The yaw is the object's heading, read from its orientation
+    // (the graphics object's +0x130), plus 270 degrees, normalised. Not yet seen in
+    // play.
+
+    // Turns the camera immediately to look along an object's heading, putting it behind
+    // the object, the same way the game resets the camera. Not yet tested in the game.
     void TurnBehind(ObjectId object)
     {
         using Fn = void(__fastcall *)(CameraController *, int, ObjectId);
         reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_TurnBehind))(this, 0, object);
     }
 
-    // The tactical view, high above, rather than the close one.
+    // Returns true in the tactical view, high above, and false in the close view.
     bool Tactical() const
     {
         return Read<std::int32_t>(kViewFlag) == 1;
     }
-    // The controller's zoom, -1 in the tactical view to 1 close in.
+    // Returns the scene camera's zoom mapped to -1 (the tactical view) to 1 (close in).
     float Zoom() const
     {
         using Fn = float(__fastcall *)(const CameraController *, int);
         return reinterpret_cast<Fn>(Module::Address(addr::kCameraControllerBase_Zoom))(this, 0);
     }
 
-    // The zoom the controller keeps and hands the scene camera each frame,
-    // read 2026-10-02: +0x48, from its least (+0x64, -1, the tactical view)
-    // to its most (+0x68, 1, close in), which the mouse wheel moves (each
-    // notch times +0x4C, 0.4, added through 0x007EDBD0). The controller's
-    // update (0x007EEB70) maps it to the scene camera's 0..1 (0x007EE770)
-    // and hands it to SceneCamera::SetZoom (0x006C2BF0), toward which the
-    // scene camera eases its own zoom (at most 2 a second, quicker as it
-    // goes), and below 0.5 there it is the tactical view. Setting this
-    // zooms as the wheel does. dao/CameraMoves.h eases it.
+    // Notes on the zoom setting, read 2026-10-02: +0x48, from its least (+0x64, -1, the
+    // tactical view) to its most (+0x68, 1, close in), which the mouse wheel moves
+    // (each notch times +0x4C, 0.4, added through 0x007EDBD0). The controller's update
+    // (0x007EEB70) maps it to the scene camera's 0..1 (0x007EE770) and hands it to
+    // SceneCamera::SetZoom (0x006C2BF0), toward which the scene camera eases its own
+    // zoom (at most 2 a second, quicker as it goes), and below 0.5 there it is the
+    // tactical view.
+
+    // Returns the zoom the player has set with the mouse wheel, from ZoomLeast (-1, the
+    // tactical view) to ZoomMost (1, close in). The scene camera eases toward it.
     float ZoomSetting() const
     {
         return Read<float>(kZoomSetting);
     }
+    // Sets the zoom as the mouse wheel does; the camera then eases toward it.
+    // @param zoom from ZoomLeast to ZoomMost
+    //
+    // To ease the setting itself over time, use dao::camera::EaseZoom (dao/CameraMoves.h).
     void SetZoomSetting(float zoom)
     {
         Write(kZoomSetting, zoom);
     }
+    // Returns the least zoom setting, the tactical view (-1).
     float ZoomLeast() const
     {
         return Read<float>(kZoomLeast);
     }
+    // Returns the greatest zoom setting, close in (1).
     float ZoomMost() const
     {
         return Read<float>(kZoomMost);
     }
 
-    // How far the focus is from the followed object: in the tactical view,
-    // where it was left when the target changed. Setting it moves the
-    // focus from the next frame; easing it to nothing pans to the target.
+    // Returns the focus's offset from the followed object. In the tactical view, this
+    // keeps the focus where it was when the target changed.
     Vector FocusOffset() const
     {
         const auto kept = Read<Vector>(kKeptOffset);
         const auto other = Read<Vector>(kOtherOffset);
         return {kept.x + other.x, kept.y + other.y, kept.z + other.z};
     }
+    // Sets the focus's offset from the followed object; the focus moves on the next frame.
+    // Easing the offset to zero pans to the target without turning the camera.
     void SetFocusOffset(Vector offset)
     {
         Write(kKeptOffset, offset);
         Write(kOtherOffset, Vector{});
     }
 
-    // The tactical view's pull back to the party (dao/Addresses.h,
-    // PullToParty): the speed, in metres a second, at which the game moves
-    // the focus toward the nearest party member while neither it nor what
-    // the camera follows is in view; it grows by 30 each second until one
-    // is. 0 when nothing pulls; set to 0, the pull starts over from rest.
+    // Notes on the pull: dao/Addresses.h, PullToParty.
+
+    // Returns the speed, in metres per second, at which the tactical view pulls the focus
+    // toward the nearest party member while neither that member nor the followed object is
+    // on screen. The speed grows by 30 each second until one of them is; it is 0 when
+    // nothing is pulling.
     float PullSpeed() const
     {
         return Read<float>(kPullSpeed);
     }
+    // Sets the tactical view's pull speed. Setting it to 0 restarts the pull from rest.
+    // @param metresPerSecond the speed, in metres per second
     void SetPullSpeed(float metresPerSecond)
     {
         Write(kPullSpeed, metresPerSecond);
     }
 
-    // The scene's camera the controller drives.
+    // Returns the scene camera that the controller drives.
     SceneCamera *Scene() const
     {
         return Read<SceneCamera *>(kSceneCamera);
     }
 
-    static constexpr std::size_t kSceneCamera = 0x04;
-    static constexpr std::size_t kTarget = 0x08;
-    static constexpr std::size_t kZoomSetting = 0x48;
-    static constexpr std::size_t kZoomLeast = 0x64;
-    static constexpr std::size_t kZoomMost = 0x68;
-    static constexpr std::size_t kFocus = 0x70;
-    static constexpr std::size_t kViewFlag = 0x90;
-    static constexpr std::size_t kPullSpeed = 0xEC;
-    static constexpr std::size_t kOtherOffset = 0xF0;
-    static constexpr std::size_t kKeptOffset = 0x100;
+    static constexpr std::size_t kSceneCamera = 0x04; // offset of the scene camera
+    static constexpr std::size_t kTarget = 0x08;      // offset of the followed object's id
+    static constexpr std::size_t kZoomSetting = 0x48; // offset of the zoom setting
+    static constexpr std::size_t kZoomLeast = 0x64;   // offset of the least zoom setting
+    static constexpr std::size_t kZoomMost = 0x68;    // offset of the greatest zoom setting
+    static constexpr std::size_t kFocus = 0x70;       // offset of the focus
+    static constexpr std::size_t kViewFlag = 0x90;    // offset of the view flag, 1 when tactical
+    static constexpr std::size_t kPullSpeed = 0xEC;   // offset of the pull speed
+    static constexpr std::size_t kOtherOffset = 0xF0; // offset of the focus's second offset
+    static constexpr std::size_t kKeptOffset = 0x100; // offset of the focus's kept offset
 
   private:
     template <class T> const T &Read(std::size_t offset) const

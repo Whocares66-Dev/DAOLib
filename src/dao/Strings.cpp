@@ -1,3 +1,14 @@
+// A plugin's own text, in the player's language: a talk table of its own
+// beside its DLL, chosen by the game's language, read by string id. What the
+// game's own text is through dao/Tlk.h, for a plugin's.
+//
+// A plugin ships turnbased_en-us.tlk, turnbased_de-de.tlk and so on beside
+// its DLL: GFF4 talk tables as the game's own (dao/core/TalkTable.h). The
+// player's language is the game's: Locale under [GameOptions] in
+// Documents\BioWare\Dragon Age\Settings\DragonAge.ini (en-us on this
+// machine, 2026-09-30), the setting that picks the game's own
+// core_<lang>.tlk. A language with no file of the plugin's falls back to
+// en-us; a string with no entry, to the fallback given.
 #include "dao/Strings.h"
 
 #include "dao/Log.h"

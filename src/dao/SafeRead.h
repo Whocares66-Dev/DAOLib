@@ -1,8 +1,7 @@
-// Reading the game's memory from a thread that does not own it: the probe's
-// sampler reads engine objects while the game runs on, and a pointer read
-// a moment ago can be freed by the time it is followed. These reads catch
-// the access violation (SEH) and report failure instead of crashing the
-// game. They do nothing about a torn value, only about a fault.
+// Reads the game's memory without crashing on a bad address: an access violation is caught and
+// reported as false or nullopt. Use these to follow pointers to objects the game may free at any
+// moment, for example from another thread. They do not protect against reading a value that
+// another thread is halfway through writing.
 #pragma once
 
 #include <cstddef>
@@ -12,10 +11,12 @@
 namespace dao
 {
 
-// Copies `size` bytes from `address` to `out`. False, with `out` in an
-// unspecified state, if any byte could not be read.
+// Copies `size` bytes from `address` to `out`.
+// @return false if any byte could not be read; `out` is then left in an unspecified state
 bool TryCopy(void *out, std::uintptr_t address, std::size_t size) noexcept;
 
+// Reads a T from `address`. T must be trivially copyable.
+// @return nullopt if any byte could not be read
 template <class T> std::optional<T> TryRead(std::uintptr_t address) noexcept
 {
     T value{};

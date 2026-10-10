@@ -1,15 +1,7 @@
-// One log file per DLL, under the folder the game itself writes to:
-// <Documents>\BioWare\Dragon Age\daolib\<name>.log. Each DLL links spdlog
-// statically and so has a default logger of its own; OpenLog points it at
-// that file. The level comes from the DAOLIB_LOG_LEVEL environment variable
-// (trace, debug, info, warn, error, off), info when unset, and the file's
-// first line names the level it took, so a log says what it can show.
-//
-// A line costs its caller no disk write: it is appended to a buffer that a
-// writer thread of the log's own writes out every quarter of a second, and
-// at once for a warning or an error (DAOLib #31), so logging from the
-// game's frame thread does not stall it. A line can reach the file up to a
-// quarter of a second late; the crash logger's own log is written apart.
+// Gives each DLL its own log file, under <Documents>\BioWare\Dragon Age\daolib. Call OpenLog once
+// when the plugin loads, then log through spdlog as usual. Set the level with the
+// DAOLIB_LOG_LEVEL environment variable (trace, debug, info, warn, error or off); it is info if
+// the variable is unset or not one of these.
 #pragma once
 
 #include <spdlog/spdlog.h>
@@ -21,17 +13,23 @@
 namespace dao
 {
 
+// Returns the folder logs are written to: <Documents>\BioWare\Dragon Age\daolib, or the same
+// path under the temporary folder if the Documents folder cannot be found. This function does
+// not create the folder.
 std::filesystem::path LogDirectory();
 
-// The longest a line waits in memory before its writer writes it out: what
-// a reader of the log files (the crash logger copying their last lines)
-// waits for first.
+// The longest a log line waits in memory before it is written to its file. Wait this long before
+// reading another DLL's log for its latest lines.
 inline constexpr std::chrono::milliseconds kLogLatency{250};
 
-// Opens <name>.log, truncating the last run's, and makes it the default
-// logger. A game started while another runs with DAOLib writes
-// <name>.<process id>.log instead, and leaves the running game's logs be.
-// Safe to call once per DLL; a second call is ignored.
+// Opens <name>.log in LogDirectory(), replacing the previous run's file, and makes it this DLL's
+// default spdlog logger. The first line says which log level is in effect.
+// @param name the start of the file name, usually the plugin's name
+//
+// Call it once per DLL; later calls do nothing. Lines are written by a background thread, so
+// logging never waits for the disk: warnings and errors are written at once, other lines within
+// kLogLatency. If a second copy of the game is started while one is running, it writes
+// <name>.<process id>.log instead.
 void OpenLog(std::string_view name);
 
 } // namespace dao

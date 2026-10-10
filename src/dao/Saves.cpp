@@ -1,3 +1,57 @@
+// A plugin's data with the game's saves, and asking the game to save or load (dao/Saves.h).
+//
+// What goes in the file is the plugin's own: text, JSON, binary. Each plugin has its own file per
+// save, <slot folder>\<plugin>.daolib, so there is nothing to share and no framing. Both
+// callbacks run on the game's thread, one at a time, as the game's own saving and loading do, so
+// plugin state they share needs no lock. They must not throw: an exception has no way back
+// through the game's code.
+//
+// Read 2026-09-30 (dev/SAVES.md):
+//
+// - Saving. SaveGame::Write (dao/Addresses.h) writes a save with the
+//   character, the slot and the kind resolved; in play a quicksave asked
+//   for "any slot" and Write was called for slot 1, kind 2, and returned
+//   1. OnSaved runs after Write returns and has succeeded.
+// - Loading. A load looks for its file with SaveGame::FindSave, with the
+//   same three (in play once per load), before the game reads the save;
+//   the world is built after. OnGameLoaded runs at the module's load
+//   event (EVENT_TYPE_MODULE_LOAD) that follows, with the save's slot, the
+//   world there. The event alone is not enough: BioWare's module_core.nss
+//   says it "can fire more than once for a single module", so a load
+//   event with no save found before it is not a load and calls nothing.
+// - A new game. module_core.nss: EVENT_TYPE_MODULE_START happens "only
+//   once for a single game instance". OnGameLoaded runs there with no
+//   slot, so a plugin starts a new playthrough from nothing rather than
+//   from the one loaded before it.
+//
+// Seen in play: Write and FindSave with their slots, and the load event
+// once per load. The callbacks, seen 2026-10-05 by the turn-based mod (its
+// file of each companion's choice): launching straight into a save, a
+// manual save written with its file (OnSaved, the slot right), and three
+// loads in a running game in a row, each told once with its slot, a save
+// with no file of the plugin's read as nothing; then an autosave on a first
+// entry into a new area (its slot, AutoSave_3, and its file written in the
+// same second as the game's) and that autosave loaded. Not yet seen: a
+// quicksave, and the module's start event for a new game. An early
+// quicksave in play wrote its files without Write being heard; read
+// 2026-10-05, Write is the only code that names a save's files and the
+// loading mode's worker its only caller, so every save of every kind goes
+// through it, and that one was most likely made before the hook was in
+// place. A save deleted from the game's menu takes its folder with it, and
+// the plugin's file too.
+//
+// Asking the game to save or load: the messages its menus and keys send to
+// its save proxy (SaveLoadProxy, the application's +0x150; dev/SAVES.md),
+// read 2026-09-30. From the main menu or in the world, on the game's thread
+// (a frame callback). Seen in play, 2026-10-01, through the Eluvian server:
+// Characters, List and Meta listed the ten saves there, and Load of a
+// manual save, asked at the main menu, had it loaded and in explore mode 14
+// s later with no menu touched, OnGameLoaded called. A second, with no
+// add-ins in the way, was asked 2 s after the menu came up and was loaded
+// 11 s after the process started. OnGameLoaded is called while the game's
+// mode still reads loading, explore mode coming a moment after: a caller
+// that wants the world in play waits for the mode as well. Save is not yet
+// seen.
 #include "dao/Saves.h"
 
 #include "dao/Addresses.h"
@@ -214,6 +268,8 @@ std::int32_t Mode(std::uintptr_t proxy)
 
 } // namespace
 
+// Read from the save proxy's list, which the game fills from the folders when its load screen
+// opens; asking refreshes it first if it is empty.
 std::vector<std::wstring> Characters()
 {
     const std::uintptr_t proxy = Proxy();
@@ -259,6 +315,12 @@ std::vector<Slot> List(std::wstring_view character)
     return slots;
 }
 
+// The load screen's mode set, the character chosen, then LoadGameMessage. A save that needs
+// content the game does not have registered stops at the game's own "requires the following
+// content" dialog (Force Load or Cancel): Load has answered true and nothing follows until the
+// player answers it (in play, 2026-10-01, after another install of the game had rewritten
+// Settings\AddIns.xml). Seeing that dialog from a plugin is not read; a caller that must know
+// waits for OnGameLoaded with a time limit.
 bool Load(const Slot &save)
 {
     const std::uintptr_t proxy = Proxy();
@@ -297,6 +359,13 @@ bool Load(const Slot &save)
     return true;
 }
 
+// A save made with content this install lacks is not loaded when asked for: the game puts up
+// "This saved game cannot be loaded. It requires the following content", with Force Load and
+// Cancel, and waits. Seen 2026-10-01: a save made in the GOG install, asked for in the EA app's,
+// which has no Collector's Edition content (dev/BUILDS.md). This is the Force Load button, the
+// dialog's answer to the application (GUIDialogResultMessage, 3): the dialog closes and the game
+// makes the load it was last asked for again, this time without that content, so a save made
+// from the game then loaded no longer has it.
 bool ForceLoad()
 {
     CClientExoApp *app = CClientExoApp::Get();
@@ -318,6 +387,18 @@ bool ForceLoad()
     return messages::Send(app, answer);
 }
 
+// SaveGameMessage, as the save screen and the quicksave key send it. A slot of -1 for a manual
+// save is chosen here; the quicksave and the autosave have their own.
+//
+// Seen in play 2026-10-02 through the Eluvian server, and changed for it:
+// a manual save to a free slot was written, OnSaved called 23 s after; but
+// -1 was refused, the game's own next free slot (SaveLoad.OpenSlot, the
+// proxy's +0x6C) being worked out by the save screen alone, and the name
+// was lost, the file "savegame". The handler (0x006D1C60) hands the game
+// the save screen's SaveLoad.SaveName as well as the message's name, and
+// the screen's is the one written; so the name is set there first, as the
+// screen sets it, and -1 is a slot chosen here. Both changes are not yet
+// seen in play.
 bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
 {
     const std::uintptr_t proxy = Proxy();

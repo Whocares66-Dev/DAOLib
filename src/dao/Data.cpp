@@ -1,3 +1,16 @@
+// The data tree's lookups and setters, through the engine's SmartData attributes.
+//
+// Read 2026-09-30 from the UI's GetValue and GetNumber handlers (dao/Addresses.h). The tree's
+// root is SmartData::TokenManager, a singleton made on first use; its Find splits a path on '.'
+// and walks it to an attribute, SmartData::IAttribute, or to a shared null attribute when there
+// is none. An attribute gives its value as text (slot 12) and as a number (slot 13), whatever
+// its type. The objects the exe names as roots include CClientExoApp, GUI, Map, Container and
+// Conversation; paths seen: GUI.SelectedChar, GUI.SelectedChar.Equipment, Map.ShowAllLabels,
+// CClientExoApp.GUIDialogResult. The game's own classes are SmartObjects too (the game modes,
+// the application), with their attributes in the tree. A plain attribute (a bool, a number) can
+// be set, and setting one tells its observers, the movies bound to it among them. Not yet seen
+// in play (as written 2026-09-30). A list's members are read below (Attribute::MemberNames,
+// Members).
 #include "dao/Data.h"
 
 #include "dao/Addresses.h"
@@ -143,6 +156,20 @@ std::size_t Attribute::MemberCount() const
     return count > 0 ? static_cast<std::size_t>(count) : 0;
 }
 
+// Read 2026-10-03. The UI's GetNumMembers (an FSCommand, 0x0051BE40) finds the path and answers
+// its attribute's slot 16. A list is an ECDynArray<T*> attribute (the level-up screen's chains, a
+// container's inventory, a store's stock, a conversation's lines), and every one of the 49 such
+// classes looks a member up (its slot 6, 0x007268E0) by the path's component read as a number, so
+// Find reaches "<list>.0" and on. An object's members go by name: the UI's ListMemberNames (an
+// FSCommand, 0x00520340) walks them with SmartData::MemberIterator (0x005C7D60), a thin wrapper
+// over an iterator the attribute makes (its slot 17, on the engine's heap: slot 0 frees it, 1
+// steps, 2 says whether it is at a member, 3 gives the member's key), each key named by the
+// attribute's slot 7, an engine std::wstring; MemberNames does the same.
+//
+// Seen in play 2026-10-04 and 10-05 through the Eluvian server: Lyna's four level-ups, each
+// chain's members listed by name and read (AbilityTemplate, AbilityInstance, DisplayState,
+// Column, Row), the talents, spells and skills offered and then spent by id; and
+// GUICrafting.Recipes.0's eleven named members.
 std::vector<std::wstring> Attribute::MemberNames() const
 {
     std::vector<std::wstring> names;
@@ -174,6 +201,9 @@ std::vector<std::wstring> Attribute::MemberNames() const
     return names;
 }
 
+// The Flash UI's SetValueUnicode (0x0051F6E0) hands the text to the attribute's slot 10. It is
+// the way a screen's text field reaches the game (the save screen's SaveLoad.SaveName,
+// dao/Saves.h).
 void Attribute::SetText(std::wstring_view value)
 {
     // Slot 10 takes the engine's own string, as SetValueUnicode passes it.
@@ -206,6 +236,18 @@ std::vector<std::wstring> MemberNames(std::wstring_view path)
     return attribute != nullptr ? attribute->MemberNames() : std::vector<std::wstring>{};
 }
 
+// Members gives only paths that Find reaches (see Attribute::MemberNames for how lists and
+// objects are walked).
+//
+// The level-up screen's chains (FindAbilityChainsMessage, built by 0x0062DCD0), each an
+// AbilityGUIInfo of AbilityTemplate, Column, DisplayState and AbilityInstance. Seen in play
+// 2026-10-03 through the Eluvian server, on Sten's level-up: TalentChains had 56 members, read
+// by index, and each chain 5, whose members go by name, so not by index; the screen's movie
+// walks them with ListMemberNames, as MemberNames does here. DisplayState is 1 for an ability
+// the creature has (0x0071BEC0), 2 for one it can learn now (0x0071BEF0, the test behind the
+// scripts' IsAbilityAvailable), 3 for one it cannot yet. Nothing for a path with nothing there.
+// Seen in play 2026-10-03 through the Eluvian server: the world map's 58 pins read by their
+// index paths, with the map down.
 std::vector<std::wstring> Members(std::wstring_view path)
 {
     std::vector<std::wstring> members;

@@ -1,5 +1,8 @@
-// A plugin's own settings in the game's options screen: a section on the
-// Game tab, with a heading, checkboxes, and choices of a few named values.
+// Adds a plugin's own settings to the game's options screen.
+//
+// AddSection puts a section on the Game tab of the options screen: a heading, then checkboxes
+// (Toggle) and sliders with named stops (Choice) that look and behave like the game's own. The
+// game does not save these settings, so the plugin must store them itself.
 //
 //   dao::options::AddSection(L"Turn-based", {{
 //       .name = L"TurnBasedCombat",
@@ -8,65 +11,6 @@
 //       .get = [] { return Enabled(); },
 //       .set = [](bool wanted) { return SetEnabled(wanted); },
 //   }});
-//
-// How the game does its own, read 2026-10-01 (dev/GUI.md, dao/core/
-// OptionsMovie.h): the Game tab is a clip of controls the designer placed,
-// with rows to spare under its two columns; a checkbox is the movie's own
-// symbol set up by the movie's own helper, which sends the engine
-// "ClientOptions.SetClientOptionMessage <option> 1" (or 0) on a click and
-// draws the box by what the engine tells it the option is.
-//
-// A plugin's section goes the same way. The library patches the options
-// movie as the game opens it (dao/Gui.h, OnMovieLoad): the heading (the
-// bar and heading text the tab's own "Gameplay" has) and the checkboxes
-// are placed in the tab's free rows, and each checkbox is set up
-// by the game's helper, so it looks and behaves as its neighbours do,
-// tooltip and click sound with them. The library answers for the engine:
-// it takes the checkbox's request to be told its option's value, and its
-// click, before the engine sees either.
-//
-// `get` is asked when the screen opens. `set` runs when the player clicks,
-// with what the box would become, and answers what the option now is: the
-// same to accept, the old value to refuse, and the box is drawn by the
-// answer. Both run on the frame's thread (dao/Frame.h), so they may call
-// script commands. A change takes effect at the click, not at the screen's
-// OK, and Cancel does not undo it; the game saves nothing of it, so the
-// plugin keeps its own settings.
-//
-// There is room for eleven rows: five under the left column and six under
-// the right. A heading is the game's own gold bar and takes two, so the
-// left column holds a heading and three checkboxes, the right a heading
-// and four; a section's rows are in one column. Sections are placed in the order they
-// were added, each whole or not at all; StateOf says what became of one.
-// The rows are shared with every other plugin that adds a section, each
-// taking what the ones before it left.
-//
-// From DAOLib_Load, before the game first opens its options.
-//
-// Seen in play, 2026-10-01, with examples/options/ beside examples/input/
-// (the play tester's session, on 3783dd4):
-// - The heading and three boxes under the left column's last box, the
-//   boxes and labels in line with the game's own and spaced as they are.
-//   The heading was then plain text centred over the column, smaller than
-//   the game's own gold bars ("Gameplay", "Feedback"): a caption. It is
-//   now the game's bar and heading text, seen the same day on 98eacf4: a
-//   bar of the width, height and gradient of the game's two, the title
-//   left-aligned in the face and size of "Gameplay", the gaps above and
-//   below it as the game's; the third box under it ends just inside the
-//   panel's corner, so three is what the left column holds.
-// - Each box was asked its value at each opening and drawn by the answer.
-// - A click changed a box and it stayed; the box that refuses was empty
-//   again 0.3 s after its click, with no flicker caught.
-// - Each box had its tooltip, drawn under it over the row below.
-// - The game's own boxes worked and did not move. Restore Defaults reset
-//   the game's and left the plugin's; after Cancel and a second opening
-//   the plugin's were as left and nothing was doubled.
-// - In a fight, the screen opened from the main menu with the game paused
-//   behind it: the refusing box refused and another changed, each
-//   callback run at the click, not when the screen closed.
-// The first try, with two plugins patching the movie, showed no section:
-// dao/Gui.h, OnMovieLoad, has why. The turn-based mod's own section (one
-// box, refused in a fight) was seen the same day too.
 #pragma once
 
 #include <cstdint>
@@ -78,29 +22,32 @@
 namespace dao::options
 {
 
+// A checkbox in a plugin's section.
+//
+// `get` runs each time the screen opens. `set` runs when the player clicks the box, and returns
+// the option's value after the click: `wanted` to accept the change, or the old value to refuse
+// it. The box shows whatever `set` returns. Both run on the game thread (dao/Frame.h), so they
+// may call script commands. A change takes effect at the click, and the screen's Cancel button
+// does not undo it.
 struct Toggle
 {
-    // Letters and digits, a letter first, and the plugin's own: the option
-    // the checkbox stands for ("TurnBasedCombat").
+    // The option's name: letters and digits, starting with a letter. Prefix it with the
+    // plugin's name, for example "TurnBasedCombat", so that it cannot clash with another plugin's.
     std::wstring name;
-    std::wstring label;
-    std::wstring tooltip;
-    std::function<bool()> get;
-    std::function<bool(bool wanted)> set;
+    std::wstring label;                   // the text beside the box
+    std::wstring tooltip;                 // the text shown when the mouse is over the box
+    std::function<bool()> get;            // returns the option's value; required
+    std::function<bool(bool wanted)> set; // applies a click and returns the new value; required
 };
 
-// A choice of a few named values: the game's own slider with named stops,
-// as the Video tab's texture and graphics detail are (the arrows either
-// side step it, the slider drags it, the value's name shows beside it).
-// `values` are the stops' names, two or more; `get` answers the index of
-// the one chosen, and `set` is given the index wanted and answers the one
-// that now holds, as a toggle's are. It takes two rows. The game asks the
-// value as the screen opens, before `get` can be run on the frame's
-// thread, so it is answered then with the last value `get` or `set` gave
-// (the first value until one has), and told `get`'s straight after, as a
-// checkbox is.
+// A slider with named stops in a plugin's section, like the detail sliders on the Video tab.
 //
-//   dao::options::AddSection(L"Turn-based", {/* toggles */}, {{
+// `get` and `set` work as they do for a Toggle, but with the index of a stop in `values` in place
+// of a bool. `wanted` is always a valid index. Dragging across several stops calls `set` once for
+// each. As the screen opens, the slider shows the last value `get` or `set` returned (the first
+// stop before either has run), then switches to what `get` returns. A choice takes two rows.
+//
+//   dao::options::AddSection(L"Turn-based", {}, {{
 //       .name = L"TurnBasedSpeed",
 //       .label = L"Turn speed",
 //       .tooltip = L"How fast the turns play",
@@ -108,41 +55,42 @@ struct Toggle
 //       .get = [] { return SpeedIndex(); },
 //       .set = [](std::int32_t wanted) { return SetSpeedIndex(wanted); },
 //   }});
-//
-// Read 2026-10-02 from the options movie (dao/core/OptionsMovie.h). Seen in
-// play the same day (examples/options, the GOG game, the play tester): the
-// section under the right column, the slider as the Video tab's detail
-// sliders look, its label at the left and the value's name at the right;
-// the track's ends step it (there are no separate arrows, on the game's
-// either) and stop at the first and last; a drag snaps to a stop, passing
-// through those between, so `set` may be called once for each; the
-// tooltip under the label; the value kept across OK, Cancel and a second
-// opening; nothing overlapping, and the game's own sections and another
-// plugin's beside it as before.
 struct Choice
 {
-    std::wstring name; // as a toggle's
-    std::wstring label;
-    std::wstring tooltip;
-    std::vector<std::wstring> values;
-    std::function<std::int32_t()> get;
-    std::function<std::int32_t(std::int32_t wanted)> set;
+    std::wstring name;                                    // the option's name, as for a Toggle
+    std::wstring label;                                   // the text to the left of the slider
+    std::wstring tooltip;                                 // the text shown under the label
+    std::vector<std::wstring> values;                     // the stops' names; at least two
+    std::function<std::int32_t()> get;                    // returns the index of the chosen stop
+    std::function<std::int32_t(std::int32_t wanted)> set; // applies a change, returns the new index
 };
 
-// False, and nothing added, for a section with neither toggles nor choices,
-// one with a name that is not letters and digits or was given before, one
-// without both callbacks, or a choice of fewer than two values.
+// Adds a section of settings to the Game tab of the options screen.
+// @param title the section's heading, which is also its key for StateOf
+// @param toggles the checkboxes, listed first
+// @param choices the sliders, listed after the checkboxes
+// @return false, with nothing added, if the section has no toggles or choices, a name is not
+//  letters and digits or is already taken, a callback is missing, or a choice has fewer than
+//  two values
+//
+// Call it from DAOLib_Load, before the game first opens its options screen. The tab has five free
+// rows in its left column and six in its right, shared by every plugin. A heading takes two rows,
+// a checkbox one and a choice two, and a section stays in one column. Sections are placed in the
+// order they were added. The first section that does not fit is left out, and so is every
+// section after it.
 bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {});
 
+// What became of a section given to AddSection.
 enum class SectionState
 {
-    Unknown, // no section of that title was added
+    Unknown, // no section with that title was added
     Waiting, // the game has not opened its options screen yet
     Shown,   // placed on the Game tab
-    NoRoom,  // the tab's free rows were taken by sections added before it
-    Failed,  // the options movie was not as read, and was left alone
+    NoRoom,  // sections added earlier took the free rows
+    Failed,  // the options screen's Flash movie was not as expected, so it was left alone
 };
 
+// Returns what became of the section with that title.
 SectionState StateOf(std::wstring_view title);
 
 } // namespace dao::options

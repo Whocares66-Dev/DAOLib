@@ -1,3 +1,68 @@
+// A plugin's settings in the options screen (dao/Options.h): how the game
+// does its own, and what was seen of a plugin's in play.
+//
+// How the game does its own, read 2026-10-01 (dev/GUI.md, dao/core/
+// OptionsMovie.h): the Game tab is a clip of controls the designer placed,
+// with rows to spare under its two columns; a checkbox is the movie's own
+// symbol set up by the movie's own helper, which sends the engine
+// "ClientOptions.SetClientOptionMessage <option> 1" (or 0) on a click and
+// draws the box by what the engine tells it the option is.
+//
+// A plugin's section goes the same way. The library patches the options
+// movie as the game opens it (dao/Gui.h, OnMovieLoad): the heading (the
+// bar and heading text the tab's own "Gameplay" has) and the checkboxes
+// are placed in the tab's free rows, and each checkbox is set up
+// by the game's helper, so it looks and behaves as its neighbours do,
+// tooltip and click sound with them. The library answers for the engine:
+// it takes the checkbox's request to be told its option's value, and its
+// click, before the engine sees either.
+//
+// There is room for eleven rows: five under the left column and six under
+// the right. A heading is the game's own gold bar and takes two, so the
+// left column holds a heading and three checkboxes, the right a heading
+// and four. The rows are shared with every other plugin that adds a
+// section, each taking what the ones before it left.
+//
+// Seen in play, 2026-10-01, with examples/options/ beside examples/input/
+// (the play tester's session, on 3783dd4):
+// - The heading and three boxes under the left column's last box, the
+//   boxes and labels in line with the game's own and spaced as they are.
+//   The heading was then plain text centred over the column, smaller than
+//   the game's own gold bars ("Gameplay", "Feedback"): a caption. It is
+//   now the game's bar and heading text, seen the same day on 98eacf4: a
+//   bar of the width, height and gradient of the game's two, the title
+//   left-aligned in the face and size of "Gameplay", the gaps above and
+//   below it as the game's; the third box under it ends just inside the
+//   panel's corner, so three is what the left column holds.
+// - Each box was asked its value at each opening and drawn by the answer.
+// - A click changed a box and it stayed; the box that refuses was empty
+//   again 0.3 s after its click, with no flicker caught.
+// - Each box had its tooltip, drawn under it over the row below.
+// - The game's own boxes worked and did not move. Restore Defaults reset
+//   the game's and left the plugin's; after Cancel and a second opening
+//   the plugin's were as left and nothing was doubled.
+// - In a fight, the screen opened from the main menu with the game paused
+//   behind it: the refusing box refused and another changed, each
+//   callback run at the click, not when the screen closed.
+// The first try, with two plugins patching the movie, showed no section:
+// dao/Gui.h, OnMovieLoad, has why. The turn-based mod's own section (one
+// box, refused in a fight) was seen the same day too.
+//
+// A choice is the game's own slider with named stops, as the Video tab's
+// texture and graphics detail are. The game asks its value as the screen
+// opens, before `get` can be run on the frame's thread, so it is answered
+// then with the last value `get` or `set` gave, and told `get`'s straight
+// after, as a checkbox is (OnGetValue). Read 2026-10-02 from the options
+// movie (dao/core/OptionsMovie.h). Seen in play the same day
+// (examples/options, the GOG game, the play tester): the section under the
+// right column, the slider as the Video tab's detail sliders look, its
+// label at the left and the value's name at the right; the track's ends
+// step it (there are no separate arrows, on the game's either) and stop at
+// the first and last; a drag snaps to a stop, passing through those
+// between, so `set` may be called once for each; the tooltip under the
+// label; the value kept across OK, Cancel and a second opening; nothing
+// overlapping, and the game's own sections and another plugin's beside it
+// as before.
 #include "dao/Options.h"
 
 #include "dao/Addresses.h"

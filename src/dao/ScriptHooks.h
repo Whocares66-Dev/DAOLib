@@ -1,24 +1,14 @@
-// Intercepting script commands: a plugin's function runs whenever a script
-// calls a command, sees the call's arguments, and decides what happens.
+// Intercepts script commands. Your function runs whenever a script calls the command: it can read
+// and change the arguments, let the game run the command, and change the value the script gets
+// back.
 //
 //   dao::script::InterceptCommand(526 /* GetCombatState */, [](dao::script::CommandCall &call) {
 //       const auto creature = call.Object(0);          // the first argument
-//       const int result = call.Proceed();             // the engine answers
+//       const int result = call.Proceed();             // the game runs the command
 //       if (result == dao::script::kOk && ForcedCalm(creature))
-//           call.SetIntAnswer(0);                       // and the script sees 0
+//           call.SetIntAnswer(0);                       // and the script gets 0 instead
 //       return result;
 //   });
-//
-// An intercept takes the command's slot in the engine's table (dao/
-// Script.h) and keeps the handler it found there, which Proceed runs, so
-// intercepts from several plugins chain: each Proceeds into the one
-// installed before it, the last into the engine. One that answers without
-// Proceed pops the arguments itself (Stack::Pop*) and pushes its answer.
-//
-// The table is filled after plugins load, so an intercept made at load is
-// installed the moment the engine has made it (OnCommandsReady); one made
-// later is installed at once. Intercepts run on the scripts' thread, in
-// the middle of a script.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -33,95 +23,125 @@
 namespace dao::script
 {
 
-// Runs `ready` once the engine has filled its command table, or at once if
-// it has. The first call detours CVirtualMachineCommands::
-// InitializeCommands (dao/Addresses.h) to find out.
+// Runs `ready` once the game has filled in its table of script commands, or right away if it
+// already has. The first call places a hook to find out when that happens.
 void OnCommandsReady(std::function<void()> ready);
 
-// True once the table is there.
+// Returns whether the game has filled in its table of script commands.
 bool CommandsReady();
 
-// The thread that filled the command table, which is the one scripts run
-// on (seen in play 2026-09-30: every script command on the thread that ran
-// InitializeCommands); 0 until then. dao::script::Invoke belongs on it.
+// Returns the ID of the game thread: the thread that filled in the command table, which scripts
+// and frame callbacks run on. Call dao::script::Invoke on this thread.
+// @return 0 until the table is filled in
 std::uint32_t ScriptThreadId();
 
-// A call of a script command, as an intercept gets it.
+// One call of a script command, as an intercept receives it. Arguments are numbered from 0. A
+// vector argument takes three places, so the arguments after it are numbered three higher.
 class CommandCall
 {
   public:
+    // @param command the command's number
+    // @param paramCount how many arguments the script passed
+    // @param link this intercept's position in the command's chain of intercepts
     CommandCall(int command, int paramCount, int link) : command_(command), paramCount_(paramCount), link_(link)
     {
     }
 
+    // Returns the command's number.
     int Command() const
     {
         return command_;
     }
+    // Returns how many arguments the script passed.
     int ParamCount() const
     {
         return paramCount_;
     }
 
-    // The n-th argument as the script passed it (0 the first), read in
-    // place; nothing if it has another type or the call has fewer. A
-    // vector takes three places, so arguments after one move down three.
+    // Reads argument `n` where it sits on the script stack, without removing it.
+    // @return nullopt if the argument has a different type, or there are fewer than n + 1
+    // arguments
     std::optional<std::int32_t> Int(int n) const;
+    // Reads argument `n` as a float, or returns nullopt as Int does.
     std::optional<float> Float(int n) const;
+    // Reads argument `n` as an object, or returns nullopt as Int does.
     std::optional<ObjectId> Object(int n) const;
-    std::optional<std::wstring_view> String(int n) const; // valid until the call returns
+    // Reads argument `n` as a string, or returns nullopt as Int does. The view is valid until the
+    // call returns.
+    std::optional<std::wstring_view> String(int n) const;
+    // Reads argument `n` as a location, or returns null in the same cases as Int.
     const CScriptLocation *Location(int n) const;
+    // Reads argument `n` as an effect, or returns null in the same cases as Int.
     const CGameEffect *Effect(int n) const;
+    // Reads argument `n` as an event, or returns null in the same cases as Int.
     const CScriptEvent *Event(int n) const;
-    const ::dao::Command *Command(int n) const; // AddCommand's second argument, say
+    // Reads argument `n` as a command, such as the second argument of AddCommand, or returns null
+    // in the same cases as Int.
+    const ::dao::Command *Command(int n) const;
 
-    // Change the n-th argument before the command runs, as if the script had
-    // passed that: the value written in place on the VM's stack. Ints,
-    // floats and objects, one word each; false if the argument is of
-    // another type, the call has fewer, or Proceed has run (the arguments
-    // are gone by then). Any intercept later in the chain, and the engine,
-    // see the new value.
+    // Changes argument `n` before the command runs, as if the script had passed the new value.
+    // Later intercepts and the game see the new value.
+    // @return false if the argument has a different type, there are too few arguments, or
+    // Proceed has already run
     bool SetInt(int n, std::int32_t value) const;
+    // Changes float argument `n`, or returns false as SetInt does.
     bool SetFloat(int n, float value) const;
+    // Changes object argument `n`, or returns false as SetInt does.
     bool SetObject(int n, ObjectId value) const;
 
-    // Runs the handler this intercept replaced: another plugin's intercept,
-    // or the engine's command. Its result is the handler's.
+    // Runs the next handler in the chain: another plugin's intercept, or the game's own command.
+    // @return the handler's result, such as kOk
+    //
+    // The handler removes the arguments from the stack. An intercept that answers without calling
+    // Proceed must pop the arguments itself (Stack::Pop*) and push its own answer.
     int Proceed();
+    // Returns whether Proceed has run.
     bool Proceeded() const
     {
         return proceeded_;
     }
-    // What Proceed answered, once it has run.
+    // Returns what Proceed returned, once it has run.
     int ProceededResult() const
     {
         return result_;
     }
 
-    // After Proceed: the answer the command left on top of the stack.
+    // Reads the value the command left on top of the stack for the script. Call it after Proceed.
+    // @return nullopt if that value is not an int
     std::optional<std::int32_t> IntAnswer() const;
+    // Reads the value as a float, or returns nullopt if it is not one.
     std::optional<float> FloatAnswer() const;
+    // Reads the value as an object, or returns nullopt if it is not one.
     std::optional<ObjectId> ObjectAnswer() const;
 
-    // Replace that answer (popped and pushed again). False if the answer
-    // on top is not of that type.
+    // Replaces the value on top of the stack, so the script gets `value`. Call it after Proceed.
+    // @return false if the value on top is not an int
     bool SetIntAnswer(std::int32_t value);
+    // Replaces a float value, or returns false if the value on top is not a float.
     bool SetFloatAnswer(float value);
+    // Replaces an object value, or returns false if the value on top is not an object.
     bool SetObjectAnswer(ObjectId value);
 
   private:
     int command_;
     int paramCount_;
-    int link_; // this intercept's place in the command's chain within this module
+    int link_; // this intercept's position in the command's chain within this module
     bool proceeded_ = false;
     int result_ = 0;
 };
 
+// A plugin's handler for a command. It returns the command's result, usually what Proceed
+// returned.
 using Intercept = std::function<int(CommandCall &)>;
 
-// Intercepts a command. Several from one plugin chain in the order made;
-// each plugin's chain Proceeds into what was in the table before it. False
-// for a number no command has.
+// Runs `intercept` each time a script calls the command.
+// @param command the command's number, listed in dev/SCRIPT_COMMANDS.md
+// @return false if no command has that number, or `intercept` is empty
+//
+// Intercepts form a chain: each one's Proceed runs the intercept installed before it, from this
+// plugin or another, and the first one installed runs the game's command. An intercept added
+// before the game fills in its command table is installed when it does. Intercepts run on the
+// game thread, in the middle of a script. If one throws, the rest of the chain answers instead.
 bool InterceptCommand(int command, Intercept intercept);
 
 } // namespace dao::script

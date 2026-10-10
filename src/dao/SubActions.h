@@ -1,32 +1,10 @@
-// A creature's current command as the engine runs it: the sub-actions left
-// on it, each with the time it still takes where the engine keeps that
-// ahead, so a plugin can say how long a command the creature did not
-// choose (ExecuteEffect as an effect lands, a getting up) still holds it,
-// for any effect and with no list of kinds (DAOLib issue #18).
+// Reads the steps of a creature's current command and how long each still takes. The game runs a
+// command as a list of smaller steps, called sub-actions: an animation, a wait, an aim. Use it to
+// tell how much longer a command the creature did not choose, such as an effect landing on it or
+// getting back up, will keep it busy. It works for any effect.
 //
 //   if (const auto held = dao::commands::HeldFor(creature))
 //       spdlog::info("held {:.2f} s more{}", held->seconds, held->known ? "" : " at least");
-//
-// Read 2026-10-04 (dao/Addresses.h, RunCurrentCommand; dev/TURN_BASED.md,
-// "A command's timed phases"): the current command's sub-actions are a
-// std::list of pointers at the creature's +0x2DC record's +0xC, the head
-// the one running (what IsConjuring answers, dao/Conjure.h's
-// RunningSubAction). Each keeps its type at +0, a delay at +0x18, a
-// duration at +0x14 and the time elapsed at +0xC, in the creature's own
-// milliseconds. The update spends the delay first, then for a timed one
-// (a duration above 0) the elapsed time up to the duration; an untimed one
-// runs until its handler says it is done, so its time is not known ahead,
-// and some set their duration only as they begin (an animation's, 37, its
-// length; an aim's, 6). So the time a command still holds a creature is
-// known exactly only where every sub-action left is timed, begun and not
-// yet spent.
-//
-// Seen in play 2026-10-04 (the turn-based mod against the high dragon, 50
-// holds of the party): a knockback (effect type 1057) is an ExecuteEffect
-// with one sub-action, 51, timed to the effect's 1200 ms and found spent
-// (1200 of 1200) as the turn began; then none left while the command
-// still held the creature, 0.6 to 3.2 s in all, the fall and the rise.
-// After the dragon's roar the count fell about 0.4 s short of the hold.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -38,27 +16,37 @@
 namespace dao::commands
 {
 
+// One step of a command. Times are in milliseconds of the creature's own clock.
 struct SubAction
 {
-    std::uint32_t type = 0;
-    std::int32_t delayMs = 0;    // still to wait before it runs
-    std::int32_t durationMs = 0; // 0 for an untimed one, or a timed one not yet begun
-    std::int32_t elapsedMs = 0;
+    std::uint32_t type = 0;      // the kind of step, such as 37 for an animation
+    std::int32_t delayMs = 0;    // time still to wait before the step runs
+    std::int32_t durationMs = 0; // 0 if the step is untimed, or timed but not yet started
+    std::int32_t elapsedMs = 0;  // how much of the duration has passed
 };
 
-// The current command's sub-actions left, the running one first; empty for
-// no command, none left, or no creature. On the game's thread.
+// Returns the sub-actions left in the creature's current command, the running one first.
+// @return an empty list if the creature has no command or no sub-actions left, or the ID is not
+// a creature
+//
+// Call it on the game thread.
 std::vector<SubAction> SubActions(ObjectId creature);
 
+// How much longer a command will keep a creature busy.
 struct Held
 {
-    float seconds = 0; // the delays and timed time left, summed
-    // False where a sub-action left is untimed, or timed and spent but still
-    // there, or none is left of a command still current: at least `seconds`.
+    float seconds = 0; // the delays and remaining timed durations, added up
+    // False if `seconds` is only a lower bound: a remaining sub-action is untimed, or is timed and
+    // used up but still running, or none are left but the command is still current.
     bool known = true;
 };
-// How long the current command still holds the creature, from its
-// sub-actions; nothing for no command. On the game's thread.
+
+// Estimates from its sub-actions how much longer the creature's current command will keep it
+// busy.
+// @return nullopt if the creature has no current command, or the ID is not a creature
+//
+// Call it on the game thread. If `known` is false, the creature is busy for at least `seconds`.
+// For example, the fall and the getting up after a knockback are not timed in advance.
 std::optional<Held> HeldFor(ObjectId creature);
 
 } // namespace dao::commands

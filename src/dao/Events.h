@@ -1,43 +1,10 @@
-// The game's script events, as the engine delivers them: a plugin's
-// callback sees each one, and whom it is for, just before the target's
-// scripts do.
+// Lets a plugin watch the game's script events: each event, and the object it is for, just before
+// that object's scripts handle it.
 //
 //   dao::events::OnScriptEvent([](dao::ObjectId target, const dao::CScriptEvent &event) {
 //       if (event.Type() == dao::script::EventType::Damaged)
 //           spdlog::info("{:#x} was hurt by {:#x}", target, event.Creator());
 //   });
-//
-// Events reach an object two ways. Most travel through the engine's event
-// queue (dao/Addresses.h, "The engine's event queue"): SignalEvent and the
-// engine queue a CScriptEvent, AIMaster::ProcessEvent hands it to the
-// target's handler when it is due, and the handler runs the object's
-// script for it (CCObject::RunEventScript, 0x00698960). Some never queue:
-// engine code calls RunEventScript at once, 18 places in all (a creature's
-// death, an order received, a selection, effects, the command queue). So
-// OnScriptEvent detours RunEventScript, which sees both, and the queue
-// too, for the events it hands an area or the module, which have handlers
-// of their own. Read 2026-09-30, after a play test in which four deaths
-// and most EVENT_TYPE_COMMAND_COMPLETEs never reached a ProcessEvent hook
-// (the Eluvian server's report). Seen in play with the new hook, 2026-09-30
-// (20:07 to 20:14, two fights): every death came, each 1.5 to 2.5 s after
-// the creature was dead by IsDead, once its death had played out, the
-// creator the killer for a death from a blow and null for one by an
-// applied effect. Over a longer session the same day, 39 deaths gave 39
-// events, a median 2.15 s after IsDead and at most 5.14 s (once 20 ms
-// before a frame's IsDead poll). For the moment of death itself, a plugin watches IsDead
-// or EVENT_TYPE_DAMAGED.
-//
-// EVENT_TYPE_DAMAGED is damage as it is taken: effect_damage_h.nss sends
-// it (events_h.nss, SendEventOnDamaged) straight after it lowers a
-// creature's health, the one place that does, once mana shields,
-// resistances and the friendly-fire scaling have had their say. Float(0)
-// is the damage, Int(0) its type (DAMAGE_TYPE_*, physical 1), Int(1) the
-// ability, the creator the attacker. Only for a blow that does not kill:
-// a fatal one sends the death instead. Read 2026-10-02 from the scripts;
-// the event itself not yet seen in play.
-//
-// Callbacks run on the scripts' thread, and see the event the target is
-// about to handle; they observe, they do not change or stop it.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -48,13 +15,24 @@
 namespace dao::events
 {
 
+// A callback for a script event. It receives the object, area or module the event is for, and
+// the event itself, which is valid only during the call.
 using ScriptEventCallback = std::function<void(ObjectId target, const CScriptEvent &event)>;
 
-// Adds a callback for every script event; the first call detours the
-// engine's event processing. At plugin load or later.
+// Calls `callback` for every script event, whether it was queued or sent straight to its target.
+//
+// Call it when the plugin loads or later. Callbacks run on the game thread and can only watch:
+// they cannot change or stop the event. EVENT_TYPE_DEATH arrives about 1.5 to 5 seconds after
+// IsDead starts returning true for the creature. To catch the moment of death, watch IsDead or
+// EVENT_TYPE_DAMAGED.
 void OnScriptEvent(ScriptEventCallback callback);
 
-// Adds a callback for script events of one type.
+// Calls `callback` for script events of one type only. Otherwise it works like the overload
+// above.
+//
+// For EVENT_TYPE_DAMAGED, Float(0) is the damage, Int(0) its DAMAGE_TYPE_* value, Int(1) the
+// ability, and the creator is the attacker. The event comes only for a blow that does not kill;
+// a fatal blow sends the death event instead.
 void OnScriptEvent(script::EventType type, ScriptEventCallback callback);
 
 } // namespace dao::events

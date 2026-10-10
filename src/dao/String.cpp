@@ -1,3 +1,7 @@
+// The engine's string, held by a plugin: its std::wstring (MSVC 2005's,
+// dao/core/Msvc8.h), in its layout, filled and freed by the engine's own
+// functions, since a string longer than seven characters lives on the
+// engine's heap.
 #include "dao/String.h"
 
 #include "dao/Addresses.h"

@@ -1,3 +1,25 @@
+// The game's data tables, read through the engine's own getters.
+//
+// A table is one of the scripts' TABLE_* numbers (dao::script::Table, from
+// 2da_constants_h.nss): an M2DA, every file of the game's 2da.erf whose
+// name starts with the table's prefix (m2da_base.gda: 1 is "ABI_", 6
+// "BITM_"). dev/gda_tables.csv lists each file's table and columns with
+// their types (tools/gda.py). A row is the row's id, as scripts pass it to
+// GetM2DAInt; a column is its name, hashed as the game does
+// (dao/core/GdaHash.h). The same values are the scripts' GetM2DAInt and
+// GetM2DAFloat, which dao::script::api also reaches; these go straight to
+// the table, with no script machinery.
+//
+// Read 2026-09-30: the engine keeps its tables behind the object in the
+// global at 0x00C1D090; its getters find a table by number and call the
+// table's typed getter (C2DASource's vtable, which M2DA and G2DA fill):
+// slot 10 for an int, which GetM2DAInt uses and GameModeExplore's ability
+// handler reads TargetType with, slot 9 for a float, which GetM2DAFloat
+// uses, slot 8 for a string, which GetM2DAString uses, and slot 11 for a
+// bool. The row and column counts are the table's slots 5 and 4, as
+// GetM2DARows and GetM2DAColumns have them. A string or bool asked of a
+// column of another type gets what the engine gives: whatever the table's
+// conversion makes of it, as GetM2DAString would.
 #include "dao/Gda.h"
 
 #include "dao/Addresses.h"

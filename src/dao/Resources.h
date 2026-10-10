@@ -1,18 +1,9 @@
-// The game's files as the game itself finds them: a resource by its file
-// name, looked up by the engine's resource system wherever it looks for
-// its own (the override folders, add-ins, patches and the game's archives,
-// in its own order), so a plugin reads what is installed, a mod's version
-// over the game's.
+// Reads the game's files by name, found the same way the game finds its own: in the override
+// folders, add-ins, patches and archives, in the game's order of precedence. Use it to read what
+// is actually installed, so that a mod's version of a file wins over the original.
 //
 //   const auto script = dao::resources::Read(L"rules_core.ncs");
 //   if (script) { /* the compiled script the game runs */ }
-//
-// Read 2026-10-02 (dao/Addresses.h, "A resource's bytes"): what the Flash
-// interface's movie file does to open a movie, Resources::Find with the
-// name and the mode it asks with, then the resource's Data and Size, and
-// Release. Seen in play 2026-10-02 by the turn-based mod: rules_core.ncs
-// read as 251,960 bytes, the size of the shipped one in
-// designerscripts.rim.
 #pragma once
 
 #include <cstddef>
@@ -23,13 +14,16 @@
 namespace dao::resources
 {
 
-// A copy of the resource's bytes; nothing if the game has no file by this
-// name (its extension included: L"rules_core.ncs", L"turnorder.gfx") or
-// it could not be read, which may put a line in the game's own log. From
-// the game's thread, once the game is up.
+// Returns a copy of a file's bytes.
+// @param file the file name with its extension, such as L"rules_core.ncs"
+// @return nullopt if the game has no file by that name or cannot read it. The game may write a
+// line about it to its own log.
+//
+// Call it on the game thread, once the game has started.
 std::optional<std::vector<std::byte>> Read(std::wstring_view file);
 
-// Whether the game has a file by this name.
+// Returns whether the game has a file by this name, found the same way as Read finds it. It
+// loads the file to find out, so call it on the game thread too.
 bool Exists(std::wstring_view file);
 
 } // namespace dao::resources

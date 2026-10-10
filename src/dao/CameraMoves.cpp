@@ -1,3 +1,34 @@
+// Smooth camera moves on the game's camera (dao/Camera.h): the part every plugin that
+// moves the camera would otherwise write, and get wrong in the same places.
+//
+// - From where the camera is. Each frame reads the camera's yaw and offset as they
+//   are, so a player who has turned or panned the camera since the plugin last moved
+//   it is where the move starts from.
+// - The short way round. The camera's yaw is not wrapped (it ran past 2 pi in play),
+//   so a turn goes by the smaller angle to the target, whatever multiple of 2 pi
+//   either is at.
+// - The player wins. A pan stops when the game pans the camera for the player (its
+//   own pan from the keys, a dragged mouse button or the cursor at the screen's edge,
+//   hooked), and a turn when the camera's yaw is not where the turn left it the frame
+//   before. Either leaves the camera theirs.
+// - Why it stopped. OnMoveEnded and LastEnd say: there (2 cm, or a thousandth of a
+//   turn), the player, the camera following something else, replaced, stopped, or no
+//   camera.
+//
+// A pan does not take the game's own changes to the offset for the player's: until
+// 2026-09-30 it did, stopping when the offset moved more than 5 cm between frames. In
+// the tactical view the game pulls the focus back toward the party while no party
+// member is in view (CameraController::PullSpeed), faster each frame, and a pan from a
+// room the party could not be seen in was stopped by it within about six frames, twice
+// at the start of the hero's turn in the turn-based mod. A pan now holds that pull at
+// rest while it runs.
+//
+// A move eases out: quick at first, slowing into place, near enough there after
+// `seconds`. The moves run in a frame callback of their own, called from the game's
+// thread (a frame callback, a script event). One plugin's moves only: a second
+// plugin's turn would look like the player's, and two pans would pull against each
+// other.
+
 #include "dao/CameraMoves.h"
 
 #include "dao/Camera.h"
@@ -342,6 +373,10 @@ void EaseYaw(float radians, float seconds)
     g_yawEnd.reset();
 }
 
+// Read 2026-10-02 (dao/Camera.h, CameraController::ZoomSetting). Seen in play the same
+// day, the turn-based mod's play test 34: pulled back on each actor's turn by its size
+// (an ogre, its victim and another in one frame), and the party's turns back at the
+// player's own zoom.
 void EaseZoom(float zoom, float seconds)
 {
     Start();
@@ -375,6 +410,20 @@ bool PlayerZoomed()
            std::fabs(camera->ZoomSetting() - *g_zoomLeft) > kZoomSlack;
 }
 
+// Selecting that same creature while the pan runs (the turn-based mod's order: select,
+// then pan) does not stop it: the game's own retargeting is taken as where the pan goes
+// on from, not as the player panning. Selecting another creature, or the player
+// panning, still does (2026-09-30: a pan stopped by a selection in the same frame once
+// left the view on the creature before).
+//
+// What "arrived" means for a pan: the controller's offset from what it follows has
+// been eased to nothing, which is the whole of the move in the tactical view. Close in
+// there is no offset to ease, the game's own pan carrying the camera over (0x007707D0,
+// from OnTargetChanged), so the move ends arrived on its first frame while that pan is
+// still under way and CameraController::Focus() is still between the two creatures (in
+// play, 2026-09-30, the turn-based mod's: arrived after 25 ms with the focus 3.1 m from
+// the creature). So to ask whether a pan fell short, read FocusOffset() or LastEnd, not
+// the focus against the creature's position.
 void PanTo(ObjectId object, float seconds)
 {
     Start();
@@ -395,6 +444,8 @@ void PanTo(ObjectId object, float seconds)
     g_playerPanned = false;
 }
 
+// From the object's forward vector (GetOrientation): atan2(-y, -x), as seen in play
+// (dao/Camera.h has the measurements).
 std::optional<float> YawBehind(ObjectId object)
 {
     const Vector forward = script::api::GetOrientation(object);
@@ -458,6 +509,12 @@ namespace
 std::optional<float> g_gameClose;
 } // namespace
 
+// Read 2026-10-04 (DAOLib #17, dao/Addresses.h "The camera's distances"): the orbit's
+// radius each frame is zoom x close + (1 - zoom) x far, the two from globals the
+// explore controller's update copies into the orbit every frame. So a larger close
+// distance pulls the camera back at the same zoom, and the zoom's view flag and the
+// tactical view are left alone. Nothing stops the camera at a wall or the ground (the
+// orbit tests no collision). The game's own is kept at the first change.
 void SetCloseDistance(std::optional<float> metres)
 {
     auto *close = At<float>(addr::kCameraControllerExplore_CloseDistance);

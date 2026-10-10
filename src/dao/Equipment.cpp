@@ -1,3 +1,32 @@
+// Equipment changes (dao/Equipment.h), by detours on CCCreature's equip and unequip.
+//
+// Read 2026-10-04 (DAOLib #22). Every path that equips or unequips meets in two of CCCreature's
+// functions: the inventory screen's EquipItemMessage, the scripts' EquipItem and UnequipItem, a
+// creature's own sub-actions 19 and 20 (an equip and an unequip queued as part of a command), the
+// items an equip displaces, a plugin's own call.
+// - the equip (0x006BC7F0), __thiscall (CCItem *item, slot, weapon set),
+//   `ret 0xC`, success in al: EquipItemMessage's handler (0x006BE330)
+//   calls it with the message's item and slot and set -1, the scripts'
+//   EquipItem with theirs. A slot of 255 lets the item go to its own.
+// - the unequip (0x006B7690), __thiscall (Result *out, CCItem *item),
+//   `ret 8`, answering out, whose first byte is the success. The equip
+//   calls it for ammunition that no longer fits (three places); what was
+//   in the slot it fills it moves to the inventory itself, without the
+//   unequip (seen in play 2026-10-04), so the creature's slots are read
+//   before and after an equip, and an item gone is told to OnUnequip as
+//   displaced. Either way OnUnequip hears of it before OnEquip.
+// One script command function serves both EquipItem and UnequipItem
+// (0x0065CDA0), branching on the command's id: the equip for EquipItem,
+// else the unequip, whose result's first byte it answers before
+// destroying the result (0x007616C0). The sub-actions are the sub-action
+// table's 19 (0x007A25C0) and 20 (0x007A2650), and five more of the
+// engine's functions call each (read by the address library's session,
+// 2026-10-04).
+// An observer is told after the engine's call, on the game's thread.
+// Seen in play 2026-10-04: an off hand's Dagger told as displaced before
+// Dar'Misu went on, a plain unequip, a refused two-hander, and the load's
+// ammunition. An area's load equips every creature's ammunition (arrows,
+// bolts, a staff's projectile), each told: a line a creature.
 #include "dao/Equipment.h"
 
 #include "dao/Addresses.h"

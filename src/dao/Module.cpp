@@ -1,3 +1,20 @@
+// The running DAOrigins.exe, and an ID turned into an address in it.
+//
+// The game is sold in more than one build (extern/DAOAddressLibrary's
+// dev/BUILDS.md), each with its functions and globals somewhere else. The
+// library holds IDs (dao/Addresses.h), and here each is looked up in the
+// file for the build that is running, beside the loader:
+// daolib\addresses\daoaddresses-<link stamp>-<image size>-<entry point>-
+// <base>.bin, named by all four of the exe's header fields, since Steam's
+// build has GOG's link stamp. A build with no file is one the library does
+// not know, and nothing is hooked or read in it. A new build of the game is
+// a new file there, with neither the loader nor a plugin rebuilt.
+//
+// Logs, the probe's call chains and the crash logger write addresses as the
+// GOG build's Ghidra listing shows them, whichever build is running, since
+// that is the listing the names and the stories in the comments belong to:
+// Preferred goes from a running address back to that. It needs the GOG
+// build's file as well, which ships beside the others.
 #include "dao/Module.h"
 
 #include "dao/core/Pe.h"
@@ -11,6 +28,8 @@
 namespace dao::Module
 {
 
+// A plugin's own folder is daolib\plugins\<name>, where its files sit beside
+// it (DAOLib #26).
 std::filesystem::path OwnFolder()
 {
     HMODULE module = nullptr;
@@ -150,6 +169,9 @@ const daoaddr::Library *Library()
     return libraries.running ? &*libraries.running : nullptr;
 }
 
+// The files are looked for in daolib\addresses beside the loader, which for a
+// plugin in its folder daolib\plugins\<name> is two levels up; the first of
+// the candidates (Loaded) that holds the running build's file wins.
 std::filesystem::path AddressFolder()
 {
     return Loaded().folder;
@@ -185,6 +207,11 @@ const daoaddr::Index *RunningIndex()
 
 } // namespace
 
+// `python tools\address_ids.py 0x0066E1B4` says the ID and offset of an
+// address read in the GOG listing. The library does not know where a
+// function ends, only where the next ID begins; every function the analysis
+// found has an ID, so an address in code is in the function named. kFarthest
+// bounds how far past an ID is still believed.
 std::optional<Place> Containing(std::uintptr_t runtime)
 {
     const daoaddr::Index *index = RunningIndex();
@@ -200,6 +227,9 @@ std::optional<Place> Containing(std::uintptr_t runtime)
     return Place{.id = hit->id, .offset = hit->offset};
 }
 
+// The listing's address is what Ghidra, the logs and the last argument of a
+// row in dao/Addresses.h write. In another build it is the ID at or below the
+// address, and as far past that ID's place in GOG's build.
 std::uint32_t Preferred(std::uintptr_t runtime)
 {
     const daoaddr::Library *library = Library();

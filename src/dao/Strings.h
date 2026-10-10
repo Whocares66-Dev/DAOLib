@@ -1,17 +1,12 @@
-// A plugin's own text, in the player's language: a talk table of its own
-// beside its DLL, chosen by the game's language, read by string id. What
-// the game's own text is through dao/Tlk.h, for a plugin's.
+// Gives a plugin its own text in the player's language. The text comes from talk tables the
+// plugin ships next to its DLL (name_en-us.tlk, name_de-de.tlk and so on), looked up by string
+// ID. To read the game's own text, use dao/Tlk.h.
 //
 //   static const auto text = dao::strings::Table::Load(*info, L"turnbased");
 //   const std::wstring tooFar = text.String(2, L"Too far");
 //
-// A plugin ships turnbased_en-us.tlk, turnbased_de-de.tlk and so on beside
-// its DLL: GFF4 talk tables as the game's own (dao/core/TalkTable.h).
-// `python tools/tlk.py --write strings.csv turnbased_en-us.tlk` makes one
-// from a CSV of id,text rows; the toolset writes them too. The player's language is the game's: Locale under
-// [GameOptions] in Documents\BioWare\Dragon Age\Settings\DragonAge.ini (en-us on this machine, 2026-09-30), the setting
-// that picks the game's own core_<lang>.tlk. A language with no file of the plugin's falls back to en-us; a string with
-// no entry, to the fallback given.
+// `python tools/tlk.py --write strings.csv turnbased_en-us.tlk` makes a talk table from a CSV
+// file of id,text rows. The toolset can write talk tables too.
 #pragma once
 
 #include "dao/Plugin.h"
@@ -26,21 +21,27 @@
 namespace dao::strings
 {
 
-// The game's language, as its options give it ("en-us", "de-de"); en-us if
-// the options say none.
+// Returns the game's language setting, such as "en-us" or "de-de", or "en-us" if none is set. It
+// reads DragonAge.ini on every call.
 std::wstring Locale();
 
+// One talk table of a plugin's strings.
 class Table
 {
   public:
-    // <folder>\<name>_<locale>.tlk, else <name>_en-us.tlk; an empty table if
-    // neither is there or readable.
+    // Loads <folder>\<name>_<locale>.tlk for the game's language, or <name>_en-us.tlk if there is
+    // no file for that language.
+    // @param name the start of the file name, such as L"turnbased"
+    // @return an empty table, whose String always returns the fallback, if neither file can be
+    // read
     static Table Load(const std::filesystem::path &folder, std::wstring_view name);
-    // The same, from the folder the plugin's DLL is in.
+    // Loads the table, as above, from the folder of the plugin's DLL.
     static Table Load(const LoaderInfo &info, std::wstring_view name);
 
+    // Returns the string with the given ID.
+    // @return `fallback` if the table has no such string or no file was read
     std::wstring String(std::uint32_t id, std::wstring_view fallback = {}) const;
-    // The file read, if one was.
+    // Returns the path of the file that was read, or nullopt if none was.
     const std::optional<std::filesystem::path> &File() const
     {
         return file_;

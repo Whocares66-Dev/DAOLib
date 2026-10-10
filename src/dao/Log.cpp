@@ -1,3 +1,15 @@
+// One log file per DLL. Each DLL links spdlog statically and so has a
+// default logger of its own; OpenLog points it at that DLL's file. The level
+// comes from DAOLIB_LOG_LEVEL, info when unset, and the file's first line
+// names the level it took, so a log says what it can show.
+//
+// A line costs its caller no disk write: it is appended to a buffer that a
+// writer thread of the log's own writes out every quarter of a second, and
+// at once for a warning or an error (DAOLib #31), so logging from the
+// game's frame thread does not stall it. A line can reach the file up to a
+// quarter of a second late; kLogLatency is what a reader of the log files
+// (the crash logger copying their last lines) waits for first. The crash
+// logger's own log is written apart.
 #include "dao/Log.h"
 
 #include <Windows.h>

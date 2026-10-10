@@ -1,42 +1,15 @@
-// Moving the camera smoothly, the player's own turning and panning taken
-// into account: the part every plugin that moves the camera would
-// otherwise write, and get wrong in the same places (dao/Camera.h has the
-// camera itself).
+// Smooth camera moves: turning, panning to a creature and zooming, each eased over a given
+// time.
 //
-//   dao::camera::PanTo(creature, 0.6f);                    // tactical: glide there, no turning
+// Every move starts from where the camera is now, turns the short way round, and stops as soon
+// as the player turns, pans or zooms the camera. Starting a move replaces any running move of
+// the same kind. Only one plugin should move the camera, because to each plugin another
+// plugin's moves look like the player's. Call these on the game thread.
+//
+//   dao::camera::PanTo(creature, 0.6f);                    // tactical view: glide, no turning
 //   if (const auto behind = dao::camera::YawBehind(creature))
-//       dao::camera::EaseYaw(*behind, 0.6f);               // close in: come round behind it
+//       dao::camera::EaseYaw(*behind, 0.6f);               // close view: come round behind it
 //   dao::camera::EaseZoom(0.7f, 0.8f);                     // pull back a little
-//
-// - From where the camera is. Each frame reads the camera's yaw and
-//   offset as they are, so a player who has turned or panned the camera
-//   since the plugin last moved it is where the move starts from.
-// - The short way round. The camera's yaw is not wrapped (it ran past 2
-//   pi in play), so a turn goes by the smaller angle to the target,
-//   whatever multiple of 2 pi either is at.
-// - The player wins. A pan stops when the game pans the camera for the
-//   player (its own pan from the keys, a dragged mouse button or the
-//   cursor at the screen's edge, hooked), and a turn when the camera's yaw
-//   is not where the turn left it the frame before. Either leaves the
-//   camera theirs.
-// - Why it stopped. OnMoveEnded and LastEnd say: there, the player, the
-//   camera following something else, replaced, stopped, or no camera.
-//
-// A pan does not take the game's own changes to the offset for the
-// player's: until 2026-09-30 it did, stopping when the offset moved more
-// than 5 cm between frames. In the tactical view the game pulls the focus
-// back toward the party while no party member is in view (CameraController
-// ::PullSpeed), faster each frame, and a pan from a room the party could
-// not be seen in was stopped by it within about six frames, twice at the
-// start of the hero's turn in the turn-based mod. A pan now holds that
-// pull at rest while it runs.
-//
-// A move eases out: quick at first, slowing into place, near enough there
-// after `seconds`. A new move of the same kind replaces the one running.
-// Called on the game's thread (a frame callback, a script event); the
-// moves run in a frame callback of their own. One plugin's moves only: a
-// second plugin's turn would look like the player's, and two pans would
-// pull against each other.
 #pragma once
 
 #include "dao/Camera.h"
@@ -49,67 +22,63 @@
 namespace dao::camera
 {
 
-// The camera in explore or combat mode, the modes it moves in; null in any
-// other (a menu, a dialogue, a cutscene, loading) or before the game is up.
+// Returns the camera controller in explore or combat mode, the only modes in which the camera
+// moves.
+// @return null in any other mode (a menu, a conversation, a cutscene, loading) or before the
+// game has started
 CameraController *Current();
 
-// When the camera starts following something else: the player selecting
-// another party member, or a plugin's Follow or PanTo. `before` is what it
-// followed until now. After the game's own handling (in the tactical view
-// the camera has stayed where it was; close in, the game's pan has begun),
-// on the game's thread. A callback that follows something else in turn is
-// called again for that.
+// Registers a callback for when the camera starts following a different object: the player
+// selecting another party member, or a plugin calling Follow or PanTo.
+// @param callback called with the object followed now and the one followed before
+//
+// The callback runs on the game thread after the game has handled the change: in the
+// tactical view the camera has stayed where it was, and in the close view the game's pan has
+// begun. If the callback makes the camera follow something else, it is called again for that
+// change.
 void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback);
 
-// Turn the camera, close in, to a yaw (dao/Camera.h, SceneCamera::Yaw).
+// Turns the camera to a yaw, in the close view.
+// @param radians the yaw to turn to, measured as SceneCamera::Yaw is
+// @param seconds how long the turn takes to all but arrive; it starts quickly and slows into
+// place
 void EaseYaw(float radians, float seconds);
 
-// Zoom the camera, as the mouse wheel does, to a zoom on the scene
-// camera's scale (dao/Camera.h, SceneCamera::Zoom: 1 close behind the
-// creature, 0 the tactical view high above). Below 0.5 the game turns to
-// the tactical view, where the camera does not follow a change of target
-// and pans differently (dao/Camera.h), so a plugin that means to stay in
-// the close view keeps to 0.5 and above. The player wins: a zoom the
-// player makes with the wheel while it runs stops it. Read 2026-10-02
-// (dao/Camera.h, CameraController::ZoomSetting). Seen in play the same
-// day, the turn-based mod's play test 34: pulled back on each actor's
-// turn by its size (an ogre, its victim and another in one frame), and
-// the party's turns back at the player's own zoom.
+// Zooms the camera, as the mouse wheel does.
+// @param zoom the zoom to reach, on SceneCamera::Zoom's scale from 1 (close behind the
+// creature) to 0 (the tactical view high above); clamped to 0..1
+// @param seconds how long the zoom takes to all but arrive
+//
+// Below 0.5 the game switches to the tactical view, where the camera does not follow a change
+// of target, so stay at 0.5 or above to remain in the close view. Does nothing if there is no
+// camera (see Current).
 void EaseZoom(float zoom, float seconds);
-// Whether the player has zoomed since the last EaseZoom: its ease ended by
-// the player, or the zoom moved since it arrived. False before any.
+// Returns true if the player has zoomed since the last EaseZoom, either during it or after it
+// arrived. Returns false before the first EaseZoom.
 bool PlayerZoomed();
 
-// Follow a creature and glide the focus onto it. In the tactical view the
-// camera keeps its height and its turn, and only slides; close in, the
-// game pans by itself to a creature within 15 m (CameraController::
-// Follow), and farther it cuts. Selecting that same creature while the pan
-// runs (the turn-based mod's order: select, then pan) does not stop it:
-// the game's own retargeting is taken as where the pan goes on from, not
-// as the player panning. Selecting another creature, or the player
-// panning, still does (2026-09-30: a pan stopped by a selection in the
-// same frame once left the view on the creature before).
+// Makes the camera follow an object and glides the focus onto it.
+// @param object the object to follow, usually a creature
+// @param seconds how long the glide takes to all but arrive
 //
-// What "arrived" means for a pan: the controller's offset from what it
-// follows has been eased to nothing, which is the whole of the move in the
-// tactical view. Close in there is no offset to ease, the game's own pan
-// carrying the camera over (0x007707D0, from OnTargetChanged), so the move
-// ends arrived on its first frame while that pan is still under way and
-// CameraController::Focus() is still between the two creatures (in play,
-// 2026-09-30, the turn-based mod's: arrived after 25 ms with the focus 3.1
-// m from the creature). So to ask whether a pan fell short, read
-// FocusOffset() or LastEnd, not the focus against the creature's position.
+// In the tactical view the camera only slides, keeping its height and yaw. In the close view
+// the game itself pans to an object within 15 m and cuts to one farther away, so the move
+// reports Arrived on its first frame while the game's own pan is still running. Selecting the
+// same creature during the pan does not stop it; selecting another does. To tell whether a
+// pan fell short, check CameraController::FocusOffset or LastEnd, not Focus. Does nothing if
+// there is no camera (see Current).
 void PanTo(ObjectId object, float seconds);
 
-// The yaw that puts the camera behind a creature, from its forward vector
-// (GetOrientation): atan2(-y, -x), as seen in play. Nothing for an object
-// with no orientation.
+// Returns the yaw that puts the camera behind an object, for EaseYaw.
+// @return nullopt if the object has no orientation
 std::optional<float> YawBehind(ObjectId object);
 
-// Whether a move is still running, and stopping them.
+// Returns true while any move is running.
 bool Moving();
+// Stops every running move where it is; each one ends with MoveEnd::Stopped.
 void Stop();
 
+// A kind of camera move.
 enum class Move
 {
     Yaw,  // EaseYaw
@@ -120,35 +89,37 @@ enum class Move
 // Why a move ended.
 enum class MoveEnd
 {
-    Arrived,    // there, near enough (2 cm, or a thousandth of a turn)
+    Arrived,    // it got close enough to its target
     Player,     // the player panned, turned or zoomed the camera
-    Retargeted, // the camera began following something else
-    Replaced,   // a new move of the same kind
-    Stopped,    // Stop()
-    NoCamera,   // the camera went: a menu, a dialogue, a cutscene, loading
+    Retargeted, // the camera started following something else
+    Replaced,   // a new move of the same kind replaced it
+    Stopped,    // Stop was called
+    NoCamera,   // the camera is gone: a menu, a conversation, a cutscene or loading
 };
+// Returns a short lower-case name for a reason, for logs, such as "arrived" or "the player".
 std::string_view Name(MoveEnd why);
 
-// When a move ends, and why, on the game's thread, once the move has let
-// go of the camera: a callback may start another.
+// Registers a callback for when a move ends.
+// @param callback called with the kind of move and why it ended
+//
+// The callback runs on the game thread after the move has released the camera, so it may
+// start another move.
 void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback);
 
-// The camera's distance from its pivot at zoom 1, in metres: the game's
-// 3.0, or what a plugin sets (nothing: the game's back). Read 2026-10-04
-// (DAOLib #17, dao/Addresses.h "The camera's distances"): the orbit's
-// radius each frame is zoom x close + (1 - zoom) x far, the two from
-// globals the explore controller's update copies into the orbit every
-// frame. So a larger close distance pulls the camera back at the same
-// zoom, and the zoom's view flag and the tactical view are left alone; for
-// a creature too big to frame. Nothing stops the camera at a wall or the
-// ground (the orbit tests no collision); keep it modest where there is
-// little room. The game's own is kept at the first change. On the game's
-// thread.
+// Sets the camera's distance from its pivot at full zoom (1); the game's default is 3.0. A
+// larger distance pulls the camera back at the same zoom without switching to the tactical
+// view, which helps frame a creature too big for the default.
+// @param metres the distance, or nullopt to restore the game's own
+//
+// Nothing stops the camera at a wall or the ground, so keep the distance modest in tight
+// spaces. Call on the game thread.
 void SetCloseDistance(std::optional<float> metres);
+// Returns the camera's distance from its pivot at full zoom, in metres, or 0 if the running
+// build of the game does not support it.
 float CloseDistance();
 
-// Why the last move of a kind ended; nothing while one runs or before the
-// first.
+// Returns why the last move of a kind ended.
+// @return nullopt while a move of that kind is running, or before the first one
 std::optional<MoveEnd> LastEnd(Move move);
 
 } // namespace dao::camera

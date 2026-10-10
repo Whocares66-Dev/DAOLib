@@ -1,37 +1,11 @@
-// An ability's name, for a person to read: its label in the ability table
-// and its name in the player's language. For logs and tools that would
-// otherwise show an ability's number.
+// Ability names, cooldowns, the abilities a creature has, and whether it can use one now and at
+// what cost. Use it to show an ability by name, to hold or release a cooldown, or to check an
+// order before giving it.
 //
 //   dao::abilities::Name(10003)   // L"Fireball"
 //   dao::abilities::Label(10003)  // L"FIREBALL"
-//
-// Read 2026-09-30 from the scripts: an ability's row in TABLE_ABILITIES_SPELLS
-// (1, ABI_base, every ability, by its id) has Label and NameStrRef, and the
-// ability bar names an ability by NameStrRef through the talk tables
-// (ui_h.nss). Both go through dao/Gda.h and dao/Tlk.h; nothing comes back
-// for an id with no row, or before the tables are loaded.
-//
-// And an ability's cooldown on a creature, with the two numbers the
-// scripts cannot set apart:
-//
-//   // two of three turns still to wait: the slot's sweep two thirds full
+//   // Two thirds of the cooldown left: the quickbar's sweep starts two thirds full.
 //   dao::abilities::SetCooldown(creature, ability, 2400.0F, 3600.0F);
-//
-// Read 2026-09-30 (dao/Addresses.h, "Cooldowns"). A creature has a record
-// for each ability it has, which holds the seconds the cooldown was last
-// set to, the seconds left, and the share of the one the other is. Each
-// frame of game time the engine takes the frame's seconds from what is
-// left and sets the share to what is left over what it was set to; the
-// record is what the creature's ability list hands the interface, so the
-// share is what a quickbar slot's sweep can show. The scripts' SetCooldown
-// sets both numbers to the one time, so a long hold set that way shows a
-// full sweep that never moves. GetCooldown and SetCooldown here read and
-// set the two. Seen in play, 2026-10-01 (examples/cooldown): Powerful
-// Swings set to 800 s left of 1200 s read back 800 of 1200, ticked a second
-// a second, and its quickbar slot drew a sweep about two thirds dark. The
-// turn-based mod, the same day, wrote a three-turn wait as thirds of 3600
-// s: 3599.9 left drew the slot wholly dark, 2399 a third lit, 1199 two
-// thirds lit, then ready.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -46,174 +20,137 @@
 namespace dao::abilities
 {
 
+// Returns an ability's label in the ability table, for example L"FIREBALL".
+// @param ability the ability's id, a row of the ABI_base table
+// @return the label, or nullopt if no row has that id or the tables are not loaded yet
 std::optional<std::wstring> Label(std::int32_t ability);
-// The label when the row names no string.
+
+// Returns an ability's name in the player's language, for example L"Fireball".
+// @param ability the ability's id, a row of the ABI_base table
+// @return the name; the label if the row has no name string; nullopt if no row has that id or the
+// tables are not loaded yet
 std::optional<std::wstring> Name(std::int32_t ability);
 
+// An ability's cooldown on a creature, in seconds of game time.
 struct Cooldown
 {
-    float remaining = 0; // seconds of game time left
-    float total = 0;     // seconds it was last set to
-    // What is left over what it was set to, 0 to 1: the sweep.
+    float remaining = 0; // seconds left; 0 when the ability is ready
+    float total = 0;     // the length, in seconds, the cooldown was last set to
+    // Returns the fraction of the cooldown still to run, from 0 to 1. This is what the quickbar's
+    // sweep shows.
     float Fraction() const
     {
         return total > 0 ? remaining / total : 0.0F;
     }
 };
 
-// An ability's cooldown on a creature; nothing for a creature that is not
-// there or has no record for the ability (it does not have the ability). An
-// ability ready to use reads 0 left. `itemTag` is the tag of the item an
-// item's ability comes from, as the scripts' sSourceItemTag.
+// Returns an ability's cooldown on a creature.
+// @param itemTag the tag of the item the ability comes from, like the scripts' sSourceItemTag;
+// empty for the creature's own ability
+// @return the cooldown, or nullopt if the creature does not exist or does not have the ability
 std::optional<Cooldown> GetCooldown(ObjectId creature, std::int32_t ability, std::wstring_view itemTag = {});
 
-// Sets an ability's cooldown to `remaining` seconds left of `total`: the
-// ability cannot be used for `remaining` seconds of game time, and its
-// sweep shows remaining over total, running down from there as the time
-// passes. 0 left ends the cooldown. False, and nothing done, for a creature
-// that is not there or has no record for the ability, or a total of 0 or
-// less with time left. On the game's thread.
+// Sets an ability's cooldown to `remaining` seconds left out of `total`.
+// @param remaining seconds of game time until the ability can be used again; 0 ends the
+// cooldown, and a negative value counts as 0
+// @param total the length the quickbar's sweep measures `remaining` against
+// @param itemTag as for GetCooldown
+// @return false, changing nothing, if the creature does not exist or does not have the ability,
+// or if `total` is 0 or less while `remaining` is not 0
+//
+// Call it on the game thread. The scripts' SetCooldown sets both numbers to the same time; this
+// lets the sweep start partly full. OnCooldownSet does not report calls to it.
 bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float total, std::wstring_view itemTag = {});
 
-// A cooldown running on a creature: which ability, the tag of the item it
-// comes from (empty for one of the creature's own), and its time.
+// A cooldown running on a creature.
 struct RunningCooldown
 {
     std::int32_t ability = 0;
-    std::wstring itemTag;
+    std::wstring itemTag; // the item the ability comes from; empty for the creature's own
     Cooldown cooldown;
 };
 
-// Every cooldown running on a creature, whatever started it: the ability's
-// own use, a mode that would not stand, a script's SetCooldown, an item's.
-// Nothing for a creature that is not there or has none running. On the
-// game's thread.
+// Returns every cooldown running on a creature, whatever started it: using the ability, a script,
+// an item, or SetCooldown.
+// @return the cooldowns, or an empty vector if the creature does not exist or has none running
 //
-// Read 2026-10-06 (DAOLib #38): the cooldown manager keeps, at its +0x10,
-// a std::list of the records that tick (core::ListValues), which its Tick
-// (0x0071C840) walks each frame, taking the time from each and dropping
-// one that has run out (0x0071C190). So the list is exactly what is
-// cooling, an item's ability's record among the rest. A cooldown set with
-// SetCooldown joins it as the engine's do.
+// Call it on the game thread.
 std::vector<RunningCooldown> Cooldowns(ObjectId creature);
 
-// A cooldown just set by the scripts' SetCooldown: the creature, the
-// ability, the item's tag (empty for the creature's own), the seconds asked
-// (0 ends a cooldown), and the record as it reads once the engine has
-// written it.
+// A cooldown the scripts' SetCooldown has just set, as reported to OnCooldownSet.
 struct CooldownSet
 {
     ObjectId creature = kInvalidObject;
     std::int32_t ability = 0;
-    std::wstring itemTag;
-    float seconds = 0;
-    Cooldown cooldown;
-    // Whether the record's total is now the seconds asked: the engine's
-    // write acted. It does not on an item's record (see SetCooldown).
+    std::wstring itemTag; // the item the ability comes from; empty for the creature's own
+    float seconds = 0;    // the seconds the script asked for; 0 ends the cooldown
+    Cooldown cooldown;    // the cooldown as it reads after the game wrote it
+    // Whether the cooldown's total now equals the seconds asked for, that is, whether the game's
+    // write took effect. On an item's cooldown it may not.
     bool took = false;
 };
 
-// Calls `observer` after each cooldown the scripts set, on the game's
-// thread, the engine's write done: a hold set from it lands last. Not for
-// this library's own SetCooldown.
+// Registers a callback for every cooldown the scripts set, which includes every cooldown the game
+// starts when an ability is used.
+// @param observer receives the cooldown after the game has written it
 //
-// Read 2026-10-08 (DAOLib #41): the cooldown manager's Set (0x0071D630) has
-// one caller, CCCreatureStats::SetCooldown, and that one, the scripts'
-// SetCooldown command; so every ability's cooldown the game starts passes
-// here, the scripts' Ability_SetCooldown as a cast begins among them,
-// whatever command or none is running. The stats keep their creature at
-// +0x5C (their constructor's argument, which the creature passes as itself,
-// 0x006B4070), checked each time against the creature's own Stats(). An
-// item's cooldown comes the same way: its record is made, like every
-// record, in the manager's first list (0x0071D6D0, the record's only
-// maker), so the drink's set takes; only once the item is spent does its
-// record leave that list (why SetCooldown writes the total itself).
-//
-// Seen in play 2026-10-09 (the turn-based mod, the Cultist Overseer's
-// fight): 87 cooldowns, every one through here, the Overseer's sustained
-// spells at 1.5 s as each cast began, and a mana potion's 5 s with its
-// item's tag, `took` true.
+// It runs on the game thread after the game's write, so a cooldown you set from the callback
+// replaces the script's. It does not run for this library's own SetCooldown.
 void OnCooldownSet(std::function<void(const CooldownSet &)> observer);
 
-// The kinds of ability, as the scripts number them (ABILITY_TYPE_*,
-// 2da_constants_h): what a creature has of each is a list of its own.
+// The kinds of ability, numbered like the scripts' ABILITY_TYPE_* constants.
 enum class Kind : std::int32_t
 {
     All = 0,
     Talent = 1,
     Spell = 2,
     Skill = 3,
-    Item = 4,
+    Item = 4, // abilities of usable items, such as a poultice
 };
 
-// Every ability a creature has, of one kind or of all four: the whole
-// sheet, where the quickbar holds only what was put in it. Each is an
-// ability's id (a row of the ability table: Name and Label above); a skill
-// with ranks is an id per rank the creature has. Empty for a creature that
-// is not there.
+// Returns every ability of one kind that a creature has, or of all kinds: its whole character
+// sheet, not only what is on the quickbar.
+// @param kind the kind to list; Kind::All for every kind
+// @return the ability ids, or an empty vector if the creature does not exist
 //
-// Read 2026-10-01 from the scripts' GetAbilityCount (0x00668A20, on to
-// 0x0071A2F0), which counts them: the creature's stats keep four lists of
-// ids, one a kind in the kinds' order, at +0x150 and each 0x10 on (the
-// list of a kind is found by 0x007199D0). Seen in play 2026-10-01 by the
-// Eluvian server: a level 1 rogue's lists (4 talents, no spells, 6 skills,
-// 2 items) and a warrior's (7, 0, 3, 2) each came to the 12 that
-// GetAbilityCount answers. The lists hold the hidden abilities too (the
-// class's, the humanoid trait), the item list is the usable items'
-// abilities (a poultice, elfroot), and a skill's ranks are an id each.
+// The list includes hidden abilities, such as the class's own, and a skill appears once for each
+// rank the creature has, each with its own id.
 std::vector<std::int32_t> Known(ObjectId creature, Kind kind = Kind::All);
 
-// Whether a creature can use an ability now, as the game decides it to grey
-// the ability's quickbar button, and what the ability costs it: for a tool
-// that orders abilities and wants to know first whether the order will do
-// anything.
+// Whether a creature can use an ability now, and if not, why not.
 //
 //   if (const auto use = dao::abilities::CanUse(jory, ability); use && !*use)
 //       spdlog::info("not now: {}", dao::Utf8(use->Reason())); // "Insufficient stamina"
-//
-// Read 2026-10-03 (dao/Addresses.h, CanUseAbility): the engine's one check,
-// which the quickbar asks for each button and the player's order asks
-// before it issues a command, and which answers with the reason a string
-// reference. It looks, in order, at an item's ability's item, the active
-// modal abilities (usable, to turn off), being disabled by effects, the
-// cost, the ability's conditions (a weapon, a shield), its cooldown, and the
-// ability being cast already. The scripts' IsAbilityAvailable asks whether
-// the ability can be learned, not used: true for a 40-stamina Mighty Blow at
-// 12 stamina, whose order then did nothing (Eluvian, 2026-10-03).
-//
-// The scripts check the cost again when the command runs (ability_core's
-// Ability_CostCheck) a little differently: rounded, by the difficulty's
-// modifier for some ranks, and a modal ability's upkeep against the total
-// rather than its cost against what is left. So a modal ability this calls
-// usable can still fail. Seen in play 2026-10-03 through the Eluvian
-// server, on the Tower Guard (a bow, no shield) at full stamina, 115: Shield
-// Bash and Shield Block not usable, "No shield equipped"; Crippling Shot,
-// Pinning Shot, Shattering Shot and Taunt usable, costing 28.775, 23.02,
-// 28.775 and 46.04, the table's 25, 20, 25 and 40 times 1.151 (his
-// fatigue). At 12 stamina every one was not usable, "Insufficient stamina".
-// IsAbilityAvailable had said yes to all.
 struct Use
 {
     bool usable = false;
-    std::int32_t reason = -1; // why not, a string reference; -1 when usable or none given (one path gives 0)
+    std::int32_t reason = -1; // why not, as a talk table string id; -1 if usable or no reason given
+    // Returns `usable`.
     explicit operator bool() const
     {
         return usable;
     }
-    // The reason in the player's language ("Insufficient stamina"); empty
-    // for none.
+    // Returns the reason in the player's language, for example "Insufficient stamina", or an empty
+    // string if no reason was given.
     std::wstring Reason() const;
 };
-// Nothing for a creature that is not there. `itemTag` as for GetCooldown.
-// On the game's thread.
+
+// Checks whether a creature can use an ability now, with the same test the game uses to grey out
+// a quickbar button.
+// @param itemTag as for GetCooldown
+// @return the result, or nullopt if the creature does not exist
+//
+// Call it on the game thread. It checks the item, active modes, disabling effects, the cost, the
+// ability's requirements (such as a weapon or a shield), the cooldown, and whether the ability is
+// already being cast. The scripts check the cost again, slightly differently, when the command
+// runs, so a sustained (modal) ability this reports as usable can still fail.
 std::optional<Use> CanUse(ObjectId creature, std::int32_t ability, std::wstring_view itemTag = {});
 
-// What an ability costs a creature now, in mana or stamina, as the check
-// above reckons it: the ability table's cost times one plus the creature's
-// fatigue in hundredths (property 41's modifier: armour's, a sustained
-// ability's). To set against its mana or stamina left
-// (CCCreature::ManaStamina). Nothing for a creature that is not there or an
-// ability with no row.
+// Returns what an ability costs a creature now in mana or stamina, as CanUse calculates it: the
+// ability table's cost, raised by the creature's fatigue.
+// @return the cost, or nullopt if the creature does not exist or the ability has no row
+//
+// Compare it with the creature's remaining mana or stamina (CCCreature::ManaStamina).
 std::optional<float> Cost(ObjectId creature, std::int32_t ability);
 
 } // namespace dao::abilities

@@ -1,29 +1,14 @@
-// The clock temporary effects run on: buffs, debuffs, damage and healing
-// over time, timed summons, lasting areas. A plugin can hold it still, move
-// it on by a jump, for every object or one, or decide per effect how fast
-// it runs.
+// Controls the clock that temporary effects run on: buffs, debuffs, damage and healing over
+// time, timed summons and lasting areas of effect.
+//
+// A plugin can stop that clock, move it on in jumps for every object or for one, or decide for
+// each effect how fast it ages. dao/Clock.h drives it together with regeneration and timers.
+// `On` lists an object's effects with the time each has left.
 //
 //   dao::effects::Hold(true);       // the player's turn: nothing wears off
 //   ...
 //   dao::effects::Advance(6.0f);    // the round is over: six seconds more
 //   dao::effects::Hold(false);
-//
-// Read 2026-09-30 (dao/Addresses.h, "How a temporary effect runs out").
-// Every temporary effect on every object ages through one engine function,
-// AddElapsed, each time its owner updates, by the milliseconds since the
-// owner's last update; the effect ends once its whole duration has
-// elapsed. This hooks AddElapsed, so the engine's own check still ends an
-// effect, on its owner's next update after its time runs out. An effect's
-// own figures are CGameEffect::Duration, Remaining and SetRemaining
-// (dao/Structures.h).
-//
-// What this does not reach: regeneration of health, mana and stamina,
-// which dao/Clock.h holds and advances with the effects, and anything a
-// script times itself with DelayEvent. Only temporary effects age; permanent and
-// instant ones are not affected. Hold and the shared Advance used in play
-// by the turn-based mod since 2026-09-30; an owner's own Advance seen in
-// play 2026-10-02, after its owner was found right (a spider's Overwhelm
-// ended by the spider's own clock).
 #pragma once
 
 #include "dao/Structures.h"
@@ -35,58 +20,57 @@
 namespace dao::effects
 {
 
-// Stop every temporary effect's time (true), or let it run again (false,
-// which also gives every owner back to the shared clock). Held effects
-// neither wear off nor end.
+// Stops the time of every temporary effect, or lets it run again.
+// @param held true to stop it; false to let it run and return every object to the shared clock
+//
+// While held, effects neither wear off nor end. Permanent and instant effects are not affected.
 void Hold(bool held);
+
+// Returns whether the effects' clock is stopped.
 bool Held();
 
-// Age every temporary effect by `seconds` more, each on its owner's next
-// update, once; an effect that runs out ends then. Works while held: the
-// way to spend a round's worth of time on effects at once. Effects applied
-// after the call are not aged by it. Effects on an object on a clock of
-// its own are passed by.
+// Ages every temporary effect by an extra amount of time, once, on its owner's next update.
+// @param seconds the time to add, in game seconds
+//
+// This works while held. An effect that runs out ends on that update. Effects applied after the
+// call, and effects on objects with their own clock (OwnClock), are not aged by it.
 void Advance(float seconds);
 
-// Put an object's effects on a clock of their own (true), which the shared
-// Advance passes by, or back on the shared one (false): a creature's own
-// time in a fight measured per creature.
+// Puts an object's effects on a clock of their own, or back on the shared one.
+// @param owner the object the effects are on, not the one that applied them
+// @param own true for its own clock, which Advance leaves out; false for the shared one
 void OwnClock(ObjectId owner, bool own = true);
 
-// Age one object's effects by `seconds` more, whether or not it is on its
-// own clock: in small steps if wanted, the fractions of a millisecond kept.
-// The owner is the object the effect is on, not its creator (a spider's
-// Overwhelm holds attacker and victim by an effect on each, each aged by
-// its own owner's clock). Read 2026-10-02: SEffectsHolder::AgeEffect,
-// AddElapsed's one caller, is __thiscall on the object's effects holder
-// (the object, the effect), and this follows it.
+// Ages the effects on one object by an extra amount of time, whether or not the object is on its
+// own clock.
+// @param owner the object the effects are on, not the one that applied them
+// @param seconds the time to add, in game seconds; fractions of a millisecond carry over
 void AdvanceObject(ObjectId owner, float seconds);
 
-// Decide per effect how much it ages: called with each temporary effect
-// and the milliseconds the engine would age it by, and returns the
-// milliseconds to age it by instead. Runs on the game's thread, very
-// often: keep it quick. After Hold and Advance, which it sees the result
-// of.
+// Adds a callback that decides how much each temporary effect ages.
+// @param ageing called with the effect and the milliseconds it would age by once Hold and Advance
+//  are taken into account; returns the milliseconds to age it by instead
+//
+// It runs on the game thread for every temporary effect on every update, so keep it quick.
 void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t ms)> ageing);
 
-// An object's effects as they stand, with the time each has left: what the
-// scripts' GetEffects lists (type, ability, creator), and the duration and
-// time left that no script command gives, read from each effect
-// (CGameEffect::Duration, Remaining). A snapshot, taken from the copies the
-// command hands back: changing one changes nothing. From the frame's thread,
-// since it calls a script command. Seen in play 2026-10-02 by the
-// turn-based mod: a giant spider's Overwhelm listed as type 1043, ability
-// 90133, its creator the spider, 6.10 of 6.10 s.
+// One effect on an object, as listed by On.
 struct Standing
 {
     std::uint32_t id = 0;
     script::EffectType type = script::EffectType::Invalid;
     script::EffectDurationType durationType = script::EffectDurationType::Invalid;
     std::int32_t ability = 0;          // the ability that applied it, 0 for none
-    ObjectId creator = kInvalidObject; // who applied it
+    ObjectId creator = kInvalidObject; // the object that applied it
     float duration = 0;                // seconds; 0 for an effect that is not temporary
-    float remaining = 0;               // seconds; the same
+    float remaining = 0;               // seconds left; 0 for an effect that is not temporary
 };
+
+// Returns the effects on an object, with each one's duration and time left.
+// @return a copy, so changing it changes nothing in the game; empty if the object has no effects
+//  or does not exist
+//
+// Call it on the game thread (dao/Frame.h), since it calls the GetEffects script command.
 std::vector<Standing> On(ObjectId object);
 
 } // namespace dao::effects

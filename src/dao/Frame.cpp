@@ -1,3 +1,12 @@
+// A plugin's code on every frame (dao/Frame.h).
+//
+// The game updates as a task on the engine's worker threads (Eclipse::
+// UpdateTask, whose slot 3 calls the per-frame update, dao/Addresses.h).
+// OnFrame detours that update and runs its callbacks just before it, on
+// the thread that runs it, once per frame. That is the thread the scripts
+// run on (FrameThreadId() equalled dao::script::ScriptThreadId() in play,
+// 2026-09-30), so a callback may call script commands and send messages;
+// and the update runs while the game is paused too.
 #include "dao/Frame.h"
 
 #include "dao/Addresses.h"

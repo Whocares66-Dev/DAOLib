@@ -1,16 +1,7 @@
-// The game's modes -- exploring, combat, dialogue, a menu, loading -- and
-// the controller that switches between them, CClientExoApp+0x114.
-//
-// Read 2026-09-30. The application builds the controller at 0x005DC064
-// (its constructor, 0x00641370, stores GameModeController's four vtables)
-// and keeps it at +0x114. Its current mode is the int at +0x78, which the
-// probe has read in play since 2026-09-29 (dev/TURN_BASED.md); the modes
-// themselves are objects in a table at +0x58, one per number, each a
-// GameMode class (GameModeExplore, GameModeDialog, ...). SetGameMode
-// (0x006414A0) switches: it asks the new mode's object (its vtable slot
-// 10) whether to refuse, special-cases loading (9), and goes on; the
-// controller's handler for SetGameModeMessage calls it with the message's
-// mode and two zeros, and so does SetMode here.
+// The game's modes (exploration, combat, dialogue, menus, loading and the rest) and the
+// controller that switches between them. Use it to tell what the game is doing and to switch
+// modes. Explore mode also tells you what is under the cursor, and lets you aim abilities and
+// give move orders the way the player does.
 #pragma once
 
 #include "dao/Addresses.h"
@@ -28,14 +19,16 @@
 namespace dao
 {
 
-// The game's modes by number: the scripts' GM_* constants (script.ldf,
-// GetGameMode's answers), and the class at each number of the controller's
-// array, as the probe listed them in play 2026-09-30 -- the two agree on all
-// 13. The main menu at start-up runs in Pregame (8): the Eluvian MCP server
-// saw none, pregame, loading, explore from launch to a loaded save
-// (2026-09-30). The probe had seen CharGen behind the main menu earlier
-// that day, so the menu reached some other way (from a game, or with the
-// character creator up) may run in CharGen; which way is not yet pinned.
+// Notes on GameMode: the numbers are the scripts' GM_* constants (script.ldf, GetGameMode's
+// answers), and the class at each number of the controller's array, as the probe listed them in
+// play 2026-09-30; the two agree on all 13. The main menu at start-up runs in Pregame (8): the
+// Eluvian MCP server saw none, pregame, loading, explore from launch to a loaded save
+// (2026-09-30). The probe had seen CharGen behind the main menu earlier that day, so the menu
+// reached some other way (from a game, or with the character creator up) may run in CharGen;
+// which way is not yet pinned.
+
+// The game's modes, with the same numbers as the scripts' GM_* constants. The comment on each
+// names the engine class that runs it.
 enum class GameMode : std::int32_t
 {
     Explore = 0,      // GameModeExplore
@@ -46,62 +39,21 @@ enum class GameMode : std::int32_t
     Cutscene = 5,     // GameModeCutscene
     FlyCam = 6,       // GameModeFlyCam
     Fixed = 7,        // GameModeFixed
-    Pregame = 8,      // GameModePregame
+    Pregame = 8,      // GameModePregame: the main menu when the game starts
     Loading = 9,      // GameModeLoading
     Movie = 10,       // GameModeMovie
-    CharGen = 11,     // GameModeCharGen: character creation (the main menu at times; above)
+    CharGen = 11,     // GameModeCharGen: character creation, and sometimes the main menu
     PartyPicker = 12, // GameModePartyPicker
 };
 
-// Explore mode, and combat mode, which derives from it (dao::TypeName and
-// tools\daoexe.py --bases GameModeCombat): what is under the mouse cursor,
-// as a click would act on it. Read 2026-09-30.
+// Explore mode, which combat mode is built on. It knows what is under the mouse cursor, and it
+// handles the player's targeting and move orders. Get it with GameModeController::Explore or
+// CClientExoApp::CurrentExplore, and use it on the game thread, for example from a frame callback.
 //
-// The mode's update (vtable slot 8, 0x00712F90) re-picks 15 times a second
-// (a timer at +0x6E4 reset to 1/15 s), or at once when the engine asks: it
-// casts a ray from the camera through the cursor (0x0070B590, up to 32
-// hits at +0xE0, their count at +0x6E0, sorted nearest first), then chooses
-// (0x0070F270): the object at +0xCC, or the ground hit at +0xD0 with its
-// verdict at +0xD4. An object the GUI names takes precedence (a global at
-// 0x00C35FF0, +0xC), and an object hit wins over the ground. What the click
-// handlers read: the primary action's (0x007132B0) target is +0xCC, and a
-// move (0x0070C9A0) goes to +0xD0's point if +0xD4 allows, recording it at
-// +0xA0 (0x0070BE80) before the creature walks. Each mode keeps its own;
-// the one current is the one updated. On the game's thread, as a frame
-// callback runs. Seen in play 2026-09-30 (dev/LIBRARY.md). The hits are
-// dao::world::Hit, which dao/World.h's Raycast returns too.
-//
-// When the choice is nothing, read 2026-10-01. The chooser (0x0070EAA0)
-// first asks the interface whether the mouse is over one of its movies'
-// elements (the GUI system's slot 71, which asks the Scaleform manager,
-// 0x00511420); if so it chooses nothing: no object, no ground, the
-// walkable verdict false, though the ray was cast and the hits are there.
-// And with no place for the cursor at all (outside the view) the ray is
-// not cast and there are no hits. Otherwise it walks the hits: an object
-// that passes its tests is chosen, else the ground hit, whose verdict is
-// CanMoveTo's (the point free for the controlled creature, by its own
-// pathfinding parameters, and clear of a collision box).
-//
-// The interface's answer (0x00511420) is yes while the mouse is over any
-// of its movies (a set at the Scaleform manager's +0x80) or one of them
-// holds a mouse press (+0xA0, set by the button-down handlers, 0x00512340,
-// and cleared by the button-up ones, 0x00512480). Both are changed by the
-// mouse's events, not each frame, while the pick is re-taken every 1/15 s
-// whether the mouse moves or not (the mode's update, 0x00712F90); so a
-// pick that stays nothing with the mouse still is the interface's state
-// left as the last mouse event had it.
-//
-// Seen in play, 2026-10-01: after the game's window regains the focus, a
-// click at the pixel the mouse already rests on is no order and the pick
-// holds no ground until the mouse moves, with no plugin drawing anything.
-//
-// So a plugin's movie that draws under the cursor empties the pick and
-// takes the click. Seen in play that day (the turn-based mod's path
-// preview): with a shape of its layer-1 movie on the cursor's pixel,
-// CursorGround was nothing in half the reads and six of nine clicks to
-// move were lost; with nothing drawn there, never. A visual effect with a
-// shape is an object hit and takes the ground's place too (dao/Vfx.h,
-// SetPickable).
+// Fifteen times a second the mode works out what is under the cursor; this is the "pick". The
+// pick is empty while the mouse is over any Flash movie, including a plugin's, because a movie
+// under the cursor takes the click. A visual effect with a shape counts as an object, and is
+// picked in place of the ground behind it (see SetPickable in dao/Vfx.h).
 class GameModeExplore
 {
   public:
@@ -110,32 +62,37 @@ class GameModeExplore
     GameModeExplore &operator=(const GameModeExplore &) = delete;
     ~GameModeExplore() = delete;
 
-    // The object a click would act on, if the cursor is over one.
+    // Returns the object a click would act on.
+    // @return the object's id, or nullopt if the cursor is not over an object
     std::optional<ObjectId> CursorObject() const
     {
         const auto id = Read<ObjectId>(kCursorObject);
         return id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
     }
 
-    // The point on the ground under the cursor, when the cursor is on the
-    // ground rather than an object.
+    // Returns the point on the ground under the cursor.
+    // @return the point, or nullopt if the cursor is over an object, a movie or nothing
     std::optional<Vector> CursorGround() const
     {
         const auto *hit = Read<const world::Hit *>(kCursorGround);
         return hit != nullptr ? std::optional<Vector>(hit->position) : std::nullopt;
     }
 
-    // Whether a move there would go: the engine's test (0x0070C840) that
-    // the point is on the area's walkmesh for the party's controlled
-    // creature (the area's check, 0x0073DE70). A move click refuses an
-    // unwalkable point.
+    // Notes on CursorGroundWalkable: the verdict is the engine's test (0x0070C840) that the point
+    // is on the area's walkmesh for the party's controlled creature (the area's check,
+    // 0x0073DE70).
+
+    // Returns whether the controlled creature could walk to the ground point under the cursor.
+    // A move click is refused on a point that is not walkable. Returns false when there is no
+    // ground point.
     bool CursorGroundWalkable() const
     {
         return CursorGround().has_value() && Read<bool>(kCursorWalkable);
     }
 
-    // Everything along the ray, nearest first, from the latest pick; the
-    // cursor's choice is made among these.
+    // Returns everything the ray of the latest pick hit, nearest first. The object or ground
+    // point under the cursor is chosen from these. The span is empty when the cursor is outside
+    // the view.
     std::span<const world::Hit> CursorHits() const
     {
         const auto count = Read<std::int32_t>(kHitCount);
@@ -143,31 +100,35 @@ class GameModeExplore
         return {hits, count > 0 && count <= kMaxHits ? static_cast<std::size_t>(count) : 0};
     }
 
-    // Ask the player for an ability's target, as the quickbar's handler does
-    // when it finds none (dao/Messages.h, PerformAbilityMessage): the
-    // targeting cursor, and the ability used on what the player clicks,
-    // through PerformAbilityOnTargetUnderCursorMessage. BeginTargeting
-    // (dao/Addresses.h) shows "Target Required" instead when its input
-    // check fails. On the game's thread. Seen in play 2026-09-30, by the
-    // turn-based mod: Shield Pummel asked for its target, and the click used
-    // it.
+    // Notes on RequestTarget: it is what the quickbar's handler does when it finds no target
+    // (dao/Messages.h, PerformAbilityMessage), and the click uses the ability through
+    // PerformAbilityOnTargetUnderCursorMessage. BeginTargeting (dao/Addresses.h) shows "Target
+    // Required" instead when its input check fails. Seen in play 2026-09-30, by the turn-based
+    // mod: Shield Pummel asked for its target, and the click used it.
+
+    // Asks the player to pick a target for an ability. It shows the targeting cursor, and uses
+    // the ability on whatever the player clicks. Call it on the game thread.
+    // @param ability the ability's id
+    // @param caster the creature that will use it
     void RequestTarget(std::int32_t ability, ObjectId caster)
     {
         using Fn = void(__fastcall *)(GameModeExplore *, int, std::int32_t, ObjectId, ObjectId);
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
     }
 
-    // The ability the player is aiming, while the targeting cursor is up: a
-    // quickbar ability pressed with no valid target, or RequestTarget, and
-    // whose it is. Nothing when no ability is being aimed. Read 2026-10-02
-    // from BeginTargeting and explore mode's aiming (dao/Addresses.h,
-    // kAbilityTargeting), which test the same two fields. Not yet seen in
-    // play.
+    // Notes on Targeting: read 2026-10-02 from BeginTargeting and explore mode's aiming
+    // (dao/Addresses.h, kAbilityTargeting), which test the same two fields. Not yet seen in play.
+
+    // An ability the player is aiming, and the creature that will use it.
     struct Aim
     {
-        std::int32_t ability = 0;
-        ObjectId caster = kInvalidObject;
+        std::int32_t ability = 0;         // the ability's id
+        ObjectId caster = kInvalidObject; // the creature that will use it
     };
+    // Returns the ability the player is aiming while the targeting cursor is up. That happens
+    // after a quickbar ability is pressed with no valid target, or after RequestTarget. Not yet
+    // tested in the game.
+    // @return the ability and its caster, or nullopt if no ability is being aimed
     static std::optional<Aim> Targeting()
     {
         constexpr std::size_t kActive = 0x14;
@@ -187,47 +148,54 @@ class GameModeExplore
         return Aim{ability, *reinterpret_cast<const ObjectId *>(state + kCaster)};
     }
 
-    // The selected target: what the cycle-target keys choose, and what a
-    // quickbar ability is used on when it is valid for it (dao/Messages.h,
-    // PerformAbilityMessage). Nothing when none is selected.
+    // Returns the selected target. The cycle-target keys choose it, and a quickbar ability is
+    // used on it if the ability can target it (see PerformAbilityMessage in dao/Messages.h).
+    // @return the target's id, or nullopt if no target is selected
     static std::optional<ObjectId> SelectedTarget()
     {
         const auto id = *reinterpret_cast<const ObjectId *>(Module::Address(addr::kSelectedTarget));
         return id == kInvalidObject ? std::nullopt : std::optional<ObjectId>(id);
     }
-    // Select a target as the cycle-target keys do (0x0070D030): the id kept,
-    // the target's GUI told, the highlight moved. Then a PerformAbilityMessage
-    // for an ability valid on it uses it there, as a quickbar click would.
-    // On the game's thread. Not yet seen in play.
+
+    // Notes on SelectTarget: it calls what the cycle-target keys call (0x0070D030), which keeps
+    // the id, tells the target's GUI and moves the highlight. Not yet seen in play.
+
+    // Selects a target, the same as the cycle-target keys. A PerformAbilityMessage sent next,
+    // for an ability that can target it, then uses the ability on it, as a quickbar click would.
+    // Not yet tested in the game. Call it on the game thread.
     void SelectTarget(ObjectId target)
     {
         using Fn = void(__fastcall *)(GameModeExplore *, int, ObjectId);
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_SelectTarget))(this, 0, target);
     }
-    // Set the object a click acts on, as if the cursor were over it: what
-    // PerformPrimaryActionOnTargetUnderCursorMessage's handler reads (+0xCC).
-    // The mode picks again from the cursor 15 times a second, so set it and
-    // send the message in the same frame callback. What the handler then does
-    // (0x00712830) is for every party member selected in the party bar, not
-    // the controlled creature alone: an attack on a hostile creature is each
-    // selected member's (dao::orders::Attack is one creature's), and with
-    // none selected nothing is ordered. Its answer is a void call's leftover
-    // and says nothing. In play, 2026-09-30, in a turn-based fight, the
-    // message reached the handler and no command was queued.
+
+    // Notes on SetCursorObject: PerformPrimaryActionOnTargetUnderCursorMessage's handler
+    // (0x00712830) reads +0xCC, and acts for every party member selected in the party bar, not the
+    // controlled creature alone: an attack on a hostile creature is each selected member's
+    // (dao::orders::Attack is one creature's), and with none selected nothing is ordered. Its
+    // answer is a void call's leftover and says nothing. In play, 2026-09-30, in a turn-based
+    // fight, the message reached the handler and no command was queued.
+
+    // Sets the object a click acts on, as if the cursor were over it, ready for a
+    // PerformPrimaryActionOnTargetUnderCursorMessage. The mode re-picks from the cursor 15 times
+    // a second, so set the object and send the message in the same frame callback. Every party
+    // member selected in the party bar carries out the action; if none is selected, nobody does.
     void SetCursorObject(ObjectId object)
     {
         *reinterpret_cast<ObjectId *>(reinterpret_cast<std::byte *>(this) + kCursorObject) = object;
     }
 
-    // Where the latest move click sent the controlled creature.
+    // Returns where the latest move click sent the controlled creature.
     Vector LastMoveDestination() const
     {
         return Read<Vector>(kLastMoveDestination);
     }
 
-    // Send a creature to a point, as a move click does (0x0070BE80): the
-    // point recorded as the latest move's destination, the creature told
-    // its order arrived (dao/Orders.h has the rest of the player's orders).
+    // Notes on MoveTo: it calls the move click's own function (0x0070BE80).
+
+    // Sends a creature to a point, the same as a move click. It records the point as the latest
+    // move's destination and hands the creature the order. For the player's other orders, see
+    // dao/Orders.h.
     void MoveTo(ObjectId creature, const Vector &point)
     {
         alignas(16) const float at[4] = {point.x, point.y, point.z, 0.0F};
@@ -235,13 +203,13 @@ class GameModeExplore
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_MoveTo))(this, 0, creature, at, -1);
     }
 
-    static constexpr std::size_t kLastMoveDestination = 0xA0;
-    static constexpr std::size_t kCursorObject = 0xCC;
-    static constexpr std::size_t kCursorGround = 0xD0;
-    static constexpr std::size_t kCursorWalkable = 0xD4;
-    static constexpr std::size_t kHits = 0xE0;
-    static constexpr std::size_t kHitCount = 0x6E0;
-    static constexpr std::int32_t kMaxHits = 32;
+    static constexpr std::size_t kLastMoveDestination = 0xA0; // the latest move's destination
+    static constexpr std::size_t kCursorObject = 0xCC;        // offset of the picked object's id
+    static constexpr std::size_t kCursorGround = 0xD0;        // offset of the picked ground hit
+    static constexpr std::size_t kCursorWalkable = 0xD4;      // whether the ground hit is walkable
+    static constexpr std::size_t kHits = 0xE0;                // offset of the ray's hits
+    static constexpr std::size_t kHitCount = 0x6E0;           // offset of the number of hits
+    static constexpr std::int32_t kMaxHits = 32;              // the most hits a pick keeps
 
   private:
     template <class T> const T &Read(std::size_t offset) const
@@ -250,6 +218,8 @@ class GameModeExplore
     }
 };
 
+// The controller that holds the game's modes and switches between them. Get it with
+// CClientExoApp::GameModes.
 class GameModeController
 {
   public:
@@ -258,12 +228,13 @@ class GameModeController
     GameModeController &operator=(const GameModeController &) = delete;
     ~GameModeController() = delete;
 
+    // Returns the current mode.
     GameMode Mode() const
     {
         return static_cast<GameMode>(Read<std::int32_t>(kMode));
     }
 
-    // Switches to a mode, as a SetGameModeMessage does.
+    // Switches to a mode, the same as a SetGameModeMessage. The new mode can refuse.
     void SetMode(GameMode mode)
     {
         using Fn = void(__fastcall *)(GameModeController *, int, std::int32_t, std::int32_t, std::int32_t);
@@ -271,22 +242,18 @@ class GameModeController
             this, 0, static_cast<std::int32_t>(mode), 0, 0);
     }
 
-    // The mode object for a number, as SetGameMode finds it: +0x58 points to
-    // an array of them indexed by the mode's number, 13 entries (seen in
-    // play 2026-09-30, one GameMode class per number: dao::GameMode). Not a
-    // std::vector: +0x5C and +0x60 are other pointers. The current mode is
-    // at +0x78 and, by its value after a load (9, loading), the previous one
-    // at +0x7C. An entry is returned only if its class is a GameMode
-    // (dao::TypeName), else null. What a plugin sends a mode's messages to
-    // (dao/Messages.h).
+    // Returns the engine's object for a mode. Send that mode's messages to it (dao/Messages.h).
+    // @return the object, or null if there is none or it is not a GameMode class
     void *ModeObject(GameMode mode) const;
+    // Returns the engine's object for the current mode. Returns null in the same cases as
+    // ModeObject.
     void *CurrentModeObject() const
     {
         return ModeObject(Mode());
     }
 
-    // The current mode as explore mode, if it is explore or combat (whose
-    // class derives from explore's); null in any other.
+    // Returns the current mode as explore mode.
+    // @return explore mode, or null unless the current mode is explore or combat
     GameModeExplore *Explore() const
     {
         const GameMode mode = Mode();
@@ -294,22 +261,22 @@ class GameModeController
                                                                      : nullptr;
     }
 
-    // The camera's controller in explore and combat mode (dao/Camera.h):
-    // the controller's +0x60, if its class is CameraControllerExplore
-    // (dao::TypeName), else null.
+    // Returns the camera controller used in explore and combat mode (dao/Camera.h).
+    // @return the controller, or null if it is not a CameraControllerExplore
     CameraController *Camera() const;
 
-    // The mode before the current one, by the value seen after a load.
+    // Returns the mode before the current one. This meaning is inferred from the value after
+    // loading a save.
     GameMode PreviousMode() const
     {
         return static_cast<GameMode>(Read<std::int32_t>(kPreviousMode));
     }
 
-    static constexpr std::size_t kModes = 0x58;
-    static constexpr std::size_t kCamera = 0x60;
-    static constexpr std::size_t kMode = 0x78;
-    static constexpr std::size_t kPreviousMode = 0x7C;
-    // The array's entries, one per GameMode.
+    static constexpr std::size_t kModes = 0x58;        // offset of the pointer to the modes' array
+    static constexpr std::size_t kCamera = 0x60;       // offset of the camera controller
+    static constexpr std::size_t kMode = 0x78;         // offset of the current mode
+    static constexpr std::size_t kPreviousMode = 0x7C; // offset of the previous mode
+    // The number of entries in the array of modes, one per GameMode.
     static constexpr std::size_t kMaxModes = 13;
 
   private:

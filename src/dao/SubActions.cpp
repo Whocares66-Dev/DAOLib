@@ -1,3 +1,26 @@
+// A creature's current command's sub-actions, and the time they still hold
+// it, for any effect and with no list of kinds (DAOLib issue #18).
+//
+// Read 2026-10-04 (dao/Addresses.h, RunCurrentCommand; dev/TURN_BASED.md,
+// "A command's timed phases"): the current command's sub-actions are a
+// std::list of pointers at the creature's +0x2DC record's +0xC, the head
+// the one running (what IsConjuring answers, dao/Conjure.h's
+// RunningSubAction). Each keeps its type at +0, a delay at +0x18, a
+// duration at +0x14 and the time elapsed at +0xC, in the creature's own
+// milliseconds. The update spends the delay first, then for a timed one
+// (a duration above 0) the elapsed time up to the duration; an untimed one
+// runs until its handler says it is done, so its time is not known ahead,
+// and some set their duration only as they begin (an animation's, 37, its
+// length; an aim's, 6). So the time a command still holds a creature is
+// known exactly only where every sub-action left is timed, begun and not
+// yet spent.
+//
+// Seen in play 2026-10-04 (the turn-based mod against the high dragon, 50
+// holds of the party): a knockback (effect type 1057) is an ExecuteEffect
+// with one sub-action, 51, timed to the effect's 1200 ms and found spent
+// (1200 of 1200) as the turn began; then none left while the command
+// still held the creature, 0.6 to 3.2 s in all, the fall and the rise.
+// After the dragon's roar the count fell about 0.4 s short of the hold.
 #include "dao/SubActions.h"
 
 #include "dao/ClientExoApp.h"

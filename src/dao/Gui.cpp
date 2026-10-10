@@ -1,3 +1,24 @@
+// The Flash UI's calls into the game, the movies' records and views, the GUI system's screens, and
+// the movie files as GFx opens them.
+//
+// Read 2026-09-30. The game gives GFx one FSCommand handler and one ExternalInterface handler
+// (EclipseGFxFSCommandHandler and EclipseGFxExternalInterface, whose callbacks are their vtables'
+// slot 1). Both pass the call to the object in 0x00C31264, most likely GUI::ScaleformManager (the
+// example plugin logs its class), which asks the movie for its user data (GFxMovie's slot 43):
+// the game's object that owns the movie, with the movie at its +0x1C. Then it looks the call's
+// name up in a registry of handlers by name, at the manager's +0xA8, one map for FSCommands and
+// one for ExternalInterface calls, keyed by the name's CRC-32. The game registers 67 FSCommands
+// and 17 ExternalInterface calls there (GetObjectNameByID, HasAbility, ListTacticTargets,
+// SendMessage, GetValue, ...). This file detours the two lookups, so it sees every call with its
+// name, and a plugin's handler for a name runs in place of the game's.
+//
+// GFx runs FSCommand and ExternalInterface handlers while it advances a movie or runs an Invoke
+// on it (Scaleform's documentation, and the game's own handlers are shaped for it): a handler
+// runs on the thread that advances the movie, and a plugin's Movie::Invoke can have a handler run
+// before it returns. Handlers should return quickly.
+//
+// Not yet seen in play (as written 2026-09-30): the example plugin logs the first calls, their
+// movies' names and the thread they come on, and every movie's name.
 #include "dao/Gui.h"
 
 #include "dao/Addresses.h"
@@ -170,6 +191,8 @@ void *Manager()
 
 } // namespace
 
+// The game's movies: each is a record the manager keeps (dao/Addresses.h), the `owner` a call
+// carries: its name at +0, its movie at +0x1C.
 std::vector<void *> Owners()
 {
     std::vector<void *> owners;
@@ -244,6 +267,28 @@ bool SetArrayOf(void *view, std::int32_t kind, const char *path, std::uint32_t i
 
 } // namespace
 
+// Movie is GFx's GFxMovieView (its class GFxMovieRoot), as the game's UI objects hold it
+// (MovieOf). Its vtable, read 2026-09-30 from the game's own calls (the paths it passes,
+// _root.OriginalStageWidth, _root.fsc_retval, the floaty layer's batch updates), is GFx 3.0's
+// GFxMovie in order, and each slot's `ret` agrees: 9 GetVisible, 10 IsAvailable(path), 11
+// SetVariable(path, value, setType), 12 GetVariable(out, path), 13 SetVariableArray(type, path,
+// index, data, count, setType), 14 SetVariableArraySize(path, count, setType), 15
+// GetVariableArraySize(path), 16 GetVariableArray(type, path, index, data, count), 17 the
+// variadic Invoke (__cdecl), 18 Invoke(method, result, args, count), 19 InvokeArgs, 42
+// SetExternalInterfaceRetVal, 43 GetUserData. No slots for GFx 3.1's CreateString and
+// CreateObject sit before SetVariable, so this is the 3.0 interface. The game sets variables
+// with Sticky, GFx's default.
+//
+// SetArray and Invoke are seen in play: dao/Options.h delivers its checkboxes' states with them
+// (SetArray on TokenManager's two arrays, then
+// Invoke("TokenManager.PerformBatchTokenReplacements"), 2026-10-01), and the boxes showed them.
+// A path needs no "_root." in front, and works with it. Seen in play 2026-10-02 by the
+// turn-based mod too: from inside its own movie's ExternalInterface handler it invoked the
+// quickbar movie's XPBar_mc.SetValue(left, whole), SetTooltipSource and
+// EffectBar_mc.UpdateXP("GUI.SelectedChar"), the game's experience bar showing what it set. Call
+// it on the thread the movie's own calls come on (an FSCommand or ExternalInterface handler runs
+// there). In the GOG game that was the frame's thread as well (the same thread id in the mod's
+// handler and its frame callback, two runs); a handler is still the surer place.
 bool Movie::IsAvailable(const char *path) const
 {
     using Fn = bool(__fastcall *)(void *, int, const char *);
@@ -256,6 +301,8 @@ bool Movie::SetVariable(const char *path, const Value &value, SetType type)
     return view_ != nullptr && Slot<Fn>(view_, 11)(view_, 0, path, &value, type);
 }
 
+// An ActionScript array at a path, from index on, as the game fills _root.fsc_retval and the
+// floaty layer's batch updates (GFx's SetArrayType: 0 int, 1 double, 4 wide string, 5 value).
 bool Movie::SetArray(const char *path, std::span<const std::int32_t> values, std::uint32_t index, SetType type)
 {
     return SetArrayOf(view_, 0, path, index, values.data(), static_cast<std::uint32_t>(values.size()), type);
@@ -316,6 +363,14 @@ Movie::Answer ToAnswer(const Value &value)
 
 } // namespace
 
+// GFx's GetVariable, slot 12, __thiscall (out, path), `ret 8`. This GFx has nothing to give but
+// undefined, null, a bool, a number or a string (dao/Gui.h, Value).
+//
+// Get and Call seen in play 2026-10-05 through the Eluvian server, over seven rounds of the
+// level-up screen's reads: numbers (nPointsToSpend 3, m_nMode 1), booleans (bLevelUp, _visible),
+// a string (m_sRootToken "CharGenCreature.Stats.TalentChains"), null and undefined each where
+// expected; Call's answer to Scrollable_mc.getNextHighestDepth a number, 3. A clip comes back as a
+// String holding its path, never as DisplayObject.
 std::optional<Movie::Answer> Movie::Get(const char *path) const
 {
     if (view_ == nullptr)
@@ -331,6 +386,7 @@ std::optional<Movie::Answer> Movie::Get(const char *path) const
     return ToAnswer(out);
 }
 
+// Invoke, slot 18, its answer given.
 std::optional<Movie::Answer> Movie::Call(const char *method, std::span<const Value> args)
 {
     if (view_ == nullptr)
@@ -437,6 +493,18 @@ namespace
 void AttachOpenFile();
 } // namespace
 
+// A screen of a plugin's own, as the game has its 61: a GUI::GUIScene the GUI system keeps by
+// name, whose movie it opens on a layer when shown (dev/GUI.md). The layer is the stacking order
+// the game's scenes use; the flags are theirs too (0x20 modal, 0x10 a loading screen).
+//
+// The movie is found as the game finds its own: a scene "turnorder" is the resource
+// "turnorder.gfx", looked up by the engine's resource system in the places it looks for every
+// resource (its override folders and the game's archives). Where the game has none by that name,
+// the plugin's own folder is the place: daolib\plugins\<name>\turnorder.gfx (or .swf), read once
+// and handed to GFx as the file the game's opener made, so the whole plugin is one folder (DAOLib
+// #26; add_daolib_plugin's FILES puts it there). Add a screen once the game is up (the GUI system
+// exists from the first frame of the main menu: a frame callback will do); show, hide and close
+// it from the scripts' thread. Read 2026-09-30, not yet seen in play.
 bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t layer, std::uint32_t flags)
 {
     void *gui = GuiSystem();
@@ -537,6 +605,31 @@ std::vector<Screen> ScreensOf(const void *gui)
 
 } // namespace
 
+// Read 2026-10-02. The GUI system keeps its scenes in a std::map at +0x58, id to GUI::GUIScene
+// (dao/core/Msvc8.h, TreeRep): the game's 60 have ids 0-0x3F. A scene's name is the std::wstring
+// at +0x58 (what SceneIdByName compares), its movie's name the text of its Filename attribute
+// (+0x74, the text at +0xC in it), its layer +0x9C and flags +0xA4. The game's scenes are each
+// on a movie of their own ("Inventory" on inventory.gfx, "Options" on OptionsMenu, "Main" on
+// MainUI, the loot panel being the inventory's). Showing a scene opens its movie by that name,
+// and the manager's record of the movie has an active byte at +0x28: set when it is shown
+// (OpenMovie, through 0x00518CB0), cleared when it is hidden (the GUI system's slot 19, through
+// the manager's 0x00511990, which takes the movie off the renderer's list too, 0x005187F0), and
+// cleared for every movie when the interface is put away whole (0x005118F0's loop). So shown
+// here is the record's active byte: what is drawn, not what is logically open.
+//
+// On the game's thread, as CurrentPopup. Seen in play 2026-10-02, GOG, through the Eluvian
+// server, every call answered at once:
+// - Exploring with nothing open, nine shown: Tooltips (layer 8), PopupLayer and Notifications
+//   (7), NavBar and Quickbar (4), ArmyControl, Minimap and Portraits (1), FloatyLayer (0); no
+//   full-screen GUI. "Main" is not among them. PopupLayer reads shown with no box up: its movie
+//   stays active, so CurrentPopup is what says a box is up.
+// - The loot panel: the full-screen GUI Inventory, in the GUI mode.
+// - The level-up screen (GUI.GoToLevelUp): the full-screen GUI LevelUp, in CharGen mode, LevelUp
+//   and BookBack among the shown and Notifications gone.
+// - After GUI.HideFullScreenGUI, and after the loot panel's Close: the nine again and no
+//   full-screen GUI.
+// Not yet seen: a store, the map, the inventory opened by its key, and two plugins' screens
+// taking ids of their own (AddScreen).
 std::vector<Screen> Screens()
 {
     const void *gui = GuiSystem();
@@ -551,6 +644,14 @@ std::vector<Screen> ShownScreens()
     return shown;
 }
 
+// The screen as Screens() finds it, and its movie through its record (FindOwner, MovieOf). Call
+// the movie on the thread its own calls come on; in the GOG game that is the frame's
+// (dao/Frame.h), the two seen as one thread, so a frame callback will do there. Read 2026-10-03.
+// Seen in play the same day through the Eluvian server (GOG), from the frame's thread: the
+// Options screen found, SceneManager.PlayScene("Controls") showed its Controls page and
+// _root.KeyBindings_mc.SetScrollPercentage(100) scrolled the key list to its end, for a picture
+// taken with no mouse; a root-level OptionTabAction, which the movie does not have, answered
+// false.
 std::optional<Movie> ScreenMovie(std::wstring_view screen)
 {
     for (const Screen &shown : ShownScreens())
@@ -564,6 +665,14 @@ std::optional<Movie> ScreenMovie(std::wstring_view screen)
     return std::nullopt;
 }
 
+// A full-screen GUI is what ToggleFullScreenGUIMessage <name> opens and GUI.HideFullScreenGUI
+// closes: the inventory, the character record, the map, the journal, mostly in the GUI game mode
+// (dao::GameMode::Gui), the level-up screen in character creation's (CharGen). The GUI system
+// shows its scene by id (its slot 13, which also signals the scripts) and pushes the id on a
+// std::vector<int> at +0x1E4 (0x00610CE0); hiding pops it (0x0060F1E0, through slot 14), and
+// closing all of them pops them all (slot 16). Toggling a name hides it when its id is the
+// vector's last, so the last is the one up; opening one first closes the rest, so there is one at
+// most. GameModeGUI keeps the id at +0x98 as well. Read 2026-10-02; seen in play with Screens.
 std::optional<Screen> CurrentFullScreen()
 {
     const void *gui = GuiSystem();
@@ -855,6 +964,13 @@ void AttachOpenFile()
 
 } // namespace
 
+// Read 2026-10-01 (dao/Addresses.h, EclipseGFxFileOpener::OpenFile): the game's file object reads
+// from the resource's bytes in memory, and this points it at the patched bytes and answers their
+// length. Seen in play the same day through dao/Input.h's rows in the controls screen: the
+// patched options movie opened each time, twice in one session and again after a restart, its
+// other tabs as ever. Patches of several plugins, each plugin's on what the others' left, seen in
+// play 2026-10-01: one plugin's key rows and another's section on the Game tab, in one opening
+// of the screen.
 void OnMovieLoad(std::wstring_view name, MoviePatch patch)
 {
     if (!patch)
@@ -873,6 +989,9 @@ void OnMovieLoad(std::wstring_view name, MoviePatch patch)
     AttachOpenFile();
 }
 
+// Shipped beside the plugin and given to the game only while the plugin is loaded, so that
+// removing the plugin brings the game's movie back with nothing left in the game's folders; a
+// patch in memory does not ship BioWare's file, a copy does. Not yet seen in play.
 bool ReplaceMovie(std::wstring_view name, const std::filesystem::path &file)
 {
     std::ifstream in(file, std::ios::binary);
@@ -893,6 +1012,10 @@ bool ReplaceMovie(std::wstring_view name, const std::filesystem::path &file)
     return true;
 }
 
+// The engine's own test (dao/Addresses.h), which explore mode asks before it picks what is under
+// the cursor. Seen in play, 2026-10-01 and 02, in the GOG, EA and Steam games alike
+// (examples/world logs each change): yes at the main menu, no with the cursor over the world, yes
+// while the game's menu was open and no when it closed.
 bool MouseOverInterface()
 {
     void *manager = Manager();
@@ -948,6 +1071,8 @@ void CompareFullScreen()
 
 } // namespace
 
+// Compared each frame, as the GUI system keeps them (its stack of full-screen ids, the last the
+// one up). Read 2026-10-05 (DAOLib #27); not yet seen in play.
 void OnFullScreen(std::function<void(std::wstring_view name, bool shown)> observer)
 {
     static std::once_flag once;
@@ -956,6 +1081,24 @@ void OnFullScreen(std::function<void(std::wstring_view name, bool shown)> observ
     g_fullScreenObservers.push_back(std::move(observer));
 }
 
+// The clip is made with the movie's own createEmptyMovieClip at its next free depth, and the
+// movie <ownMovie>.swf is loaded into it with loadMovie, served from the plugin's folder (as
+// AddScreen's are). A screen only hidden keeps the clip and its movie; one closed loses both. A
+// mark set on the clip before the load, which the load clears, says which clip's load never came.
+//
+// For the loaded movie's script, from the turn-based mod's tactics box (its issue 46,
+// 2026-10-05):
+// - The clip and anything the script attaches need names of their own: an element attached
+//   inside the clip by the clip's name would shadow it.
+// - A game element attached by attachMovie is not usable in the frame it is attached, and an
+//   element of the screen's own may be there before it is set up: wait for its m_bLoaded, as the
+//   screen's own rows do, not only for it to exist.
+// - Anything attached at the root draws over the screen's drop-down lists, and the screen's own
+//   swapDepths(1) moves whatever sits at depth 1.
+// - The screen's token observers keep ids of their own (the tactics screen's 2303, 2308, 2600 to
+//   2609); a script's own observer takes an id of its own (TokenManager.AddTokenObserverWithID,
+//   as the screen does).
+// Read 2026-10-05 (DAOLib #27); not yet seen in play.
 bool LoadInto(Movie movie, std::string_view clip, std::wstring_view ownMovie)
 {
     if (!movie || clip.empty() || ownMovie.empty())
@@ -1003,6 +1146,7 @@ bool ReturnFSCommand(void *owner, std::span<const std::int32_t> values)
     return Movie{MovieOf(owner)}.SetArray("_root.fsc_retval", values);
 }
 
+// The movie's slot 42, SetExternalInterfaceRetVal, as the game's handlers answer.
 void Call::Return(const Value &answer) const
 {
     void *movie = MovieOf(owner);
@@ -1015,6 +1159,7 @@ void Call::Return(const Value &answer) const
     vtable[42](movie, 0, &answer);
 }
 
+// At plugin load or later; the first call detours the engine's lookup.
 void OnFSCommand(std::string name, FSCommandHandler handler)
 {
     const std::lock_guard lock(g_mutex);
@@ -1057,6 +1202,18 @@ void OnAnyExternalInterface(ExternalInterfaceHandler observer)
     AttachLocked();
 }
 
+// Read 2026-10-01. The game's message boxes are one movie, the popup layer (GUI::GUIPopupLayer,
+// built by 0x0070A071's function), which keeps what it shows in the data tree under
+// GUIPopupLayer: DialogBoxText, NumButtons, and for each button a Label0 to Label3 and a Callback0
+// to Callback3, the message the game is sent when it is pressed, as text
+// ("CClientExoApp.GUIDialogResult 1 0"); also an input box, a checkbox and a picker, not read
+// here. The GUI system keeps whether a box is up at +0x1FA: set when it shows one (0x0060BA90,
+// which then has the movie show it, PopupLayer.ShowDialogBoxFromGame) and cleared by
+// DialogBoxClosedMessage. Seen in play, 2026-10-01, through the Eluvian server: after the
+// scripts' ShowPopup(379897, 1) it gave the text "Shield Pummel", the string's own and not its
+// number, and two buttons, Yes with the callback "GUIPopupLayer.ScriptDialogResult 1 1 -1" and No
+// with "... 1 2 -1"; nothing before the box was up. A script's box holds nothing: loads, orders
+// and a fight went on under it.
 std::optional<Popup> CurrentPopup()
 {
     constexpr std::size_t kBoxUp = 0x1FA; // in the GUI system
@@ -1078,6 +1235,13 @@ std::optional<Popup> CurrentPopup()
     return box;
 }
 
+// The button's callback goes as the movie sends it when the button is clicked (dao/Messages.h,
+// SendText), and then, as the movie tells it once the box has gone, DialogBoxClosedMessage. Read
+// 2026-10-01; what the movie itself does at a click is ActionScript and not read. Seen in play
+// the same day, through the Eluvian server: with a script's Yes and No box up, pressing No
+// answered true, CurrentPopup was nothing at once, and the game's own screenshot showed the box
+// gone and the interface back. Whether the script heard the answer (EVENT_TYPE_POPUP_RESULT) is
+// not yet seen.
 bool PressPopupButton(std::size_t index)
 {
     const auto box = CurrentPopup();

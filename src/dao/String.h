@@ -1,11 +1,6 @@
-// The engine's string, held by a plugin: its std::wstring (MSVC 2005's,
-// dao/core/Msvc8.h), in its layout, filled and freed by the engine's own
-// functions, since a string longer than seven characters lives on the
-// engine's heap. What a plugin passes to engine code that takes a string,
-// and gets back from code that fills one.
-//
-// A plugin that only wants text uses std::wstring and dao/Script.h's
-// PopString/PushString, which go through this.
+// The game's own string type, for passing text to game functions that take a std::wstring and for
+// reading text back from functions that fill one in. If you only need text, use std::wstring
+// with PopString and PushString from dao/Script.h, which use this type for you.
 #pragma once
 
 #include "dao/core/Msvc8.h"
@@ -16,26 +11,35 @@
 namespace dao
 {
 
+// A std::wstring with the memory layout the game uses (MSVC 2005's, see dao/core/Msvc8.h). The
+// game's own functions fill it in and free it, because text longer than seven characters is
+// stored on the game's heap.
+//
+// It calls game code, so use it only in a build the library knows (Module::IsKnownExecutable).
 class WString
 {
   public:
+    // Makes an empty string.
     WString() = default;
+    // Makes a string holding a copy of `text`.
     explicit WString(std::wstring_view text);
+    // Frees the text through the game's own code.
     ~WString();
 
     WString(const WString &) = delete;
     WString &operator=(const WString &) = delete;
 
-    // The engine's operator=: a copy of the text, on the engine's heap if
-    // it is longer than the inline buffer.
+    // Replaces the text with a copy of `text`, using the game's own operator=.
     void Assign(std::wstring_view text);
 
+    // Returns the text. The view is valid until the string is changed or destroyed.
     std::wstring_view View() const
     {
         return rep_.View();
     }
 
-    // For engine functions that take or fill a std::wstring.
+    // Returns the string as the game's std::wstring, to pass to a game function that takes or
+    // fills one in.
     core::WStringRep *Engine()
     {
         return &rep_;
@@ -46,7 +50,7 @@ class WString
 };
 static_assert(sizeof(WString) == sizeof(core::WStringRep), "a WString is the engine's string, nothing more");
 
-// UTF-8, for logs: the engine's text is UTF-16.
+// Converts UTF-16 text, which the game uses, to UTF-8, for example for a log.
 std::string Utf8(std::wstring_view text);
 
 } // namespace dao

@@ -1,3 +1,25 @@
+// Script commands from a plugin (dao/Script.h): the command table, the VM's stack, and calling a
+// command from C++.
+//
+// A script (.nss, compiled to .ncs) calls the engine by number. The script commands object
+// (CClientExoApp+0x1E4) holds a table of 863 handlers, and the VM's ExecuteCommand calls
+// `table[number](number, paramCount)` with that object in ecx: __thiscall, the command's number
+// and its parameter count, `ret 8`. A handler pops its arguments, does its work, pushes its
+// answer and returns 0, or a negative error (dao/Addresses.h has how each piece was read). So a
+// plugin can replace a command's handler, keeping the old one to call on (the probe does this to
+// check fields against the engine's answers), or put a new command in a free slot: about a
+// hundred and fifty are empty, and a script reaches one once the toolset's script.ldf declares it
+// with that number (dev/SCRIPT_COMMANDS.md).
+//
+// The table exists once InitializeCommands has filled it, early in the application's start-up
+// and after plugins load: Table() is null before the application exists. In the moment between
+// the application storing the commands object and the VM initialising it, the table pointer is
+// not yet written, so a plugin that wants its slots set before the first script runs detours
+// addr::kCVirtualMachineCommands_InitializeCommands and sets them after the original returns, as
+// the probe does.
+//
+// DestroyStructure and CopyStructure call the commands object's DestroyGameDefinedStructure and
+// CopyGameDefinedStructure.
 #include "dao/Script.h"
 
 #include "dao/Addresses.h"
@@ -209,6 +231,8 @@ Array Stack::PopArray()
     return Array{popped};
 }
 
+// The engine's constructor by tag is 0x00A2E920. Seen in play, 2026-10-01: LoadCutscene took an
+// empty array of strings and one of objects.
 Array Array::Empty(core::ArrayTag kind)
 {
     // As StackPopArray makes the popper's: 8 bytes from the engine's
@@ -385,6 +409,9 @@ std::byte *CommandsObject()
 
 } // namespace
 
+// The commands object keeps the object the running script belongs to at +8, with +4 saying it is
+// set (NWN's CVirtualMachineCmdImplementer has the same two; GetCurrentEvent and SignalEvent read
+// +8).
 ObjectId Self()
 {
     const std::byte *commands = CommandsObject();

@@ -1,33 +1,13 @@
-// Drawing in the world with the game's own visual effects: a ring on the
-// ground, as the engine draws an area being aimed, or any row of the
-// visual effects table (vfx_base), placed at a point, scaled, moved and
-// taken away.
+// Draws in the world with the game's own visual effects. Place any row of the visual effects table
+// (vfx_base) at a point, then move it, scale it and remove it. Use it for markers on the ground,
+// such as the ring the game draws while you aim an area ability.
 //
-//   const ObjectId ring = dao::vfx::PlaceRing(point, 4.0F);     // 4 m
+//   const ObjectId ring = dao::vfx::PlaceRing(point, 4.0F);     // 4 m radius
 //   dao::vfx::Move(ring, elsewhere);
 //   dao::vfx::Remove(ring);
 //
-// Read 2026-09-30 from explore mode's aiming (0x00710F80). While an area
-// ability is aimed, explore mode keeps one effect's id (0x00C0679C) and
-// each frame either moves it to the aimed point or, when the look should
-// change, takes it away and places another. It places through the visual
-// effect manager (a singleton, 0x0079E820): Place (0x0079EDC0, __thiscall
-// (const descriptor *, the id it had or -1, mode 2, const Vector4 *at,
-// const Vector4 *facing or null, the object to attach to or 0), `ret
-// 0x18`; the descriptor {the effect's row, the area's id, scale, 0}),
-// Find (0x0079D780) and Remove (0x0079EAE0, (id, 0), `ret 8`); it moves an
-// effect with CCObject::SetPosition (0x00695540) and turns it with its
-// slot 112. The rings are vfx_base rows 30017 to 30019, ground decals made
-// for a 10 m radius and scaled to the ability's (its radius over 10); the
-// row is chosen by 0x0070AB20, 30019 when the point is out of reach. In
-// play (2026-09-30, examples/preview) the two looked alike: a pale cream
-// ring, near or far. Their Tint (vfx_base) is 0; a colour for "too far" is
-// a different row (an area effect of another look, say), not this one.
-//
-// On the game's thread. An effect placed stays until removed, or until its
-// area is unloaded; a plugin removes its own. Seen in play 2026-09-30: a
-// ring placed and moved after the cursor, 22 placed and removed in a few
-// minutes, none left behind.
+// Call every function on the game thread. An effect stays until it is removed or its area is
+// unloaded, so remove the effects you place.
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -40,15 +20,14 @@
 namespace dao::vfx
 {
 
-// vfx_base's rows for explore mode's aiming.
+// The vfx_base rows that explore mode uses for aiming.
 inline constexpr std::int32_t kAreaRing = 30017;           // "AOE Selection", fxg_aoe_p
 inline constexpr std::int32_t kConeArea = 30018;           // "Cone Selection", fxg_cone_p
-inline constexpr std::int32_t kAreaRingOutOfReach = 30019; // "AOE No Selection", fxg_aoe_no_p; looks as 30017
-// The rings' radius at scale 1.
+inline constexpr std::int32_t kAreaRingOutOfReach = 30019; // "AOE No Selection", fxg_aoe_no_p; looks like 30017
+// The radius of the aiming rings at scale 1, in metres.
 inline constexpr float kRingRadius = 10.0F;
 
-// A colour an effect's model is tinted with: red, green, blue and alpha,
-// each 0 to 1.
+// A colour to tint an effect's model with: red, green, blue and alpha, each from 0 to 1.
 struct Tint
 {
     float r = 1.0F;
@@ -57,125 +36,57 @@ struct Tint
     float a = 1.0F;
 };
 
-// Places a vfx_base row at a point in the current area, at `scale`, facing
-// `facing` if given, tinted with `tint` if given. Its id, or kInvalidObject
-// if there is no area.
+// Places a vfx_base row at a point in the current area.
+// @param vfx the vfx_base row
+// @param at where to place it, in world coordinates
+// @param scale its size relative to the row's own, the same on all three axes
+// @param facing the direction it faces; the row's default if not given
+// @param tint a colour to use in place of the row's own Tint column, if given
+// @return the effect's id, or kInvalidObject if no area is loaded
 //
-// The tint, read 2026-10-01 from the effect's set-up (0x007EA550): the
-// descriptor's fourth word is a pointer to a colour of four floats, which
-// the set-up hands to the model (its slot 69) in place of the row's own
-// Tint column (a packed colour, made into the same four floats). So one
-// row might be placed in any colour. In play it has not been: see below
-// before relying on it.
-//
-// Which do, read 2026-10-01 after play showed one that does not. The
-// model's slot 69 (0x00546700) sets the material parameter
-// mml_vUserColorMultiplier on the model's meshes. The reticles' material,
-// GeneralGui.mat, has that parameter only in its "ReticalTint" semantic
-// (the pixel shader ReticleTint.psh, the parameter 1 1 1 1 by default);
-// its "Default" semantic has the texture alone. A model's material object
-// (.mao, a few lines of text) names the semantic. Four name ReticalTint:
-// fx_aoe_radius, fx_aoe_radius_no, fx_cone_radius and fx_aura_circle, the
-// aiming ring, its out-of-reach twin and the cone (rows 30017, 30019 and
-// 30018). So those take a tint. The selection reticles and the move marker
-// (row 30000, move_indicator.mao) name Default and ignore it: in play, the
-// turn-based mod's marker placed with a red tint was its usual pale gold.
-// A material object of the same name in the override folder that names
-// ReticalTint would make one of those take a tint, the game's own use of
-// it unchanged while no tint is given.
-//
-// In play that evening neither showed. The turn-based mod's marker, with
-// both of its material objects (move_indicator and move_icon) so changed,
-// was still gold. And the aiming ring itself, placed with a red tint by
-// examples/preview, was its own pale gold: the play tester's bright
-// pixels had red, green and blue within a few points of each other.
-//
-// Read after that. The shader is not the trouble: ReticleTint.psh is the
-// texture times aur_vExternalColor times mml_vUserColorMultiplier. Nor is
-// the kind of node. Slot 69 keeps the colour in the model (+0x2CC) and
-// goes through the model's drawable nodes (the list at +0x5C); to each
-// that is a mesh, a sprite emitter, an emitter of meshes or a weapon
-// trail (kinds 1, 6, 7 and 0x13 to 0x15) and has a material instance
-// (+0x150), it gives a value for the parameter that points at that colour
-// (0x004F3F40).
-//
-// Nor is it the moment. A second play test set the tint after placing,
-// every other frame (SetTint below): the ring's model had its one part
-// from the frame it was placed, the call answered each time, and the ring
-// was pale gold still. So a caller's tint has not been seen to colour
-// anything, and a reticle is not to be had in another colour this way.
-//
-// What the tint may be for. The game's auras (fxa_aura_p: rows 93052 and
-// 93054 are one model, blue and orange by their Tint) are built as the
-// aiming ring is, a plane on the same material and semantic, with an
-// emitter on VFX.mat beside it; an emitter sets the parameter itself from
-// a colour its model keeps (ObjectNodeEmitter's slot 13, at 0x00541473).
-// So the Tint column may show only in emitters, and a tint from a caller
-// may too. Not tried in play. Not read: what gives a mesh's shader the
-// parameter when it is drawn, and what the plane's animated MaterialColor
-// (animation target 0x24) writes.
-//
-// The colour is one the game uses itself: the effect's set-up (0x007EA550)
-// takes the caller's tint or, with none, the row's own from the table's
-// Tint column (0xAARRGGBB; 137 of the 993 rows have one, crusts and auras
-// on VFX.mat, whose shaders read the same parameter), and hands either to
-// the same call.
-//
-// The scale is one number, and not only here: the effect's graphics object
-// (GraphicsStructures::Object, its SetScale 0x00545330) keeps a single
-// float at its +0x54, sizes its bounds and its pick shape by it, and hands
-// three copies of it to the function that composes its transform
-// (0x00545E30). So an effect cannot be stretched along one axis without
-// detours where that number is spread, and there is little to stretch:
-// of the reticles only the party ring (SR_PTY) is a plain quad, with a
-// ring for a texture; SR_HLT (30001) is four small arrows of 18 vertices
-// each. A line on the ground is a row of small effects, or a model made
-// for it.
+// So far a tint has not visibly changed any effect's colour in the game, the aiming rings
+// included.
 ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
                const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
-// A ring of `radius` metres on the ground: the engine's aiming ring, or the
-// one it shows for a point out of reach, which looked the same in play.
+// Places the game's aiming ring on the ground.
+// @param radius the ring's radius in metres
+// @param inReach false for the out-of-reach ring, which looks the same in the game
+// @return the effect's id, or kInvalidObject if no area is loaded
 inline ObjectId PlaceRing(const Vector &at, float radius, bool inReach = true)
 {
     return Place(inReach ? kAreaRing : kAreaRingOutOfReach, at, radius / kRingRadius);
 }
 
-// Moves a placed effect, and turns it if `facing` is given; false if it is
-// gone.
+// Moves a placed effect, and turns it to `facing` if that is given.
+// @return false if the effect no longer exists
 bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing = std::nullopt);
 
-// Takes a placed effect away; nothing for one already gone.
+// Removes a placed effect and clears its SetPickable setting. Does nothing if the effect is
+// already gone.
 void Remove(ObjectId effect);
 
-// A placed effect's size or colour changed where it stands, as its set-up
-// set them when it was placed: a mark turned from gold to red without
-// taking it away and placing another. False if the effect is gone. SetScale
-// is not yet seen in play. SetTint ran in play without harm and without a
-// colour to show for it on the aiming ring (above).
+// Changes a placed effect's scale without removing and placing it again.
+// @return false if the effect no longer exists
 bool SetScale(ObjectId effect, float scale);
+
+// Changes a placed effect's tint without removing and placing it again.
+// @return false if the effect no longer exists
+//
+// As with Place, a tint has so far not visibly changed an effect's colour in the game.
 bool SetTint(ObjectId effect, const Tint &tint);
 
-// Leaves an effect out of the cursor's pick, or puts it back in.
+// Excludes an effect from the cursor's pick, which decides what is under the cursor, or includes
+// it again.
+// @param pickable false to exclude it, true to include it again
 //
-// Some rows have a shape the cursor's ray meets. Seen in play, 2026-10-01
-// (the turn-based mod): row 30000, "Movement Indicator", the game's own
-// move marker, is one of the selection reticles' models, and moved after
-// the cursor each frame it took the pick from the ground under it: the
-// mode's CursorGround read a point and nothing by turns, and a click there
-// would not have been a move. The aiming rings (30017 to 30019) have no
-// such shape.
-//
-// An effect left out is taken from what the cursor's ray met before the
-// mode chooses among it (a detour of GameModeExplore::CastCursorRay), so
-// the mode's CursorObject, CursorGround and CursorHits, and a click, are
-// as they would be without it; dao::world::PickAt leaves it out too. The
-// effect still has its shape: dao::world::Raycast meets it. Remove forgets
-// it. Seen in play, 2026-10-01 (the turn-based mod, the real mouse): with
-// the marker left out and moved under the cursor each frame, the mode's
-// ground was there in 80 reads of 80, nine clicks of nine there were
-// moves, and over a spider the cursor's object was the spider.
+// Some rows, such as the move marker (30000), have a shape the cursor's ray hits, so a marker
+// moved under the cursor would be picked instead of the ground. An excluded effect is ignored by
+// the explore-mode cursor, by clicks, and by dao::world::PickAt, but dao::world::Raycast still
+// hits it.
 void SetPickable(ObjectId effect, bool pickable);
+
+// Returns false if SetPickable excluded the effect from the cursor's pick, otherwise true.
 bool IsPickable(ObjectId effect);
 
 } // namespace dao::vfx

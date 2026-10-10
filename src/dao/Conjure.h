@@ -1,31 +1,14 @@
-// A spell held in its conjure: the engine's own cast, its caster drawing in
-// the spell with the game's animation, moved on only by the time a plugin
-// gives it. A turn-based mode hands a spell to the engine at once and
-// feeds its conjure as the caster's turn pays for it, so that everything
-// the game does to a conjuring caster it still does: the installed
-// rules_core's damage rule interrupts it (shipped or fixed), a knockdown
-// ends it, and the cost is taken only when the conjure completes.
+// Makes a spell's conjure, the wind-up before the cast, progress only as fast as a plugin feeds
+// it time.
 //
-//   dao::commands::HoldConjure(caster);           // as the spell is given
-//   dao::commands::FeedConjure(caster, 0.016f);   // as its time is paid
-//   dao::commands::HoldConjure(caster, false);    // the hold let go
+// Otherwise the game casts the spell as usual: the caster plays the conjure animation, damage
+// can interrupt it, a knockdown ends it, and the spell's cost is taken only when the conjure
+// completes. Only the conjure's progress is held, and FeedConjure moves it on. RunningSubAction
+// tells which step of its current command a creature is at.
 //
-// Read 2026-10-02 and seen in play the same day by the probe's conjure
-// watch (dev/TURN_BASED.md, "A command's timed phases and the creature's
-// clock"): a UseAbility's conjure is its sub-action of type 7, timed (its
-// duration the ability's conjure, 3,866 ms for Chain Lightning), its
-// elapsed time counting the caster's own milliseconds, done when it
-// reaches the duration; the cost is taken at the type 8 after it. Each
-// update, CSSubActionHandler::Execute runs it; for a held caster this sets
-// the elapsed time first to what has been fed, so the conjure runs as
-// ever, animation and IsConjuring with it, and completes only once fed its
-// whole duration. The cast (37) and what follows then run in real time.
-// The hold seen in play the same day, the turn-based mod's play test 33
-// (DAOTurnBased dev/PLAYTEST-2026-10-02-33.md): a caster's Chain Lightning
-// held conjuring through two spiders' turns, the lightning round her
-// frame after frame and the game's own action label up; an ogre's ability
-// cleared it before its time was paid; in the re-check, fed its whole
-// time, it was let go and the bolt flew at the start of her next turn.
+//   dao::commands::HoldConjure(caster);           // when the spell is ordered
+//   dao::commands::FeedConjure(caster, 0.016f);   // as the caster's turn spends time
+//   dao::commands::HoldConjure(caster, false);    // release the hold
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -36,53 +19,56 @@
 namespace dao::commands
 {
 
-// Hold a caster's conjures (true): from now each conjure it runs moves only
-// by what FeedConjure gives it, starting from where it stood. Let go
-// (false), the one under way runs on in real time from where it stood.
-// What else the caster does, moving into range, the cast, is not held.
+// Makes a caster's conjures progress only through FeedConjure, or releases them.
+// @param hold true to hold; false to let the current conjure run on in real time from where it is
+//
+// A conjure already under way is held where it is. Moving into range, the cast, and everything
+// after the conjure still run in real time.
 void HoldConjure(ObjectId caster, bool hold = true);
+
+// Returns whether a caster's conjures are held.
 bool ConjureHeld(ObjectId caster);
 
-// Give a held caster's conjure `seconds` more, in steps as small as wanted,
-// the fractions of a millisecond kept; never past its duration. Seconds
-// given while no conjure is running wait for the next one.
+// Gives a held caster's conjure more time.
+// @param seconds the time to give, in game seconds; fractions of a millisecond carry over, and 0
+//  or less does nothing
+//
+// The conjure never runs past its duration. Time given while no conjure is running waits for
+// the next one. Does nothing for a caster that is not held.
 void FeedConjure(ObjectId caster, float seconds);
 
-// A caster's conjure under way, held or not: how far along and how long.
-// Nothing if it is not conjuring, or before the first update after this
-// part of the library is first called. From the frame's thread.
+// How far along a conjure is.
 struct Conjuring
 {
-    float elapsed = 0;  // seconds
-    float duration = 0; // seconds
+    float elapsed = 0;  // seconds so far
+    float duration = 0; // seconds in all
 };
+
+// Returns how far along a caster's conjure is, held or not.
+// @return nullopt if the caster is not conjuring or is not a creature, or if no game update has
+//  run since this part of the library was first used
+//
+// Call it on the game thread (dao/Frame.h).
 std::optional<Conjuring> Conjure(ObjectId caster);
 
-// The type of the sub-action a creature's current command is at, as the
-// engine's IsConjuring answers it (dev/TURN_BASED.md, "A command's timed
-// phases"): the type of the first sub-action left on its current command's
-// list (IsConjuring reads it through 0x00697BF0), the one running or about
-// to run, so never 0 between two of them; 0 only when the creature has no
-// current command, or none of its sub-actions is left, or it is no
-// creature. A UseAbility's run 15, 39, 50,
-// 7 (the conjure), 8, 37 (seen in play). An attack's, seen in play
-// 2026-10-04 (the turn-based mod, Zevran's ambush, 160 attacks) and read
-// in their handlers: an approach, 4 for melee or 15 for a ranged weapon
-// (dao/Attack.h), the only ones in which the attacker walks; then the
-// attack's own. A melee blow is 1 (after a turn to face, 39, to within 1
-// degree), which waits while the target is more than 60 degrees above or
-// below the attacker or out of sight, then sends EVENT_TYPE_COMMAND_PENDING
-// for the scripts to resolve it. A shot runs 39 (turn to face,
-// 0x007A69E0), 37 (a timed animation, 0x007A4390), 6 (the aim, 0x007A2410:
-// a timed wait that holds while the target is out of sight or more than
-// 67.5 degrees off the facing) and 2 (the shot, 0x007A6490, which sends
-// COMMAND_PENDING), with 37 again; not every shot runs every one. The
-// command's 50, which puts the attack's own in, runs within the same
-// update (several sub-actions run in one while its time lasts,
-// 0x0073CB60), so it is not seen between frames. 0 between the last of
-// them and the command's end, seen; whether it can be 0 for a frame
-// before the command's step puts its sub-actions in is not read. On the
-// game's thread.
+// Returns the type of the sub-action that a creature's current command is running or is about to
+// run. The game carries out a command, such as an attack, as a series of sub-actions: approach,
+// aim, blow, and so on. This is the same value the IsConjuring script command returns.
+// @return the type; 0 if the creature has no current command, has no sub-action left in it, or
+//  is not a creature
+//
+// The known types:
+// - 1: a melee blow
+// - 2: a shot
+// - 4: the approach for a melee attack (dao/Attack.h)
+// - 6: a ranged attack's aim
+// - 7: a spell's conjure
+// - 8: an ability's cost being taken, after the conjure
+// - 15: the approach for a ranged attack or an ability
+// - 37: a timed animation, such as a cast
+// - 39: turning to face the target
+//
+// The creature walks only in 4 and 15. Call it on the game thread.
 std::uint32_t RunningSubAction(ObjectId creature);
 
 } // namespace dao::commands

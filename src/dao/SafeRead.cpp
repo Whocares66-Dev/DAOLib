@@ -1,3 +1,8 @@
+// Reading the game's memory from a thread that does not own it: the probe's
+// sampler reads engine objects while the game runs on, and a pointer read
+// a moment ago can be freed by the time it is followed. These reads catch
+// the access violation (SEH) and report failure instead of crashing the
+// game. They do nothing about a torn value, only about a fault.
 #include "dao/SafeRead.h"
 
 #include <Windows.h>

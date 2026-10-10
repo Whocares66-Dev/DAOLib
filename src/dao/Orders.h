@@ -1,32 +1,11 @@
-// The player's orders, given as the clicks give them: through the same
-// engine functions explore mode's click handlers call, so a plugin's order
-// is a click to everything that watches (the command player issued, the
-// creature told its order arrived).
+// Gives the player's orders the way mouse clicks give them, by calling the same game functions
+// that explore mode's click handlers call. The game and its scripts can't tell a plugin's order
+// from a click: the command is marked as issued by the player, and the creature gets
+// EVENT_TYPE_ON_ORDER_RECEIVED.
 //
 //   dao::orders::Attack(alistair, genlock);
-//   dao::orders::UseAbility(morrigan, ABILITY_SPELL_FIREBALL, kInvalidObject, {}, point);
-//
-// Read 2026-09-30. Each makes the command's parameters (a CDataArrays from
-// the engine's heap, which the command then owns), queues the command
-// through CCObject::QueuePlayerCommand (QueueNewCommand with player issued
-// set, not static, override -1; dao/Addresses.h), and signals
-// EVENT_TYPE_ON_ORDER_RECEIVED (90) to the creature, which the scripts'
-// follower AI listens for:
-// - Attack (0x007F6410, __stdcall (creature, target)): Attack (1) at the
-//   front of the queue, the target its object 0.
-// - UseObject (0x007F6550, __stdcall (creature, object, action)): UseObject
-//   (31) at the back, the object and the action (PLACEABLE_ACTION_*); a
-//   DESTROY becomes an Attack. The object hears EVENT_TYPE_PLACEABLE_ONCLICK
-//   (78) as well.
-// - UseAbility (0x007F6690, __stdcall (ability, creature, item, target,
-//   const Vector4 *point)): UseAbility (25) at the back with the ability,
-//   the target, the item and the point; an ability whose row in the
-//   ability table names an instant script signals that instead, and a
-//   creature that cannot act (its slot 116 answering 1) or in a trigger
-//   that forbids it gets nothing.
-// - MoveTo: explore mode's own (GameModeExplore::MoveTo, dao/GameModes.h),
-//   which records the point as the latest move's destination.
-// On the game's thread, in explore or combat mode. Not yet seen in play.
+//   using dao::kInvalidObject;
+//   dao::orders::UseAbility(morrigan, 10003 /* Fireball */, kInvalidObject, kInvalidObject, point);
 #pragma once
 
 #include "dao/ObjectId.h"
@@ -38,12 +17,33 @@
 namespace dao::orders
 {
 
-// Each answers false, and gives no order, if the creature (or for MoveTo,
-// explore mode) is not there.
+// Orders the creature to attack a target, ahead of its other commands.
+// @return false, and gives no order, if there is no such creature
+//
+// Call it, like every function here, on the game thread in explore or combat mode.
 bool Attack(ObjectId creature, ObjectId target);
+
+// Orders the creature to use an object, such as a door or a chest, after its other commands.
+// PLACEABLE_ACTION_DESTROY becomes an attack.
+// @return false, and gives no order, if there is no such creature
 bool UseObject(ObjectId creature, ObjectId object, script::PlaceableAction action = script::PlaceableAction::Use);
+
+// Orders the creature to use an ability, after its other commands.
+// @param ability the ability's row in the ability table, such as 10003
+// @param target the creature or object to aim at, or kInvalidObject for none
+// @param item the item the ability comes from, or kInvalidObject for none
+// @param point the place to aim at, for an ability aimed at the ground
+// @return false, and gives no order, if there is no such creature
+//
+// An ability with an instant script runs that script instead. A creature that cannot act, or is
+// standing in a trigger that forbids the ability, gets no order, but the function still returns
+// true.
 bool UseAbility(ObjectId creature, std::int32_t ability, ObjectId target, ObjectId item = kInvalidObject,
                 const Vector &point = {});
+
+// Orders the creature to move to a point, like a click on the ground in explore mode.
+// @return false, and gives no order, if there is no such creature or the game is not in explore
+// mode
 bool MoveTo(ObjectId creature, const Vector &point);
 
 } // namespace dao::orders

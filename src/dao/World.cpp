@@ -1,3 +1,23 @@
+// The world's geometry as the engine asks about it (dao/World.h).
+//
+// Read 2026-09-30. An area keeps its physics (Physics::PhysicsScene, over PhysX's
+// NxScene) at the +0xCC of the object at its +0x62C (0x00537D60 reads it). The engine
+// asks that scene two questions:
+// - every shape along a ray, to any distance: World::Raycast (0x006497A0, the scene's
+//   slot 8, NxScene::raycastAllShapes), which the cursor pick asks 15 times a second
+//   (dao/GameModes.h);
+// - the nearest shape between two points: the area's LineOfSight (0x0067C3F0, the
+//   scene's slot 4, raycastClosestShape over the segment), which the scripts'
+//   CheckLineOfSightObject and CheckLineOfSightVector ask, and which lets doors alone
+//   among placeables block the view.
+// Each takes a mask of collision groups, and a shape is met when its own groups
+// (PhysX's NxGroupsMask, first word) share a bit with the mask.
+//
+// On the game's thread only, where frame callbacks, events and the hooks on script
+// commands run: the raycast gathers its hits in a static vector (0x00C347B0) that the
+// cursor pick shares. Called on another thread once a frame has run
+// (dao::FrameThreadId), each answers nothing: no hits, no sight.
+
 #include "dao/World.h"
 
 #include "dao/Addresses.h"
@@ -87,6 +107,8 @@ Sight Ask(CCArea *area, const Vector &from, const Vector &to, ObjectId ignore)
 
 } // namespace
 
+// The module's current area (CCModule's 0x005FE470), which is the controlled
+// creature's.
 CCArea *CurrentArea()
 {
     CClientExoApp *app = CClientExoApp::Get();
@@ -187,6 +209,38 @@ std::optional<ViewSize> SizeOf(void *camera)
 
 } // namespace
 
+// The world on the screen: where a point of the world is drawn, and what a point of the
+// screen is over. Read 2026-10-01 from the cursor's own pick (dao/Addresses.h): the
+// scene's camera turns a pixel into a ray and a point into a pixel, and these ask it.
+// Pixels are of the game's view, from its top left: the window's client area. On the
+// game's thread, with an area loaded. They answer nothing unless the scene's camera is
+// the perspective camera they were read from. (The first try hung the game at
+// ScreenSize, which asked the wrong object: dao/Addresses.h.)
+//
+// Seen in play, 2026-10-01, through the Eluvian server, windowed 1600 by 1000, the
+// close view:
+// - ScreenSize answered 1600 by 1000, the window's client size.
+// - ToScreen of the controlled creature's position: (800, 926), her feet, in front and
+//   in view; of a point behind the camera, not in front.
+// - PickAt 60 pixels above her feet: her, then the ground. At a cave wall: nothing,
+//   the cursor's mask leaving walls out. Outside the view: nothing. A creature is in a
+//   pick twice running, its body and its pick volume.
+// - AimAt: 243 pixels above her feet; and for a wolf standing behind another creature
+//   as the camera saw them, a pixel on the wolf's visible part, where the pick met the
+//   wolf first.
+// - ToScreen's points drawn by a movie (the turn-based mod's path line): on the
+//   creature's feet and the cursor's ground point at four places, one after the camera
+//   came round. dev/GUI.md has how a movie's stage lies over the view.
+// - Pathfind with the game paused, through the Eluvian server: the same two ends asked
+//   running, paused twice and running again answered the same each time to the last
+//   waypoint and slice (44.18 m, 29 waypoints, 20 slices). A pause changes nothing.
+// - FindPath against the walk, the turn-based mod's preview: ten walks ordered from a
+//   path shown, 1 to 8.8 m, round a creature and up a ramp among them, stayed within
+//   0.34 m of the path FindPath gave, and fifty searches for a creature at rest took
+//   15 ms in all.
+// - The real cursor put at an AimAt pixel, by the play tester: the game's own
+//   CursorObject was the creature and the click attacked it, at pixels inside it; at
+//   one on its edge the game's pick held nothing (AimAt now keeps off edges).
 std::optional<ViewSize> ScreenSize()
 {
     void *camera = RenderCamera();
@@ -259,6 +313,19 @@ bool MeetsFirst(ObjectId object, std::int32_t x, std::int32_t y)
 
 } // namespace
 
+// A pixel to click an object at: its place on the screen at a height where the pick
+// there meets it before any other object, tried at a few heights from its middle
+// outward, since an object is picked by its body and not its feet. Of those, the first
+// with the pick meeting it at all eight pixels ten away as well, or failing one the
+// height with most of them: a pixel inside the object, not on its edge.
+//
+// Why inside: in play, 2026-10-01, the real cursor put at a pixel on the top edge of a
+// spider as drawn was over nothing by the game's own pick (no object, no ground, no
+// hits) and the click became a move, while PickAt at that pixel met the spider; 37
+// pixels lower the two agreed and the click attacked. The mode's pick is taken 15
+// times a second from where the engine has the cursor, and holds no hits when the
+// engine gives it no place for the cursor (dao/GameModes.h); at an edge the two can
+// differ, so an edge is no place to aim.
 std::optional<ScreenPoint> AimAt(ObjectId object)
 {
     CClientExoApp *app = CClientExoApp::Get();
@@ -526,6 +593,16 @@ void PlaceObstacle(CCCreature *creature)
 
 } // namespace
 
+// Read 2026-09-30: a creature's MovementController (its +0xA40, 0x006A2570; vftable
+// 0x00B596C0) keeps its search at +0x14, whose waypoints are a std::vector of 12-byte
+// points at +0x70 (0x00A47620 reads one, bounds-checked by (last - first) / 12) and
+// whose next waypoint's index is at +0x88 (0x00A625E0). The move commands' update
+// (0x007A9130) asks for the path a slice of time a frame (0x0073EA80, the search
+// advanced by 0x00A62640), so a path appears a frame or more after the order, not
+// while the game is paused. The search outlives the walk: a creature that has arrived,
+// or stood since a load, still answers its last path (seen in play, 2026-09-30), so
+// whether it is walking it is its current command's to say (a move:
+// CCObject::CurrentCommand). Seen in play.
 std::optional<WalkPath> CurrentPath(ObjectId creature)
 {
     CClientExoApp *app = CClientExoApp::Get();
@@ -851,6 +928,79 @@ class Searcher
 
 } // namespace
 
+// Read 2026-09-30 (dao/Addresses.h, "A search apart from any creature's"): a search is
+// a plain record the engine also makes on the stack of a script command
+// (IsLocationSafe), so this makes one of its own, with the creature's size, and follows
+// RequestPath's order with it. If the creature does not fit at the point, the nearest
+// place within 2 m back toward the creature is the destination, as for a click. The
+// creature's own obstacle is taken out of the pathfinding world for the search and put
+// back after, as the game does each time it asks for a path; `toward` names a creature
+// standing at the point, whose obstacle is lifted the same way (the game does that for
+// the creature a mover follows), so a path to an enemy ends at it rather than failing.
+// A straight walk, where one will do, is the two ends; else the search is run to its
+// end, in slices, for at most 40 ms.
+//
+// The engine's search is made for a walker: it works out only the stretch ahead of the
+// waypoint its walker heads for, and the next as the walker nears the end of that, so
+// this moves its own search's walker along to have the whole path. And it answers
+// "found" for a path it gave up on part way, so a path counts here only if it ends at
+// the destination.
+//
+// Seen in play, 2026-10-01. The first version answered a straight walk rightly but,
+// once the party had walked and so stood as obstacles, every search came back "found"
+// with the start alone. This version, in the Elven Ruins and the forest clearing, the
+// controlled creature walking as before throughout:
+// - to a companion 0.9 to 3.8 m off, before and after walking: the two ends, no
+//   search;
+// - to a spider's corpse 3.2 m off round a corner: 4 waypoints, 3.42 m, in 6 slices;
+//   to another, 7.14 m straight: 6 waypoints, 7.30 m;
+// - outdoors: 35.80 m straight, 26 waypoints and 46.56 m in 21 slices; 56.10 m
+//   straight, 64 waypoints and 107.62 m in 44 slices;
+// - to skeletons 105 to 117 m off in a room never seen: none, the search giving up part
+//   way after 17 to 25 slices, 8 to 10 ms each time;
+// - to skeletons 67 to 70 m off behind shut doors: none, the search answering 6 at the
+//   door. That version went on past the 6 until its 30 ms ran out, 130 to 170 slices;
+//   this one stops there.
+// - and, through the Eluvian server from the ruins' entrance: 40.7 m straight, 29
+//   waypoints and 44.18 m; to creatures 80 to 143 m off past a door, none, the search
+//   giving up 53.38 m along, short of the door, with no 6 and so no blocker. Searching
+//   on from where it gave up is for that case. In play it changed nothing there: the
+//   second search gave up from the same cell. But with the creature standing at that
+//   end, 1.2 m from the shut door, the search answered 6 at once ([4, 4, 6]) and, once
+//   the engine's own note of the barred cell was read, named the door. Short searches
+//   from points further on, where no creature stood, never answered 6 either, and took
+//   the call to 47 to 66 ms. So the searching on is gone again: one search, and where
+//   it gives up part way, the placeable whose footprint holds a point just ahead is
+//   named instead. Seen in play the same day: from the entrance to each of three
+//   creatures past the door, the answer 1, 53.38 m of the way, and the blocker the
+//   door, in 25 slices; and the walk to the spider in the same room found as before.
+// Searched on again, 2026-10-03 (DAOLib #5): a walk of 244 m in the Korcari Wilds found
+// nothing, where 90 m to a point on the way and then the rest were found. Read: the
+// engine plans a stretch of fine path between each two points of a coarse route, and
+// two stretches in a row that fall short of their point end the search as found
+// (0x00A4D1F0). A walker's own search does the same, a slice of 3 to 6 ms a frame
+// (RequestPath, 0x0073EA80); how a click's move reaches the end of so long a walk is
+// not read. So where a search gives up part way and no placeable lies ahead, it is
+// searched on from where it stopped, up to six searches in all, each getting at least
+// 2 m nearer, within 40 ms. A door ahead still ends it. Seen in play 2026-10-03
+// through the Eluvian server: from the Tower of Ishal's courtyard to the
+// Quartermaster, 229.5 m straight, a path of 276.4 m in one call, which a single move
+// then walked to the end. How many searches it took was not shown.
+// Read after, 2026-10-01: RequestPath tells the pathfinding world its mover's size and
+// which stamps stop it before it asks, and the search here did not, so its
+// straight-walk check went by the last creature to have asked. It tells it now; not
+// yet seen in play.
+//
+// An earlier FindPath drove the creature's own search (RequestPath until it answered)
+// and was taken out after play, 2026-09-30: RequestPath takes new ends only when no
+// search is in progress, so its answers came a call late, and the search it left stood
+// as the creature's path, after which the creature would not walk a click.
+//
+// PathSearch's blocker: with the answer 6 it is found as the game finds it for a
+// creature's own path, within 5 m of the barred cell the search noted, its footprint
+// holding that point. Where the search gave up part way (the answer 1), by the same
+// test on points up to 2.5 m ahead of where it stopped, the way the path was heading.
+// A shut door in play.
 PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
 {
     PathSearch answer;
@@ -1068,6 +1218,49 @@ std::optional<Room> ReadRoom(std::uintptr_t at)
 
 } // namespace
 
+// Two things decide a room, read 2026-09-30 and 2026-10-01 (dao/Addresses.h, "Rooms
+// and their streaming").
+//
+// Whether it has been seen follows the party, not the camera. When the rooms the
+// party's members stand in change, those rooms and some of their neighbours are in
+// view (1); a room in view before stays seen (2), which a save keeps; and a room never
+// in view (0) is hidden. In play, 2026-10-01: beyond a shut door all was black in the
+// tactical view, the room behind stayed black with the door open, its four soldiers
+// inactive, and drew when the hero walked in, when they woke and the fight began.
+//
+// Whether it is loaded follows the camera. Read 2026-09-30 (dao/Addresses.h, "Rooms and
+// their streaming"). Each frame the area's layout takes the scene's camera's position,
+// not the party's, and asks its policy how much each room is wanted: now (5) within one
+// distance of the camera, in the background (4) within a second, or wherever the
+// scene's own check names the room, and not at all (3) beyond a third, which unloads
+// it. So what is loaded follows the camera: a camera sent toward a dropped room has it
+// loaded in the background, some frames later, the game pausing itself to load only
+// when the camera jumps more than 30 m in a frame.
+//
+// Seen in play, 2026-10-01, in Castle Cousland: 61 rooms, 53 wanted, 1 wanted now and 7
+// dropped, the controlled creature's own room wanted and loaded, and none dropped once
+// the party stood in the hall. A first reading took "wanted now" for "drawn"; it is
+// not.
+//
+// And outdoors, the same day, through the Eluvian server in the Dalish forest
+// clearing: the party, two wolves 25 m off and three corpses were each in a room, the
+// rooms' numbers 0x30002 to 0x40003 (cells of the terrain, by the look of them, not a
+// file's number), every one in view (1), and none with its load reading loaded, though
+// all were on screen: each read load 2 and state 6, a state the indoor policy never
+// gives, in explore mode and in a fight alike. So Shown() goes by what has been seen
+// alone, and state and load are an indoor room's.
+//
+// And indoors, the same day, in the Elven Ruins (through the Eluvian server, the
+// turn-based mod going by Shown()): rooms 1574 to 1580, the party's own in view and
+// every other never seen, not shown, though loaded. The first hall and the entrance
+// tunnel 40 m from it are one room. Walking into the next hall put it in view and the
+// room beyond it too, unentered. A room behind a shut door stayed never seen, three
+// spiders idle in it 13 to 24 m off, and read in view the moment the door opened,
+// before anyone walked in; in Castle Cousland a room behind an opened door had stayed
+// black until the hero entered, so which neighbours a room shows is the area's own.
+// The turn-based mod went by Shown() the same night: four spiders in a room never seen,
+// loaded, were left out of a fight next door; the door opened, the room read in view at
+// once, and they joined, the camera on their turns showing the room drawn.
 std::vector<Room> Rooms()
 {
     std::vector<Room> rooms;
@@ -1132,6 +1325,10 @@ std::optional<Room> RoomOf(ObjectId object)
     return RoomAt(found->Position());
 }
 
+// The nearest shape between the points among groups::kSight blocks, except a placeable
+// that is not a door or of base type 8 (0x0067A670 reads GetPlaceableBaseType), and
+// `ignore`. Only the nearest is judged, so a chest in front of a wall leaves the view
+// clear, as the scripts see it.
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)
 {
     return Ask(CurrentArea(), from, to, ignore);
@@ -1162,6 +1359,11 @@ Sight LineOfSight(ObjectId viewer, ObjectId target)
     return Ask(area, eye, seen, kInvalidObject);
 }
 
+// The obstacle placed: the byte at the movement parameters' +0x40, which
+// MeleeRingSpot reads before lifting it. A stamp marks the cells under it (kind 6),
+// which the melee rings' fit test and the straight-walk check refuse; a creature
+// places it in its own update, so while the world is held a creature that has just
+// stopped may stand unstamped (DAOLib #19).
 std::optional<bool> ObstaclePlaced(ObjectId creature)
 {
     // The movement controller's parameters (+0x10), their +0x40 the
@@ -1177,6 +1379,31 @@ std::optional<bool> ObstaclePlaced(ObjectId creature)
     return TryRead<std::uint8_t>(*parameters + kPlaced).value_or(0) != 0;
 }
 
+// DAOLib #21. Read 2026-10-04: the model is a GraphicsStructures::Object, reached as
+// CCCreature::HeadTransform reaches it (the animation set at the creature's +0x154, its
+// +0x18, that one's +4, whose slot 19 answers the object). Its Graphics::IRenderable
+// (at +4) answers the box by its slot 5 (0x00549B80, __thiscall (Vector4 *min,
+// Vector4 *max, bool world), `ret 0xC`): the box cached at the object's +0x140 and
+// +0x150, made on the first ask (0x00549140) from the model's meshes, each mesh's own
+// box at its node's place less the object's; with `world`, its two corners put through
+// the object's place, rotation and uniform scale (the interface's +0x58). So the box is
+// in model space, about the model's place on the ground, unscaled and unturned, and
+// made once: the model's rest box, its meshes' own bounds, not following the
+// creature's pose as it animates (a creature's skinned meshes sit at the model's
+// root). A creature that changes its gear keeps the box it had (not yet seen either
+// way). Its largest extent across is the larger of Size().x and Size().y, the box
+// being in the model's own axes.
+//
+// Seen in play 2026-10-04 (the turn-based mod, examples/world, Ortan Thaig, all at
+// scale 1): a bronto 1.37 by 3.80 and 2.44 high, a giant spider 1.76 by 2.30 and 1.19,
+// a deepstalker 0.82 by 2.54 and 0.90, the long bodies as drawn. A person's is its rest
+// pose's, arms out: 1.05 to 1.24 m across, 1.60 to 1.83 m high, its head node 0.45 to
+// 0.5 m under the top (a bone at the neck). An ogre's, 4.00 by 1.19 and 4.60 high, is
+// its upright arms-out rest pose, where it stands about 3 m as drawn. So across is a
+// body's length for a creature that is not a person, and twice a person's shoulders
+// for a person. The high dragon's (seen 2026-10-05, its body on the mountain top, the
+// save after its fight) is 31.07 by 21.75 and 14.82 high, its wings spread, where the
+// body a player looks at is 8 to 10 m: for a winged model the box is the wings'.
 std::optional<ModelBox> ModelBoxOf(ObjectId creature)
 {
     constexpr std::uintptr_t kAnimationSet = 0x154; // in the creature

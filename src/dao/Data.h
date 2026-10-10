@@ -1,23 +1,10 @@
-// The engine's data tree (Eclipse's SmartData): named objects and their
-// attributes by dotted path, what the Flash UI binds to and asks for with
-// its GetValue and GetNumber calls.
+// Reads and sets values in the data tree, the engine's store of named objects and their
+// attributes (SmartData), addressed by dotted paths such as `GUI.SelectedChar`. The Flash UI's
+// screens are bound to this tree, so you can read what a screen shows, for example the selected
+// character or a list's items, and set a value the way a screen would.
 //
 //   const auto selected = dao::data::Text(L"GUI.SelectedChar");
 //   const auto labels = dao::data::Number(L"Map.ShowAllLabels");
-//
-// Read 2026-09-30 from the UI's GetValue and GetNumber handlers
-// (dao/Addresses.h). The tree's root is SmartData::TokenManager, a
-// singleton made on first use; its Find splits a path on '.' and walks it
-// to an attribute, SmartData::IAttribute, or to a shared null attribute
-// when there is none. An attribute gives its value as text (slot 12) and
-// as a number (slot 13), whatever its type. The objects the exe names as
-// roots include CClientExoApp, GUI, Map, Container and Conversation; paths
-// seen: GUI.SelectedChar, GUI.SelectedChar.Equipment, Map.ShowAllLabels,
-// CClientExoApp.GUIDialogResult. The game's own classes are SmartObjects
-// too (the game modes, the application), with their attributes in the
-// tree. A plain attribute (a bool, a number) can be set, and setting one
-// tells its observers, the movies bound to it among them. Not yet seen in
-// play. A list's members are read below (Members).
 #pragma once
 
 #include <cstddef>
@@ -30,7 +17,8 @@
 namespace dao::data
 {
 
-// An attribute in the tree: never made or freed by a plugin.
+// An attribute in the data tree. The engine owns it: get one from Find, and never create or free
+// one yourself.
 class Attribute
 {
   public:
@@ -39,15 +27,17 @@ class Attribute
     Attribute &operator=(const Attribute &) = delete;
     ~Attribute() = delete;
 
-    // The value as the UI's GetValue gives it, and as GetNumber does.
+    // Returns the value as text, whatever the attribute's type. The UI's GetValue call returns the
+    // same text.
     std::wstring Text() const;
+    // Returns the value as a number, whatever the attribute's type. The UI's GetNumber call
+    // returns the same number.
     double Number() const;
 
-    // What the attribute holds, by its class; Other for the rest (strings,
-    // objects, lists, pointers).
+    // The type of value an attribute holds.
     enum class Type
     {
-        Other,
+        Other, // anything else: a string, an object, a list or a pointer
         Bool,
         Int,
         UnsignedInt,
@@ -55,78 +45,64 @@ class Attribute
         Byte,
         Float,
     };
+    // Returns the type of value the attribute holds, worked out from its class.
     Type Kind() const;
 
-    // Sets a plain attribute of that type, as the engine does: stored,
-    // and its observers told if it changed. False, and nothing done, for
-    // an attribute of another type. From the scripts' thread (a frame
-    // callback), where the engine sets its own.
+    // Sets a Bool attribute. If the value changes, the engine notifies the attribute's observers,
+    // including any movies bound to it.
+    // @return false, with nothing changed, if the attribute is not a Bool
+    //
+    // Call each Set on the game thread, for example from a frame callback. That is where the
+    // engine sets its own attributes.
     bool Set(bool value);
-    bool Set(std::int32_t value); // an Int, Short or Byte attribute, narrowed to it
+    // Sets an Int, Short or Byte attribute, narrowing the value to the attribute's size.
+    // @return false, with nothing changed, for any other type
+    bool Set(std::int32_t value);
+    // Sets an UnsignedInt attribute.
+    // @return false, with nothing changed, for any other type
     bool Set(std::uint32_t value);
+    // Sets a Float attribute.
+    // @return false, with nothing changed, for any other type
     bool Set(float value);
 
-    // How many members it has, as the UI's GetNumMembers answers (its slot
-    // 16): a list's items, an object's members; 0 for a plain value.
+    // Returns how many members the attribute has: a list's items or an object's members. Returns
+    // 0 for a plain value. The UI's GetNumMembers call returns the same count.
     std::size_t MemberCount() const;
-    // Their names, as the UI's ListMemberNames gives them: a list's
-    // indices as text, an object's members' names.
+    // Returns the names of the attribute's members: a list's indices as text, or an object's
+    // member names. Returns an empty vector for a plain value. The UI's ListMemberNames call
+    // returns the same names.
     std::vector<std::wstring> MemberNames() const;
 
-    // Sets the attribute from text, as the Flash UI's SetValueUnicode does
-    // (0x0051F6E0, which hands the text to the attribute's slot 10): a
-    // string attribute takes it as it is, a number reads it. The way a
-    // screen's text field reaches the game (the save screen's
-    // SaveLoad.SaveName, dao/Saves.h). From the scripts' thread.
+    // Sets the attribute from text, the same way the Flash UI's SetValueUnicode call does. A
+    // string attribute takes the text as it is, and a number attribute parses it.
+    // This is how a screen's text field reaches the game, for example the save screen's
+    // SaveLoad.SaveName (see dao/Saves.h). Call it on the game thread.
     void SetText(std::wstring_view value);
 };
 
-// The attribute at a path, or null if the tree has none there.
+// Finds the attribute at a dotted path, such as `GUI.SelectedChar`.
+// @return the attribute, or null if there is nothing at the path
 Attribute *Find(std::wstring_view path);
 
+// Returns the value at a path as text, or nullopt if there is nothing at the path.
 std::optional<std::wstring> Text(std::wstring_view path);
+// Returns the value at a path as a number, or nullopt if there is nothing at the path.
 std::optional<double> Number(std::wstring_view path);
 
-// A list or an object in the tree, as the screens read one: how many
-// members it has, their names, and each member's path, the parent's own
-// with ".<name>" after it (a list's names are its indices), whose members
-// are read the same way.
+// Returns how many members the list or object at a path has, or nullopt if there is nothing at
+// the path.
+std::optional<std::size_t> MemberCount(std::wstring_view path);
+// Returns the member names of the list or object at a path. A list's member names are its
+// indices. Returns an empty vector if there is nothing at the path.
+std::vector<std::wstring> MemberNames(std::wstring_view path);
+// Returns the full path of each member of the list or object at a path: the path followed by
+// ".<name>". Each member can be read the same way, so you can walk a list of objects as a screen
+// does. Only paths that Find can reach are returned. Returns an empty vector if there is nothing
+// at the path.
 //
 //   for (const std::wstring &chain : dao::data::Members(L"CharGenCreature.Stats.TalentChains"))
 //       for (const std::wstring &ability : dao::data::Members(chain))
 //           dao::data::Number(ability + L".DisplayState");
-//
-// Read 2026-10-03. The UI's GetNumMembers (an FSCommand, 0x0051BE40) finds
-// the path and answers its attribute's slot 16. A list is an
-// ECDynArray<T*> attribute (the level-up screen's chains, a container's
-// inventory, a store's stock, a conversation's lines), and every one of
-// the 49 such classes looks a member up (its slot 6, 0x007268E0) by the
-// path's component read as a number, so Find reaches "<list>.0" and on.
-// An object's members go by name: the UI's ListMemberNames (an FSCommand,
-// 0x00520340) walks them with SmartData::MemberIterator (0x005C7D60), a
-// thin wrapper over an iterator the attribute makes (its slot 17, on the
-// engine's heap: slot 0 frees it, 1 steps, 2 says whether it is at a
-// member, 3 gives the member's key), each key named by the attribute's slot
-// 7, an engine std::wstring; MemberNames does the same. Members gives only
-// paths that Find reaches.
-//
-// The level-up screen's chains (FindAbilityChainsMessage, built by
-// 0x0062DCD0), each an AbilityGUIInfo of AbilityTemplate, Column,
-// DisplayState and AbilityInstance. Seen in play 2026-10-03 through the
-// Eluvian server, on Sten's level-up: TalentChains had 56 members, read by
-// index, and each chain 5, whose members go by name, so not by index; the
-// screen's movie walks them with ListMemberNames, as MemberNames does here. DisplayState is 1 for an ability the
-// creature has (0x0071BEC0), 2 for one it can learn now (0x0071BEF0, the
-// test behind the scripts' IsAbilityAvailable), 3 for one it cannot yet.
-// Nothing for a path with nothing there. Seen in play 2026-10-03 through
-// the Eluvian server: the world map's 58 pins read by their index paths,
-// with the map down. MemberNames seen in play 2026-10-04 and 10-05 through
-// the Eluvian server: Lyna's four level-ups, each chain's members listed
-// by name and read (AbilityTemplate, AbilityInstance, DisplayState, Column,
-// Row), the talents, spells and skills offered and then spent by id; and
-// GUICrafting.Recipes.0's eleven named members.
-std::optional<std::size_t> MemberCount(std::wstring_view path);
-std::vector<std::wstring> MemberNames(std::wstring_view path);
 std::vector<std::wstring> Members(std::wstring_view path);
 
 } // namespace dao::data

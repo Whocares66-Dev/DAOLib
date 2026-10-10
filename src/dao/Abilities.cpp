@@ -1,3 +1,27 @@
+// Abilities' names, cooldowns, lists and checks (dao/Abilities.h).
+//
+// Names, read 2026-09-30 from the scripts: an ability's row in
+// TABLE_ABILITIES_SPELLS (1, ABI_base, every ability, by its id) has Label
+// and NameStrRef, and the ability bar names an ability by NameStrRef
+// through the talk tables (ui_h.nss). Both go through dao/Gda.h and
+// dao/Tlk.h; nothing comes back for an id with no row, or before the
+// tables are loaded.
+//
+// Cooldowns, read 2026-09-30 (dao/Addresses.h, "Cooldowns"). A creature
+// has a record for each ability it has, which holds the seconds the
+// cooldown was last set to, the seconds left, and the share of the one the
+// other is. Each frame of game time the engine takes the frame's seconds
+// from what is left and sets the share to what is left over what it was
+// set to; the record is what the creature's ability list hands the
+// interface, so the share is what a quickbar slot's sweep can show. The
+// scripts' SetCooldown sets both numbers to the one time, so a long hold
+// set that way shows a full sweep that never moves. GetCooldown and
+// SetCooldown here read and set the two. Seen in play, 2026-10-01
+// (examples/cooldown): Powerful Swings set to 800 s left of 1200 s read
+// back 800 of 1200, ticked a second a second, and its quickbar slot drew a
+// sweep about two thirds dark. The turn-based mod, the same day, wrote a
+// three-turn wait as thirds of 3600 s: 3599.9 left drew the slot wholly
+// dark, 2399 a third lit, 1199 two thirds lit, then ready.
 #include "dao/Abilities.h"
 
 #include "dao/Addresses.h"
@@ -141,6 +165,22 @@ void __fastcall SetCooldownHook(void *stats, int edx, std::int32_t ability, floa
 
 } // namespace
 
+// Read 2026-10-08 (DAOLib #41): the cooldown manager's Set (0x0071D630) has
+// one caller, CCCreatureStats::SetCooldown, and that one, the scripts'
+// SetCooldown command; so every ability's cooldown the game starts passes
+// here, the scripts' Ability_SetCooldown as a cast begins among them,
+// whatever command or none is running. The stats keep their creature at
+// +0x5C (their constructor's argument, which the creature passes as itself,
+// 0x006B4070), checked each time against the creature's own Stats(). An
+// item's cooldown comes the same way: its record is made, like every
+// record, in the manager's first list (0x0071D6D0, the record's only
+// maker), so the drink's set takes; only once the item is spent does its
+// record leave that list (why SetCooldown writes the total itself).
+//
+// Seen in play 2026-10-09 (the turn-based mod, the Cultist Overseer's
+// fight): 87 cooldowns, every one through here, the Overseer's sustained
+// spells at 1.5 s as each cast began, and a mana potion's 5 s with its
+// item's tag, `took` true.
 void OnCooldownSet(std::function<void(const CooldownSet &)> observer)
 {
     static std::once_flag once;
@@ -149,6 +189,13 @@ void OnCooldownSet(std::function<void(const CooldownSet &)> observer)
     g_setObservers.push_back(std::move(observer));
 }
 
+// Read 2026-10-06 (DAOLib #38): the cooldown manager keeps, at its +0x10,
+// a std::list of the records that tick (core::ListValues), which its Tick
+// (0x0071C840) walks each frame, taking the time from each and dropping
+// one that has run out (0x0071C190). So the list is exactly what is
+// cooling, an item's ability's record among the rest: the ability's own
+// use, a mode that would not stand, a script's SetCooldown, an item's. A
+// cooldown set with SetCooldown joins it as the engine's do.
 std::vector<RunningCooldown> Cooldowns(ObjectId creature)
 {
     std::vector<RunningCooldown> running;
@@ -237,6 +284,15 @@ std::optional<std::wstring> Name(std::int32_t ability)
     return Label(ability);
 }
 
+// Read 2026-10-01 from the scripts' GetAbilityCount (0x00668A20, on to
+// 0x0071A2F0), which counts them: the creature's stats keep four lists of
+// ids, one a kind in the kinds' order, at +0x150 and each 0x10 on (the
+// list of a kind is found by 0x007199D0). Seen in play 2026-10-01 by the
+// Eluvian server: a level 1 rogue's lists (4 talents, no spells, 6 skills,
+// 2 items) and a warrior's (7, 0, 3, 2) each came to the 12 that
+// GetAbilityCount answers. The lists hold the hidden abilities too (the
+// class's, the humanoid trait), the item list is the usable items'
+// abilities (a poultice, elfroot), and a skill's ranks are an id each.
 std::vector<std::int32_t> Known(ObjectId creature, Kind kind)
 {
     constexpr std::size_t kLists = 0x150; // in the stats: four vectors of ids, a kind each
@@ -279,6 +335,28 @@ std::wstring Use::Reason() const
     return reason > 0 ? tlk::String(static_cast<std::uint32_t>(reason)) : std::wstring{};
 }
 
+// Read 2026-10-03 (dao/Addresses.h, CanUseAbility): the engine's one check,
+// which the quickbar asks for each button and the player's order asks
+// before it issues a command, and which answers with the reason a string
+// reference. It looks, in order, at an item's ability's item, the active
+// modal abilities (usable, to turn off), being disabled by effects, the
+// cost, the ability's conditions (a weapon, a shield), its cooldown, and the
+// ability being cast already. The scripts' IsAbilityAvailable asks whether
+// the ability can be learned, not used: true for a 40-stamina Mighty Blow at
+// 12 stamina, whose order then did nothing (Eluvian, 2026-10-03). One path
+// of the check gives a reason of 0, which is answered as -1.
+//
+// The scripts check the cost again when the command runs (ability_core's
+// Ability_CostCheck) a little differently: rounded, by the difficulty's
+// modifier for some ranks, and a modal ability's upkeep against the total
+// rather than its cost against what is left. So a modal ability this calls
+// usable can still fail. Seen in play 2026-10-03 through the Eluvian
+// server, on the Tower Guard (a bow, no shield) at full stamina, 115: Shield
+// Bash and Shield Block not usable, "No shield equipped"; Crippling Shot,
+// Pinning Shot, Shattering Shot and Taunt usable, costing 28.775, 23.02,
+// 28.775 and 46.04, the table's 25, 20, 25 and 40 times 1.151 (his
+// fatigue). At 12 stamina every one was not usable, "Insufficient stamina".
+// IsAbilityAvailable had said yes to all.
 std::optional<Use> CanUse(ObjectId creature, std::int32_t ability, std::wstring_view itemTag)
 {
     void *stats = Stats(creature);
@@ -299,6 +377,9 @@ std::optional<Use> CanUse(ObjectId creature, std::int32_t ability, std::wstring_
     return use;
 }
 
+// The ability table's cost times one plus the creature's fatigue in
+// hundredths (property 41's modifier: armour's, a sustained ability's), as
+// CanUse's check reckons it.
 std::optional<float> Cost(ObjectId creature, std::int32_t ability)
 {
     constexpr std::int32_t kFatigue = 41; // properties.gda's "Fatique", an attribute

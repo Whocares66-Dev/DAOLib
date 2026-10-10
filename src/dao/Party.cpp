@@ -1,3 +1,12 @@
+// The party's selection and controlled creature (dao/Party.h).
+//
+// Read 2026-09-30. The party object is the application's +0xD0's +0x58
+// (0x005D57C0); Party::Select (0x00639E50) adds a member to its selection,
+// a std::vector of ids at +0x184 (0x006368F0 adds one, and leaves a lone
+// selection of that same member alone), in the order selected. The
+// primary click's attack (0x00712830) orders the party's members from its
+// own list (0x006360C0, members filtered by a flag), which is not
+// necessarily this one.
 #include "dao/Party.h"
 
 #include "dao/ClientExoApp.h"
@@ -45,6 +54,7 @@ void CompareControlled()
 }
 } // namespace
 
+// The selection vector at the party's +0x184 (2026-09-30). Not yet seen in play.
 std::vector<ObjectId> Selected()
 {
     const CClientExoApp *app = CClientExoApp::Get();
@@ -71,6 +81,10 @@ std::vector<ObjectId> Selected()
     return {ids.begin(), ids.end()};
 }
 
+// The controlled creature is the id at the application's +0xD0's +0x5C (0x005D5CA0), beside the
+// party at +0x58; the scripts' GetMainControlled reads it. Read 2026-10-04 (DAOLib #22). Seen in
+// play the same day: changes by an Eluvian order, a move order handing control over and the party
+// bar's key, each both ways, and at a load from nobody to the hero.
 ObjectId Controlled()
 {
     const CClientExoApp *app = CClientExoApp::Get();
@@ -85,6 +99,9 @@ ObjectId Controlled()
     return script::api::GetMainControlled();
 }
 
+// Many paths set the controlled creature: the party bar, a key, the scripts'
+// SetPrimaryControlled, a selection by CenterOnObjectMessage, a plugin's order. So it is
+// compared each frame rather than caught at one setter.
 void OnControlChanged(std::function<void(ObjectId before, ObjectId now)> observer)
 {
     static std::once_flag once;

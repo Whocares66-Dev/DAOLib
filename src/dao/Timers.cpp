@@ -1,3 +1,49 @@
+// The scripts' delayed events on a plugin's clock (dao/Timers.h).
+//
+// The timers the game's scripts keep themselves, on a plugin's clock: the
+// script events they send an object after a delay (DelayEvent), above all
+// the ones that pace effects. A damage-over-time effect hurts its creature
+// once each 1.5 s by an event the creature's script re-arms each time
+// (EVENT_TYPE_DOT_TICK, effect_dot2_h), and a lasting area of effect (a
+// trap's gas, a spell's cloud) pulses by an EVENT_TYPE_AOE_HEARTBEAT its
+// script re-arms each pulse, at an interval of its own. Held, those wait;
+// advanced, those that fall due come in order, each re-armed from the time
+// it came due, so a round's four seconds give a 1.5 s tick at 1.5 and 3.0
+// and the next waits for 4.5. dao/Clock.h holds and advances this with
+// effects and regeneration; a plugin that measures a fight in rounds wants
+// all three.
+//
+// Read 2026-10-02 (dao/Addresses.h, "The queue as it runs"). Every delayed
+// event enters the engine's queue through one function with its delay,
+// and leaves it when the world clock passes its time. While held, a script
+// event of a held kind sent with a delay is kept here instead, due that
+// delay from now on this clock; one already in the queue when the hold
+// began is taken out as it comes due, due as long after the hold began as
+// it was then. Each update of the queue first delivers what has come due
+// here, earliest first, the clock moved to each one's time as it goes, as
+// the engine itself would deliver it (DeliverNow).
+//
+// Each object the events are sent to has its clock here: a damage over
+// time's ticks are sent to its victim, an area's pulses to the area. The
+// shared Advance moves them all; OwnClock takes an object off it, to move
+// by AdvanceObject alone (a creature's own time in a fight
+// measured per creature). A clock's time counts from its first event: an
+// object advanced with nothing held for it is not owed that time. Released, what is left
+// goes back into the queue with the time it has left. The queue's own
+// clearing (a game loaded) drops what is held here too.
+//
+// Events of other kinds (but see HoldFrom), and any sent with no delay, are
+// left alone: the
+// scripts sequence much by DelayEvent (plots, cutscenes, the first tick of
+// a damage over time, sent "next frame" with 0), and holding those would
+// stop the game. An area's first pulse is not a delayed event: its update
+// runs the script with it once, at once. The world's own time still runs:
+// creatures' commands, the AI, animation. What is held here is not in the
+// queue a save writes; the game refuses to save in combat, where a
+// turn-based fight is, and a plugin that holds outside one should let go
+// before a save. Seen in play 2026-10-02 by the turn-based mod: a Walking
+// Bomb's ticks came on the ogre's own turns, and the Elven Ruins' toxic gas
+// poisoned its victim through 8 rounds of the shared clock and no more.
 #include "dao/Timers.h"
 
 #include "dao/Addresses.h"
@@ -556,18 +602,35 @@ void AdvanceObject(ObjectId object, float seconds)
     }
 }
 
+// The defaults: DotTick and AoeHeartbeat held, and DelayedGmChange left
+// out, unless a plugin says otherwise. The scripts end a fight with that one
+// (combat_h, player_core: 1 to 3 s after the last enemy goes); held on a
+// fight's clock it would wait for rounds no longer played. A plugin's own
+// timers may be added.
 void HoldKind(script::EventType type, bool held)
 {
     const std::lock_guard lock(g_kindsLock);
     g_rule.Hold(static_cast<std::int32_t>(type), held);
 }
 
+// A plot's timers are seconds long (the Harrowing's Uldred: 2, 10 and 35 s,
+// cir240cr_uldred), and what the scripts put one thing after another with
+// is 0 to 0.01 s, which must run as it does: 1 holds the first and not the
+// second. An event in the queue when a hold begins is held by the time it
+// has left. A kind HoldKind(type, false) left out stays out (DAOLib issue
+// #15).
 void HoldFrom(float seconds)
 {
     const std::lock_guard lock(g_kindsLock);
     g_rule.from = seconds;
 }
 
+// The trace logs each event's type (the number and the name the generated
+// constants give it), its target and sender (id, and tag on the scripts'
+// thread), its delay and the world clock; and each as it is delivered, how
+// long after it was sent. To find what a script times with DelayEvent,
+// before deciding whether to hold its kind (DAOLib issue #14). Lines go to
+// the plugin's log, at info.
 void Trace(bool on)
 {
     Attach();

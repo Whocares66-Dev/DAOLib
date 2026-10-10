@@ -1,3 +1,13 @@
+// Calling a script command by its name.
+//
+// The command comes from dao/generated/ScriptTable.h, which says each one's
+// parameter types and defaults; the arguments are checked against it
+// first (dao/core/ScriptValue.h, CompleteArguments), and those left off
+// take their defaults, OBJECT_SELF being read at the call. Then the call is
+// made as dao::script::Invoke makes one. int, float, string, object, vector
+// and resource move by name; an array answer of ints, floats, strings or
+// objects comes back as its elements. A command with a location, effect,
+// event or command anywhere in its signature is refused.
 #include "dao/ScriptCall.h"
 
 #include "dao/Script.h"

@@ -1,3 +1,12 @@
+// Sending the engine's messages, and the detour on its dispatch that lets plugins watch and take
+// them.
+//
+// A message class derives from Messages::GameMessage and Messages::Message (RTTI), polymorphic,
+// with 11 virtual functions; slot 0 answers its type id, slot 1 clones it, and the clone copies
+// exactly its fields. The layouts in the header are read from the clone and the handler that uses
+// them; every class's size and field offsets are in dev/messages.csv (tools/messages.py), their
+// meanings not yet. Send, inline in the header, calls the engine's own Messages::Send
+// (dao/Addresses.h), as the engine sends its own.
 #include "dao/Messages.h"
 
 #include "dao/Addresses.h"
@@ -126,6 +135,12 @@ void Add(Subscription subscription)
 
 } // namespace
 
+// Read 2026-09-30: every delivery, sent or posted, goes through the registry's Dispatch
+// (dao/Addresses.h), which only Send calls; posted messages are queued and sent later. This
+// detours Dispatch. It runs for every message (the cursor's moves too), so observers must be
+// quick; a class without a struct in the header is subscribed to by its vftable
+// (dev/messages.csv), its name by dao::TypeName. Delivery is on the engine's thread that runs the
+// game (the scripts'); not yet seen in play.
 void OnAnyMessage(MessageObserver observer)
 {
     Add({AddressId{}, std::move(observer), {}});
@@ -141,6 +156,11 @@ void InterceptMessage(AddressId vftable, MessageInterceptor interceptor)
     Add({vftable, {}, std::move(interceptor)});
 }
 
+// The engine makes the message and has it read its own fields from the text (dao/Addresses.h,
+// "Messages from text"), as a movie's button does with its callback and the engine does with what
+// a script or a data table gives it. Seen in play, 2026-10-01, through the Eluvian server:
+// "GUIPopupLayer.ScriptDialogResult 1 1 -1", a box's own Yes, answered true and the box went;
+// "Nobody.NoSuchThing 1" answered false.
 bool SendText(std::wstring_view text)
 {
     // Messages::FromCallbackText's answer: who receives, and the message,
@@ -170,6 +190,14 @@ bool SendText(std::wstring_view text)
     return made.receiver != nullptr;
 }
 
+// The engine makes the message from the binding's text, and it goes to the game mode controller,
+// where a pressed key's goes. Seen in play, 2026-10-01, through the Eluvian server, in explore
+// mode: "UserTogglePauseMessage" answered true and the game was paused, and again and it ran;
+// "NoSuchMessage 1" answered false and nothing happened. With two in the party and the first
+// selected and controlled, "SelectPartyMemberIndexMessage 1 1" selected both, the first still
+// controlled, and "SelectPartyMemberIndexMessage 0 1" after it left the second selected alone and
+// controlled: with its second field 1 the message adds to the selection or takes from it, as the
+// key does with the add-to-selection key held. A second field of 0 was not tried.
 bool SendBinding(std::wstring_view text)
 {
     CClientExoApp *app = CClientExoApp::Get();
