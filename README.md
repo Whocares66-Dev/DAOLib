@@ -1,45 +1,63 @@
 # DAOLib
 
-A native plugin loader and reverse-engineered library for **Dragon Age: Origins** (GOG Ultimate Edition, `DAOrigins.exe` 1.05.13263.0), in the spirit of SKSE and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) for Skyrim: for what the toolset's scripting cannot reach.
+Native C++ plugins for **Dragon Age: Origins**: a loader that loads them when the game starts, and a library that gives them the game. What [SKSE](https://skse.silverlock.org/) and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) are for Skyrim.
 
-- `src/loader` -- `version.dll`, loaded by the game in place of the system's, which loads plugins, each a folder of its own in `bin_ship\daolib\plugins\`, before the game starts.
-- `src/dao` -- the library plugins are written against: every script command callable from C++ (661 of them, generated from the game's own declarations) and interceptable, the engine's objects, effects, events, strings, arrays and data tables as C++ types, its messages and game modes, a per-frame callback, and the addresses, detours and RTTI type names underneath (`dev/LIBRARY.md`).
-- `src/plugins/example` -- a whole plugin to copy from; `dev/PLUGINS.md` is the guide to writing one.
-- `src/plugins/probe` -- watches the game and checks the library against it in play, changing nothing.
-- `dev/` -- the plan, the reading so far, and two maps of the engine: its 827 script commands and its 314 message handlers.
-- `tools/` -- build, deploy, Ghidra analysis and MCP, exe readers.
+**Documentation: [whocares66-dev.github.io/DAOLib](https://whocares66-dev.github.io/DAOLib/)**, the API reference and the guide to writing a plugin.
 
-The loader, the probe and much of the library have been checked inside the game: object lookups, fields, the object layout, strings, locations, effects, events and arrays matched the engine's own answers on thousands of calls in play. `dev/LIBRARY.md` says what is checked and what is only read so far.
+It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each store's executable is different, and the [address library](https://github.com/Whocares66-Dev/DAOAddressLibrary) maps every function and global DAOLib uses in each of them, so one plugin runs in all three.
+
+## A plugin
+
+```cpp
+#include "dao/Log.h"
+#include "dao/Plugin.h"
+#include "dao/ScriptHooks.h"
+#include "dao/generated/ScriptApi.h"
+
+extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
+{
+    dao::OpenLog("myplugin");
+    if (info == nullptr || info->apiVersion != dao::kPluginApiVersion || !info->knownExecutable)
+        return false;
+
+    // Log every creature's combat state as the scripts ask for it.
+    dao::script::InterceptCommand(dao::script::id::GetCombatState, [](dao::script::CommandCall &call) {
+        const int result = call.Proceed();
+        spdlog::info("combat state of {:#x}: {}", *call.Object(0), *call.IntAnswer());
+        return result;
+    });
+    return true;
+}
+```
+
+The library covers the game's script commands (all 661, callable and interceptable from C++), its objects, effects and events, the Flash interface, the camera, the world's geometry, saves, key bindings and the options screen, and the engine's messages. [Writing a plugin](dev/PLUGINS.md) is the place to start; `examples/` has a small plugin for each part of the library.
+
+## What is here
+
+- `src/loader`: the loader, `version.dll`, which the game loads in place of the system's.
+- `src/dao`: the library plugins link. Its public headers are the API the docs site documents.
+- `src/plugins`: the example plugin, and the probe, which checks the library against the game in play.
+- `examples/`: one small plugin per part of the library.
+- `dev/`: what has been learned about the engine, and the plan ([dev/PLAN.md](dev/PLAN.md)).
+- `tools/`: building, deploying, the docs site, and reading the executable.
 
 ## Building
 
-Visual Studio 2022 with the C++ workload, CMake and Ninja (both come with it), [vcpkg](https://github.com/microsoft/vcpkg) with `VCPKG_ROOT` set, and Python 3. Formatting and linting want LLVM 22+ (`winget install LLVM.LLVM`), `pip install --user ruff gersemi`, and `Install-Module PSScriptAnalyzer`.
+Visual Studio 2022 with the C++ workload, [vcpkg](https://github.com/microsoft/vcpkg) with `VCPKG_ROOT` set, and Python 3. Everything is 32-bit, as the game is.
 
 ```powershell
-.\tools\build.ps1 -Preset debug -Test          # loader, library, plugins, tests
-.\tools\build.ps1 -Preset debug -Format -Lint  # formatters, then clang-tidy and friends
-.\tools\deploy.ps1                             # copy into the game's bin_ship (game closed)
-.\tools\deploy.ps1 -Remove                     # back to stock
+.\tools\build.ps1 -Preset debug -Test   # the loader, the library, the plugins, the tests
+.\tools\deploy.ps1                      # copy them into the game (with the game closed)
+.\tools\deploy.ps1 -Remove              # put the game back to stock
+python tools\build_docs.py --serve      # the docs site, at http://127.0.0.1:8045
 ```
 
-Logs land in `Documents\BioWare\Dragon Age\daolib\`; `DAOLIB_LOG_LEVEL=debug` in the environment turns them up. A log is written on a thread of its own, so logging does not cost the game's frame a disk write.
+Logs are written to `Documents\BioWare\Dragon Age\daolib\`. A plugin in a repository of its own brings DAOLib in as a git submodule ([Writing a plugin](dev/PLUGINS.md#a-plugin-in-its-own-repository)).
 
-DAOLib is free software under the GNU General Public License, version 3 (`LICENSE`).
+## Working on DAOLib
 
-A plugin in a repository of its own brings DAOLib in as a submodule, `add_subdirectory(extern/DAOLib EXCLUDE_FROM_ALL)`, and declares itself with `add_daolib_plugin(name SOURCES ...)`, as Skyrim plugins do with CommonLibSSE (`dev/PLUGINS.md`).
+[CLAUDE.md](CLAUDE.md) has the project's rules: building, the checks every commit passes, and how the executable is read (with `tools\daoexe.py`, Ghidra, and the address library's IDs). [dev/LIBRARY.md](dev/LIBRARY.md) is how the library fits together and what has been checked in play, and [dev/TODO.md](dev/TODO.md) is what to reverse engineer next.
 
-## Reading the executable
+## License
 
-Copy the game's `bin_ship\DAOrigins.exe` to `game\DAOrigins.exe` (ignored by git). `--disasm` wants `pip install capstone`. Then:
-
-```powershell
-python tools\daoexe.py --check              # is it the expected build
-python tools\daoexe.py --vtables Pause      # classes and vtables from the RTTI; also --disasm, --refs, --class-of
-python tools\script_commands.py             # the script command table -> dev\script_commands.csv
-python tools\message_handlers.py            # the message handler table -> dev\message_handlers.csv
-.\tools\ghidra-mcp.ps1 -Import              # once: Ghidra analysis, RTTI, class recovery
-.\tools\ghidra-mcp.ps1                      # serve it over MCP for Claude Code (.mcp.json)
-.\tools\ghidra-mcp.ps1 -Query "decompile 0x006403C0"   # or ask from the shell
-```
-
-See `CLAUDE.md` for the project's working rules and `dev/PLAN.md` for where it is going.
+GPLv3 ([LICENSE](LICENSE)).
