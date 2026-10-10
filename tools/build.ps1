@@ -170,7 +170,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "configure failed ($LASTEXITCODE)" }
 
     Show-Line "`n== build ($Preset) ==" -Colour Cyan
-    cmake --build --preset $Preset --parallel $parallel
+    # The linker writes the path of its temporary files into a PDB, and the
+    # user's own is under their name (C:\Users\<name>\AppData\Local\Temp);
+    # the release's PDB is given to players (DAOLib #55). So a build's is in
+    # its tree, for the build alone.
+    $userTemp = $env:TEMP, $env:TMP
+    $env:TEMP = $env:TMP = New-Item -ItemType Directory -Force (Join-Path $buildDir 'tmp')
+    try { cmake --build --preset $Preset --parallel $parallel }
+    finally { $env:TEMP, $env:TMP = $userTemp }
     if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
 
     if ($Test) {

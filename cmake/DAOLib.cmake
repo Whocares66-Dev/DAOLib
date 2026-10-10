@@ -25,6 +25,27 @@
 # models, M2DA_ tables. Warnings are the caller's to set:
 # DAOLib's own plugins add dao_apply_warnings.
 
+# dao_release_symbols: a release build of the target keeps its symbols, as a
+# debug build does. For a DLL that is <name>.pdb beside it, where the crash
+# logger looks to name our frames (dev/CRASHES.md); a player's crash log is
+# from a release build, and names nothing of ours without one (DAOLib #55).
+# /Z7 puts a static library's symbols in its objects, so they reach the PDB
+# of whichever DLL links it. /DEBUG turns the linker's /OPT:REF and /OPT:ICF
+# off, which a release build has on, so they are put back.
+function(dao_release_symbols target)
+    if(NOT MSVC)
+        return()
+    endif()
+    target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/Z7>)
+    get_target_property(type ${target} TYPE)
+    if(NOT type STREQUAL "STATIC_LIBRARY")
+        target_link_options(
+            ${target}
+            PRIVATE "$<$<CONFIG:Release>:/DEBUG;/OPT:REF;/OPT:ICF>"
+        )
+    endif()
+endfunction()
+
 function(add_daolib_plugin name)
     cmake_parse_arguments(PARSE_ARGV 1 ARG "" "" "SOURCES;FILES;OVERRIDE")
     if(NOT ARG_SOURCES)
@@ -37,6 +58,7 @@ function(add_daolib_plugin name)
         PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY "${folder}"
     )
     target_link_libraries(${name} PRIVATE DAOLib::daolib)
+    dao_release_symbols(${name})
     # The plugin's own files, copied beside it by a target that runs on
     # every build: a file another tool remade (a movie) is copied again
     # though nothing relinks, and one not there yet warns and is skipped.

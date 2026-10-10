@@ -29,11 +29,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
+. (Join-Path $PSScriptRoot 'address_release.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 
 $build = Join-Path $repo "build\$Preset"
 $builtLoader = Join-Path $build 'version.dll'
 if (-not (Test-Path $builtLoader)) { throw "No $builtLoader; run .\tools\build.ps1 -Preset $Preset first" }
+$builtPdb = Join-Path $build 'version.pdb'
+if (-not (Test-Path $builtPdb)) { throw "No $builtPdb; a crash log names none of DAOLib's frames without it" }
+# What a player is given does not say who built it. The linker writes the folder of its
+# temporary files into a PDB, which tools\build.ps1 keeps in the build tree for that
+# reason (DAOLib #55); a loader linked any other way is caught here.
+$profileFolder = [Environment]::GetFolderPath('UserProfile')
+foreach ($file in $builtLoader, $builtPdb) {
+    $bytes = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes($file))
+    foreach ($written in $profileFolder, ($profileFolder.ToCharArray() -join "`0")) {
+        if ($bytes.IndexOf($written, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw "$file holds the path of this user's folder; build it with .\tools\build.ps1 -Preset $Preset"
+        }
+    }
+}
 $builtAddresses = Join-Path $build 'daolib\addresses'
 $addressFiles = @(Get-ChildItem -Path $builtAddresses -Filter '*.bin' -ErrorAction SilentlyContinue)
 if ($addressFiles.Count -eq 0) { throw "No address files in $builtAddresses; the build makes them" }
@@ -47,9 +62,9 @@ $name = "DAOLib-$version"
 # the README says which these are. At no tag they are a commit's, which a trial may be
 # and a release is not.
 $addressRepo = Join-Path $repo 'extern\DAOAddressLibrary'
-$addressTag = @(git -C $addressRepo tag --points-at HEAD --list 'v*') | Select-Object -First 1
-if ($addressTag) {
-    $addressRelease = "DAOAddressLibrary $($addressTag -replace '^v')"
+$addressVersion = Get-AddressLibraryRelease $addressRepo
+if ($addressVersion) {
+    $addressRelease = "DAOAddressLibrary $addressVersion"
 }
 else {
     $addressRelease = "DAOAddressLibrary at its commit $(git -C $addressRepo rev-parse --short HEAD), between releases"
@@ -64,8 +79,7 @@ $addresses = Join-Path $binShip 'daolib\addresses'
 New-Item -ItemType Directory -Force $addresses | Out-Null
 
 Copy-Item -Force $builtLoader $binShip
-$builtPdb = Join-Path $build 'version.pdb'
-if (Test-Path $builtPdb) { Copy-Item -Force $builtPdb $binShip }
+Copy-Item -Force $builtPdb $binShip
 foreach ($file in $addressFiles) { Copy-Item -Force $file.FullName $addresses }
 
 $readme = @"
@@ -76,6 +90,7 @@ https://github.com/Whocares66-Dev/DAOLib (GPLv3)
 Installing
   Extract this archive into the game's install folder, the one that holds bin_ship.
   version.dll goes beside DAOrigins.exe, and the address files into bin_ship\daolib\addresses.
+  version.pdb, beside version.dll, is what lets a crash log name DAOLib's own code.
   Start the game as you always do: Galaxy, Steam, the EA app or the exe itself.
 
 Mods for DAOLib
@@ -96,7 +111,7 @@ Address files
   release to the next.
 
 Removing
-  Delete bin_ship\version.dll (and version.pdb, if it is there) and the bin_ship\daolib folder.
+  Delete bin_ship\version.dll, bin_ship\version.pdb and the bin_ship\daolib folder.
   The game is then as it was; DAOLib changes none of its own files.
 "@
 Set-Content -Path (Join-Path $stage 'README.txt') -Value $readme -Encoding utf8

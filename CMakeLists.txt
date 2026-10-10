@@ -202,6 +202,7 @@ add_library(
     src/dao/TypeName.cpp
 )
 dao_apply_warnings(daolib)
+dao_release_symbols(daolib)
 # The headers are C++20 (std::span among them), so whatever links daolib is.
 target_compile_features(daolib PUBLIC cxx_std_20)
 target_include_directories(daolib PUBLIC "${PROJECT_SOURCE_DIR}/src")
@@ -238,6 +239,7 @@ add_library(
     src/loader/Proxy.cpp
 )
 dao_apply_warnings(version)
+dao_release_symbols(version)
 # At the top of the build tree, where the game folder's layout starts, when
 # DAOLib is built inside another repository too.
 set_target_properties(

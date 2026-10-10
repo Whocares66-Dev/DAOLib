@@ -8,7 +8,7 @@ It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each stor
 
 ## Installing
 
-Players install the loader and the address files, nothing else. A DAOLib release is a zip of `bin_ship\version.dll` (the loader) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build.
+Players install the loader and the address files, nothing else. A [DAOLib release](https://github.com/Whocares66-Dev/DAOLib/releases) is a zip of `bin_ship\version.dll` (the loader, with `version.pdb`, which lets a crash log name DAOLib's own code) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build, and [CHANGELOG.md](CHANGELOG.md) says what each release brought.
 
 ## Using the library
 
