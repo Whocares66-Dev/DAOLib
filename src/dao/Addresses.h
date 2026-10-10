@@ -300,6 +300,22 @@ DAO_ADDRESS(kCCCreature_Movement, 14455)
 // step (0x006A41A0) asks both. The names are ours.
 DAO_ADDRESS(kCCCreature_AnimationLength, 14048)
 DAO_ADDRESS(kCCCreature_HasAnimation, 14049)
+// How long a command gives an animation it plays as a step (dao/Animation.h,
+// StepLength), read 2026-10-10 (DAOLib #51): the animation sub-action's
+// handler (37, 0x007A4390) asks it for its duration, __thiscall (id), `ret
+// 4`, milliseconds. An animation that loops (0x00695390) answers its own
+// length. Another answers its own and that of each it passes into by
+// anim_base's TransitionTo (0x005CA6B0), until the next would loop or five
+// are counted. One with an animation event 31 or 32 (events.gda's deathblow
+// attack and death merges; 0x00A38780 answers an event's time) answers its
+// own and that of one more, not walking TransitionTo: the deathblow's
+// attack for the creature's weapon style (0x006A9140) or the reaction for
+// its killer's (0x006BF8A0), as the address library's session read them,
+// 2026-10-10. The handler divides the answer by the
+// step's speed (its float 3, where above 0), takes a blend off where its
+// flag 3 is set, and multiplies a looping one by its count. The name is
+// ours.
+DAO_ADDRESS(kCCCreature_AnimationStepLength, 14096)
 DAO_ADDRESS(kCCObject_RequestPath, 17573)
 DAO_ADDRESS(kMovementController_Step, 33560)
 // A search apart from any creature's (dao/World.h, FindPath), read

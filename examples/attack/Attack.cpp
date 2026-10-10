@@ -1,13 +1,15 @@
-// Example: an attack's approach and its steps (dao/Attack.h, dao/SubActions.h).
+// Example: an attack's approach and its steps (dao/Attack.h, dao/SubActions.h,
+// dao/Animation.h's OfShot).
 //
 // For every attack and every ability used at another creature, logs each
 // step (sub-action) of the command as it ends: its type, the time the
 // engine gave it and how long it ran, so a shot's parts and an ability's
 // kind of approach can be read off. For a shooter's attack it also logs, as
 // the attack starts, where dao::attack::Walk says the approach will stop,
-// and as the approach ends, where it did stop and how far it walked. Set
-// beside each other, the two say whether the library's walk is the
-// engine's.
+// and as the approach ends, where it did stop and how far it walked; and
+// the shot's three parts as dao::animation::OfShot times them, before the
+// shot and after it. Set beside each other, the library's figures and the
+// engine's steps say whether the one is the other.
 //
 // What it sees goes to example_attack.log.
 #include "dao/Attack.h"
@@ -67,6 +69,19 @@ float Distance(const dao::Vector &a, const dao::Vector &b)
 std::string Seconds(const std::optional<float> &seconds)
 {
     return seconds ? fmt::format("{:.3f} s", *seconds) : std::string("none");
+}
+
+// A creature's shot as OfShot times it now, with the scripts' two times as they are set now.
+std::string ShotLine(dao::ObjectId who)
+{
+    const auto shot = dao::animation::OfShot(who);
+    if (!shot)
+    {
+        return "none";
+    }
+    return fmt::format("aim {:.3f} s, aim loop {:.3f} s, fire {:.3f} s, {:.3f} s in all (attack time {}, aim time {})",
+                       shot->aim, shot->aimLoop, shot->fire, shot->Total(),
+                       Seconds(dao::animation::AttackDuration(who)), Seconds(dao::animation::AimDuration(who)));
 }
 
 bool IsApproach(std::uint32_t step)
@@ -138,9 +153,7 @@ void Started(dao::ObjectId who, const dao::Command &command)
         {
             spdlog::info("0x{:x} Walk says {}", who, watch.said ? "no walk" : "none");
         }
-        spdlog::info("0x{:x} the scripts' last attack time {}, aim loop {}; the Aim animation {}, Fire {}", who,
-                     Seconds(dao::animation::AttackDuration(who)), Seconds(dao::animation::AimDuration(who)),
-                     Seconds(dao::animation::Length(who, 249)), Seconds(dao::animation::Length(who, 243)));
+        spdlog::info("0x{:x} the shot before the scripts set its times: {}", who, ShotLine(who));
     }
     else
     {
@@ -163,6 +176,10 @@ void Ended(dao::ObjectId who, const dao::Command &command, std::int32_t result)
     }
     spdlog::info("0x{:x} {} ended: {} ({})", who, type == dao::core::CommandType::Attack ? "attack" : "ability",
                  dao::commands::ResultName(result), result);
+    if (it->second.shooter)
+    {
+        spdlog::info("0x{:x} the shot as the scripts set it: {}", who, ShotLine(who));
+    }
     g_watched.erase(it);
 }
 

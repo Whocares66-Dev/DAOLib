@@ -38,6 +38,49 @@
 //   ability takes is what its script does then: an archery talent's is a
 //   shot (Pinning Shot's 1.7 s, a shot's 1.4 to 1.6 s and the command's
 //   ends), a monster's special its own.
+//
+// A shot's steps, read 2026-10-10 (DAOLib #51). A
+// ranged attack's sub-action 50 queues the turn to face (39) and the shot
+// (2, 0x007A6490), which sends EVENT_TYPE_COMMAND_PENDING; when the scripts
+// answer success, and the shooter has a line of sight, 0x007A4DD0 queues
+// three steps (a UseAbility queues the same three where its ability's
+// Flags in abi_base has bit 0, 0x007A83F0):
+// - 37 playing animation 249 ("Aim"), with a speed of its Length over the
+//   combat record's attack time (+0x64) where that is above 0, so the step
+//   takes the scripts' attack time; else at its own speed;
+// - 6, the aim (0x007A2410), whose duration is the combat record's aim time
+//   (+0x60) as it starts, done at once at 0; it fails without a line of
+//   sight or with the target more than 67.5 degrees off the facing;
+// - 37 playing animation 243 ("Fire") at its own speed.
+// The animation step (37, 0x007A4390) takes its duration from the step's
+// length (dao/Addresses.h, AnimationStepLength) over its speed. The scripts
+// set both times in the COMMAND_PENDING handler, for humanoids alone
+// (combat_h, HandleCommandAttack, in the toolset's source: the attack time
+// 0.3 s for a staff, for a bow by follower, armour and Master Archer; the
+// aim time core_h's GetCreatureRangedDrawSpeed, the ranged aim speed
+// property's total and itemstats' BaseAimDelay, not below 0). The attack
+// speed modifier is in the melee timing alone. The attack command's finish
+// (0x00746900, at 0x00746A74) zeroes both times, so they are set only from
+// COMMAND_PENDING to the command's end.
+//
+// Seen in play 2026-10-10 (examples/attack, the turn-based mod's session,
+// Awakening's Wending Wood in real time): a follower's bow, shot after
+// shot, step 39, then 37 given 800 ms, then 37 given 766 ms, each running
+// its time, with no aim seen (its time 0) and both script times read as
+// none at each shot's start; his Length(kAim) 1.566 s and Length(kFire)
+// 0.433 s, so the Fire step is the step's length, not the animation's. A
+// mage's staff: 39, then 6 given 100 ms, then 37 given 1,533 ms, the
+// creature having no Aim animation (its step takes no time) and a Fire of
+// 1.000 s. StepLength and OfShot were written after that run, and seen the
+// same day in two more of its runs: read as each shot's command ended,
+// OfShot's three parts were the steps' given times in 64 plain shots of 64
+// that ran to their end (the bow 0.800, 0 and 0.766 s with an attack time
+// of 0.800 s and no aim time; the staff 0, 0.100 and 1.533 s with 0.300
+// and 0.100 s), and its fire before each shot was the Fire step's. The
+// four shots a cleared command cut short showed fewer steps. An archery
+// talent's shot (Arrow of Slaying and others, by the archer's tactics) ran
+// the Aim animation at its own 1,566 ms, an aim of 1,500 ms and the same
+// 766 ms: no attack time, and the scripts' aim time for an ability.
 #include "dao/Animation.h"
 
 #include "dao/Addresses.h"
@@ -88,7 +131,13 @@ std::optional<float> Milliseconds(ObjectId creature, std::size_t field)
 
 } // namespace
 
-std::optional<float> Length(ObjectId creature, std::int32_t animation)
+namespace
+{
+
+// One of the engine's two lengths of an animation, AnimationLength or
+// AnimationStepLength, each __thiscall (id), `ret 4`, in milliseconds;
+// nothing for an animation the creature lacks.
+std::optional<float> EngineLength(ObjectId creature, std::int32_t animation, AddressId length)
 {
     CCCreature *object = CreatureOf(creature);
     if (object == nullptr)
@@ -101,8 +150,7 @@ std::optional<float> Length(ObjectId creature, std::int32_t animation)
         return std::nullopt;
     }
     using LengthFn = std::int32_t(__fastcall *)(CCCreature *, int, std::int32_t);
-    const std::int32_t ms =
-        reinterpret_cast<LengthFn>(Module::Address(addr::kCCCreature_AnimationLength))(object, 0, animation);
+    const std::int32_t ms = reinterpret_cast<LengthFn>(Module::Address(length))(object, 0, animation);
     if (ms <= 0)
     {
         return std::nullopt;
@@ -110,11 +158,23 @@ std::optional<float> Length(ObjectId creature, std::int32_t animation)
     return static_cast<float>(ms) * kMillisecond;
 }
 
-// AttackDuration: set when an attack is rolled, so it is the last attack's
-// until the next. In play it read nothing at an attack's start and the
-// scripts' value at its end (1.000 s for daggers, 0.600 s for bows): set
-// while the attack is under way, so a cost reckoned ahead of an attack
-// takes the scripts' formula instead.
+} // namespace
+
+std::optional<float> Length(ObjectId creature, std::int32_t animation)
+{
+    return EngineLength(creature, animation, addr::kCCCreature_AnimationLength);
+}
+
+std::optional<float> StepLength(ObjectId creature, std::int32_t animation)
+{
+    return EngineLength(creature, animation, addr::kCCCreature_AnimationStepLength);
+}
+
+// AttackDuration: set when an attack is rolled and zeroed by the command's
+// finish (the file's head). In play it read nothing at an attack's start
+// and the scripts' value at its end (1.000 s for daggers, 0.600 s for
+// bows): set while the attack is under way, so a cost reckoned ahead of an
+// attack takes the scripts' formula instead.
 std::optional<float> AttackDuration(ObjectId creature)
 {
     return Milliseconds(creature, kAttackMs);
@@ -123,6 +183,28 @@ std::optional<float> AttackDuration(ObjectId creature)
 std::optional<float> AimDuration(ObjectId creature)
 {
     return Milliseconds(creature, kAimMs);
+}
+
+// The three steps of the file's head, each as its handler would time it:
+// the Aim step its step length over the speed the engine gives it, the
+// animation's Length over the attack time; nothing for a creature without
+// the animation, whose step has no length.
+std::optional<Shot> OfShot(ObjectId creature, std::optional<float> attackTime, std::optional<float> aimTime)
+{
+    const auto fire = StepLength(creature, kFire);
+    if (!fire)
+    {
+        return std::nullopt;
+    }
+    Shot shot{.aimLoop = aimTime ? *aimTime : AimDuration(creature).value_or(0), .fire = *fire};
+    const auto step = StepLength(creature, kAim);
+    const auto own = Length(creature, kAim);
+    if (step && own)
+    {
+        const auto scripted = attackTime ? attackTime : AttackDuration(creature);
+        shot.aim = scripted ? *step * *scripted / *own : *step;
+    }
+    return shot;
 }
 
 namespace

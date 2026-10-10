@@ -142,7 +142,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Know how long a command still holds a creature | `dao::commands::SubActions`, `HeldFor` | `dao/SubActions.h` |
 | Know whether an attacker is in reach, where its approach walks, and how it turns to face | `dao::attack::IsRanged`, `ApproachOf`, `Walk`, `TurnTo`, `FaceExactly`; `dao::commands::RunningSubAction` | `dao/Attack.h`, `dao/Conjure.h` |
 | Hold a spell in its conjure and feed it time | `dao::commands::HoldConjure(caster)`, `FeedConjure(caster, seconds)`, `Conjure(caster)` | `dao/Conjure.h` |
-| Know how long an animation, attack or ability takes | `dao::animation::Length`, `AttackDuration`, `AimDuration`, `OfAbility` | `dao/Animation.h` |
+| Know how long an animation, attack, shot or ability takes | `dao::animation::Length`, `StepLength`, `AttackDuration`, `AimDuration`, `OfShot`, `OfAbility` | `dao/Animation.h` |
 | Know whether a creature can use an ability now, and what it costs | `dao::abilities::CanUse(creature, ability)`, `Cost(creature, ability)` | `dao/Abilities.h` |
 | Follow a conversation, and choose which replies are offered | `dao::dialogue::OnNpcLine`, `OnReplies`, `OnLineAvailable`, `Current()->LineAt(i)`, `Speaker(line)`, `Listener(line)`, `Owner()` | `dao/Dialogue.h` |
 
