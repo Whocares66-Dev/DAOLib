@@ -1,26 +1,28 @@
-"""Builds DAOLib's documentation site (DAOLib #45) into build/docs-site/html.
+"""Builds DAOLib's documentation site (DAOLib #45, #49) into build/docs-site/DAOLib.
 
-Runs Doxygen with docs/Doxyfile: the public headers' comments (through
-tools/doxygen_filter.py), the guide pages, and the theme in docs/theme. The
-working tree's docs are the site's root ("Current"); each release tag vX.Y.Z
-is built from that tag's own headers and guide, with today's Doxyfile,
-filter and theme, into X.Y.Z/; versions.json at the root lists them for the
-version selector in the title bar (docs/theme/dao-site.js). A member whose
-name is unique on its page is linked as #Name everywhere, not by Doxygen's
-hash of its signature (readable_anchors). A header's page
-links to its source on GitHub at the same version (master, or the tag)
-rather than carrying a copy. Doxygen is found on PATH, or under
-build/tools/doxygen (the portable zip from
-github.com/doxygen/doxygen/releases). Its warnings go to
-build/docs-site/warnings.txt (the current docs') and are counted here.
+The site is Jekyll with Just the Docs (docs/_config.yml, as the Eluvian and
+SkyrimFollowerTactics sites are). Its pages come from three places:
+
+- the API reference (api/): Doxygen reads the public headers (docs/Doxyfile,
+  through tools/doxygen_filter.py) and writes XML, which tools/doxygen_xml.py
+  turns into a page per namespace and class;
+- the guide (guide.html): dev/PLUGINS.md;
+- the front page and the styling: docs/.
+
+The working tree's docs are the site's root ("Current"); each release tag
+vX.Y.Z is built from that tag's own headers and guide, with today's styling,
+converter and filter, into X.Y.Z/. Every version is listed in the
+version selector, which keeps the page you are on where that version has it.
+
+Needs Doxygen 1.18 (on PATH, or the Windows zip unpacked in build/tools/doxygen)
+and Ruby with Bundler (`bundle install` in docs/ once).
 
     python tools/build_docs.py            # build
-    python tools/build_docs.py --serve    # build, then serve on http://127.0.0.1:8045
+    python tools/build_docs.py --serve    # build, then serve on http://127.0.0.1:8045/DAOLib/
 """
 
 import argparse
 import functools
-import html
 import http.server
 import io
 import json
@@ -34,19 +36,29 @@ import tarfile
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SITE = ROOT / "build" / "docs-site"
-HTML = SITE / "html"
+DOCS = ROOT / "docs"
+BUILD = ROOT / "build"
+SITE = BUILD / "docs-site"
+REPOSITORY = "https://github.com/Whocares66-Dev/DAOLib"
 # What a release's docs are built from: its own headers and guide; the rest
-# (Doxyfile, theme, front page, filter) is the working tree's.
+# (the styling, the front page, the Doxyfile, the filter, the converter) is
+# today's.
 FROM_THE_TAG = ("src/dao", "dev/PLUGINS.md")
 FROM_TODAY = ("docs", "tools/doxygen_filter.py")
+# What a local `jekyll serve` or `bundle install` leaves in docs/.
+LOCAL_OUTPUT = shutil.ignore_patterns(
+    "_site", ".jekyll-cache", ".jekyll-metadata", ".bundle", "vendor"
+)
+
+sys.path.insert(0, str(ROOT / "tools"))
+import doxygen_xml  # noqa: E402
 
 
 def doxygen():
     found = shutil.which("doxygen")
     if found:
         return found
-    local = ROOT / "build" / "tools" / "doxygen" / "doxygen.exe"
+    local = BUILD / "tools" / "doxygen" / "doxygen.exe"
     if local.exists():
         return str(local)
     sys.exit(
@@ -54,124 +66,53 @@ def doxygen():
     )
 
 
-# A member's title as Doxygen 1.18 writes it: its hash anchor, then the title
-# with a diamond permalink to that anchor before the name.
-MEMBER_TITLE = re.compile(
-    r'<a id="(a[0-9a-f]{32})" name="\1"></a>\s*'
-    r'<h2 class="memtitle"><span class="permalink"><a href="#\1">&#9670;&#160;</a></span>(.*?)</h2>',
-    re.S,
-)
-# A link to a member: a page's name and the member's hash anchor.
-MEMBER_LINK = re.compile(r"([\w.-]+\.html)#(a[0-9a-f]{32})")
-SAME_PAGE_LINK = re.compile(r'href="#(a[0-9a-f]{32})"')
+def setting(name):
+    """A top-level value of docs/_config.yml."""
+    match = re.search(
+        rf"^{name}:\s*(.+)$", (DOCS / "_config.yml").read_text(encoding="utf-8"), re.M
+    )
+    return match.group(1).strip() if match else None
 
 
-def anchor_name(title):
-    """A member's readable anchor, from its title: "Advance() [1/2]" is Advance."""
-    text = re.sub(r"<[^>]*>", "", title)
-    text = re.sub(r"\[\d+/\d+\]", "", text)
-    text = re.sub(r"[()\s]", "", text)
-    text = html.unescape(text)
-    return re.sub(r"[^\w~]", "_", text)
-
-
-def readable_anchors(output):
-    """Gives each member whose name is unique on its page the anchor #Name and
-    points every link to it there, across the site; the name is its own link.
-
-    Doxygen's anchors hash the whole signature, so a link breaks when a
-    parameter changes; #Name holds until the name does. An overloaded name
-    keeps Doxygen's anchor. Doxygen's anchors stay beside the new ones, so a
-    link made before still works."""
-    pages = sorted(output.glob("*.html"))
-    names = {}  # (page, hash) -> readable name
-    for page in pages:
-        text = page.read_text(encoding="utf-8")
-        titles = MEMBER_TITLE.findall(text)
-        counts = {}
-        for _, title in titles:
-            counts[anchor_name(title)] = counts.get(anchor_name(title), 0) + 1
-        taken = set(re.findall(r'\bid="([^"]+)"', text))
-        for anchor, title in titles:
-            name = anchor_name(title)
-            if counts[name] == 1 and name not in taken:
-                names[(page.name, anchor)] = name
-
-        def title_link(match, page=page.name):
-            anchor, title = match.group(1), match.group(2)
-            name = names.get((page, anchor))
-            target = name or anchor
-            heading = f' id="{name}"' if name else ""
-            return (
-                f'<a id="{anchor}" name="{anchor}"></a>\n'
-                f'<h2 class="memtitle"{heading}><a href="#{target}">{title}</a></h2>'
-            )
-
-        page.write_text(MEMBER_TITLE.sub(title_link, text), encoding="utf-8")
-
-    def link(match):
-        name = names.get((match.group(1), match.group(2)))
-        return f"{match.group(1)}#{name}" if name else match.group(0)
-
-    for path in [*pages, *output.glob("*.js"), *output.glob("search/*.js")]:
-        text = path.read_text(encoding="utf-8")
-        rewritten = MEMBER_LINK.sub(link, text)
-        if path.suffix == ".html":
-            rewritten = SAME_PAGE_LINK.sub(
-                lambda m, page=path.name: (
-                    f'href="#{names.get((page, m.group(1)), m.group(1))}"'
-                ),
-                rewritten,
-            )
-        if rewritten != text:
-            path.write_text(rewritten, encoding="utf-8")
-    return len(names)
-
-
-def fix_outline_escape(output):
-    """Doxygen 1.18's navtree.js escapes "=" as "&#x3D;" for the page outline,
-    then shows it as text: "operator&#x3D;". An "=" needs no escaping."""
-    navtree = output / "navtree.js"
-    text = navtree.read_text(encoding="utf-8")
-    navtree.write_text(text.replace("'=': '&#x3D;'", "'=': '='"), encoding="utf-8")
-
-
-# Pages given a short name of their own on the site, for links from outside it
-# (the README): Doxygen's name, without its extension, to the site's.
-PAGE_NAMES = {"md_dev_2_p_l_u_g_i_n_s": "guide"}
-
-
-def rename_pages(output):
-    """Renames each page in PAGE_NAMES, and the files Doxygen made for it, and
-    points every reference across the site at the new name."""
-    for old, new in PAGE_NAMES.items():
-        for path in output.glob(f"{old}*"):
-            path.rename(path.with_name(new + path.name[len(old) :]))
-        for path in [
-            *output.glob("*.html"),
-            *output.glob("*.js"),
-            *output.glob("search/*.js"),
-        ]:
-            text = path.read_text(encoding="utf-8")
-            if old in text:
-                path.write_text(text.replace(old, new), encoding="utf-8")
-
-
-def run_doxygen(cwd, output, warnings, ref):
-    """Doxygen over docs/Doxyfile in `cwd`, its HTML into `output`, its source
-    links to GitHub at `ref`."""
-    config = (cwd / "docs" / "Doxyfile").read_text(encoding="utf-8")
-    config += f'\nOUTPUT_DIRECTORY = "{output.parent.as_posix()}"\nHTML_OUTPUT = "{output.name}"\n'
-    config += f'WARN_LOGFILE = "{warnings.as_posix()}"\n'
-    env = dict(os.environ, DAOLIB_DOCS_REF=ref)
+def api_pages(source, xml, ref):
+    """Doxygen's XML of `source`'s headers, as API pages in its docs/."""
+    config = (source / "docs" / "Doxyfile").read_text(encoding="utf-8")
+    config += f'\nOUTPUT_DIRECTORY = "{xml.as_posix()}"\nWARN_LOGFILE = "{(xml / "warnings.txt").as_posix()}"\n'
+    xml.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
-        [doxygen(), "-"], cwd=cwd, input=config.encode("utf-8"), env=env, check=False
+        [doxygen(), "-"], cwd=source, input=config.encode("utf-8"), check=False
     )
     if result.returncode != 0:
-        sys.exit(f"Doxygen failed ({result.returncode}) in {cwd}")
-    readable_anchors(output)
-    fix_outline_escape(output)
-    rename_pages(output)
+        sys.exit(f"Doxygen failed ({result.returncode}) in {source}")
+    count = doxygen_xml.Site(xml / "xml", ref, REPOSITORY).write(source / "docs")
+    warnings = (
+        (xml / "warnings.txt").read_text(encoding="utf-8", errors="replace").strip()
+    )
+    return count, warnings
+
+
+def guide_page(source):
+    """dev/PLUGINS.md as the site's guide page."""
+    body = (source / "dev" / "PLUGINS.md").read_text(encoding="utf-8")
+    front = (
+        "---\ntitle: Writing a plugin\nnav_order: 2\npermalink: /guide.html\n---\n\n"
+    )
+    # Kept from Liquid, as the API pages are: its examples have C++ braces.
+    (source / "docs" / "guide.md").write_text(
+        front + "{% raw %}\n" + body.rstrip() + "\n{% endraw %}\n", encoding="utf-8"
+    )
+
+
+def pages(site_source):
+    """Every page's URL, from its permalink, for the version selector."""
+    urls = []
+    for path in site_source.rglob("*.md"):
+        match = re.search(
+            r'^permalink:\s*"?([^"\n]+)"?\s*$', path.read_text(encoding="utf-8"), re.M
+        )
+        if match:
+            urls.append(match.group(1))
+    return sorted(urls)
 
 
 def releases():
@@ -187,10 +128,10 @@ def releases():
     return [tag for _, tag in sorted(found, reverse=True)]
 
 
-def build_release(tag, scratch):
-    """A release's docs, from its own headers and guide, into HTML/X.Y.Z."""
-    stage = scratch / tag
-    stage.mkdir()
+def stage_release(tag, staging):
+    """A release's sources: its own headers and guide, today's styling."""
+    source = staging / tag
+    source.mkdir()
     archive = subprocess.run(
         ["git", "archive", "--format=tar", tag, *FROM_THE_TAG],
         cwd=ROOT,
@@ -199,53 +140,112 @@ def build_release(tag, scratch):
     )
     if archive.returncode != 0:
         print(f"{tag}: not built ({archive.stderr.decode(errors='replace').strip()})")
-        return False
+        return None
     with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
-        tar.extractall(stage, filter="data")
+        tar.extractall(source, filter="data")
     for part in FROM_TODAY:
-        source = ROOT / part
-        target = stage / part
+        target = source / part
         target.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(source, target)
+        if (ROOT / part).is_dir():
+            shutil.copytree(ROOT / part, target, ignore=LOCAL_OUTPUT)
         else:
-            shutil.copy2(source, target)
-    run_doxygen(stage, HTML / tag[1:], scratch / f"{tag}-warnings.txt", tag)
-    return True
+            shutil.copy2(ROOT / part, target)
+    return source
+
+
+def stage_current(staging):
+    """The working tree's sources."""
+    source = staging / "current"
+    source.mkdir()
+    shutil.copytree(DOCS, source / "docs", ignore=LOCAL_OUTPUT)
+    for part in ("src/dao", "dev/PLUGINS.md", "tools/doxygen_filter.py"):
+        target = source / part
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if (ROOT / part).is_dir():
+            shutil.copytree(ROOT / part, target)
+        else:
+            shutil.copy2(ROOT / part, target)
+    return source
+
+
+def jekyll(site_source, destination, overlay):
+    bundle = shutil.which("bundle")
+    if not bundle:
+        sys.exit("Install Ruby and Bundler, then run `bundle install` in docs/")
+    env = {**os.environ, "BUNDLE_GEMFILE": str(DOCS / "Gemfile")}
+    subprocess.run(
+        [
+            bundle,
+            "exec",
+            "jekyll",
+            "build",
+            "--source",
+            str(site_source),
+            "--destination",
+            str(destination),
+            "--config",
+            f"{site_source / '_config.yml'},{overlay}",
+        ],
+        cwd=DOCS,
+        env=env,
+        check=True,
+    )
 
 
 def build():
+    baseurl = setting("baseurl").rstrip("/")
     if SITE.exists():
         shutil.rmtree(SITE)
-    SITE.mkdir(parents=True)
-    warnings = SITE / "warnings.txt"
-    run_doxygen(ROOT, HTML, warnings, "master")
-    versions = [{"label": "Current", "path": ""}]
-    with tempfile.TemporaryDirectory() as temporary:
-        built = [
-            tag for tag in releases() if build_release(tag, pathlib.Path(temporary))
+    destination = SITE / baseurl.lstrip("/")
+    destination.mkdir(parents=True)
+    warnings = []
+    with tempfile.TemporaryDirectory(prefix="docs-sources-", dir=BUILD) as temporary:
+        staging = pathlib.Path(temporary)
+        sources = [("Current", stage_current(staging), baseurl, "master")]
+        for tag in releases():
+            source = stage_release(tag, staging)
+            if source is not None:
+                sources.append((tag[1:], source, f"{baseurl}/{tag[1:]}", tag))
+        for label, source, _, ref in sources:
+            count, warned = api_pages(source, staging / f"xml-{label}", ref)
+            guide_page(source)
+            print(f"{label}: {count} API pages")
+            if warned and label == "Current":
+                warnings.append(warned)
+        versions = [
+            dict(label=label, baseurl=url, pages=pages(source / "docs"))
+            for label, source, url, _ in sources
         ]
-    versions.extend({"label": tag, "path": tag[1:] + "/"} for tag in built)
-    (HTML / "versions.json").write_text(
-        json.dumps(versions, indent=1), encoding="utf-8"
-    )
-    count = (
-        len(warnings.read_text(encoding="utf-8", errors="replace").splitlines())
-        if warnings.exists()
-        else 0
-    )
+        for index, (label, source, url, _) in enumerate(sources):
+            # JSON is valid YAML; Jekyll merges this after the site's own config.
+            overlay = staging / f"config-{index}.yml"
+            overlay.write_text(
+                json.dumps(
+                    dict(baseurl=url, docs_version=label, docs_versions=versions)
+                ),
+                encoding="utf-8",
+            )
+            jekyll(
+                source / "docs",
+                destination if index == 0 else destination / label,
+                overlay,
+            )
+    (destination / ".nojekyll").touch()
+    (SITE / "warnings.txt").write_text("\n".join(warnings), encoding="utf-8")
     print(
-        f"site: {HTML / 'index.html'}; {len(versions)} version(s); {count} warning line(s) in {warnings}"
+        f"site: {destination}; {len(versions)} version(s); "
+        f"{len(warnings[0].splitlines()) if warnings else 0} Doxygen warning line(s) in {SITE / 'warnings.txt'}"
     )
+    return baseurl
 
 
-def serve(port):
+def serve(port, baseurl):
     handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler, directory=str(HTML)
+        http.server.SimpleHTTPRequestHandler, directory=str(SITE)
     )
     with http.server.ThreadingHTTPServer(("0.0.0.0", port), handler) as server:
         print(
-            f"serving http://127.0.0.1:{port}/ (and on this machine's network addresses; Ctrl+C ends it)"
+            f"serving http://127.0.0.1:{port}{baseurl}/ (and on this machine's network addresses; Ctrl+C ends it)"
         )
         server.serve_forever()
 
@@ -257,9 +257,9 @@ def main():
     )
     parser.add_argument("--port", type=int, default=8045)
     args = parser.parse_args()
-    build()
+    baseurl = build()
     if args.serve:
-        serve(args.port)
+        serve(args.port, baseurl)
 
 
 if __name__ == "__main__":

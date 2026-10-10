@@ -1,0 +1,430 @@
+// What is not a colour: the typefaces, the sidebar's leather, the plates code
+// sits on, the tables, the version selector. The rules from the first site
+// (DAOLib #45) hold: one highlight for what is current or hovered, flat
+// colours and no shadows on the page, and a name keeps its case (Cinzel has
+// only capitals, so it sets section headings, never an identifier).
+
+@import "dao_palette";
+
+$highlight: linear-gradient(90deg, $blood, transparent);
+$serif-title: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+$serif-text: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+$mono: Consolas, "Cascadia Mono", "Courier New", monospace;
+
+body {
+    font-family: $serif-text;
+    font-size: 18px;
+}
+
+// -- the sidebar: dark leather, parchment lettering ---------------------------
+
+.side-bar {
+    background-color: $leather-dark;
+    border-right: none;
+}
+
+.site-header {
+    border-bottom: 1px solid $bronze;
+}
+
+.site-title {
+    font-family: $serif-title;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $gold-bright !important;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    img {
+        width: 24px;
+        height: 24px;
+    }
+
+    // Hovered, the one highlight, not the theme's gradient of its feedback
+    // colour (a light parchment here).
+    &:hover {
+        background-image: $highlight;
+    }
+}
+
+// The menu button a phone shows in the header: the same highlight hovered.
+.site-button:hover {
+    background-image: $highlight;
+}
+
+.nav-list .nav-list-item .nav-list-link {
+    color: $parchment-dark;
+    font-family: $serif-text;
+    font-size: 16px;
+
+    &:hover {
+        color: $gold-bright;
+        background-image: $highlight;
+    }
+
+    &.active {
+        color: $gold-bright;
+        background-image: $highlight;
+        font-weight: 600;
+    }
+}
+
+.nav-list .nav-list-item .nav-list-expander {
+    color: $gold;
+
+    &:hover {
+        background-image: none;
+        color: $gold-bright;
+    }
+}
+
+.nav-category {
+    color: $gold;
+    font-family: $serif-title;
+}
+
+.site-footer,
+.main-header {
+    border-color: $bronze;
+}
+
+// -- headings -----------------------------------------------------------------
+
+// A page's title often names a namespace or class: the book face, which keeps
+// its case.
+h1 {
+    font-family: $serif-text;
+    font-weight: 600;
+    color: $blood;
+}
+
+// Section headings ("Functions", "Classes", a guide's sections) name no
+// identifiers: Cinzel's capitals.
+h2 {
+    font-family: $serif-title;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: $blood;
+    border-bottom: 1px solid $bronze;
+    padding-bottom: 4px;
+}
+
+// A guide's subheadings: the book face, semi-bold.
+.main-content h3,
+.main-content h4 {
+    font-family: $serif-text;
+    font-weight: 600;
+    color: $blood;
+}
+
+// A member's heading is its name (doxygen_xml.py marks it .member): the code face.
+.main-content .member {
+    font-family: $mono;
+}
+
+// -- code ---------------------------------------------------------------------
+
+code,
+.highlight,
+pre {
+    font-family: $mono;
+}
+
+:not(pre, figure) > code {
+    color: $blood;
+    font-weight: 600;
+    background-color: rgba(214, 191, 138, 0.35);
+    border: none;
+    padding: 0 3px;
+}
+
+div.highlighter-rouge,
+figure.highlight {
+    // The plate alone sets code apart: no border, no rounding.
+    background-color: $plate;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    pre,
+    .highlight {
+        background-color: transparent;
+        border: none;
+        border-radius: 0;
+    }
+
+    // Code at its own size and spacing, not the body's 18px and loose lines.
+    pre,
+    code {
+        font-size: 14px;
+        line-height: 1.45;
+    }
+}
+
+// -- tables: no outer border; the head a full strip of leather, the rows
+// alternating, a faint rule between them ------------------------------------
+
+.table-wrapper {
+    margin-bottom: 1.5rem;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.main-content table {
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.main-content th,
+.main-content td {
+    border: none;
+    border-bottom: 1px solid rgba(138, 106, 58, 0.3);
+}
+
+.main-content th {
+    background-color: $leather;
+    color: $gold-bright;
+    font-family: $serif-title;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+}
+
+.main-content td {
+    background-color: transparent;
+}
+
+// Table text near the body's size, code in a cell at code's size. The theme
+// sets a cell's size with !important, so only !important outranks it.
+.main-content td {
+    font-size: 17px !important;
+}
+
+.main-content td code {
+    font-size: 14px !important;
+}
+
+.main-content tbody tr:nth-child(even) td {
+    background-color: rgba(214, 191, 138, 0.35);
+}
+
+// -- links --------------------------------------------------------------------
+
+.main-content a {
+    font-weight: 600;
+    text-decoration-color: rgba(122, 18, 18, 0.35);
+
+    &:hover {
+        color: $blood-bright;
+        text-decoration-color: $gold;
+    }
+}
+
+// -- the version selector, in the header beside search --------------------------
+
+.docs-version,
+.docs-versions {
+    flex: 0 0 auto;
+    align-self: center;
+    margin: 0 12px 0 0;
+    font-family: $serif-title;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    color: $ink;
+}
+
+.docs-versions {
+    position: relative;
+}
+
+.docs-versions summary,
+.docs-version {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border: 1px solid $bronze;
+    border-radius: 3px;
+    background: $parchment-light;
+    cursor: pointer;
+    list-style: none;
+}
+
+.docs-versions summary::-webkit-details-marker {
+    display: none;
+}
+
+.docs-versions summary::marker {
+    content: "";
+}
+
+.docs-versions[open] summary svg {
+    transform: rotate(180deg);
+}
+
+.docs-versions ul {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 40;
+    min-width: 100%;
+    margin: 6px 0 0;
+    padding: 4px;
+    list-style: none;
+    background: $leather-dark;
+    border: 1px solid $gold;
+    border-radius: 3px;
+}
+
+.docs-versions li {
+    margin: 0;
+}
+
+.docs-versions a {
+    display: block;
+    padding: 5px 10px;
+    color: $parchment;
+    text-decoration: none;
+
+    &:hover,
+    &[aria-current] {
+        color: $gold-bright;
+        background-image: $highlight;
+    }
+}
+
+.github-link {
+    display: flex;
+    align-self: center;
+    margin-right: 8px;
+    color: $ink;
+
+    &:hover {
+        color: $blood;
+    }
+}
+
+// -- scrollbars: bronze, on the leather in the sidebar and on the parchment in
+// the page (scrollbar-color for Firefox and Chrome, ::-webkit-scrollbar for
+// Safari and older Chrome) ----------------------------------------------------
+
+html {
+    scrollbar-color: $bronze $parchment-dark;
+}
+
+.side-bar,
+.side-bar * {
+    scrollbar-color: $bronze $leather-dark;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: $parchment-dark;
+}
+
+::-webkit-scrollbar-thumb {
+    background: $bronze;
+    border-radius: 5px;
+    border: 2px solid $parchment-dark;
+
+    &:hover {
+        background: $leather-light;
+    }
+}
+
+.side-bar ::-webkit-scrollbar-track,
+.side-bar::-webkit-scrollbar-track {
+    background: $leather-dark;
+}
+
+.side-bar ::-webkit-scrollbar-thumb,
+.side-bar::-webkit-scrollbar-thumb {
+    border-color: $leather-dark;
+
+    &:hover {
+        background: $gold;
+    }
+}
+
+// Just the Docs borders its inner .highlight box too; none, here as well.
+div.highlight,
+pre.highlight,
+figure.highlight {
+    border: none !important;
+    border-radius: 0 !important;
+}
+
+// -- the copy button on a code block, as the Eluvian site has it: Lucide's
+// "copy" and "check" (docs/_includes/icons/code_copy.html), bronze, blood on
+// hover, a hand over it, the button no bigger than its icon -------------------
+
+div.highlighter-rouge > button,
+figure.highlight > button {
+    width: auto;
+    height: auto;
+    padding: 0.3rem;
+    top: 0.35rem;
+    right: 0.35rem;
+    line-height: 0;
+    cursor: pointer;
+    color: $bronze;
+    background: none;
+
+    &:hover {
+        color: $blood;
+        background: none;
+    }
+
+    &,
+    svg,
+    svg * {
+        cursor: pointer;
+    }
+
+    // Lucide's icons are drawn by stroke, not fill: without these the icon
+    // resolves to no stroke and shows nothing.
+    svg.copy-icon {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+}
+
+// Just the Docs sets `cursor: copy` while the block is hovered, in a more
+// specific rule: the same selector, later, gives the hand.
+div.highlighter-rouge:hover > button,
+figure.highlight:hover > button {
+    cursor: pointer;
+}
+
+// -- the breadcrumbs above a page's title, readable. The theme sizes them with
+// !important, so only !important outranks it. ---------------------------------
+
+nav.breadcrumb-nav ol.breadcrumb-nav-list li.breadcrumb-nav-list-item,
+nav.breadcrumb-nav ol.breadcrumb-nav-list li.breadcrumb-nav-list-item a {
+    font-size: 17px !important;
+}
+
+// -- the version selector and the GitHub mark centred in the header's height --
+
+.aux-nav,
+.aux-nav .aux-nav-list,
+.aux-nav .aux-nav-list .aux-nav-list-item {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}

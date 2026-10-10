@@ -1,0 +1,23 @@
+{%- comment -%}
+Every page's head (Just the Docs' hook): the two typefaces, and the version
+selector closing when you click elsewhere or press Escape, as a menu does.
+{%- endcomment -%}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap">
+<script>
+  document.addEventListener("click", function (event) {
+    document.querySelectorAll("details.docs-versions[open]").forEach(function (menu) {
+      if (!menu.contains(event.target)) {
+        menu.open = false;
+      }
+    });
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      document.querySelectorAll("details.docs-versions[open]").forEach(function (menu) {
+        menu.open = false;
+      });
+    }
+  });
+</script>

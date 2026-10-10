@@ -1,0 +1,23 @@
+// The leather and parchment as a Just the Docs colour scheme: parchment for the
+// page and ink for the text, blood for links and headings, the sidebar a strip of
+// dark leather. What is not a colour is in custom/custom.scss.
+
+@import "dao_palette";
+
+$color-scheme: light;
+$body-background-color: $parchment;
+$body-heading-color: $blood;
+$body-text-color: $ink;
+$link-color: $blood;
+$nav-child-link-color: $parchment-dark;
+$sidebar-color: $leather-dark;
+$base-button-color: $parchment-dark;
+$btn-primary-color: $blood;
+$code-background-color: $parchment-light;
+$code-linenumber-color: $ink-faded;
+$feedback-color: $parchment-dark;
+$table-background-color: $parchment-light;
+$search-background-color: $parchment-light;
+$search-foreground-color: $ink;
+$search-result-preview-color: $ink-faded;
+$border-color: rgba(138, 106, 58, 0.35);

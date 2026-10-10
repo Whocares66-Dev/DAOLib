@@ -5,8 +5,7 @@ and Doxygen reads only its own forms (`///`, `///<`). So each header passes
 through this filter on its way into Doxygen, and the sources keep their style:
 
 - the comment block at the head of the file becomes the file's description
-  (`/// @file`), so a header's page opens with what the header is for, and
-  ends with a link to the header's source on GitHub;
+  (`/// @file`), so a header's page opens with what the header is for;
 - a comment on lines of its own becomes `///`, the documentation of the
   declaration below it;
 - within one, lines indented past the prose (a usage example, `//   code`)
@@ -23,15 +22,8 @@ Usage, as Doxygen calls it (INPUT_FILTER): doxygen_filter.py <file>; the
 filtered text goes to standard output.
 """
 
-import os
 import re
 import sys
-
-# The file's source on GitHub, linked from its page in place of a copy:
-# tools/build_docs.py says which version (master, or a release's tag).
-REPOSITORY = "https://github.com/Whocares66-Dev/DAOLib"
-REF = os.environ.get("DAOLIB_DOCS_REF", "master")
-SOURCE = None  # the file's path from the repository's root, set in main()
 
 OWN_LINE = re.compile(r"^(\s*)//(?!/)(.*)$")
 AFTER_CODE = re.compile(r"^(\s*\S.*?)\s+//(?![/<])\s?(.*)$")
@@ -79,9 +71,6 @@ def block(comment, indent, file_head):
             in_item = not blank and (in_item or bool(LIST_ITEM.match(text)))
     if in_code:
         out.append(f"{indent}/// ```")
-    if file_head and SOURCE:
-        out.append(f"{indent}///")
-        out.append(f"{indent}/// Source: [{SOURCE}]({REPOSITORY}/blob/{REF}/{SOURCE})")
     return out
 
 
@@ -134,8 +123,6 @@ def filtered(lines):
 
 
 def main():
-    global SOURCE  # noqa: PLW0603
-    SOURCE = os.path.relpath(sys.argv[1], os.getcwd()).replace(os.sep, "/")
     with open(sys.argv[1], encoding="utf-8", errors="replace") as f:
         lines = f.read().split("\n")
     sys.stdout.reconfigure(encoding="utf-8")

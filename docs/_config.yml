@@ -1,0 +1,48 @@
+# DAOLib's docs site (DAOLib #49): Just the Docs, as the Eluvian and
+# SkyrimFollowerTactics sites are, in Dragon Age's leather and parchment
+# (_sass). tools/build_docs.py makes its pages: the API reference (api/) from
+# Doxygen's XML of the public headers, the guide from dev/PLUGINS.md; this
+# folder holds the front page and what the pages are dressed in.
+title: DAOLib
+description: "Native C++ plugins for Dragon Age: Origins, a loader and a library."
+url: https://whocares66-dev.github.io
+baseurl: /DAOLib
+docs_version: Current
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+color_scheme: dao
+favicon_ico: /assets/favicon.ico
+permalink: pretty
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-include-cache
+search_enabled: true
+search:
+  # Members are h3 (a namespace's) and h3/h4 (a class's): searchable by name.
+  heading_level: 4
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 12
+  focus_shortcut_key: k
+  button: false
+heading_anchors: true
+back_to_top: true
+back_to_top_text: Back to top
+aux_links_new_tab: false
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      # A namespace's page lists its classes itself.
+      has_toc: false
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - Doxyfile
+  - namespaces.dox
+  - vendor

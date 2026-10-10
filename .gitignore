@@ -33,3 +33,9 @@ __pycache__/
 
 # A local scratchpad for review notes, not part of the tree.
 dev/REVIEW.md
+
+# The docs site's Jekyll, when run in docs/ by hand
+docs/_site/
+docs/.jekyll-cache/
+docs/vendor/
+docs/.bundle/
