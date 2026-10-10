@@ -45,7 +45,7 @@ foreach ($file in $builtLoader, $builtPdb) {
     $bytes = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes($file))
     foreach ($written in $profileFolder, ($profileFolder.ToCharArray() -join "`0")) {
         if ($bytes.IndexOf($written, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            throw "$file holds the path of this user's folder; build it with .\tools\build.ps1 -Preset $Preset"
+            throw "$file holds the path of this user's folder; delete $builtLoader and build with .\tools\build.ps1 -Preset $Preset, which links it afresh"
         }
     }
 }

@@ -31,7 +31,8 @@
 # from a release build, and names nothing of ours without one (DAOLib #55).
 # /Z7 puts a static library's symbols in its objects, so they reach the PDB
 # of whichever DLL links it. /DEBUG turns the linker's /OPT:REF and /OPT:ICF
-# off, which a release build has on, so they are put back.
+# off, which a release build has on, so they are put back. Call it in the
+# directory that declares the target, as add_daolib_plugin does.
 function(dao_release_symbols target)
     if(NOT MSVC)
         return()
@@ -42,6 +43,22 @@ function(dao_release_symbols target)
         target_link_options(
             ${target}
             PRIVATE "$<$<CONFIG:Release>:/DEBUG;/OPT:REF;/OPT:ICF>"
+        )
+        # The linker adds to a PDB that is there already and keeps what
+        # earlier links wrote: twice the size after a few, and the path of a
+        # temporary folder the build no longer uses, which is under the
+        # user's name (seen by Eluvian's session 2026-10-10, DAOLib #58). A
+        # link that is not incremental needs nothing of the old one, so it
+        # starts from none; RelWithDebInfo is one too, in a repository that
+        # builds with it. A debug link is incremental and keeps its PDB.
+        add_custom_command(
+            TARGET ${target}
+            PRE_LINK
+            COMMAND
+                ${CMAKE_COMMAND} -E
+                "$<IF:$<CONFIG:Release,RelWithDebInfo>,rm;-f;$<TARGET_PDB_FILE:${target}>,true>"
+            COMMAND_EXPAND_LISTS
+            VERBATIM
         )
     endif()
 endfunction()
