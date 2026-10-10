@@ -84,16 +84,22 @@ bool IsGameProcess()
 // game exited at start whenever a source was added (2026-10-09, the
 // turn-based mod's play checks; the exit log of DAOLib #44 showed WinMain
 // returning -1).
-using SetUpSourcesFn = bool(__cdecl *)();
+// It is a member function, __thiscall with no stack arguments (a plain
+// `ret`): ECWinApp::Initialize does `mov ecx, esi` before the call, and it
+// keeps `this` with `mov edi, ecx` before it sets ECX itself. A first form
+// declared it __cdecl() and so passed on whatever ECX held: the release
+// build happened to leave `this` there, and the debug build did not, which
+// crashed the game in its own set-up a second after start (DAOLib #46).
+using SetUpSourcesFn = bool(__fastcall *)(void *self, int edx);
 dao::Detour<SetUpSourcesFn> g_setUpSources;
 std::vector<std::filesystem::path> g_pluginFolders;
 constexpr std::int32_t kPluginPriority = 2; // OVERRIDE: is 1, PATCH: 100000; a tie is not decided by it
 constexpr std::int32_t kDirectoryKind = 1;  // a folder with its subfolders and any .erf or .rim in it
 constexpr std::int32_t kWatch = 0;          // read once; OVERRIDE:'s 1 re-lists it every fifth frame
 
-bool __cdecl SetUpSources()
+bool __fastcall SetUpSources(void *self, int edx)
 {
-    const bool setUp = g_setUpSources.Original()();
+    const bool setUp = g_setUpSources.Original()(self, edx);
     if (!setUp)
     {
         return setUp;
