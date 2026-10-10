@@ -1,0 +1,1256 @@
+/* DAOLib's documentation theme (DAOLib #45): Dragon Age: Origins' leather and
+   parchment, metal and blood, over Doxygen 1.18's HTML. No game art: the
+   textures are CSS, the icons are Dragon Age: Origins' dragon emblem (EA's,
+   as the Dragon Age Wiki has it for its favicon),
+   Font Awesome Free's search, clear and arrow icons (CC BY 4.0) and Lucide's
+   panel icons (ISC). Cinzel sets the carved capitals of titles and menus,
+   EB Garamond the text; neither is used where an identifier must keep its
+   case. dao-site.js does what CSS cannot (see its head).
+
+   Every shared colour, gradient and size is a variable below: a look is
+   changed there, once, not by another rule further down. */
+
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap");
+
+/* ------------------------------------------------------------------------ */
+/* Variables                                                                */
+/* ------------------------------------------------------------------------ */
+
+:root {
+    --leather-dark: #1c120b;
+    --leather: #2e1d12;
+    --leather-light: #4a3020;
+    --parchment: #ead9b4;
+    --parchment-light: #f3e7cb;
+    --parchment-dark: #d9c393;
+    --ink: #2a1a10;
+    --ink-faded: #5a4532;
+    --gold: #c9a45c;
+    --gold-bright: #e6c983;
+    --bronze: #8a6a3a;
+    --blood: #7a1212;
+    --blood-bright: #a3201c;
+
+    /* The one mark for what is current, hovered or open: the trees' page,
+       the outline's section, a menu's item, a search filter. */
+    --highlight: linear-gradient(90deg, var(--blood), transparent);
+    /* Flat colours, no shading: a strap of leather (the title bar, a
+       member's title, a table's head) and a signature's plate. */
+    --strap: var(--leather);
+    --plate: #dcc592;
+    /* Alternate rows, inline code's tint, and the rules between rows. */
+    --row-alt: rgba(214, 191, 138, 0.35);
+    --rule: rgba(138, 106, 58, 0.3);
+    /* The flash on what a link lands on (Doxygen's "glow", cyan by default). */
+    --glow: rgba(163, 32, 28, 0.55);
+    /* What floats over the page (menus, search) casts a shadow; nothing else. */
+    --float-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+
+    --serif-title: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+    --serif-text: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+    --mono: Consolas, "Cascadia Mono", "Courier New", monospace;
+    --text-size: 18px;
+    --code-size: 15px;
+    --nav-size: 16px;
+
+    --rail: 46px; /* a hidden sidebar's width */
+    --outline-width: 260px;
+    --tree-width: 286px; /* TREEVIEW_WIDTH and Doxygen's 6px gutter */
+    --search-left: 300px; /* the search box, right of the side tree */
+    --search-width: min(42vw, 560px);
+
+    /* Doxygen's own variables, in the theme's colours. */
+    --page-background-color: var(--parchment);
+    --page-foreground-color: var(--ink);
+    --page-link-color: var(--blood);
+    --page-visited-link-color: var(--blood);
+    --font-family-normal: var(--serif-text);
+    --font-family-monospace: var(--mono);
+    --fragment-background: #e3cf9f;
+    --fragment-foreground: var(--ink);
+    --fragment-keyword: var(--blood);
+    --fragment-keywordtype: #6b3d12;
+    --fragment-keywordflow: var(--blood);
+    --fragment-token: #4a5a1a;
+    --fragment-comment: #7a6448;
+    --fragment-link: var(--blood);
+    --fragment-preprocessor: #6b3d12;
+    --fragment-linenumber-color: #8a7558;
+    --fragment-linenumber-background: var(--parchment-dark);
+    --code-background: var(--row-alt);
+    --code-foreground: var(--blood);
+    --nav-menu-background-color: var(--leather-dark);
+    --nav-menu-foreground-color: var(--parchment);
+    --nav-menu-active-bg: var(--blood);
+    --nav-menu-active-color: var(--gold-bright);
+    --nav-menu-toggle-color: var(--parchment);
+    --nav-arrow-color: var(--gold);
+    --nav-arrow-selected-color: var(--gold-bright);
+    --nav-foreground-color: var(--parchment-dark);
+    --nav-text-normal-color: var(--parchment-dark);
+    --nav-text-hover-color: var(--gold-bright);
+    --nav-text-active-color: var(--gold-bright);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The page: leather                                                        */
+/* ------------------------------------------------------------------------ */
+
+body {
+    background-color: var(--leather);
+    background-image:
+        radial-gradient(ellipse at 20% 10%, rgba(255, 220, 160, 0.06), transparent 55%),
+        radial-gradient(ellipse at 80% 90%, rgba(0, 0, 0, 0.35), transparent 60%),
+        repeating-linear-gradient(37deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 5px),
+        repeating-linear-gradient(-53deg, rgba(255, 230, 190, 0.025) 0 1px, transparent 1px 4px);
+    color: var(--ink);
+    font-family: var(--serif-text);
+}
+
+* {
+    scrollbar-color: var(--bronze) var(--leather-dark);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The title bar: the name, the search box, the version and GitHub          */
+/* ------------------------------------------------------------------------ */
+
+#titlearea {
+    position: relative;
+    z-index: 10002; /* the search results drop over the menu below */
+    background: var(--strap);
+    border-bottom: 1px solid var(--bronze); /* as the menu's, below it */
+    padding: 6px 0;
+}
+
+#titlearea table {
+    margin-left: 12px;
+}
+
+/* All capitals: Cinzel draws lower case as small capitals, which made
+   "DAOLib" look misspelt. The game's dragon stands beside it. */
+#projectname {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--serif-title);
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 0 #000, 0 0 12px rgba(201, 164, 92, 0.35);
+}
+
+/* The name links home, in the name's own gold. */
+#projectname a,
+#projectname a:visited,
+#projectname a:hover {
+    color: inherit;
+    font-weight: inherit;
+    text-decoration: none;
+}
+
+#projectname::after {
+    content: "";
+    width: 24px; /* the capitals' height */
+    height: 24px;
+    background: url("dragon.png") center / contain no-repeat;
+    filter: drop-shadow(0 1px 0 #000);
+}
+
+#dao-site-controls {
+    position: absolute;
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+#dao-version {
+    appearance: none;
+    padding: 5px 28px 5px 10px;
+    border: 1px solid var(--gold);
+    border-radius: 3px;
+    background-color: var(--leather-dark);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--gold) 50%),
+        linear-gradient(135deg, var(--gold) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    color: var(--parchment);
+    font-family: var(--serif-title);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+}
+
+#dao-version:hover,
+#dao-version:focus {
+    border-color: var(--gold-bright);
+    outline: none;
+}
+
+#dao-version option {
+    background: var(--leather-dark);
+    color: var(--parchment);
+}
+
+#dao-github {
+    display: flex;
+    color: var(--gold);
+}
+
+#dao-github:hover {
+    color: var(--gold-bright);
+    text-decoration: none;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The menu and its dropdowns                                               */
+/* ------------------------------------------------------------------------ */
+
+#main-nav,
+#main-menu,
+.sm-dox {
+    background: var(--leather-dark) !important;
+    border-bottom: 1px solid var(--bronze);
+}
+
+.sm-dox a,
+.sm-dox a:focus,
+.sm-dox a:active,
+.sm-dox a:visited,
+.sm-dox a.highlighted {
+    background: transparent !important;
+    color: var(--parchment) !important;
+    font-family: var(--serif-title) !important;
+    font-size: 13px !important;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 #000 !important;
+    border: none !important;
+}
+
+.sm-dox ul {
+    padding: 4px 0 !important;
+    background: var(--leather-dark) !important;
+    border: 1px solid var(--gold) !important;
+    box-shadow: var(--float-shadow) !important;
+}
+
+.sm-dox ul a,
+.sm-dox ul a:focus,
+.sm-dox ul a:visited {
+    font-size: 12px !important;
+    letter-spacing: 0.06em;
+    text-shadow: none !important;
+}
+
+.sm-dox a:hover,
+.sm-dox a.highlighted,
+.sm-dox ul a:hover,
+.sm-dox ul a.highlighted {
+    background: var(--highlight) !important;
+    color: var(--gold-bright) !important;
+}
+
+.sm-dox a span.sub-arrow {
+    color: var(--gold) !important;
+    border-color: transparent transparent transparent var(--gold) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The sidebars: the side tree at the left, the page's outline at the right */
+/* ------------------------------------------------------------------------ */
+
+#side-nav,
+#nav-tree,
+#page-nav {
+    background: var(--leather-dark) !important;
+    background-image: none !important;
+}
+
+/* No rule between a sidebar and the page: the scrollbar and the darker
+   leather divide them. */
+#nav-tree,
+#page-nav {
+    border: none !important;
+}
+
+#nav-tree,
+#nav-tree .label,
+#nav-tree a,
+ul.page-outline div.item,
+ul.page-outline div.item a {
+    font-family: var(--serif-text) !important;
+    font-size: var(--nav-size) !important;
+    font-weight: 400 !important;
+    color: var(--parchment-dark) !important;
+    text-shadow: none;
+}
+
+#nav-tree a:hover,
+ul.page-outline div.item a:hover {
+    color: var(--gold-bright) !important;
+    text-decoration: none;
+}
+
+/* The page being read, in the tree; the section being read, in the outline
+   (dao-site.js marks it: Doxygen marks every section on screen, "vis"). */
+#nav-tree .selected,
+ul.page-outline li.dao-reading > div.item {
+    background: var(--highlight) !important;
+}
+
+#nav-tree .selected a,
+ul.page-outline li.dao-reading > div.item a {
+    color: var(--gold-bright) !important;
+}
+
+ul.page-outline li.vis {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+#page-nav-contents {
+    top: 40px !important; /* below the outline's button */
+    height: calc(100% - 40px) !important;
+}
+
+#page-nav-contents ul.page-outline {
+    margin-top: 12px !important;
+}
+
+#nav-tree-contents {
+    padding-right: 40px; /* the tree's first rows leave the button room */
+}
+
+/* The trees' arrows: Font Awesome's chevron, upright (Doxygen tilts its
+   own 45 degrees), turned down when open. The arrow's box keeps Doxygen's
+   width: it is how a leaf is indented. */
+span.arrow {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 1em;
+    vertical-align: middle;
+}
+
+span.arrowhead {
+    width: 9px !important;
+    height: 9px !important;
+    margin: 0 !important;
+    border: none !important;
+    background-color: var(--gold) !important;
+    -webkit-mask: url("caret.svg") center / contain no-repeat;
+    mask: url("caret.svg") center / contain no-repeat;
+    transform: none !important;
+    transition: transform 0.2s ease;
+}
+
+span.arrowhead.opened {
+    transform: rotate(90deg) !important;
+}
+
+.selected span.arrowhead {
+    background-color: var(--gold-bright) !important;
+}
+
+/* Fixed widths: no drag bars, and no tree-sync toggle (the tree always
+   follows the page, Doxygen's default). */
+#splitbar,
+.ui-resizable-handle,
+#page-nav-resize-handle,
+#nav-sync {
+    display: none !important;
+}
+
+/* Each sidebar's button, at its top corner (dao-site.js): Lucide's panel
+   icon, its arrow saying what a click does. Hidden, a sidebar is a rail of
+   leather holding the button, as claude.ai's is. */
+.dao-toggle {
+    position: absolute;
+    top: 8px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.dao-toggle:hover {
+    background: var(--leather);
+    border-color: var(--bronze);
+}
+
+.dao-toggle span {
+    width: 18px;
+    height: 18px;
+    background-color: var(--gold);
+    -webkit-mask: center / contain no-repeat;
+    mask: center / contain no-repeat;
+}
+
+.dao-toggle:hover span {
+    background-color: var(--gold-bright);
+}
+
+#dao-toggle-nav {
+    right: 22px; /* clear of the tree's scrollbar */
+}
+
+#dao-toggle-outline {
+    left: 8px;
+}
+
+#dao-toggle-nav span {
+    -webkit-mask-image: url("panel-left-close.svg");
+    mask-image: url("panel-left-close.svg");
+}
+
+#dao-toggle-outline span {
+    -webkit-mask-image: url("panel-right-close.svg");
+    mask-image: url("panel-right-close.svg");
+}
+
+html.dao-hide-nav #dao-toggle-nav span {
+    -webkit-mask-image: url("panel-left-open.svg");
+    mask-image: url("panel-left-open.svg");
+}
+
+html.dao-hide-outline #dao-toggle-outline span {
+    -webkit-mask-image: url("panel-right-open.svg");
+    mask-image: url("panel-right-open.svg");
+}
+
+/* The tree's width is the theme's, not Doxygen's: Doxygen measures the
+   sidebar at load and keeps what it found as the width, so a page loaded
+   with the tree collapsed came back from the rail 46px wide. */
+#side-nav {
+    width: var(--tree-width) !important;
+}
+
+#side-nav #nav-tree {
+    width: 100% !important;
+}
+
+#doc-content {
+    margin-left: var(--tree-width) !important;
+}
+
+html.dao-hide-nav #side-nav {
+    width: var(--rail) !important;
+}
+
+html.dao-hide-nav #nav-tree,
+html.dao-hide-outline #page-nav-contents {
+    display: none !important;
+}
+
+html.dao-hide-nav #dao-toggle-nav {
+    right: 7px;
+}
+
+html.dao-hide-nav #doc-content {
+    margin-left: var(--rail) !important;
+}
+
+/* Doxygen's grid sizes both columns by content, so a wide page squeezed
+   the outline to a sliver: the outline has a fixed width, and the page
+   takes what is left and shrinks. */
+#container {
+    grid-template-columns: minmax(0, 1fr) var(--outline-width) !important;
+}
+
+#page-nav {
+    width: var(--outline-width) !important;
+    min-width: var(--outline-width) !important;
+}
+
+html.dao-hide-outline #page-nav {
+    width: var(--rail) !important;
+    min-width: var(--rail) !important;
+}
+
+html.dao-hide-outline #container {
+    grid-template-columns: minmax(0, 1fr) var(--rail) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The parchment: the page's content                                        */
+/* ------------------------------------------------------------------------ */
+
+#doc-content,
+#container,
+div.header,
+div.navpath,
+div.directory {
+    background: transparent !important;
+}
+
+div.header {
+    margin: 18px 24px 6px;
+    border: none;
+    background-image: none;
+}
+
+div.headertitle {
+    padding: 6px 2px 4px;
+    background: transparent;
+    border: none;
+}
+
+/* A page's title names a class, file or namespace: the book face, which
+   keeps the name's case. */
+.title,
+div.headertitle .title {
+    font-family: var(--serif-text) !important;
+    font-weight: 600 !important;
+    font-size: 30px !important;
+    letter-spacing: 0.01em;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 0 #000;
+}
+
+/* The front page: the title bar names the project, so its own title bar
+   would repeat it (dao-site.js marks the front page). */
+html.dao-front-page div.header {
+    display: none;
+}
+
+html.dao-front-page div.contents {
+    margin-top: 24px;
+}
+
+div.contents {
+    margin: 0 24px 24px;
+    padding: 22px 34px 30px;
+    background: var(--parchment);
+    border: 1px solid var(--bronze);
+    border-radius: 2px;
+    color: var(--ink);
+}
+
+/* Doxygen sets 14px on body, tables, divs, paragraphs and lists itself;
+   EB Garamond is small for its size. */
+div.contents,
+div.contents p,
+div.contents li,
+div.contents dd,
+div.contents dt,
+div.contents td,
+div.contents th,
+div.contents div,
+div.textblock {
+    font-family: var(--serif-text);
+    font-size: var(--text-size) !important;
+    line-height: 1.55 !important;
+}
+
+/* Section headings: Cinzel in blood, ruled in bronze. They name no
+   identifiers, so the capitals lose nothing. */
+h1,
+h2,
+h3,
+h4,
+h2.groupheader {
+    font-family: var(--serif-title);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--blood);
+}
+
+div.contents h1 {
+    font-size: 30px !important;
+}
+
+/* Not a member's title, which is an h2 too. */
+div.contents h2:not(.memtitle) {
+    margin-top: 30px;
+    padding-bottom: 4px;
+    font-size: 23px !important;
+    border-bottom: 1px solid var(--bronze) !important;
+    background: transparent !important;
+    box-shadow: none !important; /* Doxygen's white glow either side */
+}
+
+div.contents h3 {
+    font-size: 20px !important;
+}
+
+a,
+a:visited,
+a.el,
+a.code {
+    color: var(--blood);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+a:hover,
+a.el:hover {
+    color: var(--blood-bright);
+    text-decoration: underline;
+    text-decoration-color: var(--gold);
+}
+
+hr {
+    height: 1px;
+    border: none;
+    background: linear-gradient(90deg, transparent, var(--bronze), transparent);
+}
+
+/* What a link lands on flashes blood red, not Doxygen's cyan. */
+h1.glow,
+h2.glow,
+h3.glow,
+h4.glow {
+    text-shadow: 0 0 15px var(--glow) !important;
+}
+
+.memitem.glow,
+div.line.glow,
+.memberdecls td.glow,
+.fieldtable tr.glow,
+.fieldtable tr.glow td {
+    background-color: var(--glow) !important;
+    box-shadow: 0 0 15px var(--glow) !important;
+}
+
+.memitem.glow {
+    background-color: transparent !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Code                                                                     */
+/* ------------------------------------------------------------------------ */
+
+div.fragment,
+pre.fragment {
+    padding: 8px 10px;
+    background: var(--fragment-background);
+    border: 1px solid var(--bronze);
+    border-left: 4px solid var(--blood);
+    border-radius: 2px;
+}
+
+div.contents div.line,
+div.contents div.fragment {
+    font-family: var(--mono);
+    font-size: var(--code-size) !important;
+}
+
+/* Code in running text, and a parameter's name in its list, look the same:
+   the code face in blood red, semi-bold, with a faint tint behind. */
+span.tt,
+code,
+.paramname,
+.paramname em,
+div.contents td.paramname {
+    font-family: var(--mono) !important;
+    font-size: var(--code-size) !important;
+    font-style: normal !important;
+    font-weight: 600 !important;
+    color: var(--blood) !important;
+}
+
+span.tt,
+code {
+    padding: 0 3px !important;
+    background: var(--row-alt) !important;
+    border: none !important;
+    border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Members: the summary at the top of a page, and each member's plate       */
+/* ------------------------------------------------------------------------ */
+
+table.memberdecls {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.memberdecls tr.heading h2 {
+    margin-top: 22px;
+}
+
+div.contents td.memItemLeft,
+div.contents td.memItemRight,
+div.contents td.memTemplItemLeft,
+div.contents td.memTemplItemRight,
+.memTemplParams {
+    font-family: var(--mono);
+    font-size: var(--code-size) !important;
+    color: var(--ink);
+    background: rgba(255, 248, 228, 0.45);
+    border: none;
+    border-top: 1px solid var(--rule);
+}
+
+.mdescLeft,
+.mdescRight {
+    font-style: normal;
+    color: var(--ink-faded);
+    background: rgba(255, 248, 228, 0.25);
+}
+
+.memSeparator {
+    border-bottom: none;
+    background: transparent;
+}
+
+.memitem {
+    margin-bottom: 18px;
+    border: none;
+    box-shadow: none;
+}
+
+/* A member's title: a tab of leather, rounded at the top only, the name in
+   the code face (it keeps its case) and its own permalink (dao-site.js). */
+.memtitle {
+    padding: 4px 12px !important;
+    background: var(--strap) !important;
+    border: 1px solid var(--bronze) !important;
+    border-bottom: none !important;
+    border-radius: 4px 4px 0 0 !important;
+    box-shadow: none !important;
+    font-family: var(--mono) !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0;
+    color: var(--gold-bright) !important;
+}
+
+.memtitle *,
+.memtitle a,
+.memtitle a:visited {
+    color: var(--gold-bright) !important;
+    text-decoration: none !important;
+    text-shadow: 0 1px 0 #000 !important;
+}
+
+.memtitle a:hover {
+    color: #fff1c9 !important;
+    text-decoration: underline !important;
+    text-decoration-color: var(--gold) !important;
+}
+
+.memtitle::before,
+.memtitle::after,
+.memproto::before,
+.memproto::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* The signature: code, the whole of it. */
+.memproto,
+dl.reflist dt {
+    background: var(--plate) !important;
+    border: 1px solid var(--bronze);
+    border-top: 2px solid var(--gold);
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-shadow: none;
+    color: var(--ink);
+}
+
+.memproto,
+.memproto td,
+table.memname td,
+.paramtype,
+.paramkey {
+    font-family: var(--mono) !important;
+    font-size: var(--code-size) !important;
+}
+
+.memname {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+table.memname td.paramtype {
+    padding-right: 8px !important;
+}
+
+.memdoc,
+dl.reflist dd {
+    padding: 8px 14px;
+    background: var(--parchment-light);
+    border: 1px solid var(--bronze);
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+    box-shadow: none;
+}
+
+/* "Parameters", "Returns", "Note": small capitals in bronze, quieter than
+   the text they head. */
+dl.params > dt,
+dl.section > dt,
+dl.exception > dt,
+dl.tparams > dt,
+dl.retval > dt {
+    margin: 12px 0 2px;
+    font-family: var(--serif-title) !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.1em;
+    color: var(--bronze) !important;
+}
+
+dl.params > dd,
+dl.section > dd {
+    margin-left: 20px;
+}
+
+/* A parameter's name on its description's baseline, not raised. */
+table.params td {
+    vertical-align: baseline !important;
+}
+
+table.params td.paramname {
+    padding-right: 14px !important;
+    white-space: nowrap;
+}
+
+table.params td.paramdir {
+    font-family: var(--mono) !important;
+    font-size: var(--code-size) !important;
+}
+
+dl.note,
+dl.warning,
+dl.attention,
+dl.see,
+dl.since,
+dl.todo {
+    margin-left: 0;
+    padding: 6px 12px;
+    background: rgba(122, 18, 18, 0.06);
+    border-left: 4px solid var(--blood);
+}
+
+/* Doxygen's tags beside a signature. "strong" repeats the signature's own
+   "enum class", and "inline" says how a function is compiled, not how it is
+   used; an overload's count ("[2/2]") adds nothing to the signature under
+   it. The rest (static, constexpr, delete, explicit) tell a caller
+   something. */
+span.mlabel.strong,
+span.mlabel.inline,
+.memtitle .overload {
+    display: none !important;
+}
+
+span.mlabel {
+    margin-left: 4px;
+    padding: 1px 6px !important;
+    background: transparent !important;
+    border: 1px solid var(--bronze) !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    font-family: var(--mono) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: var(--bronze) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Tables: a member's fields or values, the guide's tables, the lists of    */
+/* namespaces, classes and files                                            */
+/* ------------------------------------------------------------------------ */
+
+table.fieldtable,
+table.markdownTable,
+table.directory {
+    max-width: 100%;
+    background: var(--parchment-light) !important;
+    border: 1px solid var(--bronze) !important;
+    border-collapse: collapse !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+}
+
+table.directory {
+    width: 100%;
+}
+
+table.fieldtable th,
+table.markdownTable th {
+    padding: 6px 12px !important;
+    background: var(--strap) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--gold) !important;
+    border-radius: 0 !important;
+    font-family: var(--serif-title) !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em;
+    text-align: left !important;
+    color: var(--gold-bright) !important;
+}
+
+table.fieldtable td,
+table.markdownTable td,
+.directory td {
+    padding: 5px 12px !important;
+    border: none !important;
+    border-top: 1px solid var(--rule) !important;
+    vertical-align: top;
+    color: var(--ink) !important;
+}
+
+table.fieldtable tr:nth-child(odd) td,
+table.markdownTable tr:nth-child(odd) td,
+.directory tr.odd,
+.directory tr.odd td {
+    background: transparent !important;
+}
+
+table.fieldtable tr:nth-child(even) td,
+table.markdownTable tr:nth-child(even) td,
+.directory tr.even,
+.directory tr.even td {
+    background: var(--row-alt) !important;
+}
+
+/* A field's or value's name, and an entry in a list, in the code face. */
+table.fieldtable td.fieldname,
+table.fieldtable td.fieldname em,
+.directory td.entry a {
+    font-family: var(--mono) !important;
+    font-size: var(--code-size) !important;
+    font-style: normal !important;
+}
+
+table.fieldtable td.fieldname,
+table.fieldtable td.fieldname em {
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--blood) !important;
+}
+
+table.fieldtable td.fieldname,
+.directory td.desc {
+    border-right: 1px solid var(--rule) !important;
+}
+
+.directory td.desc {
+    border-left: 1px solid var(--rule) !important;
+    color: var(--ink-faded) !important;
+}
+
+table.fieldtable td.fielddoc p:first-child {
+    margin-top: 0;
+}
+
+table.fieldtable td.fielddoc p:last-child {
+    margin-bottom: 0;
+}
+
+/* The guide's tables fit the page: code in a cell may wrap between words,
+   but a header's file name in the last column stays whole. */
+table.markdownTable span.tt,
+table.markdownTable code {
+    white-space: normal !important;
+    overflow-wrap: break-word;
+}
+
+table.markdownTable td:last-child span.tt,
+table.markdownTable td:last-child code {
+    white-space: nowrap !important;
+}
+
+/* A list entry's kind (N, C, F) as a small blood-red seal. */
+.icon {
+    background-color: var(--blood) !important;
+    border-radius: 2px !important;
+    font-family: var(--serif-title) !important;
+    color: var(--gold-bright) !important;
+}
+
+.iconfopen,
+.iconfclosed,
+.icondoc {
+    filter: sepia(1) saturate(1.5) hue-rotate(-20deg) brightness(0.7);
+}
+
+/* The index's letters and tabs, where a page has them. */
+div.qindex,
+div.navtab,
+.tabs,
+.tabs2,
+.tabs3 {
+    background: var(--leather-dark);
+    background-image: none;
+    border: 1px solid var(--bronze);
+}
+
+.tablist a,
+div.qindex a {
+    background-image: none !important;
+    font-family: var(--serif-title);
+    color: var(--parchment) !important;
+    text-shadow: 0 1px 0 #000;
+}
+
+.tablist li.current a {
+    background: var(--highlight) !important;
+    color: var(--gold-bright) !important;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The breadcrumbs at the foot                                              */
+/* ------------------------------------------------------------------------ */
+
+#nav-path ul {
+    background: var(--leather-dark) !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--parchment-dark);
+}
+
+#nav-path li.navelem,
+#nav-path li.navelem a {
+    background: transparent !important;
+}
+
+#nav-path li.navelem a {
+    color: var(--gold) !important;
+    text-shadow: 0 1px 0 #000;
+}
+
+#nav-path li.navelem::after {
+    background: var(--leather-dark) !important;
+    box-shadow: 2px -2px 0 1px var(--leather-light) !important;
+}
+
+#nav-path li.footer {
+    font-style: italic;
+    color: var(--parchment-dark);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Search: in the title bar (dao-site.js moves it there from the menu)      */
+/* ------------------------------------------------------------------------ */
+
+html.dao-search-moved #searchBoxPos1,
+html.dao-search-moved #searchBoxPos2 {
+    display: none !important;
+}
+
+#dao-search-slot {
+    position: absolute;
+    top: 50%;
+    left: var(--search-left);
+    z-index: 200;
+    width: var(--search-width);
+    transform: translateY(-50%);
+}
+
+#MSearchBox {
+    display: flex !important;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0 !important;
+    padding: 2px 10px !important;
+    background: var(--leather-dark) !important;
+    border: 1px solid var(--bronze) !important;
+    border-radius: 3px !important;
+    box-shadow: none !important;
+}
+
+#MSearchBox:focus-within {
+    border-color: var(--gold) !important;
+}
+
+#MSearchBox .left,
+#MSearchBox .right {
+    display: flex !important;
+    align-items: center;
+    height: 30px !important;
+}
+
+#MSearchBox .left {
+    flex: 1;
+}
+
+#MSearchBox .right {
+    justify-content: center;
+    width: 28px !important;
+    margin-left: 6px;
+}
+
+/* The typed text on the magnifier's line: EB Garamond sits low in its box. */
+#MSearchField {
+    flex: 1;
+    box-sizing: border-box;
+    width: auto !important;
+    height: 30px !important;
+    padding: 0 0 3px 2px !important;
+    background: transparent !important;
+    font-family: var(--serif-text) !important;
+    font-size: 17px !important;
+    line-height: 30px !important;
+    color: var(--parchment-dark) !important;
+}
+
+.MSearchBoxActive #MSearchField {
+    color: var(--parchment-light) !important;
+}
+
+#MSearchField::placeholder {
+    font-style: italic;
+    color: var(--bronze);
+}
+
+/* The magnifier and the clear button: Font Awesome's, in the box's gold. */
+.search-icon,
+.close-icon {
+    -webkit-mask: center / contain no-repeat;
+    mask: center / contain no-repeat;
+}
+
+.search-icon {
+    width: 18px !important;
+    height: 18px !important;
+    background-color: var(--gold);
+    -webkit-mask-image: url("search.svg");
+    mask-image: url("search.svg");
+    -webkit-mask-size: 16px 16px;
+    mask-size: 16px 16px;
+}
+
+.close-icon {
+    display: block !important;
+    width: 14px !important;
+    height: 14px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background-color: var(--bronze) !important;
+    -webkit-mask-image: url("clear.svg");
+    mask-image: url("clear.svg");
+}
+
+#MSearchClose:hover .close-icon {
+    background-color: var(--gold-bright) !important;
+}
+
+.search-icon::before,
+.search-icon::after,
+.close-icon::before,
+.close-icon::after,
+.search-icon-dropdown {
+    display: none !important;
+}
+
+/* Doxygen shows the clear button as a block when there is text: centred
+   either way, at the icon's own size. */
+#MSearchClose {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    cursor: pointer;
+}
+
+/* The filter menu under the magnifier. */
+#MSearchSelectWindow {
+    position: fixed !important;
+    top: 56px !important;
+    left: var(--search-left) !important;
+    padding: 6px 0 !important;
+    background: var(--leather-dark) !important;
+    border: 1px solid var(--gold) !important;
+    border-radius: 3px !important;
+    box-shadow: var(--float-shadow) !important;
+    backdrop-filter: none !important;
+}
+
+a.SelectItem {
+    padding: 3px 14px 3px 10px !important;
+    font-family: var(--serif-text) !important;
+    font-size: 16px !important;
+    color: var(--parchment) !important;
+}
+
+a.SelectItem:hover,
+a.SelectItem:focus {
+    background: var(--highlight) !important;
+    color: var(--gold-bright) !important;
+}
+
+.SelectionMark {
+    color: var(--gold) !important;
+}
+
+/* The results: in the search slot (dao-site.js), just under the box, as
+   wide as it and as tall as the hits, over the menu. */
+#MSearchResultsWindow {
+    position: absolute !important;
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    z-index: 10000 !important;
+    box-sizing: border-box;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 70vh !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    transform: none !important;
+    background: var(--parchment-light) !important;
+    border: 1px solid var(--gold) !important;
+    border-radius: 3px;
+    box-shadow: var(--float-shadow) !important;
+}
+
+#MSearchResults,
+#MSearchResults .SRPage,
+#MSearchResults .SRResult {
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+#MSearchResults,
+.SRPage,
+.SRResult,
+.SRStatus {
+    background: var(--parchment-light) !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-family: var(--serif-text) !important;
+    font-size: 16px !important;
+    color: var(--ink) !important;
+}
+
+#MSearchResults .SRResult {
+    padding: 3px 12px;
+}
+
+a.SRSymbol {
+    font-family: var(--mono) !important;
+    font-size: 14px !important;
+    color: var(--blood) !important;
+}
+
+a.SRScope {
+    font-family: var(--serif-text) !important;
+    font-size: 15px !important;
+    color: var(--ink-faded) !important;
+}

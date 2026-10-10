@@ -1,0 +1,113 @@
+# DAOLib's documentation site (DAOLib #45): the API a plugin uses, from the
+# public headers' own comments, and the guide beside it. Built by
+# tools/build_docs.py into build/docs-site/html; paths here are from the
+# repository's root, where that script runs Doxygen.
+#
+# What a plugin includes is documented: src/dao/*.h. What is the library's
+# own is not: src/dao/core (its logic, tested headless), src/dao/generated
+# (the script API's thousand functions, a page of their own later),
+# Addresses.h (the address IDs), and the detail and anonymous namespaces.
+# The headers' comments are plain // prose; tools/doxygen_filter.py turns
+# them into Doxygen's forms as they are read, so the sources keep their
+# style.
+
+PROJECT_NAME           = "DAOLib"
+PROJECT_BRIEF          =
+PROJECT_ICON           = docs/theme/favicon.ico
+OUTPUT_DIRECTORY       = build/docs-site
+CREATE_SUBDIRS         = NO
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = . src/
+STRIP_FROM_INC_PATH    = src/
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+TOC_INCLUDE_HEADINGS   = 3
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+TAB_SIZE               = 4
+BUILTIN_STL_SUPPORT    = YES
+DISTRIBUTE_GROUP_DOC   = YES
+SORT_MEMBER_DOCS       = YES
+
+EXTRACT_ALL            = YES
+SORT_BRIEF_DOCS        = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = NO
+EXTRACT_ANON_NSPACES   = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_FRIEND_COMPOUNDS  = YES
+HIDE_IN_BODY_DOCS      = YES
+INTERNAL_DOCS          = NO
+SHOW_INCLUDE_FILES     = YES
+SHOW_USED_FILES        = NO
+SHOW_FILES             = YES
+SHOW_NAMESPACES        = YES
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = NO
+WARN_LOGFILE           = build/docs-site/warnings.txt
+
+INPUT                  = docs/index.md docs/namespaces.dox \
+                         dev/PLUGINS.md \
+                         src/dao
+FILE_PATTERNS          = *.h *.md *.dox
+RECURSIVE              = NO
+EXCLUDE                = src/dao/Addresses.h \
+                         src/dao/core \
+                         src/dao/generated
+EXCLUDE_SYMBOLS        = detail \
+                         dao::detail \
+                         *::detail \
+                         *::@*
+USE_MDFILE_AS_MAINPAGE = docs/index.md
+FILTER_PATTERNS        = *.h="python tools/doxygen_filter.py"
+FILTER_SOURCE_FILES    = NO
+EXAMPLE_PATH           = examples
+
+SOURCE_BROWSER         = NO
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = NO
+REFERENCES_RELATION    = NO
+VERBATIM_HEADERS       = NO
+
+ALPHABETICAL_INDEX     = YES
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+LAYOUT_FILE            = docs/DoxygenLayout.xml
+HTML_HEADER            = docs/theme/header.html
+HTML_EXTRA_STYLESHEET  = docs/theme/dao.css
+HTML_EXTRA_FILES       = docs/theme/dao-site.js docs/theme/dragon.png docs/theme/search.svg docs/theme/clear.svg docs/theme/caret.svg docs/theme/panel-left-close.svg docs/theme/panel-left-open.svg docs/theme/panel-right-close.svg docs/theme/panel-right-open.svg
+HTML_COLORSTYLE        = LIGHT
+HTML_COLORSTYLE_HUE    = 30
+HTML_COLORSTYLE_SAT    = 120
+HTML_COLORSTYLE_GAMMA  = 90
+HTML_DYNAMIC_SECTIONS  = NO
+HTML_COPY_CLIPBOARD    = YES
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+TREEVIEW_WIDTH         = 280
+SEARCHENGINE           = YES
+SERVER_BASED_SEARCH    = NO
+
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
+SEARCH_INCLUDES        = YES
+INCLUDE_PATH           = src
+
+CLASS_GRAPH            = NO
+COLLABORATION_GRAPH    = NO
+INCLUDE_GRAPH          = NO
+INCLUDED_BY_GRAPH      = NO
+HAVE_DOT               = NO

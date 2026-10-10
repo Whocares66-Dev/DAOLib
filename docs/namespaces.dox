@@ -1,0 +1,99 @@
+/*
+ * DAOLib's namespaces, one line each, for the site's namespace list (DAOLib #45).
+ * The headers' own comments describe files, not namespaces, so the namespaces'
+ * descriptions live here. Doxygen reads this file; nothing compiles it.
+ */
+
+/// @namespace dao
+/// Everything in DAOLib: the game's classes and the library's parts, each in a namespace of its own.
+
+/// @namespace dao::abilities
+/// Abilities: their names, whether a creature can use one now and what it costs, and cooldowns.
+
+/// @namespace dao::animation
+/// How long animations, attacks and abilities take a creature to play.
+
+/// @namespace dao::attack
+/// Melee and ranged attacks: reach, the approach to a target, turning to face it.
+
+/// @namespace dao::camera
+/// Smooth camera moves: panning to a creature, turning behind it, easing the zoom.
+
+/// @namespace dao::clock
+/// Pause or speed up the game's clock for effects, regeneration and their timers.
+
+/// @namespace dao::commands
+/// A creature's commands: when they start and end, the steps they run, and holding a spell's
+/// conjure.
+
+/// @namespace dao::data
+/// The game's data tree, the named values its interface reads and writes.
+
+/// @namespace dao::dialogue
+/// Conversations, cutscenes and movies: watch them, steer which replies appear, skip them.
+
+/// @namespace dao::effects
+/// Temporary effects: list them on a creature, stop them wearing off, age them at once.
+
+/// @namespace dao::equipment
+/// Hear when equipment goes on or comes off a creature.
+
+/// @namespace dao::events
+/// The scripts' events (damage, perception, death and the rest), as callbacks.
+
+/// @namespace dao::gda
+/// The game's data tables (2DA/GDA): read a value by table, row and column.
+
+/// @namespace dao::gui
+/// The Flash interface: answer movies' calls into the game, call into movies, add screens.
+
+/// @namespace dao::input
+/// Key bindings of a plugin's own, and pointing the game's cursor pick at a pixel.
+
+/// @namespace dao::journal
+/// The journal's quests, current and completed.
+
+/// @namespace dao::messages
+/// The engine's messages: watch, intercept or send them.
+
+/// @namespace dao::Module
+/// The running game executable, and turning the library's address IDs into addresses in it.
+
+/// @namespace dao::options
+/// A plugin's own settings in the game's options screen.
+
+/// @namespace dao::orders
+/// Give orders as the player's clicks do: attack, use, cast, move.
+
+/// @namespace dao::party
+/// The party: who is selected and who the player controls.
+
+/// @namespace dao::portraits
+/// Frame a creature's portrait with a camera of your own.
+
+/// @namespace dao::resources
+/// Read a file as the game finds it, a mod's version over the game's.
+
+/// @namespace dao::saves
+/// A plugin's own data kept with the game's saves; listing saves, and saving or loading.
+
+/// @namespace dao::script
+/// Script commands from C++: call them, intercept them, replace them or add new ones.
+
+/// @namespace dao::strings
+/// A plugin's own text in the player's language, from talk tables beside its DLL.
+
+/// @namespace dao::timers
+/// The scripts' delayed events: hold them, deliver them on a clock of your own, trace them.
+
+/// @namespace dao::tlk
+/// The game's own text by string reference, in the player's language.
+
+/// @namespace dao::vfx
+/// Draw in the world with the game's visual effects: rings, reticles, any effect by row.
+
+/// @namespace dao::world
+/// The world's geometry: rays, line of sight, screen positions, paths and rooms.
+
+/// @namespace dao::world::groups
+/// The collision groups a ray can be tested against.
