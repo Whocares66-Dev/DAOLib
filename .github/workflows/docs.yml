@@ -1,0 +1,82 @@
+# DAOLib's documentation site (DAOLib #45): built by tools/build_docs.py with
+# Doxygen 1.18 and published to GitHub Pages on a push to master or a release
+# tag. The site's root is master's docs ("Current"); each vX.Y.Z tag is built
+# from its own headers into X.Y.Z/ for the version selector. A pull request
+# that touches the docs builds the site without publishing it.
+
+name: Documentation
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'dev/PLUGINS.md'
+      - 'src/dao/*.h'
+      - 'tools/build_docs.py'
+      - 'tools/doxygen_filter.py'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOXYGEN_VERSION: '1.18.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Every tag, for each release's docs; a tag push builds the whole
+          # site from master plus all release tags.
+          fetch-depth: 0
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && 'master' || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Doxygen
+        # The theme's page header is Doxygen 1.18's: the distribution's older
+        # Doxygen would not match it.
+        run: |
+          version_tag="Release_${DOXYGEN_VERSION//./_}"
+          curl -sSL "https://github.com/doxygen/doxygen/releases/download/${version_tag}/doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/doxygen-${DOXYGEN_VERSION}/bin" >> "$GITHUB_PATH"
+      - run: doxygen --version
+      - run: python tools/build_docs.py
+      - name: Doxygen's warnings
+        run: |
+          if [ -s build/docs-site/warnings.txt ]; then
+            cat build/docs-site/warnings.txt
+            exit 1
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/docs-site/html
+
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
