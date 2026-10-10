@@ -8,7 +8,9 @@
     bin_ship) as SKSE is installed into Skyrim's: bin_ship\version.dll and its .pdb (so
     the crash logger names DAOLib's frames), bin_ship\daolib\addresses\*.bin (one per
     build of the game the address library knows: GOG, Steam, EA), and README.txt
-    saying where it goes, how to see that it works and how to remove it. No plugin goes
+    saying where it goes, how to see that it works and how to remove it, and which
+    release of the address library the files are: the tag extern\DAOAddressLibrary is
+    at, where a DAOLib release holds it (DAOLib #54). No plugin goes
     in: a mod ships its own folder, bin_ship\daolib\plugins\<name>\, the same way
     (DAOLib #26). A .dazip cannot carry the loader: DAUpdater unpacks into the Documents
     folder, never the game's (DAOLib #28).
@@ -41,6 +43,19 @@ if ($cmake -notmatch 'project\(DAOLib VERSION (\S+)') { throw 'No version in CMa
 $version = $Matches[1]
 $name = "DAOLib-$version"
 
+# The address library has releases of its own, the same files in a zip of their own, so
+# the README says which these are. At no tag they are a commit's, which a trial may be
+# and a release is not.
+$addressRepo = Join-Path $repo 'extern\DAOAddressLibrary'
+$addressTag = @(git -C $addressRepo tag --points-at HEAD --list 'v*') | Select-Object -First 1
+if ($addressTag) {
+    $addressRelease = "DAOAddressLibrary $($addressTag -replace '^v')"
+}
+else {
+    $addressRelease = "DAOAddressLibrary at its commit $(git -C $addressRepo rev-parse --short HEAD), between releases"
+    Show-Warn "extern\DAOAddressLibrary is at no release's tag; a DAOLib release holds it at one"
+}
+
 $out = Join-Path $repo 'build\package'
 $stage = Join-Path $out $name
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
@@ -70,6 +85,15 @@ Mods for DAOLib
 Seeing that it works
   The loader writes Documents\BioWare\Dragon Age\daolib\loader.log at each start:
   each mod's line says "loaded", and a crash or a long freeze leaves a log there too.
+
+Address files
+  Those in bin_ship\daolib\addresses are $addressRelease
+  (https://github.com/Whocares66-Dev/DAOAddressLibrary/releases). They say where things are
+  in each build of the game, and a newer release's serve every older DAOLib and mod.
+  Extracting this archive replaces the ones already there, newer or not. If a mod asked for
+  a newer Address Library, extract that again after this. loader.log's line
+  "address library: N IDs for this build" says which are in place: N never falls from one
+  release to the next.
 
 Removing
   Delete bin_ship\version.dll (and version.pdb, if it is there) and the bin_ship\daolib folder.
