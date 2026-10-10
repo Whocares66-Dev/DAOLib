@@ -2,7 +2,7 @@
 // attacks without keeping a copy of the game's rules. It tells you whether an attacker is in reach
 // of its target, whether it will find room on the target's melee ring (the places around a
 // creature where melee attackers stand), where and how far it would walk, and how far it must
-// turn first.
+// turn first. ApproachOf and Walk answer the same for an ability used on a target.
 //
 //   if (const auto approach = dao::attack::ApproachOf(attacker, target))
 //       if (!approach->inReach)
@@ -28,35 +28,47 @@ namespace dao::attack
 // @return false also when `attacker` is not a creature
 bool IsRanged(ObjectId attacker);
 
-// How the attack command would approach a target, given where the attacker and target stand now.
+// How an attack or an ability would approach its target, given where the two stand now. The
+// game approaches in one of two ways. "Melee" below is the approach to a place on the target's
+// ring: a plain attack without a ranged weapon, or an ability whose Range in the abilities table
+// is 0. "Ranged" is the approach to within a range: a plain attack with a bow, a crossbow or a
+// staff, or an ability with any other Range.
 struct Approach
 {
     bool ranged = false;
-    // Whether the attack would start at once, without a walk. For melee, this is judged on the ring
+    // Whether the action would start at once, without a walk. For melee, this is judged on the ring
     // as it is now. For a ranged attack, the target must be within the weapon's range, no nearer
-    // than `spaces`, and in sight.
+    // than `spaces`, and in sight. For a ranged ability, it must be within the ability's range, and
+    // in sight if `needsSight`.
     bool inReach = false;
-    // Melee: whether the blow lands in the command's first update, before the ring fills. It does
-    // when the attacker is in reach and faces the target to within 1 degree, and the target is
-    // within striking reach, no more than 60 degrees above or below, and in sight.
+    // A melee attack: whether the blow lands in the command's first update, before the ring fills.
+    // It does when the attacker is in reach and faces the target to within 1 degree, and the target
+    // is within striking reach, no more than 60 degrees above or below, and in sight. Always false
+    // for an ability.
     bool strikesAtOnce = false;
     // Melee: whether the ring still has a place for the attacker after it fills. One frame after
     // an attacker claims a place, the ring fills with the creatures standing around the target.
     bool roomOnceFilled = false;
-    // Whether the attack will find room on the ring: the ring has a place now, and either the blow
-    // lands at once or the filled ring still has a place. When false, the attack fails with
-    // COMMAND_FAILED_NO_SPACE_IN_MELEE_RING. Always true for a ranged attack.
+    // Whether the action will find room on the ring. The ring must have a place now, and the
+    // filled ring must still have one, unless the action is done with the ring before it fills: an
+    // attack whose blow lands at once, or an ability whose user is already in reach. When false,
+    // the command fails with COMMAND_FAILED_NO_SPACE_IN_MELEE_RING. Always true when ranged.
     bool findsRoom = true;
-    bool lineOfSight = true; // ranged: whether the game's line-of-sight test passes; melee: true
+    // Ranged: whether the approach needs a line of sight to the target. A ranged attack does; an
+    // ability does if it has a projectile.
+    bool needsSight = false;
+    // Ranged: whether the game's line-of-sight test passes; true where none is needed. Melee: true.
+    bool lineOfSight = true;
     // Where the approach walks to. Melee: the attacker's place on the filled ring, or else its
     // place on the ring as it is now, or else the target's position. Ranged: the target's
     // position.
     Vector goal;
-    // Ranged: the straight-line distance from the target at which the walk stops, `range` minus
-    // `spaces`. Melee: 0, since the walk ends at `goal`.
+    // Ranged: the straight-line distance from the target at which the walk stops: `range` minus
+    // `spaces` for an attack, `range` for an ability. Melee: 0, since the walk ends at `goal`.
     float stopWithin = 0;
-    float range = 0;  // ranged: the weapon's range in metres, at most 60; melee: 0
-    float spaces = 0; // both creatures' personal spaces, in metres; the minimum shot distance
+    float range = 0; // ranged: the weapon's or the ability's range in metres, at most 60; melee: 0
+    // Both creatures' personal spaces, in metres. A ranged attack shoots from no nearer.
+    float spaces = 0;
 };
 
 // Returns how the attack command would approach a target from where the attacker stands now.
@@ -65,6 +77,17 @@ struct Approach
 // A ring place found now can be taken by other creatures before the attacker gets there, and the
 // attack then fails.
 std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target);
+
+// Returns how a creature using an ability on a target would approach it from where it stands now.
+// @param ability a row of the abilities table (TABLE_ABILITIES_SPELLS)
+// @return the approach, or nullopt if either object is not a creature or `ability` is not a row
+// of the table
+//
+// The ability's own Range decides the kind of approach, whatever weapon the user holds. An
+// ability used on its user has no approach, and the answer is in reach. An ability aimed at a
+// point on the ground is not answered. As with an attack, a ring place found now can be gone
+// before the user gets there.
+std::optional<Approach> ApproachOf(ObjectId user, ObjectId target, std::int32_t ability);
 
 // The turn an attacker's command makes to face its target before the blow, computed for now.
 struct FacingTurn
@@ -154,5 +177,10 @@ struct Walked
 // A ranged walk that begins in range but out of sight depends on the frame rate in the game. This
 // reckons it at sixty frames a second and the usual combat run, and can be a few metres off.
 std::optional<Walked> Walk(ObjectId attacker, ObjectId target);
+
+// Computes the walk a creature would make before using an ability on a target. It works like
+// Walk above, with the approach ApproachOf gives for the ability.
+// @param ability a row of the abilities table (TABLE_ABILITIES_SPELLS)
+std::optional<Walked> Walk(ObjectId user, ObjectId target, std::int32_t ability);
 
 } // namespace dao::attack

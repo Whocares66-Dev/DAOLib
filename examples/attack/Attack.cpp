@@ -1,14 +1,15 @@
 // Example: an attack's approach and its steps (dao/Attack.h, dao/SubActions.h,
 // dao/Animation.h's OfShot).
 //
-// For every attack and every ability used at another creature, logs each
-// step (sub-action) of the command as it ends: its type, the time the
-// engine gave it and how long it ran, so a shot's parts and an ability's
-// kind of approach can be read off. For a shooter's attack it also logs, as
-// the attack starts, where dao::attack::Walk says the approach will stop,
-// and as the approach ends, where it did stop and how far it walked; and
-// the shot's three parts as dao::animation::OfShot times them, before the
-// shot and after it. Set beside each other, the library's figures and the
+// For every attack and every ability used at another creature, logs as the
+// command starts how dao::attack::ApproachOf says it will approach (by the
+// target's ring or by a range, in reach or not, room on the ring or none)
+// and where dao::attack::Walk says the approach will stop; then each step
+// (sub-action) of the command as it ends, with its type, the time the
+// engine gave it and how long it ran; and as an approach ends, where it did
+// stop and how far it walked. For a shooter's attack it also logs the
+// shot's three parts as dao::animation::OfShot times them, before the shot
+// and after it. Set beside each other, the library's figures and the
 // engine's steps say whether the one is the other.
 //
 // What it sees goes to example_attack.log.
@@ -46,7 +47,7 @@ constexpr std::uint32_t kApproachRanged = 15;
 struct Watch
 {
     bool shooter = false;                    // an attack with a ranged weapon
-    std::optional<dao::attack::Walked> said; // a shooter's walk, as Walk gave it at the start
+    std::optional<dao::attack::Walked> said; // the walk, as Walk gave it at the start
     dao::Vector last;                        // where the creature stood last frame
     float walked = 0;                        // metres moved in an approach
     std::uint32_t step = 0;                  // the running sub-action's type; 0 before the first
@@ -89,25 +90,48 @@ bool IsApproach(std::uint32_t step)
     return step == kApproachMelee || step == kApproachRanged;
 }
 
-// Logs the step a creature has just left, and for a shooter's approach where it ended against
-// where Walk had put it.
+// How ApproachOf answered, for the log.
+std::string ApproachLine(const std::optional<dao::attack::Approach> &approach)
+{
+    if (!approach)
+    {
+        return "none";
+    }
+    if (approach->ranged)
+    {
+        return fmt::format("by range: in reach {}, in sight {}{}, range {:.1f} m, stop within {:.1f} m",
+                           approach->inReach, approach->lineOfSight, approach->needsSight ? "" : " (not needed)",
+                           approach->range, approach->stopWithin);
+    }
+    return fmt::format("by the ring: in reach {}, finds room {} (room once filled {}, strikes at once {})",
+                       approach->inReach, approach->findsRoom, approach->roomOnceFilled, approach->strikesAtOnce);
+}
+
+// How Walk answered, for the log.
+std::string WalkLine(const std::optional<dao::attack::Walked> &walk)
+{
+    if (!walk)
+    {
+        return "none";
+    }
+    return walk->path.empty() ? std::string("no walk")
+                              : fmt::format("{:.2f} m, to {}", walk->metres, Place(walk->path.back()));
+}
+
+// Logs the step a creature has just left, and for an approach where it ended against where Walk
+// had put it.
 void StepEnded(dao::ObjectId who, const Watch &watch)
 {
     const double ran = std::chrono::duration<double>(Clock::now() - watch.since).count();
     spdlog::info("0x{:x} step {}: given {} ms, ran {:.3f} s", who, watch.step, watch.stepMs, ran);
-    if (!watch.shooter || !IsApproach(watch.step))
+    if (!IsApproach(watch.step))
     {
         return;
     }
-    if (!watch.said)
+    if (!watch.said || watch.said->path.empty())
     {
-        spdlog::info("0x{:x} approach ended at {} after {:.2f} m; Walk had said none", who, Place(watch.last),
-                     watch.walked);
-    }
-    else if (watch.said->path.empty())
-    {
-        spdlog::info("0x{:x} approach ended at {} after {:.2f} m; Walk had said no walk", who, Place(watch.last),
-                     watch.walked);
+        spdlog::info("0x{:x} approach ended at {} after {:.2f} m; Walk had said {}", who, Place(watch.last),
+                     watch.walked, WalkLine(watch.said));
     }
     else
     {
@@ -132,32 +156,26 @@ void Started(dao::ObjectId who, const dao::Command &command)
     }
     Watch watch;
     watch.last = dao::script::api::GetPosition(who);
-    if (const auto ability = command.Ability())
+    const auto ability = command.Ability();
+    const auto approach =
+        ability ? dao::attack::ApproachOf(who, *target, *ability) : dao::attack::ApproachOf(who, *target);
+    watch.said = ability ? dao::attack::Walk(who, *target, *ability) : dao::attack::Walk(who, *target);
+    watch.shooter = !ability && dao::attack::IsRanged(who);
+    if (ability)
     {
-        spdlog::info("0x{:x} uses ability {} at 0x{:x}: its Range row {}", who, *ability, *target,
-                     dao::gda::GetInt(dao::script::Table::AbilitiesTalents, *ability, "Range").value_or(-1));
-    }
-    else if (dao::attack::IsRanged(who))
-    {
-        watch.shooter = true;
-        watch.said = dao::attack::Walk(who, *target);
-        const auto approach = dao::attack::ApproachOf(who, *target);
-        spdlog::info("0x{:x} shoots at 0x{:x} from {}: in reach {}, in sight {}, range {:.1f} m, stop within {:.1f} m",
-                     who, *target, Place(watch.last), approach && approach->inReach, approach && approach->lineOfSight,
-                     approach ? approach->range : 0.0F, approach ? approach->stopWithin : 0.0F);
-        if (watch.said && !watch.said->path.empty())
-        {
-            spdlog::info("0x{:x} Walk says {:.2f} m, to {}", who, watch.said->metres, Place(watch.said->path.back()));
-        }
-        else
-        {
-            spdlog::info("0x{:x} Walk says {}", who, watch.said ? "no walk" : "none");
-        }
-        spdlog::info("0x{:x} the shot before the scripts set its times: {}", who, ShotLine(who));
+        spdlog::info("0x{:x} uses ability {} (Range row {}) at 0x{:x} from {}", who, *ability,
+                     dao::gda::GetInt(dao::script::Table::AbilitiesTalents, *ability, "Range").value_or(-1), *target,
+                     Place(watch.last));
     }
     else
     {
-        spdlog::info("0x{:x} attacks 0x{:x} in melee", who, *target);
+        spdlog::info("0x{:x} {} 0x{:x} from {}", who, watch.shooter ? "shoots at" : "attacks", *target,
+                     Place(watch.last));
+    }
+    spdlog::info("0x{:x} approach {}; Walk says {}", who, ApproachLine(approach), WalkLine(watch.said));
+    if (watch.shooter)
+    {
+        spdlog::info("0x{:x} the shot before the scripts set its times: {}", who, ShotLine(who));
     }
     g_watched[who] = watch;
 }

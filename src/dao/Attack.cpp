@@ -196,9 +196,12 @@ float WeaponRange(CCObject *creature)
 // step, and then at each point a kWalkStep apart, an update's run; the 1 m
 // and the giving up are the move update's own, copied. No walk where the
 // first update ends it; nothing if it is given up or the path ends first.
+// An approach that needs no sight (its flag 7 clear: an ability with no
+// projectile) ends at the first point within the stop distance.
 std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, const std::vector<Vector> &path,
-                                 float stop, float spaces)
+                                 const Approach &approach)
 {
+    float stop = approach.stopWithin;
     const Vector4 aim = ToVector4(to->Position());
     // True where the walk ends at `point`, false where it goes on; nothing
     // where it is given up.
@@ -208,11 +211,11 @@ std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, 
         {
             return false;
         }
-        if (At<SightFn>(addr::kCombat_LineOfSight)(from, to, target, &at))
+        if (!approach.needsSight || At<SightFn>(addr::kCombat_LineOfSight)(from, to, target, &at))
         {
             return true;
         }
-        if (stop - 1 <= spaces)
+        if (stop - 1 <= approach.spaces)
         {
             return std::nullopt;
         }
@@ -535,51 +538,61 @@ bool FaceExactly(ObjectId creature, Vector toward)
     return true;
 }
 
-// Approach's melee fields, as read 2026-10-04:
-// - strikesAtOnce: the blow comes in the command's first update, before the ring is filled: in
-//   reach, already facing the target within the turn's 1 degree (sub-action 39, 0x007A69E0,
-//   through TurnToward), then the blow's own tests (0x007A87C0): its reach (InStrikingReach, the
-//   flat distance to the target's point within both spaces and 2.2), the target within 60
-//   degrees of level and in sight.
-// - roomOnceFilled: the ring as it is a frame after the attacker's claim; the place the approach
-//   then walks to, and the place the blow asks for if it comes later.
-// - findsRoom: where it is false, the attack fails COMMAND_FAILED_NO_SPACE_IN_MELEE_RING after
-//   its first update (DAOLib #19), or at the approach's first run where the ring as it stands now
-//   has no place. Seen in play 2026-10-04 (the turn-based mod's staged crowd of dragonlings): it
-//   matched the engine for 184 attacks of 184, false for all 24 that failed for want of room,
-//   true for the 160 that did not.
-// - range: melee is 0, its reach being the engine's own test, InMeleeReach.
-std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
+namespace
 {
-    CCObject *from = Creature(attacker);
-    CCObject *to = Creature(target);
-    if (from == nullptr || to == nullptr)
-    {
-        return std::nullopt;
-    }
+
+// The approach by range, as sub-action 15 tests it on its first run
+// (SubActions::ApproachRanged): within `range` of the target and no nearer
+// than `least`, on the ground, and in sight where the approach needs it
+// (its flag 7).
+Approach RangedApproach(CCObject *from, CCObject *to, ObjectId target, float range, float least, bool needsSight)
+{
+    Approach approach;
+    approach.ranged = true;
+    approach.needsSight = needsSight;
+    approach.spaces = PersonalSpaces(from, to);
+    approach.range = range;
+    approach.goal = to->Position();
+    approach.stopWithin = std::max(0.0F, range - least);
+    const Vector4 at = ToVector4(from->Position());
+    const Vector4 aim = ToVector4(approach.goal);
+    const bool inBand = At<BandFn>(addr::kSubActions_WithinBand)(&at, &aim, range, least);
+    approach.lineOfSight = !needsSight || At<SightFn>(addr::kCombat_LineOfSight)(from, to, target, nullptr);
+    approach.inReach = inBand && approach.lineOfSight;
+    return approach;
+}
+
+// The approach by the target's melee ring, as sub-action 4 tests it
+// (SubActions::ApproachMelee): the target's ring place for the attacker,
+// asked without claiming it, then the target's reach test with that place.
+// `blow` says what follows the approach: a plain attack's blow, which asks
+// the ring again unless it lands in the command's first update, or an
+// ability's use, which asks the ring nothing. As read 2026-10-04:
+// - strikesAtOnce: the blow comes in the command's first update, before the
+//   ring is filled: in reach, already facing the target within the turn's 1
+//   degree (sub-action 39, 0x007A69E0, through TurnToward), then the blow's
+//   own tests (0x007A87C0): its reach (InStrikingReach, the flat distance to
+//   the target's point within both spaces and 2.2), the target within 60
+//   degrees of level and in sight.
+// - roomOnceFilled: the ring as it is a frame after the attacker's claim;
+//   the place the approach then walks to, and the place the blow asks for
+//   if it comes later.
+// - findsRoom: where it is false, the attack fails
+//   COMMAND_FAILED_NO_SPACE_IN_MELEE_RING after its first update (DAOLib
+//   #19), or at the approach's first run where the ring as it stands now
+//   has no place. Seen in play 2026-10-04 (the turn-based mod's staged
+//   crowd of dragonlings): it matched the engine for 184 attacks of 184,
+//   false for all 24 that failed for want of room, true for the 160 that
+//   did not.
+// - range: 0, the reach being the engine's own test, InMeleeReach.
+Approach MeleeApproach(CCObject *from, CCObject *to, ObjectId attacker, ObjectId target, bool blow)
+{
     Approach approach;
     approach.spaces = PersonalSpaces(from, to);
-    approach.ranged = HasRangedWeapon(from);
-    if (approach.ranged)
-    {
-        // As sub-action 15 tests it (SubActions::ApproachRanged).
-        approach.range = WeaponRange(from);
-        approach.goal = to->Position();
-        approach.stopWithin = std::max(0.0F, approach.range - approach.spaces);
-        const Vector4 at = ToVector4(from->Position());
-        const Vector4 aim = ToVector4(approach.goal);
-        const bool inBand = At<BandFn>(addr::kSubActions_WithinBand)(&at, &aim, approach.range, approach.spaces);
-        approach.lineOfSight = At<SightFn>(addr::kCombat_LineOfSight)(from, to, target, nullptr);
-        approach.inReach = inBand && approach.lineOfSight;
-        return approach;
-    }
-    // As sub-action 4 tests it (SubActions::ApproachMelee): the target's
-    // ring place for the attacker, asked without claiming it, then the
-    // target's reach test with that place. CCCreature::PersonalSpace:
-    // __thiscall, a float; MeleeRingSpot: __thiscall (attacker id, out,
-    // unread, claim, unread), `ret 0x14`, passed the space as the
-    // engine's own approach passes it; InMeleeReach: __thiscall (attacker,
-    // place), `ret 8`.
+    // CCCreature::PersonalSpace: __thiscall, a float; MeleeRingSpot:
+    // __thiscall (attacker id, out, unread, claim, unread), `ret 0x14`,
+    // passed the space as the engine's own approach passes it;
+    // InMeleeReach: __thiscall (attacker, place), `ret 8`.
     using SpaceFn = float(__fastcall *)(CCObject *, int);
     using SpotFn = bool(__fastcall *)(CCObject *, int, ObjectId, Vector4 *, float, std::int32_t, std::int32_t);
     using ReachFn = std::int32_t(__fastcall *)(CCObject *, int, CCObject *, const Vector4 *);
@@ -591,14 +604,17 @@ std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
     Vector4 now;
     const bool roomNow = spot(to, 0, attacker, &now, space, 0, 0);
     approach.inReach = roomNow && reach(to, 0, from, &now) != 0;
-    approach.strikesAtOnce = approach.inReach && StrikesAtOnce(from, to, target);
+    approach.strikesAtOnce = blow && approach.inReach && StrikesAtOnce(from, to, target);
     // The ring as it stands once the claim has made it active.
     Vector4 filled;
     {
         const FilledRings fill(to);
         approach.roomOnceFilled = spot(to, 0, attacker, &filled, space, 0, 0);
     }
-    approach.findsRoom = roomNow && (approach.strikesAtOnce || approach.roomOnceFilled);
+    // What is over before the ring fills: a blow that lands at once, or an
+    // ability's approach, done as soon as it is in reach.
+    const bool doneAtOnce = blow ? approach.strikesAtOnce : approach.inReach;
+    approach.findsRoom = roomNow && (doneAtOnce || approach.roomOnceFilled);
     if (approach.roomOnceFilled)
     {
         approach.goal = Vector{filled.x, filled.y, filled.z};
@@ -610,19 +626,19 @@ std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
     return approach;
 }
 
-// The engine's path to the goal (dao/World.h, FindPath), to its end for melee; for a ranged
-// attack, along it to where the engine's move update would end it, its own tests (WithinBand,
-// LineOfSight from each point) asked an update's run apart, its 1 m cut of the stop distance
+// The engine's path to the goal (dao/World.h, FindPath), to its end for an
+// approach by the ring; for one by range, along it to where the engine's
+// move update would end it, its own tests (WithinBand, LineOfSight from
+// each point) asked an update's run apart, its 1 m cut of the stop distance
 // without a line of sight copied (RangedWalk).
-std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
+std::optional<Walked> WalkBy(ObjectId attacker, ObjectId target, const std::optional<Approach> &approach)
 {
-    const auto approach = ApproachOf(attacker, target);
     if (!approach)
     {
         return std::nullopt;
     }
-    // A blow that will find no room is given up, at its first run or on
-    // the way, so it has no walk.
+    // An approach that will find no room is given up, at its first run or
+    // on the way, so it has no walk.
     if (!approach->ranged && !approach->findsRoom)
     {
         return std::nullopt;
@@ -631,8 +647,8 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
     {
         return Walked{};
     }
-    // A ranged walk is toward the target, which stands at the goal; a melee
-    // one to an empty place on its ring.
+    // A walk by range is toward the target, which stands at the goal; one
+    // by the ring to an empty place on it.
     const auto path = world::FindPath(attacker, approach->goal, approach->ranged ? target : kInvalidObject);
     if (!path)
     {
@@ -642,8 +658,93 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
     {
         return Walked{path->Length(), path->waypoints};
     }
-    return RangedWalk(Creature(attacker), Creature(target), target, path->waypoints, approach->stopWithin,
-                      approach->spaces);
+    return RangedWalk(Creature(attacker), Creature(target), target, path->waypoints, *approach);
+}
+
+} // namespace
+
+// The attack command's step (AttackStep): a ranged weapon approaches by
+// its Range, no nearer than both personal spaces and in sight; any other by
+// the target's ring.
+std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
+{
+    CCObject *from = Creature(attacker);
+    CCObject *to = Creature(target);
+    if (from == nullptr || to == nullptr)
+    {
+        return std::nullopt;
+    }
+    if (HasRangedWeapon(from))
+    {
+        return RangedApproach(from, to, target, WeaponRange(from), PersonalSpaces(from, to), true);
+    }
+    return MeleeApproach(from, to, attacker, target, true);
+}
+
+// The UseAbility command's step (0x00743F50), read 2026-10-10 (DAOLib #52).
+// The approach is chosen by the ability's Range in abi_base, not by the
+// weapon. Range 0, at another object: sub-action 4, the handler of a melee
+// attack's approach, given the same things (the target, the user's own
+// personal space, its flag 1), so the same ring asked with a claim on every
+// update and the same COMMAND_FAILED_NO_SPACE_IN_MELEE_RING. Any other
+// Range: sub-action 15 with that row's PrimaryRange in the ranges table,
+// capped at 60 as a weapon's is, a least distance of 0, and its flag 7, the
+// need of a line of sight, set where the ability's Projectile is not 0. At a
+// point on the ground it is sub-action 14, not answered here. No approach
+// is queued where the target is the user. After the approach and the turn
+// (39), the use itself (sub-action 8, 0x007A7440) asks the ring nothing: for
+// Range 0 at another creature it tests InStrikingReach alone, and fails the
+// command with -1 where that does not hold.
+// Seen in play 2026-10-10 (examples/attack, the turn-based mod's session,
+// Awakening's Wending Wood, before this function was written): of 67
+// abilities used at another creature, every one seen approaching with Range
+// 0 ran step 4 (Sunder Armor, Mighty Blow, Pommel Strike, Assault and the
+// dual-weapon ones) and four of those failed for want of room, two with no
+// step run; every one with another Range ran step 15 (spells at row 3,
+// archery talents at 17). And with it, the same day (a hurlock with six
+// wolves of the party's spawned round it, 457 abilities used at another
+// creature): by the ring for all 439 of Range 0, the 11 seen walking in
+// step 4, and by range for the 18 others, all in reach and none walking.
+// findsRoom was false at the start of 414 and every one ended
+// COMMAND_FAILED_NO_SPACE_IN_MELEE_RING (as did all 1,055 plain attacks it
+// was false for); of the 25 it was true for, 16 succeeded, 6 failed for
+// room 0.02 to 2.0 s into their walk as the crowd shifted, 2 were cleared
+// and 1 found no path. Not seen: an ability's walk by range, and an
+// ability in reach of a ring that is full once filled, the one case where
+// its findsRoom differs from an attack's.
+std::optional<Approach> ApproachOf(ObjectId user, ObjectId target, std::int32_t ability)
+{
+    CCObject *from = Creature(user);
+    CCObject *to = Creature(target);
+    const auto row = gda::GetInt(script::Table::AbilitiesTalents, ability, "Range");
+    if (from == nullptr || to == nullptr || !row)
+    {
+        return std::nullopt;
+    }
+    if (from == to)
+    {
+        Approach none;
+        none.inReach = true;
+        none.goal = from->Position();
+        return none;
+    }
+    if (*row == 0)
+    {
+        return MeleeApproach(from, to, user, target, false);
+    }
+    const float range = gda::GetFloat(script::Table::Ranges, *row, "PrimaryRange").value_or(0);
+    const bool needsSight = gda::GetInt(script::Table::AbilitiesTalents, ability, "Projectile").value_or(0) != 0;
+    return RangedApproach(from, to, target, std::min(range, kMostRange), 0, needsSight);
+}
+
+std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
+{
+    return WalkBy(attacker, target, ApproachOf(attacker, target));
+}
+
+std::optional<Walked> Walk(ObjectId user, ObjectId target, std::int32_t ability)
+{
+    return WalkBy(user, target, ApproachOf(user, target, ability));
 }
 
 // Read only (DAOLib #19). A creature keeps a std::vector of rings at its +0xB44, each a radius

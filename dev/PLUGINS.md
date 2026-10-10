@@ -140,7 +140,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Hear an object start and finish a command, and how it ended | `dao::commands::OnStart`, `OnEnd` | `dao/CommandEvents.h` |
 | Give orders as the player's clicks do | `dao::orders::Attack`, `UseObject`, `UseAbility`, `MoveTo` | `dao/Orders.h` |
 | Know how long a command still holds a creature | `dao::commands::SubActions`, `HeldFor` | `dao/SubActions.h` |
-| Know whether an attacker is in reach, where its approach walks, and how it turns to face | `dao::attack::IsRanged`, `ApproachOf`, `Walk`, `TurnTo`, `FaceExactly`; `dao::commands::RunningSubAction` | `dao/Attack.h`, `dao/Conjure.h` |
+| Know whether an attacker, or an ability's user, is in reach, where its approach walks, and how it turns to face | `dao::attack::IsRanged`, `ApproachOf`, `Walk` (each with or without an ability), `TurnTo`, `FaceExactly`; `dao::commands::RunningSubAction` | `dao/Attack.h`, `dao/Conjure.h` |
 | Hold a spell in its conjure and feed it time | `dao::commands::HoldConjure(caster)`, `FeedConjure(caster, seconds)`, `Conjure(caster)` | `dao/Conjure.h` |
 | Know how long an animation, attack, shot or ability takes | `dao::animation::Length`, `StepLength`, `AttackDuration`, `AimDuration`, `OfShot`, `OfAbility` | `dao/Animation.h` |
 | Know whether a creature can use an ability now, and what it costs | `dao::abilities::CanUse(creature, ability)`, `Cost(creature, ability)` | `dao/Abilities.h` |
