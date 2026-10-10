@@ -47,7 +47,7 @@ constexpr std::size_t kValues = 0x1748;
 
 core::VmStackView VmStack()
 {
-    const auto *vm = *At<const std::byte *>(addr::kVirtualMachine);
+    const auto *vm = Global<const std::byte *>(addr::kVirtualMachine);
     if (vm == nullptr)
     {
         return {};

@@ -38,7 +38,7 @@ class CClientExoApp
     //  load) and after it is destroyed
     static CClientExoApp *Get()
     {
-        return *At<CClientExoApp *>(addr::kClientExoApp);
+        return Global<CClientExoApp *>(addr::kClientExoApp);
     }
 
     // -- objects by id. Each calls the engine's own lookup: __thiscall, the id, `ret 4`.

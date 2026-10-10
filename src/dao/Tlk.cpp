@@ -18,7 +18,7 @@ namespace dao::tlk
 
 std::wstring String(std::uint32_t strref, bool female)
 {
-    void *table = *At<void *>(addr::kTlkTable);
+    void *table = Global<void *>(addr::kTlkTable);
     if (table == nullptr)
     {
         return {};

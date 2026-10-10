@@ -404,6 +404,10 @@ void CheckOwnScreen()
     const bool closed = dao::gui::CloseScreen(L"DAOLibExample");
     spdlog::info("screen DAOLibExample: added {}, shown {}, closed {}; its record now {}", added, shown, closed,
                  dao::gui::FindOwner(L"daolib_example"));
+    // A screen the game does not have: false from all three (DAOLib #46).
+    spdlog::info("screen DAOLibNoSuchScreen: shown {}, hidden {}, closed {} (each should be false)",
+                 dao::gui::ShowScreen(L"DAOLibNoSuchScreen"), dao::gui::HideScreen(L"DAOLibNoSuchScreen"),
+                 dao::gui::CloseScreen(L"DAOLibNoSuchScreen"));
 }
 
 // The portrait of the creature the player controls, rendered as the

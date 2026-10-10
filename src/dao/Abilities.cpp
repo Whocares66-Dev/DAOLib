@@ -174,8 +174,8 @@ void __fastcall SetCooldownHook(void *stats, int edx, std::int32_t ability, floa
 // 0x006B4070), checked each time against the creature's own Stats(). An
 // item's cooldown comes the same way: its record is made, like every
 // record, in the manager's first list (0x0071D6D0, the record's only
-// maker), so the drink's set takes; only once the item is spent does its
-// record leave that list (why SetCooldown writes the total itself).
+// maker), so the drink's set takes while the party still holds the item;
+// once the last one is used, its record leaves that list (see SetCooldown).
 //
 // Seen in play 2026-10-09 (the turn-based mod, the Cultist Overseer's
 // fight): 87 cooldowns, every one through here, the Overseer's sustained
@@ -254,12 +254,20 @@ bool SetCooldown(ObjectId creature, std::int32_t ability, float remaining, float
     {
         return false;
     }
-    // The engine's Set acts only on the records of the creature's own
-    // abilities (the manager's first list); an item's record, which an
-    // item's use starts and only the ticking list holds (a poultice's,
-    // shared by the group), it leaves as it was. So the total is written
-    // here as Set writes it, a plain float (DAOLib #38; seen in play
+    // The engine's Set acts on the records in the manager's first list. An
+    // item's record is there while the party holds the item, and Set takes
+    // on it then; once the last one is used, the record leaves that list
+    // and only the ticking list holds it (a poultice's, shared by the
+    // group), and Set leaves it as it was. So the total is written here as
+    // Set writes it, a plain float, for that case (DAOLib #38; seen in play
     // 2026-10-06, a poultice's hold read 2895 s left of 5).
+    //
+    // Seen in play 2026-10-10 (DAOLib #46, Wynne at Fort Drakon): the
+    // scripts' set on a Health Poultice and a Lesser Injury Kit, the
+    // party's last of each, took (the record read 5.00 of 5.00); a moment
+    // later Record found none, so a set after the last use returns false.
+    // The example passed no item tag, so a set on an item still held, with
+    // its tag, is not yet seen.
     *reinterpret_cast<float *>(record + kTotal) = remaining > 0 ? total : 0.0F;
     auto *left = reinterpret_cast<data::Attribute *>(record + kRemaining);
     auto *share = reinterpret_cast<data::Attribute *>(record + kShare);

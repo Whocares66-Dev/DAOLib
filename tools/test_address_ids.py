@@ -33,5 +33,23 @@ class Listing(unittest.TestCase):
             address_ids.listing(db)
 
 
+class Faults(unittest.TestCase):
+    """An ID one build lacks would be called at address 0 there (DAOLib #46)."""
+
+    def faults(self, addresses):
+        row = SimpleNamespace(kind="function", name="Engine::Fn", addresses=addresses)
+        db = SimpleNamespace(rows={10547: row}, columns=["gog", "ea", "steam"])
+        path = address_ids.os.path.join(address_ids.ROOT, "src", "dao", "Addresses.h")
+        return address_ids.faults_of(db, "gog", path, "DAO_ADDRESS(kFn, 10547)\n")
+
+    def test_an_id_in_every_build_is_no_fault(self):
+        self.assertEqual(self.faults({"gog": 1, "ea": 2, "steam": 1}), [])
+
+    def test_an_id_a_build_lacks_is_a_fault_naming_that_build(self):
+        faults = self.faults({"gog": 1, "ea": 2})
+        self.assertEqual(len(faults), 1)
+        self.assertIn("steam", faults[0])
+
+
 if __name__ == "__main__":
     unittest.main()

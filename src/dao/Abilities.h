@@ -86,7 +86,8 @@ struct CooldownSet
     float seconds = 0;    // the seconds the script asked for; 0 ends the cooldown
     Cooldown cooldown;    // the cooldown as it reads after the game wrote it
     // Whether the cooldown's total now equals the seconds asked for, that is, whether the game's
-    // write took effect. On an item's cooldown it may not.
+    // write took effect. On an item's cooldown it takes while the party holds the item, and
+    // may not once the last one is used.
     bool took = false;
 };
 

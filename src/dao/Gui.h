@@ -330,7 +330,7 @@ inline constexpr std::uint32_t kScreenModal = 0x20; // AddScreen's flag for a mo
 // screen. HasMovie tells you whether a movie can be found.
 bool AddScreen(std::wstring_view name, std::wstring_view movie, std::int32_t layer, std::uint32_t flags = 0);
 // Opens a screen's movie, loading it if needed, and shows it.
-// @return false before the GUI system is up; otherwise true, even for a name it does not know
+// @return false before the GUI system is up, or for a screen the game does not have
 //
 // Call it on the game thread, like HideScreen and CloseScreen.
 bool ShowScreen(std::wstring_view name);

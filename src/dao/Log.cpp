@@ -296,8 +296,9 @@ void OpenLog(std::string_view name)
         logger->flush_on(spdlog::level::warn);
         logger->set_pattern("[%H:%M:%S.%e] [%t] [%l] %v");
         spdlog::set_default_logger(std::move(logger));
-        spdlog::info("{} {} (daolib {}), level {}", name, DAO_VERSION_STRING, DAO_VERSION_STRING,
-                     spdlog::level::to_string_view(level));
+        // A plugin has no version of its own here: the line names the plugin and
+        // the library it was built with (DAOLib #46).
+        spdlog::info("{} (daolib {}), level {}", name, DAO_VERSION_STRING, spdlog::level::to_string_view(level));
     }
     catch (const std::exception &e)
     {

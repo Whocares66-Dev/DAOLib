@@ -126,4 +126,12 @@ template <class T> T *At(AddressId id)
     return reinterpret_cast<T *>(Module::Address(id));
 }
 
+// Reads a global the game keeps, such as the application's or the GUI manager's pointer.
+// @return its value, or T{} (null for a pointer) if the running build has no address for it
+template <class T> T Global(AddressId id)
+{
+    const T *slot = At<T>(id);
+    return slot != nullptr ? *slot : T{};
+}
+
 } // namespace dao

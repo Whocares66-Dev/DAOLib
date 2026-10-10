@@ -186,7 +186,7 @@ struct SetIterator
 
 void *Manager()
 {
-    return *At<void *>(addr::kGuiManager);
+    return Global<void *>(addr::kGuiManager);
 }
 
 } // namespace
@@ -462,12 +462,22 @@ std::int32_t FreeScreenId(const void *gui)
     return id;
 }
 
+// The id the GUI system knows a scene by, or -1 (its slot 12).
+std::int32_t SceneId(void *gui, std::wstring_view name)
+{
+    WString text(name);
+    using Fn = std::int32_t(__fastcall *)(void *, int, const core::WStringRep *);
+    return Slot<Fn>(gui, 12)(gui, 0, text.Engine());
+}
+
 // The GUI system's by-name slots (17 open, 18 close, 19 hide), each
-// __thiscall (const std::wstring &name), `ret 4`.
+// __thiscall (const std::wstring &name), `ret 4`. They return nothing, and
+// do nothing for a name the system does not have, so the name is looked up
+// first: false for a screen that is not there (DAOLib #46).
 bool ByName(std::size_t slot, std::wstring_view name)
 {
     void *gui = GuiSystem();
-    if (gui == nullptr)
+    if (gui == nullptr || SceneId(gui, name) < 0)
     {
         return false;
     }
@@ -475,14 +485,6 @@ bool ByName(std::size_t slot, std::wstring_view name)
     using Fn = void(__fastcall *)(void *, int, const core::WStringRep *);
     Slot<Fn>(gui, slot)(gui, 0, text.Engine());
     return true;
-}
-
-// The id the GUI system knows a scene by, or -1 (its slot 12).
-std::int32_t SceneId(void *gui, std::wstring_view name)
-{
-    WString text(name);
-    using Fn = std::int32_t(__fastcall *)(void *, int, const core::WStringRep *);
-    return Slot<Fn>(gui, 12)(gui, 0, text.Engine());
 }
 
 } // namespace

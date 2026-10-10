@@ -44,7 +44,7 @@ constexpr std::size_t kTableOffset = 0xC;
 
 void *VirtualMachine()
 {
-    return *At<void *>(addr::kVirtualMachine);
+    return Global<void *>(addr::kVirtualMachine);
 }
 
 // The VM's pops and pushes: BOOL, __thiscall on the VM, one argument, `ret 4`.

@@ -223,7 +223,10 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
         }
         else
         {
-            g_sections[i].state = readable && patched ? SectionState::NoRoom : SectionState::Failed;
+            // AddSections gives nothing both when the movie is not as read and when no
+            // section fits: in a movie that reads, a section not shown had no room
+            // (DAOLib #46).
+            g_sections[i].state = readable ? SectionState::NoRoom : SectionState::Failed;
         }
     }
     return patched;

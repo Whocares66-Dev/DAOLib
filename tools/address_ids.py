@@ -268,6 +268,15 @@ def faults_of(db, key, path, text):
             out.append(
                 f"{where}: {what}: ID {number} has no name in the address library"
             )
+        else:
+            # The library calls and reads its IDs unguarded: one that a build
+            # lacks would be address 0 there (DAOLib #46).
+            out += [
+                f"{where}: {what}: ID {number} has no address in the {build} build; "
+                "a call or read through it would be to address 0 there"
+                for build in db.columns
+                if build not in row.addresses
+            ]
     return out
 
 

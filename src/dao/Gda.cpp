@@ -38,7 +38,7 @@ namespace
 // does on first use; the getters read through the store without a check.
 void *Keeper()
 {
-    void *tables = *At<void *>(addr::kGdaTables);
+    void *tables = Global<void *>(addr::kGdaTables);
     if (tables == nullptr || *reinterpret_cast<void *const *>(static_cast<const std::byte *>(tables) + 4) == nullptr)
     {
         return nullptr;
