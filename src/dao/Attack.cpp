@@ -24,9 +24,27 @@
 //   distance on the ground (x and y) is at most the weapon's Range
 //   (bitm_base, capped at 60 m) and at least both personal spaces, and the
 //   attacker has line of sight. The walk is toward the target until within
-//   Range less both spaces of it, on the ground, with a line of sight
-//   from there; without one there, 1 m nearer, and so on until that would
-//   reach both spaces, where the engine gives the attack up.
+//   a stop distance of it, on the ground, with a line of sight from there.
+//   The stop distance is Range less both spaces at first, and is cut by
+//   1 m on every update that finds the walker within it without a line of
+//   sight, until a cut would bring it to both spaces: there the move
+//   update ends the walk as though it had arrived, and no shot follows.
+//   Corrected 2026-10-10 (DAOLib #50): the cut was first read as one per
+//   metre walked. It is one per update, so for a shooter that starts in
+//   range without sight the stop distance falls to its own distance
+//   within a second, and is then tested only each metre nearer. Seen in
+//   play 2026-10-10 (examples/attack, the turn-based mod's session,
+//   Awakening's Wending Wood in real time, the targets walking): of 30
+//   ranged approaches none that ended in a shot had Walk answer nothing.
+//   An archer ordered from 25 m, in range and out of sight, walked 20.1 m
+//   where Walk had said 21.9 m, ending 1.2 m from Walk's place (the first
+//   reading gives that walk up after 10.75 m); from out of range, 125.9 m
+//   for 129.2 m, 1.9 m apart; his eleven shorter walks ended 0.2 to 2.3 m
+//   from it. Enemy archers at party members on the move: 1.4 to 4.1 m, the
+//   engine stopping the sooner each time. The approaches that ended far
+//   from Walk's place were the AI's own timeouts (COMMAND_FAILED_TIMEOUT
+//   after 10 s, and one after 1 s) and a command a conversation cleared. A
+//   target standing still has not been tried.
 // The ring place is asked for without claiming it: the engine's own
 // approach claims it (and lets go of the attacker's last), which a
 // question here must not. And as an active ring holds it: a ring nobody
@@ -99,9 +117,14 @@ constexpr float kNoRange = 65505.0F;
 constexpr float kMostRange = 60.0F;
 constexpr std::int32_t kBaseItems = 6;
 constexpr std::uint32_t kRangeColumn = 0x81F2A384;
-// How finely a ranged walk is followed along its path: the engine tests
-// each frame where the walker stands, a few centimetres apart at a walk.
-constexpr float kWalkStep = 0.25F;
+// How far a ranged walker goes between two of the move update's tests,
+// each of which may cut the stop distance: one update's run at the usual
+// combat speed, 4.66 m/s (apr_base's Game_CbtSpeed, 55 of its 90 rows), at
+// sixty updates a second. The engine's own figure is the walker's speed
+// and the frame's time, so a walk that begins in range without sight can
+// end a few metres from where this puts it (DAOLib #50; it was 0.25 m,
+// four cuts to the metre, which gave up walks the engine makes).
+constexpr float kWalkStep = 4.66F / 60.0F;
 // A creature's equipped items: its +0xBE0 a SmartData::Attribute whose
 // value is its Equipment, the Equipment's +0x24 a SlotItemLocation; the
 // main hand slot 0; an item's base row the word at +0x464.
@@ -169,9 +192,10 @@ float WeaponRange(CCObject *creature)
 // sight from there (LineOfSight from that point); in range without one,
 // the stop distance is cut by 1 m and the walk goes on, and it is given up
 // once that cut would bring it to both spaces. The engine's tests are
-// called at each point a kWalkStep apart; the 1 m and the giving up are
-// the move update's own, copied. Nothing if it is given up or the path
-// ends first.
+// called once where the walker stands, as its first update is before any
+// step, and then at each point a kWalkStep apart, an update's run; the 1 m
+// and the giving up are the move update's own, copied. No walk where the
+// first update ends it; nothing if it is given up or the path ends first.
 std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, const std::vector<Vector> &path,
                                  float stop, float spaces)
 {
@@ -198,6 +222,15 @@ std::optional<Walked> RangedWalk(CCObject *from, CCObject *to, ObjectId target, 
     if (path.empty())
     {
         return std::nullopt;
+    }
+    const auto atOnce = endsAt(path.front());
+    if (!atOnce)
+    {
+        return std::nullopt;
+    }
+    if (*atOnce)
+    {
+        return Walked{};
     }
     Walked walked;
     walked.path.push_back(path.front());
@@ -579,8 +612,8 @@ std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)
 
 // The engine's path to the goal (dao/World.h, FindPath), to its end for melee; for a ranged
 // attack, along it to where the engine's move update would end it, its own tests (WithinBand,
-// LineOfSight from each point) asked every 0.25 m, its 1 m step nearer without a line of sight
-// copied (RangedWalk).
+// LineOfSight from each point) asked an update's run apart, its 1 m cut of the stop distance
+// without a line of sight copied (RangedWalk).
 std::optional<Walked> Walk(ObjectId attacker, ObjectId target)
 {
     const auto approach = ApproachOf(attacker, target);

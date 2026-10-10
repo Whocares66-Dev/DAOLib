@@ -150,6 +150,9 @@ struct Walked
 // @return the walk, or nullopt if either object is not a creature, no path reaches the goal, or
 // the game would give up the attack on the way (no room on the melee ring, or no line of sight in
 // time)
+//
+// A ranged walk that begins in range but out of sight depends on the frame rate in the game. This
+// reckons it at sixty frames a second and the usual combat run, and can be a few metres off.
 std::optional<Walked> Walk(ObjectId attacker, ObjectId target);
 
 } // namespace dao::attack

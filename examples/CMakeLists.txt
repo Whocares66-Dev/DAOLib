@@ -52,3 +52,6 @@ dao_apply_warnings(example_options)
 
 add_daolib_plugin(example_party SOURCES party/Party.cpp)
 dao_apply_warnings(example_party)
+
+add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
+dao_apply_warnings(example_attack)
