@@ -1027,6 +1027,40 @@ DAO_ADDRESS(kRIMTreeManager_Unload, 33383)
 // list, and the loading ended at once with the party where it stood. The
 // name is ours.
 DAO_ADDRESS(kRIMTreeManager_FindNode, 33377)
+// UnloadRooms, __thiscall on an area, no arguments: has the area's layout
+// (+0x658) unload every room (0x005C81D0: each room's slot 8 with the
+// layout and 1). Its one caller is a transition's step 10 (0x006C5C9D in
+// 0x006C5C50), for the area the party's hero is in (0x0062FD10 on the
+// party), before the layout of the area arrived in loads; it takes nothing
+// back from the call. Read 2026-10-10 for DAOLib #64, used for #72. The
+// name is ours.
+DAO_ADDRESS(kCCArea_UnloadRooms, 13595)
+// GetAreaById, __thiscall on the application (area id), `ret 4`: the area,
+// or null. A list's entry begins with the id (0x006FA910 walks them so).
+// Read 2026-10-11 for DAOLib #72, with what a layout needs before a room of
+// it can load: the layout is given its scene and marked ready (its +0x510)
+// by 0x005C9690, a virtual of its own (it also makes the layout the current
+// one, the global at 0x00C326CC, which AreaLayout::Update sets again at its
+// start every frame); 0x005CA590, the arrival's load around a point (from
+// the area's 0x0067B210), does nothing for a layout not ready; 0x005C8670
+// unloads every room and marks it not ready. A layout's +0x7C is 1 for an
+// outdoor area (it gets a SpeedTree library). CRoom::SetState with 4 asks
+// for a load in the background where the room's load is neither done nor
+// asked for (its slot 6 with 1, the layout and true). A room's load is
+// then finished by the room's slot 24 (0x005D2E60, __thiscall (float
+// seconds, layout), `ret 8`), which AreaLayout::Update calls for every
+// room of its layout each frame: where the room is waiting on its objects
+// (its byte at +0x368, set by 0x005D2B80 once it has queued a
+// ConstructObjectTask for each) and the last of them has signalled, it
+// takes the objects in and the room is loaded. So a room asked for in an
+// area the party is not in is built and never finished, since no update
+// runs for that area's layout: in play, 2026-10-11, the chantry's one room,
+// asked for from the village, was still not loaded a minute later, and
+// was two seconds after the party had been in. Indoors an area is one
+// room (the chantry and two others of Redcliffe village's list; the
+// village itself has 80), and each area of a list has its layout ready
+// with a scene of its own before the party has been in it.
+DAO_ADDRESS(kCClientExoApp_GetAreaById, 10511)
 // The frame's present, read 2026-10-11 for DAOLib #73, after a profile (#68)
 // found the arrival's wait for rooms held to the monitor. Present is
 // D3DDriver::D3DGraphicsDriver's slot 10 (vftable 0x00B2E174), __thiscall,

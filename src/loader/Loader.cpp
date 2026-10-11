@@ -35,6 +35,7 @@
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
 #include "fix/AreaLists.h"
+#include "fix/AreaRooms.h"
 #include "fix/EngineHeap.h"
 #include "fix/LoadingPresent.h"
 #include "loader/CrashLog.h"
@@ -246,6 +247,7 @@ void __stdcall EntryHook()
     fix::InstallEngineHeapFix();
     fix::InstallArchiveReadFix();
     fix::InstallAreaListsFix();
+    fix::InstallAreaRoomsFix();
     fix::InstallLoadingPresentFix();
     LoadPlugins();
     spdlog::debug("starting the game");
@@ -273,6 +275,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         fix::InstallEngineHeapFix();
         fix::InstallArchiveReadFix();
         fix::InstallAreaListsFix();
+        fix::InstallAreaRoomsFix();
         fix::InstallLoadingPresentFix();
         LoadPlugins();
         spdlog::debug("starting the game");

@@ -8,6 +8,7 @@
 #include "dao/Objects.h"
 #include "dao/String.h"
 #include "dao/core/Msvc8.h"
+#include "fix/AddressSpace.h"
 
 #include <Windows.h>
 
@@ -110,30 +111,6 @@ bool Overlap(std::uintptr_t one, std::uintptr_t other)
         }
     }
     return false;
-}
-
-// Whether the address space is running short: the largest free block under 512 MiB. A kept
-// list is paid for there, some 50 to 150 MiB each in play, and a list is only worth keeping
-// while the game has room to load the next area beside it.
-bool MemoryShort()
-{
-    constexpr std::size_t kRoomWanted = 512U << 20;
-    SYSTEM_INFO system{};
-    GetSystemInfo(&system);
-    const auto top = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
-    MEMORY_BASIC_INFORMATION region{};
-    for (std::uintptr_t at = 0x10000; at < top; at += region.RegionSize)
-    {
-        if (VirtualQuery(reinterpret_cast<const void *>(at), &region, sizeof region) == 0 || region.RegionSize == 0)
-        {
-            break;
-        }
-        if (region.State == MEM_FREE && region.RegionSize >= kRoomWanted)
-        {
-            return false;
-        }
-    }
-    return true;
 }
 
 // CSAreaList's deleting destructor, its only virtual: what the module's
@@ -283,7 +260,8 @@ void BeforeMake(std::uintptr_t mode)
         Delete(g_kept.back(), "it is the oldest, and one more is kept");
         g_kept.pop_back();
     }
-    while (!g_kept.empty() && MemoryShort())
+    // A kept list is paid for in address space, some 50 to 150 MiB each in play.
+    while (!g_kept.empty() && AddressSpaceShort())
     {
         Delete(g_kept.back(), "it is the oldest, and the address space is running short");
         g_kept.pop_back();

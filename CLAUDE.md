@@ -33,7 +33,9 @@ src/fix/        corrections to the engine's own faults, one file each, built int
                 before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
                 offset in its archive's file (ArchiveRead), the engine's memory from the system's heap in place of its own
                 850 MiB of pools (EngineHeap, off with DAOLIB_ENGINE_HEAP=0), the area lists the party leaves kept and handed
-                back on its return (AreaLists, off with DAOLIB_AREA_LISTS=0), a loading screen's frames presented
+                back on its return (AreaLists, off with DAOLIB_AREA_LISTS=0), an area's rooms kept when the party
+                leaves and the indoor areas' beside it loaded ahead (AreaRooms, off with DAOLIB_AREA_ROOMS=0), a
+                loading screen's frames presented
                 fifteen a second so its loading does not wait for the monitor (LoadingPresent, off with
                 DAOLIB_LOADING_PRESENT=0). dev/CRASHES.md has the crash each one fixed
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,

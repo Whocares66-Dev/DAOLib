@@ -236,7 +236,9 @@ add_library(
     version
     SHARED
     src/loader/CrashLog.cpp
+    src/fix/AddressSpace.cpp
     src/fix/AreaLists.cpp
+    src/fix/AreaRooms.cpp
     src/fix/ArchiveRead.cpp
     src/fix/EngineHeap.cpp
     src/fix/LoadingPresent.cpp
