@@ -27,6 +27,12 @@ constexpr std::int32_t kLargestShift = 16;       // an alignment past 64 KiB is 
 constexpr std::uint32_t kFirstOddOnesLogged = 8; // of each kind
 constexpr std::uint64_t kReportEvery = 1U << 23; // allocations between two lines in the log
 
+// A read past a block's end (Notes on reads past the end, below).
+constexpr std::size_t kPast = 0x10000;        // how far past a block's end a read is still the block's
+constexpr std::uint32_t kLarge = 0x40000;     // a block this size or more carries that much after it
+constexpr std::size_t kPage = 0x1000;         //
+constexpr std::uint32_t kFirstPastLogged = 8; // of the reads past an end, how many are said in the log
+
 // Before each block, ending where the block begins.
 struct Header
 {
@@ -44,6 +50,8 @@ std::atomic<std::uint64_t> g_liveBytes{0};
 std::atomic<std::uint64_t> g_liveBlocks{0};
 std::atomic<std::uint32_t> g_notOurs{0};
 std::atomic<std::uint32_t> g_freedTwice{0};
+std::atomic<std::uint32_t> g_readsPast{0};
+std::atomic<bool> g_checking{false}; // the start's own read past an end is not one to say in the log
 
 Header *HeaderOf(void *block)
 {
@@ -68,7 +76,11 @@ void *Take(std::uint32_t size, std::int32_t shift)
     }
     shift = std::clamp(shift < 0 ? kDefaultShift : shift, kDefaultShift, kLargestShift);
     const std::uintptr_t align = std::uintptr_t{1} << shift;
-    void *raw = HeapAlloc(g_heap, 0, static_cast<SIZE_T>(size) + sizeof(Header) + align - 1);
+    // A large block has a mapping of its own from the system, and what follows that cannot be
+    // made readable afterwards; so it is asked for with the room after it that a read past
+    // its end may take.
+    const SIZE_T after = size >= kLarge ? kPast : 0;
+    void *raw = HeapAlloc(g_heap, 0, static_cast<SIZE_T>(size) + sizeof(Header) + align - 1 + after);
     if (raw == nullptr)
     {
         g_failed.fetch_add(1, std::memory_order_relaxed);
@@ -195,6 +207,131 @@ bool __cdecl Statistics(std::uint32_t *used, std::uint32_t *size, std::int32_t /
     return false;
 }
 
+// Notes on reads past the end: the engine reads past the end of what it allocated, and in its
+// own pools that was always more of the pool. A file's name copied as a kilobyte whatever its
+// length is one such (fix/SavedFileName.h, DAOLib #78), found when the name was the last thing
+// before a page that is not there and the game crashed; there may be others no reading has
+// found. So the pools' property is kept: a read that faults a little way past the end of a
+// live block of this heap has the page made readable, all zeros, and goes on. The first few
+// are said in the log with the code that read, so that each can be corrected where it is. A
+// write is left to fault, and so is a read anywhere else.
+
+// Whether `at` is a little way past the end of a live block of this heap. The block's header
+// is looked for in the memory before the faulting page, which other threads may be freeing as
+// it is read: so that memory is copied out by a read that fails instead of faulting.
+bool PastABlock(std::uintptr_t at)
+{
+    const std::uintptr_t page = at & ~(kPage - 1);
+    MEMORY_BASIC_INFORMATION before{};
+    if (page < kPast || VirtualQuery(reinterpret_cast<const void *>(page - 1), &before, sizeof before) == 0 ||
+        before.State != MEM_COMMIT)
+    {
+        return false;
+    }
+    const std::uintptr_t from = std::max(reinterpret_cast<std::uintptr_t>(before.BaseAddress), page - kPast);
+    static thread_local std::array<std::uint32_t, kPast / sizeof(std::uint32_t)> words;
+    SIZE_T copied = 0;
+    if (ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void *>(from), words.data(), page - from,
+                          &copied) == FALSE)
+    {
+        return false;
+    }
+    // A header is four words, the mark first, 16 bytes before its block.
+    const std::size_t count = copied / sizeof(std::uint32_t);
+    for (std::size_t i = 0; i + 4 <= count; ++i)
+    {
+        if (words.at(i) != kLive)
+        {
+            continue;
+        }
+        const std::uintptr_t block = from + ((i + 4) * sizeof(std::uint32_t));
+        const std::uintptr_t end = block + words.at(i + 1);
+        if (end <= at && at - end < kPast)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Before any other handler sees an exception: a read past the end of a block of this heap.
+LONG CALLBACK ReadPastEnd(EXCEPTION_POINTERS *info)
+{
+    const EXCEPTION_RECORD &record = *info->ExceptionRecord;
+    constexpr ULONG_PTR kRead = 0;
+    if (record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION || record.NumberParameters < 2 ||
+        record.ExceptionInformation[0] != kRead)
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    const auto at = static_cast<std::uintptr_t>(record.ExceptionInformation[1]);
+    if (!PastABlock(at))
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    // Only a page that is not there is made: one another thread has mapped since the fault has
+    // what it has, and the read is tried again as it is. Inside the heap's own reservation the
+    // page is committed; past it, where the address space is free, it is reserved and
+    // committed. Read and write, the heap's own protection: should the heap commit the same
+    // page in the moment between the asking and the making, nothing of its is changed, since
+    // committing a page that is there leaves what it holds and this asks for the protection it
+    // has.
+    auto *page = reinterpret_cast<void *>(at & ~(kPage - 1));
+    MEMORY_BASIC_INFORMATION now{};
+    if (VirtualQuery(page, &now, sizeof now) == 0)
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (now.State == MEM_COMMIT)
+    {
+        return (now.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0 ? EXCEPTION_CONTINUE_EXECUTION
+                                                                 : EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (VirtualAlloc(page, kPage, MEM_COMMIT, PAGE_READWRITE) == nullptr &&
+        VirtualAlloc(page, kPage, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE) == nullptr)
+    {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (!g_checking.load(std::memory_order_relaxed) &&
+        g_readsPast.fetch_add(1, std::memory_order_relaxed) < kFirstPastLogged)
+    {
+        spdlog::warn("engine heap: the code at {:#010x} read {:#010x}, past the end of a block of the engine's and "
+                     "of the memory there is; the page is made readable, as in the engine's own pools it was",
+                     dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(record.ExceptionAddress)), at);
+    }
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+// Whether a read past a block's end is caught, tried once at the start on memory made for the
+// trying: two pages reserved, the first committed, a block of this heap's kind written to end
+// where the first page does, and a word read from the second.
+bool ReadPastEndIsCaught()
+{
+    auto *pages = static_cast<std::byte *>(VirtualAlloc(nullptr, 2 * kPage, MEM_RESERVE, PAGE_NOACCESS));
+    if (pages == nullptr || VirtualAlloc(pages, kPage, MEM_COMMIT, PAGE_READWRITE) == nullptr)
+    {
+        return false;
+    }
+    constexpr std::uint32_t kSize = 32;
+    auto *block = pages + kPage - kSize;
+    *HeaderOf(block) = Header{kLive, kSize, block, kDefaultShift};
+    g_checking.store(true, std::memory_order_relaxed);
+    // volatile: the read is the point, and must be made.
+    const volatile std::uint32_t *past = reinterpret_cast<const std::uint32_t *>(pages + kPage + 8);
+    bool caught = false;
+    __try
+    {
+        caught = *past == 0;
+    }
+    __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+    {
+        caught = false;
+    }
+    g_checking.store(false, std::memory_order_relaxed);
+    VirtualFree(pages, 0, MEM_RELEASE);
+    return caught;
+}
+
 bool TurnedOff()
 {
     std::array<char, 4> value{};
@@ -236,6 +373,16 @@ void InstallEngineHeap()
         spdlog::warn("engine heap: the engine's allocator could not be detoured, so its memory stays its own pools "
                      "(issue #69)");
         return;
+    }
+    if (AddVectoredExceptionHandler(1, &ReadPastEnd) == nullptr || !ReadPastEndIsCaught())
+    {
+        spdlog::warn("engine heap: a read past the end of a block is not caught (tried at the start); such a "
+                     "read can fault where in the engine's pools it did not (issue #78)");
+    }
+    else
+    {
+        spdlog::info("engine heap: a read a little past the end of a block finds memory there, as in the "
+                     "engine's pools it did; tried at the start, and caught (issue #78)");
     }
     spdlog::info("engine heap: the engine's memory is the system's heap, not its own 850 MiB of pools (issue #69)");
 }

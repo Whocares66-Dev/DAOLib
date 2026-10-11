@@ -34,6 +34,7 @@
 #include "dao/Plugin.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
+#include "fix/SavedFileName.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
@@ -244,6 +245,7 @@ void __stdcall EntryHook()
     loader::crashlog::StartWatchdog();
     perf::InstallEngineHeap();
     fix::InstallArchiveReadFix();
+    fix::InstallSavedFileNameFix();
     perf::InstallFastLoad();
     LoadPlugins();
     spdlog::debug("starting the game");
@@ -270,6 +272,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         loader::crashlog::StartWatchdog();
         perf::InstallEngineHeap();
         fix::InstallArchiveReadFix();
+        fix::InstallSavedFileNameFix();
         perf::InstallFastLoad();
         LoadPlugins();
         spdlog::debug("starting the game");

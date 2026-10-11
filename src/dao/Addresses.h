@@ -1061,6 +1061,24 @@ DAO_ADDRESS(kCCArea_UnloadRooms, 13595)
 // village itself has 80), and each area of a list has its layout ready
 // with a scene of its own before the party has been in it.
 DAO_ADDRESS(kCClientExoApp_GetAreaById, 10511)
+// A saved file's name, read 2026-10-11 for DAOLib #78, after a crash as a
+// screenshot was asked for. Renderer::ThreadedGraphicsDriver (vftable
+// 0x00B5834C) records the graphics driver's calls as commands for the
+// render thread. Its slots 84 and 85, SaveToFile and SaveToFileOther
+// (__thiscall (object, const std::wstring *name, eight more arguments or
+// six), `ret 0x28` and `ret 0x20`), record commands 0x27 and 0x28: an
+// object to be saved to a file of that name (the real driver's slot 84,
+// 0x0053AC70, calls the object's slot 4 with the name's characters and
+// the rest). Each copies the name into the command as 0x400 bytes from the
+// string's buffer, whatever its length (`push 0x400; push eax; push edx;
+// call 0x008E24A0` at 0x00A23D38 and 0x00A23E97, the exe's only two copies
+// of that length): up to a kilobyte past the end of a short name. The crash:
+// an access violation in the copy at 0x008E24FA, reading 0x4FCA6000 with
+// its source at 0x4FCA5D60, from 0x00A23D3F, the string the engine's own
+// (Eluvian's screenshot sends TakeScreenshotMessage and no name). The names
+// are ours.
+DAO_ADDRESS(kThreadedGraphicsDriver_SaveToFile, 32291)
+DAO_ADDRESS(kThreadedGraphicsDriver_SaveToFileOther, 32292)
 // The frame's present, read 2026-10-11 for DAOLib #73, after a profile (#68)
 // found the arrival's wait for rooms held to the monitor. Present is
 // D3DDriver::D3DGraphicsDriver's slot 10 (vftable 0x00B2E174), __thiscall,

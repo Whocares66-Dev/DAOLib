@@ -18,6 +18,12 @@
 // and its ceiling is gone. What the engine's own did without a word, this
 // does too: a free or a reallocation of a pointer that is not one of its
 // blocks, or of a block already freed, is left alone. Read 2026-10-11.
+//
+// One more thing the pools did without a word is kept (DAOLib #78): a read a
+// little way past the end of a block found memory there, the pool's own.
+// Here it can find none, at the end of what the heap has mapped. Such a
+// read has its page made readable and goes on, and is said in the log
+// with the code that read, to be corrected where it is.
 #pragma once
 
 namespace perf

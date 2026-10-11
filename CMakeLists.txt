@@ -242,6 +242,7 @@ add_library(
     SHARED
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
+    src/fix/SavedFileName.cpp
     src/perf/EngineHeap.cpp
     src/perf/FastLoad.cpp
     src/perf/fastload/AddressSpace.cpp

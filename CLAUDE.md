@@ -31,7 +31,8 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/fix/        corrections to the engine's own faults, one file each, built into version.dll and put in by the loader
                 before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
-                offset in its archive's file (ArchiveRead). dev/CRASHES.md has the crash each one fixed
+                offset in its archive's file (ArchiveRead), a saved file's name handed to the renderer in a buffer
+                of the kilobyte the renderer copies (SavedFileName). dev/CRASHES.md has the crash each one fixed
 src/perf/       what makes the game faster and corrects no fault, built into version.dll the same way. The engine's
                 memory from the system's heap in place of its own 850 MiB of pools (EngineHeap, off with
                 DAOLIB_ENGINE_HEAP=0), and fast load (FastLoad, its parts under fastload/): the area lists the party
