@@ -78,7 +78,8 @@ constexpr std::uint16_t kBar = 294;
 constexpr std::uint16_t kHeadingText = 224;
 constexpr std::uint16_t kSlider = 171;
 constexpr std::uint16_t kPicker = 219;
-constexpr std::uint16_t kVideoTab = 315;
+constexpr std::uint16_t kVideoLeft = 314;
+constexpr std::uint16_t kVideoRight = 315;
 
 // The options movie in small: the game's own heading (its text clip
 // exported, over a bar), the Game tab with the last checkbox of each
@@ -121,16 +122,28 @@ Bytes OptionsMovie(bool pickers = true)
     Add(gameplay, ShortTag(1, {}));
     Put(gameplay, 0, 2);
 
-    // The Video tab's slider with named stops, whose symbol a choice is.
+    // The Video tab's two columns, a clip each: the left's last checkbox
+    // low under a slider, the right's under the slider with named stops
+    // whose symbol a choice is.
+    Bytes videoLeft;
+    Put(videoLeft, kVideoLeft, 2);
+    Put(videoLeft, 1, 2);
+    Add(videoLeft, DesignerPlace(1, kCheckbox, 3, 120, "OptFullscreen_mc"));
+    Add(videoLeft, DesignerPlace(7, kSlider, 44, 153, "OptGamma_mc"));
+    Add(videoLeft, DesignerPlace(28, kCheckbox, 3, 302, "OptVSync_mc"));
+    Add(videoLeft, ShortTag(1, {}));
+    Put(videoLeft, 0, 2);
     Bytes video;
-    Put(video, kVideoTab, 2);
+    Put(video, kVideoRight, 2);
     Put(video, 1, 2);
+    Add(video, DesignerPlace(22, kCheckbox, 35, 267, "OptFBFX_mc"));
     Add(video, DesignerPlace(49, kSlider, 72, 161, "OptTextureQuality_mc"));
     Add(video, ShortTag(1, {}));
     Put(video, 0, 2);
 
     Bytes tags = Exports({{kHeading, "KeyBindingHeader"}, {kCheckbox, "checkbox_mc"}, {kHeadingText, "txt_Game"}});
     Add(tags, LongTag(39, gameplay));
+    Add(tags, LongTag(39, videoLeft));
     Add(tags, LongTag(39, video));
     Add(tags, LongTag(39, tab));
     Add(tags, LongTag(59, script));
@@ -140,6 +153,12 @@ Bytes OptionsMovie(bool pickers = true)
 bool Holds(const Bytes &movie, const Bytes &code)
 {
     return !std::ranges::search(movie, code).empty();
+}
+
+// How many of the sections went in.
+std::size_t Shown(const std::vector<bool> &shown)
+{
+    return static_cast<std::size_t>(std::ranges::count(shown, true));
 }
 
 } // namespace
@@ -286,10 +305,10 @@ TEST_CASE("a section is the game's heading over its checkboxes, in one column", 
         {"Turn-based", {{"DAOLibTurnBasedCombat", "Turn-based combat", "Outside a fight only"}}},
         {"Second", {{"DAOLibA", "A", ""}, {"DAOLibB", "B", ""}}},
     };
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     const auto patched = AddSections(movie, sections, shown);
     REQUIRE(patched);
-    CHECK(shown == 2);
+    CHECK(Shown(shown) == 2);
 
     // The first: the bar in the left column's first two free rows, 15 left
     // of the checkboxes and 6 down, the heading's text in the bar at (24,
@@ -351,13 +370,13 @@ TEST_CASE("a second plugin's sections go in the rows the first left", "[options]
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
     const Bytes movie = OptionsMovie();
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     // Each plugin has its own copy of the library, and each copy patches
     // what the other left.
     const auto first = AddSections(
         movie, std::vector<Section>{{"First", {{"DAOLibOne", "One", ""}, {"DAOLibTwo", "Two", ""}}}}, shown);
     REQUIRE(first);
-    CHECK(shown == 1);
+    CHECK(Shown(shown) == 1);
     // The bar lies in two rows and the checkboxes in two: one row is left
     // on the left, and the right column's six.
     const auto slots = FreeSlots(*first);
@@ -368,7 +387,7 @@ TEST_CASE("a second plugin's sections go in the rows the first left", "[options]
 
     const auto both = AddSections(*first, std::vector<Section>{{"Second", {{"DAOLibThree", "Three", ""}}}}, shown);
     REQUIRE(both);
-    CHECK(shown == 1);
+    CHECK(Shown(shown) == 1);
     // The first plugin's are where they were, the second's in the right
     // column, and the two headings have names of their own.
     const auto one = gfx::FindInstance(*both, ControlInstance("DAOLibOne"));
@@ -456,10 +475,10 @@ TEST_CASE("a section goes in the column it asks for, or in the other for want of
     Section right{"Right", {{"DAOLibR", "R", ""}}};
     right.column = 1;
     const Section either{"Either", {{"DAOLibE", "E", ""}}};
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     const auto patched = AddSections(movie, std::vector<Section>{right, either}, shown);
     REQUIRE(patched);
-    CHECK(shown == 2);
+    CHECK(Shown(shown) == 2);
     const auto inRight = gfx::FindInstance(*patched, ControlInstance("DAOLibR"));
     const auto inLeft = gfx::FindInstance(*patched, ControlInstance("DAOLibE"));
     REQUIRE((inRight && inLeft));
@@ -472,7 +491,7 @@ TEST_CASE("a section goes in the column it asks for, or in the other for want of
                        {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
     const auto full = AddSections(movie, std::vector<Section>{four, right}, shown);
     REQUIRE(full);
-    CHECK(shown == 2);
+    CHECK(Shown(shown) == 2);
     const auto pushed = gfx::FindInstance(*full, ControlInstance("DAOLibR"));
     REQUIRE(pushed);
     CHECK(pushed->x == 7);
@@ -489,10 +508,10 @@ TEST_CASE("a section with no room is left out, and those after it", "[options]")
                        {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
     const Section three{"Three", {{"DAOLibX", "X", ""}, {"DAOLibY", "Y", ""}, {"DAOLibZ", "Z", ""}}};
     const Section small{"Small", {{"DAOLibS", "S", ""}}};
-    std::size_t shown = 99;
+    std::vector<bool> shown(9, true);
     const auto patched = AddSections(movie, std::vector<Section>{four, three, small}, shown);
     REQUIRE(patched);
-    CHECK(shown == 2);
+    CHECK(shown == std::vector<bool>{true, true, false});
     const auto lastOfFour = gfx::FindInstance(*patched, ControlInstance("DAOLibF3"));
     const auto lastOfThree = gfx::FindInstance(*patched, ControlInstance("DAOLibZ"));
     REQUIRE((lastOfFour && lastOfThree));
@@ -513,14 +532,14 @@ TEST_CASE("a section with no room is left out, and those after it", "[options]")
         huge.toggles.push_back({"DAOLibHuge" + std::to_string(i), "H", ""});
     }
     CHECK_FALSE(AddSections(movie, std::vector<Section>{huge, small}, shown));
-    CHECK(shown == 0);
-    shown = 99;
+    CHECK(Shown(shown) == 0);
+    shown.assign(9, true);
     CHECK_FALSE(AddSections(movie, {}, shown));
-    CHECK(shown == 0);
+    CHECK(Shown(shown) == 0);
     CHECK_FALSE(AddSections(movie, std::vector<Section>{{"Empty", {}}}, shown));
     // A movie with no Game tab, and one whose heading is not the game's.
     CHECK_FALSE(AddSections(Movie(LongTag(12, Simple(0x17))), std::vector<Section>{small}, shown));
-    CHECK(shown == 0);
+    CHECK(Shown(shown) == 0);
 }
 
 TEST_CASE("a choice is the game's slider with named stops, in two rows under the checkboxes", "[options]")
@@ -533,10 +552,10 @@ TEST_CASE("a choice is the game's slider with named stops, in two rows under the
     const Bytes movie = OptionsMovie();
     Section section{"Turn-based", {{"DAOLibTurnBased", "Turn-based combat", ""}}};
     section.choices.push_back({"DAOLibSpeed", "Speed", "How fast turns play", {"0.5x", "1x", "1.5x", "2x"}});
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     const auto patched = AddSections(movie, std::vector<Section>{section}, shown);
     REQUIRE(patched);
-    CHECK(shown == 1);
+    CHECK(Shown(shown) == 1);
 
     // The heading in the left column's first two free rows (263, 298), the
     // checkbox in the third (333), the slider in the fourth and fifth (368,
@@ -582,10 +601,10 @@ TEST_CASE("a choice can be the game's dropdown, deepest so that its list covers 
     graphics.choices.push_back({"DAOLibLook", "Look", "", {"Plain", "Vivid"}});
     Section other{"Other", {{"DAOLibBox", "A box", ""}}};
     other.choices.push_back({"DAOLibMode", "Mode", "", {"a", "b", "c"}, true});
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     const auto patched = AddSections(movie, std::vector<Section>{graphics, other}, shown);
     REQUIRE(patched);
-    CHECK(shown == 2);
+    CHECK(Shown(shown) == 2);
 
     // The first: the heading at 201 and 236, the dropdown at 271, 4 right
     // of the column as the tab's own stand, the slider under it at 341.
@@ -649,13 +668,13 @@ TEST_CASE("a dropdown in a movie with no picker of the game's is left out with i
     using dao::core::options_movie::AddSections;
     using dao::core::options_movie::Section;
     const Bytes movie = OptionsMovie(false);
-    std::size_t shown = 99;
+    std::vector<bool> shown(9, true);
     CHECK_FALSE(
         AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}, true}}}}, shown));
-    CHECK(shown == 0);
+    CHECK(Shown(shown) == 0);
     // The same as a slider, or a checkbox alone, goes in.
     CHECK(AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}}}}}, shown));
-    CHECK(shown == 1);
+    CHECK(Shown(shown) == 1);
 }
 
 TEST_CASE("a section with a choice that does not fit is left out", "[options]")
@@ -667,7 +686,114 @@ TEST_CASE("a section with a choice that does not fit is left out", "[options]")
     Section section{"Big", {{"DAOLibOne", "One", ""}}};
     section.choices.push_back({"DAOLibA", "A", "", {"x", "y"}});
     section.choices.push_back({"DAOLibB", "B", "", {"x", "y"}});
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     CHECK_FALSE(AddSections(OptionsMovie(), std::vector<Section>{section}, shown));
-    CHECK(shown == 0);
+    CHECK(Shown(shown) == 0);
+}
+
+TEST_CASE("the Video tab's free rows are two under its left column and five under its right", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const auto slots = FreeSlots(OptionsMovie(), Tab::Video);
+    REQUIRE(slots);
+    // Under OptVSync_mc at (3, 302) in the left column's clip, a row every
+    // 35 to 398; under OptFBFX_mc at (35, 267) in the right's, to 448: the
+    // left clip stands 50 lower, so both end at the Game tab's last row.
+    REQUIRE(slots->size() == 7);
+    CHECK((*slots)[0] == Slot{3, 337, 0});
+    CHECK((*slots)[1] == Slot{3, 372, 0});
+    CHECK((*slots)[2] == Slot{35, 302, 1});
+    CHECK((*slots)[6] == Slot{35, 442, 1});
+    // The Game tab's are as they were, asked for by name or not.
+    CHECK(FreeSlots(OptionsMovie(), Tab::Game) == FreeSlots(OptionsMovie()));
+    CHECK_FALSE(FreeSlots({}, Tab::Video));
+}
+
+TEST_CASE("a section on the Video tab is placed in its column's own clip", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    // A heading, a checkbox and a slider are five rows: the right column's
+    // five, though the left is asked for, which has two.
+    Section graphics{"Graphics", {{"DAOLibSmaa", "Extra anti-aliasing", ""}}, {{"DAOLibLook", "Look", "", {"a", "b"}}}};
+    graphics.tab = Tab::Video;
+    graphics.column = 0;
+    std::vector<bool> shown;
+    const auto patched = AddSections(movie, std::vector<Section>{graphics}, shown);
+    REQUIRE(patched);
+    CHECK(shown == std::vector<bool>{true});
+
+    // The heading's text 24 right and 13 down of its bar, the bar 38 left
+    // of the column's checkboxes and 6 down in the first row.
+    const Slot top{35, 302, 1};
+    CHECK(HeadingInstance(top, Tab::Video) != HeadingInstance(top, Tab::Game));
+    const auto heading = gfx::FindInstance(*patched, HeadingInstance(top, Tab::Video));
+    const auto box = gfx::FindInstance(*patched, ControlInstance("DAOLibSmaa"));
+    const auto slider = gfx::FindInstance(*patched, ControlInstance("DAOLibLook"));
+    REQUIRE((heading && box && slider));
+    CHECK(heading->sprite == kVideoRight);
+    CHECK(heading->character == kHeadingText);
+    CHECK(heading->x == 35 - 38 + 24);
+    CHECK(heading->y == 302 + 6 + 13);
+    CHECK(box->sprite == kVideoRight);
+    CHECK(box->character == kCheckbox);
+    CHECK(box->x == 35);
+    CHECK(box->y == 372);
+    // The slider 37 right of the column's checkboxes, as the tab's own.
+    CHECK(slider->sprite == kVideoRight);
+    CHECK(slider->character == kSlider);
+    CHECK(slider->x == 72);
+    CHECK(slider->y == 407);
+    // Above what the clip had, and set up with the rest.
+    CHECK(box->depth > 49);
+    CHECK(Holds(*patched, gfx::Push({gfx::Text("MakeSliderPickerInit")})));
+
+    // The right column is full, the left as it was, and the Game tab
+    // untouched.
+    const auto left = FreeSlots(*patched, Tab::Video);
+    REQUIRE(left);
+    CHECK(left->size() == 2);
+    CHECK(left->back() == Slot{3, 372, 0});
+    CHECK(FreeSlots(*patched, Tab::Game) == FreeSlots(movie, Tab::Game));
+}
+
+TEST_CASE("a tab's sections are not kept out by another tab's want of room", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    // Five checkboxes are seven rows, more than any column: on the Game
+    // tab it keeps the Game section after it out, and not the Video one.
+    Section huge{"Huge", {}};
+    for (int i = 0; i < 5; ++i)
+    {
+        huge.toggles.push_back({"DAOLibHuge" + std::to_string(i), "H", ""});
+    }
+    Section video{"Video", {{"DAOLibV", "V", ""}}};
+    video.tab = Tab::Video;
+    const Section game{"Game", {{"DAOLibG", "G", ""}}};
+    std::vector<bool> shown;
+    const auto patched = AddSections(movie, std::vector<Section>{huge, video, game}, shown);
+    REQUIRE(patched);
+    CHECK(shown == std::vector<bool>{false, true, false});
+    CHECK(gfx::FindInstance(*patched, ControlInstance("DAOLibV")));
+    CHECK_FALSE(gfx::FindInstance(*patched, ControlInstance("DAOLibG")));
+
+    // And the other way: too much for the Video tab, and the Game section
+    // after it goes in. One patch then places in the clips of both tabs.
+    huge.tab = Tab::Video;
+    const auto both = AddSections(movie, std::vector<Section>{video, huge, game}, shown);
+    REQUIRE(both);
+    CHECK(shown == std::vector<bool>{true, false, true});
+    const auto onVideo = gfx::FindInstance(*both, ControlInstance("DAOLibV"));
+    const auto onGame = gfx::FindInstance(*both, ControlInstance("DAOLibG"));
+    REQUIRE((onVideo && onGame));
+    CHECK(onVideo->sprite == kVideoRight);
+    CHECK(onGame->sprite == kGameTab);
+    // Each set up, the two tabs' in the one function.
+    const auto setUp = [](std::string_view option, std::string_view label) {
+        return gfx::Push({gfx::Register(2), gfx::Text(ControlInstance(option) + "_init"), gfx::Text(""),
+                          gfx::Text(label), gfx::Text(option), gfx::Integer(3), gfx::Text("OptionsUtils")});
+    };
+    CHECK(Holds(*both, setUp("DAOLibV", "V")));
+    CHECK(Holds(*both, setUp("DAOLibG", "G")));
 }

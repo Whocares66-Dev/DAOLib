@@ -321,8 +321,20 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "options-dropdown-two-rows: a dropdown's second row is taken for the next plugin's section",
         OPTIONS,
-        "(picker && instance.character == picker->character))",
-        "(picker && instance.character == 0))",
+        "instance.character == symbols.slider || instance.character == symbols.picker)",
+        "instance.character == symbols.slider || instance.character == 0)",
+    ),
+    Mutant(
+        "options-video-last-row: the Video tab's right column ends at the Game tab's last row, above the screen's buttons",
+        OPTIONS,
+        '{"OptFBFX_mc", 448, 38, 37, 4}',
+        '{"OptFBFX_mc", 483, 38, 37, 4}',
+    ),
+    Mutant(
+        "options-tabs-apart: a section left out of one tab does not keep another tab's out",
+        OPTIONS,
+        "        if (section.tab != tab)\n        {\n            continue;",
+        "        if (section.tab != tab)\n        {\n            return;",
     ),
     Mutant(
         "inflate-blocks-after-first: a stream of several blocks is read to its last",

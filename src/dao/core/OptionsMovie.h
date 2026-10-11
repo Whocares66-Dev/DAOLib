@@ -60,6 +60,16 @@
 // centred over the column. In play, 2026-10-01, it read as a caption
 // beside the game's bars.)
 //
+// - The Video tab (read 2026-10-11, DAOLib #79) is a clip of two clips, one
+//   a column: the left one, 50 lower than the right, ends in the checkbox
+//   OptVSync_mc at (3, 302), and the right in OptFBFX_mc at (35, 267). On
+//   the screen the columns stand where the Game tab's do, to a pixel, and
+//   under the same two bars ("Screen", "Detail"), so a section is placed
+//   there as on the Game tab, each column in its own clip. The left
+//   column's last checkbox is low: two rows are free under it, and five
+//   under the right's. Its sliders stand 41 right of the left column's
+//   checkboxes and 37 of the right's, its dropdown (OptResolution_mc) 6.
+//
 // - The Controls tab's key list is built in script: AddHeader(text) for a
 //   section and AddKeyBinding("TogglePause") for each action, the last of
 //   them HideMainInterface. A plugin's actions are listed by the same
@@ -100,6 +110,13 @@ struct Choice
     bool dropdown = false;
 };
 
+// The tab a section is on.
+enum class Tab : std::uint8_t
+{
+    Game,
+    Video,
+};
+
 // A section that takes whichever column has room first.
 inline constexpr std::int32_t kEitherColumn = -1;
 
@@ -114,9 +131,11 @@ struct Section
     // The column the section would be in, 0 the left or 1 the right, if that column has the
     // rows; kEitherColumn for the first that has. `= ...` for the same reason.
     std::int32_t column = kEitherColumn; // NOLINT(readability-redundant-member-init)
+    Tab tab = Tab::Game;                 // NOLINT(readability-redundant-member-init)
 };
 
-// A row of the Game tab the game leaves empty: where a checkbox in it goes.
+// A row of a tab the game leaves empty: where a checkbox in it goes, in the
+// clip its column is.
 struct Slot
 {
     std::int32_t x = 0;
@@ -130,29 +149,32 @@ struct Slot
 inline constexpr std::size_t kHeadingRows = 2;
 inline constexpr std::size_t kChoiceRows = 2;
 
-// The free rows, in the order they are filled: down the left column from
-// under its last checkbox, then down the right, but for rows something is
-// placed in already. Each plugin links its own copy of the library and
+// A tab's free rows, in the order they are filled: down the left column
+// from under its last checkbox, then down the right, but for rows something
+// is placed in already. Each plugin links its own copy of the library and
 // each copy patches the movie the others have patched, so a row another
-// plugin's section took is taken. Nothing if the movie's Game tab is not
-// as read.
-std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie);
+// plugin's section took is taken. Nothing if the movie's tab is not as
+// read.
+std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab = Tab::Game);
 
 // The name a control for an option is placed under, a checkbox or a
-// choice, and the name of a heading's text in a row: by the row, so that no
-// two plugins' headings share one.
+// choice, and the name of a heading's text in a row: by the tab and the
+// row, so that no two plugins' headings share one.
 std::string ControlInstance(std::string_view option);
-std::string HeadingInstance(const Slot &slot);
+std::string HeadingInstance(const Slot &slot, Tab tab = Tab::Game);
 
-// The movie with as many of the sections as there are rows for, each a
-// heading, its checkboxes and its choices in rows one under the other in
-// one column, a section never split or begun without room for all of it; `shown` is how
-// many went in, from the first. Nothing, and
-// `shown` 0, if the movie is not as read or no section fits. The dropdowns
-// are placed deepest, an upper one deeper than a lower, so that an open list
-// covers what these sections put under it.
+// The movie with as many of the sections as their tabs have rows for, each
+// a heading, its checkboxes and its choices in rows one under the other in
+// one column, a section never split or begun without room for all of it.
+// `shown` says of each section whether it went in: on a tab the first
+// section left out for want of room keeps those after it out too, so that
+// sections stand in the order they were given; another tab's are not kept
+// out by it. Nothing, and none shown, if the movie is not as read or no
+// section fits. The dropdowns are placed deepest of their clip, an upper
+// one deeper than a lower, so that an open list covers what these sections
+// put under it.
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
-                                      std::size_t &shown);
+                                      std::vector<bool> &shown);
 
 // Actions for the Controls tab's key list, under a heading.
 struct KeySection

@@ -64,6 +64,22 @@
 // overlapping, and the game's own sections and another plugin's beside it
 // as before.
 //
+// A section can be on the Video tab instead (DAOLib #79, read 2026-10-11;
+// dao/core/OptionsMovie.h, dev/GUI.md). That tab's two columns are a clip
+// each, and it has less room than it looks to: two rows under the left
+// column, which no section fits, and five under the right. A section a tab
+// has no room for is said in the log: one left out in silence was looked
+// for on every tab. Seen in play the same day (examples/options, the GOG
+// game at its main menu, the screen driven through its script): a heading,
+// a checkbox and a slider under the right column's "Frame-buffer effects",
+// the bar as "Detail" above it, the slider in line with the tab's three
+// and ending just above Restore Defaults; the checkbox asked as the tab
+// was first shown, a click kept and drawn; the slider stepped twice, `set`
+// called for each; the Game tab's sections, the loader's among them, as
+// before. The log had a warning for the example's fourth section, which
+// the Video tab had no room for, and for its second, six rows where the
+// Game tab's right column had three left under the loader's own section.
+//
 // A choice with ChoiceStyle::Dropdown is the game's own dropdown, as the
 // Game tab's Difficulty is (DAOLib #66, read 2026-10-11; dao/core/
 // OptionsMovie.h, dev/GUI.md). It talks as the slider does: its value asked
@@ -87,6 +103,7 @@
 #include "dao/Guard.h"
 #include "dao/Gui.h"
 #include "dao/Hook.h"
+#include "dao/Log.h"
 #include "dao/String.h"
 #include "dao/core/InputCode.h"
 #include "dao/core/OptionsMovie.h"
@@ -150,6 +167,7 @@ struct Section
     std::wstring title;
     SectionState state = SectionState::Waiting;
     Column column = Column::Either;
+    Tab tab = Tab::Game;
 };
 
 // A checkbox in an open movie waiting to be told its option's value.
@@ -210,6 +228,70 @@ std::int32_t MovieColumn(Column column)
     return core::options_movie::kEitherColumn;
 }
 
+core::options_movie::Tab MovieTab(Tab tab)
+{
+    return tab == Tab::Video ? core::options_movie::Tab::Video : core::options_movie::Tab::Game;
+}
+
+// Under g_mutex: section `index` as the movie's patch takes it.
+core::options_movie::Section MovieSection(std::size_t index)
+{
+    core::options_movie::Section section;
+    section.title = Utf8(g_sections[index].title);
+    section.column = MovieColumn(g_sections[index].column);
+    section.tab = MovieTab(g_sections[index].tab);
+    for (const Entry &entry : g_entries)
+    {
+        if (entry.section != index)
+        {
+            continue;
+        }
+        if (entry.toggle)
+        {
+            section.toggles.push_back({entry.option, Utf8(entry.toggle->label), Utf8(entry.toggle->tooltip)});
+        }
+        else if (entry.choice)
+        {
+            core::options_movie::Choice choice{entry.option,
+                                               Utf8(entry.choice->label),
+                                               Utf8(entry.choice->tooltip),
+                                               {},
+                                               entry.choice->style == ChoiceStyle::Dropdown};
+            for (const std::wstring &value : entry.choice->values)
+            {
+                choice.values.push_back(Utf8(value));
+            }
+            section.choices.push_back(std::move(choice));
+        }
+    }
+    return section;
+}
+
+// Under g_mutex: gives a section the state the patch left it in, and says so
+// in the log when it is newly left out. A section left out in silence is
+// looked for on the screen (DAOLib #79: one was, on every tab).
+void Became(Section &section, SectionState state, std::size_t rows, std::size_t freeRows)
+{
+    if (section.state == state)
+    {
+        return;
+    }
+    section.state = state;
+    const std::string_view tab = section.tab == Tab::Video ? "Video" : "Game";
+    if (state == SectionState::NoRoom)
+    {
+        spdlog::warn("options: the section \"{}\" is left out: it takes {} rows one under the other in one column "
+                     "of the {} tab, which has {} left in its two, or a section before it on that tab was left out",
+                     Utf8(section.title), rows, tab, freeRows);
+    }
+    else if (state == SectionState::Failed)
+    {
+        spdlog::warn("options: the section \"{}\" is left out: the options screen's {} tab is not as it was read, "
+                     "so nothing was added to it",
+                     Utf8(section.title), tab);
+    }
+}
+
 // The options movie as the game opens it: the sections placed.
 std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
 {
@@ -218,53 +300,28 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
         const std::lock_guard lock(g_mutex);
         for (std::size_t i = 0; i < g_sections.size(); ++i)
         {
-            core::options_movie::Section section;
-            section.title = Utf8(g_sections[i].title);
-            section.column = MovieColumn(g_sections[i].column);
-            for (const Entry &entry : g_entries)
-            {
-                if (entry.section != i)
-                {
-                    continue;
-                }
-                if (entry.toggle)
-                {
-                    section.toggles.push_back({entry.option, Utf8(entry.toggle->label), Utf8(entry.toggle->tooltip)});
-                }
-                else if (entry.choice)
-                {
-                    core::options_movie::Choice choice{entry.option,
-                                                       Utf8(entry.choice->label),
-                                                       Utf8(entry.choice->tooltip),
-                                                       {},
-                                                       entry.choice->style == ChoiceStyle::Dropdown};
-                    for (const std::wstring &value : entry.choice->values)
-                    {
-                        choice.values.push_back(Utf8(value));
-                    }
-                    section.choices.push_back(std::move(choice));
-                }
-            }
-            sections.push_back(std::move(section));
+            sections.push_back(MovieSection(i));
         }
     }
-    std::size_t shown = 0;
+    std::vector<bool> shown;
     auto patched = core::options_movie::AddSections(movie, sections, shown);
     const std::lock_guard lock(g_mutex);
-    const bool readable = core::options_movie::FreeSlots(movie).has_value();
-    for (std::size_t i = 0; i < g_sections.size(); ++i)
+    // Sections are only ever added, so the first of g_sections are the ones patched.
+    // The rows a tab has left are counted with this patch's own sections in.
+    const std::span<const std::byte> after = patched ? std::span<const std::byte>(*patched) : movie;
+    for (std::size_t i = 0; i < sections.size(); ++i)
     {
-        if (i < shown)
+        // AddSections gives nothing both when the movie is not as read and when no section
+        // fits: on a tab that reads, a section not shown had no room (DAOLib #46).
+        const auto slots = core::options_movie::FreeSlots(after, sections[i].tab);
+        SectionState state = slots ? SectionState::NoRoom : SectionState::Failed;
+        if (shown[i])
         {
-            g_sections[i].state = SectionState::Shown;
+            state = SectionState::Shown;
         }
-        else
-        {
-            // AddSections gives nothing both when the movie is not as read and when no
-            // section fits: in a movie that reads, a section not shown had no room
-            // (DAOLib #46).
-            g_sections[i].state = readable ? SectionState::NoRoom : SectionState::Failed;
-        }
+        const std::size_t rows = core::options_movie::kHeadingRows + sections[i].toggles.size() +
+                                 (core::options_movie::kChoiceRows * sections[i].choices.size());
+        Became(g_sections[i], state, rows, slots ? slots->size() : 0);
     }
     return patched;
 }
@@ -516,7 +573,7 @@ bool Attach()
 
 } // namespace
 
-bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices, Column column)
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices, Column column, Tab tab)
 {
     if (toggles.empty() && choices.empty())
     {
@@ -567,7 +624,7 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
         options.push_back(std::move(option));
     }
     const std::size_t section = g_sections.size();
-    g_sections.push_back({std::move(title), SectionState::Waiting, column});
+    g_sections.push_back({std::move(title), SectionState::Waiting, column, tab});
     std::size_t next = 0;
     for (Toggle &toggle : toggles)
     {

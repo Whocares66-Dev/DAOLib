@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <utility>
 
 namespace dao::core::options_movie
@@ -13,25 +14,42 @@ namespace
 {
 
 constexpr std::int32_t kRow = 35;           // pixels from one row to the next
-constexpr std::int32_t kLastRow = 403;      // the lowest a row can start, the screen's buttons below
 constexpr std::int32_t kControlHeight = 30; // what a checkbox takes of its row
-// A choice: the slider, right of the column's checkboxes, in two rows.
-constexpr std::int32_t kChoiceRight = 40;
-constexpr std::int32_t kDropdownRight = 4; // a dropdown, as the tab's own stand
 constexpr std::int32_t kChoiceHeight = (static_cast<std::int32_t>(kChoiceRows) * kRow) - (kRow - kControlHeight);
 constexpr std::uint16_t kDepthStep = 6;    // as the designer's own placements are apart
 constexpr std::int32_t kSetUpRegister = 2; // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
 
 // A heading: the bar, in its two rows, and the text in the bar.
 constexpr std::int32_t kBarHeight = 48;
-constexpr std::int32_t kBarDown = 6;                               // from its first row's top
-constexpr std::array<std::int32_t, 2> kBarLeftOfColumn = {15, 37}; // of the column's checkboxes
+constexpr std::int32_t kBarDown = 6; // from its first row's top
 constexpr std::int32_t kTextRight = 24;
 constexpr std::int32_t kTextDown = 13;
 constexpr std::int32_t kColumnReach = 45; // either side of a column's checkboxes, what is placed is the column's
 
-constexpr std::string_view kLastLeft = "OptLootShimmer_mc";
-constexpr std::string_view kLastRight = "OptShowTutorials_mc";
+// A column of a tab: the last of the game's controls in it, a checkbox, under
+// which its free rows are, and how what a section places stands to the
+// column's checkboxes.
+struct ColumnLayout
+{
+    std::string_view last;
+    std::int32_t lastRow = 0;       // the lowest a row can start in the column's clip, the screen's buttons below
+    std::int32_t barLeft = 0;       // a heading's bar, left of the checkboxes
+    std::int32_t sliderRight = 0;   // a slider, right of them, as the tab's own stand
+    std::int32_t dropdownRight = 0; // and a dropdown
+};
+using TabLayout = std::array<ColumnLayout, 2>;
+
+constexpr TabLayout kGameTab = {{{"OptLootShimmer_mc", 403, 15, 40, 4}, {"OptShowTutorials_mc", 403, 37, 40, 4}}};
+// The Video tab's columns are a clip each, the left one 50 lower than the
+// right: the lowest row is the Game tab's on the screen, and a different y
+// in each.
+constexpr TabLayout kVideoTab = {{{"OptVSync_mc", 398, 15, 41, 6}, {"OptFBFX_mc", 448, 38, 37, 4}}};
+
+constexpr const TabLayout &LayoutOf(Tab tab)
+{
+    return tab == Tab::Video ? kVideoTab : kGameTab;
+}
+
 constexpr std::string_view kFirstSetUp = "OptAutoPause_mc_init";
 constexpr std::string_view kHeadingText = "txt_Game";
 constexpr std::string_view kSlider = "OptTextureQuality_mc"; // the Video tab's: the symbol a choice is
@@ -87,12 +105,12 @@ gfx::Bytes DropdownSetUp(const Choice &choice)
 }
 
 // r2.<instance>_init = function () { this.SetText(title); };
-gfx::Bytes HeadingSetUp(const Slot &slot, std::string_view title)
+gfx::Bytes HeadingSetUp(std::string_view instance, std::string_view title)
 {
     using namespace gfx;
     const Bytes setText =
         Join({Push({Text(title), Integer(1), Register(1), Text("SetText")}), Do(Op::CallMethod), Do(Op::Pop)});
-    return Join({Push({Register(kSetUpRegister), Text(HeadingInstance(slot) + "_init")}), Function(setText),
+    return Join({Push({Register(kSetUpRegister), Text(std::string(instance) + "_init")}), Function(setText),
                  Do(Op::SetMember)});
 }
 
@@ -122,6 +140,65 @@ std::optional<Heading> FindHeading(std::span<const std::byte> movie)
     return std::nullopt;
 }
 
+// The symbol a control like the movie's own `instance` is an instance of.
+std::optional<std::uint16_t> SymbolOf(std::span<const std::byte> movie, std::string_view instance)
+{
+    const auto found = gfx::FindInstance(movie, instance);
+    if (!found)
+    {
+        return std::nullopt;
+    }
+    return found->character;
+}
+
+// What a section is made of, where the movie has it: the game's heading,
+// its slider with named stops and its dropdown.
+struct Symbols
+{
+    std::optional<Heading> heading;
+    std::optional<std::uint16_t> slider;
+    std::optional<std::uint16_t> picker;
+};
+
+Symbols SymbolsOf(std::span<const std::byte> movie)
+{
+    return {FindHeading(movie), SymbolOf(movie, kSlider), SymbolOf(movie, kPicker)};
+}
+
+// The last of the game's controls in each column of a tab, with the clip
+// each is in. Nothing if the movie has not both.
+std::optional<std::array<gfx::Instance, 2>> ColumnsOf(std::span<const std::byte> movie, Tab tab)
+{
+    const TabLayout &layout = LayoutOf(tab);
+    auto left = gfx::FindInstance(movie, layout[0].last);
+    auto right = gfx::FindInstance(movie, layout[1].last);
+    if (!left || !right)
+    {
+        return std::nullopt;
+    }
+    return std::array{std::move(*left), std::move(*right)};
+}
+
+// Whether something a clip places reaches into the row at `y` of the column
+// whose checkboxes stand at `x`: a bar is higher than a row, and lies in
+// two, as a choice does.
+bool Taken(const std::vector<gfx::Instance> &placed, const Symbols &symbols, std::int32_t x, std::int32_t y)
+{
+    return std::ranges::any_of(placed, [&](const gfx::Instance &instance) {
+        std::int32_t height = kControlHeight;
+        if (symbols.heading && instance.character == symbols.heading->bar)
+        {
+            height = kBarHeight;
+        }
+        else if (instance.character == symbols.slider || instance.character == symbols.picker)
+        {
+            height = kChoiceHeight;
+        }
+        return instance.x >= x - kColumnReach && instance.x <= x + kColumnReach && instance.y < y + kRow &&
+               instance.y + height > y;
+    });
+}
+
 } // namespace
 
 std::string ControlInstance(std::string_view option)
@@ -129,51 +206,34 @@ std::string ControlInstance(std::string_view option)
     return "Opt" + std::string(option) + "_mc";
 }
 
-std::string HeadingInstance(const Slot &slot)
+std::string HeadingInstance(const Slot &slot, Tab tab)
 {
-    return "DAOLibSectionAt" + std::to_string(slot.x) + "x" + std::to_string(slot.y) + "_mc";
+    // The Game tab's as they were before a section had a tab: another
+    // plugin's older copy of the library names its headings so.
+    const std::string_view on = tab == Tab::Video ? "DAOLibVideoSectionAt" : "DAOLibSectionAt";
+    return std::string(on) + std::to_string(slot.x) + "x" + std::to_string(slot.y) + "_mc";
 }
 
-std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
+std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab)
 {
-    const auto left = gfx::FindInstance(movie, kLastLeft);
-    const auto right = gfx::FindInstance(movie, kLastRight);
-    if (!left || !right || left->sprite != right->sprite)
+    const auto columns = ColumnsOf(movie, tab);
+    if (!columns)
     {
         return std::nullopt;
     }
-    const std::vector<gfx::Instance> placed = gfx::InstancesOf(movie, left->sprite);
-    const auto heading = FindHeading(movie);
-    const auto slider = gfx::FindInstance(movie, kSlider);
-    const auto picker = gfx::FindInstance(movie, kPicker);
+    const Symbols symbols = SymbolsOf(movie);
     std::vector<Slot> slots;
-    std::int32_t column = 0;
-    for (const auto &last : {*left, *right})
+    for (std::size_t column = 0; column < columns->size(); ++column)
     {
-        for (std::int32_t y = last.y + kRow; y <= kLastRow; y += kRow)
+        const gfx::Instance &last = (*columns)[column];
+        const std::vector<gfx::Instance> placed = gfx::InstancesOf(movie, last.sprite);
+        for (std::int32_t y = last.y + kRow; y <= LayoutOf(tab)[column].lastRow; y += kRow)
         {
-            // Taken by whatever of the column's reaches into the row: a
-            // bar is higher than a row, and lies in two.
-            const bool taken = std::ranges::any_of(placed, [&](const gfx::Instance &instance) {
-                std::int32_t height = kControlHeight;
-                if (heading && instance.character == heading->bar)
-                {
-                    height = kBarHeight;
-                }
-                else if ((slider && instance.character == slider->character) ||
-                         (picker && instance.character == picker->character))
-                {
-                    height = kChoiceHeight;
-                }
-                return instance.x >= last.x - kColumnReach && instance.x <= last.x + kColumnReach &&
-                       instance.y < y + kRow && instance.y + height > y;
-            });
-            if (!taken)
+            if (!Taken(placed, symbols, last.x, y))
             {
-                slots.push_back({last.x, y, column});
+                slots.push_back({last.x, y, static_cast<std::int32_t>(column)});
             }
         }
-        ++column;
     }
     return slots;
 }
@@ -212,17 +272,6 @@ std::size_t FirstRun(const std::vector<Slot> &slots, std::size_t rows, std::int3
     return wanted != slots.size() ? wanted : FirstRunIn(slots, rows, kEitherColumn);
 }
 
-// The symbol a control like the movie's own `instance` is an instance of.
-std::optional<std::uint16_t> SymbolOf(std::span<const std::byte> movie, std::string_view instance)
-{
-    const auto found = gfx::FindInstance(movie, instance);
-    if (!found)
-    {
-        return std::nullopt;
-    }
-    return found->character;
-}
-
 // Gives what is placed its depths: above `deepest`, in the order placed, but
 // for the dropdowns, which come last, the first placed last of all. A
 // dropdown's open list is drawn at the dropdown's depth, so it then covers
@@ -238,83 +287,160 @@ void GiveDepths(std::vector<gfx::Placement> &placements, std::uint16_t deepest, 
     }
 }
 
-} // namespace
-
-std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
-                                      std::size_t &shown)
+// What the sections place in one clip of the movie.
+struct ClipPlacements
 {
-    shown = 0;
-    auto slots = FreeSlots(movie);
-    const auto tab = gfx::FindInstance(movie, kLastLeft);
-    const auto heading = FindHeading(movie);
-    const auto slider = SymbolOf(movie, kSlider);
-    const auto picker = SymbolOf(movie, kPicker);
-    if (!slots || !tab || !heading)
-    {
-        return std::nullopt;
-    }
-    // The symbol a choice is, if the movie has it.
-    const auto symbol = [&](const Choice &choice) { return choice.dropdown ? picker : slider; };
-
+    std::uint16_t sprite = 0;
+    std::uint16_t deepest = 0;              // the highest depth the clip uses as the game has it
     std::vector<gfx::Placement> placements; // in the order placed; GiveDepths has their depths
+};
+
+// Everything the sections add to the movie: what is placed, a clip at a
+// time, and the set-up functions of all of it.
+struct Additions
+{
+    std::vector<ClipPlacements> clips;
     gfx::Bytes setUps;
+
+    std::vector<gfx::Placement> &In(const gfx::Instance &column)
+    {
+        auto clip = std::ranges::find(clips, column.sprite, &ClipPlacements::sprite);
+        if (clip == clips.end())
+        {
+            clips.push_back({column.sprite, column.deepest, {}});
+            clip = std::prev(clips.end());
+        }
+        return clip->placements;
+    }
+
+    void SetUp(const gfx::Bytes &code)
+    {
+        setUps.insert(setUps.end(), code.begin(), code.end());
+    }
+};
+
+// How many rows a section takes: its heading, a row a checkbox and two a
+// choice.
+std::size_t RowsOf(const Section &section)
+{
+    return kHeadingRows + section.toggles.size() + (kChoiceRows * section.choices.size());
+}
+
+// Places a section in `rows`, free rows one under the other in one column
+// of its tab, as many as RowsOf says: the game's bar and heading text, then
+// its checkboxes, which are what the column's last control is, then its
+// choices. Nothing in a movie without the game's heading.
+void PlaceSection(const Section &section, std::span<const Slot> rows, const std::array<gfx::Instance, 2> &columns,
+                  const Symbols &symbols, Additions &additions)
+{
+    if (!symbols.heading)
+    {
+        return;
+    }
+    const Heading &gameHeading = *symbols.heading;
+    const Slot &top = rows.front();
+    const auto side = static_cast<std::size_t>(top.column);
+    const ColumnLayout &layout = LayoutOf(section.tab)[side];
+    std::vector<gfx::Placement> &placements = additions.In(columns[side]);
     const auto place = [&](std::string name, std::uint16_t character, std::int32_t x, std::int32_t y) {
         placements.push_back({std::move(name), character, 0, x, y});
     };
-    for (const Section &section : sections)
+
+    const std::int32_t barX = top.x - layout.barLeft;
+    const std::int32_t barY = top.y + kBarDown;
+    const std::string heading = HeadingInstance(top, section.tab);
+    place({}, gameHeading.bar, barX, barY);
+    place(heading, gameHeading.text, barX + kTextRight, barY + kTextDown);
+    additions.SetUp(HeadingSetUp(heading, section.title));
+    for (std::size_t i = 0; i < section.toggles.size(); ++i)
     {
+        const Slot &row = rows[kHeadingRows + i];
+        place(ControlInstance(section.toggles[i].option), columns[side].character, row.x, row.y);
+        additions.SetUp(ToggleSetUp(section.toggles[i]));
+    }
+    for (std::size_t i = 0; i < section.choices.size(); ++i)
+    {
+        // A choice is the game's slider with named stops or its dropdown,
+        // in two rows.
+        const Choice &choice = section.choices[i];
+        const Slot &row = rows[kHeadingRows + section.toggles.size() + (kChoiceRows * i)];
+        const std::int32_t right = choice.dropdown ? layout.dropdownRight : layout.sliderRight;
+        const auto symbol = choice.dropdown ? symbols.picker : symbols.slider;
+        place(ControlInstance(choice.option), symbol.value_or(0), row.x + right, row.y);
+        additions.SetUp(choice.dropdown ? DropdownSetUp(choice) : SliderSetUp(choice));
+    }
+}
+
+// Places a tab's sections, in the order given, in the rows the tab has
+// free, and says in `shown` which went in. The first left out keeps those
+// after it out.
+void PlaceTab(std::span<const std::byte> movie, Tab tab, std::span<const Section> sections, const Symbols &symbols,
+              Additions &additions, std::vector<bool> &shown)
+{
+    const auto columns = ColumnsOf(movie, tab);
+    auto slots = FreeSlots(movie, tab);
+    if (!columns || !slots)
+    {
+        return;
+    }
+    for (std::size_t i = 0; i < sections.size(); ++i)
+    {
+        const Section &section = sections[i];
+        if (section.tab != tab)
+        {
+            continue;
+        }
         // The first rows free one under the other in one column, enough
-        // for the heading and every checkbox.
-        const std::size_t rows = kHeadingRows + section.toggles.size() + (kChoiceRows * section.choices.size());
+        // for the heading and every control; and each choice a symbol the
+        // movie has.
+        const std::size_t rows = RowsOf(section);
         const std::size_t first = FirstRun(*slots, rows, section.column);
-        const bool choicesFit =
-            std::ranges::all_of(section.choices, [&](const Choice &choice) { return symbol(choice).has_value(); });
+        const bool choicesFit = std::ranges::all_of(section.choices, [&](const Choice &choice) {
+            return (choice.dropdown ? symbols.picker : symbols.slider).has_value();
+        });
         if ((section.toggles.empty() && section.choices.empty()) || !choicesFit || first == slots->size())
         {
-            break;
+            return;
         }
-        const Slot top = (*slots)[first];
-        const std::int32_t barX = top.x - kBarLeftOfColumn[static_cast<std::size_t>(top.column)];
-        const std::int32_t barY = top.y + kBarDown;
-        place({}, heading->bar, barX, barY);
-        place(HeadingInstance(top), heading->text, barX + kTextRight, barY + kTextDown);
-        const gfx::Bytes headingSetUp = HeadingSetUp(top, section.title);
-        setUps.insert(setUps.end(), headingSetUp.begin(), headingSetUp.end());
-        for (std::size_t i = 0; i < section.toggles.size(); ++i)
-        {
-            // A checkbox is what the game's own are.
-            const Slot &row = (*slots)[first + kHeadingRows + i];
-            place(ControlInstance(section.toggles[i].option), tab->character, row.x, row.y);
-            const gfx::Bytes setUp = ToggleSetUp(section.toggles[i]);
-            setUps.insert(setUps.end(), setUp.begin(), setUp.end());
-        }
-        for (std::size_t i = 0; i < section.choices.size(); ++i)
-        {
-            // A choice is the game's slider with named stops or its
-            // dropdown, in two rows.
-            const Choice &choice = section.choices[i];
-            const Slot &row = (*slots)[first + kHeadingRows + section.toggles.size() + (kChoiceRows * i)];
-            const std::int32_t right = choice.dropdown ? kDropdownRight : kChoiceRight;
-            place(ControlInstance(choice.option), symbol(choice).value_or(0), row.x + right, row.y);
-            const gfx::Bytes setUp = choice.dropdown ? DropdownSetUp(choice) : SliderSetUp(choice);
-            setUps.insert(setUps.end(), setUp.begin(), setUp.end());
-        }
-        slots->erase(slots->begin() + static_cast<std::ptrdiff_t>(first),
-                     slots->begin() + static_cast<std::ptrdiff_t>(first + rows));
-        ++shown;
+        const auto begin = slots->begin() + static_cast<std::ptrdiff_t>(first);
+        const auto end = begin + static_cast<std::ptrdiff_t>(rows);
+        PlaceSection(section, {begin, end}, *columns, symbols, additions);
+        slots->erase(begin, end);
+        shown[i] = true;
     }
-    if (shown == 0)
+}
+
+} // namespace
+
+std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
+                                      std::vector<bool> &shown)
+{
+    shown.assign(sections.size(), false);
+    const Symbols symbols = SymbolsOf(movie);
+    if (!symbols.heading)
     {
         return std::nullopt;
     }
-    GiveDepths(placements, tab->deepest, picker);
-
-    auto placed = gfx::PlaceInSprite(movie, tab->sprite, placements);
-    auto patched =
-        placed ? gfx::InsertBefore(*placed, {kSetUpRegister, std::string(kFirstSetUp)}, setUps) : std::nullopt;
+    Additions additions;
+    for (const Tab tab : {Tab::Game, Tab::Video})
+    {
+        PlaceTab(movie, tab, sections, symbols, additions, shown);
+    }
+    if (additions.clips.empty())
+    {
+        return std::nullopt;
+    }
+    std::optional<gfx::Bytes> patched = gfx::Bytes(movie.begin(), movie.end());
+    for (ClipPlacements &clip : additions.clips)
+    {
+        GiveDepths(clip.placements, clip.deepest, symbols.picker);
+        patched = patched ? gfx::PlaceInSprite(*patched, clip.sprite, clip.placements) : std::nullopt;
+    }
+    patched = patched ? gfx::InsertBefore(*patched, {kSetUpRegister, std::string(kFirstSetUp)}, additions.setUps)
+                      : std::nullopt;
     if (!patched)
     {
-        shown = 0;
+        shown.assign(sections.size(), false);
     }
     return patched;
 }
