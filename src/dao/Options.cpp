@@ -63,6 +63,23 @@
 // label; the value kept across OK, Cancel and a second opening; nothing
 // overlapping, and the game's own sections and another plugin's beside it
 // as before.
+//
+// A choice with ChoiceStyle::Dropdown is the game's own dropdown, as the
+// Game tab's Difficulty is (DAOLib #66, read 2026-10-11; dao/core/
+// OptionsMovie.h, dev/GUI.md). It talks as the slider does: its value asked
+// as its button is made and answered with the last known, told `get`'s
+// after, and a pick sent as the same message with the entry's index, so
+// nothing here knows which of the two a choice is but the patch. The
+// button shows the picked entry at once and is then told what `set`
+// returned, so a refused pick goes back. Seen in play the same day
+// (examples/options, the GOG game at its main menu, the screen driven
+// through its script): the dropdown under the right column's heading, its
+// label and button in line with the game's Subtitles above and looking as it
+// does, the slider under it; the list opened over the slider, drawn as the
+// game's own Difficulty list is over what is under that; a pick called
+// `set` once with the entry's index, closed the list and put the name on
+// the button; after Cancel and a second opening `get` was asked and the
+// button showed the pick. A refused pick was not tried.
 #include "dao/Options.h"
 
 #include "dao/Addresses.h"
@@ -199,8 +216,11 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
                 }
                 else if (entry.choice)
                 {
-                    core::options_movie::Choice choice{
-                        entry.option, Utf8(entry.choice->label), Utf8(entry.choice->tooltip), {}};
+                    core::options_movie::Choice choice{entry.option,
+                                                       Utf8(entry.choice->label),
+                                                       Utf8(entry.choice->tooltip),
+                                                       {},
+                                                       entry.choice->style == ChoiceStyle::Dropdown};
                     for (const std::wstring &value : entry.choice->values)
                     {
                         choice.values.push_back(Utf8(value));

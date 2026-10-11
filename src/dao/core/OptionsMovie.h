@@ -36,6 +36,20 @@
 //   moves. On the tabs whose checkboxes stand at x 7 the sliders stand
 //   about 40 to the right of them, 40 to 46 apart: two rows.
 //
+// - A choice can be a dropdown instead: the symbol the movie exports as
+//   Picker, the Game tab's own OptDifficulty_mc, OptPlotAssist_mc and
+//   OptSubtitles_mc (read 2026-10-11, guiexport.erf's movie and
+//   patch003.erf's alike), set up by OptionsUtils.MakePickerInit(option,
+//   label, tooltip, new Array(names...), null,
+//   OptionsMenu.PickEntryCallBack): the null is the entries' tooltips, and
+//   the callback sends the same SetClientOptionMessage a slider does. It
+//   asks its value with GetValue as its button is made, and is told it
+//   after as a checkbox is. The tab's own stand 4 to the right of the
+//   column's checkboxes and 60 apart: two rows. An open list is a clip of
+//   the picker's own, so it is drawn at the picker's depth: the game places
+//   its pickers deepest of the tab, the upper deeper than the lower, and an
+//   open list covers what is under it.
+//
 // So a section is added by placing a heading and checkboxes in the Game
 // tab's sprite, in the rows it has free, and adding their set-up functions
 // before the first of the game's own. The heading is the game's: its bar,
@@ -75,13 +89,15 @@ struct Toggle
 };
 
 // A choice: the option it sends the index of and is told it, its label,
-// its tooltip, and its values' names, two or more. UTF-8.
+// its tooltip, and its values' names, two or more. UTF-8. It is the game's
+// slider with a stop for each value, or with `dropdown` the game's dropdown.
 struct Choice
 {
     std::string option;
     std::string label;
     std::string tooltip;
     std::vector<std::string> values;
+    bool dropdown = false;
 };
 
 // A section's rows: its checkboxes, then its choices.
@@ -126,7 +142,9 @@ std::string HeadingInstance(const Slot &slot);
 // heading, its checkboxes and its choices in rows one under the other in
 // one column, a section never split or begun without room for all of it; `shown` is how
 // many went in, from the first. Nothing, and
-// `shown` 0, if the movie is not as read or no section fits.
+// `shown` 0, if the movie is not as read or no section fits. The dropdowns
+// are placed deepest, an upper one deeper than a lower, so that an open list
+// covers what these sections put under it.
 std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::span<const Section> sections,
                                       std::size_t &shown);
 

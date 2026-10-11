@@ -96,6 +96,7 @@ CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
 GFX = "src/dao/core/GfxMovie.cpp"
+OPTIONS = "src/dao/core/OptionsMovie.cpp"
 INFLATE = "src/dao/core/Inflate.cpp"
 RANGE = "src/dao/core/Range.h"
 RELOCATE = "src/dao/core/Relocate.h"
@@ -308,6 +309,20 @@ MUTANTS: list[Mutant] = [
         GFX,
         "if (file.size() < length)",
         "if (file.size() + 1 < length)",
+    ),
+    # The options screen's dropdown (DAOLib #66): an open list is drawn at the
+    # dropdown's depth, and a dropdown stands in two rows.
+    Mutant(
+        "options-dropdown-deepest: a dropdown is deeper than what is under it, so its open list covers that",
+        OPTIONS,
+        "return placed.character != picker;",
+        "return placed.character == picker;",
+    ),
+    Mutant(
+        "options-dropdown-two-rows: a dropdown's second row is taken for the next plugin's section",
+        OPTIONS,
+        "(picker && instance.character == picker->character))",
+        "(picker && instance.character == 0))",
     ),
     Mutant(
         "inflate-blocks-after-first: a stream of several blocks is read to its last",

@@ -16,11 +16,15 @@
 // the boxes are as they were left (a change is made at the click). All of
 // it seen 2026-10-01 (dao/Options.h).
 //
-// A second section, "DAOLib example choice", has a choice of four named
-// values, the game's own slider with named stops: it goes under the right
-// column, since the left is full. It starts at "Normal"; the arrows and
-// the slider change it, the name beside it follows, and each change is
-// logged. Not yet seen in play.
+// A second section, "DAOLib example choice", has two choices of named
+// values and goes under the right column, since the left is full. The first
+// is a dropdown, the game's own as Difficulty is: a button with the value's
+// name, "Second" at the start, which opens a list of the three over the
+// slider under it; a pick closes the list, puts the name on the button and
+// is logged. The second is the game's slider with named stops, of four: it
+// starts at "Normal"; the track's ends and a drag change it, the name beside
+// it follows, and each change is logged. The slider was seen 2026-10-02
+// and the dropdown 2026-10-11 (dao/Options.cpp).
 // What it does goes to example_options.log.
 #include "dao/Options.h"
 #include "dao/Frame.h"
@@ -42,6 +46,7 @@ constexpr const wchar_t *kChoiceTitle = L"DAOLib example choice";
 std::atomic<bool> g_plain{false};
 std::atomic<bool> g_startsOn{true};
 std::atomic<std::int32_t> g_speed{1};
+std::atomic<std::int32_t> g_mode{1};
 
 const char *Name(dao::options::SectionState state)
 {
@@ -142,11 +147,26 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         g_speed = wanted;
         return wanted;
     };
+    dao::options::Choice mode;
+    mode.name = L"ExampleMode";
+    mode.label = L"A dropdown";
+    mode.tooltip = L"Three named values in a list; each pick is logged";
+    mode.values = {L"First", L"Second", L"Third"};
+    mode.style = dao::options::ChoiceStyle::Dropdown;
+    mode.get = [] {
+        spdlog::info("ExampleMode asked: {}", g_mode.load());
+        return g_mode.load();
+    };
+    mode.set = [](std::int32_t wanted) {
+        spdlog::info("ExampleMode changed: {} -> {}", g_mode.load(), wanted);
+        g_mode = wanted;
+        return wanted;
+    };
     // A choice of one value is refused.
     dao::options::Choice single = speed;
     single.name = L"ExampleSingle";
     single.values = {L"Only"};
-    const bool choiceAdded = dao::options::AddSection(kChoiceTitle, {}, {speed});
+    const bool choiceAdded = dao::options::AddSection(kChoiceTitle, {}, {mode, speed});
     const bool singleRefused = !dao::options::AddSection(L"Refused choice", {}, {single});
     spdlog::info("the choice added: {}; one value refused: {}", choiceAdded, singleRefused);
     dao::OnFrame(&Frame);

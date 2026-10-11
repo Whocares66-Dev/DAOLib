@@ -77,13 +77,14 @@ constexpr std::uint16_t kGameTab = 297;
 constexpr std::uint16_t kBar = 294;
 constexpr std::uint16_t kHeadingText = 224;
 constexpr std::uint16_t kSlider = 171;
+constexpr std::uint16_t kPicker = 219;
 constexpr std::uint16_t kVideoTab = 315;
 
 // The options movie in small: the game's own heading (its text clip
 // exported, over a bar), the Game tab with the last checkbox of each
 // column and two more controls, and the function that makes their set-up
-// functions.
-Bytes OptionsMovie()
+// functions. Without `pickers` it has none of the game's dropdowns.
+Bytes OptionsMovie(bool pickers = true)
 {
     Bytes tab;
     Put(tab, kGameTab, 2);
@@ -91,7 +92,11 @@ Bytes OptionsMovie()
     Add(tab, DesignerPlace(25, kCheckbox, 7, 158, "OptAutoPause_mc"));
     Add(tab, DesignerPlace(7, kCheckbox, 483, 166, "OptShowTutorials_mc"));
     Add(tab, DesignerPlace(43, kCheckbox, 7, 228, "OptLootShimmer_mc"));
-    Add(tab, DesignerPlace(69, 219, 488, 0, "OptSubtitles_mc"));
+    if (pickers)
+    {
+        Add(tab, DesignerPlace(59, kPicker, 11, 0, "OptDifficulty_mc"));
+        Add(tab, DesignerPlace(69, kPicker, 488, 0, "OptSubtitles_mc"));
+    }
     Add(tab, ShortTag(1, {})); // ShowFrame
     Put(tab, 0, 2);
 
@@ -147,7 +152,11 @@ TEST_CASE("a push and a function are written as the game's compiled script has t
     Put(expected, 3, 4);
     CHECK(gfx::Push({gfx::Register(2), gfx::Text("name"), gfx::Integer(3)}) == Record(0x96, expected));
 
+    // A null is its type alone.
+    CHECK(gfx::Push({gfx::Null(), gfx::Register(1)}) == Record(0x96, Bytes{std::byte{2}, std::byte{4}, std::byte{1}}));
+
     CHECK(gfx::Do(gfx::Op::SetMember) == Simple(0x4F));
+    CHECK(gfx::Do(gfx::Op::GetMember) == Simple(0x4E));
     CHECK(gfx::Do(gfx::Op::GetVariable) == Simple(0x1C));
     CHECK(gfx::Do(gfx::Op::CallMethod) == Simple(0x52));
     CHECK(gfx::Do(gfx::Op::CallFunction) == Simple(0x3D));
@@ -182,7 +191,7 @@ TEST_CASE("an instance is found by its name, with its sprite, character and plac
 
     const auto subtitles = gfx::FindInstance(movie, "OptSubtitles_mc");
     REQUIRE(subtitles);
-    CHECK(subtitles->character == 219);
+    CHECK(subtitles->character == kPicker);
     CHECK(subtitles->x == 488);
     CHECK(subtitles->y == 0);
 
@@ -380,10 +389,10 @@ TEST_CASE("everything a sprite places is listed", "[gfx]")
 {
     const Bytes movie = OptionsMovie();
     const auto instances = gfx::InstancesOf(movie, kGameTab);
-    REQUIRE(instances.size() == 4);
+    REQUIRE(instances.size() == 5);
     CHECK(instances[0].name == "OptAutoPause_mc");
-    CHECK(instances[3].name == "OptSubtitles_mc");
-    CHECK(instances[3].deepest == 69);
+    CHECK(instances[4].name == "OptSubtitles_mc");
+    CHECK(instances[4].deepest == 69);
     CHECK(gfx::InstancesOf(movie, 9999).empty());
     CHECK(gfx::InstancesOf({}, kGameTab).empty());
 }
@@ -526,6 +535,97 @@ TEST_CASE("a choice is the game's slider with named stops, in two rows under the
     REQUIRE(after);
     CHECK(after->size() == 6);
     CHECK(std::all_of(after->begin(), after->end(), [](const auto &slot) { return slot.column == 1; }));
+}
+
+TEST_CASE("a choice can be the game's dropdown, deepest so that its list covers what is under it", "[options]")
+{
+    using dao::core::options_movie::AddSections;
+    using dao::core::options_movie::Choice;
+    using dao::core::options_movie::ControlInstance;
+    using dao::core::options_movie::FreeSlots;
+    using dao::core::options_movie::Section;
+    const Bytes movie = OptionsMovie();
+    // Two sections with a dropdown each: one over a slider, six rows, which
+    // only the right column has; one under a checkbox, the left's five.
+    Section graphics{"Graphics", {}};
+    graphics.choices.push_back({"DAOLibAntiAliasing", "Anti-aliasing", "Which", {"Default", "SMAA"}, true});
+    graphics.choices.push_back({"DAOLibLook", "Look", "", {"Plain", "Vivid"}});
+    Section other{"Other", {{"DAOLibBox", "A box", ""}}};
+    other.choices.push_back({"DAOLibMode", "Mode", "", {"a", "b", "c"}, true});
+    std::size_t shown = 0;
+    const auto patched = AddSections(movie, std::vector<Section>{graphics, other}, shown);
+    REQUIRE(patched);
+    CHECK(shown == 2);
+
+    // The first: the heading at 201 and 236, the dropdown at 271, 4 right
+    // of the column as the tab's own stand, the slider under it at 341.
+    const auto dropdown = gfx::FindInstance(*patched, ControlInstance("DAOLibAntiAliasing"));
+    const auto slider = gfx::FindInstance(*patched, ControlInstance("DAOLibLook"));
+    REQUIRE((dropdown && slider));
+    CHECK(dropdown->sprite == kGameTab);
+    CHECK(dropdown->character == kPicker);
+    CHECK(dropdown->x == 487);
+    CHECK(dropdown->y == 271);
+    CHECK(slider->character == kSlider);
+    CHECK(slider->y == 341);
+    // The second: its checkbox at 333, its dropdown at 368.
+    const auto box = gfx::FindInstance(*patched, ControlInstance("DAOLibBox"));
+    const auto mode = gfx::FindInstance(*patched, ControlInstance("DAOLibMode"));
+    REQUIRE((box && mode));
+    CHECK(mode->x == 11);
+    CHECK(mode->y == 368);
+
+    // The dropdowns are deeper than everything else placed, whichever
+    // section it is of, and the first, added first, deeper than the second.
+    CHECK(dropdown->depth > slider->depth);
+    CHECK(dropdown->depth > box->depth);
+    CHECK(mode->depth > box->depth);
+    CHECK(mode->depth > slider->depth);
+    CHECK(dropdown->depth > mode->depth);
+
+    // Its set-up: the movie's own callback, no tooltips for the entries, the
+    // values' array, then the game's helper called with the six.
+    const Bytes setUp =
+        gfx::Join({gfx::Push({gfx::Register(2), gfx::Text("OptDAOLibAntiAliasing_mc_init"), gfx::Text("OptionsMenu")}),
+                   gfx::Do(gfx::Op::GetVariable), gfx::Push({gfx::Text("PickEntryCallBack")}),
+                   gfx::Do(gfx::Op::GetMember), gfx::Push({gfx::Null()}),
+                   gfx::Push({gfx::Text("SMAA"), gfx::Text("Default"), gfx::Integer(2)}), gfx::Do(gfx::Op::InitArray),
+                   gfx::Push({gfx::Text("Which"), gfx::Text("Anti-aliasing"), gfx::Text("DAOLibAntiAliasing"),
+                              gfx::Integer(6), gfx::Text("OptionsUtils")}),
+                   gfx::Do(gfx::Op::GetVariable), gfx::Push({gfx::Text("MakePickerInit")}),
+                   gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::SetMember)});
+    CHECK(Holds(*patched, setUp));
+    // The slider beside it is still set up as a slider.
+    CHECK(Holds(*patched, gfx::Push({gfx::Text("MakeSliderPickerInit")})));
+    CHECK(gfx::InsertBefore(*patched, {2, "OptAutoPause_mc_init"}, gfx::Do(gfx::Op::Pop)));
+
+    // A dropdown's two rows are taken for whoever comes next, as a slider's
+    // are: nothing is free after these two, and after a heading and a
+    // dropdown alone the left column has its last row.
+    const auto after = FreeSlots(*patched);
+    REQUIRE(after);
+    CHECK(after->empty());
+    const auto alone =
+        AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}, true}}}}, shown);
+    REQUIRE(alone);
+    const auto left = FreeSlots(*alone);
+    REQUIRE(left);
+    REQUIRE(left->size() == 7);
+    CHECK((*left)[0] == dao::core::options_movie::Slot{7, 403, 0});
+}
+
+TEST_CASE("a dropdown in a movie with no picker of the game's is left out with its section", "[options]")
+{
+    using dao::core::options_movie::AddSections;
+    using dao::core::options_movie::Section;
+    const Bytes movie = OptionsMovie(false);
+    std::size_t shown = 99;
+    CHECK_FALSE(
+        AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}, true}}}}, shown));
+    CHECK(shown == 0);
+    // The same as a slider, or a checkbox alone, goes in.
+    CHECK(AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}}}}}, shown));
+    CHECK(shown == 1);
 }
 
 TEST_CASE("a section with a choice that does not fit is left out", "[options]")

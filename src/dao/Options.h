@@ -1,8 +1,9 @@
 // Adds a plugin's own settings to the game's options screen.
 //
 // AddSection puts a section on the Game tab of the options screen: a heading, then checkboxes
-// (Toggle) and sliders with named stops (Choice) that look and behave like the game's own. The
-// game does not save these settings, so the plugin must store them itself.
+// (Toggle) and choices of a few named values (Choice), each a slider with stops or a dropdown, that
+// look and behave like the game's own. The game does not save these settings, so the plugin must
+// store them itself.
 //
 //   dao::options::AddSection(L"Turn-based", {{
 //       .name = L"TurnBasedCombat",
@@ -40,12 +41,20 @@ struct Toggle
     std::function<bool(bool wanted)> set; // applies a click and returns the new value; required
 };
 
-// A slider with named stops in a plugin's section, like the detail sliders on the Video tab.
+// How a Choice is shown.
+enum class ChoiceStyle
+{
+    Slider,   // a slider with a stop for each value, like the detail sliders on the Video tab
+    Dropdown, // a button that opens a list of the values, like Difficulty on the Game tab
+};
+
+// A choice of one of a few named values in a plugin's section.
 //
-// `get` and `set` work as they do for a Toggle, but with the index of a stop in `values` in place
-// of a bool. `wanted` is always a valid index. Dragging across several stops calls `set` once for
-// each. As the screen opens, the slider shows the last value `get` or `set` returned (the first
-// stop before either has run), then switches to what `get` returns. A choice takes two rows.
+// `get` and `set` work as they do for a Toggle, but with the index of a value in `values` in place
+// of a bool. `wanted` is always a valid index. Dragging a slider across several stops calls `set`
+// once for each. As the screen opens, the choice shows the last value `get` or `set` returned (the
+// first value before either has run), then switches to what `get` returns. A choice takes two
+// rows. A dropdown's list opens downward over the rows under it.
 //
 //   dao::options::AddSection(L"Turn-based", {}, {{
 //       .name = L"TurnBasedSpeed",
@@ -58,17 +67,18 @@ struct Toggle
 struct Choice
 {
     std::wstring name;                                    // the option's name, as for a Toggle
-    std::wstring label;                                   // the text to the left of the slider
+    std::wstring label;                                   // the text to the left of the slider or dropdown
     std::wstring tooltip;                                 // the text shown under the label
-    std::vector<std::wstring> values;                     // the stops' names; at least two
-    std::function<std::int32_t()> get;                    // returns the index of the chosen stop
+    std::vector<std::wstring> values;                     // the values' names; at least two
+    ChoiceStyle style = ChoiceStyle::Slider;              // a slider, or a dropdown
+    std::function<std::int32_t()> get;                    // returns the index of the chosen value
     std::function<std::int32_t(std::int32_t wanted)> set; // applies a change, returns the new index
 };
 
 // Adds a section of settings to the Game tab of the options screen.
 // @param title the section's heading, which is also its key for StateOf
 // @param toggles the checkboxes, listed first
-// @param choices the sliders, listed after the checkboxes
+// @param choices the sliders and dropdowns, listed after the checkboxes in the order given
 // @return false, with nothing added, if the section has no toggles or choices, a name is not
 //  letters and digits or is already taken, a callback is missing, or a choice has fewer than
 //  two values

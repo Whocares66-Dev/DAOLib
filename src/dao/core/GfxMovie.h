@@ -59,6 +59,7 @@ struct Value
         Text,
         Integer,
         Register,
+        Null,
     };
     Kind kind = Kind::Integer;
     std::string text;
@@ -69,6 +70,7 @@ struct Value
 Value Text(std::string_view text);
 Value Integer(std::int32_t number);
 Value Register(std::int32_t number);
+Value Null();
 
 // One push of these values, the strings written out in it.
 Bytes Push(std::initializer_list<Value> values);
@@ -81,6 +83,7 @@ enum class Op : std::uint8_t
     GetVariable = 0x1C,
     CallFunction = 0x3D,
     InitArray = 0x42,
+    GetMember = 0x4E,
     SetMember = 0x4F,
     CallMethod = 0x52,
 };

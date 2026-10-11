@@ -857,6 +857,11 @@ Value Register(std::int32_t number)
     return {Value::Kind::Register, {}, number};
 }
 
+Value Null()
+{
+    return {Value::Kind::Null, {}, 0};
+}
+
 Bytes Push(std::span<const Value> values)
 {
     Bytes body;
@@ -875,6 +880,9 @@ Bytes Push(std::span<const Value> values)
         case Value::Kind::Register:
             body.push_back(std::byte{4});
             body.push_back(static_cast<std::byte>(value.number));
+            break;
+        case Value::Kind::Null:
+            body.push_back(std::byte{2});
             break;
         }
     }
