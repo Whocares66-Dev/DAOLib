@@ -5,7 +5,7 @@ Dragon Age: Origins Ultimate Edition is sold by GOG, EA and Steam, all at 1.05.1
 | Build | State |
 |---|---|
 | GOG | The one everything was read in: the Ghidra project, the names, every address in a comment. Verified in play. |
-| EA app | Known to the address library. Seen in play 2026-10-01 with the loader put in from the build tree ("Seen in play"). Not yet run deployed. |
+| EA app | Known to the address library. Seen in play 2026-10-01 with the loader put in from the build tree ("Seen in play"). Not yet run deployed, 0.1.0 included: on this machine the EA app starts Steam's copy, since `HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age` has `Path` = Steam's folder (`Flavour = steam`; the play tester, 2026-10-10), a machine-wide key that is the user's to change. |
 | Steam | `steam-1.05`, read 2026-10-01 in the address library (its `dev/STEAM.md`): GOG's code byte for byte, every GOG ID at its GOG address, wrapped by SteamStub 2.1, and with GOG's link stamp. Below. |
 
 ## IDs, not addresses
