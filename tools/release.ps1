@@ -136,7 +136,7 @@ if (-not $notesMatch.Success -or -not $notesMatch.Groups['notes'].Value.Trim()) 
 }
 $notes = $notesMatch.Groups['notes'].Value.Trim()
 $notesFile = Join-Path $repo "build\release-notes-$version.md"
-$zip = Join-Path $repo "build\package\$name-$version.zip"
+$zip = Join-Path $repo "dist\$name-$version.zip"
 
 # Below 1.0 is GitHub's prerelease, as SkyrimFollowerTactics' releases are.
 $prerelease = $major -eq 0

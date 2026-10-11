@@ -3,7 +3,7 @@
     Make the release zip a player installs DAOLib from.
 
 .DESCRIPTION
-    After `.\tools\build.ps1 -Preset release`, writes build\package\DAOLib-<version>.zip,
+    After `.\tools\build.ps1 -Preset release`, writes dist\DAOLib-<version>.zip,
     laid out as the game's install folder, so a player extracts it there (beside
     bin_ship) as SKSE is installed into Skyrim's: bin_ship\version.dll and its .pdb (so
     the crash logger names DAOLib's frames), bin_ship\daolib\addresses\*.bin (one per
@@ -71,7 +71,7 @@ else {
     Show-Warn "extern\DAOAddressLibrary is at no release's tag; a DAOLib release holds it at one"
 }
 
-$out = Join-Path $repo 'build\package'
+$out = Join-Path $repo 'dist'
 $stage = Join-Path $out $name
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 $binShip = Join-Path $stage 'bin_ship'
