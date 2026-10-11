@@ -57,3 +57,26 @@ Since 2026-09-30 the probe also watches the engine's event queue (`Events.h`): a
 The probe also calls commands through the library's `Invoke` (`dao/generated/ScriptApi.h`) from inside its shadows, on the scripts' thread: `api::GetObjectType` on every object a getter check finds, against the scripts' bit for its type byte; `api::GetStringLength` on every `GetTag` and `GetName` answer, against its length; `api::GetPositionFromLocation` on every `GetLocation` answer, against the location's position. Their counts go out with the rest as `invoke check` lines.
 
 A getter no script calls in a session stays unchecked. The census saw `GETCOMBATSTATE` run through every fight; the placeable getters want chests and locks, and `GetMapPinState` the world map.
+
+## Loading screens
+
+Since 2026-10-10 the probe times every step of a loading screen (`Loading.h`, DAOLib #64). The loading game mode runs one state a frame, each a machine in numbered steps (`src/dao/Addresses.h`, "The loading mode's states"): state 5 is an area transition within the area list in memory, state 4 a swap to another list, state 3 a save, 2 and 8 a game starting or a save loading, 6 what follows each of them. A detour on the mode's update reads the state and its step before the engine runs them and times the call. In `probe.log`:
+
+- `loading watch: detoured GameModeLoading::Update at 0x006c9680` once at start-up.
+- `loading: begins in state 7, for area "<tag>" at waypoint "<tag>"; ...` at a loading screen's first update, with the rooms of the area being left.
+- `loading: state 5 (area transition) step 10: 1 update(s), X ms inside, Y ms in all` as each step ends. "Inside" is the time the engine spent in the step's updates, work that holds the frame; the rest of "in all" is frames going by while something else is waited for, a background load most often.
+- `loading: done in X ms, ... longest (state/step): ...; now in area "<tag>", R rooms, L loaded, N loading` on the first frame out of the loading mode: the whole screen, its five longest steps, and the rooms of the area arrived in.
+
+The question it answers is which steps a loading screen's time is in: the rooms and models of the area arrived in, which could be loaded ahead of a door, or the saving and rebuilding of an area list, which could not.
+
+**Seen in play**, 2026-10-10 (GOG, the play tester's session, the file cache warm from earlier that day; seven loading screens, each with its `begins` and `done`, 131 lines in all). A door's screen begins in state 7, a save's load in state 2. Times are the `done` line's; the game then takes another 0.12 to 0.23 s to its first frame out of the mode, by Eluvian's clock.
+
+| Loading screen | In all | Where it went |
+|---|---|---|
+| A save loading into Redcliffe village | 3.6 s | state 2, 23 steps, the longest 0.9 s |
+| Village to its tavern, the same area list, twice | 0.7 s, 0.5 s | state 5 step 10 (the old area's rooms out, the new layout in, the party placed): 0.39 s, 0.24 s |
+| Tavern back to the village, twice | 2.4 s, 1.5 s | state 6 step 4, the area's script on `EVENT_TYPE_AREALOAD_PRELOADEXIT`: 0.85 s, 0.70 s in one update. State 6 step 6, waiting on rooms: 1.17 s, 0.45 s |
+| Village to the castle by the world map, another list | 1.8 s | state 4: the old list out 0.18 s, the new list's files 0.46 s, its areas built 0.25 s, the layout 0.18 s |
+| Castle to the village by the world map | 2.1 s | state 4: the list's files 0.32 s, its areas built 0.62 s; the area's script 0.21 s |
+
+So what loading areas ahead of a door could have ready, the rooms of the area arrived in, was 0.45 to 1.2 s of the longest screen and next to nothing of the others; the rest is the area's own script, the saving and rebuilding of an area list, and a few frames either side. Into the tavern the door's opening took a second before the loading began, longer than the loading. Not seen: a cold file cache, a long session, the larger areas later in the game.

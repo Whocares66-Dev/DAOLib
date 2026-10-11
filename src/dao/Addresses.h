@@ -920,6 +920,59 @@ DAO_ADDRESS(kSaveGame_FindSave, 12676)
 // (mustExist), and a save once, after Write (not mustExist).
 DAO_ADDRESS(kGameModeLoading_Worker, 15080)
 DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, 15140)
+// The loading mode's states, read 2026-10-10 for DAOLib #64 (could the
+// areas behind a map's doors be loaded ahead). The mode's update (Update,
+// its slot 8, __thiscall (float seconds), `ret 4`) runs one state a frame,
+// by the word at its +0x84 (its slot 13 reads it, its slot 14, 0x006C63F0,
+// sets it), then its base's update (0x00694640). Each state is a machine in
+// numbered steps, kept in the mode's data (a GameModeLoadingData, the
+// mode's +0x130; its +0 an error, which stops them all): 2 and 8
+// (0x006C76F0, not read; step at +0x64), 3 the Worker above (+0x70), 4
+// (0x006C8800, +0x6C), 5 (0x006C8420, +0x6C), 6 (0x006C8EF0, +0x74) and 7
+// (0x006C7380, no steps).
+//
+// DoAreaTransition (CCModule::ForScript_DoAreaTransition, 0x00600A40) makes
+// the data with kind 7 and sets the game mode to loading. State 7 finds the
+// area asked for (its tag a std::wstring at the mode's +0xD4, the waypoint's
+// at +0xF0; 0x006C7080) and goes to 5 if the area is in the area list in
+// memory, to 4 if not. The engine's own log calls them "Area Transition"
+// and "Area List Swap". An area list is a file, modules\<module>\data\
+// al_*.rim; of the single-player module's 190, 140 hold one area.
+//
+// State 5: 1 pauses; 2 tells the graphics (its slot 60); 10 (0x006C5C50)
+// unloads the area left (0x0067B390: every room of its layout, slot 8),
+// makes the new area's scene (its +0x62C) the graphics', and has the new
+// area's layout load around the arrival point (0x0067B210, which reads the
+// area's .bin and hands the point to the layout, 0x005CA590, and so to
+// AreaLayout::Update); 13 waits while 0x006C6EE0 answers true: a party
+// member's model still loading (the creature's +0x7BC), or, for any area of
+// the list, a placeable (the area's vector at +0x244) or a creature
+// (+0x254) not yet in (0x0067F420); then 0x006C73C0 puts the party at the
+// point; 14 unpauses and sets state 6.
+//
+// State 4: 1 pauses; 3 and 4 save each area of the list left, one a frame
+// (0x006FB3A0, 0x006FA5C0); 5 unloads it; 6 loads the new list
+// (0x006FBFF0); 7 and 8 wait on its files (0x00A590C0); 9 builds its
+// areas, some each frame (0x006FABB0: 0 going, 1 done, else failed); 10 to
+// 14 as state 5's 10 to 14.
+//
+// State 6 follows each: 1 sets the game mode the loading began in; 4 sends
+// the hero's area EVENT_TYPE_AREALOAD_PRELOADEXIT (38; 42 after a save's
+// load) and runs the event queue at once (AIMaster::Update), so the area's
+// own script runs inside the step; 6 runs AreaLayout::Update each frame and
+// waits, paused, while rooms still load (0x005C84D0, the same count
+// AreaLayout::Update unpauses on); 7 and 8 send the POSTLOADEXIT event (39
+// or 43) and leave the mode.
+//
+// In play, 2026-10-10 (the probe's loading watch, dev/PROBE.md, file cache
+// warm): Redcliffe village to its tavern, in the same list, 0.5 and 0.7 s,
+// of it 0.24 and 0.39 s in state 5's step 10, which ran through 13 in the
+// one update each time; back out to the village 1.5 and 2.4 s, of it 0.70
+// and 0.85 s in state 6's step 4, one update, and 0.45 and 1.17 s in its
+// step 6 (18 and 57 updates); village to castle and back by the world map,
+// list swaps, 1.8 and 2.1 s, of it 0.32 to 0.46 s in state 4's step 6 and
+// 0.25 to 0.62 s in its step 9. The name is ours.
+DAO_ADDRESS(kGameModeLoading_Update, 15094)
 
 // The camera and the party's selection, read 2026-09-30 from
 // CenterOnObjectMessage's handler (dao/Messages.h). Party::Select,
