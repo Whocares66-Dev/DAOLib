@@ -973,6 +973,60 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, 15140)
 // list swaps, 1.8 and 2.1 s, of it 0.32 to 0.46 s in state 4's step 6 and
 // 0.25 to 0.62 s in its step 9. The name is ours.
 DAO_ADDRESS(kGameModeLoading_Update, 15094)
+// The module's area list, read 2026-10-10 for DAOLib #64 (could a second
+// list be kept ready). The module owns one, a CSAreaList (0xE0 bytes, over
+// CResLST; constructor 0x006FBE50, taking the list's name by value) at its
+// +0x2CC. DropAreaList, __thiscall, no arguments, calls the list's deleting
+// destructor, its only virtual, and nulls the field; the destructor
+// (0x006FBEE0) tears down (0x00684760) and deletes each of its areas, found
+// by ID in the application's table. 0x005FE170, __thiscall (the name), makes
+// a list only if the field is null. ReadAreas, __thiscall (int, 1 from the
+// swap), `ret 4`, empties the list's entries and reads them again, from the
+// resource manager's `are` files or its own Area_List of Area_ID and
+// Area_Name, answering 1 or 0: 0x48 bytes each, the area's ID first, in a
+// vector at +0xB8, with the next to save or build at +0xC8. 0x006FABB0,
+// which the engine's own text calls CSAreaList::LoadAreas(), builds one
+// CCArea a call from that cursor (0 more to come, 1 all built, 0x12 an area
+// the application already has: "Trying to load an already loaded area!").
+// FindArea, __thiscall (const std::wstring &tag), `ret 4`, answers the
+// list's area of that tag or null. The swap (state 4 above) calls
+// DropAreaList at its step 5, makes and reads the list at 6, and builds at
+// 9; its step 10 unloads the rooms of the area the party's hero is still in
+// (0x0062FD10 on the party). A teardown also unloads a RIM named for the
+// area from the resource manager (0x004C8330). The names but LoadAreas are
+// ours.
+DAO_ADDRESS(kCCModule_DropAreaList, 11006)
+DAO_ADDRESS(kCSAreaList_ReadAreas, 15833)
+DAO_ADDRESS(kCSAreaList_FindArea, 15814)
+// The list's RIM trees, read 2026-10-10 after the first try at keeping a
+// list (DAOLib #64) waited ten seconds at every swap. The application's
+// +0xC0 is a ModuleResourceManager (vftable 0x00B00958, over RIMTreeManager,
+// constructor 0x005DB6F0), with the tree loaded for the module's list at its
+// +0x7C. The swap's step 7 hands it the tag of the area asked for
+// (0x005FBAB0): the area's node is found (0x00A58F30), and if it is not
+// loaded already (0x00A587E0), the current tree is unloaded when it is not
+// the node's own (Unload, __thiscall (tree), `ret 4`), the node's (its
+// +0x58) is loaded (0x00A59770) and made the current one. Step 8 calls the
+// manager's update each frame (0x00A590C0, __thiscall (float seconds)),
+// which drops from its vector at +0x40 each tree that has finished
+// unloading (0x00A58B00), and while any is left adds the seconds to a
+// count at +0x4C and answers false until that reaches 10.0; then it goes on
+// regardless. In play, 2026-10-10, with a list kept and so its areas alive:
+// step 8 took 10.0 s at each of three swaps, and the fourth crashed inside
+// that update (0x004E6677, reading 0x23, under 0x00A58A29). The name is
+// ours.
+DAO_ADDRESS(kRIMTreeManager_Unload, 33383)
+// FindNode, __thiscall (const std::wstring &area tag), `ret 4`, is the
+// lookup 0x005FBAB0 begins with: the area's node, its tree at +0x58, or
+// null. The manager's current tree is also what tells a transition which
+// list the party is in: 0x005FBBD0 makes the list's name from it, and the
+// loading mode's state 7 (0x006C7080) compares that with the list of the
+// area asked for, taking the same name for a door within the list. In
+// play, 2026-10-10, with the current tree left stale by a list kept: the
+// trip back was taken for such a door, the area was not in the module's
+// list, and the loading ended at once with the party where it stood. The
+// name is ours.
+DAO_ADDRESS(kRIMTreeManager_FindNode, 33377)
 // The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
 // profile of loading found its thread in FindFit for over a third of the
 // steps that build an area list and swap a layout. The engine's memory is
