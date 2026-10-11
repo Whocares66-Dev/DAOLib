@@ -76,13 +76,15 @@ The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x8
 
 **Verified in the game 2026-09-29.** The game started with the probe deployed. `loader.log` showed the fingerprint matching, the entry point detoured and `probe.dll` loaded, and `probe.log` showed both pause hooks placed. The engine then called `CClientExoApp::SetPaused(false, false)` from `0x005DD34F`, a startup routine. The hook read the live object's RTTI as `CClientExoApp`, and the game played on. That call came on a different thread from the one the entry point ran on, so the game loop is not on the process's first thread. The install was put back to stock afterwards with `deploy.ps1 -Remove`.
 
-## Before every commit
+## Before merging to master
 
 ```powershell
 .\tools\build.ps1 -Preset debug -Test -Format -Lint
 .\tools\build.ps1 -Preset debug-asan -Test
 .\tools\build.ps1 -Preset debug-analyze
 ```
+
+**Not before every commit** (the user, 2026-10-11: "no need to run the fucking build gates every commit. only when merging to master"). On a feature branch, build and test what the change needs and commit. The three runs are for the merge to master.
 
 Tests first, then the formatters (clang-format, ruff format, gersemi for CMake) rewrite in place, then the linters. The `format-check` target fails instead of rewriting. Every one of these fails the run on a finding:
 
