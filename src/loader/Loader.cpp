@@ -34,6 +34,7 @@
 #include "dao/Plugin.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
+#include "fix/EngineHeap.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
@@ -240,6 +241,7 @@ void __stdcall EntryHook()
     spdlog::info("entry point reached; loading plugins");
     loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
+    fix::InstallEngineHeapFix();
     fix::InstallArchiveReadFix();
     LoadPlugins();
     spdlog::debug("starting the game");
@@ -264,6 +266,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
                      dao::Module::ImageAddress(caller));
         loader::instance::SeedSaves();
         loader::crashlog::StartWatchdog();
+        fix::InstallEngineHeapFix();
         fix::InstallArchiveReadFix();
         LoadPlugins();
         spdlog::debug("starting the game");

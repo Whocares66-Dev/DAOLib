@@ -973,6 +973,71 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, 15140)
 // list swaps, 1.8 and 2.1 s, of it 0.32 to 0.46 s in state 4's step 6 and
 // 0.25 to 0.62 s in its step 9. The name is ours.
 DAO_ADDRESS(kGameModeLoading_Update, 15094)
+// The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
+// profile of loading found its thread in FindFit for over a third of the
+// steps that build an area list and swap a layout. The engine's memory is
+// its own: operator new (0x00413660) calls 0x004B92C0 (size, alignment's
+// shift or -1 for the pool's own), which picks a pool, and operator delete
+// (0x004136C0) asks 0x004B8B90 which pool owns the pointer and calls that
+// pool's slot 6. The pools are ECPrivate::Pool (vftable 0x00AEF424, 21
+// slots) and two classes over it, ECPrivate::BlockPool (0x00AEFAC4) and
+// ECPrivate::StringPool (0x00AEF7F4).
+//
+// Pool's slot 4 (0x004BA880) allocates: under the pool's lock (the critical
+// section at its +0x40: 0x004C4D00 and 0x004C4D50 take it, 0x004C4D30 lets
+// it go) it rounds the size up to 4, finds a free block (0x004B9940),
+// unlinks it (slot 11), splits off what is left over when that is at least
+// the pool's smallest block (+0xEC) and links the remainder (slot 10), and
+// writes the block's header. Slot 5 (0x004BA9D0) reallocates, growing in
+// place over the free blocks that follow. Both read the header straight
+// from the pointer: the block's size at -0x10, its alignment's shift at
+// -0xA, a used flag at -9, and the size asked for just before the data.
+//
+// The free lists are twenty, at the pool's +4 on, by the size's bit length
+// (everything of 256 KiB and over in the last). 0x004B9940 starts at the
+// size's own list and goes up one at a time until one answers. FindFit,
+// __thiscall (first block of a list, size, alignment's shift), `ret 0xC`,
+// not reading `this`, searches one list: it walks all of it by the block's
+// +8, the room a block gives being its size (+0) less 0x18 and what the
+// alignment takes at that address; a block whose room is the size is the
+// answer at once, and otherwise the smallest block that fits, the first of
+// equals, at the list's end. So an allocation costs the length of its size
+// class's list. The name is ours.
+DAO_ADDRESS(kPool_FindFit, 4322)
+// The pools from outside, read 2026-10-11 (an audit for DAOLib #69: could
+// the pools be replaced whole). Everything outside the pool classes reaches
+// them through three functions, all __cdecl: Allocate (size, alignment's
+// shift or -1 for the pool's own; null for a size of 0), called by operator
+// new and three thunks (0x004136DA, 0x0041373F, 0x004694C7); Free
+// (pointer), operator delete's jump and 0x004694E5; Reallocate (pointer,
+// size), from 0x004136BA. Each builds the one manager on its first call
+// (0x004B8DA0): 0x4D4 bytes at g_memoryManager holding four pools, of which
+// two are set up, "Main Pool" and "Strings", each one HeapAlloc from the
+// process heap, never grown and never returned: 0x3700000 for Strings and
+// 0x31B00000 for Main, a MiB less at each try that fails. So the engine's
+// heap is 850 MiB, committed from the start, and no more. The pool is
+// chosen by a code on a per-thread stack (static TLS; 0x004B8B20 pushes,
+// 0x004B8B60 pops, an empty stack is the Main pool), and a pointer's owner
+// is found by address range (each pool's slot 15, by 0x004B8B90). A free of
+// a pointer no pool owns, or of a block already free, returns without a
+// word; a reallocation of a pointer no pool owns returns null, one to the
+// size already asked for returns the pointer. No code outside the classes
+// calls a pool's slot, the header's helpers have no caller outside them, and
+// the allocators above (Scaleform's, PhysX's, SpeedTree's, Umbra's) go
+// through operator new and its kin. FreeSubPool, __cdecl (code), frees a
+// BlockPool's sub-pool whole (its slot 20), from FreeLODMemoryTask and an
+// area layout's destructor; nothing calls the slot that makes one, and the
+// codes written are -1. Statistics, __cdecl (out, out, pool or -1), has one
+// caller, PhysX's manager, for a pool that is not there. The names are ours.
+// The loader replaces the three, and answers the two, before the first
+// allocation (src/fix/EngineHeap.h), so in a game with the loader none of
+// the pools' own code above runs and the manager's pointer stays null.
+DAO_ADDRESS(kEngineMemory_Allocate, 4313)
+DAO_ADDRESS(kEngineMemory_Free, 4308)
+DAO_ADDRESS(kEngineMemory_Reallocate, 4314)
+DAO_ADDRESS(kEngineMemory_FreeSubPool, 4312)
+DAO_ADDRESS(kEngineMemory_Statistics, 4311)
+DAO_DATA(kEngineMemoryManager, 100163)
 
 // The camera and the party's selection, read 2026-09-30 from
 // CenterOnObjectMessage's handler (dao/Messages.h). Party::Select,

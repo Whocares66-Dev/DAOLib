@@ -237,6 +237,7 @@ add_library(
     SHARED
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
+    src/fix/EngineHeap.cpp
     src/loader/Instance.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
