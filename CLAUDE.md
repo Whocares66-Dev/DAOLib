@@ -37,7 +37,9 @@ src/fix/        corrections to the engine's own faults, one file each, built int
                 leaves and the indoor areas' beside it loaded ahead (AreaRooms, off with DAOLIB_AREA_ROOMS=0), a
                 loading screen's frames presented
                 fifteen a second so its loading does not wait for the monitor (LoadingPresent, off with
-                DAOLIB_LOADING_PRESENT=0). dev/CRASHES.md has the crash each one fixed
+                DAOLIB_LOADING_PRESENT=0) while its own task takes a turn every 16 ms, not 66, so a loading's
+                steps do not wait on it (LoadingPace, off with DAOLIB_LOADING_PACE=0). dev/CRASHES.md has the
+                crash each one fixed
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h), drawing in the world (Vfx.h), commands starting and ending (CommandEvents.h), a plugin's own text (Strings.h), the party's selection and who is controlled (Party.h), equipment going on and coming off (Equipment.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),

@@ -10,7 +10,8 @@
 // door, the wait was 320 to 672 ms with the sync on and 190 to 227 with it
 // off.
 //
-// So while the loading mode is updating, a frame is presented only when the
+// So while the loading mode is updating, or the loading screen's own task
+// is the one presenting, a frame is presented only when the
 // last was presented a fifteenth of a second ago or more: the pace the
 // loading screen's own task draws it at before the arrival (dao/Addresses.h,
 // "The loading screen's task"). The frames between are drawn and not

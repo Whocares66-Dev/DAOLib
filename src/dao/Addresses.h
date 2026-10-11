@@ -1085,6 +1085,26 @@ DAO_ADDRESS(kD3DGraphicsDriver_Present, 23543)
 // wait; the loading screen's own task (15 presents in a load from the menu)
 // did come through the driver's. The name is ours.
 DAO_ADDRESS(kD3DSwapChain_Present, 24028)
+// The loading screen's task, read 2026-10-11 for DAOLib #71, after a profile
+// (#68) found a loading screen's time in waits, a frame at a time. While a
+// loading screen is up it is drawn by Eclipse::UpdateAndRenderLoadingGUITask
+// (vftable 0x00AF6C80), a task of kind 2: the render thread's. Execute, its
+// slot 2 (__thiscall (float seconds), `ret 4`, answering 2 or 3 in eax),
+// begins every turn with a sleep
+// of 0x42, 66 ms (`push 0x42` at its +1, the call to the sleep's wrapper
+// 0x004E6170 at +5), then, while the graphics' slot 61 says the loading
+// screen is up, updates the GUI (the application's +0x158, its slot 8) by a
+// fixed step, the float 0.066 at Step, which nothing else reads, draws and
+// presents, and answers 2 to be run again; when the screen is no longer up
+// it sets its byte at +0x18 and answers 3. The graphics' slot 60 starts and
+// stops it, and to stop it spins on that byte (0x005272D0: `while (!done)
+// SwitchToThread()`), which the loading mode's state 6 calls at the top of
+// every update. In the profile the game's own frame, while loading, waited
+// on the render thread (WaitForSingleObject, 0x004E6120, under the
+// graphics' slot 20) 70 to 80 ms a frame, and the spin took 75 to 90 ms a
+// screen: the loading screen's turn. The names are ours.
+DAO_ADDRESS(kLoadingGUITask_Execute, 7121)
+DAO_DATA(kLoadingGUITask_Step, 63796)
 // The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
 // profile of loading found its thread in FindFit for over a third of the
 // steps that build an area list and swap a layout. The engine's memory is

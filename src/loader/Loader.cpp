@@ -37,6 +37,7 @@
 #include "fix/AreaLists.h"
 #include "fix/AreaRooms.h"
 #include "fix/EngineHeap.h"
+#include "fix/LoadingPace.h"
 #include "fix/LoadingPresent.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
@@ -248,6 +249,7 @@ void __stdcall EntryHook()
     fix::InstallArchiveReadFix();
     fix::InstallAreaListsFix();
     fix::InstallAreaRoomsFix();
+    fix::InstallLoadingPaceFix(); // before the present's: it writes into code the present's detours
     fix::InstallLoadingPresentFix();
     LoadPlugins();
     spdlog::debug("starting the game");
@@ -276,6 +278,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         fix::InstallArchiveReadFix();
         fix::InstallAreaListsFix();
         fix::InstallAreaRoomsFix();
+        fix::InstallLoadingPaceFix(); // before the present's: it writes into code the present's detours
         fix::InstallLoadingPresentFix();
         LoadPlugins();
         spdlog::debug("starting the game");

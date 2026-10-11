@@ -241,6 +241,7 @@ add_library(
     src/fix/AreaRooms.cpp
     src/fix/ArchiveRead.cpp
     src/fix/EngineHeap.cpp
+    src/fix/LoadingPace.cpp
     src/fix/LoadingPresent.cpp
     src/loader/Instance.cpp
     src/loader/Loader.cpp

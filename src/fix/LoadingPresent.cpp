@@ -34,6 +34,7 @@ std::atomic<std::int64_t> g_lastUpdate{0};
 std::atomic<std::int64_t> g_lastPresent{0};
 std::atomic<std::uint32_t> g_skipped{0};
 std::atomic<std::uint32_t> g_presented{0};
+std::atomic<DWORD> g_taskThread{0}; // the thread inside the loading screen's task, or 0
 
 // GameModeLoading::Update: __thiscall (float seconds), `ret 4`; what it leaves in eax is its
 // base's, and is passed on unread.
@@ -57,12 +58,30 @@ std::uintptr_t __fastcall Update(std::uintptr_t mode, int edx, float seconds)
     return g_update.Original()(mode, edx, seconds);
 }
 
+// UpdateAndRenderLoadingGUITask::Execute: __thiscall (float seconds), `ret 4`; a turn of the
+// loading screen's own task, on the render thread, which updates the loading screen, draws it
+// and presents it, and answers in eax whether to be run again.
+using TaskFn = std::uint32_t(__fastcall *)(std::uintptr_t task, int edx, float seconds);
+dao::Detour<TaskFn> g_task;
+
+std::uint32_t __fastcall Task(std::uintptr_t task, int edx, float seconds)
+{
+    g_taskThread.store(GetCurrentThreadId(), std::memory_order_relaxed);
+    const std::uint32_t result = g_task.Original()(task, edx, seconds);
+    g_taskThread.store(0, std::memory_order_relaxed);
+    return result;
+}
+
 // Whether this present is to be skipped: the loading mode is updating, and the last frame
 // presented was presented less than the interval ago.
 bool Skip()
 {
     const std::int64_t now = NowMs();
-    const bool loading = now - g_lastUpdate.load(std::memory_order_relaxed) <= kLoadingWindowMs;
+    // The loading screen's own task presents it while an update of the loading mode is long at
+    // its work, a save's read or an area's build, when no update is recent: its presents are a
+    // loading screen's whenever they come.
+    const bool loading = now - g_lastUpdate.load(std::memory_order_relaxed) <= kLoadingWindowMs ||
+                         g_taskThread.load(std::memory_order_relaxed) == GetCurrentThreadId();
     if (loading && now - g_lastPresent.load(std::memory_order_relaxed) < g_intervalMs)
     {
         g_skipped.fetch_add(1, std::memory_order_relaxed);
@@ -112,12 +131,14 @@ void InstallLoadingPresentFix()
                      "#73)");
         return;
     }
-    // All three or none: a present skipped with no update seen would be skipped in play.
+    // All four or none: a present skipped with no update seen would be skipped in play.
     if (!g_update.Attach(dao::addr::kGameModeLoading_Update, &Update) ||
+        !g_task.Attach(dao::addr::kLoadingGUITask_Execute, &Task) ||
         !g_present.Attach(dao::addr::kD3DGraphicsDriver_Present, &Present) ||
         !g_presentChain.Attach(dao::addr::kD3DSwapChain_Present, &PresentChain))
     {
         g_presentChain.Detach();
+        g_task.Detach();
         g_present.Detach();
         g_update.Detach();
         spdlog::warn("fixes: the present's detours could not be placed, so every frame of a loading screen is "
