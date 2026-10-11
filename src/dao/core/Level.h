@@ -51,7 +51,9 @@ struct MeshChunk
 {
     std::wstring name;
     std::vector<Point> positions;
-    std::vector<Uv> lightUv;            // one a vertex, or none if the chunk has no second texture coordinates
+    // The lightmap's coordinates, one a vertex: the second set of texture coordinates, or the
+    // only one; none if the chunk has no texture coordinates.
+    std::vector<Uv> lightUv;
     std::vector<std::uint32_t> indices; // three a triangle, into the two above
 };
 

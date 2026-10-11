@@ -143,20 +143,20 @@ Quaternion QuaternionOf(const std::vector<float> &floats)
     return floats.size() >= 4 ? Quaternion{floats[0], floats[1], floats[2], floats[3]} : Quaternion{0, 0, 0, 1};
 }
 
-std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std::byte> vertices,
-                                 std::span<const std::byte> indices)
+// Where in a vertex an element is, and its type.
+using Declared = std::optional<std::pair<std::size_t, std::uint32_t>>;
+
+// Where a chunk's vertices have their place and the lightmap's coordinates. The lightmap's are
+// the second set of texture coordinates, or the first where the chunk has no second: a terrain's
+// ground patch has one set and it is the lightmap's (read in Redcliffe's lak100d_14_0.msh, whose
+// tile's .rml lists the patch with a lightmap's part and atlas, 2026-10-11; with the second set
+// alone asked for, the 52 terrain levels came out with no ground). Whether a part is lightmapped
+// at all is the room's list's to say, not this.
+std::pair<Declared, Declared> DeclaredIn(const gff4::Struct &chunk)
 {
-    MeshChunk out;
-    out.name = chunk.String(kName).value_or(L"");
-    const std::size_t size = chunk.Get<std::uint32_t>(kChunkVertexSize).value_or(0);
-    const std::size_t count = chunk.Get<std::uint32_t>(kChunkVertexCount).value_or(0);
-    const std::size_t start = chunk.Get<std::uint32_t>(kChunkVertexOffset).value_or(0);
-    if (size == 0 || start > vertices.size() || count > (vertices.size() - start) / size)
-    {
-        return std::nullopt;
-    }
-    std::optional<std::pair<std::size_t, std::uint32_t>> position;
-    std::optional<std::pair<std::size_t, std::uint32_t>> light;
+    Declared position;
+    Declared first;
+    Declared second;
     for (const gff4::Struct &declarator : chunk.Structs(kChunkDeclarators))
     {
         if (declarator.Get<std::int32_t>(kDeclaratorStream).value_or(-1) != 0)
@@ -171,11 +171,31 @@ std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std:
         {
             position = {offset, type};
         }
+        else if (usage == kUsageTexcoord && which == 0)
+        {
+            first = {offset, type};
+        }
         else if (usage == kUsageTexcoord && which == 1)
         {
-            light = {offset, type};
+            second = {offset, type};
         }
     }
+    return {position, second ? second : first};
+}
+
+std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std::byte> vertices,
+                                 std::span<const std::byte> indices)
+{
+    MeshChunk out;
+    out.name = chunk.String(kName).value_or(L"");
+    const std::size_t size = chunk.Get<std::uint32_t>(kChunkVertexSize).value_or(0);
+    const std::size_t count = chunk.Get<std::uint32_t>(kChunkVertexCount).value_or(0);
+    const std::size_t start = chunk.Get<std::uint32_t>(kChunkVertexOffset).value_or(0);
+    if (size == 0 || start > vertices.size() || count > (vertices.size() - start) / size)
+    {
+        return std::nullopt;
+    }
+    const auto [position, light] = DeclaredIn(chunk);
     if (!position)
     {
         return std::nullopt;

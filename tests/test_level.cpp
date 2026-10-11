@@ -125,8 +125,10 @@ template <class T> void Append(std::vector<std::uint8_t> &to, const T &value)
 
 // A mesh of one chunk, "Slab": a triangle with corners (0,0,0), (2,0,0) and
 // (0,2,0), each vertex its place as three floats, a first texture
-// coordinate, and the lightmap's as two half floats: (0,0), (1,0), (0,1).
-std::vector<std::byte> MeshFile()
+// coordinate, and the lightmap's as two half floats: (0,0), (1,0), (0,1). With
+// `sets` 1 the chunk declares the first coordinates only, (0.5, 0.5) at every
+// vertex, as a terrain's ground patch does.
+std::vector<std::byte> MeshFile(std::uint32_t sets = 2)
 {
     Builder b = Start(
         "MESH", {{"mesh",
@@ -177,9 +179,9 @@ std::vector<std::byte> MeshFile()
     b.U32(chunk + 60, 3);
     // Three declarators in place: the place, the first coordinates, the lightmap's.
     const std::size_t declarators = b.bytes.size();
-    b.U32(declarators, 3);
+    b.U32(declarators, 1 + sets);
     const std::uint32_t rows[3][4] = {{0, 2, 0, 0}, {12, 1, 5, 0}, {20, 15, 5, 1}};
-    for (std::size_t i = 0; i < 3; ++i)
+    for (std::size_t i = 0; i < 1 + sets; ++i)
     {
         const std::size_t at = declarators + 4 + (24 * i);
         b.U32(at, 0);
@@ -285,6 +287,16 @@ TEST_CASE("a mesh's chunk is read: places, the lightmap's coordinates, the trian
     CHECK(chunks[0].lightUv[1] == level::Uv{1, 0});
     CHECK(chunks[0].lightUv[2] == level::Uv{0, 1});
     CHECK(chunks[0].indices == std::vector<std::uint32_t>{0, 1, 2});
+
+    // One set of texture coordinates is the lightmap's: a terrain's ground.
+    const std::vector<std::byte> ground = MeshFile(1);
+    const std::optional<gff4::File> groundFile = gff4::File::Parse(ground);
+    REQUIRE(groundFile.has_value());
+    const std::vector<level::MeshChunk> patch = level::Meshes(*groundFile);
+    REQUIRE(patch.size() == 1);
+    REQUIRE(patch[0].lightUv.size() == 3);
+    CHECK(patch[0].lightUv[1] == level::Uv{0.5F, 0.5F});
+    CHECK(patch[0].positions[1] == Point{2, 0, 0});
 }
 
 TEST_CASE("a model's mesh node has its place and turn through the nodes above it, and a layout its probe", "[level]")
