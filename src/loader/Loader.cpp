@@ -36,6 +36,7 @@
 #include "fix/ArchiveRead.h"
 #include "fix/AreaLists.h"
 #include "fix/EngineHeap.h"
+#include "fix/LoadingPresent.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
@@ -245,6 +246,7 @@ void __stdcall EntryHook()
     fix::InstallEngineHeapFix();
     fix::InstallArchiveReadFix();
     fix::InstallAreaListsFix();
+    fix::InstallLoadingPresentFix();
     LoadPlugins();
     spdlog::debug("starting the game");
     g_entry.Original()();
@@ -271,6 +273,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
         fix::InstallEngineHeapFix();
         fix::InstallArchiveReadFix();
         fix::InstallAreaListsFix();
+        fix::InstallLoadingPresentFix();
         LoadPlugins();
         spdlog::debug("starting the game");
     }

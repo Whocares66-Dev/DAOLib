@@ -239,6 +239,7 @@ add_library(
     src/fix/AreaLists.cpp
     src/fix/ArchiveRead.cpp
     src/fix/EngineHeap.cpp
+    src/fix/LoadingPresent.cpp
     src/loader/Instance.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp

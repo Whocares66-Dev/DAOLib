@@ -1027,6 +1027,30 @@ DAO_ADDRESS(kRIMTreeManager_Unload, 33383)
 // list, and the loading ended at once with the party where it stood. The
 // name is ours.
 DAO_ADDRESS(kRIMTreeManager_FindNode, 33377)
+// The frame's present, read 2026-10-11 for DAOLib #73, after a profile (#68)
+// found the arrival's wait for rooms held to the monitor. Present is
+// D3DDriver::D3DGraphicsDriver's slot 10 (vftable 0x00B2E174), __thiscall,
+// no arguments: the device's Present (the object at the driver's +0x100,
+// its slot 17) with four nulls, answering in al whether the result is
+// anything but D3DERR_DEVICELOST (0x88760868). The driver calls the device
+// itself for resources too, from whatever thread asks: CreateIndexBuffer
+// in its slot 22 (0x0086A3F0) and CreateTexture in its slot 43
+// (0x00868FB0), with the device at its +0xFC. In play the streaming thread
+// spent over half of the wait under those two in ntdll's
+// ZwWaitForAlertByThreadId, a lock's wait, and the wait was 337 to 672 ms
+// into Redcliffe village with vertical sync on and 190 to 227 with it off.
+// The name is ours.
+DAO_ADDRESS(kD3DGraphicsDriver_Present, 23543)
+// The other present, read 2026-10-11 after the first try at #73 skipped
+// nothing: D3DDriver::D3DSwapChain's slot 2 (vftable 0x00B2E0D8), __thiscall,
+// no arguments, the same shape: the swap chain's Present (the object at its
+// +0x10, its slot 3) with five nulls, answering in al whether the result is
+// anything but D3DERR_DEVICELOST. In play, windowed, the frames of the
+// arrival's wait did not come through the driver's Present at all, while
+// the update thread spent half the wait under d3d9.dll and dwmapi.dll in a
+// wait; the loading screen's own task (15 presents in a load from the menu)
+// did come through the driver's. The name is ours.
+DAO_ADDRESS(kD3DSwapChain_Present, 24028)
 // The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
 // profile of loading found its thread in FindFit for over a third of the
 // steps that build an area list and swap a layout. The engine's memory is
