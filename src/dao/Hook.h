@@ -56,15 +56,19 @@ template <class Fn> class Detour
     // address.
     bool Attach(AddressId id, Fn hook)
     {
-        if (attached_)
+        return AttachTo(reinterpret_cast<Fn>(Module::Address(id)), hook);
+    }
+
+    // Places the detour on a function by where it is: one that is not the game's own, a
+    // system DLL's export or a method read from an object's vtable.
+    // @return false if `target` is null, a detour is already placed, or Detours refuses
+    bool AttachTo(Fn target, Fn hook)
+    {
+        if (attached_ || target == nullptr)
         {
             return false;
         }
-        original_ = reinterpret_cast<Fn>(Module::Address(id));
-        if (original_ == nullptr)
-        {
-            return false;
-        }
+        original_ = target;
         hook_ = hook;
         if (DetourTransactionBegin() != NO_ERROR)
         {

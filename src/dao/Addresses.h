@@ -2013,4 +2013,86 @@ DAO_DATA(kFrameBufferEffects, 99917)
 DAO_ADDRESS(kFrameBufferEffects_Find, 2349)
 DAO_ADDRESS(kFrameBufferEffect_FindResource, 2591)
 
+// The sun's shadow maps asked for, __cdecl (const Partition *, count): the
+// engine's parallel-split shadow maps, each {float distance, int size, int
+// format}, 12 bytes, copied and their textures made (0x00454F60, which names
+// them ShadowTexture%d). Called from 0x00455580 with two, {10.0, size, format}
+// and {sqrt of 0x00BF20B4's 900, size, format}, the size 0x00BF20C4's, which
+// the shadow quality (0x00BF20E0) sets to 512 or 1024. Read 2026-10-10 from
+// the string's use, DAOLib #65. The class has no RTTI; the name is ours.
+DAO_ADDRESS(kShadowMaps_SetPartitions, 2295)
+
+// How many lights the scene's light manager holds, by kind: four ints that
+// Renderer::LightManagerDefault's sixth virtual function (0x00464E30, a
+// node's lights taken in) adds to and its eighth (0x00465190) takes from,
+// for every light whose ILight says it is not of kind 1 (its +0xC; kind 1
+// is taken in only as a point light, and not counted). Point lights (type
+// 1) go to the first or the second by 0x0053C8D0's answer, type 2 to the
+// third and type 3 to the fourth; ObjectNodePointLight's type is 1
+// (0x0079B310). Which of ambient lights and light probes are 2 and 3 is not
+// read yet. Read 2026-10-10, DAOLib #65. The names are ours.
+DAO_DATA(kLightManager_PointLights, 99991)
+DAO_DATA(kLightManager_PointLightsOther, 99992)
+DAO_DATA(kLightManager_LightsOfType2, 99993)
+DAO_DATA(kLightManager_LightsOfType3, 99994)
+
+// The renderer's light manager taking a node's lights into its lists and
+// letting them go (its sixth and eighth virtuals: __thiscall, the node's
+// lights' owner, `ret 4`), one list's insert and erase of a light's node
+// (__thiscall on the list, the node, `ret 4`), and the stamp at the manager's
+// +0xD0 that has objects choose their lights again (__thiscall, no
+// arguments). A point light goes by its ILight's kind (the ILight's +0xC) to
+// one of two pairs of lists, the manager's +0x6C and +0x84 for the things
+// that move and +0x24 and +0xC for the level's own pieces, the first of each
+// pair for a light whose blueprint has a flag; an object takes the best
+// three of the first and two of the second, by each light's score against
+// it. Read 2026-10-11, DAOLib #65: examples/graphics/Graphics.cpp has the
+// reading and what uses it. LightList has no RTTI; the name is ours.
+DAO_ADDRESS(kLightManager_AddLights, 2701)
+DAO_ADDRESS(kLightManager_RemoveLights, 2702)
+DAO_ADDRESS(kLightManager_MarkChanged, 2621)
+DAO_ADDRESS(kLightList_Insert, 2698)
+DAO_ADDRESS(kLightList_Erase, 2699)
+
+// The chooser of the lights of a node that moves (the manager's lists +0x84
+// and +0x6C; __thiscall on the manager, four arguments, `ret 0x10`), the
+// choice from one list that it and the level's chooser both make (__thiscall
+// on the list: the object's place, its size as a float, the object's group
+// of chosen lights and six more, `ret 0x24`), and a
+// point light's score against an object (its virtual at +0x84: __thiscall on
+// the node, the object's place, its size, its room and another, `ret 0x10`;
+// the score is left in the node's +0x184: strength times what is left of the
+// light's reach there, nothing for an object of a room the light is not of).
+// Read 2026-10-11, DAOLib #65.
+DAO_ADDRESS(kLightManager_ChooseForMoving, 2694)
+DAO_ADDRESS(kLightList_ChooseFor, 2691)
+DAO_ADDRESS(kObjectNodePointLight_Score, 7628)
+
+// A light probe's score against an object, as a point light's is (the same
+// virtual, +0x84, and the same arguments): one over the distance between
+// them, left in the node's +0x184, nothing for an object of a room the
+// probe is not of. And the function of an object's light state (the object's
+// groups of chosen lights and what the shaders are handed of them; no RTTI,
+// the name is ours) that fills the second from the first when a material
+// first asks in a frame: __thiscall with one argument, `ret 4`. The point
+// lights go to the state's +0x40 (g_vLightParams), the chosen probe's cube
+// map to +0x114 and its three irradiance matrices to +0x130, +0x170 and
+// +0x1B0 (g_mLightParams), these copied only when the probe is not the one
+// kept at +0x110. Read 2026-10-11, DAOLib #65: examples/graphics/Graphics.cpp
+// blends a figure's probes there.
+DAO_ADDRESS(kObjectNodeLightProbe_Score, 7629)
+DAO_ADDRESS(kLightState_Fill, 2848)
+
+// The resource manager making a source of files of one kind without putting
+// it in its list (ECResMan::ResMan::AddSource does that): __thiscall, the
+// source's path as a std::wstring in the engine's own names for its folders
+// ("ENV:lak303d\lak303d.rim", "DATA:global.rim"), its kind (the manager's
+// +0x7C has a maker for each: 0 and 1 a directory, 2 a RIM, 3 an ERF), its
+// priority and two more, `ret 0x14`; it returns the source, or nothing for
+// an empty path or a kind with no maker. Its one caller asks for kind 2: a
+// level's own .rim and each of its rooms' come through here as the level
+// loads (logged 2026-10-11, at priority 100007). Read 2026-10-11, DAOLib
+// #65: examples/graphics learns by it which level the player has come into.
+DAO_ADDRESS(kResMan_MakeSource, 4641)
+
 } // namespace dao::addr

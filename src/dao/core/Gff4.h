@@ -115,6 +115,15 @@ class Struct
     std::vector<Struct> Structs(std::uint32_t label) const;
     // A list of U32 or S32 values.
     std::vector<std::uint32_t> Numbers(std::uint32_t label) const;
+    // The floats of a field that is made of them: one for an F32, three for
+    // a Vector3, four for a Vector4, a Quaternion or a Color, sixteen for a
+    // Matrix. None for a field of another type.
+    std::vector<float> Floats(std::uint32_t label) const;
+    // The elements of a list of U8, U16, U32 or F32 as the file has them,
+    // little-endian and one after another: a mesh's vertices and indices
+    // are lists of bytes and of 16-bit numbers a megabyte long. Empty for a
+    // field that is no such list or runs out of the file.
+    std::span<const std::byte> ListBytes(std::uint32_t label, Type element) const;
 
   private:
     std::optional<std::size_t> Slot(std::uint32_t label, Type type) const;

@@ -11,6 +11,8 @@ add_executable(
     test_gfxmovie.cpp
     test_heldevents.cpp
     test_inflate.cpp
+    test_level.cpp
+    test_lightprobes.cpp
     test_input.cpp
     test_instance.cpp
     test_msvc8.cpp

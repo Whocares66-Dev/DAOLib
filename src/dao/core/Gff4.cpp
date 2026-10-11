@@ -194,6 +194,87 @@ std::optional<std::wstring> Struct::String(std::uint32_t label) const
     return file_->StringAt(at_ + field->offset);
 }
 
+std::vector<float> Struct::Floats(std::uint32_t label) const
+{
+    std::vector<float> floats;
+    const Field *field = Shape().Find(label);
+    if (field == nullptr)
+    {
+        return floats;
+    }
+    std::size_t count = 0;
+    switch (static_cast<Type>(field->type))
+    {
+    case Type::F32:
+        count = 1;
+        break;
+    case Type::Vector3:
+        count = 3;
+        break;
+    case Type::Vector4:
+    case Type::Quaternion:
+    case Type::Color:
+        count = 4;
+        break;
+    case Type::Matrix:
+        count = 16;
+        break;
+    default:
+        return floats;
+    }
+    const auto slot = Slot(label, static_cast<Type>(field->type));
+    for (std::size_t i = 0; slot && i < count; ++i)
+    {
+        const auto value = ReadAt<float>(file_->Bytes(), *slot + (i * sizeof(float)));
+        if (!value)
+        {
+            floats.clear();
+            break;
+        }
+        floats.push_back(*value);
+    }
+    return floats;
+}
+
+std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) const
+{
+    std::size_t size = 0;
+    switch (element)
+    {
+    case Type::U8:
+        size = 1;
+        break;
+    case Type::U16:
+        size = 2;
+        break;
+    case Type::U32:
+    case Type::F32:
+        size = 4;
+        break;
+    default:
+        return {};
+    }
+    const Field *field = Shape().Find(label);
+    if (field == nullptr || field->type != static_cast<std::uint16_t>(element) || (field->flags & kList) == 0 ||
+        (field->flags & kStruct) != 0)
+    {
+        return {};
+    }
+    const auto offset = file_->U32(at_ + field->offset);
+    if (!offset || *offset == kNull)
+    {
+        return {};
+    }
+    const std::size_t list = file_->DataOffset() + *offset;
+    const auto count = file_->U32(list);
+    const std::span<const std::byte> bytes = file_->Bytes();
+    if (!count || list + 4 > bytes.size() || *count > (bytes.size() - list - 4) / size)
+    {
+        return {};
+    }
+    return bytes.subspan(list + 4, *count * size);
+}
+
 std::optional<TlkString> Struct::Tlk(std::uint32_t label) const
 {
     const auto slot = Slot(label, Type::TlkString);

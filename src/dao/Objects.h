@@ -707,6 +707,19 @@ class CCArea : public CGameObject
     {
         return Read<const CScriptEvent *>(0x3C4);
     }
+
+    // Notes on Scene: World::CurrentScene (0x00648B30, and EA's 0x00531170) reads it at +0x62C
+    // of the current area, in both builds. It is a Graphics::ISceneInstance by its RTTI, the
+    // owner (+8) of the area's Renderer::LightManagerDefault, and what the graphics object's
+    // slot 9 answers while the world is drawn; a portrait and the inventory's figure are each
+    // drawn as a scene of their own (logged in play, 2026-10-11).
+
+    // Returns the scene the area is drawn as, which is what tells the world's scene from the
+    // small scenes of a portrait or the inventory's figure.
+    void *Scene() const
+    {
+        return Read<void *>(0x62C);
+    }
 };
 // The module: the game being played, which holds the areas. Get it with
 // CClientExoApp::GetModule.
