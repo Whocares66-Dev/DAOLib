@@ -24,7 +24,7 @@
 // has the same offsets.
 //
 // Seen in play 2026-10-10, in Redcliffe's day and night villages
-// (examples/atmosphere): every sky and sunlight set read back as set and
+// (the harness of #62, 7dc6606's examples/atmosphere): every sky and sunlight set read back as set and
 // was in the picture taken four seconds on. The sky changes what is drawn
 // above and the far haze; the sunlight the ground, the creatures, their
 // shadows and where the sun's glow stands in the sky, so the renderer

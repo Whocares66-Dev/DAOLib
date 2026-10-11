@@ -15,7 +15,7 @@
 // way to another. EA's build has the same offsets (0x00891570, 0x008982F0,
 // 0x008976D0). The global's class has no RTTI; its name here is ours.
 //
-// Seen in play 2026-10-10 (examples/atmosphere): two effects, da_bloom and
+// Seen in play 2026-10-10 (7dc6606's examples/atmosphere): two effects, da_bloom and
 // da_hsvmatrix, both on; a name is found whatever its case. An area comes
 // with its own values: Redcliffe village's da_hsvmatrix read hue 0,
 // saturation 0.85, contrast 1.02, brightness 1, and the night village's
