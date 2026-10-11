@@ -149,7 +149,7 @@ void OnCommandsReady(std::function<void()> ready)
 {
     {
         const std::lock_guard lock(g_readyMutex);
-        if (!g_ready && Table() == nullptr)
+        if (!g_ready && CommandTable() == nullptr)
         {
             if (g_initializeCommands.Original() == nullptr)
             {

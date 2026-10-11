@@ -752,7 +752,7 @@ void Install(void *commands)
         ++installed;
     }
     spdlog::info("script checks: {} of {} getters shadowed, table at {}", installed,
-                 std::size(dao::generated::kScriptGetters), static_cast<void *>(dao::script::Table()));
+                 std::size(dao::generated::kScriptGetters), static_cast<void *>(dao::script::CommandTable()));
     spdlog::info(
         "script checks: {} of {} value-type commands shadowed (strings, vectors, locations, effects, events, arrays)",
         InstallPeeks(), std::size(kPeeks));

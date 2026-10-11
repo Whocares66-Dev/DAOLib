@@ -131,6 +131,8 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | List a creature's effects with the time each has left | `dao::effects::On(id)` | `dao/Effects.h` |
 | Hold the scripts' delayed events and deliver them on a clock of your own | `dao::timers::Hold`, `Advance`, `OwnClock(id)`, `AdvanceObject(id, seconds)`, `HoldKind(type)`, `HoldFrom(seconds)`, `Waiting()`, `WaitingFor(id)` | `dao/Timers.h` |
 | Know who is selected in the party bar | `dao::party::Selected()` | `dao/Party.h` |
+| Read or change the area's sky (sun, air, clouds, fog, moon) and its sunlight (the light on the ground and creatures, and its direction) | `dao::atmosphere::CurrentSky()`, `SetSky(sky)`, `ResetSky()`, `CurrentSunlight()`, `SetSunlight(light)`, `ResetSunlight()`, `dao::core::Blend` | `dao/Atmosphere.h` |
+| Read or change what the game does to the whole picture: the colour grade, the bloom | `dao::framebuffer::Effects()`, `Enabled(effect)`, `Value(effect, name)`, `SetEnabled`, `SetValue` | `dao/Framebuffer.h` |
 
 ### Commands, combat and abilities
 

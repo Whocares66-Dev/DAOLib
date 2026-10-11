@@ -12,7 +12,7 @@
 // with that number (dev/SCRIPT_COMMANDS.md).
 //
 // The table exists once InitializeCommands has filled it, early in the application's start-up
-// and after plugins load: Table() is null before the application exists. In the moment between
+// and after plugins load: CommandTable() is null before the application exists. In the moment between
 // the application storing the commands object and the VM initialising it, the table pointer is
 // not yet written, so a plugin that wants its slots set before the first script runs detours
 // addr::kCVirtualMachineCommands_InitializeCommands and sets them after the original returns, as
@@ -96,7 +96,7 @@ void *CopyStructure(EngineStructure type, const void *structure)
         app->Commands(), 0, static_cast<std::int32_t>(type), structure);
 }
 
-Handler *Table()
+Handler *CommandTable()
 {
     const auto *app = CClientExoApp::Get();
     if (app == nullptr)
@@ -114,7 +114,7 @@ Handler *Table()
 
 Handler Get(int id)
 {
-    Handler *table = Table();
+    Handler *table = CommandTable();
     if (table == nullptr || id < 0 || id >= kSlots)
     {
         return nullptr;
@@ -124,7 +124,7 @@ Handler Get(int id)
 
 Handler Set(int id, Handler handler)
 {
-    Handler *table = Table();
+    Handler *table = CommandTable();
     if (table == nullptr || id < 0 || id >= kSlots)
     {
         return nullptr;

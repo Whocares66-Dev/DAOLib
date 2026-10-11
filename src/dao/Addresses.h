@@ -1737,4 +1737,24 @@ DAO_ADDRESS(kCGameObjectArray_GetGameObject, 33354)
 // and leaves combat, for a turn-based mode.
 DAO_ADDRESS(kCCCreature_SetCombatState, 14734)
 
+// SetAtmosphere's engine side, __thiscall on the party, no arguments: the
+// controlled creature's area as the sky's commands want it, whose +0x658
+// is the scene that holds the sky (dao/Atmosphere.h); null with no members
+// or nobody controlled. Read 2026-10-10 from the command's handler
+// (0x00664A10), DAOLib #62.
+DAO_ADDRESS(kScriptBackend_ForScript_SetAtmosphere, 12271)
+
+// The framebuffer's effects (dao/Framebuffer.h), read 2026-10-10 from
+// FB_SetEffectResource's and FB_SetEffectEnabled's handlers (0x00651880,
+// 0x006519B0), DAOLib #62. The global holds the object that keeps them, a
+// std::vector of Renderer::FrameBufferEffect pointers at its +0; its class
+// has no RTTI, and the name is ours. Find, __thiscall on it (const
+// std::wstring &name), `ret 4`: the effect of that name, or null.
+// FindResource, __thiscall on an effect (const std::wstring &name),
+// `ret 4`: the effect's value of that name, a Renderer::FrameBufferResource,
+// or null.
+DAO_DATA(kFrameBufferEffects, 99917)
+DAO_ADDRESS(kFrameBufferEffects_Find, 2349)
+DAO_ADDRESS(kFrameBufferEffect_FindResource, 2591)
+
 } // namespace dao::addr

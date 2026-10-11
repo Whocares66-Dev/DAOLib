@@ -60,7 +60,7 @@ using Handler = int(__fastcall *)(void *commands, int edx, int id, int paramCoun
 // The engine fills the table early in start-up, after plugins load. To set your slots before the
 // first script runs, detour addr::kCVirtualMachineCommands_InitializeCommands and call Set after
 // the original returns.
-Handler *Table();
+Handler *CommandTable();
 
 // Returns the handler in a slot.
 // @return the handler, or null if the slot is empty, the number is out of range, or the table

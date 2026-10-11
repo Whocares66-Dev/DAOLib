@@ -54,21 +54,24 @@ void CompareControlled()
 }
 } // namespace
 
+std::uintptr_t EngineObject()
+{
+    const CClientExoApp *app = CClientExoApp::Get();
+    const auto holder =
+        app != nullptr ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + kPartyHolder) : std::nullopt;
+    const auto party = holder && *holder != 0 ? TryRead<std::uintptr_t>(*holder + kParty) : std::nullopt;
+    return party.value_or(0);
+}
+
 // The selection vector at the party's +0x184 (2026-09-30). Not yet seen in play.
 std::vector<ObjectId> Selected()
 {
-    const CClientExoApp *app = CClientExoApp::Get();
-    if (app == nullptr)
+    const std::uintptr_t party = EngineObject();
+    if (party == 0)
     {
         return {};
     }
-    const auto holder = TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + kPartyHolder);
-    const auto party = holder && *holder != 0 ? TryRead<std::uintptr_t>(*holder + kParty) : std::nullopt;
-    if (!party || *party == 0)
-    {
-        return {};
-    }
-    const auto selection = TryRead<core::VectorRep<ObjectId>>(*party + kSelection);
+    const auto selection = TryRead<core::VectorRep<ObjectId>>(party + kSelection);
     if (!selection)
     {
         return {};
@@ -87,12 +90,8 @@ std::vector<ObjectId> Selected()
 // bar's key, each both ways, and at a load from nobody to the hero.
 ObjectId Controlled()
 {
-    const CClientExoApp *app = CClientExoApp::Get();
-    const auto holder =
-        app != nullptr ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(app) + kPartyHolder) : std::nullopt;
-    const auto party = holder && *holder != 0 ? TryRead<std::uintptr_t>(*holder + kParty) : std::nullopt;
     // GetMainControlled asks only once the party is there.
-    if (!party || *party == 0)
+    if (EngineObject() == 0)
     {
         return kInvalidObject;
     }

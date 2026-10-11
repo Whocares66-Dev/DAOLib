@@ -43,6 +43,12 @@ Each item says why it needs native work, what is known, and when it is done. Mos
 - **Done when:** a plugin sees each line and choice as it is shown, and can add or hide a choice.
 - **Done in code, not yet seen in play (2026-09-30):** `dao/Dialogue.h`. The engine's conversation object holds its file (GFF4 `CONV`), and a line is offered only if `Conversation::IsLineAvailable` (`0x007F0D30`) passes it, so `OnLineAvailable` can hide any line or offer one whose condition fails. `OnNpcLine` (on `PlayLine`, `0x007F1EF0`) and `OnReplies` (after dialogue mode's `ShowResponses`, `0x00690B70`) see what is spoken and offered. The lines are read from the file by a GFF4 reader in `core/` (`Gff4.h`, `Conversation.h`), tested, and checked against `tools/gff4.py` on 104 of the game's conversations. `examples/dialogue` logs a conversation. Since: choosing a reply and skipping a cutscene (`dao::dialogue::Choose`, `SkipCutscene`) and who speaks to whom (`Speaker`, `Listener`, `Owner`) seen in play through the Eluvian server. Left: hiding or adding a line seen in play; adding a line the file does not have, which would mean giving the engine a changed file.
 
+## 5. The light on trees, grass and buildings
+
+- **Why native:** an area's sky and sunlight can be set (`dao/Atmosphere.h`, DAOLib #62), and with them the ground, the creatures, the shadows and the haze follow from day to night. The trees, the grass and the buildings do not: under the night village's sky and sunlight the day village's pines and grass keep their warm olive on blue ground, and the night village's mill and trees stay night-dark on day-coloured ground. No script command or data table reaches any of it.
+- **Leads:** the static models' lightmaps (`EnvModelLightmapAtlas`, field 3323, and the level's `LvlLightmap*`); the trees' controller (`EnvAreaTreecontrollerList`, 3355); the area file's `EnvLightProbe` list (3103, 3104, 3108) and the models' `MMHLightprobeIrradianceCoefficients*` (6190 to 6192); `EnvAreaSunlightColorMult` (3153), read by nothing found yet. The layout's load (`EC::ChunkManager`, 0x005D1290) is where the sunlight's fields were found.
+- **Done when:** a plugin can scale or tint the light trees, grass and buildings show, and the day village's pines go dark under the night village's look as the night village's own are.
+
 ## Done
 
 Read, built and seen in play; what is left of each is small, and kept here.
