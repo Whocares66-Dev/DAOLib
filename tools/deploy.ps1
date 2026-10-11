@@ -30,12 +30,6 @@
         icacls "C:\Program Files\EA Games\Dragon Age\bin_ship" /grant "${env:USERNAME}:(OI)(CI)M"
     -Game names a bin_ship folder that is none of them.
 
-    Nothing is copied while another session holds the claim on the game
-    (Documents\BioWare\Dragon Age\daolib\game.claim.json; tools/game_claim.py
-    has the rules). -Owner says who is
-    deploying, whose own claim does not stop it; -IgnoreClaim is for the player
-    at the keyboard, whom the claim does not hold.
-
 .EXAMPLE
     .\tools\deploy.ps1                 # debug build into the GOG install
     .\tools\deploy.ps1 -Install ea     # into the EA app's
@@ -52,9 +46,7 @@ param(
     [string[]] $Examples = @(),
     [ValidateSet('gog', 'ea', 'steam')]
     [string] $Install = 'gog',
-    [string] $Game,
-    [string] $Owner = '',
-    [switch] $IgnoreClaim
+    [string] $Game
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,22 +61,6 @@ if (-not $Game) {
     }[$Install]
 }
 if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.exe in $Game" }
-# The claim on the game (tools/game_claim.py): one that stands and is not
-# this caller's stops the copy. A file that cannot be read is no claim.
-if (-not $IgnoreClaim) {
-    $claimFolder = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'BioWare\Dragon Age\daolib'
-    $claimFile = Join-Path $claimFolder 'game.claim.json'
-    $claim = $null
-    if (Test-Path $claimFile) {
-        try { $claim = Get-Content $claimFile -Raw | ConvertFrom-Json } catch { Show-Info "$claimFile is not readable; taken as no claim" }
-    }
-    if ($null -ne $claim -and $null -ne $claim.until) {
-        $left = [double]$claim.until - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-        if ($left -gt 0 -and $claim.owner -ne $Owner) {
-            throw "the game is claimed by $($claim.owner) for another $([math]::Round($left / 60, 1)) minutes ($($claim.note)); nothing deployed"
-        }
-    }
-}
 # The game holds its DLLs open. Another install of the game has the same
 # process name (the EA version beside GOG's), so the running one is asked
 # where it runs from: only this install's blocks the copy. One whose path
