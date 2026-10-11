@@ -35,6 +35,7 @@
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
 #include "loader/CrashLog.h"
+#include "loader/Instance.h"
 #include "loader/Proxy.h"
 
 #include <Windows.h>
@@ -141,6 +142,22 @@ void ServePluginFolders(const std::vector<std::filesystem::path> &plugins)
     }
 }
 
+// The folder DAOLIB_PLUGINS names, or an empty path without the variable
+// (DAOLib #67). Every copy of the game shares the one game folder and holds
+// its DLLs open, so a copy run for a test names its own plugins folder, a
+// build tree's daolib\plugins as it stands, and loads those in place of the
+// game folder's: nothing of the test goes into the game, and no other copy
+// loads it. In place of, not as well as, and a folder that is not there
+// loads nothing: a test must not run with another session's plugins by
+// mistake.
+std::filesystem::path PluginsAsked()
+{
+    std::wstring value(32768, L'\0'); // the longest a variable's value can be
+    const DWORD length = GetEnvironmentVariableW(L"DAOLIB_PLUGINS", value.data(), static_cast<DWORD>(value.size()));
+    value.resize(length < value.size() ? length : 0);
+    return {value};
+}
+
 void LoadPlugins()
 {
     const auto exePath = dao::Module::Path();
@@ -148,7 +165,13 @@ void LoadPlugins()
     // Beside the loader, which deployed is beside the exe. A loader put into
     // the game from the build tree (tools\run_from_build.py) finds the build's
     // plugins the same way, with nothing copied into the game.
-    const auto folder = loaderPath.parent_path() / L"daolib" / L"plugins";
+    const auto asked = PluginsAsked();
+    const auto folder = asked.empty() ? loaderPath.parent_path() / L"daolib" / L"plugins" : asked;
+    if (!asked.empty())
+    {
+        spdlog::info("DAOLIB_PLUGINS is set: plugins are loaded from {} and not from the game's folder",
+                     asked.string());
+    }
     const bool known = dao::Module::IsKnownExecutable();
 
     std::error_code ec;
@@ -215,6 +238,7 @@ void LoadPlugins()
 void __stdcall EntryHook()
 {
     spdlog::info("entry point reached; loading plugins");
+    loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
     fix::InstallArchiveReadFix();
     LoadPlugins();
@@ -238,6 +262,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
     {
         spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
                      dao::Module::ImageAddress(caller));
+        loader::instance::SeedSaves();
         loader::crashlog::StartWatchdog();
         fix::InstallArchiveReadFix();
         LoadPlugins();
@@ -271,7 +296,10 @@ bool WaitForGameCode()
 
 void Attach()
 {
+    // Before the log is opened: an instance's log is in the instance's own folder.
+    loader::instance::Install();
     dao::OpenLog("loader");
+    loader::instance::Report();
     // First, so a crash anywhere after this is logged, the loader's own included.
     loader::crashlog::Install(SelfPath().parent_path());
     const auto fingerprint = dao::Module::Fingerprint();

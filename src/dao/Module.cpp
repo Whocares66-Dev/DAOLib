@@ -17,6 +17,7 @@
 // build's file as well, which ships beside the others.
 #include "dao/Module.h"
 
+#include "dao/core/Instance.h"
 #include "dao/core/Pe.h"
 
 #include <Windows.h>
@@ -27,6 +28,17 @@
 
 namespace dao::Module
 {
+
+// The loader leaves DAOLIB_INSTANCE as what the process is (loader/Instance.h,
+// DAOLib #67): the name it took, in lower case, or unset. Read from the
+// process's own environment, not the C runtime's copy of it, which was made
+// before the loader wrote the variable.
+std::string Instance()
+{
+    std::array<char, core::kLongestInstanceName + 2> value{};
+    const DWORD length = GetEnvironmentVariableA("DAOLIB_INSTANCE", value.data(), static_cast<DWORD>(value.size()));
+    return length < value.size() ? core::InstanceOf({value.data(), length}).value_or(std::string()) : std::string();
+}
 
 // A plugin's own folder is daolib\plugins\<name>, where its files sit beside
 // it (DAOLib #26).

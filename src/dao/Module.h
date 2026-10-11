@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <string>
 
 namespace dao
 {
@@ -51,6 +52,11 @@ std::filesystem::path AddressFolder();
 // (daolib\plugins\<name>), or the loader's.
 // @return an empty path if the DLL cannot be found
 std::filesystem::path OwnFolder();
+
+// Returns the name of the instance this copy of the game is, as DAOLIB_INSTANCE asked for it
+// and the loader took it, in lower case (dev/BUILDS.md).
+// @return an empty string for the game as ever, which runs one at a time
+std::string Instance();
 
 // Turns an ID from dao/Addresses.h into an address in the running process.
 // @return 0 if the build is unknown or has no such ID; At() then returns null, and

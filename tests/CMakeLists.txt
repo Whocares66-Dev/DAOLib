@@ -12,6 +12,7 @@ add_executable(
     test_heldevents.cpp
     test_inflate.cpp
     test_input.cpp
+    test_instance.cpp
     test_msvc8.cpp
     test_optionsmovie.cpp
     test_owedtime.cpp

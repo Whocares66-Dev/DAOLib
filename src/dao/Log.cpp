@@ -12,6 +12,8 @@
 // logger's own log is written apart.
 #include "dao/Log.h"
 
+#include "dao/Module.h"
+
 #include <Windows.h>
 
 #include <ShlObj.h>
@@ -85,8 +87,16 @@ spdlog::level::level_enum LevelFromEnvironment()
 // exited. Each DLL has the library's statics of its own, so each asks.
 bool OwnsLogs()
 {
-    HANDLE mapping =
-        CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(LONG), L"Local\\DAOLib.LogOwner");
+    // An instance (dao/Module.h, DAOLib #67) has a log folder of its own and so a block of
+    // its own: with the one block, an instance beside the first game took the names of a
+    // second copy in a folder nothing else wrote to (in play, 2026-10-11).
+    std::wstring block = L"Local\\DAOLib.LogOwner";
+    if (const std::string instance = Module::Instance(); !instance.empty())
+    {
+        block += L'.';
+        block.append(instance.begin(), instance.end());
+    }
+    HANDLE mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(LONG), block.c_str());
     if (mapping == nullptr)
     {
         return true;
