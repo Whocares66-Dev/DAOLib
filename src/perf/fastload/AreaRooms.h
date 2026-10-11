@@ -1,5 +1,6 @@
 // An area's rooms stay loaded when the party leaves it, and the rooms of
-// the indoor areas beside it are loaded ahead (DAOLib issue #72).
+// the indoor areas beside it are loaded ahead (DAOLib issue #72). A part of
+// fast load (perf/FastLoad.h).
 //
 // An area is laid out in rooms, each loaded from a file of its own
 // (dao/Addresses.h, "Rooms and their streaming"). A transition's step 10
@@ -10,7 +11,7 @@
 // In play, by a door between Redcliffe village and its tavern, that was 0.1
 // to 0.5 s of a loading screen of 0.4 to 1.2 s.
 //
-// So, while the address space has room (fix/AddressSpace.h):
+// So, while the address space has room (perf/fastload/AddressSpace.h):
 //
 // - The engine's unloading of the rooms of the area left is not done. They
 //   go with their area, when its list is deleted: the engine's own doing,
@@ -45,13 +46,18 @@
 // layout's update, and 0.06 to 0.28 s in the others.
 #pragma once
 
-namespace fix
+#include "perf/fastload/Shared.h"
+
+namespace perf::fastload::rooms
 {
 
-// Once, from the loader's way into the game, before the plugins load: every
-// game, whatever plugins it has. DAOLIB_AREA_ROOMS=0 in the environment
-// turns it off: an area's rooms are unloaded when the party leaves, and
-// none is loaded ahead, the engine as it was.
-void InstallAreaRoomsFix();
+// Places the detours. DAOLIB_AREA_ROOMS=0 in the environment leaves them
+// out: an area's rooms are unloaded when the party leaves, and none is
+// loaded ahead, the engine as it was.
+void Attach();
 
-} // namespace fix
+// Before an update of the loading mode: when the last loading screen was is
+// what the preload waits two seconds after.
+void BeforeUpdate(const Update &update);
+
+} // namespace perf::fastload::rooms

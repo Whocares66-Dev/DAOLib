@@ -1,10 +1,10 @@
-#include "fix/AddressSpace.h"
+#include "perf/fastload/AddressSpace.h"
 
 #include <Windows.h>
 
 #include <cstddef>
 
-namespace fix
+namespace perf::fastload
 {
 
 // Notes on AddressSpaceShort: it was a walk of the whole address space with VirtualQuery,
@@ -26,4 +26,4 @@ bool AddressSpaceShort()
     return false;
 }
 
-} // namespace fix
+} // namespace perf::fastload

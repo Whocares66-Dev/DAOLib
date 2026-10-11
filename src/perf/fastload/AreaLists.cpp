@@ -1,4 +1,4 @@
-#include "fix/AreaLists.h"
+#include "perf/fastload/AreaLists.h"
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
@@ -8,7 +8,7 @@
 #include "dao/Objects.h"
 #include "dao/String.h"
 #include "dao/core/Msvc8.h"
-#include "fix/AddressSpace.h"
+#include "perf/fastload/AddressSpace.h"
 
 #include <Windows.h>
 
@@ -21,15 +21,16 @@
 #include <vector>
 
 // Everything here runs on the game's update thread, inside the loading
-// mode's update, so nothing is locked.
-namespace fix
+// mode's update, so nothing is locked. The update itself is detoured once
+// for all of fast load (perf/FastLoad.cpp), which calls BeforeUpdate and
+// AfterUpdate around the engine's.
+namespace perf::fastload::lists
 {
 
 namespace
 {
 
-// The loading mode (dao/Addresses.h, "The loading mode's states").
-constexpr std::size_t kState = 0x84;    // in the mode: a word
+// The loading mode (dao/Addresses.h, "The loading mode's states"). Its state comes with the update.
 constexpr std::size_t kData = 0x130;    // in the mode: its data
 constexpr std::size_t kSwapStep = 0x6C; // in the data: the step of states 4 and 5
 constexpr std::size_t kAreaTag = 0xD4;  // in the mode: the area asked for, a std::wstring
@@ -50,11 +51,6 @@ constexpr std::size_t kEntrySize = 0x48;    //
 constexpr std::size_t kAppResources = 0xC0; // in the application: its ModuleResourceManager
 constexpr std::size_t kCurrentTree = 0x7C;  // in the manager: the RIM tree loaded for the list
 constexpr std::size_t kNodeTree = 0x58;     // in a tree's node: its tree
-
-template <class T> T &At(std::uintptr_t object, std::size_t offset)
-{
-    return *reinterpret_cast<T *>(object + offset);
-}
 
 // What the loading mode is doing while its update runs; state 0 outside it.
 struct Doing
@@ -172,7 +168,7 @@ std::uintptr_t __fastcall DropAreaList(std::uintptr_t module, int edx)
 {
     const std::uintptr_t list = At<std::uintptr_t>(module, kModuleList);
     const std::uintptr_t resources = Resources();
-    if (g_doing.state == kStateListSwap && g_doing.step == kStepDrop && list != 0 && g_leaving.list == 0 &&
+    if (On() && g_doing.state == kStateListSwap && g_doing.step == kStepDrop && list != 0 && g_leaving.list == 0 &&
         resources != 0)
     {
         g_leaving = Kept{list, At<std::uintptr_t>(resources, kCurrentTree)};
@@ -311,17 +307,68 @@ void AfterTrees()
     g_treesGone.clear();
 }
 
-// GameModeLoading::Update: __thiscall (float seconds), `ret 4`. What it
-// leaves in eax is its base's, and is passed on unread.
-using UpdateFn = std::uintptr_t(__fastcall *)(std::uintptr_t mode, int edx, float seconds);
-dao::Detour<UpdateFn> g_update;
+} // namespace
 
-std::uintptr_t __fastcall Update(std::uintptr_t mode, int edx, float seconds)
+void Attach()
 {
-    const auto data = At<std::uintptr_t>(mode, kData);
-    g_mode = mode;
-    g_doing.state = At<std::uint16_t>(mode, kState);
+    std::array<char, 8> asked{};
+    if (const DWORD length =
+            GetEnvironmentVariableA("DAOLIB_AREA_LISTS", asked.data(), static_cast<DWORD>(asked.size()));
+        length > 0 && length < asked.size())
+    {
+        g_capacity = std::strtoul(asked.data(), nullptr, 10);
+    }
+    if (g_capacity == 0)
+    {
+        spdlog::info("fast load: DAOLIB_AREA_LISTS=0, so an area list the party leaves is deleted as ever");
+        return;
+    }
+    // All three or none: some of them would leave a list neither kept nor deleted.
+    if (!g_read.Attach(dao::addr::kCSAreaList_ReadAreas, &ReadAreas) ||
+        !g_drop.Attach(dao::addr::kCCModule_DropAreaList, &DropAreaList) ||
+        !g_unload.Attach(dao::addr::kRIMTreeManager_Unload, &UnloadTree))
+    {
+        g_unload.Detach();
+        g_drop.Detach();
+        g_read.Detach();
+        g_capacity = 0;
+        spdlog::warn("fast load: the area lists' detours could not be placed, so a list left is deleted as ever");
+        return;
+    }
+    spdlog::info("fast load: the area lists the party leaves are kept while memory allows, {} at the most, and handed "
+                 "back on its return",
+                 g_capacity);
+}
+
+void BeforeUpdate(const Update &update)
+{
+    if (g_capacity == 0)
+    {
+        return;
+    }
+    const auto data = At<std::uintptr_t>(update.mode, kData);
+    g_mode = update.mode;
+    g_doing.state = update.state;
     g_doing.step = data != 0 ? At<std::int32_t>(data, kSwapStep) : 0;
+    // On or off: a list kept and then deleted leaves its RIM tree loaded, and the engine does
+    // not make a tree it finds loaded the current one. In play, with the switch turned off
+    // after the castle's list had been kept: the swap to the castle left the village's tree the
+    // current one, and every trip back to the village by the map was taken for a door within
+    // the list and ended at once, the party where it stood, until a trip elsewhere.
+    if (g_doing.state == kStateListSwap && g_doing.step == kStepWait)
+    {
+        AfterTrees();
+    }
+    if (!On())
+    {
+        // Off, nothing more is kept (DropAreaList asks), and what was kept goes at the next
+        // loading screen, not in the middle of a swap that has taken a list out of the module.
+        if (!g_swapping)
+        {
+            DeleteKept("fast loading is off");
+        }
+        return;
+    }
     if (g_doing.state == kStateStart || g_doing.state == kStateStartOther)
     {
         DeleteKept("a game is starting or a save loading");
@@ -333,51 +380,14 @@ std::uintptr_t __fastcall Update(std::uintptr_t mode, int edx, float seconds)
     else if (g_doing.state == kStateListSwap && g_doing.step == kStepMake && g_swapping)
     {
         g_swapping = false;
-        BeforeMake(mode);
+        BeforeMake(update.mode);
     }
-    else if (g_doing.state == kStateListSwap && g_doing.step == kStepWait)
-    {
-        AfterTrees();
-    }
-    const std::uintptr_t result = g_update.Original()(mode, edx, seconds);
+}
+
+void AfterUpdate()
+{
     g_doing = Doing{};
     g_mode = 0;
-    return result;
 }
 
-} // namespace
-
-void InstallAreaListsFix()
-{
-    std::array<char, 8> asked{};
-    if (const DWORD length =
-            GetEnvironmentVariableA("DAOLIB_AREA_LISTS", asked.data(), static_cast<DWORD>(asked.size()));
-        length > 0 && length < asked.size())
-    {
-        g_capacity = std::strtoul(asked.data(), nullptr, 10);
-    }
-    if (g_capacity == 0)
-    {
-        spdlog::info("fixes: DAOLIB_AREA_LISTS=0, so an area list the party leaves is deleted as ever (issue #64)");
-        return;
-    }
-    // All four or none: some of them would leave a list neither kept nor deleted.
-    if (!g_read.Attach(dao::addr::kCSAreaList_ReadAreas, &ReadAreas) ||
-        !g_drop.Attach(dao::addr::kCCModule_DropAreaList, &DropAreaList) ||
-        !g_unload.Attach(dao::addr::kRIMTreeManager_Unload, &UnloadTree) ||
-        !g_update.Attach(dao::addr::kGameModeLoading_Update, &Update))
-    {
-        g_update.Detach();
-        g_unload.Detach();
-        g_drop.Detach();
-        g_read.Detach();
-        spdlog::warn(
-            "fixes: the area lists' detours could not be placed, so a list left is deleted as ever (issue #64)");
-        return;
-    }
-    spdlog::info("fixes: the area lists the party leaves are kept while memory allows, {} at the most, and handed "
-                 "back on its return (issue #64)",
-                 g_capacity);
-}
-
-} // namespace fix
+} // namespace perf::fastload::lists

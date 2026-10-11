@@ -75,10 +75,20 @@ struct Choice
     std::function<std::int32_t(std::int32_t wanted)> set; // applies a change, returns the new index
 };
 
+// The column of the Game tab a section would be in.
+enum class Column
+{
+    Either, // the first with room: the left, then the right
+    Left,
+    Right,
+};
+
 // Adds a section of settings to the Game tab of the options screen.
 // @param title the section's heading, which is also its key for StateOf
 // @param toggles the checkboxes, listed first
 // @param choices the sliders and dropdowns, listed after the checkboxes in the order given
+// @param column the column the section goes in if that column has the rows for it; it goes in
+//  the other if not
 // @return false, with nothing added, if the section has no toggles or choices, a name is not
 //  letters and digits or is already taken, a callback is missing, or a choice has fewer than
 //  two values
@@ -88,7 +98,8 @@ struct Choice
 // a checkbox one and a choice two, and a section stays in one column. Sections are placed in the
 // order they were added. The first section that does not fit is left out, and so is every
 // section after it.
-bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {});
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {},
+                Column column = Column::Either);
 
 // What became of a section given to AddSection.
 enum class SectionState

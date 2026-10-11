@@ -1,24 +1,23 @@
-#include "fix/AreaRooms.h"
+#include "perf/fastload/AreaRooms.h"
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
-#include "fix/AddressSpace.h"
+#include "perf/fastload/AddressSpace.h"
 
 #include <Windows.h>
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 
 // Everything here runs on the game's update thread: the loading mode's
 // update, a transition's step inside it, and the update of the layout the
 // party is in. So nothing is locked.
-namespace fix
+namespace perf::fastload::rooms
 {
 
 namespace
@@ -46,23 +45,10 @@ constexpr std::int32_t kLoadAsked = 0;
 constexpr std::int32_t kWanted = 4; // a room's state: load it in the background
 constexpr std::uint32_t kMaxRooms = 4096;
 
-constexpr std::int64_t kAfterLoadingMs = 2000;   // the arrival's own loads first
-constexpr std::int64_t kBetweenAsksMs = 50;      //
-constexpr std::int64_t kGiveUpMs = 10000;        // a room asked for and not in by then is passed over
-constexpr std::int64_t kShortAgainMs = 5000;     // how long before the address space is asked about again
-constexpr std::int64_t kBetweenScreensMs = 1000; // an update this long after the last begins a loading screen
-
-template <class T> T &At(std::uintptr_t object, std::size_t offset)
-{
-    return *reinterpret_cast<T *>(object + offset);
-}
-
-std::int64_t NowMs()
-{
-    using Clock = std::chrono::steady_clock;
-    return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
-}
-
+constexpr std::int64_t kAfterLoadingMs = 2000; // the arrival's own loads first
+constexpr std::int64_t kBetweenAsksMs = 50;    //
+constexpr std::int64_t kGiveUpMs = 10000;      // a room asked for and not in by then is passed over
+constexpr std::int64_t kShortAgainMs = 5000;   // how long before the address space is asked about again
 // What was done since the last loading screen, for one line in the log at the next.
 struct Done
 {
@@ -85,33 +71,13 @@ dao::Detour<UnloadRoomsFn> g_unloadRooms;
 
 void __fastcall UnloadRooms(std::uintptr_t area, int edx)
 {
-    if (AddressSpaceShort())
+    if (!On() || AddressSpaceShort())
     {
         ++g_done.unloaded;
         g_unloadRooms.Original()(area, edx);
         return;
     }
     ++g_done.kept;
-}
-
-// GameModeLoading::Update: __thiscall (float seconds), `ret 4`. What it leaves in eax is its
-// base's, and is passed on unread.
-using UpdateFn = std::uintptr_t(__fastcall *)(std::uintptr_t mode, int edx, float seconds);
-dao::Detour<UpdateFn> g_update;
-
-std::uintptr_t __fastcall Update(std::uintptr_t mode, int edx, float seconds)
-{
-    const std::int64_t now = NowMs();
-    if (now - g_lastLoadingUpdate > kBetweenScreensMs && (g_done.asked != 0 || g_done.kept + g_done.unloaded != 0))
-    {
-        spdlog::info("area rooms: since the last loading screen began, {} area(s) left with rooms loaded and {} with "
-                     "rooms unloaded; {} room(s) asked for ahead, {} ms of a frame at the most, and {} taken in, {} ms "
-                     "at the most",
-                     g_done.kept, g_done.unloaded, g_done.asked, g_done.longestAsk, g_done.takenIn, g_done.longestTake);
-        g_done = Done{};
-    }
-    g_lastLoadingUpdate = now;
-    return g_update.Original()(mode, edx, seconds);
 }
 
 // A layout's rooms as the preload sees them.
@@ -231,7 +197,10 @@ dao::Detour<LayoutUpdateFn> g_layoutUpdate;
 std::uintptr_t __fastcall LayoutUpdate(std::uintptr_t layout, int edx)
 {
     const std::uintptr_t result = g_layoutUpdate.Original()(layout, edx);
-    Preload(layout);
+    if (On())
+    {
+        Preload(layout);
+    }
     return result;
 }
 
@@ -244,29 +213,40 @@ bool TurnedOff()
 
 } // namespace
 
-void InstallAreaRoomsFix()
+void Attach()
 {
     if (TurnedOff())
     {
-        spdlog::info("fixes: DAOLIB_AREA_ROOMS=0, so an area's rooms are unloaded when the party leaves and none is "
-                     "loaded ahead (issue #72)");
+        spdlog::info("fast load: DAOLIB_AREA_ROOMS=0, so an area's rooms are unloaded when the party leaves and none "
+                     "is loaded ahead");
         return;
     }
-    // All three or none: a room asked for ahead in an area whose rooms the engine then unloads
-    // is work for nothing, and the preload wants to know when a loading screen was.
+    // Both or neither: a room asked for ahead in an area whose rooms the engine then unloads is
+    // work for nothing.
     if (!g_unloadRooms.Attach(dao::addr::kCCArea_UnloadRooms, &UnloadRooms) ||
-        !g_update.Attach(dao::addr::kGameModeLoading_Update, &Update) ||
         !g_layoutUpdate.Attach(dao::addr::kAreaLayout_Update, &LayoutUpdate))
     {
         g_layoutUpdate.Detach();
-        g_update.Detach();
         g_unloadRooms.Detach();
-        spdlog::warn("fixes: the rooms' detours could not be placed, so an area's rooms are unloaded when the party "
-                     "leaves and none is loaded ahead (issue #72)");
+        spdlog::warn("fast load: the rooms' detours could not be placed, so an area's rooms are unloaded when the "
+                     "party leaves and none is loaded ahead");
         return;
     }
-    spdlog::info("fixes: an area's rooms stay loaded when the party leaves it, and the rooms of the indoor areas "
-                 "beside it are loaded ahead, while memory allows (issue #72)");
+    spdlog::info("fast load: an area's rooms stay loaded when the party leaves it, and the rooms of the indoor areas "
+                 "beside it are loaded ahead, while memory allows");
 }
 
-} // namespace fix
+void BeforeUpdate(const Update &update)
+{
+    if (update.first && (g_done.asked != 0 || g_done.kept + g_done.unloaded != 0))
+    {
+        spdlog::info("fast load: since the last loading screen began, {} area(s) left with rooms loaded and {} with "
+                     "rooms unloaded; {} room(s) asked for ahead, {} ms of a frame at the most, and {} taken in, {} ms "
+                     "at the most",
+                     g_done.kept, g_done.unloaded, g_done.asked, g_done.longestAsk, g_done.takenIn, g_done.longestTake);
+        g_done = Done{};
+    }
+    g_lastLoadingUpdate = update.now;
+}
+
+} // namespace perf::fastload::rooms

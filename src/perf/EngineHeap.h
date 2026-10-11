@@ -20,13 +20,13 @@
 // blocks, or of a block already freed, is left alone. Read 2026-10-11.
 #pragma once
 
-namespace fix
+namespace perf
 {
 
 // Once, from the loader's way into the game, before the plugins load and
 // before the engine's first allocation: every game, whatever plugins it
 // has. DAOLIB_ENGINE_HEAP=0 in the environment leaves the engine's own
 // pools in place.
-void InstallEngineHeapFix();
+void InstallEngineHeap();
 
-} // namespace fix
+} // namespace perf

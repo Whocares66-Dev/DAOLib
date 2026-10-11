@@ -31,15 +31,13 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
 src/fix/        corrections to the engine's own faults, one file each, built into version.dll and put in by the loader
                 before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
-                offset in its archive's file (ArchiveRead), the engine's memory from the system's heap in place of its own
-                850 MiB of pools (EngineHeap, off with DAOLIB_ENGINE_HEAP=0), the area lists the party leaves kept and handed
-                back on its return (AreaLists, off with DAOLIB_AREA_LISTS=0), an area's rooms kept when the party
-                leaves and the indoor areas' beside it loaded ahead (AreaRooms, off with DAOLIB_AREA_ROOMS=0), a
-                loading screen's frames presented
-                fifteen a second so its loading does not wait for the monitor (LoadingPresent, off with
-                DAOLIB_LOADING_PRESENT=0) while its own task takes a turn every 16 ms, not 66, so a loading's
-                steps do not wait on it (LoadingPace, off with DAOLIB_LOADING_PACE=0). dev/CRASHES.md has the
-                crash each one fixed
+                offset in its archive's file (ArchiveRead). dev/CRASHES.md has the crash each one fixed
+src/perf/       what makes the game faster and corrects no fault, built into version.dll the same way. The engine's
+                memory from the system's heap in place of its own 850 MiB of pools (EngineHeap, off with
+                DAOLIB_ENGINE_HEAP=0), and fast load (FastLoad, its parts under fastload/): the area lists the party
+                leaves kept, an area's rooms kept and the indoor ones beside it loaded ahead, the loading screen at a
+                turn of 16 ms and presented fifteen times a second. Fast load has a switch on the options screen's
+                Game tab, kept in daolib.ini beside the logs; DAOLIB_FAST_LOAD=0 leaves it out
 src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h), drawing in the world (Vfx.h), commands starting and ending (CommandEvents.h), a plugin's own text (Strings.h), the party's selection and who is controlled (Party.h), equipment going on and coming off (Equipment.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),

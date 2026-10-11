@@ -1,4 +1,4 @@
-#include "fix/EngineHeap.h"
+#include "perf/EngineHeap.h"
 
 #include "dao/Addresses.h"
 #include "dao/Hook.h"
@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace fix
+namespace perf
 {
 
 namespace
@@ -204,11 +204,11 @@ bool TurnedOff()
 
 } // namespace
 
-void InstallEngineHeapFix()
+void InstallEngineHeap()
 {
     if (TurnedOff())
     {
-        spdlog::info("fixes: DAOLIB_ENGINE_HEAP=0, so the engine's memory is its own pools (issue #69)");
+        spdlog::info("engine heap: DAOLIB_ENGINE_HEAP=0, so the engine's memory is its own pools (issue #69)");
         return;
     }
     // Before the first allocation or not at all: a block of the engine's own freed here, or
@@ -216,7 +216,7 @@ void InstallEngineHeapFix()
     const auto manager = dao::TryRead<std::uintptr_t>(dao::Module::Address(dao::addr::kEngineMemoryManager));
     if (!manager || *manager != 0)
     {
-        spdlog::warn("fixes: the engine's memory manager is already there, so its memory stays its own pools "
+        spdlog::warn("engine heap: the engine's memory manager is already there, so its memory stays its own pools "
                      "(issue #69)");
         return;
     }
@@ -233,11 +233,11 @@ void InstallEngineHeapFix()
         g_reallocate.Detach();
         g_freeSubPool.Detach();
         g_statistics.Detach();
-        spdlog::warn("fixes: the engine's allocator could not be detoured, so its memory stays its own pools "
+        spdlog::warn("engine heap: the engine's allocator could not be detoured, so its memory stays its own pools "
                      "(issue #69)");
         return;
     }
-    spdlog::info("fixes: the engine's memory is the system's heap, not its own 850 MiB of pools (issue #69)");
+    spdlog::info("engine heap: the engine's memory is the system's heap, not its own 850 MiB of pools (issue #69)");
 }
 
-} // namespace fix
+} // namespace perf

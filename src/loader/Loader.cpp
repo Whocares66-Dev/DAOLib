@@ -34,14 +34,11 @@
 #include "dao/Plugin.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
-#include "fix/AreaLists.h"
-#include "fix/AreaRooms.h"
-#include "fix/EngineHeap.h"
-#include "fix/LoadingPace.h"
-#include "fix/LoadingPresent.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
+#include "perf/EngineHeap.h"
+#include "perf/FastLoad.h"
 
 #include <Windows.h>
 
@@ -245,12 +242,9 @@ void __stdcall EntryHook()
     spdlog::info("entry point reached; loading plugins");
     loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
-    fix::InstallEngineHeapFix();
+    perf::InstallEngineHeap();
     fix::InstallArchiveReadFix();
-    fix::InstallAreaListsFix();
-    fix::InstallAreaRoomsFix();
-    fix::InstallLoadingPaceFix(); // before the present's: it writes into code the present's detours
-    fix::InstallLoadingPresentFix();
+    perf::InstallFastLoad();
     LoadPlugins();
     spdlog::debug("starting the game");
     g_entry.Original()();
@@ -274,12 +268,9 @@ void WINAPI SystemTimeHook(LPFILETIME time)
                      dao::Module::ImageAddress(caller));
         loader::instance::SeedSaves();
         loader::crashlog::StartWatchdog();
-        fix::InstallEngineHeapFix();
+        perf::InstallEngineHeap();
         fix::InstallArchiveReadFix();
-        fix::InstallAreaListsFix();
-        fix::InstallAreaRoomsFix();
-        fix::InstallLoadingPaceFix(); // before the present's: it writes into code the present's detours
-        fix::InstallLoadingPresentFix();
+        perf::InstallFastLoad();
         LoadPlugins();
         spdlog::debug("starting the game");
     }

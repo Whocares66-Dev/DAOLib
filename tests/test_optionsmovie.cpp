@@ -448,6 +448,36 @@ TEST_CASE("actions are listed under their headings after the game's own", "[opti
     CHECK_FALSE(ListKeys(Movie(LongTag(12, Simple(0x17))), sections));
 }
 
+TEST_CASE("a section goes in the column it asks for, or in the other for want of room", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    // The left column is free and comes first, and the section asks for the right.
+    Section right{"Right", {{"DAOLibR", "R", ""}}};
+    right.column = 1;
+    const Section either{"Either", {{"DAOLibE", "E", ""}}};
+    std::size_t shown = 0;
+    const auto patched = AddSections(movie, std::vector<Section>{right, either}, shown);
+    REQUIRE(patched);
+    CHECK(shown == 2);
+    const auto inRight = gfx::FindInstance(*patched, ControlInstance("DAOLibR"));
+    const auto inLeft = gfx::FindInstance(*patched, ControlInstance("DAOLibE"));
+    REQUIRE((inRight && inLeft));
+    CHECK(inRight->x == 483);
+    CHECK(inLeft->x == 7);
+
+    // The right holds a heading and four: with those in it, a section that
+    // asks for the right goes in the left.
+    const Section four{"Four",
+                       {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
+    const auto full = AddSections(movie, std::vector<Section>{four, right}, shown);
+    REQUIRE(full);
+    CHECK(shown == 2);
+    const auto pushed = gfx::FindInstance(*full, ControlInstance("DAOLibR"));
+    REQUIRE(pushed);
+    CHECK(pushed->x == 7);
+}
+
 TEST_CASE("a section with no room is left out, and those after it", "[options]")
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)

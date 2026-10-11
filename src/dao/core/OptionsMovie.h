@@ -100,6 +100,9 @@ struct Choice
     bool dropdown = false;
 };
 
+// A section that takes whichever column has room first.
+inline constexpr std::int32_t kEitherColumn = -1;
+
 // A section's rows: its checkboxes, then its choices.
 struct Section
 {
@@ -108,6 +111,9 @@ struct Section
     // `= {}` so that a section written {title, toggles} leaves it out
     // without clang's missing-field-initializers.
     std::vector<Choice> choices = {}; // NOLINT(readability-redundant-member-init)
+    // The column the section would be in, 0 the left or 1 the right, if that column has the
+    // rows; kEitherColumn for the first that has. `= ...` for the same reason.
+    std::int32_t column = kEitherColumn; // NOLINT(readability-redundant-member-init)
 };
 
 // A row of the Game tab the game leaves empty: where a checkbox in it goes.

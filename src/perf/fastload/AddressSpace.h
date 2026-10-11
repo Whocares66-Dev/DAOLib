@@ -2,7 +2,7 @@
 // keep things loaded ask before they keep more (AreaLists, AreaRooms).
 #pragma once
 
-namespace fix
+namespace perf::fastload
 {
 
 // True when no free block of the address space is 512 MiB or more. What a
@@ -11,4 +11,4 @@ namespace fix
 // a block and given it straight back.
 bool AddressSpaceShort();
 
-} // namespace fix
+} // namespace perf::fastload

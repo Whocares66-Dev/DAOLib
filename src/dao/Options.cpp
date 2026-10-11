@@ -149,6 +149,7 @@ struct Section
 {
     std::wstring title;
     SectionState state = SectionState::Waiting;
+    Column column = Column::Either;
 };
 
 // A checkbox in an open movie waiting to be told its option's value.
@@ -194,6 +195,21 @@ std::optional<std::size_t> EntryOf(std::string_view option)
     return std::nullopt;
 }
 
+// A column as the movie's sections have it: 0 the left, 1 the right.
+std::int32_t MovieColumn(Column column)
+{
+    switch (column)
+    {
+    case Column::Left:
+        return 0;
+    case Column::Right:
+        return 1;
+    case Column::Either:
+        break;
+    }
+    return core::options_movie::kEitherColumn;
+}
+
 // The options movie as the game opens it: the sections placed.
 std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
 {
@@ -204,6 +220,7 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
         {
             core::options_movie::Section section;
             section.title = Utf8(g_sections[i].title);
+            section.column = MovieColumn(g_sections[i].column);
             for (const Entry &entry : g_entries)
             {
                 if (entry.section != i)
@@ -499,7 +516,7 @@ bool Attach()
 
 } // namespace
 
-bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices)
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices, Column column)
 {
     if (toggles.empty() && choices.empty())
     {
@@ -550,7 +567,7 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
         options.push_back(std::move(option));
     }
     const std::size_t section = g_sections.size();
-    g_sections.push_back({std::move(title), SectionState::Waiting});
+    g_sections.push_back({std::move(title), SectionState::Waiting, column});
     std::size_t next = 0;
     for (Toggle &toggle : toggles)
     {

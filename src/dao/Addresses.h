@@ -1105,6 +1105,12 @@ DAO_ADDRESS(kD3DSwapChain_Present, 24028)
 // screen: the loading screen's turn. The names are ours.
 DAO_ADDRESS(kLoadingGUITask_Execute, 7121)
 DAO_DATA(kLoadingGUITask_Step, 63796)
+// The engine's sleep, read 2026-10-11 for DAOLib #75: __cdecl (ms), four
+// instructions over the system's Sleep (`mov eax, [esp+4]; push eax; call
+// [Sleep]; ret`). The loading screen's task calls it with 0x42 at its
+// Execute's +5, the sleep each of its turns begins with; fast load answers
+// that one call shorter (perf/fastload/LoadingScreen.h). The name is ours.
+DAO_ADDRESS(kMultithreading_Sleep, 5425)
 // The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
 // profile of loading found its thread in FindFit for over a third of the
 // steps that build an area list and swap a layout. The engine's memory is
@@ -1162,7 +1168,7 @@ DAO_ADDRESS(kPool_FindFit, 4322)
 // codes written are -1. Statistics, __cdecl (out, out, pool or -1), has one
 // caller, PhysX's manager, for a pool that is not there. The names are ours.
 // The loader replaces the three, and answers the two, before the first
-// allocation (src/fix/EngineHeap.h), so in a game with the loader none of
+// allocation (src/perf/EngineHeap.h), so in a game with the loader none of
 // the pools' own code above runs and the manager's pointer stays null.
 DAO_ADDRESS(kEngineMemory_Allocate, 4313)
 DAO_ADDRESS(kEngineMemory_Free, 4308)

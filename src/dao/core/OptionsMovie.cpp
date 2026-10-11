@@ -181,13 +181,14 @@ std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie)
 namespace
 {
 
-// The first of `rows` free slots one under the other in one column; the
-// slots' count if there is no such run.
-std::size_t FirstRun(const std::vector<Slot> &slots, std::size_t rows)
+// The first of `rows` free slots one under the other in one column, in
+// `column` if it is not kEitherColumn; the slots' count if there is no such
+// run.
+std::size_t FirstRunIn(const std::vector<Slot> &slots, std::size_t rows, std::int32_t column)
 {
     for (std::size_t i = 0; i + rows <= slots.size(); ++i)
     {
-        bool together = true;
+        bool together = column == kEitherColumn || slots[i].column == column;
         for (std::size_t j = 1; j < rows && together; ++j)
         {
             const Slot &above = slots[i + j - 1];
@@ -200,6 +201,15 @@ std::size_t FirstRun(const std::vector<Slot> &slots, std::size_t rows)
         }
     }
     return slots.size();
+}
+
+// The rows for a section: in the column it asks for if that has them, in
+// the first that has otherwise. A section is better in the other column
+// than left out.
+std::size_t FirstRun(const std::vector<Slot> &slots, std::size_t rows, std::int32_t column)
+{
+    const std::size_t wanted = FirstRunIn(slots, rows, column);
+    return wanted != slots.size() ? wanted : FirstRunIn(slots, rows, kEitherColumn);
 }
 
 // The symbol a control like the movie's own `instance` is an instance of.
@@ -256,7 +266,7 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
         // The first rows free one under the other in one column, enough
         // for the heading and every checkbox.
         const std::size_t rows = kHeadingRows + section.toggles.size() + (kChoiceRows * section.choices.size());
-        const std::size_t first = FirstRun(*slots, rows);
+        const std::size_t first = FirstRun(*slots, rows, section.column);
         const bool choicesFit =
             std::ranges::all_of(section.choices, [&](const Choice &choice) { return symbol(choice).has_value(); });
         if ((section.toggles.empty() && section.choices.empty()) || !choicesFit || first == slots->size())

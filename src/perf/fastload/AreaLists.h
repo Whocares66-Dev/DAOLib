@@ -1,5 +1,5 @@
 // The area lists the party leaves are kept, and handed back when it returns
-// (DAOLib issue #64).
+// (DAOLib issue #64). A part of fast load (perf/FastLoad.h).
 //
 // The game's areas come in lists, each a file of its own, and a door or a
 // map trip to an area of another list is the long loading screen: the
@@ -44,13 +44,18 @@
 // with four kept.
 #pragma once
 
-namespace fix
+#include "perf/fastload/Shared.h"
+
+namespace perf::fastload::lists
 {
 
-// Once, from the loader's way into the game, before the plugins load: every
-// game, whatever plugins it has. DAOLIB_AREA_LISTS=<n> in the environment
-// keeps n lists at the most in place of eight; 0 keeps none, the engine as
-// it was.
-void InstallAreaListsFix();
+// Places the detours. DAOLIB_AREA_LISTS=<n> in the environment keeps n lists
+// at the most in place of eight; 0 keeps none, the engine as it was.
+void Attach();
 
-} // namespace fix
+// Before and after an update of the loading mode: what the mode is doing is
+// what says which of the module's calls is a swap's.
+void BeforeUpdate(const Update &update);
+void AfterUpdate();
+
+} // namespace perf::fastload::lists

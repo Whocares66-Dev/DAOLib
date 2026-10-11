@@ -236,13 +236,13 @@ add_library(
     version
     SHARED
     src/loader/CrashLog.cpp
-    src/fix/AddressSpace.cpp
-    src/fix/AreaLists.cpp
-    src/fix/AreaRooms.cpp
     src/fix/ArchiveRead.cpp
-    src/fix/EngineHeap.cpp
-    src/fix/LoadingPace.cpp
-    src/fix/LoadingPresent.cpp
+    src/perf/EngineHeap.cpp
+    src/perf/FastLoad.cpp
+    src/perf/fastload/AddressSpace.cpp
+    src/perf/fastload/AreaLists.cpp
+    src/perf/fastload/AreaRooms.cpp
+    src/perf/fastload/LoadingScreen.cpp
     src/loader/Instance.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
