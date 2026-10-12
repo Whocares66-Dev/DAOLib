@@ -73,7 +73,9 @@
 #include "dao/core/OptionsMovie.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -515,6 +517,60 @@ void PointCursor(std::int32_t x, std::int32_t y)
     g_cursorAt.store(static_cast<std::int64_t>(static_cast<std::uint32_t>(x)) | static_cast<std::int64_t>(y) << 32,
                      std::memory_order_relaxed);
     g_cursorHeld.store(true, std::memory_order_relaxed);
+}
+
+namespace
+{
+
+// The inputs the steering asks of, by Move's order (dao/Addresses.h, kInput_IsDown).
+constexpr std::array<std::int32_t, 4> kMoveInputs{2, 3, 4, 5};
+std::array<std::atomic<bool>, 4> g_moveHeld{};
+
+using IsDownFn = bool(__fastcall *)(void *input, int edx, const std::int32_t *id);
+Detour<IsDownFn> g_isDown;
+
+// The input system asked whether an input is down. A key really down is down; one a plugin
+// holds is down where the game would have looked at the key at all, which the modes say.
+bool __fastcall IsDown(void *input, int edx, const std::int32_t *id)
+{
+    if (g_isDown.Original()(input, edx, id))
+    {
+        return true;
+    }
+    if (id == nullptr)
+    {
+        return false;
+    }
+    for (std::size_t i = 0; i < kMoveInputs.size(); ++i)
+    {
+        if (*id == kMoveInputs.at(i) && g_moveHeld.at(i).load(std::memory_order_relaxed))
+        {
+            using AllowsFn = bool(__fastcall *)(void *modes, int edx, const std::int32_t *id);
+            return reinterpret_cast<AllowsFn>(Module::Address(addr::kInputModes_AllowsInput))(Modes(), 0, id);
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+// The steering asks the input system each frame whether the four inputs are down (dao/Addresses.h,
+// kInput_IsDown), and this answers for one a plugin holds, as PointCursor answers for the mouse's
+// place: everything after is the engine's own, the direction by the camera, the drive command,
+// the stop when nothing is held.
+//
+// Seen in play 2026-10-12 (examples/input with example_input.walk, GOG's game, Lyna's autosave
+// in Redcliffe, no key pressed): each direction held a second and a half in turn took the
+// controlled creature from 352.49 338.36 forward to 351.85 345.66, back to 352.44 338.99, left
+// to 346.40 337.96 and right to 353.07 338.54, and a second and a half after the last was let
+// go it stood 0.08 from there. So inputs 4 and 5 are left and right. The game had gone into a
+// fight at the first step, and steering went on in it. Again with the game's window not the
+// foreground one all through (Eluvian's `window` said so three times in the walk): the same.
+void Hold(Move direction, bool held)
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_isDown.Attach(addr::kInput_IsDown, &IsDown); });
+    g_moveHeld.at(static_cast<std::size_t>(direction)).store(held, std::memory_order_relaxed);
 }
 
 void ReleaseCursor()

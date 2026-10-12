@@ -88,4 +88,25 @@ void PointCursor(std::int32_t x, std::int32_t y);
 // Hands the world pick back to the real mouse after PointCursor.
 void ReleaseCursor();
 
+// One of the four ways the game's movement keys steer the controlled creature.
+enum class Move : std::uint8_t
+{
+    Forward,
+    Backward,
+    Left,
+    Right,
+};
+
+// Holds one of the game's movement keys down, or lets it go, with no key pressed.
+// @param direction the key
+// @param held true to hold it down, false to let it go
+//
+// While a direction is held the game steers the controlled creature as it does by the keyboard:
+// by the way the camera faces, running or walking as the player has it set, with the game's own
+// drive command, and only where the game takes movement keys at all (not in a conversation or a
+// menu). It stops when nothing is held. A real key pressed at the same time counts as well.
+// This works even when the game's window is not in front. A direction stays held until it is
+// let go, so let go of what was held. Call it from any thread.
+void Hold(Move direction, bool held);
+
 } // namespace dao::input

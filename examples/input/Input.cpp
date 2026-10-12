@@ -20,12 +20,17 @@
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
 #include "dao/Log.h"
+#include "dao/Module.h"
+#include "dao/Party.h"
 #include "dao/Plugin.h"
 #include "dao/String.h"
+#include "dao/generated/ScriptApi.h"
 
 #include <spdlog/spdlog.h>
 
+#include <array>
 #include <chrono>
+#include <filesystem>
 #include <string_view>
 
 namespace
@@ -57,8 +62,71 @@ void Pressed(std::wstring_view action)
                  mode ? static_cast<int>(*mode) : -1);
 }
 
+// A walk with no key: each of the four directions held for a second and a half in turn, and
+// where the controlled creature stood before and after each. Only where a file
+// example_input.walk beside the plugin asks for it, and once, in the world.
+void Walk()
+{
+    using Clock = std::chrono::steady_clock;
+    static const bool asked = std::filesystem::exists(dao::Module::OwnFolder() / L"example_input.walk");
+    static int step = -1; // the direction held, 4 once all are done
+    static Clock::time_point since;
+    static const std::array<const char *, 4> kNames{"forward", "backward", "left", "right"};
+    // It starts in explore mode and then runs to its end whatever the game goes into: a walk may
+    // set off a conversation, and what a held direction does there is part of what is looked for.
+    const auto mode = dao::CClientExoApp::CurrentMode();
+    if (!asked || step > 4 || (step == -1 && mode != dao::GameMode::Explore))
+    {
+        return;
+    }
+    const dao::ObjectId creature = dao::party::Controlled();
+    if (creature == dao::kInvalidObject)
+    {
+        return;
+    }
+    const auto log = [&](const char *what) {
+        const dao::Vector at = dao::script::api::GetPosition(creature);
+        spdlog::info("walk: {}, the creature at {:.2f} {:.2f} {:.2f}, mode {}", what, at.x, at.y, at.z,
+                     mode ? static_cast<int>(*mode) : -1);
+    };
+    if (step == -1)
+    {
+        // A few seconds in the world first, the load settled.
+        static const Clock::time_point entered = Clock::now();
+        if (Clock::now() - entered < std::chrono::seconds(4))
+        {
+            return;
+        }
+        log("before");
+        step = 0;
+        since = Clock::now();
+        dao::input::Hold(dao::input::Move::Forward, true);
+        return;
+    }
+    if (Clock::now() - since < std::chrono::milliseconds(1500))
+    {
+        return;
+    }
+    since = Clock::now();
+    if (step < 4)
+    {
+        dao::input::Hold(static_cast<dao::input::Move>(step), false);
+        log(kNames.at(static_cast<std::size_t>(step)));
+    }
+    else
+    {
+        log("a second and a half after the last was let go");
+    }
+    ++step;
+    if (step < 4)
+    {
+        dao::input::Hold(static_cast<dao::input::Move>(step), true);
+    }
+}
+
 void Frame()
 {
+    Walk();
     using Clock = std::chrono::steady_clock;
     static const Clock::time_point started = Clock::now();
     static Clock::time_point last = started;

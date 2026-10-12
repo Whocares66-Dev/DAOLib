@@ -633,6 +633,27 @@ DAO_ADDRESS(kInputModes_Get, 24303)
 // whether the cursor is at the window's edge, for scrolling. The name is
 // ours.
 DAO_ADDRESS(kInput_AxisPair, 24340)
+// Whether an input is down (dao/Input.h, Hold; DAOLib #95), read 2026-10-12
+// from the drive command back. The player steering the controlled creature
+// is a steering object's update each frame (0x00764150): it makes a
+// direction (0x00763CD0, through 0x00763A00) and, while that is not zero,
+// drives the creature by it and the camera's angle (0x007636A0, to
+// 0x006ADCF0, which changes the creature's drive command or issues one,
+// 0x006A21C0: type 0x21, player issued); when it is zero and the creature
+// is driving, it stops it (0x00763810). The direction comes of asking the
+// input system of numbered inputs whether each is down: forward is input 2
+// (or 6), backward 3, and across is input 5 (or 27 with 14) less input 4
+// (or 26 with 14); each counts 1 with the creature's run on (its +0x4A8)
+// and 0.5 without. IsDown, __thiscall on the input system (const int
+// *input), `ret 4`, a bool: false at once where the input modes do not
+// allow the input now, else whether any key bound to it is down in the
+// devices' state. AllowsInput, __thiscall on the modes (InputModes::Get's;
+// const int *input), `ret 4`, a bool: true if a group that is on allows the
+// input and none bars it, as Allowed answers for a text. Every one of
+// IsDown's 84 calls asks AllowsInput first through it (the address
+// library's session, reading GOG and EA the same day). The names are ours.
+DAO_ADDRESS(kInput_IsDown, 24337)
+DAO_ADDRESS(kInputModes_AllowsInput, 24258)
 DAO_DATA(kInputModes, 102761)
 DAO_ADDRESS(kInputModes_Group, 24295)
 DAO_ADDRESS(kInputModeGroup_Allow, 24272)
