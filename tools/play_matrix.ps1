@@ -37,9 +37,9 @@
     (Steam's installer writes it), -SwitchPath sets it to EA's for the runs and puts it back,
     from an elevated shell.
 
-    Not in the matrix, and why (dev/TESTING.md): the Windows 95 and 98 modes, which DAOLib
-    does not support; 8-bit colour, 16-bit colour and 640 x 480, which change the desktop's own
-    display mode while the game is up; Run as administrator, which asks at a prompt.
+    Not in the matrix, and why (dev/TESTING.md): 8-bit colour, 16-bit colour and 640 x 480,
+    which change the desktop's own display mode while the game is up; Run as administrator,
+    which asks at a prompt.
 
 .EXAMPLE
     .\tools\play_matrix.ps1 -Install steam                   # the two settings of a merge

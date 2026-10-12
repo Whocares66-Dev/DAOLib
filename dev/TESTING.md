@@ -71,7 +71,6 @@ A setting on the exe's Compatibility tab is a layer: a value named by the exe's 
 
 Left out, each for its reason:
 
-- **Windows 95 and Windows 98 / ME modes** (`WIN95`, `WIN98`): not supported. Seen once, Steam's game, debug build: the loader is loaded, its start is reached, and the game stops at the C++ runtime's "abort() has been called" before the first plugin loads, where the vanilla game starts. Why was not read (the user: "why should we support windows 95/98 mode?"). With the loader as `version.dll` these modes left it out without a word.
 - **Reduced colour mode (8-bit, 16-bit) and 640 x 480** (`256COLOR`, `16BITCOLOR`, `640X480`): they change the desktop's own display mode while the game is up, on a machine other games are running on. Which DLL the layers load was seen without the game (a 32-bit exe importing `dinput8.dll` with the loader beside it, `dev/BUILDS.md`): the one beside the exe under all three, `256COLOR` bringing `AcGenral`.
 - **Run this program as an administrator** (`RUNASADMIN`): it asks at a prompt. Not seen, with or without the game.
 - **Disable visual themes** (`DISABLETHEMES`): Windows 10 and 11 no longer offer it. It brings `AcGenral`, as Disable fullscreen optimizations does.
@@ -86,4 +85,4 @@ Not reachable here: **Windows 11.** This machine is Windows 10. One of the two p
 |---|---|---|
 | GOG (the private copy) | all twelve, and `DISABLETHEMES` | every one passed |
 | EA | all twelve, and `DISABLETHEMES` | every one passed |
-| Steam | the two of a merge through the script; all twelve, `DISABLETHEMES`, `WIN95` and `WIN98` by hand the same hour (the loader loaded, the start's cue, the engine heap, the plugins, no fault log) | all passed but `WIN95` and `WIN98`, above |
+| Steam | the two of a merge through the script; all twelve and `DISABLETHEMES` by hand the same hour (the loader loaded, the start's cue, the engine heap, the plugins, no fault log) | every one passed |

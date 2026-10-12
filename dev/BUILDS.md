@@ -154,7 +154,7 @@ Two players, one with EA's build on Windows 11 (26H2, build 26300.9457) and one 
 | The Compatibility tab's setting (layer) | `version.dll`, `winmm.dll` taken from the system first |
 |---|---|
 | none; high DPI settings (`HIGHDPIAWARE`, `DPIUNAWARE`, `GDIDPISCALING`); 16-bit colour; 640 x 480; Windows XP SP2 to Windows 8 modes | no |
-| Disable fullscreen optimizations (`DISABLEDXMAXIMIZEDWINDOWEDMODE`); 8-bit colour (`256COLOR`); `DISABLETHEMES`; Windows 95, 98, NT 4 and 2000 modes | yes |
+| Disable fullscreen optimizations (`DISABLEDXMAXIMIZEDWINDOWEDMODE`); 8-bit colour (`256COLOR`); `DISABLETHEMES` | yes |
 
 `dinput8.dll`, `netapi32.dll`, `psapi.dll`, `d3d9.dll`, `winhttp.dll` and `d3dx9_36.dll` were in the process under none of them, and are in no shim DLL's imports here (`apphelp`, `AcLayers`, `AcGenral`, `AcSpecfc`, `AcXtrnal`, each with what it imports, read from `SysWOW64`). GOG's installer sets `HIGHDPIAWARE` on its exe, which is why GOG's game here has a layer and loads the loader. Windows 11's shims were not read: this machine has none.
 
