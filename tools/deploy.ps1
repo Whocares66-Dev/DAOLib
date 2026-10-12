@@ -3,7 +3,7 @@
     Copy a build's loader and plugins into the game's bin_ship folder, or take them out.
 
 .DESCRIPTION
-    After `.\tools\build.ps1 -Preset <preset>`, puts build\<preset>\version.dll beside
+    After `.\tools\build.ps1 -Preset <preset>`, puts build\<preset>\dinput8.dll beside
     DAOrigins.exe and each plugin's folder, build\<preset>\daolib\plugins\<name>\ (its DLL,
     its .pdb, so the crash logger can name our frames (dev/CRASHES.md), and its own files),
     under bin_ship\daolib\plugins, and
@@ -19,7 +19,9 @@
     all. An example not named is taken out of the game if it is there.
 
     -Remove deletes them again, and the whole bin_ship\daolib folder, which returns the
-    game to stock: version.dll is ours alone, the system's stays in SysWOW64 untouched.
+    game to stock: dinput8.dll there is ours alone, the system's stays in SysWOW64 untouched.
+    A version.dll there is the loader under its name before DAOLib #93, and is taken out
+    either way: two loaders in one game would each load the plugins.
     The logs are elsewhere (Documents) and stay.
 
     -Install picks the game: gog (the default), ea, the EA app's install, or steam,
@@ -75,13 +77,15 @@ foreach ($running in @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue
     Show-Info "another install's game is running, from $from (process $($running.Id)); it does not hold this install's files"
 }
 
-$loader = Join-Path $Game 'version.dll'
-$loaderPdb = Join-Path $Game 'version.pdb'
+$loader = Join-Path $Game 'dinput8.dll'
+$loaderPdb = Join-Path $Game 'dinput8.pdb'
+# The loader as it was named before DAOLib #93.
+$oldLoader = @((Join-Path $Game 'version.dll'), (Join-Path $Game 'version.pdb'))
 $daolib = Join-Path $Game 'daolib'
 $plugins = Join-Path $daolib 'plugins'
 
 if ($Remove) {
-    foreach ($f in @($loader, $loaderPdb)) {
+    foreach ($f in @($loader, $loaderPdb) + $oldLoader) {
         if (Test-Path $f) { Remove-Item -Force $f; Show-Ok "removed $f" }
     }
     if (Test-Path $daolib) { Remove-Item -Recurse -Force $daolib; Show-Ok "removed $daolib" }
@@ -89,12 +93,15 @@ if ($Remove) {
 }
 
 $build = Join-Path $repo "build\$Preset"
-$builtLoader = Join-Path $build 'version.dll'
+$builtLoader = Join-Path $build 'dinput8.dll'
 if (-not (Test-Path $builtLoader)) { throw "No $builtLoader; run .\tools\build.ps1 -Preset $Preset first" }
 
 New-Item -ItemType Directory -Force $plugins | Out-Null
+foreach ($f in $oldLoader) {
+    if (Test-Path $f) { Remove-Item -Force $f; Show-Ok "removed $f (the loader is dinput8.dll now)" }
+}
 Copy-Item -Force $builtLoader $loader
-$builtPdb = Join-Path $build 'version.pdb'
+$builtPdb = Join-Path $build 'dinput8.pdb'
 if (Test-Path $builtPdb) { Copy-Item -Force $builtPdb $loaderPdb }
 Show-Ok "loader  -> $loader"
 # Each plugin is a folder of its own, its DLL and its files (DAOLib #26);

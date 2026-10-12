@@ -28,12 +28,12 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 ## Layout
 
 ```
-src/loader/     version.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
-src/fix/        corrections to the engine's own faults, one file each, built into version.dll and put in by the loader
+src/loader/     dinput8.dll: the proxy (Proxy.cpp), the entry-point detour that loads plugins (Loader.cpp), the crash logger (CrashLog.cpp)
+src/fix/        corrections to the engine's own faults, one file each, built into dinput8.dll and put in by the loader
                 before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
                 offset in its archive's file (ArchiveRead), a saved file's name handed to the renderer in a buffer
                 of the kilobyte the renderer copies (SavedFileName). dev/CRASHES.md has the crash each one fixed
-src/perf/       what makes the game faster and corrects no fault, built into version.dll the same way. The engine's
+src/perf/       what makes the game faster and corrects no fault, built into dinput8.dll the same way. The engine's
                 memory from the system's heap in place of its own 850 MiB of pools (EngineHeap, off with
                 DAOLIB_ENGINE_HEAP=0), the game on every processor where GOG's exe starts it on the
                 first two (AllProcessors, off with DAOLIB_ALL_PROCESSORS=0), and fast load (FastLoad, its parts under fastload/): the area lists the party
@@ -78,7 +78,7 @@ toolset/        the toolset installer and what is extracted from it (ignored)
 .\tools\build.ps1 -Preset debug -Mutants      # the core broken on purpose, one promise at a time: minutes
 ```
 
-Output is `build\<preset>\version.dll` and `build\<preset>\daolib\plugins\<name>\`, each plugin a folder of its own (its DLL and its files), a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `.\tools\package.ps1` makes the zip a player installs from (`dist\DAOLib-<version>.zip`, the loader, its PDB and the address files laid out as the game folder, with a README), after a `release` build, which keeps its PDBs for that; `.\tools\release.ps1` tags and publishes it (`dev/RELEASING.md`). `-Remove` returns the install to stock: `version.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
+Output is `build\<preset>\dinput8.dll` and `build\<preset>\daolib\plugins\<name>\`, each plugin a folder of its own (its DLL and its files), a game folder's worth of files. **A build copies nothing into the game.** `.\tools\deploy.ps1` does, with the game closed, since it holds the DLLs open. `.\tools\package.ps1` makes the zip a player installs from (`dist\DAOLib-<version>.zip`, the loader, its PDB and the address files laid out as the game folder, with a README), after a `release` build, which keeps its PDBs for that; `.\tools\release.ps1` tags and publishes it (`dev/RELEASING.md`). `-Remove` returns the install to stock: `dinput8.dll` there is ours alone, and the system's stays in `SysWOW64`. Logs go to one file per DLL (`loader.log`, `probe.log`), at info unless `DAOLIB_LOG_LEVEL` says otherwise. The first line of each names the level it took.
 
 The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x86, which takes a few minutes, and so does the first of each other preset. Last verified green 2026-09-30: build, tests, format, lint, the tests under ASan, and /analyze.
 

@@ -24,17 +24,17 @@ THIS STARTS THE GAME, through the EA app, which it opens if it is not open.
 Say so before running it.
 
 The exe is started as the EA app expects (it hands off to the EA app, which
-starts it again, dev/BUILDS.md), and build\\<preset>\\version.dll is loaded
+starts it again, dev/BUILDS.md), and build\\<preset>\\dinput8.dll is loaded
 into the run the EA app starts, as soon as that process has a kernel32 to
 load it with: LoadLibraryW on a thread made in the game, the path written
 into the game's memory first. That is more than a second before the wrapper
 has decrypted the game's code, which this checks, since a loader that came
 after would miss the game's start. From there everything is as deployed. The
 loader looks for daolib\\plugins beside itself, so the build's plugins load,
-and being named version.dll it is the version.dll the game's own imports
+and being named dinput8.dll it is the dinput8.dll the game's own imports
 then bind to.
 
-It does not show that the wrapper finds a version.dll put beside the exe.
+It does not show that the wrapper finds a dinput8.dll put beside the exe.
 Only a deployed run does.
 """
 
@@ -188,12 +188,12 @@ def stage(preset, examples=()):
     PDBs and Ghidra's function names. The path of the loader there, or None
     with no build."""
     build = os.path.normpath(os.path.join(HERE, "..", "build", preset))
-    if not os.path.exists(os.path.join(build, "version.dll")):
+    if not os.path.exists(os.path.join(build, "dinput8.dll")):
         return None
     play = os.path.join(build, "play")
     shutil.rmtree(play, ignore_errors=True)
     os.makedirs(os.path.join(play, "daolib", "plugins"))
-    for name in ("version.dll", "version.pdb"):
+    for name in ("dinput8.dll", "dinput8.pdb"):
         if os.path.exists(os.path.join(build, name)):
             shutil.copy2(os.path.join(build, name), play)
     plugins = os.path.join(build, "daolib", "plugins")
@@ -213,7 +213,7 @@ def stage(preset, examples=()):
         os.path.join(build, "daolib", "addresses"),
         os.path.join(play, "daolib", "addresses"),
     )
-    return os.path.join(play, "version.dll")
+    return os.path.join(play, "dinput8.dll")
 
 
 def end_children(parent, name):
@@ -286,7 +286,7 @@ def main(argv):
     loader = stage(preset, examples)
     if not loader:
         print(
-            f"no build\\{preset}\\version.dll; run tools\\build.ps1 -Preset {preset} first",
+            f"no build\\{preset}\\dinput8.dll; run tools\\build.ps1 -Preset {preset} first",
             file=sys.stderr,
         )
         return 2
@@ -359,10 +359,10 @@ def play(exe, loader, watch, seconds, started):
             f"{time.monotonic() - started:.1f} s after this started"
         )
         return 1
-    served = version_import(process, exe)
+    served = loader_import(process, exe)
     if served:
         print(
-            f"the game's own VERSION.dll imports go to {served[0]:#x}, in {served[1]}"
+            f"the game's own DINPUT8.dll imports go to {served[0]:#x}, in {served[1]}"
         )
     k32.TerminateProcess(process, 0)
     end_children(pid, "activationui.exe")
@@ -370,11 +370,11 @@ def play(exe, loader, watch, seconds, started):
     return 0
 
 
-def version_import(process, exe):
+def loader_import(process, exe):
     """(address, the file it is in) of the first function the game imports
-    from VERSION.dll, as the wrapper resolved it. In the loader's file, the
-    wrapper found VERSION.dll by its name, as the system's loader does, and
-    took the one already there; that is the lookup which finds a version.dll
+    from DINPUT8.dll, as the wrapper resolved it. In the loader's file, the
+    wrapper found DINPUT8.dll by its name, as the system's loader does, and
+    took the one already there; that is the lookup which finds a dinput8.dll
     beside the exe first when none is loaded. None if it cannot be read."""
     img = daoexe.Image(exe)
     o = img.offset(ea_dump.original_imports(img)[0])
@@ -382,7 +382,7 @@ def version_import(process, exe):
         _, _, _, name, iat = struct.unpack_from("<IIIII", img.data, o)
         if name == 0:
             return None
-        if img.cstring(name).lower() == "version.dll":
+        if img.cstring(name).lower() == "dinput8.dll":
             break
         o += 20
     slot = ea_dump.read(process, img.image_base + iat, 4)

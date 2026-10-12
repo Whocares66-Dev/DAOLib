@@ -5,7 +5,7 @@
 .DESCRIPTION
     After `.\tools\build.ps1 -Preset release`, writes dist\DAOLib-<version>.zip,
     laid out as the game's install folder, so a player extracts it there (beside
-    bin_ship) as SKSE is installed into Skyrim's: bin_ship\version.dll and its .pdb (so
+    bin_ship) as SKSE is installed into Skyrim's: bin_ship\dinput8.dll and its .pdb (so
     the crash logger names DAOLib's frames), bin_ship\daolib\addresses\*.bin (one per
     build of the game the address library knows: GOG, Steam, EA), and README.txt
     saying where it goes, how to see that it works and how to remove it, and which
@@ -33,9 +33,9 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 
 $build = Join-Path $repo "build\$Preset"
-$builtLoader = Join-Path $build 'version.dll'
+$builtLoader = Join-Path $build 'dinput8.dll'
 if (-not (Test-Path $builtLoader)) { throw "No $builtLoader; run .\tools\build.ps1 -Preset $Preset first" }
-$builtPdb = Join-Path $build 'version.pdb'
+$builtPdb = Join-Path $build 'dinput8.pdb'
 if (-not (Test-Path $builtPdb)) { throw "No $builtPdb; a crash log names none of DAOLib's frames without it" }
 # What a player is given does not say who built it. The linker writes the folder of its
 # temporary files into a PDB, which tools\build.ps1 keeps in the build tree for that
@@ -89,13 +89,18 @@ https://github.com/Whocares66-Dev/DAOLib (GPLv3)
 
 Installing
   Extract this archive into the game's install folder, the one that holds bin_ship.
-  version.dll goes beside DAOrigins.exe, and the address files into bin_ship\daolib\addresses.
-  version.pdb, beside version.dll, is what lets a crash log name DAOLib's own code.
+  dinput8.dll goes beside DAOrigins.exe, and the address files into bin_ship\daolib\addresses.
+  dinput8.pdb, beside dinput8.dll, is what lets a crash log name DAOLib's own code.
   Start the game as you always do: Galaxy, Steam, the EA app or the exe itself.
 
 Mods for DAOLib
   Each mod is a folder of its own, extracted into bin_ship\daolib\plugins\<mod>\.
   DAOLib does nothing without at least one mod.
+
+Another mod that is a dinput8.dll
+  Two files cannot have the name. Keep DAOLib's as dinput8.dll and put the other mod's
+  beside it renamed dinput8.chain.dll: DAOLib passes the game's calls on to it, and
+  loader.log says "another mod's dinput8.dll is chained". One such mod at a time.
 
 Seeing that it works
   The loader writes Documents\BioWare\Dragon Age\daolib\loader.log at each start:
@@ -111,7 +116,7 @@ Address files
   release to the next.
 
 Removing
-  Delete bin_ship\version.dll, bin_ship\version.pdb and the bin_ship\daolib folder.
+  Delete bin_ship\dinput8.dll, bin_ship\dinput8.pdb and the bin_ship\daolib folder.
   The game is then as it was; DAOLib changes none of its own files.
 "@
 Set-Content -Path (Join-Path $stage 'README.txt') -Value $readme -Encoding utf8

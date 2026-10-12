@@ -232,14 +232,14 @@ add_library(DAOLib::daolib ALIAS daolib)
 add_dependencies(daolib daoaddr_data)
 
 # ---------------------------------------------------------------------------
-# version.dll -- the loader. Dropped beside DAOrigins.exe it is loaded in
-# place of the system's version.dll (the game imports three of its functions,
-# which are forwarded to the real one), detours the exe's entry point, and
+# dinput8.dll -- the loader. Dropped beside DAOrigins.exe it is loaded in
+# place of the system's dinput8.dll (the game imports one of its functions,
+# which is forwarded to the real one), detours the exe's entry point, and
 # from there loads each plugin, daolib\plugins\<name>\<name>.dll, on the game's main thread
 # before any game code runs.
 # ---------------------------------------------------------------------------
 add_library(
-    version
+    loader
     SHARED
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
@@ -255,19 +255,19 @@ add_library(
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
 )
-dao_apply_warnings(version)
-dao_release_symbols(version)
+dao_apply_warnings(loader)
+dao_release_symbols(loader)
 # At the top of the build tree, where the game folder's layout starts, when
 # DAOLib is built inside another repository too.
 set_target_properties(
-    version
+    loader
     PROPERTIES
         PREFIX ""
-        OUTPUT_NAME "version"
+        OUTPUT_NAME "dinput8"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 # dbghelp names the frames of a crash log; psapi gives the process's memory.
-target_link_libraries(version PRIVATE daolib dbghelp psapi)
+target_link_libraries(loader PRIVATE daolib dbghelp psapi)
 
 # ---------------------------------------------------------------------------
 # Plugins. Each is a DLL exporting DAOLib_Load (src/dao/Plugin.h); the build

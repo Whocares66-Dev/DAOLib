@@ -8,7 +8,7 @@ It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each stor
 
 ## Installing
 
-Players install the loader and the address files, nothing else. A [DAOLib release](https://github.com/Whocares66-Dev/DAOLib/releases) is a zip of `bin_ship\version.dll` (the loader, with `version.pdb`, which lets a crash log name DAOLib's own code) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build, and [CHANGELOG.md](CHANGELOG.md) says what each release brought.
+Players install the loader and the address files, nothing else. A [DAOLib release](https://github.com/Whocares66-Dev/DAOLib/releases) is a zip of `bin_ship\dinput8.dll` (the loader, with `dinput8.pdb`, which lets a crash log name DAOLib's own code) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build, and [CHANGELOG.md](CHANGELOG.md) says what each release brought.
 
 ## Using the library
 
@@ -44,7 +44,7 @@ The library covers the game's script commands (all 661, callable and interceptab
 
 ## What is here
 
-- `src/loader`: the loader, `version.dll`, which the game loads in place of the system's.
+- `src/loader`: the loader, `dinput8.dll`, which the game loads in place of the system's.
 - `src/dao`: the library plugins link. Its public headers are the API the docs site documents.
 - `src/plugins`: the example plugin, and the probe, which checks the library against the game in play.
 - `examples/`: one small plugin per part of the library.

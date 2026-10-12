@@ -10,7 +10,7 @@
     runs CMake.
 
 .PARAMETER Preset
-    debug       loader (version.dll), daolib, the plugins, and the tests.
+    debug       loader (dinput8.dll), daolib, the plugins, and the tests.
                 The first run compiles spdlog, Detours and Catch2 through vcpkg.
     release     same, optimized.
     debug-asan  same, under AddressSanitizer; for -Test. The DLLs it makes are

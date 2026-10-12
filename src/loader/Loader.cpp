@@ -1,10 +1,11 @@
-// The loader. Windows loads this in place of version.dll because it sits
-// beside DAOrigins.exe, which imports version.dll by name and finds the
-// game's folder before the system's. DllMain stands the proxy up (any exe
-// in bin_ship that imports version.dll gets that much and no more), and in
-// DAOrigins.exe detours the exe's entry point: every static import's
-// DllMain has run by then, ours included, so a detour placed here catches
-// the CRT's start, on the main thread, with the loader lock released.
+// The loader. Windows loads this in place of dinput8.dll because it sits
+// beside DAOrigins.exe, which imports dinput8.dll by name and finds the
+// game's folder before the system's (why that name: loader/Proxy.cpp).
+// DllMain stands the proxy up (any exe in bin_ship that imports dinput8.dll
+// gets that much and no more), and in DAOrigins.exe detours the exe's entry
+// point: every static import's DllMain has run by then, ours included, so a
+// detour placed here catches the CRT's start, on the main thread, with the
+// loader lock released.
 // There the plugins are loaded and their DAOLib_Load called, then the entry
 // point runs and the game starts.
 //
@@ -33,6 +34,7 @@
 #include "dao/Module.h"
 #include "dao/Plugin.h"
 #include "dao/Resources.h"
+#include "dao/String.h"
 #include "fix/ArchiveRead.h"
 #include "fix/SavedFileName.h"
 #include "loader/CrashLog.h"
@@ -263,6 +265,15 @@ void Attach()
     loader::instance::Install();
     dao::OpenLog("loader");
     loader::instance::Report();
+    if (const auto &chain = loader::proxy::Chained(); chain.loaded)
+    {
+        spdlog::info("another mod's dinput8.dll is chained: the game's calls pass to {}", dao::Utf8(chain.file));
+    }
+    else if (!chain.file.empty())
+    {
+        spdlog::warn("{} could not be loaded, error {}; the game's calls pass to the system's dinput8.dll",
+                     dao::Utf8(chain.file), chain.error);
+    }
     // First, so a crash anywhere after this is logged, the loader's own included.
     loader::crashlog::Install(SelfPath().parent_path());
     const auto fingerprint = dao::Module::Fingerprint();
@@ -318,7 +329,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID /*reserved*/) // NO
         {
             return TRUE;
         }
-        if (!loader::proxy::Load())
+        if (!loader::proxy::Load(instance))
         {
             return FALSE;
         }

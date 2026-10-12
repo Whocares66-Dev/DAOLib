@@ -48,7 +48,7 @@ bin_ship\daolib\plugins\<name>\...          its own files: movies, talk tables, 
 bin_ship\daolib\plugins\<name>\override\    files that replace or add to the game's own
 ```
 
-- The loader (`version.dll`) loads the DLL in every plugin folder, in order of the folders' names, before any game code runs, and calls `DAOLib_Load` once. A DLL loose in `daolib\plugins\` is not loaded; the loader's log says where it should go.
+- The loader (`dinput8.dll`) loads the DLL in every plugin folder, in order of the folders' names, before any game code runs, and calls `DAOLib_Load` once. A DLL loose in `daolib\plugins\` is not loaded; the loader's log says where it should go.
 - `add_daolib_plugin(... FILES ...)` copies the plugin's own files beside its DLL on every build. A movie there is served to the game when the game has none by that name (`dao::gui::AddScreen` turns this on), and talk tables there are read by `dao/Strings.h`.
 - `add_daolib_plugin(... OVERRIDE ...)` copies files into the `override\` folder. The game finds any file there or in its subfolders by name (a texture, a material, a model, a table, an `.erf`), just as it does in its own `packages\core\override`, and merges an `M2DA_` table there with its own at start.
 - The player's own override folder wins over a plugin's file of the same name, and a plugin's file wins over the game's archives and patches. The folder is read once at start, not watched. Only the game's kinds of file go there, not the DLL.
@@ -248,4 +248,4 @@ A wrong signature leaves the stack off by the arguments' size when the function 
 
 ## Shipping a plugin
 
-Players install DAOLib from its release zip, extracted into the game's folder as SKSE is: `bin_ship\version.dll` and `bin_ship\daolib\addresses\`. Ship a plugin the same way, as a zip holding its folder, `bin_ship\daolib\plugins\<name>\`. A `.dazip` can't hold it, because DAUpdater unpacks into the Documents folder, never the game's.
+Players install DAOLib from its release zip, extracted into the game's folder as SKSE is: `bin_ship\dinput8.dll` and `bin_ship\daolib\addresses\`. Ship a plugin the same way, as a zip holding its folder, `bin_ship\daolib\plugins\<name>\`. A `.dazip` can't hold it, because DAUpdater unpacks into the Documents folder, never the game's.
