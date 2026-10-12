@@ -245,8 +245,8 @@ add_library(
     src/fix/ArchiveRead.cpp
     src/fix/SavedFileName.cpp
     src/perf/EngineHeap.cpp
+    src/perf/AllProcessors.cpp
     src/perf/FastLoad.cpp
-    src/perf/OwnProcessors.cpp
     src/perf/fastload/AddressSpace.cpp
     src/perf/fastload/AreaLists.cpp
     src/perf/fastload/AreaRooms.cpp
