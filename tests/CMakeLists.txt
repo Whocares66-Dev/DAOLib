@@ -15,6 +15,7 @@ add_executable(
     test_lightprobes.cpp
     test_input.cpp
     test_instance.cpp
+    test_processors.cpp
     test_msvc8.cpp
     test_optionsmovie.cpp
     test_owedtime.cpp

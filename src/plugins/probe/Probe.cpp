@@ -270,6 +270,34 @@ void __fastcall AddAnimationEvent(void *manager, int edx, const std::uint32_t *e
     g_addAnimationEvent.Original()(manager, edx, event, flags);
 }
 
+// Who confines the game to a few processors: every copy of the game was seen
+// with a process affinity of 3, the first two logical processors, so that
+// several copies share one core while the rest idle (2026-10-12). The
+// system's own SetProcessAffinityMask is detoured, and each call logged with
+// its mask, what the process had before, and the callers above.
+using SetProcessAffinityFn = BOOL(WINAPI *)(HANDLE, DWORD_PTR);
+dao::Detour<SetProcessAffinityFn> g_setProcessAffinity;
+
+BOOL WINAPI SetProcessAffinity(HANDLE process, DWORD_PTR mask)
+{
+    DWORD_PTR had = 0;
+    DWORD_PTR system = 0;
+    GetProcessAffinityMask(GetCurrentProcess(), &had, &system);
+    const auto from = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    HMODULE module = nullptr;
+    std::array<char, MAX_PATH> name{};
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCSTR>(from), &module) != 0)
+    {
+        GetModuleFileNameA(module, name.data(), MAX_PATH);
+    }
+    const auto chain = CallerChain(_AddressOfReturnAddress());
+    spdlog::info("SetProcessAffinityMask({:#x}) on thread {}: the process had {:#x} of the system's {:#x}; from {:#x} "
+                 "in {}, the game's callers above: {:#010x} {:#010x} {:#010x} {:#010x}",
+                 mask, GetCurrentThreadId(), had, system, from, name.data(), chain[0], chain[1], chain[2], chain[3]);
+    return g_setProcessAffinity.Original()(process, mask);
+}
+
 // An experiment for DAOLib #88, off unless DAOLIB_PROBE_CREATURE_SHOW is set
 // to a distance in metres: the library holds the distance from the camera
 // within which the game shows a creature at it (dao/World.h,
@@ -409,6 +437,25 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_animationEvent, dao::addr::kCCCreature_OnAnimationEvent, &AnimationEvent, "CCCreature::OnAnimationEvent");
     Place(g_addAnimationEvent, dao::addr::kAnimationManager_AddEvent, &AddAnimationEvent,
           "Animation::AnimationManager::AddEvent");
+    if (!g_setProcessAffinity.AttachTo(&SetProcessAffinityMask, &SetProcessAffinity))
+    {
+        spdlog::warn("could not detour SetProcessAffinityMask");
+    }
+    DWORD_PTR had = 0;
+    DWORD_PTR system = 0;
+    GetProcessAffinityMask(GetCurrentProcess(), &had, &system);
+    spdlog::info("process affinity at load: {:#x} of the system's {:#x}", had, system);
+    dao::OnFrame([] {
+        static DWORD_PTR last = 0;
+        DWORD_PTR now = 0;
+        DWORD_PTR all = 0;
+        GetProcessAffinityMask(GetCurrentProcess(), &now, &all);
+        if (now != last)
+        {
+            spdlog::info("process affinity on a frame: {:#x}, where it was {:#x}", now, last);
+            last = now;
+        }
+    });
     WidenCreatureShow();
     probe::AttachScriptChecks();
     probe::AttachEventWatch();

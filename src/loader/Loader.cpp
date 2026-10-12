@@ -40,6 +40,7 @@
 #include "loader/Proxy.h"
 #include "perf/EngineHeap.h"
 #include "perf/FastLoad.h"
+#include "perf/OwnProcessors.h"
 
 #include <Windows.h>
 
@@ -192,6 +193,7 @@ void LoadPlugins()
 void __stdcall EntryHook()
 {
     spdlog::info("entry point reached; loading plugins");
+    perf::InstallOwnProcessors();
     loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
     perf::InstallEngineHeap();
@@ -219,6 +221,7 @@ void WINAPI SystemTimeHook(LPFILETIME time)
     {
         spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
                      dao::Module::ImageAddress(caller));
+        perf::InstallOwnProcessors();
         loader::instance::SeedSaves();
         loader::crashlog::StartWatchdog();
         perf::InstallEngineHeap();

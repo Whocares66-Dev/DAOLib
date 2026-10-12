@@ -35,7 +35,8 @@ src/fix/        corrections to the engine's own faults, one file each, built int
                 of the kilobyte the renderer copies (SavedFileName). dev/CRASHES.md has the crash each one fixed
 src/perf/       what makes the game faster and corrects no fault, built into version.dll the same way. The engine's
                 memory from the system's heap in place of its own 850 MiB of pools (EngineHeap, off with
-                DAOLIB_ENGINE_HEAP=0), and fast load (FastLoad, its parts under fastload/): the area lists the party
+                DAOLIB_ENGINE_HEAP=0), each copy of the game on processors of its own where GOG's exe starts
+                them all on the first two (OwnProcessors, off with DAOLIB_OWN_PROCESSORS=0), and fast load (FastLoad, its parts under fastload/): the area lists the party
                 leaves kept, an area's rooms kept and the indoor ones beside it loaded ahead, the loading screen at a
                 turn of 16 ms and presented fifteen times a second. Fast load has a switch on the options screen's
                 Game tab, kept in daolib.ini beside the logs; DAOLIB_FAST_LOAD=0 leaves it out

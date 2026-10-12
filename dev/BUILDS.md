@@ -131,6 +131,14 @@ The loader needs nothing of its own for it. Its test for a wrapped build, the en
 
 The Steam folder was put back to stock after (`-Remove`).
 
+## GOG's exe is started on two processors (2026-10-12, DAOLib #89)
+
+GOG's `DAOrigins.exe` carries a process affinity mask of 3 in its PE load configuration (the image's `ProcessAffinityMask`, at file offset 0x75A130): Windows starts every copy of it on the machine's first two logical processors, whatever started it and before any of its code runs. EA's exe and Steam's carry 0 there, and are started on every processor. So it is GOG's doing, not BioWare's; why is not written anywhere we have. The game's thread manager (`Eclipse::DAThreadManager`, its start-up at 0x004017D0) counts the processors the process was given and makes that many worker threads less one, a multi-threaded renderer with two or more, and sets a mask itself (1) only in its single-core mode.
+
+One copy is then as GOG meant it. Several copies (the instances of DAOLib #67) share those two processors, some sixty threads each, while the rest of the machine idles: seen on ten cores of two threads with three and four copies, the machine's CPU under 20% and each copy's frame thread stalling for seconds in a yield loop on its own task threads (seventy hang logs in one instance's day). What set the mask was found by elimination: nothing in the launch path or the plugins, no call of `SetProcessAffinityMask` after start (the probe detours it), no compatibility flag, and a bare copy of the exe under another name in an empty folder came up at 0x3 as well.
+
+The loader moves a copy that finds another on its processors to a group of its own, as many processors as the image gave it, before the game's code runs (`src/perf/OwnProcessors.h`, `dao/core/Processors.h`; `DAOLIB_OWN_PROCESSORS=0` leaves it out). A copy alone stays where it was started, and EA's and Steam's are left alone. Seen in play the same day, a save loaded in a copy beside three others at 0x3: left at 0x3, 34.6 frames a second; moved to 0xC, 58.5; and two copies with the loader took 0xC and 0x30.
+
 ## What is left
 
 - **A deployed run in EA's build.** `.\tools\deploy.ps1 -Install ea`, then the game from the EA app. The EA app's folder gives the user no write access; it is granted once from an elevated shell (the script's help has the line). What only this can show is the last step of "The wrapper finds VERSION.dll by name": that with the loader beside the exe and not yet in the process, it is the one found. `ea_play.py` puts the loader in itself.

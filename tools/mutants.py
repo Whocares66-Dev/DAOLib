@@ -97,6 +97,7 @@ TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
 GFX = "src/dao/core/GfxMovie.cpp"
 OPTIONS = "src/dao/core/OptionsMovie.cpp"
+PROCESSORS = "src/dao/core/Processors.h"
 INFLATE = "src/dao/core/Inflate.cpp"
 RANGE = "src/dao/core/Range.h"
 RELOCATE = "src/dao/core/Relocate.h"
@@ -371,6 +372,21 @@ MUTANTS: list[Mutant] = [
         OPTIONS,
         "else if (instance.character == symbols.picker)",
         "else if (instance.character == 0)",
+    ),
+    # Which processors a copy of the game takes beside others (DAOLib #89): a
+    # wrong answer is copies sharing a core again, or one on fewer
+    # processors than the game was built to count.
+    Mutant(
+        "processors-free-group: a copy beside another takes the group the fewest copies run on",
+        PROCESSORS,
+        "if (const int sharing = sharers(group); sharing < fewest)",
+        "if (const int sharing = sharers(group); sharing > fewest)",
+    ),
+    Mutant(
+        "processors-own-size: a group has as many processors as the copy was started on",
+        PROCESSORS,
+        "if (++taken < count)",
+        "if (++taken < 1)",
     ),
     Mutant(
         "options-slider-pitch: a section's sliders stand 41 apart, the game's own pitch, and take the rows they reach into",
