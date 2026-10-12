@@ -17,11 +17,21 @@
 // into Core\Activation.dll, and the game's code is encrypted until that has
 // run, so there is nothing to detour when this DLL is loaded and a plugin's
 // hooks would be written into bytes about to be decrypted over. There the
-// plugins load at the first call the game's own code makes instead: the
-// CRT's start reads the clock for its stack cookie before anything else
-// (__security_init_cookie, the entry point's first call), so a detour on
-// GetSystemTimeAsFileTime, watching for a caller inside the exe's .text, is
-// the same moment one call later, on the same thread.
+// plugins load at the first call out that the game's own code always makes
+// instead: the CRT's start (__tmainCRTStartup, what the entry point jumps
+// to) asks for the process's startup information before anything else, so
+// a detour on GetStartupInfoA, watching for a caller inside the exe's
+// .text, is the same moment a call later, on the same thread.
+//
+// Not the clock, which this waited on until DAOLib #94: the entry point
+// first sets up the stack cookie (__security_init_cookie), which reads the
+// clock only for a cookie still at its default. Windows sets a cookie the
+// exe's load configuration names as it loads the image, so in Steam's
+// build, whose .data is not encrypted, the cookie was set already, no clock
+// was read there, and the first read this saw was a time() of the game's
+// well into its start: after its static constructors and the engine's
+// first allocations. EA's .data is encrypted on disk, Windows does not
+// know the cookie in it, and there the clock was read.
 //
 // Steam's build is wrapped the same way, by SteamStub 2.1 (the address
 // library's dev/STEAM.md): its headers' entry point is the stub's, in a
@@ -192,9 +202,10 @@ void LoadPlugins()
     spdlog::info("{} plugin(s) in {}", plugins.size(), folder.string());
 }
 
-void __stdcall EntryHook()
+// What goes in before the game's own code runs, on its main thread, whichever
+// way in the build has: the loader's own parts, then the plugins.
+void BeforeTheGame()
 {
-    spdlog::info("entry point reached; loading plugins");
     perf::InstallAllProcessors();
     loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
@@ -204,36 +215,36 @@ void __stdcall EntryHook()
     perf::InstallFastLoad();
     LoadPlugins();
     spdlog::debug("starting the game");
+}
+
+void __stdcall EntryHook()
+{
+    spdlog::info("entry point reached; loading plugins");
+    BeforeTheGame();
     g_entry.Original()();
 }
 
-// The wrapped build's way in: the clock, as the game's code first reads it.
-using SystemTimeFn = void(WINAPI *)(LPFILETIME);
-SystemTimeFn g_systemTime = nullptr;
+// The wrapped build's way in: the startup information, as the game's CRT
+// asks for it at its start.
+using StartupInfoFn = void(WINAPI *)(LPSTARTUPINFOA);
+StartupInfoFn g_startupInfo = nullptr;
 dao::Module::CodeRange g_code;
 std::atomic<bool> g_gameStarted = false;
 
-void WINAPI SystemTimeHook(LPFILETIME time)
+void WINAPI StartupInfoHook(LPSTARTUPINFOA info)
 {
-    // The wrapper, the system and this DLL's own log read the clock too, and
-    // only a caller in the exe's code is the game. Once is all it is for;
-    // the detour stays, since another thread may be inside it.
+    // The wrapper and the system's own DLLs may ask too, and only a caller
+    // in the exe's code is the game. Once is all it is for; the detour
+    // stays, since another thread may be inside it.
     const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
     if (!g_gameStarted.load(std::memory_order_relaxed) && g_code.Contains(caller) && !g_gameStarted.exchange(true))
     {
-        spdlog::info("the game's code is running, decrypted (the clock read from {:#x}); loading plugins",
+        spdlog::info("the game's code is running, decrypted (its startup information asked for from {:#x}); "
+                     "loading plugins",
                      dao::Module::ImageAddress(caller));
-        perf::InstallAllProcessors();
-        loader::instance::SeedSaves();
-        loader::crashlog::StartWatchdog();
-        perf::InstallEngineHeap();
-        fix::InstallArchiveReadFix();
-        fix::InstallSavedFileNameFix();
-        perf::InstallFastLoad();
-        LoadPlugins();
-        spdlog::debug("starting the game");
+        BeforeTheGame();
     }
-    g_systemTime(time);
+    g_startupInfo(info);
 }
 
 bool WaitForGameCode()
@@ -244,13 +255,13 @@ bool WaitForGameCode()
         return false;
     }
     g_code = *code;
-    g_systemTime = &GetSystemTimeAsFileTime;
+    g_startupInfo = &GetStartupInfoA;
     if (DetourTransactionBegin() != NO_ERROR)
     {
         return false;
     }
     DetourUpdateThread(GetCurrentThread());
-    if (DetourAttach(reinterpret_cast<PVOID *>(&g_systemTime), reinterpret_cast<PVOID>(&SystemTimeHook)) != NO_ERROR ||
+    if (DetourAttach(reinterpret_cast<PVOID *>(&g_startupInfo), reinterpret_cast<PVOID>(&StartupInfoHook)) != NO_ERROR ||
         DetourTransactionCommit() != NO_ERROR)
     {
         DetourTransactionAbort();
@@ -301,7 +312,7 @@ void Attach()
     {
         if (!WaitForGameCode())
         {
-            spdlog::error("could not detour GetSystemTimeAsFileTime; plugins are not loaded");
+            spdlog::error("could not detour GetStartupInfoA; plugins are not loaded");
             return;
         }
         spdlog::info("the game's code is wrapped; plugins load when it first runs");
