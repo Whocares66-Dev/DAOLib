@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <span>
+#include <unordered_map>
 
 namespace dao::core
 {
@@ -122,6 +123,47 @@ struct Sunlight
     std::array<float, 4> direction{};      // the way the light travels, a unit vector, and a fourth (1)
 
     bool operator==(const Sunlight &) const = default;
+};
+
+// The sunlight each layout had before it was written over. A layout keeps its own sunlight
+// nowhere but in the fields a write goes over, and the game keeps a layout, the written
+// values in it, for as long as its area stays loaded: so what a layout held before the first
+// write is remembered for each layout, by its address. A layout still holds a write while it
+// reads back as last written there. One that reads back as anything else is the game's again
+// (a new area's at the same address comes with its file's values) and is forgotten.
+class OwnSunlight
+{
+  public:
+    // Returns the layout's own sunlight, given what it holds now.
+    [[nodiscard]] Sunlight Of(std::uintptr_t layout, const Sunlight &now)
+    {
+        const auto kept = kept_.find(layout);
+        if (kept == kept_.end())
+        {
+            return now;
+        }
+        if (kept->second.written == now)
+        {
+            return kept->second.own;
+        }
+        kept_.erase(kept);
+        return now;
+    }
+
+    // Records that `written` is going over a layout that holds `now`.
+    void Write(std::uintptr_t layout, const Sunlight &now, const Sunlight &written)
+    {
+        const Sunlight own = Of(layout, now);
+        kept_[layout] = {own, written};
+    }
+
+  private:
+    struct Kept
+    {
+        Sunlight own;
+        Sunlight written;
+    };
+    std::unordered_map<std::uintptr_t, Kept> kept_;
 };
 
 // The sky `share` of the way from one to another, every value on a straight line: 0 is `from`,

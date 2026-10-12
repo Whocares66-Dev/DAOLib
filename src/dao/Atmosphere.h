@@ -15,10 +15,11 @@
 //   dao::atmosphere::ResetSky();
 //   dao::atmosphere::ResetSunlight();
 //
-// Both are the area's: a new area comes with its own, and what was set is gone. A change shows
-// in the next frame. The sky is what is drawn above and the haze in the distance, and lights
-// nothing. Trees, grass and buildings keep the light their level was made with, whatever the
-// sunlight, and lights placed in the level (torches, windows) are not part of either.
+// Both are the area's: a new area comes with its own. A sunlight that was set stays in its
+// area for as long as the game keeps that area loaded, so the party may come back to it;
+// AreaOwnSunlight answers the area's own there all the same. A change shows in the next frame. The sky is what is drawn
+// above and the haze in the distance, and lights nothing. Trees, grass and buildings keep the light their level was
+// made with, whatever the sunlight, and lights placed in the level (torches, windows) are not part of either.
 #pragma once
 
 #include "dao/core/Sky.h"

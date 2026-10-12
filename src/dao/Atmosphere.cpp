@@ -93,21 +93,14 @@ std::optional<Sky> Read(std::size_t block)
     return core::SkyFromBlock(bytes);
 }
 
-// The layout keeps its own sunlight nowhere but in the fields SetSunlight writes over, so the
-// first write to a layout keeps what was there. A layout is still the one written to while it
-// reads back as written: a new area's, even at the same address, comes with its file's values.
-struct Kept
-{
-    std::uintptr_t layout = 0;
-    Sunlight own;
-    Sunlight written;
-};
-Kept g_kept; // the game thread's alone
-
-bool StillOurs(std::uintptr_t layout, const Sunlight &now)
-{
-    return layout != 0 && layout == g_kept.layout && now == g_kept.written;
-}
+// What each layout's sunlight was before SetSunlight wrote over it (dao/core/Sky.h). For each
+// layout and not for the last one written: the game keeps the layout of an area the party has
+// left, with what was written in it, and a plugin that sets the sunlight every frame writes
+// the loading screen's layout and the next area's in between. With one record the first
+// area's layout, come back to, read as the game's own, and a sunlight set as so many times
+// the area's own grew by that much with every return (DAOLib #98: Redcliffe's 0.77 0.63 0.40
+// read as 2.47, then 15.10, then 42.79).
+core::OwnSunlight g_own; // the game thread's alone
 
 struct Column
 {
@@ -178,7 +171,11 @@ std::optional<Sunlight> CurrentSunlight()
 std::optional<Sunlight> AreaOwnSunlight()
 {
     const auto now = CurrentSunlight();
-    return now && StillOurs(Layout(), *now) ? g_kept.own : now;
+    if (!now)
+    {
+        return std::nullopt;
+    }
+    return g_own.Of(Layout(), *now);
 }
 
 bool SetSunlight(const Sunlight &light)
@@ -190,7 +187,7 @@ bool SetSunlight(const Sunlight &light)
         return false;
     }
     const std::uintptr_t layout = Layout();
-    g_kept = {layout, StillOurs(layout, *now) ? g_kept.own : *now, light};
+    g_own.Write(layout, *now, light);
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightColor), light.color.data(), sizeof light.color);
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightCharacterColor), light.characterColor.data(),
                 sizeof light.characterColor);

@@ -112,6 +112,73 @@ TEST_CASE("sunlight blends its colours in a straight line and turns its directio
     }
 }
 
+namespace
+{
+// A sunlight of one brightness, which is all these tests tell apart.
+Sunlight Lit(float brightness)
+{
+    return {{brightness, brightness, brightness, 1}, {brightness, brightness, brightness, 1}, {0, 0, -1, 1}};
+}
+} // namespace
+
+TEST_CASE("a layout's own sunlight is what it held before the first write, however often it is written")
+{
+    dao::core::OwnSunlight own;
+    const std::uintptr_t area = 0x1000;
+    CHECK(own.Of(area, Lit(0.77F)) == Lit(0.77F)); // never written: what it holds is its own
+    own.Write(area, Lit(0.77F), Lit(2.47F));
+    CHECK(own.Of(area, Lit(2.47F)) == Lit(0.77F));
+    // Every frame after: the layout holds the last write, and the next goes over it.
+    own.Write(area, Lit(2.47F), Lit(2.50F));
+    own.Write(area, Lit(2.50F), Lit(2.47F));
+    CHECK(own.Of(area, Lit(2.47F)) == Lit(0.77F));
+}
+
+TEST_CASE("a layout come back to, written before and others written since, still has its own sunlight")
+{
+    // DAOLib #98: a plugin sets each area's sunlight to its own times a factor, every frame. The
+    // game keeps the first area's layout with what was written in it, while the loading screen's
+    // layout and the next area's are written in between.
+    dao::core::OwnSunlight own;
+    const std::uintptr_t redcliffe = 0x1000;
+    const std::uintptr_t loading = 0x2000;
+    const std::uintptr_t castle = 0x3000;
+    own.Write(redcliffe, Lit(0.77F), Lit(2.47F));
+    own.Write(loading, Lit(2.0F), Lit(6.4F));
+    own.Write(castle, Lit(0.5F), Lit(1.6F));
+    // Back in the first area, its layout as it was left.
+    CHECK(own.Of(redcliffe, Lit(2.47F)) == Lit(0.77F));
+    own.Write(redcliffe, Lit(2.47F), Lit(2.47F));
+    CHECK(own.Of(redcliffe, Lit(2.47F)) == Lit(0.77F));
+    CHECK(own.Of(loading, Lit(6.4F)) == Lit(2.0F));
+    CHECK(own.Of(castle, Lit(1.6F)) == Lit(0.5F));
+}
+
+TEST_CASE("a layout that no longer holds what was written is the game's again, at the same address or not")
+{
+    dao::core::OwnSunlight own;
+    const std::uintptr_t area = 0x1000;
+    own.Write(area, Lit(0.77F), Lit(2.47F));
+    // A new area's layout at the address the old one had: its file's values.
+    CHECK(own.Of(area, Lit(0.3F)) == Lit(0.3F));
+    // And the old record is gone, not waiting for a layout that happens to hold 2.47.
+    CHECK(own.Of(area, Lit(2.47F)) == Lit(2.47F));
+    own.Write(area, Lit(0.3F), Lit(0.9F));
+    CHECK(own.Of(area, Lit(0.9F)) == Lit(0.3F));
+}
+
+TEST_CASE("a layout returned to its own sunlight keeps it as its own")
+{
+    // ResetSunlight: the own written back over what was set.
+    dao::core::OwnSunlight own;
+    const std::uintptr_t area = 0x1000;
+    own.Write(area, Lit(0.77F), Lit(2.47F));
+    own.Write(area, Lit(2.47F), own.Of(area, Lit(2.47F)));
+    CHECK(own.Of(area, Lit(0.77F)) == Lit(0.77F));
+    own.Write(area, Lit(0.77F), Lit(1.5F));
+    CHECK(own.Of(area, Lit(1.5F)) == Lit(0.77F));
+}
+
 TEST_CASE("sunlight from straight against where it was has no way round: it keeps its side of half way")
 {
     const Sunlight east{{1, 1, 1, 1}, {1, 1, 1, 1}, {1, 0, 0, 1}};
