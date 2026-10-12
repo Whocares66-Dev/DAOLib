@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -34,6 +35,16 @@ std::optional<std::vector<std::byte>> Read(std::wstring_view file);
 // Returns whether the game has a file by this name, found the same way as Read finds it. It
 // loads the file to find out, so call it on the game thread too.
 bool Exists(std::wstring_view file);
+
+// Returns the names of the game's files of one type, each once, in no order: every file the
+// game has in its folders and archives as they are now, add-ins' and a plugin's among them.
+// @param type the extension, with its dot or without: L"mao", L".dds"
+// @return the names in lower case, each with its extension; empty if the game has none, or is
+// not a build the library knows
+//
+// Call it on the game thread, once the game has started. The files of an area's own archives
+// are among them only while the area is loaded.
+std::vector<std::wstring> Names(std::wstring_view type);
 
 // Adds a folder to the places the game finds its files in, as a plugin's override\ folder is.
 // @param folder the folder's full path

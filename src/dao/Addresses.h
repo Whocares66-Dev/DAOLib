@@ -832,6 +832,31 @@ DAO_ADDRESS(kResMan_AddSource, 4671)
 // and this are a pair the game uses while it runs, some fifty callers
 // each, so neither belongs to start alone. The name is ours.
 DAO_ADDRESS(kResMan_ReleaseSource, 4672)
+// The names the manager has, by type (dao/Resources.h, DAOLib #96), read
+// 2026-10-12 from the game's own use of it: gathering its merged tables, it
+// asks for every file of the type GDA (0x006FBAD9, the list then matched
+// against a prefix, PRCSCR_). ListNames, __thiscall on the manager (out
+// list, const std::wstring &source, const std::wstring &type, char loaded,
+// const std::wstring &without), `ret 0x14`, the last source's answer, and
+// true too where the lock was not had and nothing was listed (the address
+// library's session, reading GOG and EA the same day), so true says nothing
+// of the list: under the manager's lock (0x004C5390, 0x004C53B0) it goes through every
+// source that is not closed (+0x68), only the one named `source` if that is
+// not empty, none whose name holds `without` if that is not empty, and has
+// each add its names to the list by its slot 5 (ResourceSource's 0x004E6A90,
+// DirectorySource's 0x004CED00, `ret 0x10`): the type in lower case, a '.'
+// put before it if it has none, every resource not marked (+0x3A) whose name
+// ends with it, each name once (0x004E66D0), and with `loaded` 1 only those
+// whose state is 2 (any other value but 0 takes none). An empty type takes
+// every name. The list is 0x28 bytes: a std::list<std::wstring> (its
+// head at +4, its size at +8; a node's next at +0 and its string at +8) and
+// a std::wstring after it (+0xC). NameList's constructor, __thiscall
+// (std::wstring by value, which it copies into +0xC and destroys), `ret
+// 0x1C`, and its destructor, __thiscall with no arguments, are how the game
+// makes and frees one on its stack around the call. The names are ours.
+DAO_ADDRESS(kResMan_ListNames, 4632)
+DAO_ADDRESS(kNameList_Construct, 5272)
+DAO_ADDRESS(kNameList_Destroy, 5273)
 DAO_ADDRESS(kResources_Release, 5021)
 // A resource's bytes (dao/Resources.h), read 2026-10-02 from the movie
 // file's constructor (its call at 0x00523412) and its length (slot 6,

@@ -51,6 +51,14 @@
 // menu): a loose texture and three from texturepack.erf and guiexport.erf
 // read whole, each the same bytes as its file read outside the game
 // (132, 87,536, 212 and 2,097,280 bytes, by a sum over them).
+//
+// The names of a type (DAOLib #96): the manager's own ListNames, which the
+// game uses to gather its merged tables (dao/Addresses.h, "The names the
+// manager has"), into a list of the engine's made and freed by the engine's
+// own two functions. Seen in play 2026-10-12 (examples/resources, GOG's game,
+// at the main menu): 7,769 names for dds, with its dot or without, a
+// plugin's own override file and the game's among them; 4,089 for mao, an
+// add-in's among them; none for a type the game has not; each name once.
 #include "dao/Resources.h"
 
 #include "dao/Addresses.h"
@@ -64,6 +72,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cwctype>
@@ -412,6 +421,51 @@ std::optional<std::vector<std::byte>> Read(std::wstring_view file)
 bool Exists(std::wstring_view file)
 {
     return !file.empty() && Found(file).Exists();
+}
+
+// The game's own list, as it makes one to gather its merged tables (dao/Addresses.h, "The names
+// the manager has"): a list of the engine's, made and freed by the engine's own two functions,
+// filled by the manager from every source, and copied out here.
+std::vector<std::wstring> Names(std::wstring_view type)
+{
+    using ConstructFn = void *(__fastcall *)(void *, int, core::WStringRep);
+    using DestroyFn = void(__fastcall *)(void *, int);
+    using ListFn = bool(__fastcall *)(void *, int, void *, const core::WStringRep *, const core::WStringRep *,
+                                      std::uint32_t, const core::WStringRep *);
+    constexpr std::size_t kListBytes = 0x28;
+    constexpr std::size_t kListHead = 0x04;   // in the list: its head node
+    constexpr std::size_t kNodeString = 0x08; // in a node: its string, the next node at +0
+    // More than the game's files of every type together; a list longer is taken as a misread.
+    constexpr std::size_t kMostNames = 1U << 20U;
+
+    std::vector<std::wstring> names;
+    const auto construct = reinterpret_cast<ConstructFn>(Module::Address(addr::kNameList_Construct));
+    const auto destroy = reinterpret_cast<DestroyFn>(Module::Address(addr::kNameList_Destroy));
+    const auto list = reinterpret_cast<ListFn>(Module::Address(addr::kResMan_ListNames));
+    void *manager =
+        !type.empty() && construct != nullptr && destroy != nullptr && list != nullptr ? Manager() : nullptr;
+    if (manager == nullptr)
+    {
+        return names;
+    }
+    alignas(void *) std::array<std::byte, kListBytes> found{};
+    // The constructor takes a string by value and frees it: an empty one has nothing to free.
+    construct(found.data(), 0, core::WStringRep{});
+    const core::WStringRep none{};
+    WString wanted(type);
+    // Every source, the type, all of its files and not the loaded alone, no source left out.
+    list(manager, 0, found.data(), &none, wanted.Engine(), 0, &none);
+    const auto head = *reinterpret_cast<const std::uintptr_t *>(found.data() + kListHead);
+    for (std::uintptr_t node = TryRead<std::uintptr_t>(head).value_or(head);
+         node != head && node != 0 && names.size() < kMostNames; node = TryRead<std::uintptr_t>(node).value_or(0))
+    {
+        if (auto name = EngineText(node + kNodeString))
+        {
+            names.push_back(std::move(*name));
+        }
+    }
+    destroy(found.data(), 0);
+    return names;
 }
 
 bool AddFolder(const std::filesystem::path &folder)

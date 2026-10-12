@@ -19,10 +19,12 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace
@@ -59,6 +61,18 @@ void LogFile(const wchar_t *file)
                  bytes ? bytes->size() : 0, whole ? "a DDS file" : "NOT a DDS file", sum);
 }
 
+// How many files of a type the game has, and whether one known to be there is among them.
+void LogNames(const wchar_t *type, const wchar_t *known)
+{
+    const std::vector<std::wstring> names = dao::resources::Names(type);
+    const bool has = std::ranges::find(names, std::wstring(known)) != names.end();
+    std::vector<std::wstring> sorted = names;
+    std::ranges::sort(sorted);
+    const bool once = std::ranges::adjacent_find(sorted) == sorted.end();
+    spdlog::info("{}: {} names, each once: {}, {} among them: {}; the first is {}", dao::Utf8(type), names.size(), once,
+                 dao::Utf8(known), has, names.empty() ? std::string("none") : dao::Utf8(names.front()));
+}
+
 void OnFirstFrame()
 {
     static bool done = false;
@@ -67,6 +81,10 @@ void OnFirstFrame()
         return;
     }
     done = true;
+    LogNames(L"dds", kAlways);           // this plugin's own, in its override folder
+    LogNames(L".dds", L"01_fire.dds");   // the game's, the type given with its dot
+    LogNames(L"mao", L"anvil_01.mao");   // a material
+    LogNames(L"no_such_type", L"x");     // none
     LogFile(kAlways);                    // loose, in this plugin's override folder
     LogFile(L"01_fire.dds");             // in the game's texture archive
     LogFile(L"default_blackzero.dds");   // in the character creator's, a RIM
