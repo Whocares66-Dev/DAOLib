@@ -15,7 +15,11 @@ namespace
 
 constexpr std::int32_t kRow = 35;           // pixels from one row to the next
 constexpr std::int32_t kControlHeight = 30; // what a checkbox takes of its row
-constexpr std::int32_t kChoiceHeight = (static_cast<std::int32_t>(kChoiceRows) * kRow) - (kRow - kControlHeight);
+// What a choice takes of its column: a dropdown two rows, as the Game tab's
+// own are apart, and a slider what the game's own sliders are apart.
+constexpr std::int32_t kDropdownPitch = 2 * kRow;
+constexpr std::int32_t kSliderPitch = 41;
+constexpr std::int32_t kDropdownHeight = kDropdownPitch - (kRow - kControlHeight);
 constexpr std::uint16_t kDepthStep = 6;    // as the designer's own placements are apart
 constexpr std::int32_t kSetUpRegister = 2; // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
 
@@ -357,7 +361,8 @@ std::optional<std::array<gfx::Instance, 2>> ColumnsOf(std::span<const std::byte>
 
 // Whether something a clip places reaches into the row at `y` of the column
 // whose checkboxes stand at `x`: a bar is higher than a row, and lies in
-// two, as a choice does.
+// two, as a dropdown does. A slider takes all of its 41, so that the row
+// its section ends in is taken however many sliders it has.
 bool Taken(const std::vector<gfx::Instance> &placed, const Symbols &symbols, std::int32_t x, std::int32_t y)
 {
     return std::ranges::any_of(placed, [&](const gfx::Instance &instance) {
@@ -366,9 +371,13 @@ bool Taken(const std::vector<gfx::Instance> &placed, const Symbols &symbols, std
         {
             height = kBarHeight;
         }
-        else if (instance.character == symbols.slider || instance.character == symbols.picker)
+        else if (instance.character == symbols.slider)
         {
-            height = kChoiceHeight;
+            height = kSliderPitch;
+        }
+        else if (instance.character == symbols.picker)
+        {
+            height = kDropdownHeight;
         }
         return instance.x >= x - kColumnReach && instance.x <= x + kColumnReach && instance.y < y + kRow &&
                instance.y + height > y;
@@ -388,6 +397,16 @@ std::string HeadingInstance(const Slot &slot, Tab tab)
     // plugin's older copy of the library names its headings so.
     const std::string_view on = tab == Tab::Video ? "DAOLibVideoSectionAt" : "DAOLibSectionAt";
     return std::string(on) + std::to_string(slot.x) + "x" + std::to_string(slot.y) + "_mc";
+}
+
+std::size_t RowsOf(const Section &section)
+{
+    std::int32_t choices = 0;
+    for (const Choice &choice : section.choices)
+    {
+        choices += choice.dropdown ? kDropdownPitch : kSliderPitch;
+    }
+    return kHeadingRows + section.toggles.size() + static_cast<std::size_t>((choices + kRow - 1) / kRow);
 }
 
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab)
@@ -502,17 +521,10 @@ struct Additions
     }
 };
 
-// How many rows a section takes: its heading, a row a checkbox and two a
-// choice.
-std::size_t RowsOf(const Section &section)
-{
-    return kHeadingRows + section.toggles.size() + (kChoiceRows * section.choices.size());
-}
-
 // Places a section in `rows`, free rows one under the other in one column
 // of its tab, as many as RowsOf says: the game's bar and heading text, then
-// its checkboxes, which are what the column's last control is, then its
-// choices. Nothing in a movie without the game's heading.
+// its checkboxes, a row each, which are what the column's last control is,
+// then its choices. Nothing in a movie without the game's heading.
 void PlaceSection(const Section &section, std::span<const Slot> rows, const std::array<gfx::Instance, 2> &columns,
                   const Symbols &symbols, Additions &additions)
 {
@@ -541,16 +553,17 @@ void PlaceSection(const Section &section, std::span<const Slot> rows, const std:
         place(ControlInstance(section.toggles[i].option), columns[side].character, row.x, row.y);
         additions.SetUp(ToggleSetUp(section.toggles[i]));
     }
-    for (std::size_t i = 0; i < section.choices.size(); ++i)
+    // A choice is the game's slider with named stops or its dropdown, each
+    // under the last by what that one takes, from the row under the
+    // checkboxes: they leave the rows, a slider's 41 not being a row's 35.
+    std::int32_t y = top.y + (static_cast<std::int32_t>(kHeadingRows + section.toggles.size()) * kRow);
+    for (const Choice &choice : section.choices)
     {
-        // A choice is the game's slider with named stops or its dropdown,
-        // in two rows.
-        const Choice &choice = section.choices[i];
-        const Slot &row = rows[kHeadingRows + section.toggles.size() + (kChoiceRows * i)];
         const std::int32_t right = choice.dropdown ? layout.dropdownRight : layout.sliderRight;
         const auto symbol = choice.dropdown ? symbols.picker : symbols.slider;
-        place(ControlInstance(choice.option), symbol.value_or(0), row.x + right, row.y);
+        place(ControlInstance(choice.option), symbol.value_or(0), top.x + right, y);
         additions.SetUp(choice.dropdown ? DropdownSetUp(choice) : SliderSetUp(choice));
+        y += choice.dropdown ? kDropdownPitch : kSliderPitch;
     }
 }
 

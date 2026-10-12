@@ -53,8 +53,8 @@ enum class ChoiceStyle
 // `get` and `set` work as they do for a Toggle, but with the index of a value in `values` in place
 // of a bool. `wanted` is always a valid index. Dragging a slider across several stops calls `set`
 // once for each. As the screen opens, the choice shows the last value `get` or `set` returned (the
-// first value before either has run), then switches to what `get` returns. A choice takes two
-// rows. A dropdown's list opens downward over the rows under it.
+// first value before either has run), then switches to what `get` returns. A dropdown's list opens
+// downward over the rows under it.
 //
 //   dao::options::AddSection(L"Turn-based", {}, {{
 //       .name = L"TurnBasedSpeed",
@@ -87,7 +87,7 @@ enum class Column
 enum class Tab
 {
     Game,  // five free rows in its left column, six in its right
-    Video, // its right column, fourteen rows; the tab's own settings are then all in its left
+    Video, // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
 };
 
 // Adds a section of settings to a tab of the options screen.
@@ -102,8 +102,9 @@ enum class Tab
 //  two values
 //
 // Call it from DAOLib_Load, before the game first opens its options screen. A tab's free rows are
-// shared by every plugin. A heading takes two rows, a checkbox one and a choice two, and a section
-// stays in one column. A section on the Video tab has the tab laid out for it: the game's own
+// shared by every plugin. A heading takes two rows, a checkbox one and a dropdown two; sliders
+// stand as close as the game's own, six of them in seven rows; and a section takes whole rows of
+// one column. A section on the Video tab has the tab laid out for it: the game's own
 // settings closer together and all in the left column, and the right column, a heading and twelve
 // rows, for sections. Sections are placed in the order they were added. The first section a tab has no room for
 // is left out, and so is every later section on that tab; the plugin's log has a warning for

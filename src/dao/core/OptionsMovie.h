@@ -34,7 +34,10 @@
 //   ExternalInterface's GetValue, is told it after as a checkbox is, and
 //   sends "ClientOptions.SetClientOptionMessage <option> <index>" when it
 //   moves. On the tabs whose checkboxes stand at x 7 the sliders stand
-//   about 40 to the right of them, 40 to 46 apart: two rows.
+//   about 40 to the right of them, 40 to 46 apart. A section's stand 41
+//   apart, as the Video tab's own do once laid out (DAOLib #84; at first
+//   they had two rows each, 70, which read as loosely set beside the
+//   game's).
 //
 // - A choice can be a dropdown instead: the symbol the movie exports as
 //   Picker, the Game tab's own OptDifficulty_mc, OptPlotAssist_mc and
@@ -74,7 +77,8 @@
 //   the left column's controls closer, the "Detail" bar, which the main
 //   timeline places, under them with the right column's four controls, and
 //   the right column, its clip empty, a section's from the bars' height to
-//   above Restore Defaults: fourteen rows, a heading and twelve.
+//   above Restore Defaults: fourteen rows, a heading and twelve, which is
+//   a heading, two checkboxes and eight sliders.
 //
 // - The Controls tab's key list is built in script: AddHeader(text) for a
 //   section and AddKeyBinding("TogglePause") for each action, the last of
@@ -151,9 +155,13 @@ struct Slot
     bool operator==(const Slot &) const = default;
 };
 
-// How many rows a heading takes, and a choice.
+// How many rows a heading takes.
 inline constexpr std::size_t kHeadingRows = 2;
-inline constexpr std::size_t kChoiceRows = 2;
+
+// How many of a column's free rows a section takes: two for its heading, one
+// a checkbox, two a dropdown, and 41 pixels of the rows' 35 a slider, to the
+// whole row above.
+std::size_t RowsOf(const Section &section);
 
 // A tab's free rows, in the order they are filled: down the left column
 // from under its last checkbox, then down the right, but for rows something
@@ -171,8 +179,9 @@ std::string ControlInstance(std::string_view option);
 std::string HeadingInstance(const Slot &slot, Tab tab = Tab::Game);
 
 // The movie with as many of the sections as their tabs have rows for, each
-// a heading, its checkboxes and its choices in rows one under the other in
-// one column, a section never split or begun without room for all of it.
+// a heading, its checkboxes and its choices one under the other in one
+// column, the sliders as close as the game's own, a section never split or
+// begun without room for all of it.
 // With a section for the Video tab among them, that tab's own controls are
 // first put in its left column, set closer, which leaves the right column
 // to sections; once, however many copies of the library patch the movie.

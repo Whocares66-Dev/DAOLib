@@ -339,9 +339,7 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
         {
             state = SectionState::Shown;
         }
-        const std::size_t rows = core::options_movie::kHeadingRows + sections[i].toggles.size() +
-                                 (core::options_movie::kChoiceRows * sections[i].choices.size());
-        Became(g_sections[i], state, rows, slots ? slots->size() : 0);
+        Became(g_sections[i], state, core::options_movie::RowsOf(sections[i]), slots ? slots->size() : 0);
     }
     return patched;
 }

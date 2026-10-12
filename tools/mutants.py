@@ -369,8 +369,20 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "options-dropdown-two-rows: a dropdown's second row is taken for the next plugin's section",
         OPTIONS,
-        "instance.character == symbols.slider || instance.character == symbols.picker)",
-        "instance.character == symbols.slider || instance.character == 0)",
+        "else if (instance.character == symbols.picker)",
+        "else if (instance.character == 0)",
+    ),
+    Mutant(
+        "options-slider-pitch: a section's sliders stand 41 apart, the game's own pitch, and take the rows they reach into",
+        OPTIONS,
+        "constexpr std::int32_t kSliderPitch = 41;",
+        "constexpr std::int32_t kSliderPitch = 35;",
+    ),
+    Mutant(
+        "options-slider-rows: the row a section's last slider reaches into is taken for the next plugin's section",
+        OPTIONS,
+        "            height = kSliderPitch;",
+        "            height = kControlHeight;",
     ),
     Mutant(
         "options-video-last-row: the Video tab's right column ends at the Game tab's last row, above the screen's buttons",
