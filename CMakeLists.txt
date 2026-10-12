@@ -306,6 +306,7 @@ if(DAO_BUILD_PLUGINS)
             "${DAO_PROBE_TARGETS}"
     )
     dao_apply_warnings(probe)
+    target_link_libraries(probe PRIVATE winmm)
     target_include_directories(
         probe
         PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated"

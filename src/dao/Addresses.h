@@ -1129,6 +1129,52 @@ DAO_DATA(kLoadingGUITask_Step, 63796)
 // Execute's +5, the sleep each of its turns begins with; fast load answers
 // that one call shorter (perf/fastload/LoadingScreen.h). The name is ours.
 DAO_ADDRESS(kMultithreading_Sleep, 5425)
+// The engine's threads, read 2026-10-11 for DAOLib #68 and #71, to say
+// which of them a loading screen waits for. Eclipse::DAThreadManager
+// (vftable 0x00ADD8F0, over Multithreading::ThreadManager) makes them in
+// its slot 2 (0x004017D0), each by 0x004BE1A0 (__thiscall (name, pooled,
+// kind, ?)): "DragonAge::Update" of kind 1, "DragonAge::Render" 2,
+// "DragonAge::Streaming" 5, "DragonAge::FileIO" 3, "DragonAge::Network" 4,
+// "DragonAge::StackDump" 6, one of each, and then
+// "DragonAge::WorkerThread"s of no kind, by its loop one for every
+// processor but one; in play, 2026-10-11, on twenty cores, one thread gave
+// itself that name. A
+// thread's run (Multithreading::Thread's slot 1, 0x004E63A0) first gives
+// itself its name, the manager's SetThreadName (__thiscall (thread id or -1
+// for this one, const char *name), `ret 8` at 0x004BBDFA: the plain `ret`
+// before it, at 0x004BBDDE, is its exception filter's, and no caller cleans
+// the stack; the manager is the global at 0x00C2B588, which 0x004BBE00
+// returns), which raises the debugger's exception 0x406D1388 and nothing
+// else; the name is the caller's temporary, freed after the call. Then it
+// takes tasks for ever: the manager's slot 1
+// (0x004BC450) waits for the next of its queue, the task's slot 2 runs it,
+// and an answer of 2 puts it back. A task (Multithreading::Task,
+// constructor 0x004C4DA0) keeps its kind at +0xC, and 0x004BE610 queues it
+// for that kind's thread, or runs it where it stands when the kind has
+// none (the task's slot 1, which calls its slot 2 with a sixtieth of a
+// second). The kinds, from the push before each class's call to the
+// constructor: 5, the streaming thread, for ConstructObjectTask,
+// ConstructMergeObjectTask, ConstructCrustObjectTask, TextureLoadTask,
+// RIMLoadTask, LoadVFXTask and LoadModuleResourcesTask; 3, the file thread,
+// for ECResMan::ReadRequestTask; 2, the render thread, for
+// RenderCommandProcessorTask and for the loading screen's own
+// UpdateAndRenderLoadingGUITask, whose 66 ms of sleep a turn is therefore
+// the render thread's; 1, the update thread, for RoomLoadingTask,
+// ModelDeleteTask, EmitterUpdateTask and ComposeMorphTask. A
+// ConstructObjectTask's run (0x00572C40) builds its object under one lock
+// (0x004CB2B0 to 0x004CB300 around the factory's slot 4), so two of them
+// would not run side by side on two threads. In play, 2026-10-11, through
+// the arrival's wait for rooms: the file thread waiting 99% of the time,
+// the streaming thread 42%, the rest of it under Direct3D's CreateIndexBuffer
+// and CreateTexture (the driver's slots 22 and 43, 0x0086A3F0 and
+// 0x00868FB0, which call the device themselves). A room's load
+// (RoomLoadingTask, vftable 0x00AFFFC0, kind 1) is
+// what the resources' read of the room's file is told to run when it is
+// done (0x004C8550, from 0x005D2FF2): on the update thread, where it makes a
+// GraphicsStructures::ConstructObjectTask for each object of the room
+// (0x005D2B80). The names of the threads are the game's; the function's is
+// ours.
+DAO_ADDRESS(kThreadManager_SetThreadName, 4373)
 // The engine's pools, read 2026-10-11 for DAOLib #68 and #69, after a
 // profile of loading found its thread in FindFit for over a third of the
 // steps that build an area list and swap a layout. The engine's memory is

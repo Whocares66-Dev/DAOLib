@@ -1,5 +1,7 @@
 #include "Loading.h"
 
+#include "Recorder.h"
+
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
@@ -208,6 +210,7 @@ void EndScreen()
                  area != nullptr ? TextAt(reinterpret_cast<std::uintptr_t>(area) + kAreaOwnTag) : std::string(),
                  RoomsNow());
     g_screen = Screen{};
+    SetLoadingPhase(0);
 }
 
 // GameModeLoading's update, its slot 8: __thiscall (float seconds), `ret 4`.
@@ -243,7 +246,9 @@ std::uintptr_t __fastcall Update(void *mode, int edx, float seconds)
             g_screen.current.began = before;
         }
     }
+    SetLoadingPhase(LoadingPhase(state, step, true));
     const std::uintptr_t result = g_update.Original()(mode, edx, seconds);
+    SetLoadingPhase(LoadingPhase(state, step, false));
     const std::int64_t after = Now();
     {
         const std::lock_guard lock(g_mutex);
