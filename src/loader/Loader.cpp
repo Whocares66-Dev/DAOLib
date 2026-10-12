@@ -261,7 +261,8 @@ bool WaitForGameCode()
         return false;
     }
     DetourUpdateThread(GetCurrentThread());
-    if (DetourAttach(reinterpret_cast<PVOID *>(&g_startupInfo), reinterpret_cast<PVOID>(&StartupInfoHook)) != NO_ERROR ||
+    if (DetourAttach(reinterpret_cast<PVOID *>(&g_startupInfo), reinterpret_cast<PVOID>(&StartupInfoHook)) !=
+            NO_ERROR ||
         DetourTransactionCommit() != NO_ERROR)
     {
         DetourTransactionAbort();
