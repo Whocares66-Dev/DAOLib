@@ -2063,6 +2063,52 @@ DAO_ADDRESS(kGdaStore_FindTable, 5262)
 // OBJECT_ID, CGameObject**)`, the same shape, called by GetObjectById on the
 // application's array at +0xCC.
 DAO_ADDRESS(kCGameObjectArray_GetGameObject, 33354)
+// How an object gets its id, read 2026-10-12 (DAOLib #86, dao/ObjectIds.h).
+//
+// AddObject, __thiscall on the same array ((id asked for, object), `ret
+// 8`, the id given in eax; it never reads ecx, and a null object answers
+// -1), has the world database make an EC::GameObjectProxy for the object
+// and register it (0x004D6760, ID 5050, whose one call is to 0x004D6610,
+// ID 5047), then tells the object the id it got (its slot 1) and returns
+// it. EA's is the same code, its first five bytes the same and free of
+// anything relative (the address library's session, 2026-10-12). Six
+// callers. One is CCObject's constructor (0x00699670, ID 14185: it sets
+// the AI level at +0x2B0 to -1 just after), so a creature, a placeable
+// and an item each have their id from the moment they are constructed;
+// the other five (IDs 13809, 20441, 21400, 12488, 11132) are other
+// kinds, not read. The id asked for is the one the constructor was
+// given: the scripts' CreateObject (0x00669550) comes to 0x006861F0 (ID
+// 13782), which does `new CCCreature(-1)` or `new CCPlaceable(-1)`, loads
+// the template into it (0x006A2900 for a creature) and puts it in the
+// area; a save's objects are constructed with their saved ids. A
+// template with a pool (the scripts' CreatePool) is not constructed at
+// all: 0x00687830 hands out one of the pool's creatures, which has its
+// id already.
+//
+// The world database (the save's own word: SavegameWorldDatabase) is the
+// object at this global, 0x3C bytes, made by 0x004C52E0. It has three
+// pools of ids, pointers at its +0x30, +0x34 and +0x38, each 0x10 bytes:
+// the least id, the most, the last given, and a byte set once the pool
+// has wrapped. Their ranges are fixed (0x004D59A0): 1 to 0x3FFFFFFF,
+// 0x40000000 to 0x7FFFFFFF, 0x80000000 to 0xFFFFFFFE. An object that
+// asks for -1 gets the first pool's next id (0x004D5DC0, ID 5038): the
+// last given plus one, with no look at what is in use until the pool has
+// wrapped. One that asks for an id is of the pool whose range holds it,
+// and TakeId (__thiscall on the database, (id, pool), `ret 8`, a bool)
+// says whether it may have it: no if an object has it (the database's
+// map, 0x008170B0), and then the object gets the pool's next instead,
+// with no sign but the id returned; yes otherwise, and an id past the
+// pool's last given becomes the last given. So an id asked for above
+// the counter moves the counter up to it, and TakeId alone moves the
+// counter and registers nothing.
+//
+// A save keeps each pool's last given (0x004D5D00 reads the list
+// SavegameWorldDatabase, field 16500, each entry a SavegameWorldDBIDgroup,
+// 16501, and a SavegameWorldDBLastID, 16502), so two games loaded from
+// one save number their new objects from the same id. The names are ours.
+DAO_ADDRESS(kCGameObjectArray_AddObject, 33352)
+DAO_DATA(kWorldDatabase, 100181)
+DAO_ADDRESS(kWorldDatabase_TakeId, 5039)
 // SetCombatState's engine side: the script command looks the creature up
 // (0x005D58C0) and calls this on it with the state. How a creature enters
 // and leaves combat, for a turn-based mode.

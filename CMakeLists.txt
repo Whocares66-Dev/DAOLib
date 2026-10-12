@@ -171,6 +171,7 @@ add_library(
     src/dao/Journal.cpp
     src/dao/Animation.cpp
     src/dao/ScriptCall.cpp
+    src/dao/ObjectIds.cpp
     src/dao/Orders.cpp
     src/dao/Abilities.cpp
     src/dao/Attack.cpp

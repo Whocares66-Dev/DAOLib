@@ -66,3 +66,6 @@ add_daolib_plugin(
     OVERRIDE resources/example_resources_always.dds
 )
 dao_apply_warnings(example_resources)
+
+add_daolib_plugin(example_objectids SOURCES objectids/ObjectIds.cpp)
+dao_apply_warnings(example_objectids)
