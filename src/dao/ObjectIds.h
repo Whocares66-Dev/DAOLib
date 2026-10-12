@@ -75,9 +75,11 @@ struct AreasBuilt
 // same objects in the same order, so a game that numbers a build on from where another's
 // numbering stood gives them the same ids. Each id is asked for as a save's object asks for its
 // own: one that an object already has is not given twice. That object gets an id of the game's
-// own numbering, and `refused` counts it. The game's own numbering is not moved.
+// own numbering, and `refused` counts it. The game's own numbering stays where it is unless the
+// ids given go past it, and then it goes on from the last of them.
 //
-// A save's load is a build too, and makes new objects of its own. What an area's scripts make
+// A save's load is a build too, makes new objects of its own, and by then numbers from the save's
+// counter, so `starting` is how a game keeps a load's new objects clear of ids. What an area's scripts make
 // once it is built (CreateObject, CreatePool) is not part of the build, and is numbered by the
 // game as ever.
 //

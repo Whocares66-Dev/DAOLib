@@ -120,6 +120,9 @@ struct Slot
 // Registers a callback that runs each time the game writes a save, once the save is written.
 // @param callback receives the slot that was written
 //
+// The save's picture, screen.dds, is written after: a callback that reads the slot's folder may
+// find it missing or empty.
+//
 // Callbacks run on the game thread, one at a time, so state shared with OnGameLoaded callbacks
 // needs no lock. They must not throw.
 void OnSaved(std::function<void(const Slot &saved)> callback);
