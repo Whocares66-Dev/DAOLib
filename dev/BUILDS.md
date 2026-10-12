@@ -5,7 +5,7 @@ Dragon Age: Origins Ultimate Edition is sold by GOG, EA and Steam, all at 1.05.1
 | Build | State |
 |---|---|
 | GOG | The one everything was read in: the Ghidra project, the names, every address in a comment. Verified in play. |
-| EA app | Known to the address library. Seen in play 2026-10-01 with the loader put in from the build tree ("Seen in play"). Not yet run deployed, 0.1.0 included: on this machine the EA app starts Steam's copy, since `HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age` has `Path` = Steam's folder (`Flavour = steam`; the play tester, 2026-10-10), a machine-wide key that is the user's to change. |
+| EA app | Known to the address library. Seen in play 2026-10-01 with the loader put in from the build tree ("Seen in play"), and since run deployed, where it works (the user, 2026-10-12: "we did test it. it works w/ ea"). On this machine the EA app otherwise starts Steam's copy, since `HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age` has `Path` = Steam's folder (`Flavour = steam`; the play tester, 2026-10-10), a machine-wide key that is the user's to change. |
 | Steam | `steam-1.05`, read 2026-10-01 in the address library (its `dev/STEAM.md`): GOG's code byte for byte, every GOG ID at its GOG address, wrapped by SteamStub 2.1, and with GOG's link stamp. Below. |
 
 ## IDs, not addresses
@@ -141,8 +141,27 @@ The loader gives the process the machine's processors before the game's code run
 
 It was first answered another way (DAOLib #89, the same day): each copy kept on two processors and moved to a pair no other copy had, with an enumeration of the other copies and a rule for choosing among pairs. That worked round the mask and kept it, and was replaced within the day by the above (DAOLib #92; the user: "do the simplest, most obviously correct thing"). What was seen with it stands as the measure of the fault. A save loaded in a copy beside three others at 0x3: left at 0x3, 34.6 frames a second; on a pair of its own, 58.5. A copy in the world, its frames asked for some twenty times a second, while a second copy started beside it (DAOLib #90): with both left on the first two processors the first answered nothing for 5.7 s as the second began its start-up, not even from its server thread, then went up to 0.9 s between frames for a quarter of a minute more, and the second took 21.5 s to serve where it takes 10; with each on processors of its own, 41 ms. The multiplayer mod's session, two to four copies in one session: 60 frames a second in every copy where three had given the host 17 to 19, and no hang log written where the host's instance had written 85.
 
+## Windows loads its own version.dll first (2026-10-12)
+
+Two players, one with EA's build on Windows 11 (26H2, build 26300.9457) and one with Steam's, reported 0.1.0 doing nothing: the game runs, no mod shows, and `Documents\BioWare\Dragon Age\daolib` is never made. That is the loader not in the process at all. Whether what follows is what they have is not known until they look; it gives exactly that, and it is common advice for this game.
+
+**A compatibility layer on the exe can bring in the system's `version.dll` before the exe's imports are resolved.** Windows loads a layer's shim DLLs from the system folder first, with everything they import, and `AcGenral.dll` imports `VERSION.dll` and `WINMM.dll`. The exe's own import of `VERSION.dll` is then answered by the module of that name already there, and the one beside the exe is never opened. No error, no log. Seen on this machine (Windows 10 19045) with two small 32-bit exes and no game: one importing `version.dll` with 0.1.0's `version.dll` beside it, printing the path of the module it got; one importing nothing, printing which names were in the process at `main`, each run under `__COMPAT_LAYER`.
+
+| The Compatibility tab's setting (layer) | `version.dll`, `winmm.dll` taken from the system first |
+|---|---|
+| none; high DPI settings (`HIGHDPIAWARE`, `DPIUNAWARE`, `GDIDPISCALING`); 16-bit colour; 640 x 480; Windows XP SP2 to Windows 8 modes | no |
+| Disable fullscreen optimizations (`DISABLEDXMAXIMIZEDWINDOWEDMODE`); 8-bit colour (`256COLOR`); `DISABLETHEMES`; Windows 95, 98, NT 4 and 2000 modes | yes |
+
+`dinput8.dll`, `netapi32.dll`, `psapi.dll`, `d3d9.dll`, `winhttp.dll` and `d3dx9_36.dll` were in the process under none of them, and are in no shim DLL's imports here (`apphelp`, `AcLayers`, `AcGenral`, `AcSpecfc`, `AcXtrnal`, each with what it imports, read from `SysWOW64`). GOG's installer sets `HIGHDPIAWARE` on its exe, which is why GOG's game here has a layer and loads the loader. Windows 11's shims were not read: this machine has none.
+
+Others have met it: Ultimate ASI Loader's issue 215 (2026-06-29, https://github.com/ThirteenAG/Ultimate-ASI-Loader/issues/215) has the same silence on Windows 11 after update KB5095093, a commenter finding the local `version.dll` passed over with fullscreen optimizations disabled and the loader working as `winhttp.dll`, and another that it came only for games in a store's default folder. So on Windows 11 something may set the layer, or its like, without the player.
+
+**A player's way round it:** on `bin_ship\DAOrigins.exe`, Properties, Compatibility (and "Change settings for all users"), untick "Disable fullscreen optimizations", reduced colour mode and any compatibility mode. `reg query "HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"` (and `HKLM`) lists what is set, by the exe's path.
+
+**Not the C++ runtime.** 0.1.0's `version.dll` imports `MSVCP140.dll` and `VCRUNTIME140.dll`, the x86 Visual C++ 2015-2022 redistributable, which this machine has from Visual Studio. Without it GOG's and Steam's exes, which import `VERSION.dll` themselves, would not start at all, with Windows' box naming the missing DLL; the reports are of a game that runs. It is still a thing a player may lack, and the loader need not ask for it (the static runtime, `x86-windows-static` and `MultiThreaded`): nothing but `DAOLib_Load` and a struct of plain pointers crosses from the loader to a plugin.
+
 ## What is left
 
-- **A deployed run in EA's build.** `.\tools\deploy.ps1 -Install ea`, then the game from the EA app. The EA app's folder gives the user no write access; it is granted once from an elevated shell (the script's help has the line). What only this can show is the last step of "The wrapper finds VERSION.dll by name": that with the loader beside the exe and not yet in the process, it is the one found. `ea_play.py` puts the loader in itself.
+- **A loader Windows cannot leave out.** "Windows loads its own version.dll first", above: the loader under a name the compatibility layers do not bring in, and the players' reports answered.
 - **More of the game.** The in-world run stood in one place. A fight, a conversation, a chest and a save made are what the remaining getters and the examples want, in the EA build as they did in GOG's.
 - **Steam, further.** A fight, a conversation and a save made, as for EA's build.
