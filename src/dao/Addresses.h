@@ -1009,6 +1009,11 @@ DAO_ADDRESS(kGameModeLoading_Update, 15094)
 DAO_ADDRESS(kCCModule_DropAreaList, 11006)
 DAO_ADDRESS(kCSAreaList_ReadAreas, 15833)
 DAO_ADDRESS(kCSAreaList_FindArea, 15814)
+// LoadAreas itself (the engine's own name for it, above), __thiscall on the
+// list with no arguments, a plain `ret`: for dao/ObjectIds.h (DAOLib #87),
+// which follows a build of a list's areas by it, from the first call that
+// finds none going to the first that answers other than 0.
+DAO_ADDRESS(kCSAreaList_LoadAreas, 15817)
 // The list's RIM trees, read 2026-10-10 after the first try at keeping a
 // list (DAOLib #64) waited ten seconds at every swap. The application's
 // +0xC0 is a ModuleResourceManager (vftable 0x00B00958, over RIMTreeManager,

@@ -11,6 +11,14 @@
 // the id expected, and destroys them again. What it finds goes to
 // example_objectids.log. It saves nothing, but a save made after it keeps
 // the numbering it moved.
+//
+// It also follows the game building areas, which is when an area never
+// visited numbers everything in it: each build is logged with where the
+// numbering stood and how many new objects it made. With the variable
+// EXAMPLE_OBJECTIDS_FOLLOW set to such an id (in hex, from another run's
+// log), the game's own numbering is moved far ahead after the dogs and the
+// next build is numbered on from that id instead: the area's objects then
+// have the ids they had in the other run.
 #include "dao/ObjectIds.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
@@ -24,8 +32,13 @@
 
 #include <spdlog/spdlog.h>
 
+#include <Windows.h>
+
+#include <array>
 #include <cstdint>
+#include <cwchar>
 #include <optional>
+#include <utility>
 
 namespace
 {
@@ -75,11 +88,11 @@ void Show(ObjectId player)
     Log("made under a free id behind", filled, behind);
 
     // The game's own numbering moved far ahead: what the scripts make next is there.
-    const ObjectId far = *start + 0x100000;
-    spdlog::info("numbering new objects from 0x{:x}: {}; from an id behind: {}", far, objects::NumberNewFrom(far),
+    const ObjectId apart = *start + 0x100000;
+    spdlog::info("numbering new objects from 0x{:x}: {}; from an id behind: {}", apart, objects::NumberNewFrom(apart),
                  objects::NumberNewFrom(behind));
     const ObjectId moved = api::CreateObject(kCreature, kTemplate, where);
-    Log("made by CreateObject after", moved, far);
+    Log("made by CreateObject after", moved, apart);
 
     for (const ObjectId made : {plain, chosen, taken, filled, moved})
     {
@@ -90,10 +103,21 @@ void Show(ObjectId player)
     }
 }
 
+// The id EXAMPLE_OBJECTIDS_FOLLOW names, for the next build after the dogs.
+std::optional<ObjectId> g_follow;
+bool g_shown = false;
+
+std::optional<ObjectId> FollowAsked()
+{
+    std::array<wchar_t, 32> text{};
+    const DWORD length = GetEnvironmentVariableW(L"EXAMPLE_OBJECTIDS_FOLLOW", text.data(), 32);
+    return length != 0 && length < text.size() ? std::optional<ObjectId>(std::wcstoul(text.data(), nullptr, 16))
+                                               : std::nullopt;
+}
+
 void OnFrame()
 {
-    static bool done = false;
-    if (done || dao::CClientExoApp::CurrentMode() != dao::GameMode::Explore)
+    if (g_shown || dao::CClientExoApp::CurrentMode() != dao::GameMode::Explore)
     {
         return;
     }
@@ -102,8 +126,31 @@ void OnFrame()
     {
         return;
     }
-    done = true;
+    g_shown = true;
     Show(player);
+    if (g_follow)
+    {
+        const ObjectId apart = objects::LastNewId().value_or(0) + 0x1000000;
+        spdlog::info("following another run: this game's own numbering moved to 0x{:x}: {}", apart,
+                     objects::NumberNewFrom(apart));
+    }
+}
+
+std::optional<ObjectId> OnAreasStarting(ObjectId last)
+{
+    spdlog::info("areas begin to be built: the last new id is 0x{:x}", last);
+    if (!g_shown || !g_follow)
+    {
+        return std::nullopt;
+    }
+    spdlog::info("numbering this build on from 0x{:x}, as asked", *g_follow);
+    return std::exchange(g_follow, std::nullopt);
+}
+
+void OnAreasBuilt(const objects::AreasBuilt &built)
+{
+    spdlog::info("areas built: {} new object(s) numbered on from 0x{:x}, {} refused; the last new id is 0x{:x}",
+                 built.objects, built.last, built.refused, objects::LastNewId().value_or(0));
 }
 
 } // namespace
@@ -116,6 +163,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::error("not the loader or the game this was built for");
         return false;
     }
+    g_follow = FollowAsked();
+    objects::OnAreasBuild(&OnAreasStarting, &OnAreasBuilt);
     dao::OnFrame(&OnFrame);
     return true;
 }

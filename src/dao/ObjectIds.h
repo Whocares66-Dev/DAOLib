@@ -1,18 +1,20 @@
 // The ids the game gives its objects, chosen by a plugin: a creature made under an id the caller
-// names, and where the ids of new objects start. Two games loaded from one save number their new
-// objects from the same id and drift apart from there; with these, one game can make a creature
-// under the id another gave it.
+// names, where the ids of new objects start, and the ids an area's objects get as it is built.
+// Two games loaded from one save number their new objects from the same id and drift apart from
+// there; with these, one game can give its objects the ids another gave them.
 //
 //   using namespace dao;
 //   objects::NumberNewFrom(0x20000000);            // this game's own new objects, out of the way
 //   const ObjectId made = objects::CreateAs(theirs, script::OBJECT_TYPE_CREATURE, tmpl, where);
 //   if (made != theirs) { /* an object here has that id already, or nothing was made */ }
+//   objects::OnAreasBuild([](ObjectId) { return TheirNumberingForThisBuild(); });
 #pragma once
 
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string_view>
 
@@ -53,5 +55,35 @@ std::optional<ObjectId> LastNewId();
 //
 // The number only goes up, and a save made after keeps it. Call it on the game thread.
 bool NumberNewFrom(ObjectId first);
+
+// What a build of a list's areas numbered.
+struct AreasBuilt
+{
+    ObjectId last = kInvalidObject; // the id its new objects were numbered on from
+    std::uint32_t objects = 0;      // how many new objects it made
+    std::uint32_t refused = 0;      // of those, how many got another id than the numbering's
+};
+
+// Follows the game as it builds the areas of a list it has not in memory, and lets a plugin say
+// what ids the new objects of a build get.
+// @param starting runs as a build begins, with LastNewId at that moment. It returns the id to
+//  number the build's new objects on from, or nullopt to leave them to the game's own numbering
+// @param built runs when the build is done, with what it numbered
+//
+// An area's creatures, placeables and items are made as it is built, and in an area the save has
+// never visited every one is new and takes the next id. Two games loaded from one save make the
+// same objects in the same order, so a game that numbers a build on from where another's
+// numbering stood gives them the same ids. Each id is asked for as a save's object asks for its
+// own: one that an object already has is not given twice. That object gets an id of the game's
+// own numbering, and `refused` counts it. The game's own numbering is not moved.
+//
+// A save's load is a build too, and makes new objects of its own. What an area's scripts make
+// once it is built (CreateObject, CreatePool) is not part of the build, and is numbered by the
+// game as ever.
+//
+// Call it from DAOLib_Load. The callbacks run on the game thread, in the middle of a loading
+// screen: keep them short. If several return an id, the first added is followed.
+void OnAreasBuild(std::function<std::optional<ObjectId>(ObjectId last)> starting,
+                  std::function<void(const AreasBuilt &)> built = {});
 
 } // namespace dao::objects
