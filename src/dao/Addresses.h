@@ -316,6 +316,61 @@ DAO_ADDRESS(kCCCreature_HasAnimation, 14049)
 // flag 3 is set, and multiplies a looping one by its count. The name is
 // ours.
 DAO_ADDRESS(kCCCreature_AnimationStepLength, 14096)
+// A creature's animation events, read 2026-10-12 (DAOLib #88): its vtable's
+// slot 46, __thiscall (event record, bool), `ret 8`, a bool in al. The
+// record's first word is the event's number (events.gda's); number 1 is an
+// attack's impact, which goes to 0x006A6230 (it reads the record's name, a
+// string at +0x1C, for "Left", the off hand's weapon) and on to
+// 0x006A6080, the one place a melee impact's script event, 29, is made (a
+// projectile's is made by 0x007E87C0). With the bool set the record only
+// goes to 0x006B6290. What it does not take itself goes to CCObject's. The
+// attack's sub-action waits the animation's length and sends no impact
+// itself, so an animation whose events are not raised is a blow that never
+// lands. The name is ours.
+DAO_ADDRESS(kCCCreature_OnAnimationEvent, 14964)
+// Where a creature's animation events come from, and what stops them far
+// from the camera, read and seen in play 2026-10-12 (DAOLib #88, with the
+// probe). Each update a CCObject (0x0069A600, under the AI master's update,
+// on the game thread) asks the Animation::AnimationManager (a static
+// object, its getter 0x008107F0) for the events waiting under its id (the
+// manager's slot 15, 0x0080F380) and hands each to its slot 46. The manager
+// is given them (AddEvent, its slot 14, __thiscall (event record, flags),
+// `ret 8`, under its lock) by the animations as they are advanced: each
+// graphics object (GraphicsStructures::Object) owns an Animation::
+// AnimationTask, whose run advances the object's animation, and the tasks
+// of the objects in the scene run on the task threads as a group the
+// scene's animation manager owns (Animation::AnimSceneManagerDefault: its
+// slot 5, 0x00810DB0, takes an object in and its slot 7, 0x00810E00, takes
+// one out). So an object not in the scene has no animation and raises no
+// event.
+//
+// What takes a creature's object out of the scene is the game's own show
+// and hide by distance. 0x006184E0 goes through the area's objects by their
+// distance from the camera and tells each whether it is shown (its slot 79,
+// 0x0069A9xx for a CCObject, 0x006AA890 a creature's own): a creature
+// nearer than CreatureShowDistance is, and one farther is not, unless it is
+// under 60 m and its +0xC60 names a follower; any other object is shown
+// nearer than ObjectShowDistance; the creatures 0x005D5600 answers true
+// for are left as they are. Both distances are 60 in the image. The
+// creatures' the game writes itself whenever it applies the graphics
+// detail (0x00458EB0, by the level: 30, 35, 50 or 60; four callers, read
+// by the address library's session); nothing writes the objects'. Hidden in explore
+// or combat mode, an object fades (0x00695A90, half a second, its target
+// the byte at +0x18D set by 0x00695C00) and at nothing its slot 66 takes
+// its model out of the scene. The same pass gives each object its band
+// (its slot 81), which a creature's AI level is worked out from.
+//
+// In play: with the camera 82 m from a fight no impact was raised at all
+// (and so none handled), where 40 to 55 were in 14 s with the camera on the
+// fight; as the camera left, some forty objects were taken out of the
+// scene in one frame, from 0x00695A90 under the AI master's update. Three
+// things read first were not it, each tried in play: the rooms' streaming
+// around the camera, the creature's AI level, and the scene's fade of far
+// objects (0x00536010, whose distances are an object's own times a factor).
+// The names are ours.
+DAO_ADDRESS(kAnimationManager_AddEvent, 21851)
+DAO_DATA(kCreatureShowDistance, 96798)
+DAO_DATA(kObjectShowDistance, 96799)
 DAO_ADDRESS(kCCObject_RequestPath, 17573)
 DAO_ADDRESS(kMovementController_Step, 33560)
 // A search apart from any creature's (dao/World.h, FindPath), read

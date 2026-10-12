@@ -28,6 +28,7 @@
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Frame.h"
 #include "dao/Gui.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
@@ -37,6 +38,7 @@
 #include "dao/Script.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
+#include "dao/World.h"
 #include "dao/core/CallSite.h"
 #include "dao/core/Msvc8.h"
 
@@ -46,6 +48,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdlib>
 #include <string>
 
 namespace
@@ -162,9 +165,9 @@ dao::Detour<QueueCommandFn> g_queueCommand;
 // Read by scanning up the stack from the hook's own return-address slot and
 // keeping values just after a call instruction (dao/core/CallSite.h); the
 // game has no frame data to walk instead. A stale value can slip in.
-std::array<std::uint32_t, 4> CallerChain(const void *returnSlot)
+std::array<std::uint32_t, 8> CallerChain(const void *returnSlot)
 {
-    std::array<std::uint32_t, 4> chain{};
+    std::array<std::uint32_t, 8> chain{};
     static const auto code = dao::Module::Code();
     if (!code)
     {
@@ -205,6 +208,85 @@ int __fastcall QueueCommand(void *self, int edx, void *command, int second, int 
                   chain[0], chain[1], chain[2], chain[3], dao::TypeName(self), self, dao::TypeName(command), command,
                   words[0], words[1], words[2], words[3], words[4], second, third, result);
     return result;
+}
+
+// A creature's animation events (dao/Addresses.h, kCCCreature_OnAnimationEvent;
+// DAOLib #88): an attack's impact is event 1 of its animation, and with the
+// camera some 60 m from a fight no impact reaches the scripts. Who raises
+// the event, and whether any is raised out there, is what this logs: each
+// impact event counted, the first ten and every tenth after with the
+// creature and the callers above. It changes nothing.
+using AnimationEventFn = char(__fastcall *)(void *creature, int edx, const std::uint32_t *event, char second);
+dao::Detour<AnimationEventFn> g_animationEvent;
+std::atomic<std::uint32_t> g_impactEvents{0};
+
+char __fastcall AnimationEvent(void *creature, int edx, const std::uint32_t *event, char second)
+{
+    if (dao::TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(event)) == 1U)
+    {
+        const std::uint32_t n = ++g_impactEvents;
+        if (n <= 3)
+        {
+            const auto chain = CallerChain(_AddressOfReturnAddress());
+            spdlog::info("animation event 1, an attack's impact, call {}, thread {}: creature at {}, second {}, from "
+                         "{:#010x} via {:#010x} {:#010x} {:#010x} {:#010x} {:#010x} {:#010x} {:#010x}",
+                         n, GetCurrentThreadId(), creature, static_cast<int>(second), chain[0], chain[1], chain[2],
+                         chain[3], chain[4], chain[5], chain[6], chain[7]);
+        }
+        else
+        {
+            spdlog::info("impact event {}", n);
+        }
+    }
+    return g_animationEvent.Original()(creature, edx, event, second);
+}
+
+// The same event as the animation manager is given it (dao/Addresses.h,
+// kAnimationManager_AddEvent): whether an impact is raised at all far from
+// the camera, and by what, is the other half of the question. Counted as the
+// handled ones are, the first three with their callers.
+using AddAnimationEventFn = void(__fastcall *)(void *manager, int edx, const std::uint32_t *event, int flags);
+dao::Detour<AddAnimationEventFn> g_addAnimationEvent;
+std::atomic<std::uint32_t> g_impactsRaised{0};
+
+void __fastcall AddAnimationEvent(void *manager, int edx, const std::uint32_t *event, int flags)
+{
+    if (dao::TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(event)) == 1U)
+    {
+        const std::uint32_t n = ++g_impactsRaised;
+        if (n <= 3)
+        {
+            const auto chain = CallerChain(_AddressOfReturnAddress());
+            spdlog::info("impact raised {}, thread {}, flags {}: from {:#010x} via {:#010x} {:#010x} {:#010x} "
+                         "{:#010x} {:#010x} {:#010x} {:#010x}",
+                         n, GetCurrentThreadId(), flags & 0xFF, chain[0], chain[1], chain[2], chain[3], chain[4],
+                         chain[5], chain[6], chain[7]);
+        }
+        else
+        {
+            spdlog::info("impact raised {}", n);
+        }
+    }
+    g_addAnimationEvent.Original()(manager, edx, event, flags);
+}
+
+// An experiment for DAOLib #88, off unless DAOLIB_PROBE_CREATURE_SHOW is set
+// to a distance in metres: the library holds the distance from the camera
+// within which the game shows a creature at it (dao/World.h,
+// SetCreatureShowDistance; 60 or less as the game has it), to see whether a
+// blow then lands farther off. The one thing the probe changes.
+void WidenCreatureShow()
+{
+    std::array<char, 32> text{};
+    const DWORD length = GetEnvironmentVariableA("DAOLIB_PROBE_CREATURE_SHOW", text.data(), 32);
+    const float wanted = length != 0 && length < text.size() ? std::strtof(text.data(), nullptr) : 0.0F;
+    if (wanted <= 0.0F)
+    {
+        return;
+    }
+    const auto was = dao::world::CreatureShowDistance();
+    spdlog::warn("DAOLIB_PROBE_CREATURE_SHOW is set: creatures shown within {} m of the camera, where it was {}: {}",
+                 wanted, was.value_or(0.0F), dao::world::SetCreatureShowDistance(wanted));
 }
 
 // The client command table's AddCommand (dao/Addresses.h,
@@ -324,6 +406,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     Place(g_openMovie, dao::addr::kScaleformManager_OpenMovie, &OpenMovie, "GUI::ScaleformManager::OpenMovie");
     Place(g_writeSave, dao::addr::kSaveGame_Write, &WriteSave, "SaveGame::Write");
     Place(g_findSave, dao::addr::kSaveGame_FindSave, &FindSave, "SaveGame::FindSave");
+    Place(g_animationEvent, dao::addr::kCCCreature_OnAnimationEvent, &AnimationEvent, "CCCreature::OnAnimationEvent");
+    Place(g_addAnimationEvent, dao::addr::kAnimationManager_AddEvent, &AddAnimationEvent,
+          "Animation::AnimationManager::AddEvent");
+    WidenCreatureShow();
     probe::AttachScriptChecks();
     probe::AttachEventWatch();
     probe::AttachConjureWatch();

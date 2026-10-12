@@ -391,4 +391,25 @@ std::optional<Room> RoomOf(ObjectId object);
 // off the game thread
 Sight LineOfSight(ObjectId viewer, ObjectId target);
 
+// Returns how far from the camera the game shows a creature, in metres, as it stands now. The
+// game's own goes by the graphics detail the player chose: 30, 35, 50 or 60.
+// @return nullopt in a build of the game the library does not know
+//
+// A creature farther from the camera than this is faded out and taken out of the scene, and its
+// animations stop with it. An attack's impact is an event of its animation, so such a creature's
+// commands still run and end, but its blows never land.
+std::optional<float> CreatureShowDistance();
+
+// Holds the distance from the camera within which the game shows a creature at `metres`, or with
+// nullopt gives it back to the game.
+// @param metres more than 0, or nullopt for the game's own
+// @return false, with nothing changed, for a distance that is not more than 0, or in a build of
+//  the game the library does not know
+//
+// The game sets the distance itself whenever it applies the graphics detail, so the library puts
+// the plugin's back each frame for as long as it is held. It is one distance for every creature
+// of the game, not one creature's, and it is not saved. Farther creatures drawn and animated cost
+// frame time. The area's rooms are still loaded only around the camera, to some 120 m.
+bool SetCreatureShowDistance(std::optional<float> metres);
+
 } // namespace dao::world

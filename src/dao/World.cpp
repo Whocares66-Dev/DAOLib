@@ -40,6 +40,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <mutex>
+#include <optional>
 #include <utility>
 
 namespace dao::world
@@ -1477,6 +1479,67 @@ std::optional<ModelBox> ModelBoxOf(ObjectId creature)
     answer.worldMin = low.ToVector();
     answer.worldMax = high.ToVector();
     return answer;
+}
+
+// The distance within which a creature is shown (dao/Addresses.h, "Where a
+// creature's animation events come from"; DAOLib #88): a float the game
+// reads each time it goes through the area's objects. The game writes it
+// too, when it applies the graphics detail (0x00458EB0: 30, 35, 50 or 60 by
+// the level; read by the address library's session, 2026-10-12), so a
+// distance a plugin asks for is held: put back each frame, with what the
+// game last wrote kept to give back. Seen in play 2026-10-12 with the
+// probe, which holds it the same way: at 60, a fight 82 m from the camera
+// had no impact raised in 14 s; at 400, 63.
+namespace
+{
+
+std::mutex g_showMutex;
+std::optional<float> g_showHeld; // the distance a plugin holds
+float g_showGames = 0.0F;        // what the game had there, to give back
+bool g_showWatched = false;
+
+void HoldCreatureShow()
+{
+    auto *distance = At<float>(addr::kCreatureShowDistance);
+    const std::lock_guard lock(g_showMutex);
+    if (distance != nullptr && g_showHeld && *distance != *g_showHeld)
+    {
+        g_showGames = *distance; // the game has applied its own again
+        *distance = *g_showHeld;
+    }
+}
+
+} // namespace
+
+std::optional<float> CreatureShowDistance()
+{
+    const auto *distance = At<float>(addr::kCreatureShowDistance);
+    return distance != nullptr ? std::optional<float>(*distance) : std::nullopt;
+}
+
+bool SetCreatureShowDistance(std::optional<float> metres)
+{
+    auto *distance = At<float>(addr::kCreatureShowDistance);
+    if (distance == nullptr || (metres && !(*metres > 0.0F)))
+    {
+        return false;
+    }
+    bool watch = false;
+    {
+        const std::lock_guard lock(g_showMutex);
+        if (!g_showHeld)
+        {
+            g_showGames = *distance;
+        }
+        g_showHeld = metres;
+        *distance = metres.value_or(g_showGames);
+        watch = metres.has_value() && !std::exchange(g_showWatched, true);
+    }
+    if (watch)
+    {
+        OnFrame(&HoldCreatureShow);
+    }
+    return true;
 }
 
 } // namespace dao::world
