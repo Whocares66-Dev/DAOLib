@@ -15,11 +15,15 @@
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
+#include "dao/String.h"
 
 #include <spdlog/spdlog.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
+#include <vector>
 
 namespace
 {
@@ -39,6 +43,22 @@ void LogTexture(const char *when)
                  bytes ? bytes->size() : 0, dao::resources::Exists(kAlways) ? "found" : "not found");
 }
 
+// A texture read as the file it is, wherever the game has it: loose in a folder, in one of
+// the game's archives, or in one the game has already drawn from. A .dds file begins "DDS ".
+void LogFile(const wchar_t *file)
+{
+    const auto bytes = dao::resources::Read(file);
+    const bool whole = bytes && bytes->size() >= 4 && std::memcmp(bytes->data(), "DDS ", 4) == 0;
+    // FNV-1a over the bytes, to hold against the file's own outside the game.
+    std::uint32_t sum = 2166136261U;
+    for (const std::byte byte : bytes.value_or(std::vector<std::byte>{}))
+    {
+        sum = (sum ^ static_cast<std::uint32_t>(byte)) * 16777619U;
+    }
+    spdlog::info("{}: {}, {} bytes, {}, sum {:#010x}", dao::Utf8(file), bytes ? "read" : "not read",
+                 bytes ? bytes->size() : 0, whole ? "a DDS file" : "NOT a DDS file", sum);
+}
+
 void OnFirstFrame()
 {
     static bool done = false;
@@ -47,6 +67,10 @@ void OnFirstFrame()
         return;
     }
     done = true;
+    LogFile(kAlways);                    // loose, in this plugin's override folder
+    LogFile(L"01_fire.dds");             // in the game's texture archive
+    LogFile(L"default_blackzero.dds");   // in the character creator's, a RIM
+    LogFile(L"atl_chargen_dxt1_00.dds"); // and another of its
     LogTexture("added at load");
     spdlog::info("adding it again: {}", dao::resources::AddFolder(Extra()));
     spdlog::info("taking it away: {}", dao::resources::RemoveFolder(Extra()));

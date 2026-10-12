@@ -852,6 +852,51 @@ DAO_ADDRESS(kResources_Release, 5021)
 // names are ours.
 DAO_ADDRESS(kResources_Data, 5018)
 DAO_ADDRESS(kResources_Size, 5019)
+// A file's bytes from its source and not from the resource (dao/Resources.h,
+// DAOLib #100), read 2026-10-12. What Data answers, the resource's +0x20, is
+// the file only until the resource's first use: ReadOnFirstUse (below) then
+// hands the bytes to the processor of the file's type, frees them and puts
+// the processor's own buffer there (0x004BEA24, 0x004BEA30). The processors
+// are a table by extension (0x00C2C0DC, looked up at 0x004E6F30 with what
+// follows the name's last '.', 0x004E6EE0) with one entry, made at
+// 0x008471D3: "dds", TexManager::DDSResourceHelper (vftable 0x00B2B2A4). So
+// a texture the game has used answers bytes that are not its file, of the
+// file's length (+0x30), and every other type answers its file.
+//
+// The engine's own fetch cannot be asked again for a buffer of ours: a
+// source's slot 1 (ErfSource 0x004D0930 with the archive's one FileAccess,
+// its +0xB8; DirectorySource 0x004CEC00 with the path, its folder's at +0xA4
+// and the resource's name after it, 0x004C3360 being the two strings joined)
+// makes a ReadRequestTask whose Run seeks to the resource's +0x28, allocates
+// its +0x2C bytes and stores that buffer in the resource's +0x20
+// (0x004E9E20), over what the game draws from. RIMSource's slot 1
+// (0x004CC1B0) fetches nothing: a RIM is read whole by its own task
+// (0x004CE970), and its resources are given places in that block, the
+// block's address less its file offset (+0xE8, +0x100) plus the resource's
+// +0x28 (0x004CE8E0), so +0x28 is an offset in the file for a RIM too.
+//
+// A source's slot 6, __thiscall (bytes, size), `ret 8`, true when done, is
+// what ReadOnFirstUse runs over the fetched bytes first: ErfSource's
+// (0x004D0790) a cipher it holds at +0xA8 with eight bytes of key at +0xB0,
+// which is how an add-in's enciphered archive reads as plain; the others'
+// (0x00821560) answer true. Lock, __thiscall (bool: 0 waits, 1 only
+// tries), `ret 4`, true when held, and Unlock, __thiscall with no
+// arguments, are the source's lock (the critical section at its +0x6C,
+// 0x004CB2B0 and 0x004CB300), which ReadOnFirstUse holds around slot 6.
+// The three vftables tell a source's kind; a RIMSource is an ErfSource (its
+// base at +0, with Multithreading::Task at +0xD0). A source's +4 is the
+// engine's name for it, an alias and a file (TEXTURES:texturepack.erf,
+// DATA:guiexport.erf) for an archive and the folder's path for a folder,
+// seen in play 2026-10-12: no path to open an archive by. Its one open
+// file is the FileAccess at +0xB8 (the vftable below, the handle at its
+// +4), which slot 1 uses only with the source's +0x68 clear and +0x69 set.
+// The names of the two functions are ours.
+DAO_ADDRESS(kResourceSource_Lock, 5439)
+DAO_ADDRESS(kResourceSource_Unlock, 5440)
+DAO_DATA(kErfSource_Vftable, 63047)
+DAO_DATA(kDirectorySource_Vftable, 63048)
+DAO_DATA(kRimSource_Vftable, 63045)
+DAO_DATA(kFileAccess_Vftable, 62906)
 // Find's fast way, read 2026-10-03 for the model-load crash (DAOLib issue #3,
 // issue #3). On the main thread (the id in 0x00C2B590, set at
 // start-up) with the game exploring or in a fight (GameModeController's

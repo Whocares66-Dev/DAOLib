@@ -26,7 +26,9 @@ namespace dao::resources
 // @return nullopt if the game has no file by that name or cannot read it. The game may write a
 // line about it to its own log.
 //
-// Call it on the game thread, once the game has started.
+// Call it on the game thread, once the game has started. A texture (.dds) is read from its
+// archive or folder each time, since the game keeps its own form of a texture it has used and
+// not the file; every other file is copied from what the game holds.
 std::optional<std::vector<std::byte>> Read(std::wstring_view file);
 
 // Returns whether the game has a file by this name, found the same way as Read finds it. It

@@ -34,6 +34,23 @@
 // the first frame, not found once the folder was released, and found again
 // once it was added in the running game. Not seen: what a release reaches
 // of a file the game holds loaded.
+//
+// A texture's file (DAOLib #100). What Data answers for a .dds the game has
+// used is not the file: the engine hands a texture's bytes to its one
+// processor at first use, frees them and keeps the processor's buffer in
+// their place (dao/Addresses.h, "A file's bytes from its source"), and a
+// plugin reading 22 add-in textures got bytes of the files' lengths that
+// began with pointers. So a .dds is not taken from the resource: its bytes
+// are fetched from its source here, as the engine fetches them. The
+// engine's own fetch cannot be asked again, since it stores its buffer in
+// the resource, over what the game draws from. A loose file is read by the
+// path the engine makes for it; an archive's from the one file the archive
+// holds open, at the resource's offset; and both are given the source's
+// slot 6 under the source's lock, which deciphers an enciphered archive's.
+// Seen in play 2026-10-12 (examples/resources, GOG's game, at the main
+// menu): a loose texture and three from texturepack.erf and guiexport.erf
+// read whole, each the same bytes as its file read outside the game
+// (132, 87,536, 212 and 2,097,280 bytes, by a sum over them).
 #include "dao/Resources.h"
 
 #include "dao/Addresses.h"
@@ -44,8 +61,13 @@
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 
+#include <Windows.h>
+
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <cwctype>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <system_error>
@@ -63,6 +85,117 @@ constexpr std::int32_t kLoadNow = 3;
 // More than any of the game's files: a length past it is taken as a
 // misread.
 constexpr std::uint32_t kMostBytes = 512U * 1024 * 1024;
+
+// A resource's fields and its source's (dao/Addresses.h, "A file's bytes from
+// its source").
+constexpr std::size_t kResourceName = 0x00;     // the name it is found by, the engine's std::wstring
+constexpr std::size_t kResourceSource = 0x1C;   // the source it came from
+constexpr std::size_t kResourceOffset = 0x28;   // where its bytes begin in the source's file
+constexpr std::size_t kResourceFileSize = 0x2C; // and how many they are
+constexpr std::size_t kSourceClosed = 0x68;     // a source: closing, or closed
+constexpr std::size_t kSourceOpen = 0x69;       // and opened
+constexpr std::size_t kSourceFolder = 0xA4;     // a DirectorySource's folder, ending in a separator
+constexpr std::size_t kArchiveFile = 0xB8;      // an ErfSource's one open file, a FileAccess
+constexpr std::size_t kFileHandle = 0x04;       // a FileAccess's handle
+constexpr std::size_t kDecipherSlot = 6;
+// Longer than any path the game makes; a length past it is taken as a misread.
+constexpr std::uint32_t kMostCharacters = 2048;
+
+// The text of one of the engine's strings, or nothing if it does not read as one.
+std::optional<std::wstring> EngineText(std::uintptr_t at)
+{
+    const auto rep = TryRead<core::WStringRep>(at);
+    if (!rep || rep->size > kMostCharacters)
+    {
+        return std::nullopt;
+    }
+    std::wstring text(rep->size, L'\0');
+    const std::uintptr_t from = rep->capacity > core::WStringRep::kInlineCapacity
+                                    ? reinterpret_cast<std::uintptr_t>(rep->data.pointer)
+                                    : at + offsetof(core::WStringRep, data);
+    if (rep->size != 0 && !TryCopy(text.data(), from, rep->size * sizeof(wchar_t)))
+    {
+        return std::nullopt;
+    }
+    return text;
+}
+
+// Whether the game replaces this file's bytes with something of its own when it first uses
+// the file, so that the resource no longer holds the file: textures, and nothing else.
+bool IsProcessed(std::wstring_view file)
+{
+    constexpr std::wstring_view kTexture = L".dds";
+    return file.size() >= kTexture.size() &&
+           std::ranges::equal(file.substr(file.size() - kTexture.size()), kTexture,
+                              [](wchar_t a, wchar_t b) { return std::towlower(a) == b; });
+}
+
+// A loose file's bytes: the folder's path and the resource's name after it, as the engine
+// joins them to open the file itself.
+bool ReadLoose(std::uintptr_t resource, std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+{
+    const auto folder = EngineText(source + kSourceFolder);
+    const auto name = EngineText(resource + kResourceName);
+    if (!folder || !name)
+    {
+        return false;
+    }
+    std::ifstream file(std::filesystem::path(*folder + *name), std::ios::binary);
+    return file && file.seekg(offset) &&
+           file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
+// An archive's bytes, from the one file the archive holds open: read at their place in it, a
+// read that carries its own position and so shares nothing with a read the engine is making
+// of the same file on another thread (src/fix/ArchiveRead.cpp has the same read, and why).
+bool ReadArchive(std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+{
+    const std::uintptr_t file = TryRead<std::uintptr_t>(source + kArchiveFile).value_or(0);
+    if (file == 0 || TryRead<std::uintptr_t>(file).value_or(0) != Module::Address(addr::kFileAccess_Vftable))
+    {
+        return false;
+    }
+    auto *const handle = reinterpret_cast<HANDLE>(TryRead<std::uintptr_t>(file + kFileHandle).value_or(0));
+    OVERLAPPED at{};
+    at.Offset = offset;
+    DWORD read = 0;
+    return handle != INVALID_HANDLE_VALUE && handle != nullptr &&
+           ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &read, &at) != 0 && read == bytes.size();
+}
+
+// A resource's file fetched from its source beside the engine, as the engine fetches it and
+// under the source's lock as the engine does: the source open, its bytes read from where they
+// lie, and the source's own way with bytes fresh from its file run over them (slot 6: an
+// enciphered archive deciphers them, every other source leaves them as they are).
+bool Fetch(std::uintptr_t resource, std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+{
+    using LockFn = std::uint32_t(__fastcall *)(std::uintptr_t, int, std::uint32_t);
+    using UnlockFn = std::uint32_t(__fastcall *)(std::uintptr_t, int);
+    using DecipherFn = bool(__fastcall *)(std::uintptr_t, int, void *, std::uint32_t);
+    const std::uintptr_t kind = TryRead<std::uintptr_t>(source).value_or(0);
+    const bool loose = kind == Module::Address(addr::kDirectorySource_Vftable);
+    // A RIMSource is an ErfSource (its base at +0), and its file is the same kind of archive.
+    const bool archive =
+        kind == Module::Address(addr::kErfSource_Vftable) || kind == Module::Address(addr::kRimSource_Vftable);
+    const auto decipher = TryRead<std::uintptr_t>(kind + (kDecipherSlot * sizeof(std::uintptr_t)));
+    if ((!loose && !archive) || !decipher || *decipher == 0)
+    {
+        return false;
+    }
+    // Lock(0) waits and then holds, and a source's lock nests, so a caller the engine already
+    // runs under it gets it too. Unlock checks nothing: only after a Lock that answered true.
+    if (reinterpret_cast<LockFn>(Module::Address(addr::kResourceSource_Lock))(source, 0, 0) == 0)
+    {
+        return false;
+    }
+    const bool open = TryRead<std::uint8_t>(source + kSourceClosed).value_or(1) == 0 &&
+                      TryRead<std::uint8_t>(source + kSourceOpen).value_or(0) != 0;
+    const bool fetched =
+        open && (loose ? ReadLoose(resource, source, offset, bytes) : ReadArchive(source, offset, bytes)) &&
+        reinterpret_cast<DecipherFn>(*decipher)(source, 0, bytes.data(), static_cast<std::uint32_t>(bytes.size()));
+    reinterpret_cast<UnlockFn>(Module::Address(addr::kResourceSource_Unlock))(source, 0);
+    return fetched;
+}
 
 // A resource found by name, released when it goes.
 class Found
@@ -111,6 +244,30 @@ class Found
         }
         std::vector<std::byte> bytes(size);
         if (size != 0 && !TryCopy(bytes.data(), data, size))
+        {
+            return std::nullopt;
+        }
+        return bytes;
+    }
+
+    // The file's bytes fetched from the resource's source, beside the engine: for a type whose
+    // resource does not keep its file (dao/Addresses.h). The engine's own fetch would put its
+    // buffer in the resource, over what the game is drawing from.
+    [[nodiscard]] std::optional<std::vector<std::byte>> FileBytes() const
+    {
+        if (handle_ == 0)
+        {
+            return std::nullopt;
+        }
+        const std::uintptr_t source = TryRead<std::uintptr_t>(handle_ + kResourceSource).value_or(0);
+        const auto offset = TryRead<std::uint32_t>(handle_ + kResourceOffset);
+        const auto size = TryRead<std::uint32_t>(handle_ + kResourceFileSize);
+        if (source == 0 || !offset || !size || *size > kMostBytes)
+        {
+            return std::nullopt;
+        }
+        std::vector<std::byte> bytes(*size);
+        if (!Fetch(handle_, source, *offset, bytes))
         {
             return std::nullopt;
         }
@@ -249,7 +406,7 @@ std::optional<std::vector<std::byte>> Read(std::wstring_view file)
         return std::nullopt;
     }
     Found found(file);
-    return found.Bytes();
+    return IsProcessed(file) ? found.FileBytes() : found.Bytes();
 }
 
 bool Exists(std::wstring_view file)
