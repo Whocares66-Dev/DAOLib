@@ -65,10 +65,16 @@
 //   OptVSync_mc at (3, 302), and the right in OptFBFX_mc at (35, 267). On
 //   the screen the columns stand where the Game tab's do, to a pixel, and
 //   under the same two bars ("Screen", "Detail"), so a section is placed
-//   there as on the Game tab, each column in its own clip. The left
-//   column's last checkbox is low: two rows are free under it, and five
-//   under the right's. Its sliders stand 41 right of the left column's
-//   checkboxes and 37 of the right's, its dropdown (OptResolution_mc) 6.
+//   there as on the Game tab, each column in its own clip. Its sliders
+//   stand 41 right of the left column's checkboxes and 37 of the right's,
+//   its dropdown (OptResolution_mc) 6. As the game has it the tab is set
+//   wide, 99 from the dropdown to the checkbox under it and 106 from the
+//   last detail slider to its checkbox, and has five rows free, under the
+//   right column. So for a section the tab is laid out again (DAOLib #82):
+//   the left column's controls closer, the "Detail" bar, which the main
+//   timeline places, under them with the right column's four controls, and
+//   the right column, its clip empty, a section's from the bars' height to
+//   above Restore Defaults: fourteen rows, a heading and twelve.
 //
 // - The Controls tab's key list is built in script: AddHeader(text) for a
 //   section and AddKeyBinding("TogglePause") for each action, the last of
@@ -151,7 +157,8 @@ inline constexpr std::size_t kChoiceRows = 2;
 
 // A tab's free rows, in the order they are filled: down the left column
 // from under its last checkbox, then down the right, but for rows something
-// is placed in already. Each plugin links its own copy of the library and
+// is placed in already; the Video tab's are the right column's whole, as a
+// section finds the tab. Each plugin links its own copy of the library and
 // each copy patches the movie the others have patched, so a row another
 // plugin's section took is taken. Nothing if the movie's tab is not as
 // read.
@@ -166,6 +173,9 @@ std::string HeadingInstance(const Slot &slot, Tab tab = Tab::Game);
 // The movie with as many of the sections as their tabs have rows for, each
 // a heading, its checkboxes and its choices in rows one under the other in
 // one column, a section never split or begun without room for all of it.
+// With a section for the Video tab among them, that tab's own controls are
+// first put in its left column, set closer, which leaves the right column
+// to sections; once, however many copies of the library patch the movie.
 // `shown` says of each section whether it went in: on a tab the first
 // section left out for want of room keeps those after it out too, so that
 // sections stand in the order they were given; another tab's are not kept

@@ -80,6 +80,16 @@ constexpr std::uint16_t kSlider = 171;
 constexpr std::uint16_t kPicker = 219;
 constexpr std::uint16_t kVideoLeft = 314;
 constexpr std::uint16_t kVideoRight = 315;
+constexpr std::uint16_t kVideoTab = 316;
+constexpr std::uint16_t kDetailText = 98;
+constexpr std::uint16_t kDetailBar = 310;
+constexpr std::uint16_t kGammaPicture = 313;
+
+// The main timeline's placement of the Video tab's "Detail" bar.
+Bytes DetailBarAt(int x, int y)
+{
+    return DesignerPlace(56, kDetailBar, x, y, "");
+}
 
 // The options movie in small: the game's own heading (its text clip
 // exported, over a bar), the Game tab with the last checkbox of each
@@ -122,31 +132,60 @@ Bytes OptionsMovie(bool pickers = true)
     Add(gameplay, ShortTag(1, {}));
     Put(gameplay, 0, 2);
 
-    // The Video tab's two columns, a clip each: the left's last checkbox
-    // low under a slider, the right's under the slider with named stops
-    // whose symbol a choice is.
+    // The Video tab as the game has it: two columns, a clip each, in a
+    // clip of the two. The left has its dropdown deepest, a checkbox, the
+    // gamma's slider with its picture, a shape at the clip's origin, and a
+    // checkbox low under them; the right three sliders with named stops,
+    // whose symbol a choice is, and a checkbox.
     Bytes videoLeft;
     Put(videoLeft, kVideoLeft, 2);
     Put(videoLeft, 1, 2);
     Add(videoLeft, DesignerPlace(1, kCheckbox, 3, 120, "OptFullscreen_mc"));
     Add(videoLeft, DesignerPlace(7, kSlider, 44, 153, "OptGamma_mc"));
     Add(videoLeft, DesignerPlace(28, kCheckbox, 3, 302, "OptVSync_mc"));
+    Add(videoLeft, DesignerPlace(34, kGammaPicture, 0, 0, ""));
+    Add(videoLeft, DesignerPlace(35, kPicker, 9, 21, "OptResolution_mc"));
     Add(videoLeft, ShortTag(1, {}));
     Put(videoLeft, 0, 2);
+    Bytes videoRight;
+    Put(videoRight, kVideoRight, 2);
+    Put(videoRight, 1, 2);
+    Add(videoRight, DesignerPlace(1, kSlider, 72, 115, "OptAntialiasing_mc"));
+    Add(videoRight, DesignerPlace(22, kCheckbox, 35, 267, "OptFBFX_mc"));
+    Add(videoRight, DesignerPlace(28, kSlider, 72, 69, "OptGraphicsDetail_mc"));
+    Add(videoRight, DesignerPlace(49, kSlider, 72, 161, "OptTextureQuality_mc"));
+    Add(videoRight, ShortTag(1, {}));
+    Put(videoRight, 0, 2);
     Bytes video;
-    Put(video, kVideoRight, 2);
+    Put(video, kVideoTab, 2);
     Put(video, 1, 2);
-    Add(video, DesignerPlace(22, kCheckbox, 35, 267, "OptFBFX_mc"));
-    Add(video, DesignerPlace(49, kSlider, 72, 161, "OptTextureQuality_mc"));
+    Add(video, DesignerPlace(1, kVideoLeft, 0, 50, ""));
+    Add(video, DesignerPlace(37, kVideoRight, 445, 0, ""));
     Add(video, ShortTag(1, {}));
     Put(video, 0, 2);
+    // "Detail": the bar and its text, a clip the main timeline places.
+    Bytes detail;
+    Put(detail, kDetailBar, 2);
+    Put(detail, 1, 2);
+    Add(detail, DesignerPlace(1, kBar, 0, 0, ""));
+    Add(detail, DesignerPlace(2, kDetailText, 24, 13, ""));
+    Add(detail, ShortTag(1, {}));
+    Put(detail, 0, 2);
 
-    Bytes tags = Exports({{kHeading, "KeyBindingHeader"}, {kCheckbox, "checkbox_mc"}, {kHeadingText, "txt_Game"}});
+    Bytes tags = Exports({{kHeading, "KeyBindingHeader"},
+                          {kCheckbox, "checkbox_mc"},
+                          {kHeadingText, "txt_Game"},
+                          {kDetailText, "txt_Detail"}});
     Add(tags, LongTag(39, gameplay));
     Add(tags, LongTag(39, videoLeft));
+    Add(tags, LongTag(39, videoRight));
     Add(tags, LongTag(39, video));
+    Add(tags, LongTag(39, detail));
     Add(tags, LongTag(39, tab));
     Add(tags, LongTag(59, script));
+    Add(tags, DetailBarAt(524, 131));
+    Add(tags, DesignerPlace(62, kVideoTab, 82, 155, ""));
+    Add(tags, ShortTag(1, {}));
     return Movie(tags);
 }
 
@@ -691,19 +730,19 @@ TEST_CASE("a section with a choice that does not fit is left out", "[options]")
     CHECK(Shown(shown) == 0);
 }
 
-TEST_CASE("the Video tab's free rows are two under its left column and five under its right", "[options]")
+TEST_CASE("the Video tab's free rows are its right column's, from the bars' height down", "[options]")
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
     const auto slots = FreeSlots(OptionsMovie(), Tab::Video);
     REQUIRE(slots);
-    // Under OptVSync_mc at (3, 302) in the left column's clip, a row every
-    // 35 to 398; under OptFBFX_mc at (35, 267) in the right's, to 448: the
-    // left clip stands 50 lower, so both end at the Game tab's last row.
-    REQUIRE(slots->size() == 7);
-    CHECK((*slots)[0] == Slot{3, 337, 0});
-    CHECK((*slots)[1] == Slot{3, 372, 0});
-    CHECK((*slots)[2] == Slot{35, 302, 1});
-    CHECK((*slots)[6] == Slot{35, 442, 1});
+    // The tab as a section finds it, its own controls all in the left
+    // column: none there, and in the right clip a row every 35 from 30
+    // above its origin, where a heading's bar is level with "Screen"'s, to
+    // the Game tab's last row on the screen. Fourteen: a heading and twelve.
+    REQUIRE(slots->size() == 14);
+    CHECK(slots->front() == Slot{35, -30, 1});
+    CHECK((*slots)[1] == Slot{35, 5, 1});
+    CHECK(slots->back() == Slot{35, 425, 1});
     // The Game tab's are as they were, asked for by name or not.
     CHECK(FreeSlots(OptionsMovie(), Tab::Game) == FreeSlots(OptionsMovie()));
     CHECK_FALSE(FreeSlots({}, Tab::Video));
@@ -713,8 +752,8 @@ TEST_CASE("a section on the Video tab is placed in its column's own clip", "[opt
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
     const Bytes movie = OptionsMovie();
-    // A heading, a checkbox and a slider are five rows: the right column's
-    // five, though the left is asked for, which has two.
+    // A heading, a checkbox and a slider: at the right column's top, though
+    // the left is asked for, which has no row.
     Section graphics{"Graphics", {{"DAOLibSmaa", "Extra anti-aliasing", ""}}, {{"DAOLibLook", "Look", "", {"a", "b"}}}};
     graphics.tab = Tab::Video;
     graphics.column = 0;
@@ -725,7 +764,7 @@ TEST_CASE("a section on the Video tab is placed in its column's own clip", "[opt
 
     // The heading's text 24 right and 13 down of its bar, the bar 38 left
     // of the column's checkboxes and 6 down in the first row.
-    const Slot top{35, 302, 1};
+    const Slot top{35, -30, 1};
     CHECK(HeadingInstance(top, Tab::Video) != HeadingInstance(top, Tab::Game));
     const auto heading = gfx::FindInstance(*patched, HeadingInstance(top, Tab::Video));
     const auto box = gfx::FindInstance(*patched, ControlInstance("DAOLibSmaa"));
@@ -734,37 +773,131 @@ TEST_CASE("a section on the Video tab is placed in its column's own clip", "[opt
     CHECK(heading->sprite == kVideoRight);
     CHECK(heading->character == kHeadingText);
     CHECK(heading->x == 35 - 38 + 24);
-    CHECK(heading->y == 302 + 6 + 13);
+    CHECK(heading->y == -30 + 6 + 13);
     CHECK(box->sprite == kVideoRight);
     CHECK(box->character == kCheckbox);
     CHECK(box->x == 35);
-    CHECK(box->y == 372);
+    CHECK(box->y == 40);
     // The slider 37 right of the column's checkboxes, as the tab's own.
     CHECK(slider->sprite == kVideoRight);
     CHECK(slider->character == kSlider);
     CHECK(slider->x == 72);
-    CHECK(slider->y == 407);
-    // Above what the clip had, and set up with the rest.
-    CHECK(box->depth > 49);
+    CHECK(slider->y == 75);
     CHECK(Holds(*patched, gfx::Push({gfx::Text("MakeSliderPickerInit")})));
 
-    // The right column is full, the left as it was, and the Game tab
-    // untouched.
+    // Nine rows of the column are left, under the section, and the Game tab
+    // is untouched.
     const auto left = FreeSlots(*patched, Tab::Video);
     REQUIRE(left);
-    CHECK(left->size() == 2);
-    CHECK(left->back() == Slot{3, 372, 0});
+    CHECK(left->size() == 9);
+    CHECK(left->front() == Slot{35, 145, 1});
     CHECK(FreeSlots(*patched, Tab::Game) == FreeSlots(movie, Tab::Game));
+}
+
+TEST_CASE("a section on the Video tab has the tab's own controls put in its left column, closer", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    Section graphics{"Graphics", {{"DAOLibSmaa", "Extra anti-aliasing", ""}}};
+    graphics.tab = Tab::Video;
+    std::vector<bool> shown;
+    const auto patched = AddSections(movie, std::vector<Section>{graphics}, shown);
+    REQUIRE(patched);
+
+    // Each of the tab's own where the layout has it, in the left clip: its
+    // own at the depths they had, the dropdown still deepest, and the right
+    // column's at depths the left had free under the dropdown's.
+    struct Where
+    {
+        std::string_view name;
+        int x;
+        int y;
+    };
+    for (const Where &where :
+         {Where{"OptResolution_mc", 9, -5}, Where{"OptFullscreen_mc", 3, 58}, Where{"OptGamma_mc", 44, 91},
+          Where{"OptVSync_mc", 3, 184}, Where{"OptGraphicsDetail_mc", 44, 280}, Where{"OptAntialiasing_mc", 44, 321},
+          Where{"OptTextureQuality_mc", 44, 362}, Where{"OptFBFX_mc", 3, 398}})
+    {
+        CAPTURE(where.name);
+        const auto found = gfx::FindInstance(*patched, where.name);
+        REQUIRE(found);
+        CHECK(found->sprite == kVideoLeft);
+        CHECK(found->x == where.x);
+        CHECK(found->y == where.y);
+        CHECK(found->depth <= 35);
+    }
+    CHECK(gfx::FindInstance(*patched, "OptResolution_mc")->depth == 35);
+    CHECK(gfx::FindInstance(*patched, "OptVSync_mc")->depth == 28);
+    const auto left = gfx::InstancesOf(*patched, kVideoLeft);
+    // Nine things, each at a depth of its own: the eight and the gamma's
+    // picture, which went up with its slider, 62.
+    REQUIRE(left.size() == 9);
+    for (const gfx::Instance &one : left)
+    {
+        CHECK(std::ranges::count(left, one.depth, &gfx::Instance::depth) == 1);
+        if (one.character == kGammaPicture)
+        {
+            CHECK(one.y == -62);
+            CHECK(one.depth == 34);
+        }
+    }
+    // The right clip has the section alone, and the "Detail" bar is under
+    // Vertical sync on the main timeline: 15 left of the checkbox and 36
+    // under it, the left clip being at (82, 205) of the stage.
+    for (const gfx::Instance &one : gfx::InstancesOf(*patched, kVideoRight))
+    {
+        CHECK(one.character != kSlider);
+        CHECK(one.name != "OptFBFX_mc");
+    }
+    CHECK(Holds(*patched, DetailBarAt(70, 425)));
+    CHECK_FALSE(Holds(*patched, DetailBarAt(524, 131)));
+
+    // A second plugin's copy of the library finds the tab laid out, leaves
+    // it so, and puts its section under the first's.
+    Section more{"More", {{"DAOLibMore", "More", ""}}};
+    more.tab = Tab::Video;
+    const auto twice = AddSections(*patched, std::vector<Section>{more}, shown);
+    REQUIRE(twice);
+    CHECK(gfx::InstancesOf(*twice, kVideoLeft).size() == 9);
+    CHECK(gfx::FindInstance(*twice, "OptFBFX_mc")->y == 398);
+    CHECK(gfx::FindInstance(*twice, "OptFBFX_mc")->depth == gfx::FindInstance(*patched, "OptFBFX_mc")->depth);
+    const auto second = gfx::FindInstance(*twice, ControlInstance("DAOLibMore"));
+    REQUIRE(second);
+    CHECK(second->sprite == kVideoRight);
+    CHECK(second->y == 145);
+}
+
+TEST_CASE("the Video tab is as the game has it with no section for it, or where it is not as read", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    std::vector<bool> shown;
+    const auto game = AddSections(movie, std::vector<Section>{{"Game", {{"DAOLibG", "G", ""}}}}, shown);
+    REQUIRE(game);
+    CHECK(gfx::FindInstance(*game, "OptFBFX_mc")->sprite == kVideoRight);
+    CHECK(gfx::FindInstance(*game, "OptVSync_mc")->y == 302);
+    CHECK(Holds(*game, DetailBarAt(524, 131)));
+
+    // A tab without one of its controls is left alone, and its section out.
+    const auto vsync = gfx::FindInstance(movie, "OptVSync_mc");
+    REQUIRE(vsync);
+    const auto strange = gfx::RemovePlaced(movie, vsync->sprite, vsync->depth);
+    REQUIRE(strange);
+    Section graphics{"Graphics", {{"DAOLibSmaa", "Extra anti-aliasing", ""}}};
+    graphics.tab = Tab::Video;
+    CHECK_FALSE(AddSections(*strange, std::vector<Section>{graphics}, shown));
+    CHECK(shown == std::vector<bool>{false});
+    CHECK_FALSE(FreeSlots(*strange, Tab::Video));
 }
 
 TEST_CASE("a tab's sections are not kept out by another tab's want of room", "[options]")
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
     const Bytes movie = OptionsMovie();
-    // Five checkboxes are seven rows, more than any column: on the Game
-    // tab it keeps the Game section after it out, and not the Video one.
+    // Thirteen checkboxes are fifteen rows, more than any column: on the
+    // Game tab it keeps the Game section after it out, and not the Video one.
     Section huge{"Huge", {}};
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 13; ++i)
     {
         huge.toggles.push_back({"DAOLibHuge" + std::to_string(i), "H", ""});
     }

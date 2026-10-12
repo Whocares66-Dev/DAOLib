@@ -16,8 +16,10 @@ using dao::core::gfx::FindInstance;
 using dao::core::gfx::HastenFadeOut;
 using dao::core::gfx::InsertAfter;
 using dao::core::gfx::InstancesOf;
+using dao::core::gfx::MoveOnTimeline;
 using dao::core::gfx::PlaceInSprite;
 using dao::core::gfx::Placement;
+using dao::core::gfx::RemovePlaced;
 using dao::core::gfx::Statements;
 using dao::core::gfx::Unpack;
 
@@ -746,4 +748,61 @@ TEST_CASE("what is no fade out, or not understood, is not hastened", "[gfx]")
     Add(tags, Fades(47, 128, 10));
     Add(tags, Frame());
     CHECK_FALSE(HastenFadeOut(Movie(tags), 47, 2));
+}
+
+TEST_CASE("a placement is taken out of a sprite's first frame, and the sizes around it shrink", "[gfx]")
+{
+    Bytes first = Placed(9, "Kept_mc");
+    Bytes gone{std::byte{0x26}};
+    Put(gone, 7, 2);
+    Put(gone, 12, 2);
+    Add(gone, PackBits({{0, 1}, {0, 1}, {1, 5}, {0, 1}, {0, 1}}));
+    PutText(gone, "Gone_mc");
+    Add(first, ShortTag(26, gone));
+    const Bytes movie = Movie(TwoFrameSprite(5, first));
+    REQUIRE(FindInstance(movie, "Gone_mc"));
+
+    // The one at depth 7, and nothing else: the movie is the one made
+    // without it.
+    const auto without = RemovePlaced(movie, 5, 7);
+    REQUIRE(without);
+    CHECK(*without == Movie(TwoFrameSprite(5, Placed(9, "Kept_mc"))));
+    // Nothing at that depth, no such sprite, a sprite in the short form.
+    CHECK_FALSE(RemovePlaced(movie, 5, 8));
+    CHECK_FALSE(RemovePlaced(movie, 6, 7));
+    Bytes small;
+    Put(small, 5, 2);
+    Put(small, 1, 2);
+    Add(small, Placed(9, "Kept_mc"));
+    Add(small, ShortTag(1, {}));
+    Put(small, 0, 2);
+    CHECK_FALSE(RemovePlaced(Movie(ShortTag(39, small)), 5, 1));
+}
+
+TEST_CASE("what the main timeline places is put elsewhere in the bits its place has", "[gfx]")
+{
+    // A bar placed at (524, 131) in 15 bits a number, after a placement of
+    // another thing and before a move of its own, which has no place.
+    const auto timeline = [](std::uint32_t x, std::uint32_t y) {
+        Bytes bar{std::byte{0x06}};
+        Put(bar, 56, 2);
+        Put(bar, 310, 2);
+        Add(bar, PackBits({{0, 1}, {0, 1}, {15, 5}, {x * 20, 15}, {y * 20, 15}}));
+        Bytes tags = Places(1, 4);
+        Add(tags, ShortTag(26, bar));
+        Add(tags, Frame());
+        Add(tags, Fades(56, 128, 10));
+        Add(tags, Frame());
+        return Movie(tags);
+    };
+    const Bytes movie = timeline(524, 131);
+    const auto moved = MoveOnTimeline(movie, 310, 70, 427);
+    REQUIRE(moved);
+    CHECK(*moved == timeline(70, 427));
+    // 15 bits hold a place to 819 pixels and no further; a character the
+    // timeline does not place, or places with no matrix, is not moved.
+    CHECK(MoveOnTimeline(movie, 310, 819, 0));
+    CHECK_FALSE(MoveOnTimeline(movie, 310, 820, 0));
+    CHECK_FALSE(MoveOnTimeline(movie, 311, 70, 427));
+    CHECK_FALSE(MoveOnTimeline(movie, 4, 70, 427));
 }

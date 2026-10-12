@@ -26,12 +26,13 @@
 // it follows, and each change is logged. The slider was seen 2026-10-02
 // and the dropdown 2026-10-11 (dao/Options.cpp).
 //
-// A third section, "DAOLib example video", goes on the Video tab, under
-// "Frame-buffer effects" in the right column: a checkbox and a slider of
-// three stops, the five rows that column has. A fourth, "DAOLib example
-// left out", asks for the Video tab too and has no room there: it is not
-// on the screen, the log has the library's warning for it, and its state
-// is "no room".
+// A third section, "DAOLib example video", goes on the Video tab, at the
+// top of its right column: a checkbox and a slider of three stops. For it
+// the library puts the tab's own "Detail" settings under "Screen" in the
+// left column. A fourth, "DAOLib example left out", asks for the Video tab
+// too, with more sliders than the column has rows left: it is not on the
+// screen, the log has the library's warning for it, and its state is "no
+// room".
 // What it does goes to example_options.log.
 #include "dao/Options.h"
 #include "dao/Frame.h"
@@ -45,6 +46,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -181,8 +184,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     const bool singleRefused = !dao::options::AddSection(L"Refused choice", {}, {single});
     spdlog::info("the choice added: {}; one value refused: {}", choiceAdded, singleRefused);
 
-    // On the Video tab: a checkbox and a slider, the right column's five rows; and a section
-    // after it that the tab has no room for.
+    // On the Video tab: a checkbox and a slider, five of the right column's fourteen rows; and a
+    // section after it that the tab has no room for, five sliders being ten rows.
     dao::options::Choice look;
     look.name = L"ExampleLook";
     look.label = L"A choice on Video";
@@ -200,9 +203,21 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     const bool videoAdded = dao::options::AddSection(
         kVideoTitle, {Kept(L"ExampleVideo", L"A box on Video", L"A setting on the Video tab", g_video)}, {look},
         dao::options::Column::Either, dao::options::Tab::Video);
+    std::vector<dao::options::Choice> tooMany;
+    for (const wchar_t *name :
+         {L"ExampleLeftOutA", L"ExampleLeftOutB", L"ExampleLeftOutC", L"ExampleLeftOutD", L"ExampleLeftOutE"})
+    {
+        dao::options::Choice filler;
+        filler.name = name;
+        filler.label = L"Not on the screen";
+        filler.values = {L"Off", L"On"};
+        filler.get = [] { return std::int32_t{0}; };
+        filler.set = [](std::int32_t wanted) { return wanted; };
+        tooMany.push_back(std::move(filler));
+    }
     const bool leftOutAdded =
-        dao::options::AddSection(kLeftOutTitle, {Kept(L"ExampleLeftOut", L"Not on the screen", L"", g_leftOut)}, {},
-                                 dao::options::Column::Either, dao::options::Tab::Video);
+        dao::options::AddSection(kLeftOutTitle, {Kept(L"ExampleLeftOut", L"Not on the screen", L"", g_leftOut)},
+                                 std::move(tooMany), dao::options::Column::Either, dao::options::Tab::Video);
     spdlog::info("the Video tab's added: {}; the one it has no room for added: {}", videoAdded, leftOutAdded);
     dao::OnFrame(&Frame);
     return true;

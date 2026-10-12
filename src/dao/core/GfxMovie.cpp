@@ -678,9 +678,10 @@ std::optional<Bytes> Insert(std::span<const std::byte> movie, const Anchor &anch
     return out;
 }
 
-// The alpha a colour transform multiplies by, 256 for whole, and where its
-// bits are.
-struct AlphaTerm
+// A number among a tag's bit fields, and where its bits are: the alpha a
+// colour transform multiplies by (256 for whole), or a place's x or y in
+// twips.
+struct Field
 {
     std::int32_t value = 0;
     std::size_t at = 0; // the byte its first bit is in
@@ -696,8 +697,9 @@ struct Placed
     std::optional<std::uint16_t> character;
     std::int32_t x = 0; // in twips
     std::int32_t y = 0;
-    bool coloured = false;          // it has a colour transform
-    std::optional<AlphaTerm> alpha; // which multiplies the alpha
+    std::optional<std::pair<Field, Field>> place; // x and y where the tag has them, if it has a matrix
+    bool coloured = false;                        // it has a colour transform
+    std::optional<Field> alpha;                   // which multiplies the alpha
     std::string_view name;
 };
 
@@ -728,8 +730,11 @@ Placed ReadPlaced(Reader &bytes, const Tag &tag)
             bits.Signed(count);
         }
         const int count = static_cast<int>(bits.Unsigned(5));
-        placed.x = bits.Signed(count);
-        placed.y = bits.Signed(count);
+        Field x{0, bits.at, bits.bit, count};
+        placed.x = x.value = bits.Signed(count);
+        Field y{0, bits.at, bits.bit, count};
+        placed.y = y.value = bits.Signed(count);
+        placed.place = {x, y};
         at = bits.End();
     }
     if ((flags & 0x08U) != 0)
@@ -741,7 +746,7 @@ Placed ReadPlaced(Reader &bytes, const Tag &tag)
         placed.coloured = true;
         for (int i = 0; i < (adds ? 4 : 0) + (multiplies ? 4 : 0); ++i)
         {
-            AlphaTerm term{0, bits.at, bits.bit, count};
+            Field term{0, bits.at, bits.bit, count};
             term.value = bits.Signed(count);
             if (multiplies && i == 3) // the multiply terms come first: red, green, blue, alpha
             {
@@ -793,6 +798,23 @@ int BitsFor(std::int32_t value)
         ++count;
     }
     return count;
+}
+
+// A field's bits written over, most significant first.
+void WriteField(Bytes &out, const Field &field, std::int32_t value)
+{
+    std::size_t at = field.at;
+    int bit = field.bit;
+    for (int i = field.count - 1; i >= 0; --i)
+    {
+        const auto mask = static_cast<std::byte>(0x80U >> bit);
+        out[at] = ((static_cast<std::uint32_t>(value) >> i) & 1U) != 0 ? out[at] | mask : out[at] & ~mask;
+        if (++bit == 8)
+        {
+            bit = 0;
+            ++at;
+        }
+    }
 }
 
 // A PlaceObject2 of a character at a depth and a place, with a name.
@@ -1169,16 +1191,100 @@ std::optional<std::uint16_t> ExportedCharacter(std::span<const std::byte> movie,
     return std::nullopt;
 }
 
+namespace
+{
+
+// A sprite's tag among the tags from `at`, if its length is in the long
+// form, as a sprite that is to grow or shrink must have it.
+std::optional<Tag> SpriteTag(Reader &bytes, std::size_t at, std::uint16_t sprite)
+{
+    while (at < bytes.data.size())
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > bytes.data.size() - tag.body || tag.code == kEnd)
+        {
+            break;
+        }
+        if (tag.code == kDefineSprite && tag.length >= 4 && bytes.U16(tag.body) == sprite)
+        {
+            return tag.longLength != 0 ? std::optional(tag) : std::nullopt;
+        }
+        at = tag.body + tag.length;
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
 std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16_t sprite,
                                    std::span<const Placement> placements)
 {
     Reader bytes{movie};
     const auto first = Tags(bytes);
-    if (!first)
+    const auto tag = first ? SpriteTag(bytes, *first, sprite) : std::nullopt;
+    // Before the sprite's first ShowFrame: on its first frame, over what it
+    // places already.
+    const auto showFrame = tag ? FirstShowFrame(bytes, *tag) : std::nullopt;
+    if (!showFrame)
     {
         return std::nullopt;
     }
-    std::size_t at = *first;
+    Bytes tags;
+    for (const Placement &placement : placements)
+    {
+        const Bytes one = PlaceTag(placement);
+        tags.insert(tags.end(), one.begin(), one.end());
+    }
+    if (tags.size() > UINT32_MAX - bytes.U32(4))
+    {
+        return std::nullopt;
+    }
+    Bytes out(movie.begin(), movie.end());
+    out.insert(out.begin() + static_cast<std::ptrdiff_t>(*showFrame), tags.begin(), tags.end());
+    Write(out, 4, bytes.U32(4) + static_cast<std::uint32_t>(tags.size()), 4);
+    Write(out, tag->longLength, static_cast<std::uint32_t>(tag->length + tags.size()), 4);
+    return out;
+}
+
+std::optional<Bytes> RemovePlaced(std::span<const std::byte> movie, std::uint16_t sprite, std::uint16_t depth)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    const auto clip = first ? SpriteTag(bytes, *first, sprite) : std::nullopt;
+    if (!clip)
+    {
+        return std::nullopt;
+    }
+    const std::size_t end = clip->body + clip->length;
+    std::size_t at = clip->body + 4;
+    while (at < end)
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > end - tag.body || tag.code == kEnd || tag.code == kShowFrame)
+        {
+            break;
+        }
+        const std::size_t next = tag.body + tag.length;
+        if (tag.code == kPlaceObject2 && tag.length >= 3 && bytes.U16(tag.body + 1) == depth)
+        {
+            const auto size = static_cast<std::uint32_t>(next - at);
+            Bytes out(movie.begin(), movie.end());
+            out.erase(out.begin() + static_cast<std::ptrdiff_t>(at), out.begin() + static_cast<std::ptrdiff_t>(next));
+            Write(out, 4, bytes.U32(4) - size, 4);
+            Write(out, clip->longLength, static_cast<std::uint32_t>(clip->length) - size, 4);
+            return out;
+        }
+        at = next;
+    }
+    return std::nullopt;
+}
+
+std::optional<Bytes> MoveOnTimeline(std::span<const std::byte> movie, std::uint16_t character, std::int32_t x,
+                                    std::int32_t y)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    std::size_t at = first.value_or(movie.size());
     while (at < movie.size())
     {
         const Tag tag = ReadTag(bytes, at);
@@ -1186,33 +1292,28 @@ std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16
         {
             break;
         }
-        if (tag.code == kDefineSprite && tag.length >= 4 && bytes.U16(tag.body) == sprite)
-        {
-            // Before the sprite's first ShowFrame: on its first frame, over
-            // what it places already.
-            const auto showFrame = FirstShowFrame(bytes, tag);
-            if (!showFrame || tag.longLength == 0)
-            {
-                return std::nullopt;
-            }
-            const std::size_t inner = *showFrame;
-            Bytes tags;
-            for (const Placement &placement : placements)
-            {
-                const Bytes one = PlaceTag(placement);
-                tags.insert(tags.end(), one.begin(), one.end());
-            }
-            if (tags.size() > UINT32_MAX - bytes.U32(4))
-            {
-                return std::nullopt;
-            }
-            Bytes out(movie.begin(), movie.end());
-            out.insert(out.begin() + static_cast<std::ptrdiff_t>(inner), tags.begin(), tags.end());
-            Write(out, 4, bytes.U32(4) + static_cast<std::uint32_t>(tags.size()), 4);
-            Write(out, tag.longLength, static_cast<std::uint32_t>(tag.length + tags.size()), 4);
-            return out;
-        }
         at = tag.body + tag.length;
+        if (tag.code != kPlaceObject2 || tag.length < 3)
+        {
+            continue;
+        }
+        const Placed placed = ReadPlaced(bytes, tag);
+        if (!bytes.good || placed.character != character)
+        {
+            bytes.good = true; // a placement not understood is not the one
+            continue;
+        }
+        // Written where the old place is, so only a place that fits its bits.
+        const std::int32_t twipsX = x * 20;
+        const std::int32_t twipsY = y * 20;
+        if (!placed.place || std::max(BitsFor(twipsX), BitsFor(twipsY)) > placed.place->first.count)
+        {
+            break;
+        }
+        Bytes out(movie.begin(), movie.end());
+        WriteField(out, placed.place->first, twipsX);
+        WriteField(out, placed.place->second, twipsY);
+        return out;
     }
     return std::nullopt;
 }
@@ -1292,7 +1393,7 @@ struct Fade
     struct Set
     {
         std::size_t frame = 0; // of its life, from 0
-        AlphaTerm term;
+        Field term;
     };
     std::vector<std::int32_t> shown; // the alpha as each frame of its life is shown
     std::vector<Set> sets;           // each multiply term that sets it
@@ -1360,23 +1461,6 @@ bool FadesOut(const std::vector<std::int32_t> &shown)
            std::ranges::is_sorted(shown, std::ranges::greater());
 }
 
-// A term's bits written over, most significant first.
-void WriteTerm(Bytes &out, const AlphaTerm &term, std::int32_t value)
-{
-    std::size_t at = term.at;
-    int bit = term.bit;
-    for (int i = term.count - 1; i >= 0; --i)
-    {
-        const auto mask = static_cast<std::byte>(0x80U >> bit);
-        out[at] = ((static_cast<std::uint32_t>(value) >> i) & 1U) != 0 ? out[at] | mask : out[at] & ~mask;
-        if (++bit == 8)
-        {
-            bit = 0;
-            ++at;
-        }
-    }
-}
-
 } // namespace
 
 std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16_t depth, std::size_t times)
@@ -1400,7 +1484,7 @@ std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16
     {
         if (set.frame <= last) // one in a frame never shown is left
         {
-            WriteTerm(out, set.term, fade->shown[set.frame > last / times ? last : set.frame * times]);
+            WriteField(out, set.term, fade->shown[set.frame > last / times ? last : set.frame * times]);
         }
     }
     return out;

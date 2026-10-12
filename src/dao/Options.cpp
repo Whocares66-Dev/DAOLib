@@ -80,6 +80,26 @@
 // the Video tab had no room for, and for its second, six rows where the
 // Game tab's right column had three left under the loader's own section.
 //
+// The Video tab is laid out again for a section (DAOLib #82; the user,
+// 2026-10-11: "reduce the spacing, move detail to the left below screen,
+// then have graphics take the whole right column"): the game's "Detail"
+// settings go under "Screen" in the left column, everything there set as
+// close as the Game tab's, and the right column is the sections' from its
+// top, fourteen rows where there were five. dao/core/OptionsMovie.h has the
+// reading and the places. Outside the game, patch003.erf's movie through
+// the patch with a section of three checkboxes and four sliders: placed,
+// and FFDec reading the result with every control where the layout has it.
+// Seen in play the same day (examples/options, the GOG game at its main
+// menu, windowed 1600 by 1000, the tab shown through its script): "Screen"
+// over the dropdown, the checkbox, the gamma's slider and picture and
+// Vertical sync; "Detail" under them over its three sliders and
+// Frame-buffer effects, each showing its setting, the last well inside the
+// panel; the example's heading at the right column's top, level with
+// "Screen", its checkbox and slider under it, and Restore Defaults below
+// with nothing over it. The log had the warning for the example's fourth
+// section, 13 rows where the tab had 9 left. Not driven: a click on one of
+// the game's own controls where it now stands.
+//
 // A choice with ChoiceStyle::Dropdown is the game's own dropdown, as the
 // Game tab's Difficulty is (DAOLib #66, read 2026-10-11; dao/core/
 // OptionsMovie.h, dev/GUI.md). It talks as the slider does: its value asked

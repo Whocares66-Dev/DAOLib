@@ -87,7 +87,7 @@ enum class Column
 enum class Tab
 {
     Game,  // five free rows in its left column, six in its right
-    Video, // two free rows in its left column, five in its right
+    Video, // its right column, fourteen rows; the tab's own settings are then all in its left
 };
 
 // Adds a section of settings to a tab of the options screen.
@@ -103,8 +103,9 @@ enum class Tab
 //
 // Call it from DAOLib_Load, before the game first opens its options screen. A tab's free rows are
 // shared by every plugin. A heading takes two rows, a checkbox one and a choice two, and a section
-// stays in one column: the Video tab's left column holds none, and its right a heading and three
-// rows. Sections are placed in the order they were added. The first section a tab has no room for
+// stays in one column. A section on the Video tab has the tab laid out for it: the game's own
+// settings closer together and all in the left column, and the right column, a heading and twelve
+// rows, for sections. Sections are placed in the order they were added. The first section a tab has no room for
 // is left out, and so is every later section on that tab; the plugin's log has a warning for
 // each, and StateOf says NoRoom.
 bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {},

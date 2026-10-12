@@ -299,6 +299,30 @@ MUTANTS: list[Mutant] = [
         "true",
     ),
     Mutant(
+        "gfx-remove-sprite-size: a placement taken out of a sprite shrinks the sprite's tag by its size",
+        GFX,
+        "static_cast<std::uint32_t>(clip->length) - size",
+        "static_cast<std::uint32_t>(clip->length)",
+    ),
+    Mutant(
+        "gfx-move-fits: a place that does not fit the bits the old one has is refused",
+        GFX,
+        "> placed.place->first.count",
+        "> placed.place->first.count + 1",
+    ),
+    Mutant(
+        "options-video-once: a Video tab laid out by another copy of the library is left as it is",
+        OPTIONS,
+        "if (fbfx->sprite == vsync->sprite)",
+        "if (fbfx->sprite == 0)",
+    ),
+    Mutant(
+        "options-video-picture: the gamma's picture goes up with its slider",
+        OPTIONS,
+        "own.y + kGamma.y - gamma->y",
+        "own.y",
+    ),
+    Mutant(
         "gfx-fields-after-move: a field after the place is written where it moved to",
         GFX,
         "return at >= place.at ? at + added : at;",
@@ -351,8 +375,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "options-video-last-row: the Video tab's right column ends at the Game tab's last row, above the screen's buttons",
         OPTIONS,
-        '{"OptFBFX_mc", 448, 38, 37, 4}',
-        '{"OptFBFX_mc", 483, 38, 37, 4}',
+        '{"", 448, 38, 37, 4}',
+        '{"", 483, 38, 37, 4}',
     ),
     Mutant(
         "options-tabs-apart: a section left out of one tab does not keep another tab's out",

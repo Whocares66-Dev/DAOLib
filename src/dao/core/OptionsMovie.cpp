@@ -40,10 +40,44 @@ struct ColumnLayout
 using TabLayout = std::array<ColumnLayout, 2>;
 
 constexpr TabLayout kGameTab = {{{"OptLootShimmer_mc", 403, 15, 40, 4}, {"OptShowTutorials_mc", 403, 37, 40, 4}}};
-// The Video tab's columns are a clip each, the left one 50 lower than the
-// right: the lowest row is the Game tab's on the screen, and a different y
-// in each.
-constexpr TabLayout kVideoTab = {{{"OptVSync_mc", 398, 15, 41, 6}, {"OptFBFX_mc", 448, 38, 37, 4}}};
+// The Video tab as LayOutVideo leaves it: the left column full to its last
+// control, no row under it, and the right column a clip with nothing of the
+// game's, its rows from kVideoRightTop to the Game tab's last row on the
+// screen.
+constexpr TabLayout kVideoTab = {{{"OptFBFX_mc", 0, 15, 41, 6}, {"", 448, 38, 37, 4}}};
+constexpr std::int32_t kVideoRightX = 35;    // the right column's checkboxes, where the game's own stood
+constexpr std::int32_t kVideoRightTop = -30; // its first row: a heading there has its bar level with "Screen"'s
+
+// Where LayOutVideo puts one of the tab's own controls, in the left
+// column's clip.
+struct Moved
+{
+    std::string_view name;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+};
+// The left column's own, set as close as the Game tab's: the dropdown where
+// the Game tab's first stands under its bar, the checkbox 63 under it, the
+// gamma's slider 33 under that, and Vertical sync 8 under the gamma's
+// picture, which is 48 to 85 under its slider.
+constexpr std::array<Moved, 4> kVideoScreen = {
+    {{"OptResolution_mc", 9, -5}, {"OptFullscreen_mc", 3, 58}, {"OptGamma_mc", 44, 91}, {"OptVSync_mc", 3, 184}}};
+// The right column's, under them: the first slider 60 under the bar, the
+// sliders 41 apart, as the Controls tab's are, and the checkbox 36 under the
+// last, in the Game tab's lowest row on the screen, the panel's corner under
+// it.
+constexpr std::array<Moved, 4> kVideoDetail = {{{"OptGraphicsDetail_mc", 44, 280},
+                                                {"OptAntialiasing_mc", 44, 321},
+                                                {"OptTextureQuality_mc", 44, 362},
+                                                {"OptFBFX_mc", 3, 398}}};
+constexpr const Moved &kGamma = kVideoScreen[2];
+constexpr const Moved &kVSync = kVideoScreen[3];
+constexpr std::string_view kDetailText = "txt_Detail"; // the text of the bar the main timeline places
+// The left column's clip on the stage, and a bar under a checkbox of it: a
+// row and a pixel lower, as the Game tab's bars stand to the rows over them.
+constexpr std::int32_t kVideoLeftX = 82;
+constexpr std::int32_t kVideoLeftY = 205;
+constexpr std::int32_t kBarUnder = kRow + 1;
 
 constexpr const TabLayout &LayoutOf(Tab tab)
 {
@@ -165,10 +199,126 @@ Symbols SymbolsOf(std::span<const std::byte> movie)
     return {FindHeading(movie), SymbolOf(movie, kSlider), SymbolOf(movie, kPicker)};
 }
 
+const Moved *PlaceOf(std::span<const Moved> moves, std::string_view name)
+{
+    const auto found = std::ranges::find(moves, name, &Moved::name);
+    return found != moves.end() ? &*found : nullptr;
+}
+
+// The Video tab laid out for sections (the user, 2026-10-11, DAOLib #82:
+// "reduce the spacing, move detail to the left below screen, then have
+// graphics take the whole right column"): the left column's own controls
+// set closer, the "Detail" bar and the right column's controls under them,
+// and the right column's clip left with nothing of the game's. The movie as
+// it is if another copy of the library has laid it out already; nothing if
+// the tab is not as read.
+std::optional<gfx::Bytes> LayOutVideo(std::span<const std::byte> movie)
+{
+    const auto vsync = gfx::FindInstance(movie, kVSync.name);
+    const auto gamma = gfx::FindInstance(movie, kGamma.name);
+    const auto fbfx = gfx::FindInstance(movie, kVideoDetail.back().name);
+    const auto text = gfx::ExportedCharacter(movie, kDetailText);
+    const auto bar = text ? gfx::SpritePlacing(movie, *text) : std::nullopt;
+    if (!vsync || !gamma || !fbfx || !bar)
+    {
+        return std::nullopt;
+    }
+    if (fbfx->sprite == vsync->sprite)
+    {
+        return gfx::Bytes(movie.begin(), movie.end());
+    }
+    // What the left clip places again: its own higher, each at its depth, and
+    // with the gamma's slider its picture, a shape at the clip's origin drawn
+    // where it is seen. Then the right clip's, at depths the left has free:
+    // from the lowest, so under the dropdown, whose open list covers them.
+    std::vector<gfx::Placement> placements;
+    std::vector<std::pair<std::uint16_t, std::uint16_t>> taken; // a clip, and a depth of it
+    std::vector<std::uint16_t> used;
+    for (const gfx::Instance &own : gfx::InstancesOf(movie, vsync->sprite))
+    {
+        used.push_back(own.depth);
+        const Moved *to = PlaceOf(kVideoScreen, own.name);
+        const bool picture = own.name.empty() && own.x == 0 && own.y == 0;
+        if (to != nullptr || picture)
+        {
+            taken.emplace_back(own.sprite, own.depth);
+            placements.push_back({own.name, own.character, own.depth, to != nullptr ? to->x : own.x,
+                                  to != nullptr ? to->y : own.y + kGamma.y - gamma->y});
+        }
+    }
+    std::uint16_t depth = 1;
+    for (const gfx::Instance &theirs : gfx::InstancesOf(movie, fbfx->sprite))
+    {
+        if (const Moved *to = PlaceOf(kVideoDetail, theirs.name))
+        {
+            while (std::ranges::find(used, depth) != used.end())
+            {
+                ++depth;
+            }
+            used.push_back(depth);
+            taken.emplace_back(theirs.sprite, theirs.depth);
+            placements.push_back({theirs.name, theirs.character, depth, to->x, to->y});
+        }
+    }
+    const auto named = std::ranges::count_if(placements, [](const gfx::Placement &p) { return !p.name.empty(); });
+    if (static_cast<std::size_t>(named) != kVideoScreen.size() + kVideoDetail.size())
+    {
+        return std::nullopt;
+    }
+    std::optional<gfx::Bytes> out = gfx::Bytes(movie.begin(), movie.end());
+    for (const auto &[clip, at] : taken)
+    {
+        out = out ? gfx::RemovePlaced(*out, clip, at) : std::nullopt;
+    }
+    out = out ? gfx::PlaceInSprite(*out, vsync->sprite, placements) : std::nullopt;
+    return out ? gfx::MoveOnTimeline(*out, *bar, kVideoLeftX + kVSync.x - kVideoTab[0].barLeft,
+                                     kVideoLeftY + kVSync.y + kBarUnder)
+               : std::nullopt;
+}
+
+// The Video tab's columns once it is laid out: the left by its last control,
+// and the right, which has none of the game's, as the other clip of the
+// tab's, a checkbox's row above its first.
+std::optional<std::array<gfx::Instance, 2>> VideoColumns(std::span<const std::byte> movie)
+{
+    auto left = gfx::FindInstance(movie, kVideoTab[0].last);
+    const auto vsync = gfx::FindInstance(movie, kVSync.name);
+    const auto tab =
+        left && vsync && left->sprite == vsync->sprite ? gfx::SpritePlacing(movie, left->sprite) : std::nullopt;
+    if (!tab)
+    {
+        return std::nullopt;
+    }
+    for (const gfx::Instance &clip : gfx::InstancesOf(movie, *tab))
+    {
+        if (clip.character == left->sprite)
+        {
+            continue;
+        }
+        gfx::Instance right = *left; // a checkbox, as a section's are
+        right.name.clear();
+        right.sprite = clip.character;
+        right.x = kVideoRightX;
+        right.y = kVideoRightTop - kRow;
+        right.deepest = 0;
+        for (const gfx::Instance &placed : gfx::InstancesOf(movie, right.sprite))
+        {
+            right.deepest = placed.deepest;
+        }
+        return std::array{std::move(*left), std::move(right)};
+    }
+    return std::nullopt;
+}
+
 // The last of the game's controls in each column of a tab, with the clip
-// each is in. Nothing if the movie has not both.
+// each is in; the Video tab's as VideoColumns has them. Nothing if the movie
+// has not both.
 std::optional<std::array<gfx::Instance, 2>> ColumnsOf(std::span<const std::byte> movie, Tab tab)
 {
+    if (tab == Tab::Video)
+    {
+        return VideoColumns(movie);
+    }
     const TabLayout &layout = LayoutOf(tab);
     auto left = gfx::FindInstance(movie, layout[0].last);
     auto right = gfx::FindInstance(movie, layout[1].last);
@@ -216,6 +366,13 @@ std::string HeadingInstance(const Slot &slot, Tab tab)
 
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab)
 {
+    // The Video tab's rows are the ones it has once laid out.
+    const std::optional<gfx::Bytes> laid = tab == Tab::Video ? LayOutVideo(movie) : std::nullopt;
+    if (tab == Tab::Video && !laid)
+    {
+        return std::nullopt;
+    }
+    movie = laid ? std::span<const std::byte>(*laid) : movie;
     const auto columns = ColumnsOf(movie, tab);
     if (!columns)
     {
@@ -421,6 +578,11 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
     {
         return std::nullopt;
     }
+    // A section on the Video tab has the tab laid out for it first. Where
+    // that cannot be, the tab has no columns and its sections are left out.
+    const bool video = std::ranges::any_of(sections, [](const Section &s) { return s.tab == Tab::Video; });
+    const std::optional<gfx::Bytes> laid = video ? LayOutVideo(movie) : std::nullopt;
+    movie = laid ? std::span<const std::byte>(*laid) : movie;
     Additions additions;
     for (const Tab tab : {Tab::Game, Tab::Video})
     {

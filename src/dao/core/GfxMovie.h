@@ -192,7 +192,19 @@ struct Placement
 std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16_t sprite,
                                    std::span<const Placement> placements);
 
+// The movie without what a sprite places at a depth on its first frame,
+// and the sprite's tag and the header's length made to fit. Nothing if the
+// sprite places nothing there or its layout is not understood.
+std::optional<Bytes> RemovePlaced(std::span<const std::byte> movie, std::uint16_t sprite, std::uint16_t depth);
+
 // --- What a movie's timeline does
+
+// The uncompressed movie with what its main timeline first places of a
+// character put at another place, in pixels, and no byte of the movie
+// moved. Nothing if the timeline places none, or the place does not fit the
+// bits the old one has.
+std::optional<Bytes> MoveOnTimeline(std::span<const std::byte> movie, std::uint16_t character, std::int32_t x,
+                                    std::int32_t y);
 
 // The uncompressed movie with a fade out on its main timeline made `times`
 // as fast: wherever the timeline sets the alpha of what it has at `depth`,
