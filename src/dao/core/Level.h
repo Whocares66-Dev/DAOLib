@@ -54,7 +54,12 @@ struct MeshChunk
     // The lightmap's coordinates, one a vertex: the second set of texture coordinates, or the
     // only one; none if the chunk has no texture coordinates.
     std::vector<Uv> lightUv;
-    std::vector<std::uint32_t> indices; // three a triangle, into the two above
+    // The texture's coordinates, one a vertex: the first set, where the chunk's material paints
+    // it; none if the chunk has no texture coordinates, keeps its first set as other than floats
+    // or half floats, or its bytes stop short of them. A chunk with one set has it as both this
+    // and lightUv.
+    std::vector<Uv> paintUv;
+    std::vector<std::uint32_t> indices; // three a triangle, into the three above
 };
 
 // Returns the chunks of a mesh file (.msh). A chunk whose vertices or

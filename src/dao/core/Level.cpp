@@ -151,8 +151,16 @@ using Declared = std::optional<std::pair<std::size_t, std::uint32_t>>;
 // ground patch has one set and it is the lightmap's (read in Redcliffe's lak100d_14_0.msh, whose
 // tile's .rml lists the patch with a lightmap's part and atlas, 2026-10-11; with the second set
 // alone asked for, the 52 terrain levels came out with no ground). Whether a part is lightmapped
-// at all is the room's list's to say, not this.
-std::pair<Declared, Declared> DeclaredIn(const gff4::Struct &chunk)
+// at all is the room's list's to say, not this. The first set is also the material's own: where
+// its texture paints the chunk (DAOLib #96).
+struct Elements
+{
+    Declared position;
+    Declared light;
+    Declared paint;
+};
+
+Elements DeclaredIn(const gff4::Struct &chunk)
 {
     Declared position;
     Declared first;
@@ -180,7 +188,7 @@ std::pair<Declared, Declared> DeclaredIn(const gff4::Struct &chunk)
             second = {offset, type};
         }
     }
-    return {position, second ? second : first};
+    return {.position = position, .light = second ? second : first, .paint = first};
 }
 
 std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std::byte> vertices,
@@ -195,13 +203,17 @@ std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std:
     {
         return std::nullopt;
     }
-    const auto [position, light] = DeclaredIn(chunk);
+    const auto [position, light, declaredPaint] = DeclaredIn(chunk);
     if (!position)
     {
         return std::nullopt;
     }
+    // A first set that is not floats (a few chunks keep theirs as shorts) is one the chunk has
+    // not, here: its places and its lightmap's coordinates are read all the same.
+    const Declared paint = declaredPaint && FloatsOf(declaredPaint->second) >= 2 ? declaredPaint : std::nullopt;
     out.positions.resize(count);
     out.lightUv.resize(light ? count : 0);
+    out.paintUv.resize(paint ? count : 0);
     for (std::size_t i = 0; i < count; ++i)
     {
         const std::size_t at = start + (i * size);
@@ -209,6 +221,13 @@ std::optional<MeshChunk> ChunkOf(const gff4::Struct &chunk, std::span<const std:
             (light && !Element(vertices, at + light->first, light->second, 2, out.lightUv[i].data())))
         {
             return std::nullopt;
+        }
+        // The texture's coordinates stopping short cost the chunk those alone: its places and its
+        // lightmap's are whole, and a lightmap's reader has no use for the rest.
+        if (paint && !out.paintUv.empty() &&
+            !Element(vertices, at + paint->first, paint->second, 2, out.paintUv[i].data()))
+        {
+            out.paintUv.clear();
         }
     }
     const std::size_t first = chunk.Get<std::uint32_t>(kChunkStartIndex).value_or(0);

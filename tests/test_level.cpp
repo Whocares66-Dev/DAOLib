@@ -128,7 +128,7 @@ template <class T> void Append(std::vector<std::uint8_t> &to, const T &value)
 // coordinate, and the lightmap's as two half floats: (0,0), (1,0), (0,1). With
 // `sets` 1 the chunk declares the first coordinates only, (0.5, 0.5) at every
 // vertex, as a terrain's ground patch does.
-std::vector<std::byte> MeshFile(std::uint32_t sets = 2)
+std::vector<std::byte> MeshFile(std::uint32_t sets = 2, std::uint32_t firstType = 1, std::uint32_t firstAt = 12)
 {
     Builder b = Start(
         "MESH", {{"mesh",
@@ -180,7 +180,7 @@ std::vector<std::byte> MeshFile(std::uint32_t sets = 2)
     // Three declarators in place: the place, the first coordinates, the lightmap's.
     const std::size_t declarators = b.bytes.size();
     b.U32(declarators, 1 + sets);
-    const std::uint32_t rows[3][4] = {{0, 2, 0, 0}, {12, 1, 5, 0}, {20, 15, 5, 1}};
+    const std::uint32_t rows[3][4] = {{0, 2, 0, 0}, {firstAt, firstType, 5, 0}, {20, 15, 5, 1}};
     for (std::size_t i = 0; i < 1 + sets; ++i)
     {
         const std::size_t at = declarators + 4 + (24 * i);
@@ -286,6 +286,9 @@ TEST_CASE("a mesh's chunk is read: places, the lightmap's coordinates, the trian
     REQUIRE(chunks[0].lightUv.size() == 3);
     CHECK(chunks[0].lightUv[1] == level::Uv{1, 0});
     CHECK(chunks[0].lightUv[2] == level::Uv{0, 1});
+    // The first set is the texture's own, beside the lightmap's.
+    REQUIRE(chunks[0].paintUv.size() == 3);
+    CHECK(chunks[0].paintUv[1] == level::Uv{0.5F, 0.5F});
     CHECK(chunks[0].indices == std::vector<std::uint32_t>{0, 1, 2});
 
     // One set of texture coordinates is the lightmap's: a terrain's ground.
@@ -297,6 +300,34 @@ TEST_CASE("a mesh's chunk is read: places, the lightmap's coordinates, the trian
     REQUIRE(patch[0].lightUv.size() == 3);
     CHECK(patch[0].lightUv[1] == level::Uv{0.5F, 0.5F});
     CHECK(patch[0].positions[1] == Point{2, 0, 0});
+    // And the texture's too, being the only one.
+    REQUIRE(patch[0].paintUv.size() == 3);
+    CHECK(patch[0].paintUv[1] == level::Uv{0.5F, 0.5F});
+}
+
+TEST_CASE("a chunk whose first texture coordinates are not floats has none for its texture, and is read", "[level]")
+{
+    // Direct3D's D3DDECLTYPE_SHORT2 (6) for the first set; the second, the lightmap's, as before.
+    const std::vector<std::byte> bytes = MeshFile(2, 6);
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const std::vector<level::MeshChunk> chunks = level::Meshes(*file);
+    REQUIRE(chunks.size() == 1);
+    CHECK(chunks[0].paintUv.empty());
+    REQUIRE(chunks[0].lightUv.size() == 3);
+    CHECK(chunks[0].lightUv[1] == level::Uv{1, 0});
+    CHECK(chunks[0].positions[1] == Point{2, 0, 0});
+
+    // And so has one whose first set is declared where the vertices' bytes do not reach.
+    const std::vector<std::byte> shortBytes = MeshFile(2, 1, 4000);
+    const std::optional<gff4::File> shortFile = gff4::File::Parse(shortBytes);
+    REQUIRE(shortFile.has_value());
+    const std::vector<level::MeshChunk> cut = level::Meshes(*shortFile);
+    REQUIRE(cut.size() == 1);
+    CHECK(cut[0].paintUv.empty());
+    REQUIRE(cut[0].lightUv.size() == 3);
+    CHECK(cut[0].lightUv[2] == level::Uv{0, 1});
+    CHECK(cut[0].positions[2] == Point{0, 2, 0});
 }
 
 TEST_CASE("a model's mesh node has its place and turn through the nodes above it, and a layout its probe", "[level]")

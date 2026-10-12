@@ -17,6 +17,7 @@ constexpr std::uint32_t kSideMost = 16384;   // more is no texture's
 constexpr std::uint32_t kDxt1 = 0x31545844;  // "DXT1"
 constexpr std::uint32_t kDxt3 = 0x33545844;
 constexpr std::uint32_t kDxt5 = 0x35545844;
+constexpr std::uint32_t kNotFlat = 0x200 | 0x200000; // the header's second capabilities: a cube map, a volume
 
 std::array<std::uint8_t, 3> Colour565(std::uint16_t packed)
 {
@@ -128,26 +129,40 @@ bool DecodeBlocks(std::span<const std::byte> data, std::uint32_t format, Image &
     return true;
 }
 
-// A picture of 32 bits a pixel that is not packed: blue, green, red, alpha.
-bool DecodePlain(std::span<const std::byte> data, Image &image)
+// A picture that is not packed, of `bytes` a pixel: blue, green, red, and with four an
+// alpha; with three every pixel is opaque.
+bool DecodePlain(std::span<const std::byte> data, std::size_t bytes, Image &image)
 {
-    if (data.size() < image.rgba.size())
+    const std::size_t pixels = image.rgba.size() / 4;
+    if (data.size() / bytes < pixels)
     {
         return false;
     }
-    for (std::size_t at = 0; at < image.rgba.size(); at += 4)
+    for (std::size_t pixel = 0; pixel < pixels; ++pixel)
     {
-        image.rgba[at] = std::to_integer<std::uint8_t>(data[at + 2]);
-        image.rgba[at + 1] = std::to_integer<std::uint8_t>(data[at + 1]);
-        image.rgba[at + 2] = std::to_integer<std::uint8_t>(data[at]);
-        image.rgba[at + 3] = std::to_integer<std::uint8_t>(data[at + 3]);
+        const std::span<const std::byte> from = data.subspan(pixel * bytes, bytes);
+        const std::size_t to = pixel * 4;
+        image.rgba[to] = std::to_integer<std::uint8_t>(from[2]);
+        image.rgba[to + 1] = std::to_integer<std::uint8_t>(from[1]);
+        image.rgba[to + 2] = std::to_integer<std::uint8_t>(from[0]);
+        image.rgba[to + 3] = bytes == 4 ? std::to_integer<std::uint8_t>(from[3]) : std::uint8_t{255};
     }
     return true;
 }
 
+// How many bytes of the file a picture of this size is.
+std::size_t BytesOf(std::uint32_t format, std::size_t plainBytes, std::uint32_t width, std::uint32_t height)
+{
+    if (plainBytes != 0)
+    {
+        return std::size_t{width} * height * plainBytes;
+    }
+    return std::size_t{(width + 3) / 4} * ((height + 3) / 4) * (format == kDxt1 ? 8U : 16U);
+}
+
 } // namespace
 
-std::optional<Image> Decode(std::span<const std::byte> file)
+std::optional<Image> Decode(std::span<const std::byte> file, std::uint32_t sideMost)
 {
     if (file.size() < kPixels || ReadAt<std::uint32_t>(file, 0) != kMagic)
     {
@@ -156,17 +171,37 @@ std::optional<Image> Decode(std::span<const std::byte> file)
     Image image;
     image.height = ReadAt<std::uint32_t>(file, 12).value_or(0);
     image.width = ReadAt<std::uint32_t>(file, 16).value_or(0);
+    const std::uint32_t more = ReadAt<std::uint32_t>(file, 112).value_or(0);
     const std::uint32_t format = ReadAt<std::uint32_t>(file, 84).value_or(0);
     const std::uint32_t bits = ReadAt<std::uint32_t>(file, 88).value_or(0);
-    if (image.width == 0 || image.height == 0 || image.width > kSideMost || image.height > kSideMost)
+    const bool packed = format == kDxt1 || format == kDxt3 || format == kDxt5;
+    const std::size_t plainBytes = !packed && format == 0 && (bits == 24 || bits == 32) ? bits / 8 : 0;
+    if (image.width == 0 || image.height == 0 || image.width > kSideMost || image.height > kSideMost ||
+        (!packed && plainBytes == 0))
     {
         return std::nullopt;
     }
+    // Down the file's pictures to the one asked for, by the pictures its bytes hold and not by
+    // the count its header gives: the game's own beckmann.dds is marked as having smaller
+    // pictures, holds all ten of them, and counts one (DAOLib #96). A cube's or a volume's
+    // bytes after its first picture are its other faces or slices, and are not walked.
+    std::size_t at = kPixels;
+    while (sideMost != 0 && (more & kNotFlat) == 0 && std::max(image.width, image.height) > sideMost)
+    {
+        const std::size_t next = at + BytesOf(format, plainBytes, image.width, image.height);
+        const std::uint32_t width = std::max(image.width / 2, 1U);
+        const std::uint32_t height = std::max(image.height / 2, 1U);
+        if (next > file.size() || file.size() - next < BytesOf(format, plainBytes, width, height))
+        {
+            break;
+        }
+        at = next;
+        image.width = width;
+        image.height = height;
+    }
     image.rgba.resize(static_cast<std::size_t>(image.width) * image.height * 4);
-    const std::span<const std::byte> data = file.subspan(kPixels);
-    const bool packed = format == kDxt1 || format == kDxt3 || format == kDxt5;
-    const bool read =
-        packed ? DecodeBlocks(data, format, image) : format == 0 && bits == 32 && DecodePlain(data, image);
+    const std::span<const std::byte> data = file.subspan(at);
+    const bool read = packed ? DecodeBlocks(data, format, image) : DecodePlain(data, plainBytes, image);
     return read ? std::optional<Image>(std::move(image)) : std::nullopt;
 }
 

@@ -160,6 +160,102 @@ TEST_CASE("a DXT5 block gives its two colours and its alphas", "[dds]")
     CHECK_FALSE(dds::Decode(file).has_value());
 }
 
+namespace
+{
+// A DDS file's header for pictures that are not packed: so many bits a pixel, the largest
+// `side` pixels a side, and `pictures` of them.
+std::vector<std::byte> PlainDds(std::uint32_t side, std::uint32_t bits, std::uint32_t pictures)
+{
+    std::vector<std::byte> file(128);
+    const std::uint32_t magic = 0x20534444;
+    std::memcpy(file.data(), &magic, 4);
+    std::memcpy(file.data() + 12, &side, 4);
+    std::memcpy(file.data() + 16, &side, 4);
+    std::memcpy(file.data() + 28, &pictures, 4);
+    std::memcpy(file.data() + 88, &bits, 4);
+    return file;
+}
+} // namespace
+
+TEST_CASE("a picture of 24 bits is read, blue first, every pixel opaque", "[dds]")
+{
+    std::vector<std::byte> file = PlainDds(2, 24, 1);
+    // Blue, green, red: a red pixel, a green, a blue, and one of 10, 20, 30.
+    for (const int byte : {0, 0, 255, 0, 255, 0, 255, 0, 0, 30, 20, 10})
+    {
+        Put(file, static_cast<std::uint8_t>(byte));
+    }
+    const std::optional<dds::Image> image = dds::Decode(file);
+    REQUIRE(image.has_value());
+    REQUIRE(image->width == 2);
+    REQUIRE(image->height == 2);
+    CHECK(image->rgba == std::vector<std::uint8_t>{255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 10, 20, 30, 255});
+
+    // Bytes that stop short of the picture, and bits this does not read.
+    file.pop_back();
+    CHECK_FALSE(dds::Decode(file).has_value());
+    CHECK_FALSE(dds::Decode(PlainDds(2, 16, 1)).has_value());
+}
+
+TEST_CASE("a picture no larger than a side is the one given, of a file's chain", "[dds]")
+{
+    // Three pictures of 32 bits: 4 by 4 of 1s, 2 by 2 of 2s, 1 by 1 of 3s.
+    std::vector<std::byte> file = PlainDds(4, 32, 3);
+    file.insert(file.end(), 4 * 4 * 4, std::byte{1});
+    file.insert(file.end(), 2 * 2 * 4, std::byte{2});
+    file.insert(file.end(), 1 * 1 * 4, std::byte{3});
+    const auto sideAndFirst = [&](std::uint32_t sideMost) {
+        const std::optional<dds::Image> image = dds::Decode(file, sideMost);
+        REQUIRE(image.has_value());
+        REQUIRE(image->rgba.size() == std::size_t{image->width} * image->height * 4);
+        return std::pair<std::uint32_t, int>(image->width, image->rgba[0]);
+    };
+    CHECK(sideAndFirst(0) == std::pair<std::uint32_t, int>(4, 1)); // the largest, unasked
+    CHECK(sideAndFirst(4) == std::pair<std::uint32_t, int>(4, 1));
+    CHECK(sideAndFirst(3) == std::pair<std::uint32_t, int>(2, 2));
+    CHECK(sideAndFirst(2) == std::pair<std::uint32_t, int>(2, 2));
+    CHECK(sideAndFirst(1) == std::pair<std::uint32_t, int>(1, 3));
+
+    // A file with one picture has no smaller to give: its own, whatever is asked.
+    std::vector<std::byte> one = PlainDds(4, 32, 1);
+    one.insert(one.end(), 4 * 4 * 4, std::byte{7});
+    const std::optional<dds::Image> only = dds::Decode(one, 1);
+    REQUIRE(only.has_value());
+    CHECK(only->width == 4);
+
+    // A chain that says more pictures than the bytes hold: the smallest that is whole.
+    file.resize(128 + (4 * 4 * 4) + 3);
+    CHECK(dds::Decode(file, 0).has_value());
+    const std::optional<dds::Image> whole = dds::Decode(file, 2);
+    REQUIRE(whole.has_value());
+    CHECK(whole->width == 4);
+}
+
+TEST_CASE("a file's smaller pictures are found by its bytes, whatever its header counts", "[dds]")
+{
+    // The game's beckmann.dds: marked as having smaller pictures, holding them, counting one.
+    std::vector<std::byte> file = PlainDds(4, 24, 1);
+    file.insert(file.end(), 4 * 4 * 3, std::byte{1});
+    file.insert(file.end(), 2 * 2 * 3, std::byte{2});
+    file.insert(file.end(), 1 * 1 * 3, std::byte{3});
+    const std::optional<dds::Image> half = dds::Decode(file, 2);
+    REQUIRE(half.has_value());
+    CHECK(half->width == 2);
+    CHECK(half->rgba[0] == 2);
+    const std::optional<dds::Image> least = dds::Decode(file, 1);
+    REQUIRE(least.has_value());
+    CHECK(least->width == 1);
+    CHECK(least->rgba[0] == 3);
+
+    // A cube map's bytes after its first picture are its other faces: not a smaller picture.
+    const std::uint32_t cube = 0x200;
+    std::memcpy(file.data() + 112, &cube, 4);
+    const std::optional<dds::Image> face = dds::Decode(file, 1);
+    REQUIRE(face.has_value());
+    CHECK(face->width == 4);
+    CHECK(face->rgba[0] == 1);
+}
+
 TEST_CASE("a ray meets the nearest triangle, from either side, and the tree agrees with trying each", "[raycast]")
 {
     const std::vector<Triangle> box = Box(5, 4);
