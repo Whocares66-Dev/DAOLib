@@ -46,12 +46,28 @@
 // stands when the game first opens the movie, so a change of the switch
 // reaches the fade at the game's next start. A door is not this screen: it
 // is load_light (the scene LightLoading), black by design with the word
-// "Loading" after 0.85 s of the movie, and is not changed; load_fade is
-// black too. In play, 2026-10-11, GOG, windowed, the window pictured thirty
+// "Loading" after 0.85 s of the movie; load_fade is black too. In play,
+// 2026-10-11, GOG, windowed, the window pictured thirty
 // times a second: a save loaded from in the game came out of its black in
 // 0.6 s where it took 2.5 (#73), the picture and the tip as ever after; and
 // the doors between Redcliffe village and its tavern, load_light by the
 // screens shown, were black from end to end, 1.1 to 1.5 s.
+//
+// A door's black (DAOLib #83): load_light comes up black over twenty frames
+// while the area loads, which costs nothing, and once the area is there
+// fades its two black depths, 1 and 3 of the main timeline, out over the
+// twelve frames from 57, its Outro, at sixty a second: 0.2 s. They go four
+// times as fast, in three frames. What is left of a door's black is the
+// loading itself and the first frame after it: nothing is presented between
+// the loading mode's last update and that frame, so the black stands, and
+// the log says at debug how long that was. In play, 2026-10-11, GOG,
+// windowed, the same doors with nothing picturing them: into the tavern
+// 0.42 to 0.54 s from the loading mode's first update to the first frame
+// presented after it, of it 0.20 to 0.27 s the loading mode's steps and 0.23
+// to 0.29 s from its last update's start to that frame; back into the
+// village 0.9 to 1.0 s, 0.67 to 0.77 s of it the steps. Pictured, a door
+// into the tavern was black for 0.37 s and then showed the tavern at once,
+// with no dim picture between.
 //
 // In play, 2026-10-11, GOG, windowed, the sync on: with the rooms kept
 // (perf/fastload/AreaRooms.h), ten doors and swaps 4.1 s where they were

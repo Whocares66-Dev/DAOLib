@@ -695,6 +695,24 @@ TEST_CASE("a fade out sets at each frame what it set so many times further on", 
     CHECK(*atOnce == Timeline({0, 0, 0, 0, 0, 0, 0, 0}));
 }
 
+TEST_CASE("a fade out is hastened from the frame it begins at, and what is before it left", "[gfx]")
+{
+    // A black screen: it comes up over three frames, is whole for two, and
+    // goes over four, from the timeline's frame 6.
+    const Bytes movie = Timeline({64, 128, 256, 256, 256, 192, 128, 64, 0});
+    CHECK_FALSE(HastenFadeOut(movie, 47, 2)); // its whole life is no fade out
+    const auto hastened = HastenFadeOut(movie, 47, 2, 6);
+    REQUIRE(hastened);
+    CHECK(*hastened == Timeline({64, 128, 256, 256, 256, 128, 0, 0, 0}));
+    // From a frame it is still coming up in, or one past its life.
+    CHECK_FALSE(HastenFadeOut(movie, 47, 2, 2));
+    CHECK_FALSE(HastenFadeOut(movie, 47, 2, 40));
+    // A thing placed later than the first frame counts its frames from the
+    // timeline's first all the same: the caption's fade in is no fade out
+    // from any frame.
+    CHECK_FALSE(HastenFadeOut(movie, 3, 2, 6));
+}
+
 TEST_CASE("a fade that stops short of nothing ends where it ended", "[gfx]")
 {
     const auto hastened = HastenFadeOut(Timeline({200, 150, 100, 100, 100}), 47, 2);

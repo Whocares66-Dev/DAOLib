@@ -40,6 +40,13 @@ constexpr std::int64_t kLoadingWindowMs = 50;
 // picture comes out from under (read 2026-10-11 from patch003.erf's load_town.gfx with FFDec).
 constexpr const wchar_t *kMovie = L"load_town";
 constexpr std::uint16_t kCoverDepth = 47;
+// A door's screen, black: the two depths its black is at, the frame of its main timeline its fade
+// out begins at (the label Outro), and how many times as fast that goes (the same reading,
+// load_light.gfx).
+constexpr const wchar_t *kDoorMovie = L"load_light";
+constexpr std::array<std::uint16_t, 2> kDoorDepths = {1, 3};
+constexpr std::size_t kDoorOutro = 57;
+constexpr std::size_t kDoorTimes = 4;
 
 std::int64_t g_paceMs = 16;     // the task's turn; 0 for the engine's own
 std::int64_t g_intervalMs = 66; // between two presents of a loading screen; 0 for every frame
@@ -52,6 +59,14 @@ std::atomic<std::int64_t> g_lastPresent{0};
 std::atomic<std::uint32_t> g_skipped{0};
 std::atomic<std::uint32_t> g_presented{0};
 std::atomic<DWORD> g_taskThread{0}; // the thread inside the loading screen's task, or 0
+// The first frame presented after a loading screen, as ms after the loading mode's last update
+// began: kAwaited from an update until a frame is presented that is not a loading screen's, then
+// that frame's time, which a later update of the same loading takes back (its updates can be
+// further apart than a frame of it is long), and kSaid once it stands and is in the log.
+constexpr std::int64_t kSaid = -1;
+constexpr std::int64_t kAwaited = 0;
+constexpr std::int64_t kStandsAfterMs = 1000; // as long after an update as begins another loading screen
+std::atomic<std::int64_t> g_firstFrameMs{kSaid};
 
 // UpdateAndRenderLoadingGUITask::Execute: __thiscall (float seconds), `ret 4`; a turn of the
 // loading screen's own task, which sleeps, updates the loading screen, draws it and presents it,
@@ -78,6 +93,24 @@ void __cdecl EngineSleep(DWORD ms)
     g_sleep.Original()(tasks && On() ? static_cast<DWORD>(g_paceMs) : ms);
 }
 
+// A frame presented that is no loading screen's, `since` ms after the loading mode's last update
+// began. Until the first such frame the loading screen's last picture stands: a door's black.
+void NoteFrameAfter(std::int64_t since)
+{
+    const std::int64_t first = g_firstFrameMs.load(std::memory_order_relaxed);
+    if (first == kAwaited)
+    {
+        g_firstFrameMs.store(since, std::memory_order_relaxed);
+    }
+    else if (first > kAwaited && since > kStandsAfterMs)
+    {
+        g_firstFrameMs.store(kSaid, std::memory_order_relaxed);
+        spdlog::debug("fast load: the first frame after the loading screen was presented {} ms after the loading "
+                      "mode's last update began",
+                      first);
+    }
+}
+
 // Whether this present is to be skipped: it is a loading screen's, and the last frame presented
 // was presented less than the interval ago. The loading screen's own task presents it while an
 // update of the loading mode is long at its work, a save's read or an area's build, when no
@@ -89,8 +122,13 @@ bool Skip()
         return false;
     }
     const std::int64_t now = NowMs();
-    const bool loading = now - g_lastUpdate.load(std::memory_order_relaxed) <= kLoadingWindowMs ||
-                         g_taskThread.load(std::memory_order_relaxed) == GetCurrentThreadId();
+    const std::int64_t since = now - g_lastUpdate.load(std::memory_order_relaxed);
+    const bool loading =
+        since <= kLoadingWindowMs || g_taskThread.load(std::memory_order_relaxed) == GetCurrentThreadId();
+    if (!loading)
+    {
+        NoteFrameAfter(since);
+    }
     if (loading && now - g_lastPresent.load(std::memory_order_relaxed) < g_intervalMs)
     {
         g_skipped.fetch_add(1, std::memory_order_relaxed);
@@ -206,16 +244,41 @@ std::optional<std::vector<std::byte>> Fade(std::span<const std::byte> movie)
     return hastened;
 }
 
+// A door's black gone sooner once the area is there: the fade out of both of its depths.
+std::optional<std::vector<std::byte>> DoorFade(std::span<const std::byte> movie)
+{
+    if (!On())
+    {
+        return std::nullopt;
+    }
+    std::optional<std::vector<std::byte>> hastened(std::in_place, movie.begin(), movie.end());
+    for (const std::uint16_t depth : kDoorDepths)
+    {
+        hastened = hastened ? dao::core::gfx::HastenFadeOut(*hastened, depth, kDoorTimes, kDoorOutro) : std::nullopt;
+    }
+    if (hastened)
+    {
+        spdlog::info("fast load: a door's black screen goes {} times as fast once the area is there", kDoorTimes);
+    }
+    else
+    {
+        spdlog::warn("fast load: a door's screen's movie is not as read (no fade out from frame {} of its {} "
+                     "bytes), so it goes as ever",
+                     kDoorOutro, movie.size());
+    }
+    return hastened;
+}
+
 void AttachFade()
 {
     g_fadeTimes = Asked("DAOLIB_LOADING_FADE", g_fadeTimes);
     if (g_fadeTimes < 2)
     {
-        spdlog::info("fast load: DAOLIB_LOADING_FADE={}, so the loading screen comes out of its black as ever",
-                     g_fadeTimes);
+        spdlog::info("fast load: DAOLIB_LOADING_FADE={}, so the loading screens' fades are their own", g_fadeTimes);
         return;
     }
     dao::gui::OnMovieLoad(kMovie, &Fade);
+    dao::gui::OnMovieLoad(kDoorMovie, &DoorFade);
 }
 
 } // namespace
@@ -262,6 +325,7 @@ void BeforeUpdate(const Update &update)
                       presented, skipped);
     }
     g_lastUpdate.store(update.now, std::memory_order_relaxed);
+    g_firstFrameMs.store(kAwaited, std::memory_order_relaxed);
 }
 
 } // namespace perf::fastload::screen

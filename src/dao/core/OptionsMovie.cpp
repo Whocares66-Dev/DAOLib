@@ -205,6 +205,62 @@ const Moved *PlaceOf(std::span<const Moved> moves, std::string_view name)
     return found != moves.end() ? &*found : nullptr;
 }
 
+// What LayOutVideo takes out of the tab's two clips, and what the left clip
+// then places.
+struct VideoMoves
+{
+    std::vector<gfx::Placement> placements;
+    std::vector<std::pair<std::uint16_t, std::uint16_t>> taken; // a clip, and a depth of it
+    std::vector<std::uint16_t> used;                            // the left clip's depths
+};
+
+// The left clip's own, higher, each at its depth; and with the gamma's
+// slider its picture, a shape at the clip's origin drawn where it is seen,
+// which goes up as far as the slider does.
+void MoveScreen(VideoMoves &moves, std::span<const gfx::Instance> own, std::int32_t gammaUp)
+{
+    for (const gfx::Instance &one : own)
+    {
+        moves.used.push_back(one.depth);
+        const Moved *to = PlaceOf(kVideoScreen, one.name);
+        const bool picture = one.name.empty() && one.x == 0 && one.y == 0;
+        if (to != nullptr)
+        {
+            moves.placements.push_back({one.name, one.character, one.depth, to->x, to->y});
+        }
+        else if (picture)
+        {
+            moves.placements.push_back({one.name, one.character, one.depth, one.x, one.y - gammaUp});
+        }
+        if (to != nullptr || picture)
+        {
+            moves.taken.emplace_back(one.sprite, one.depth);
+        }
+    }
+}
+
+// The right clip's, into the left at depths it has free: from the lowest, so
+// under the dropdown, whose open list covers them.
+void MoveDetail(VideoMoves &moves, std::span<const gfx::Instance> theirs)
+{
+    std::uint16_t depth = 1;
+    for (const gfx::Instance &one : theirs)
+    {
+        const Moved *to = PlaceOf(kVideoDetail, one.name);
+        if (to == nullptr)
+        {
+            continue;
+        }
+        while (std::ranges::find(moves.used, depth) != moves.used.end())
+        {
+            ++depth;
+        }
+        moves.used.push_back(depth);
+        moves.taken.emplace_back(one.sprite, one.depth);
+        moves.placements.push_back({one.name, one.character, depth, to->x, to->y});
+    }
+}
+
 // The Video tab laid out for sections (the user, 2026-10-11, DAOLib #82:
 // "reduce the spacing, move detail to the left below screen, then have
 // graphics take the whole right column"): the left column's own controls
@@ -227,50 +283,20 @@ std::optional<gfx::Bytes> LayOutVideo(std::span<const std::byte> movie)
     {
         return gfx::Bytes(movie.begin(), movie.end());
     }
-    // What the left clip places again: its own higher, each at its depth, and
-    // with the gamma's slider its picture, a shape at the clip's origin drawn
-    // where it is seen. Then the right clip's, at depths the left has free:
-    // from the lowest, so under the dropdown, whose open list covers them.
-    std::vector<gfx::Placement> placements;
-    std::vector<std::pair<std::uint16_t, std::uint16_t>> taken; // a clip, and a depth of it
-    std::vector<std::uint16_t> used;
-    for (const gfx::Instance &own : gfx::InstancesOf(movie, vsync->sprite))
-    {
-        used.push_back(own.depth);
-        const Moved *to = PlaceOf(kVideoScreen, own.name);
-        const bool picture = own.name.empty() && own.x == 0 && own.y == 0;
-        if (to != nullptr || picture)
-        {
-            taken.emplace_back(own.sprite, own.depth);
-            placements.push_back({own.name, own.character, own.depth, to != nullptr ? to->x : own.x,
-                                  to != nullptr ? to->y : own.y + kGamma.y - gamma->y});
-        }
-    }
-    std::uint16_t depth = 1;
-    for (const gfx::Instance &theirs : gfx::InstancesOf(movie, fbfx->sprite))
-    {
-        if (const Moved *to = PlaceOf(kVideoDetail, theirs.name))
-        {
-            while (std::ranges::find(used, depth) != used.end())
-            {
-                ++depth;
-            }
-            used.push_back(depth);
-            taken.emplace_back(theirs.sprite, theirs.depth);
-            placements.push_back({theirs.name, theirs.character, depth, to->x, to->y});
-        }
-    }
-    const auto named = std::ranges::count_if(placements, [](const gfx::Placement &p) { return !p.name.empty(); });
+    VideoMoves moves;
+    MoveScreen(moves, gfx::InstancesOf(movie, vsync->sprite), gamma->y - kGamma.y);
+    MoveDetail(moves, gfx::InstancesOf(movie, fbfx->sprite));
+    const auto named = std::ranges::count_if(moves.placements, [](const gfx::Placement &p) { return !p.name.empty(); });
     if (static_cast<std::size_t>(named) != kVideoScreen.size() + kVideoDetail.size())
     {
         return std::nullopt;
     }
     std::optional<gfx::Bytes> out = gfx::Bytes(movie.begin(), movie.end());
-    for (const auto &[clip, at] : taken)
+    for (const auto &[clip, at] : moves.taken)
     {
         out = out ? gfx::RemovePlaced(*out, clip, at) : std::nullopt;
     }
-    out = out ? gfx::PlaceInSprite(*out, vsync->sprite, placements) : std::nullopt;
+    out = out ? gfx::PlaceInSprite(*out, vsync->sprite, moves.placements) : std::nullopt;
     return out ? gfx::MoveOnTimeline(*out, *bar, kVideoLeftX + kVSync.x - kVideoTab[0].barLeft,
                                      kVideoLeftY + kVSync.y + kBarUnder)
                : std::nullopt;

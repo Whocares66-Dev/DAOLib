@@ -241,8 +241,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "gfx-place-first-frame: placements go before the sprite's first ShowFrame",
         GFX,
-        "out.insert(out.begin() + static_cast<std::ptrdiff_t>(inner), tags.begin(), tags.end());",
-        "out.insert(out.begin() + static_cast<std::ptrdiff_t>(inner + 2), tags.begin(), tags.end());",
+        "out.insert(out.begin() + static_cast<std::ptrdiff_t>(*showFrame), tags.begin(), tags.end());",
+        "out.insert(out.begin() + static_cast<std::ptrdiff_t>(*showFrame + 2), tags.begin(), tags.end());",
     ),
     Mutant(
         "gfx-place-tag-long-form: a placement of 63 bytes or more is written in the long form",
@@ -283,8 +283,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "gfx-fade-past-end: a frame is past the fade's end only when its alpha would be read beyond it",
         GFX,
-        "set.frame > last / times ? last",
-        "set.frame >= last / times ? last",
+        "into > last / times ? last",
+        "into >= last / times ? last",
     ),
     Mutant(
         "gfx-fade-life-ends: what a depth has after the fade's thing is taken away is not the fade's",
@@ -319,8 +319,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "options-video-picture: the gamma's picture goes up with its slider",
         OPTIONS,
-        "own.y + kGamma.y - gamma->y",
-        "own.y",
+        "one.x, one.y - gammaUp}",
+        "one.x, one.y + gammaUp}",
     ),
     Mutant(
         "gfx-fields-after-move: a field after the place is written where it moved to",
@@ -349,8 +349,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "gfx-place-sprite-length: placing grows the sprite's length",
         GFX,
-        "Write(out, tag.longLength, static_cast<std::uint32_t>(tag.length + tags.size()), 4);",
-        "Write(out, tag.longLength, static_cast<std::uint32_t>(tag.length), 4);",
+        "Write(out, tag->longLength, static_cast<std::uint32_t>(tag->length + tags.size()), 4);",
+        "Write(out, tag->longLength, static_cast<std::uint32_t>(tag->length), 4);",
     ),
     Mutant(
         "gfx-unpack-short-file: a file shorter than its header says is no movie",

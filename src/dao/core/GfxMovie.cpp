@@ -1397,6 +1397,50 @@ struct Fade
     };
     std::vector<std::int32_t> shown; // the alpha as each frame of its life is shown
     std::vector<Set> sets;           // each multiply term that sets it
+    std::size_t born = 0;            // the timeline's frame, from 1, its life begins in
+};
+
+// A fade as its tags are read: what the timeline has done with the alpha so
+// far.
+struct FadeSoFar
+{
+    Fade fade;
+    std::optional<std::int32_t> alpha; // none until something is there
+    std::size_t frame = 1;             // of the timeline
+
+    // A frame is shown.
+    void Show()
+    {
+        ++frame;
+        if (alpha)
+        {
+            fade.shown.push_back(*alpha);
+        }
+    }
+
+    // A PlaceObject2 at the depth. A transform sets the alpha, whole if it has
+    // no multiply terms; with no transform a thing is placed whole and is
+    // moved as it was.
+    void Place(const Placed &placed)
+    {
+        if (!alpha && !placed.character)
+        {
+            return; // a move of nothing
+        }
+        if (!alpha)
+        {
+            fade.born = frame;
+        }
+        if (placed.alpha)
+        {
+            fade.sets.push_back({fade.shown.size(), *placed.alpha});
+            alpha = placed.alpha->value;
+        }
+        else if (placed.coloured || !alpha)
+        {
+            alpha = kWholeAlpha;
+        }
+    }
 };
 
 // The fade at a depth in the tags from `at`, or nothing for tags that are
@@ -1404,8 +1448,7 @@ struct Fade
 // PlaceObject2.
 std::optional<Fade> ReadFade(Reader &bytes, std::size_t at, std::uint16_t depth)
 {
-    Fade fade;
-    std::optional<std::int32_t> alpha; // none until something is there
+    FadeSoFar read;
     while (at < bytes.data.size())
     {
         const Tag tag = ReadTag(bytes, at);
@@ -1418,9 +1461,9 @@ std::optional<Fade> ReadFade(Reader &bytes, std::size_t at, std::uint16_t depth)
         {
             break;
         }
-        if (tag.code == kShowFrame && alpha)
+        if (tag.code == kShowFrame)
         {
-            fade.shown.push_back(*alpha);
+            read.Show();
         }
         if (DepthOf(bytes, tag) != depth)
         {
@@ -1428,7 +1471,7 @@ std::optional<Fade> ReadFade(Reader &bytes, std::size_t at, std::uint16_t depth)
         }
         if (tag.code == kRemoveObject || tag.code == kRemoveObject2)
         {
-            if (alpha)
+            if (read.alpha)
             {
                 break; // its life is over; what the depth has next is another thing
             }
@@ -1438,24 +1481,13 @@ std::optional<Fade> ReadFade(Reader &bytes, std::size_t at, std::uint16_t depth)
         {
             return std::nullopt;
         }
-        const Placed placed = ReadPlaced(bytes, tag);
-        if (!alpha && !placed.character)
-        {
-            continue; // a move of nothing
-        }
-        if (placed.alpha)
-        {
-            fade.sets.push_back({fade.shown.size(), *placed.alpha});
-        }
-        // A transform sets the alpha, whole if it has no multiply terms; with no transform a
-        // thing is placed whole and is moved as it was.
-        alpha = placed.alpha ? placed.alpha->value : placed.coloured ? kWholeAlpha : alpha.value_or(kWholeAlpha);
+        read.Place(ReadPlaced(bytes, tag));
     }
-    return bytes.good ? std::optional(fade) : std::nullopt;
+    return bytes.good ? std::optional(read.fade) : std::nullopt;
 }
 
 // Whether the alpha goes from more to less and never up, nor under nothing.
-bool FadesOut(const std::vector<std::int32_t> &shown)
+bool FadesOut(std::span<const std::int32_t> shown)
 {
     return !shown.empty() && shown.back() >= 0 && shown.front() > shown.back() &&
            std::ranges::is_sorted(shown, std::ranges::greater());
@@ -1463,7 +1495,8 @@ bool FadesOut(const std::vector<std::int32_t> &shown)
 
 } // namespace
 
-std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16_t depth, std::size_t times)
+std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16_t depth, std::size_t times,
+                                   std::size_t from)
 {
     Reader bytes{movie};
     const auto first = Tags(bytes);
@@ -1472,20 +1505,29 @@ std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16
         return std::nullopt;
     }
     const auto fade = ReadFade(bytes, *first, depth);
-    if (!fade || fade->sets.empty() || !FadesOut(fade->shown))
+    // The frame of its life the fade out begins in, and the alpha from there on.
+    const std::size_t begin = fade && from > fade->born ? from - fade->born : 0;
+    if (!fade || fade->sets.empty() || begin >= fade->shown.size())
+    {
+        return std::nullopt;
+    }
+    const std::span<const std::int32_t> fall = std::span(fade->shown).subspan(begin);
+    if (!FadesOut(fall))
     {
         return std::nullopt;
     }
     // A fade out only lowers what a frame sets, and an alpha that is not under nothing fits
     // the bits of any greater one: so each term is written where it is.
     Bytes out(movie.begin(), movie.end());
-    const std::size_t last = fade->shown.size() - 1;
+    const std::size_t last = fall.size() - 1;
     for (const Fade::Set &set : fade->sets)
     {
-        if (set.frame <= last) // one in a frame never shown is left
+        if (set.frame < begin || set.frame - begin > last)
         {
-            WriteField(out, set.term, fade->shown[set.frame > last / times ? last : set.frame * times]);
+            continue; // before the fade out, or in a frame never shown
         }
+        const std::size_t into = set.frame - begin;
+        WriteField(out, set.term, fall[into > last / times ? last : into * times]);
     }
     return out;
 }
