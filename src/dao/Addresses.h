@@ -766,6 +766,17 @@ DAO_ADDRESS(kResources_Find, 5034)
 DAO_ADDRESS(kResMan_SetUpSources, 343)
 DAO_ADDRESS(kResMan_Manager, 4667)
 DAO_ADDRESS(kResMan_AddSource, 4671)
+// A source released by the name it was added with, read 2026-10-12 (DAOLib
+// #85): __thiscall on the manager (const std::wstring *name), `ret 4`. Under
+// the manager's lock it finds the source of that name that is not already
+// going (its +0x68 clear) and takes one count from it (0x004C7A10, its one
+// caller): at none left the source is closed (its slot 7) and, with none
+// of its resources held (+0x2C), taken out of the manager's list and its
+// index (0x004C6330) and deleted by a task of the manager's own
+// (ECResMan::DeleteSourceTask). True if there was such a source. AddSource
+// and this are a pair the game uses while it runs, some fifty callers
+// each, so neither belongs to start alone. The name is ours.
+DAO_ADDRESS(kResMan_ReleaseSource, 4672)
 DAO_ADDRESS(kResources_Release, 5021)
 // A resource's bytes (dao/Resources.h), read 2026-10-02 from the movie
 // file's constructor (its call at 0x00523412) and its length (slot 6,

@@ -58,3 +58,11 @@ dao_apply_warnings(example_attack)
 
 add_daolib_plugin(example_atmosphere SOURCES atmosphere/Atmosphere.cpp)
 dao_apply_warnings(example_atmosphere)
+
+add_daolib_plugin(
+    example_resources
+    SOURCES resources/Resources.cpp
+    FILES resources/extra
+    OVERRIDE resources/example_resources_always.dds
+)
+dao_apply_warnings(example_resources)
