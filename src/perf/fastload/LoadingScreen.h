@@ -1,6 +1,6 @@
-// The loading screen takes its turns at a shorter pace, and is presented no
-// oftener than it was (DAOLib issues #71 and #73). A part of fast load
-// (perf/FastLoad.h).
+// The loading screen takes its turns at a shorter pace, is presented no
+// oftener than it was, and comes out of its black sooner (DAOLib issues #71,
+// #73 and #81). A part of fast load (perf/FastLoad.h).
 //
 // While a loading screen is up it is drawn by a task of its own, on the
 // render thread (dao/Addresses.h, "The loading screen's task"), which
@@ -32,6 +32,27 @@
 // stays as the player set it, and outside a loading screen every frame is
 // presented as ever.
 //
+// The fade: the loading screen with a picture is the movie load_town (the
+// scene Loading), thirty frames a second, and its picture is there from the
+// first frame under a black rectangle, at depth 47 of the main timeline,
+// whose alpha falls from whole to nothing over 66 frames: 2.2 s, of which a
+// loading that is over in a second shows little but black. The clock cannot hurry it: the
+// engine advances a movie two frames a turn at the most (the loop at
+// 0x0051ADA0 calls the movie's Advance with a catch-up of 1), which at the
+// pace here is four times its speed and still half a second. So the movie
+// is changed as the game opens its file (dao/Gui.h, OnMovieLoad): the cover
+// fades eight times as fast, nothing at all after nine frames, and every
+// other thing in the movie comes at its own time. It is taken as the switch
+// stands when the game first opens the movie, so a change of the switch
+// reaches the fade at the game's next start. A door is not this screen: it
+// is load_light (the scene LightLoading), black by design with the word
+// "Loading" after 0.85 s of the movie, and is not changed; load_fade is
+// black too. In play, 2026-10-11, GOG, windowed, the window pictured thirty
+// times a second: a save loaded from in the game came out of its black in
+// 0.6 s where it took 2.5 (#73), the picture and the tip as ever after; and
+// the doors between Redcliffe village and its tavern, load_light by the
+// screens shown, were black from end to end, 1.1 to 1.5 s.
+//
 // In play, 2026-10-11, GOG, windowed, the sync on: with the rooms kept
 // (perf/fastload/AreaRooms.h), ten doors and swaps 4.1 s where they were
 // 6.0 s at the engine's pace; a save's load 3.5 s at the start and 2.2 to
@@ -47,7 +68,8 @@ namespace perf::fastload::screen
 // Places the detours. DAOLIB_LOADING_PACE=<ms> sets the turn in place of 16
 // (4 to 66; 0 leaves the engine's 66), DAOLIB_LOADING_PRESENT=<ms> the
 // least time between two presents of a loading screen in place of 66 (0
-// presents every frame).
+// presents every frame), DAOLIB_LOADING_FADE=<times> how many times as fast
+// the cover fades in place of 8 (0 or 1 leaves the movie's own).
 void Attach();
 
 // The GUI's step as the switch now stands: after the player has changed it.

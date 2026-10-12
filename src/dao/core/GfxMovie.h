@@ -192,4 +192,15 @@ struct Placement
 std::optional<Bytes> PlaceInSprite(std::span<const std::byte> movie, std::uint16_t sprite,
                                    std::span<const Placement> placements);
 
+// --- What a movie's timeline does
+
+// The uncompressed movie with a fade out on its main timeline made `times`
+// as fast: wherever the timeline sets the alpha of what it has at `depth`,
+// it sets what it would have set `times` as many frames into that thing's
+// life, and past the fade's end what the fade ends at. No byte of the movie
+// moves. Nothing if the layout is not understood, if nothing there has its
+// alpha set, if the alpha does not fall or ever rises, or if `times` is
+// under 2.
+std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16_t depth, std::size_t times);
+
 } // namespace dao::core::gfx

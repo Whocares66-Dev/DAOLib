@@ -3,6 +3,7 @@
 #include "dao/core/Inflate.h"
 
 #include <algorithm>
+#include <functional>
 #include <utility>
 
 namespace dao::core::gfx
@@ -21,11 +22,17 @@ constexpr std::uint32_t kCws = 'C' | 'W' << 8 | 'S' << 16;
 
 constexpr unsigned kEnd = 0;
 constexpr unsigned kShowFrame = 1;
+constexpr unsigned kPlaceObject = 4;
+constexpr unsigned kRemoveObject = 5;
 constexpr unsigned kDoAction = 12;
 constexpr unsigned kPlaceObject2 = 26;
+constexpr unsigned kRemoveObject2 = 28;
 constexpr unsigned kDefineSprite = 39;
 constexpr unsigned kExportAssets = 56;
 constexpr unsigned kDoInitAction = 59;
+constexpr unsigned kPlaceObject3 = 70;
+
+constexpr std::int32_t kWholeAlpha = 256; // what a colour transform multiplies by to change nothing
 
 constexpr std::uint8_t kCallFunction = 0x3D;
 constexpr std::uint8_t kPop = 0x17;
@@ -671,6 +678,16 @@ std::optional<Bytes> Insert(std::span<const std::byte> movie, const Anchor &anch
     return out;
 }
 
+// The alpha a colour transform multiplies by, 256 for whole, and where its
+// bits are.
+struct AlphaTerm
+{
+    std::int32_t value = 0;
+    std::size_t at = 0; // the byte its first bit is in
+    int bit = 0;        // and which, from the most significant
+    int count = 0;      // how many bits it has
+};
+
 // What a PlaceObject2 says: flags, a depth, then by the flags a character,
 // a matrix, a colour transform, a ratio and a name.
 struct Placed
@@ -679,6 +696,8 @@ struct Placed
     std::optional<std::uint16_t> character;
     std::int32_t x = 0; // in twips
     std::int32_t y = 0;
+    bool coloured = false;          // it has a colour transform
+    std::optional<AlphaTerm> alpha; // which multiplies the alpha
     std::string_view name;
 };
 
@@ -719,9 +738,15 @@ Placed ReadPlaced(Reader &bytes, const Tag &tag)
         const bool adds = bits.Unsigned(1) != 0;
         const bool multiplies = bits.Unsigned(1) != 0;
         const int count = static_cast<int>(bits.Unsigned(4));
+        placed.coloured = true;
         for (int i = 0; i < (adds ? 4 : 0) + (multiplies ? 4 : 0); ++i)
         {
-            bits.Signed(count);
+            AlphaTerm term{0, bits.at, bits.bit, count};
+            term.value = bits.Signed(count);
+            if (multiplies && i == 3) // the multiply terms come first: red, green, blue, alpha
+            {
+                placed.alpha = term;
+            }
         }
         at = bits.End();
     }
@@ -1236,6 +1261,148 @@ std::optional<Bytes> AppendDoAction(std::span<const std::byte> movie, std::span<
     Bytes out(movie.begin(), movie.end());
     out.insert(out.begin() + static_cast<std::ptrdiff_t>(at), tag.begin(), tag.end());
     Write(out, 4, bytes.U32(4) + static_cast<std::uint32_t>(tag.size()), 4);
+    return out;
+}
+
+namespace
+{
+
+// The depth a tag puts something at or takes it from, for the tags that do.
+std::optional<std::uint16_t> DepthOf(Reader &bytes, const Tag &tag)
+{
+    switch (tag.code)
+    {
+    case kPlaceObject2:
+        return bytes.U16(tag.body + 1);
+    case kRemoveObject2:
+        return bytes.U16(tag.body);
+    case kPlaceObject:
+    case kRemoveObject:
+    case kPlaceObject3:
+        return bytes.U16(tag.body + 2);
+    default:
+        return std::nullopt;
+    }
+}
+
+// What a timeline does with the alpha of the first thing it has at a depth,
+// for as long as that is there.
+struct Fade
+{
+    struct Set
+    {
+        std::size_t frame = 0; // of its life, from 0
+        AlphaTerm term;
+    };
+    std::vector<std::int32_t> shown; // the alpha as each frame of its life is shown
+    std::vector<Set> sets;           // each multiply term that sets it
+};
+
+// The fade at a depth in the tags from `at`, or nothing for tags that are
+// not understood: cut short, or placing there by a tag other than
+// PlaceObject2.
+std::optional<Fade> ReadFade(Reader &bytes, std::size_t at, std::uint16_t depth)
+{
+    Fade fade;
+    std::optional<std::int32_t> alpha; // none until something is there
+    while (at < bytes.data.size())
+    {
+        const Tag tag = ReadTag(bytes, at);
+        if (!bytes.good || tag.length > bytes.data.size() - tag.body)
+        {
+            return std::nullopt;
+        }
+        at = tag.body + tag.length;
+        if (tag.code == kEnd)
+        {
+            break;
+        }
+        if (tag.code == kShowFrame && alpha)
+        {
+            fade.shown.push_back(*alpha);
+        }
+        if (DepthOf(bytes, tag) != depth)
+        {
+            continue;
+        }
+        if (tag.code == kRemoveObject || tag.code == kRemoveObject2)
+        {
+            if (alpha)
+            {
+                break; // its life is over; what the depth has next is another thing
+            }
+            continue;
+        }
+        if (tag.code != kPlaceObject2)
+        {
+            return std::nullopt;
+        }
+        const Placed placed = ReadPlaced(bytes, tag);
+        if (!alpha && !placed.character)
+        {
+            continue; // a move of nothing
+        }
+        if (placed.alpha)
+        {
+            fade.sets.push_back({fade.shown.size(), *placed.alpha});
+        }
+        // A transform sets the alpha, whole if it has no multiply terms; with no transform a
+        // thing is placed whole and is moved as it was.
+        alpha = placed.alpha ? placed.alpha->value : placed.coloured ? kWholeAlpha : alpha.value_or(kWholeAlpha);
+    }
+    return bytes.good ? std::optional(fade) : std::nullopt;
+}
+
+// Whether the alpha goes from more to less and never up, nor under nothing.
+bool FadesOut(const std::vector<std::int32_t> &shown)
+{
+    return !shown.empty() && shown.back() >= 0 && shown.front() > shown.back() &&
+           std::ranges::is_sorted(shown, std::ranges::greater());
+}
+
+// A term's bits written over, most significant first.
+void WriteTerm(Bytes &out, const AlphaTerm &term, std::int32_t value)
+{
+    std::size_t at = term.at;
+    int bit = term.bit;
+    for (int i = term.count - 1; i >= 0; --i)
+    {
+        const auto mask = static_cast<std::byte>(0x80U >> bit);
+        out[at] = ((static_cast<std::uint32_t>(value) >> i) & 1U) != 0 ? out[at] | mask : out[at] & ~mask;
+        if (++bit == 8)
+        {
+            bit = 0;
+            ++at;
+        }
+    }
+}
+
+} // namespace
+
+std::optional<Bytes> HastenFadeOut(std::span<const std::byte> movie, std::uint16_t depth, std::size_t times)
+{
+    Reader bytes{movie};
+    const auto first = Tags(bytes);
+    if (!first || times < 2)
+    {
+        return std::nullopt;
+    }
+    const auto fade = ReadFade(bytes, *first, depth);
+    if (!fade || fade->sets.empty() || !FadesOut(fade->shown))
+    {
+        return std::nullopt;
+    }
+    // A fade out only lowers what a frame sets, and an alpha that is not under nothing fits
+    // the bits of any greater one: so each term is written where it is.
+    Bytes out(movie.begin(), movie.end());
+    const std::size_t last = fade->shown.size() - 1;
+    for (const Fade::Set &set : fade->sets)
+    {
+        if (set.frame <= last) // one in a frame never shown is left
+        {
+            WriteTerm(out, set.term, fade->shown[set.frame > last / times ? last : set.frame * times]);
+        }
+    }
     return out;
 }
 

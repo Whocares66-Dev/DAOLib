@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,6 +13,7 @@
 using dao::core::gfx::AppendDoAction;
 using dao::core::gfx::Call;
 using dao::core::gfx::FindInstance;
+using dao::core::gfx::HastenFadeOut;
 using dao::core::gfx::InsertAfter;
 using dao::core::gfx::InstancesOf;
 using dao::core::gfx::PlaceInSprite;
@@ -602,4 +604,146 @@ TEST_CASE("a placement's colour transform is stepped over to its name", "[gfx]")
     CHECK(found->character == 9);
     CHECK(found->x == 3);
     CHECK(found->y == 4);
+}
+
+namespace
+{
+
+// A PlaceObject2 of a character at a depth, whole: no colour transform.
+Bytes Places(std::uint16_t depth, std::uint16_t character)
+{
+    Bytes body{std::byte{0x02}};
+    Put(body, depth, 2);
+    Put(body, character, 2);
+    return ShortTag(26, body);
+}
+
+// A PlaceObject2 that sets the alpha of what a depth has: a move with a
+// colour transform of four multiply terms, each of `bits` bits.
+Bytes Fades(std::uint16_t depth, std::uint32_t alpha, int bits)
+{
+    Bytes body{std::byte{0x09}};
+    Put(body, depth, 2);
+    Add(body, PackBits({{0, 1},
+                        {1, 1},
+                        {static_cast<std::uint32_t>(bits), 4},
+                        {256, bits},
+                        {256, bits},
+                        {256, bits},
+                        {alpha, bits}}));
+    return ShortTag(26, body);
+}
+
+Bytes Frame()
+{
+    return ShortTag(1, {});
+}
+
+Bytes Removes(std::uint16_t depth)
+{
+    Bytes body;
+    Put(body, depth, 2);
+    return ShortTag(28, body);
+}
+
+// A loading screen's timeline in small: a cover at depth 47 over a picture
+// at depth 1, whole on the first frame and given each of `cover` on the
+// frames after, while a caption at depth 3 comes up; then the cover taken
+// away and the depth given to another thing at half alpha. The terms are
+// 10 bits and 12 by turns, so they begin at different bits of their bytes.
+Bytes Timeline(std::initializer_list<std::uint32_t> cover)
+{
+    Bytes tags = Places(1, 4);
+    Add(tags, Places(47, 5));
+    Add(tags, Places(3, 6));
+    Add(tags, Frame());
+    std::uint32_t caption = 0;
+    int bits = 10;
+    for (const std::uint32_t alpha : cover)
+    {
+        Add(tags, Fades(47, alpha, bits));
+        Add(tags, Fades(3, caption += 20, bits));
+        Add(tags, Frame());
+        bits = bits == 10 ? 12 : 10;
+    }
+    Add(tags, Removes(47));
+    Add(tags, Places(47, 7));
+    Add(tags, Fades(47, 128, 10));
+    Add(tags, Frame());
+    return Movie(tags);
+}
+
+} // namespace
+
+TEST_CASE("a fade out sets at each frame what it set so many times further on", "[gfx]")
+{
+    const Bytes movie = Timeline({224, 192, 160, 128, 96, 64, 32, 0});
+    // Nine frames of the cover's life: the second takes the fourth's alpha,
+    // the third the seventh's, and the rest are past the end. The caption,
+    // the picture and what has the depth after the cover are as they were.
+    const auto thrice = HastenFadeOut(movie, 47, 3);
+    REQUIRE(thrice);
+    CHECK(*thrice == Timeline({160, 64, 0, 0, 0, 0, 0, 0}));
+    const auto twice = HastenFadeOut(movie, 47, 2);
+    REQUIRE(twice);
+    CHECK(*twice == Timeline({192, 128, 64, 0, 0, 0, 0, 0}));
+    // So fast that every frame is past the end.
+    const auto atOnce = HastenFadeOut(movie, 47, 1000);
+    REQUIRE(atOnce);
+    CHECK(*atOnce == Timeline({0, 0, 0, 0, 0, 0, 0, 0}));
+}
+
+TEST_CASE("a fade that stops short of nothing ends where it ended", "[gfx]")
+{
+    const auto hastened = HastenFadeOut(Timeline({200, 150, 100, 100, 100}), 47, 2);
+    REQUIRE(hastened);
+    CHECK(*hastened == Timeline({150, 100, 100, 100, 100}));
+}
+
+TEST_CASE("frames that set no alpha, or set it whole, are left as they are", "[gfx]")
+{
+    // The cover held whole for two frames, the second by a colour transform
+    // with no multiply terms, which has no alpha to write; then the fade.
+    const auto timeline = [](std::uint32_t first, std::uint32_t second, std::uint32_t third) {
+        Bytes whole{std::byte{0x09}};
+        Put(whole, 47, 2);
+        Add(whole, PackBits({{0, 1}, {0, 1}, {0, 4}}));
+        Bytes tags = Places(47, 5);
+        Add(tags, Frame());
+        Add(tags, Frame());
+        Add(tags, ShortTag(26, whole));
+        Add(tags, Frame());
+        for (const std::uint32_t alpha : {first, second, third})
+        {
+            Add(tags, Fades(47, alpha, 10));
+            Add(tags, Frame());
+        }
+        return Movie(tags);
+    };
+    const auto hastened = HastenFadeOut(timeline(200, 100, 0), 47, 2);
+    REQUIRE(hastened);
+    CHECK(*hastened == timeline(0, 0, 0));
+}
+
+TEST_CASE("what is no fade out, or not understood, is not hastened", "[gfx]")
+{
+    const Bytes movie = Timeline({224, 192, 160, 128, 96, 64, 32, 0});
+    CHECK_FALSE(HastenFadeOut(movie, 3, 3));  // the caption comes up
+    CHECK_FALSE(HastenFadeOut(movie, 1, 3));  // the picture's alpha is never set
+    CHECK_FALSE(HastenFadeOut(movie, 9, 3));  // nothing is there
+    CHECK_FALSE(HastenFadeOut(movie, 47, 1)); // as fast as it was
+    CHECK_FALSE(HastenFadeOut(movie, 47, 0));
+    CHECK_FALSE(HastenFadeOut(Timeline({128, 0, 64, 0}), 47, 2));                 // down, and up again
+    CHECK_FALSE(HastenFadeOut(Timeline({256, 256, 256}), 47, 2));                 // whole throughout
+    CHECK_FALSE(HastenFadeOut(std::span(movie).first(movie.size() - 30), 47, 3)); // cut short in the cover's life
+
+    // Placed by a PlaceObject3, whose flags are two bytes.
+    Bytes body{std::byte{0x02}, std::byte{0}};
+    Put(body, 47, 2);
+    Put(body, 5, 2);
+    Bytes tags = ShortTag(70, body);
+    Add(tags, Frame());
+    Add(tags, Fades(47, 128, 10));
+    Add(tags, Frame());
+    CHECK_FALSE(HastenFadeOut(Movie(tags), 47, 2));
 }

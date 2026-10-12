@@ -1,10 +1,12 @@
 #include "perf/fastload/LoadingScreen.h"
 
 #include "dao/Addresses.h"
+#include "dao/Gui.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
+#include "dao/core/GfxMovie.h"
 
 #include <Windows.h>
 
@@ -14,6 +16,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
+#include <span>
+#include <vector>
 
 namespace perf::fastload::screen
 {
@@ -31,8 +36,14 @@ constexpr std::int64_t kLeastPaceMs = 4;
 // should be presented when it comes.
 constexpr std::int64_t kLoadingWindowMs = 50;
 
+// The loading screen's movie, and the depth on its main timeline of the black rectangle its
+// picture comes out from under (read 2026-10-11 from patch003.erf's load_town.gfx with FFDec).
+constexpr const wchar_t *kMovie = L"load_town";
+constexpr std::uint16_t kCoverDepth = 47;
+
 std::int64_t g_paceMs = 16;     // the task's turn; 0 for the engine's own
 std::int64_t g_intervalMs = 66; // between two presents of a loading screen; 0 for every frame
+std::int64_t g_fadeTimes = 8;   // how many times as fast the cover fades; 1 for the movie's own
 std::uintptr_t g_step = 0;      // where the GUI's step is, once it is found as read
 // The update is the game's thread's; the task and its sleep are the render thread's; a present
 // is whichever thread's draws the frame.
@@ -171,10 +182,47 @@ void AttachPresents()
                  g_intervalMs);
 }
 
+// The fade: the movie's cover hastened, when the game first opens the movie's file, on the
+// thread that opens it.
+std::optional<std::vector<std::byte>> Fade(std::span<const std::byte> movie)
+{
+    if (!On())
+    {
+        spdlog::info("fast load: off as the loading screen's movie is first opened, so its fade is its own until "
+                     "the game is started again");
+        return std::nullopt;
+    }
+    auto hastened = dao::core::gfx::HastenFadeOut(movie, kCoverDepth, static_cast<std::size_t>(g_fadeTimes));
+    if (hastened)
+    {
+        spdlog::info("fast load: the loading screen comes out of its black {} times as fast", g_fadeTimes);
+    }
+    else
+    {
+        spdlog::warn("fast load: the loading screen's movie is not as read (no fade out at depth {} of its {} "
+                     "bytes), so its fade is its own",
+                     kCoverDepth, movie.size());
+    }
+    return hastened;
+}
+
+void AttachFade()
+{
+    g_fadeTimes = Asked("DAOLIB_LOADING_FADE", g_fadeTimes);
+    if (g_fadeTimes < 2)
+    {
+        spdlog::info("fast load: DAOLIB_LOADING_FADE={}, so the loading screen comes out of its black as ever",
+                     g_fadeTimes);
+        return;
+    }
+    dao::gui::OnMovieLoad(kMovie, &Fade);
+}
+
 } // namespace
 
 void Attach()
 {
+    AttachFade();
     // Which thread is in the task is what both the pace and the presents ask.
     if (!g_task.Attach(dao::addr::kLoadingGUITask_Execute, &Task))
     {

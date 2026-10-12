@@ -275,6 +275,30 @@ MUTANTS: list[Mutant] = [
         "tag.body = at + 2;",
     ),
     Mutant(
+        "gfx-fade-alpha-term: the alpha is the fourth of a colour transform's multiply terms",
+        GFX,
+        "if (multiplies && i == 3)",
+        "if (multiplies && i == 2)",
+    ),
+    Mutant(
+        "gfx-fade-past-end: a frame is past the fade's end only when its alpha would be read beyond it",
+        GFX,
+        "set.frame > last / times ? last",
+        "set.frame >= last / times ? last",
+    ),
+    Mutant(
+        "gfx-fade-life-ends: what a depth has after the fade's thing is taken away is not the fade's",
+        GFX,
+        "break; // its life is over",
+        "continue; // its life is over",
+    ),
+    Mutant(
+        "gfx-fade-out-only: an alpha that ever rises is no fade out, and its terms might not fit",
+        GFX,
+        "std::ranges::is_sorted(shown, std::ranges::greater())",
+        "true",
+    ),
+    Mutant(
         "gfx-fields-after-move: a field after the place is written where it moved to",
         GFX,
         "return at >= place.at ? at + added : at;",
