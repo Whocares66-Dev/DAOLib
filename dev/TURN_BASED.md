@@ -118,7 +118,7 @@ The toolset's database holds the source of the game's scripts (`dev/TOOLSET.md`,
 
 What `ai_main_h_2.nss` does, read for where a turn-based mode takes hold:
 
-- `AI_DetermineCombatRound` returns at once if the creature is a non-combatant, if the game is in neither combat nor explore mode (then it queues a wait), if the creature has a current command or anything queued (`GetCurrentCommand`, `GetCommandQueueSize`), or if its AI is off. Otherwise it runs the creature's tactics (`_AI_ExecuteTactic` over its package's table) and queues what they choose.
+- `AI_DetermineCombatRound` returns at once if the creature is a non-combatant, if the game is in neither combat nor explore mode (then it queues a wait), if the creature has a current command or anything queued (`GetCurrentCommand`, `GetCommandQueueSize`), or if its AI is off (`dev/AI.md` has that switch). Otherwise it runs the creature's tactics (`_AI_ExecuteTactic` over its package's table) and queues what they choose.
 - Every choice is queued through `WR_AddCommand` (27 places in `ai_main_h_2`), which checks its arguments and calls the script command `AddCommand` (`dao::script::id::AddCommand`).
 - The next choice comes when that command completes: the engine sends `EVENT_TYPE_COMMAND_COMPLETE`, and `rules_core` calls `AI_DetermineCombatRound` again.
 
