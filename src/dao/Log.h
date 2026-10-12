@@ -30,7 +30,17 @@ inline constexpr std::chrono::milliseconds kLogLatency{250};
 // Call it once per DLL; later calls do nothing. Lines are written by a background thread, so
 // logging never waits for the disk: warnings and errors are written at once, other lines within
 // kLogLatency. If a second copy of the game is started while one is running, it writes
-// <name>.<process id>.log instead.
+// <name>.<process id>.log instead (OwnsLogs).
 void OpenLog(std::string_view name);
+
+// Returns whether this game has the plain file names in LogDirectory(): <name>.log, and with it
+// any file a plugin keeps beside the logs under a name of its own.
+// @return true for the first game running in its log folder; false for one started while that
+//  one runs, which OpenLog gives <name>.<process id>.log, and which should name its own files by
+//  its process id too
+//
+// Every DLL of a game gets the same answer, at any time for as long as the game runs, before or
+// after OpenLog. A named instance has a log folder of its own and is the first game in it.
+bool OwnsLogs();
 
 } // namespace dao

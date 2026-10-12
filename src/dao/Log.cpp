@@ -85,7 +85,7 @@ spdlog::level::level_enum LevelFromEnvironment()
 // block of shared memory: every DLL of the owning game finds its own id
 // there, and a game that finds another's takes over only if that one has
 // exited. Each DLL has the library's statics of its own, so each asks.
-bool OwnsLogs()
+bool DecideOwnsLogs()
 {
     // An instance (dao/Module.h, DAOLib #67) has a log folder of its own and so a block of
     // its own: with the one block, an instance beside the first game took the names of a
@@ -273,6 +273,41 @@ class BackgroundFileSink final : public spdlog::sinks::base_sink<std::mutex>
 
 } // namespace
 
+// What DecideOwnsLogs answered this process, kept for the process's life in
+// a named block of its own (by its process id), so that every DLL of the
+// game is told the same and none is told otherwise later (DAOLib #91, for
+// Eluvian's own files beside the logs): asked again after the first game
+// has gone, DecideOwnsLogs would take the names over, and a DLL loaded then
+// would have plain names beside the others' <pid> ones. 0 not yet decided,
+// 1 the owner, 2 not.
+bool OwnsLogs()
+{
+    static const bool owns = [] {
+        const std::wstring block = L"Local\\DAOLib.LogOwner.Process." + std::to_wstring(GetCurrentProcessId());
+        HANDLE mapping =
+            CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(LONG), block.c_str());
+        auto *answer =
+            mapping != nullptr
+                ? static_cast<LONG volatile *>(MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(LONG)))
+                : nullptr;
+        if (answer == nullptr)
+        {
+            return DecideOwnsLogs();
+        }
+        // The mapping and its view stay open for the game's life, as the
+        // owner's block does.
+        LONG decided = *answer;
+        if (decided == 0)
+        {
+            const LONG mine = DecideOwnsLogs() ? 1 : 2;
+            decided = InterlockedCompareExchange(answer, mine, 0);
+            decided = decided == 0 ? mine : decided;
+        }
+        return decided == 1;
+    }();
+    return owns;
+}
+
 void OpenLog(std::string_view name)
 {
     static bool opened = false;
@@ -285,7 +320,7 @@ void OpenLog(std::string_view name)
     {
         const auto directory = LogDirectory();
         std::filesystem::create_directories(directory);
-        const bool owner = OwnsLogs();
+        const bool owner = dao::OwnsLogs();
         const std::string stem =
             owner ? std::string(name) : std::string(name) + "." + std::to_string(GetCurrentProcessId());
         const auto file = directory / (stem + ".log");

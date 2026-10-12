@@ -422,6 +422,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         spdlog::warn("DAOLIB_PROBE_CRASH_TEST is set: the first SetPaused will crash the game on purpose{}",
                      g_crashTest == CrashTest::kFullThenCrash ? ", with the address space filled first" : "");
     }
+    spdlog::info("this game has the plain names in its log folder: {}", dao::OwnsLogs());
     // No game object exists yet: the app is made on first use, after this.
     spdlog::info("CClientExoApp at load: {}", static_cast<void *>(dao::CClientExoApp::Get()));
 
