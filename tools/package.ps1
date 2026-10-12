@@ -17,14 +17,21 @@
 
     The version is the project's (CMakeLists.txt). Nothing is copied into the game.
 
+    -Trial names a zip that is not a release: one given to a player to try what is on
+    master between releases. It is dist\DAOLib-<version>-<trial>.zip, beside the
+    release's own and not over it, and its README says which commit it is.
+
 .EXAMPLE
     .\tools\package.ps1                 # from build\release
     .\tools\package.ps1 -Preset debug   # a debug build's, for a trial
+    .\tools\package.ps1 -Trial dinput8  # dist\DAOLib-<version>-dinput8.zip, not a release
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('debug', 'release')]
-    [string] $Preset = 'release'
+    [string] $Preset = 'release',
+    [ValidatePattern('^[A-Za-z0-9._-]*$')]
+    [string] $Trial
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +64,11 @@ $cmake = Get-Content -Raw (Join-Path $repo 'CMakeLists.txt')
 if ($cmake -notmatch 'project\(DAOLib VERSION (\S+)') { throw 'No version in CMakeLists.txt' }
 $version = $Matches[1]
 $name = "DAOLib-$version"
+$title = "DAOLib $version"
+if ($Trial) {
+    $name += "-$Trial"
+    $title += ", a trial build ($Trial, commit $(git -C $repo rev-parse --short HEAD)), not a release"
+}
 
 # The address library has releases of its own, the same files in a zip of their own, so
 # the README says which these are. At no tag they are a commit's, which a trial may be
@@ -83,7 +95,7 @@ Copy-Item -Force $builtPdb $binShip
 foreach ($file in $addressFiles) { Copy-Item -Force $file.FullName $addresses }
 
 $readme = @"
-DAOLib $version
+$title
 A plugin loader and library for Dragon Age: Origins (1.05, the GOG, Steam and EA builds).
 https://github.com/Whocares66-Dev/DAOLib (GPLv3)
 
@@ -92,6 +104,10 @@ Installing
   dinput8.dll goes beside DAOrigins.exe, and the address files into bin_ship\daolib\addresses.
   dinput8.pdb, beside dinput8.dll, is what lets a crash log name DAOLib's own code.
   Start the game as you always do: Galaxy, Steam, the EA app or the exe itself.
+
+Coming from DAOLib 0.1.0
+  Delete bin_ship\version.dll and bin_ship\version.pdb first. The loader was version.dll
+  then and is dinput8.dll now, and with both there every mod is loaded twice.
 
 Mods for DAOLib
   Each mod is a folder of its own, extracted into bin_ship\daolib\plugins\<mod>\.
