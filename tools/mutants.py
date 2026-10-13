@@ -22,7 +22,7 @@ under build\\mutants\\wN, with a build of its own, and breaks that copy: the
 working tree is read and never written, so it can be edited while they run,
 and a run that is stopped leaves nothing broken. The copies are kept between
 runs and brought up to the tree file by file, so that only what changed is
-built again. A worker builds the debug preset's dao_tests and nothing else,
+built again. A worker builds the debug preset's dao_core_tests and nothing else,
 with the tree's own vcpkg packages, and runs it; everything runs below normal
 priority, as tools\\build.ps1 builds.
 
@@ -75,7 +75,7 @@ SKIP = {".git", "build", "game", "toolset", "__pycache__", ".ruff_cache"}
 # The debug preset's packages (spdlog, Detours, Catch2), installed once by the
 # tree's own build.
 PACKAGES = REPO / "build" / PRESET / "vcpkg_installed"
-TARGET = "dao_tests"
+TARGET = "dao_core_tests"
 # The tests take a second or two; a run past this has hung (a debug check's
 # dialog did, before tests/crt_reports.cpp sent them to stderr).
 TIMEOUT_S = 120
@@ -554,8 +554,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "stacktext-pointer: only a capacity past 7 means a heap pointer",
         STACKTEXT,
-        "if (capacity > WStringRep::kInlineCapacity)",
-        "if (capacity >= WStringRep::kInlineCapacity)",
+        "if (capacity > kWStringInlineCapacity)",
+        "if (capacity >= kWStringInlineCapacity)",
     ),
     Mutant(
         "stacktext-least: text of exactly the least length is taken",

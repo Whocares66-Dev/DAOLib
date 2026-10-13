@@ -5,9 +5,9 @@
 .DESCRIPTION
     CMakePresets.json pins CMAKE_CXX_COMPILER=cl.exe, which only exists inside the
     Visual Studio developer environment. This script locates the VS install, imports
-    the 32-bit target environment (vcvarsall.bat amd64_x86: a 64-bit compiler
-    producing x86 code, the game's architecture) into the current session, and then
-    runs CMake.
+    the target environment into the current session, and then runs CMake: 32-bit
+    (vcvarsall.bat amd64_x86: a 64-bit compiler producing x86 code, the game's
+    architecture), or 64-bit for core-x64.
 
 .PARAMETER Preset
     debug       loader (dinput8.dll), daolib, the plugins, and the tests.
@@ -20,6 +20,10 @@
                 a warning failing the build. Its own tree, so the debug tree's
                 compile database, which clang-tidy reads, never holds /analyze
                 (clang rejects it). Not for -Lint.
+    core-x64    dao/core and its tests alone, built 64-bit: the build a tool
+                that reads the game's files with no game links (DAOLib #106).
+                The first run compiles Catch2 for x64. Not for -Lint or
+                -Format, which the debug preset's tree covers.
 
 .PARAMETER Format
     After building, rewrite every source in place with its formatter: the
@@ -52,12 +56,13 @@
     .\tools\build.ps1 -Preset debug-asan -Test
     .\tools\build.ps1 -Preset debug-analyze
     .\tools\build.ps1 -Preset release
+    .\tools\build.ps1 -Preset core-x64 -Test
     .\tools\build.ps1 -Preset debug -Mutants
     .\tools\build.ps1 -Preset debug -Mutants -MutantNames msvc8-list
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('debug', 'release', 'debug-asan', 'debug-analyze')]
+    [ValidateSet('debug', 'release', 'debug-asan', 'debug-analyze', 'core-x64')]
     [string] $Preset = 'debug',
     [switch] $Test,
     [switch] $Format,
@@ -76,6 +81,12 @@ if ($Mutants -and $Preset -ne 'debug') {
 if ($Lint -and $Preset -eq 'debug-analyze') {
     throw 'clang-tidy cannot read a compile database holding /analyze; lint with -Preset debug.'
 }
+if (($Lint -or $Format) -and $Preset -eq 'core-x64') {
+    throw 'core-x64 builds dao/core alone, with no format or lint targets; format and lint with -Preset debug.'
+}
+# The compiler's target: x86 for everything that goes into the game, x64 for
+# the core alone.
+$targetArch = if ($Preset -eq 'core-x64') { 'amd64' } else { 'amd64_x86' }
 $repo = Split-Path -Parent $PSScriptRoot
 
 function Get-VcVarsAllPath {
@@ -114,9 +125,9 @@ Install the C++ workload, with Visual Studio CLOSED:
       --includeRecommended --quiet --norestart
 '@
     }
-    Show-Line "Importing developer environment from $vcvars (amd64_x86)" -Colour DarkGray
+    Show-Line "Importing developer environment from $vcvars ($targetArch)" -Colour DarkGray
     # `set` after vcvarsall dumps the whole environment; replay it into this session.
-    $output = & ${env:ComSpec} /s /c "`"$vcvars`" amd64_x86 >nul 2>&1 && set"
+    $output = & ${env:ComSpec} /s /c "`"$vcvars`" $targetArch >nul 2>&1 && set"
     foreach ($line in $output) {
         if ($line -match '^([^=]+)=(.*)$') {
             Set-Item -Path "Env:\$($Matches[1])" -Value $Matches[2] -ErrorAction SilentlyContinue

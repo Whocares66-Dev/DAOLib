@@ -53,7 +53,7 @@ The library covers the game's script commands (all 661, callable and interceptab
 
 ## Building
 
-Visual Studio 2022 with the C++ workload, [vcpkg](https://github.com/microsoft/vcpkg) with `VCPKG_ROOT` set, and Python 3. Everything is 32-bit, as the game is.
+Visual Studio 2022 with the C++ workload, [vcpkg](https://github.com/microsoft/vcpkg) with `VCPKG_ROOT` set, and Python 3. Everything that goes into the game is 32-bit, as the game is; `dao/core`, the part that reads the game's files and never the game, builds 64-bit too (`.\tools\build.ps1 -Preset core-x64 -Test`).
 
 ```powershell
 .\tools\build.ps1 -Preset debug -Test   # the loader, the library, the plugins, the tests

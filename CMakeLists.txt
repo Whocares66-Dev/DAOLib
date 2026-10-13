@@ -2,17 +2,31 @@ cmake_minimum_required(VERSION 3.21)
 
 project(DAOLib VERSION 0.1.0 LANGUAGES CXX)
 
-# Everything here targets the game's own architecture: DAOrigins.exe is a
-# 32-bit x86 executable, so the loader it imports and the plugins the loader
-# loads must be too. CMakePresets.json selects the x86 toolset and the
-# x86-windows-static-md vcpkg triplet; this is the check that a stray
-# configure from a 64-bit shell fails early with a sentence, not late with a
-# DLL the game cannot load.
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+# What goes into the game targets its architecture: DAOrigins.exe is a 32-bit
+# x86 executable, so the loader it imports and the plugins the loader loads
+# must be too. CMakePresets.json selects the x86 toolset and the
+# x86-windows-static-md vcpkg triplet for them. dao/core, the part that never
+# touches the game, builds 64-bit as well, for tools that read the game's
+# files with no game (Eluvian's ghilana, DAOLib #106): a 64-bit build is the
+# core and its tests alone, and asking it for more fails early with a
+# sentence, not late with a DLL the game cannot load.
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(DAO_CORE_ONLY_DEFAULT ON)
+else()
+    set(DAO_CORE_ONLY_DEFAULT OFF)
+endif()
+option(
+    DAO_CORE_ONLY
+    "Build dao/core and its tests alone (the only build a 64-bit one can be)"
+    ${DAO_CORE_ONLY_DEFAULT}
+)
+if(NOT DAO_CORE_ONLY AND NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(
         FATAL_ERROR
-        "DAOLib must be built for 32-bit x86 (the game's architecture); "
-        "configure with a preset from CMakePresets.json, through tools/build.ps1"
+        "The loader, daolib and the plugins must be built for 32-bit x86 "
+        "(the game's architecture); a 64-bit build is dao/core alone "
+        "(DAO_CORE_ONLY). Configure with a preset from CMakePresets.json, "
+        "through tools/build.ps1"
     )
 endif()
 
@@ -111,14 +125,66 @@ if(DAO_SANITIZE)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+# add_daolib_plugin and dao_release_symbols. A function is global once
+# defined, so a repository that adds this directory can call it afterwards.
+include(DAOLib)
+
+# ---------------------------------------------------------------------------
+# daolib_core -- dao/core: what never touches the running game, pure
+# functions over bytes and numbers. The game's files and formats, PE headers,
+# address arithmetic, name undecoration. It is what tests/ covers, it is all
+# a tool that reads the game's files with no game links, and it builds for
+# x86 and x64 alike (DAOLib #106).
+#
+# It never includes <Windows.h> (CLAUDE.md's one architectural rule), and the
+# build keeps that: _WINDOWS_ is the guard <Windows.h> opens with, so with it
+# defined the header is empty and a use of the Windows API in core fails to
+# compile.
+# ---------------------------------------------------------------------------
+add_library(
+    daolib_core
+    STATIC
+    src/dao/core/CallSite.cpp
+    src/dao/core/Conversation.cpp
+    src/dao/core/Dds.cpp
+    src/dao/core/Erf.cpp
+    src/dao/core/Exceptions.cpp
+    src/dao/core/Fingerprint.cpp
+    src/dao/core/FunctionTable.cpp
+    src/dao/core/Gff4.cpp
+    src/dao/core/GfxMovie.cpp
+    src/dao/core/Inflate.cpp
+    src/dao/core/Level.cpp
+    src/dao/core/LightProbes.cpp
+    src/dao/core/OptionsMovie.cpp
+    src/dao/core/Pe.cpp
+    src/dao/core/RayCast.cpp
+    src/dao/core/Rtti.cpp
+    src/dao/core/SaveMeta.cpp
+    src/dao/core/ScriptValue.cpp
+    src/dao/core/StackText.cpp
+    src/dao/core/TalkTable.cpp
+)
+dao_apply_warnings(daolib_core)
+dao_release_symbols(daolib_core)
+target_compile_features(daolib_core PUBLIC cxx_std_20)
+target_include_directories(daolib_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
+target_compile_definitions(daolib_core PRIVATE _WINDOWS_)
+add_library(DAOLib::core ALIAS daolib_core)
+
+if(DAO_CORE_ONLY)
+    if(DAO_BUILD_TESTS)
+        enable_testing()
+        add_subdirectory(tests)
+    endif()
+    return()
+endif()
+
 # The format and lint targets cover the top-level tree's own sources, so they
 # are the including repository's to define when DAOLib is not the top level.
 if(PROJECT_IS_TOP_LEVEL)
     include(Quality)
 endif()
-# add_daolib_plugin. A function is global once defined, so a repository that
-# adds this directory can call it afterwards.
-include(DAOLib)
 
 find_package(spdlog CONFIG REQUIRED)
 find_path(DETOURS_INCLUDE_DIRS "detours/detours.h" REQUIRED)
@@ -130,9 +196,8 @@ find_library(DETOURS_LIBRARY detours REQUIRED)
 # preferred base), the exe fingerprint every address was read from, class
 # names from the engine's RTTI, a detour wrapper, and a log per DLL.
 #
-# `dao/core` is the part that never touches the running game -- pure
-# functions over bytes and numbers -- and is what tests/ covers. The rest
-# reads process memory and is verified in play.
+# It links daolib_core, above, and adds what reads process memory, which is
+# verified in play.
 # ---------------------------------------------------------------------------
 # The address library: an ID for every function and global of the game, and
 # where each is in each build of it. daolib holds IDs (dao/Addresses.h) and
@@ -146,26 +211,6 @@ endif()
 add_library(
     daolib
     STATIC
-    src/dao/core/CallSite.cpp
-    src/dao/core/Exceptions.cpp
-    src/dao/core/Conversation.cpp
-    src/dao/core/Dds.cpp
-    src/dao/core/Erf.cpp
-    src/dao/core/Fingerprint.cpp
-    src/dao/core/FunctionTable.cpp
-    src/dao/core/Gff4.cpp
-    src/dao/core/GfxMovie.cpp
-    src/dao/core/Inflate.cpp
-    src/dao/core/Level.cpp
-    src/dao/core/LightProbes.cpp
-    src/dao/core/OptionsMovie.cpp
-    src/dao/core/Pe.cpp
-    src/dao/core/RayCast.cpp
-    src/dao/core/Rtti.cpp
-    src/dao/core/SaveMeta.cpp
-    src/dao/core/StackText.cpp
-    src/dao/core/ScriptValue.cpp
-    src/dao/core/TalkTable.cpp
     src/dao/Data.cpp
     src/dao/Dialogue.cpp
     src/dao/Journal.cpp
@@ -217,7 +262,11 @@ target_include_directories(daolib PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_include_directories(daolib SYSTEM PUBLIC ${DETOURS_INCLUDE_DIRS})
 target_link_libraries(
     daolib
-    PUBLIC spdlog::spdlog ${DETOURS_LIBRARY} DAOAddressLibrary::daoaddr
+    PUBLIC
+        daolib_core
+        spdlog::spdlog
+        ${DETOURS_LIBRARY}
+        DAOAddressLibrary::daoaddr
 )
 target_compile_definitions(
     daolib

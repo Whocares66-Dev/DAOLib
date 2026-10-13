@@ -1,12 +1,14 @@
 find_package(Catch2 3 CONFIG REQUIRED)
 
+# dao_core_tests: dao/core alone, as daolib_core is built, x86 or x64. The
+# data tables generated from the game's own (dao/generated) are core's kind:
+# headers of constants and signatures that read nothing of the process.
 add_executable(
-    dao_tests
+    dao_core_tests
     crt_reports.cpp
     test_angle.cpp
     test_code.cpp
     test_crashlog.cpp
-    test_fingerprint.cpp
     test_gff4.cpp
     test_gfxmovie.cpp
     test_heldevents.cpp
@@ -23,12 +25,25 @@ add_executable(
     test_path.cpp
     test_range.cpp
     test_relocate.cpp
-    test_saferead.cpp
     test_savemeta.cpp
     test_sky.cpp
     test_script_table.cpp
     test_talktable.cpp
 )
+dao_apply_warnings(dao_core_tests)
+target_link_libraries(dao_core_tests PRIVATE daolib_core Catch2::Catch2WithMain)
+
+include(Catch)
+catch_discover_tests(dao_core_tests)
+
+# The rest is the library over the running game: x86 only.
+if(DAO_CORE_ONLY)
+    return()
+endif()
+
+# dao_tests: what of daolib can be checked in a test process with no game,
+# the address library's files and reads that fault among it.
+add_executable(dao_tests crt_reports.cpp test_fingerprint.cpp test_saferead.cpp)
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)
 # The address library's files, as its build packs them: the tests read them
@@ -38,8 +53,6 @@ target_compile_definitions(
     PRIVATE DAO_ADDRESS_DATA_DIR="${DAOADDR_DATA_DIR}"
 )
 add_dependencies(dao_tests daoaddr_data)
-
-include(Catch)
 catch_discover_tests(dao_tests)
 
 # The Python tools' own tests (tools/test_*.py), where there is a Python.

@@ -14,6 +14,10 @@
 #include <utility>
 #include <vector>
 
+// The overlays of the engine's memory are the 32-bit process's alone
+// (Msvc8.h): a 64-bit build of the core tests has none to test.
+#if UINTPTR_MAX == UINT32_MAX
+
 using dao::core::VectorRep;
 using dao::core::WStringRep;
 
@@ -180,6 +184,22 @@ TEST_CASE("an engine map's walk finds the least of a deep right subtree", "[msvc
     CHECK(keys == std::vector<std::int32_t>{1, 2, 3, 4, 5, 6, 7});
 }
 
+TEST_CASE("a script array's elements are its payload's vector", "[arrays]")
+{
+    std::array<std::uint32_t, 2> ids{0x82, 0x6a8};
+    VectorRep<std::uint32_t> vector{0, ids.data(), ids.data() + 2, ids.data() + 2};
+    std::int32_t references = 1;
+    dao::core::ArrayRep::Payload payload{&vector, &references};
+    const dao::core::ArrayRep array{0x43, &payload};
+    REQUIRE(array.Elements().size() == 2);
+    CHECK(array.Elements()[1] == 0x6a8);
+
+    const dao::core::ArrayRep empty{0x43, nullptr};
+    CHECK(empty.Elements().empty());
+}
+
+#endif // UINTPTR_MAX == UINT32_MAX
+
 TEST_CASE("a script array's tag says what it holds", "[arrays]")
 {
     using dao::core::ArrayStructure;
@@ -194,20 +214,6 @@ TEST_CASE("a script array's tag says what it holds", "[arrays]")
     CHECK_FALSE(IsArrayTag(6));       // an object, not an array
     CHECK(ArrayStructure(0x53) == 3); // effect[]
     CHECK(ArrayStructure(0x43) == -1);
-}
-
-TEST_CASE("a script array's elements are its payload's vector", "[arrays]")
-{
-    std::array<std::uint32_t, 2> ids{0x82, 0x6a8};
-    VectorRep<std::uint32_t> vector{0, ids.data(), ids.data() + 2, ids.data() + 2};
-    std::int32_t references = 1;
-    dao::core::ArrayRep::Payload payload{&vector, &references};
-    const dao::core::ArrayRep array{0x43, &payload};
-    REQUIRE(array.Elements().size() == 2);
-    CHECK(array.Elements()[1] == 0x6a8);
-
-    const dao::core::ArrayRep empty{0x43, nullptr};
-    CHECK(empty.Elements().empty());
 }
 
 TEST_CASE("the VM stack's n-th value counts down from the top", "[vmstack]")

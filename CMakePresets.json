@@ -17,7 +17,7 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x86-windows-static-md",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
-                "VCPKG_MANIFEST_FEATURES": "tests",
+                "VCPKG_MANIFEST_FEATURES": "game;tests",
                 "DAO_SANITIZE": "OFF",
                 "DAO_ANALYZE": "OFF"
             }
@@ -45,18 +45,34 @@
             "inherits": ["debug"],
             "displayName": "Debug under MSVC's static analyser (/analyze)",
             "cacheVariables": { "DAO_ANALYZE": "ON" }
+        },
+        {
+            "name": "core-x64",
+            "inherits": ["base"],
+            "displayName": "Debug, x64: dao/core and its tests alone, for tools that read the game's files",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+                "VCPKG_MANIFEST_FEATURES": "tests"
+            }
         }
     ],
     "buildPresets": [
         { "name": "debug", "configurePreset": "debug" },
         { "name": "release", "configurePreset": "release" },
         { "name": "debug-asan", "configurePreset": "debug-asan" },
-        { "name": "debug-analyze", "configurePreset": "debug-analyze" }
+        { "name": "debug-analyze", "configurePreset": "debug-analyze" },
+        { "name": "core-x64", "configurePreset": "core-x64" }
     ],
     "testPresets": [
         { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
         { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
         { "name": "debug-asan", "configurePreset": "debug-asan", "output": { "outputOnFailure": true } },
-        { "name": "debug-analyze", "configurePreset": "debug-analyze", "output": { "outputOnFailure": true } }
+        { "name": "debug-analyze", "configurePreset": "debug-analyze", "output": { "outputOnFailure": true } },
+        { "name": "core-x64", "configurePreset": "core-x64", "output": { "outputOnFailure": true } }
     ]
 }

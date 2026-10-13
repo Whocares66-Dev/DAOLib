@@ -21,7 +21,7 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 | Logs | `Documents\BioWare\Dragon Age\daolib\`, which on this machine is under OneDrive: `C:\Users\tianx\OneDrive\Documents\BioWare\Dragon Age\daolib\` |
 | Toolset | installer in `toolset\` (ignored); `dev/TOOLSET.md` |
 
-**Everything is 32-bit.** The game is, so the loader and every plugin must be. `CMakeLists.txt` refuses a 64-bit configure, and `tools\build.ps1` sets the environment up right. Inline asm and `__declspec(naked)` in the proxy are x86 features, and that is fine.
+**Everything that goes into the game is 32-bit.** The game is, so the loader and every plugin must be. `CMakeLists.txt` refuses a 64-bit configure of them, and `tools\build.ps1` sets the environment up right. Inline asm and `__declspec(naked)` in the proxy are x86 features, and that is fine. The one exception is `src/dao/core`, the target `daolib_core`, which builds 64-bit as well (`-Preset core-x64`, the core and its tests alone) for tools that read the game's files with no game, Eluvian's ghilana first (DAOLib #106). Core's overlays of the engine's memory (`Msvc8.h`'s, `ScriptArray.h`'s) are declared only in a 32-bit build.
 
 **IDs, read in the GOG build.** `src/dao/Addresses.h` holds IDs, not addresses or names: `DAO_ADDRESS(kCClientExoApp_SetPaused, 10547)` is ID 10547 of the address library (`extern/DAOAddressLibrary`), which means the same function in every build of the game. What it is called and where it is in each build are in the library's table (`extern\DAOAddressLibrary\data\addresses.csv`) and nowhere else: `python tools\address_ids.py kCClientExoApp_SetPaused` (or `10547`, or `0x005D6740`, or part of a name) says both. Read a new one in the GOG exe above, write the row as it was read, `DAO_ADDRESS(kName, "Engine::Name", 0x005D6740)`, and run `python tools\address_ids.py`: it finds the ID, writes the name into this checkout's copy of the table and leaves the row as the ID alone, and says what the library notes about the ID (a function `changed` in a build is not the same code there: a detour at its start is fine, an offset into it may not be). **The address library has its own keeper: commit and push nothing in `extern\DAOAddressLibrary` from here** (the user's rule, 2026-10-01). Send its session the line the tool prints (ID, kind, name, GOG address) with what the thing is; it commits the name to the library's `master`; then check that commit out in the submodule and commit the submodule with the row. Hold the row's commit until then: one made earlier would hold the library at a commit without the name and fail the ctest for everyone else. A problem with the library, its tools or its docs goes to its session the same way. The addresses in the comments of `Addresses.h` are GOG's, for reading against Ghidra; no code uses them. A ctest fails on a row not yet turned into its ID, or whose ID the table does not have as that kind of thing with a name. At run time `dao::Module::Address(id)` looks the ID up in the address library's file for the running build (`daolib\addresses\daoaddresses-<link stamp>-<image size>-<entry rva>-<base>.bin`, beside the loader: all four header fields, since Steam's build has GOG's link stamp), and `dao::Module::Preferred` goes back to GOG's address, so logs read the same whichever build ran. Everything is guarded by `dao::Module::IsKnownExecutable()`: whether there is such a file for the running exe. No build is compiled in. An ID does not move a field: `dev/BUILDS.md` lists the classes whose layout differs between builds.
 
@@ -53,10 +53,12 @@ src/dao/generated/  written by tools: field descriptors (gen_script_fields.py), 
                 (gen_message_handlers.py); do not edit
 src/dao/core/   the part that never touches the process: Fingerprint, Relocate, Rtti undecoration, FieldPath,
                 CommandWord, ObjectType, Msvc8 (the engine's std::wstring and std::vector), ScriptArray, Angle, Gff4, Conversation and TalkTable (the game's files), ScriptValue (a command's signature as data),
-                VmStack, GdaHash, InputCode (a key as the engine's input word), Inflate, GfxMovie and OptionsMovie (a Flash movie patched as bytes, and the options screen's), HeldEvents and OwedTime (delayed events and ageing on a plugin's clocks), Sky (an area's sky as the engine's block of floats), Erf and Dds (an archive's directory, a texture's first picture), Level (a room's definition, a model's meshes and a placed model's lightmapped triangles, from the game's files), RayCast (rays against triangles) and LightProbes (a level's light probes baked from its lightmaps); tested
+                VmStack, GdaHash, InputCode (a key as the engine's input word), Inflate, GfxMovie and OptionsMovie (a Flash movie patched as bytes, and the options screen's), HeldEvents and OwedTime (delayed events and ageing on a plugin's clocks), Sky (an area's sky as the engine's block of floats), Erf and Dds (an archive's directory, a texture's first picture), Level (a room's definition, a model's meshes and a placed model's lightmapped triangles, from the game's files), RayCast (rays against triangles) and LightProbes (a level's light probes baked from its lightmaps); tested.
+                The target daolib_core, which daolib links; x86 and x64
 src/plugins/    one folder per plugin: probe/ watches and checks, example/ checks many parts of daolib in play
 examples/       small plugins, one per part of daolib, to read and copy from and to check it in play (examples/README.md)
-tests/          Catch2 over src/dao/core; ctest also runs tools/test_*.py and gen_script_fields.py --check
+tests/          Catch2: dao_core_tests over src/dao/core (x86 and x64), dao_tests over what of daolib needs no game;
+                ctest also runs tools/test_*.py and gen_script_fields.py --check
 tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
                 names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, gen_message_handlers.py, messages.py, gff4.py, gda.py, tlk.py, address_ids.py (the IDs in the source are the address library's), package.ps1 and release.ps1 (the zip a player installs, and a release of it), ea_play.py (the EA game with the build's loader, nothing deployed), play_matrix.ps1 (a build's game started under each compatibility setting, and the loader's start checked), mutants.py (the core broken on purpose), ghidra/
@@ -76,6 +78,7 @@ toolset/        the toolset installer and what is extracted from it (ignored)
 .\tools\build.ps1 -Preset debug-asan -Test      # the tests under AddressSanitizer
 .\tools\build.ps1 -Preset debug-analyze        # our own targets under MSVC's /analyze
 .\tools\build.ps1 -Preset release
+.\tools\build.ps1 -Preset core-x64 -Test       # dao/core and its tests alone, built 64-bit
 .\tools\build.ps1 -Preset debug -Mutants      # the core broken on purpose, one promise at a time: minutes
 ```
 
@@ -91,6 +94,7 @@ The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x8
 .\tools\build.ps1 -Preset debug -Test -Format -Lint
 .\tools\build.ps1 -Preset debug-asan -Test
 .\tools\build.ps1 -Preset debug-analyze
+.\tools\build.ps1 -Preset core-x64 -Test
 ```
 
 **And in the game** (`dev/TESTING.md`), for a merge that changes what is built: each of the three builds started with no compatibility setting and with "Disable fullscreen optimizations", `.\tools\play_matrix.ps1` after a deploy into each. A release is seen under the whole matrix, `-All`, on its release build.

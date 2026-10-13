@@ -40,9 +40,20 @@
 namespace dao::core
 {
 
+// An engine string's inline buffer, in wide characters, the 8th the
+// terminator: what a string found in bytes is judged by (StackText.h).
+inline constexpr std::uint32_t kWStringInlineCapacity = 7;
+
+// The overlays below are the engine's memory read in place, through pointers
+// of the process's own width, so they mean something only in the game's
+// 32-bit process. A 64-bit build of core (a tool that reads the game's files,
+// DAOLib #106) has no game memory to read: it declares none of them, and a use
+// of one there fails to compile instead of reading the wrong offsets.
+#if UINTPTR_MAX == UINT32_MAX
+
 struct WStringRep
 {
-    static constexpr std::uint32_t kInlineCapacity = 7; // wide characters, the 8th the terminator
+    static constexpr std::uint32_t kInlineCapacity = kWStringInlineCapacity;
 
     std::uint32_t allocator = 0;
     union {
@@ -162,6 +173,8 @@ template <class Key, class Value> struct TreeRep
     }
 };
 static_assert(sizeof(TreeRep<std::int32_t, void *>) == 0xC);
+
+#endif // UINTPTR_MAX == UINT32_MAX
 
 // A std::list of 32-bit values, as MSVC 8 lays it out: an allocator word,
 // the head node at +4 (its own value unused) and the count at +8; a node

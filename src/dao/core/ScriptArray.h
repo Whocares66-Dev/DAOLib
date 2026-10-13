@@ -46,6 +46,9 @@ constexpr std::int32_t ArrayStructure(std::int32_t tag)
     return tag >= 0x50 && tag <= 0x59 ? tag - 0x50 : -1;
 }
 
+// The engine's memory read in place, as Msvc8.h's overlays are: in the
+// game's 32-bit process alone.
+#if UINTPTR_MAX == UINT32_MAX
 struct ArrayRep
 {
     struct Payload
@@ -64,5 +67,6 @@ struct ArrayRep
     }
 };
 static_assert(sizeof(ArrayRep) == 8, "the engine allocates 8 bytes for an array");
+#endif // UINTPTR_MAX == UINT32_MAX
 
 } // namespace dao::core

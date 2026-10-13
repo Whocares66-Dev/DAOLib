@@ -2,11 +2,15 @@
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "name": "daolib",
     "version-string": "0.1.0",
-    "dependencies": [
-        "detours",
-        "spdlog"
-    ],
+    "dependencies": [],
     "features": {
+        "game": {
+            "description": "The loader, daolib and the plugins: what goes into the game (x86)",
+            "dependencies": [
+                "detours",
+                "spdlog"
+            ]
+        },
         "tests": {
             "description": "Build the unit tests",
             "dependencies": [

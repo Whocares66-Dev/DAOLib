@@ -43,13 +43,13 @@ std::optional<StackWString> WStringIn(std::span<const std::uint32_t, 7> words)
 {
     const std::uint32_t size = words[5];
     const std::uint32_t capacity = words[6];
-    if (capacity < WStringRep::kInlineCapacity || capacity > kMostCapacity || size < 3 || size > capacity)
+    if (capacity < kWStringInlineCapacity || capacity > kMostCapacity || size < 3 || size > capacity)
     {
         return std::nullopt;
     }
     StackWString found;
     found.size = size;
-    if (capacity > WStringRep::kInlineCapacity)
+    if (capacity > kWStringInlineCapacity)
     {
         found.pointer = words[1];
         if (found.pointer == 0)
@@ -59,7 +59,7 @@ std::optional<StackWString> WStringIn(std::span<const std::uint32_t, 7> words)
         return found;
     }
     // Inline: the four words after the first are eight UTF-16 units.
-    std::array<wchar_t, WStringRep::kInlineCapacity + 1> units{};
+    std::array<wchar_t, kWStringInlineCapacity + 1> units{};
     std::memcpy(units.data(), &words[1], sizeof units);
     const auto text = PrintableWide(units, 3);
     if (!text || text->size() != size)
