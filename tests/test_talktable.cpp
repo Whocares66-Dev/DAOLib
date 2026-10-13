@@ -75,6 +75,17 @@ TEST_CASE("a talk table's strings by id")
     CHECK_FALSE(table->String(3));
 }
 
+TEST_CASE("a talk table's strings go in their ids' order, whatever the file's")
+{
+    const auto table = TalkTableFile::Parse(MakeTalkTable({{9, u"nine"}, {2, u"two"}, {5, u"five"}}));
+    REQUIRE(table);
+    const auto &strings = table->Strings();
+    REQUIRE(strings.size() == 3);
+    CHECK(strings[0] == std::pair<std::uint32_t, std::wstring>{2, L"two"});
+    CHECK(strings[1].first == 5);
+    CHECK(strings[2] == std::pair<std::uint32_t, std::wstring>{9, L"nine"});
+}
+
 TEST_CASE("a file that is not a version 0.2 talk table is refused")
 {
     auto bytes = MakeTalkTable({{1, u"x"}});

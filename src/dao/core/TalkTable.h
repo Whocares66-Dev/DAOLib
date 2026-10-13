@@ -31,6 +31,11 @@ class TalkTableFile
     {
         return strings_.size();
     }
+    // Returns every string with its id, in the ids' order: for a text's search.
+    const std::vector<std::pair<std::uint32_t, std::wstring>> &Strings() const
+    {
+        return strings_;
+    }
 
     static constexpr std::uint32_t kStringList = 19001;
     static constexpr std::uint32_t kStringId = 19002;
