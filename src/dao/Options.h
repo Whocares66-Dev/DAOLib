@@ -1,9 +1,9 @@
 // Adds a plugin's own settings to the game's options screen.
 //
-// AddSection puts a section on the Game tab of the options screen, or on its Video tab: a
-// heading, then checkboxes (Toggle) and choices of a few named values (Choice), each a slider with
-// stops or a dropdown, that look and behave like the game's own. The game does not save these
-// settings, so the plugin must store them itself.
+// AddSection puts a section on the Game tab of the options screen, or on its Video or Online tab:
+// a heading, then checkboxes (Toggle), choices of a few named values (Choice), each a slider with
+// stops or a dropdown, and buttons (Button), that look and behave like the game's own. The game
+// does not save these settings, so the plugin must store them itself.
 //
 //   dao::options::AddSection(L"Turn-based", {{
 //       .name = L"TurnBasedCombat",
@@ -75,6 +75,26 @@ struct Choice
     std::function<std::int32_t(std::int32_t wanted)> set; // applies a change, returns the new index
 };
 
+// A button in a plugin's section, like the screen's own Restore Defaults.
+//
+// `pressed` runs on the game thread (dao/Frame.h) each time the player clicks the button, so it
+// may call script commands. The screen stays open.
+//
+//   dao::options::AddSection(L"Multiplayer", {}, {}, dao::options::Column::Either,
+//                            dao::options::Tab::Online, {{
+//       .name = L"MultiplayerHost",
+//       .label = L"Host a game",
+//       .tooltip = L"Lets a friend join this game",
+//       .pressed = [] { Host(); },
+//   }});
+struct Button
+{
+    std::wstring name;             // the button's name, as for a Toggle
+    std::wstring label;            // the text on the button
+    std::wstring tooltip;          // the text shown when the mouse is over the button
+    std::function<void()> pressed; // runs at a click; required
+};
+
 // The column of its tab a section would be in.
 enum class Column
 {
@@ -86,8 +106,9 @@ enum class Column
 // The tab of the options screen a section is on.
 enum class Tab
 {
-    Game,  // five free rows in its left column, six in its right
-    Video, // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
+    Game,   // five free rows in its left column, six in its right
+    Video,  // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
+    Online, // nine free rows in its left column, seven in its right
 };
 
 // Adds a section of settings to a tab of the options screen.
@@ -97,20 +118,21 @@ enum class Tab
 // @param column the column the section goes in if that column has the rows for it; it goes in
 //  the other if not
 // @param tab the tab the section is on
-// @return false, with nothing added, if the section has no toggles or choices, a name is not
-//  letters and digits or is already taken, a callback is missing, or a choice has fewer than
-//  two values
+// @param buttons the buttons, listed after the choices in the order given
+// @return false, with nothing added, if the section has no toggles, choices or buttons, a name
+//  is not letters and digits or is already taken, a callback is missing, or a choice has fewer
+//  than two values
 //
 // Call it from DAOLib_Load, before the game first opens its options screen. A tab's free rows are
 // shared by every plugin. A heading takes two rows, a checkbox one and a dropdown two; sliders
-// stand as close as the game's own, six of them in seven rows; and a section takes whole rows of
-// one column. A section on the Video tab has the tab laid out for it: the game's own
+// stand as close as the game's own, six of them in seven rows, and buttons two in three; and a
+// section takes whole rows of one column. A section on the Video tab has the tab laid out for it: the game's own
 // settings closer together and all in the left column, and the right column, a heading and twelve
 // rows, for sections. Sections are placed in the order they were added. The first section a tab has no room for
 // is left out, and so is every later section on that tab; the plugin's log has a warning for
 // each, and StateOf says NoRoom.
 bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices = {},
-                Column column = Column::Either, Tab tab = Tab::Game);
+                Column column = Column::Either, Tab tab = Tab::Game, std::vector<Button> buttons = {});
 
 // What became of a section given to AddSection.
 enum class SectionState

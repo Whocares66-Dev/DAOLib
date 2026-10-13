@@ -187,6 +187,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | React to a key the player has bound | watch the message its action sends with `dao::messages::OnMessage<M>`; `dev/TODO.md`, item 3, maps actions to messages | `dao/Messages.h` |
 | Point the game's world pick at a pixel without moving the mouse | `dao::input::PointCursor(x, y)`, `ReleaseCursor()` | `dao/Input.h` |
 | Add settings to the game's options screen | `dao::options::AddSection(L"My plugin", {toggles}, {choices})` from `DAOLib_Load`; `examples/options/` | `dao/Options.h` |
+| Add a button to the options screen that runs the plugin's code | a `dao::options::Button` with a `pressed`, as `AddSection`'s last argument; the Online tab (`Tab::Online`) has the most room for it; `examples/options/` | `dao/Options.h` |
 | Keep data with the game's saves, as SKSE's co-saves do | `dao::saves::OnGameLoaded`, `OnSaved`, `save.Read("myplugin")`, `save.Write("myplugin", data)`; `examples/saves/` | `dao/Saves.h` |
 | Know why the game won't save (its slot limits) | `dao::saves::MostSlot(kind)` | `dao/Saves.h` |
 

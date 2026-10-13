@@ -116,6 +116,26 @@
 // `set` once with the entry's index, closed the list and put the name on
 // the button; after Cancel and a second opening `get` was asked and the
 // button showed the pick. A refused pick was not tried.
+//
+// A button is the screen's own Restore Defaults placed again, and a section
+// can be on the Online tab (DAOLib #104, read 2026-10-12; dao/core/
+// OptionsMovie.h). A button's click sends what a ticked checkbox's does,
+// which is heard here the same way; it asks for no value and is told none,
+// so it has no observer. Seen in play the same day (examples/options, the
+// GOG game at its main menu, the screen driven through its script): on the
+// Online tab a heading under "Connection"'s two boxes, as that bar is, a
+// checkbox and under it two buttons that look as Restore Defaults does,
+// their left edges where the boxes' are. A press of one
+// (SimulateButtonPush, which is a click's press and release) ran its
+// `pressed` once on the frame's thread, a second press again, and the
+// screen stayed open; the checkbox was asked its value as the tab was first
+// shown and ticked by its click. The button with a tooltip had the
+// tooltip's behaviour on it (MaxTooltipWidth 200) and the one without had
+// not, and both the click sound of Restore Defaults (95). Not seen: the
+// tooltip drawn, which wants the mouse resting on the button; a button on
+// the Game or Video tab; a button in a game with an older copy of this
+// library in another plugin, which reads a button as a checkbox's height
+// and so may put a row into its lower part.
 #include "dao/Options.h"
 
 #include "dao/Addresses.h"
@@ -134,6 +154,7 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -172,11 +193,13 @@ std::uint32_t ObserverBase()
     return kFirstObserver | plugin << 15U;
 }
 
-// A checkbox or a choice; a checkbox's values are 0 and 1.
+// A checkbox, a choice or a button; a checkbox's values are 0 and 1, and a
+// button has none.
 struct Entry
 {
     std::optional<Toggle> toggle;
     std::optional<Choice> choice;
+    std::optional<Button> button;
     std::string option; // as the movie has it: "DAOLibTurnBasedCombat"
     std::size_t section = 0;
     std::int32_t last = 0; // the value last got or set: what a GetValue is answered
@@ -250,7 +273,30 @@ std::int32_t MovieColumn(Column column)
 
 core::options_movie::Tab MovieTab(Tab tab)
 {
-    return tab == Tab::Video ? core::options_movie::Tab::Video : core::options_movie::Tab::Game;
+    switch (tab)
+    {
+    case Tab::Video:
+        return core::options_movie::Tab::Video;
+    case Tab::Online:
+        return core::options_movie::Tab::Online;
+    case Tab::Game:
+        break;
+    }
+    return core::options_movie::Tab::Game;
+}
+
+std::string_view NameOf(Tab tab)
+{
+    switch (tab)
+    {
+    case Tab::Video:
+        return "Video";
+    case Tab::Online:
+        return "Online";
+    case Tab::Game:
+        break;
+    }
+    return "Game";
 }
 
 // Under g_mutex: section `index` as the movie's patch takes it.
@@ -283,6 +329,10 @@ core::options_movie::Section MovieSection(std::size_t index)
             }
             section.choices.push_back(std::move(choice));
         }
+        else if (entry.button)
+        {
+            section.buttons.push_back({entry.option, Utf8(entry.button->label), Utf8(entry.button->tooltip)});
+        }
     }
     return section;
 }
@@ -297,7 +347,7 @@ void Became(Section &section, SectionState state, std::size_t rows, std::size_t 
         return;
     }
     section.state = state;
-    const std::string_view tab = section.tab == Tab::Video ? "Video" : "Game";
+    const std::string_view tab = NameOf(section.tab);
     if (state == SectionState::NoRoom)
     {
         spdlog::warn("options: the section \"{}\" is left out: it takes {} rows one under the other in one column "
@@ -397,7 +447,8 @@ bool OnGetValue(const gui::Call &call)
 }
 
 // A click: the FSCommand SendMessage with "ClientOptions.
-// SetClientOptionMessage <option> 1" (or 0), or a choice's index.
+// SetClientOptionMessage <option> 1" (or 0), or a choice's index; a button
+// sends the 1.
 bool OnSendMessage(void * /*owner*/, std::string_view args)
 {
     if (!args.starts_with(kSetMessage))
@@ -418,7 +469,7 @@ bool OnSendMessage(void * /*owner*/, std::string_view args)
         return false;
     }
     std::int32_t wanted = 0;
-    if (g_entries[*entry].toggle)
+    if (g_entries[*entry].toggle || g_entries[*entry].button)
     {
         wanted = value != "0" ? 1 : 0;
     }
@@ -448,10 +499,16 @@ std::int32_t ValueOf(const Entry &entry)
 }
 
 // A click's wanted value given to the plugin's set, a choice's kept to its
-// stops; the value the option then has, which a refusal leaves as it was.
+// stops; the value the option then has, which a refusal leaves as it was. A
+// button's click is its `pressed`, and it has no value.
 std::int32_t Apply(const Entry &entry, std::int32_t wanted)
 {
     std::int32_t value = entry.last;
+    if (entry.button)
+    {
+        detail::Guard("a button's pressed", [&] { entry.button->pressed(); });
+        return value;
+    }
     detail::Guard("an option's set", [&] {
         if (entry.toggle)
         {
@@ -589,46 +646,48 @@ bool Attach()
     return attached;
 }
 
+// The names of a section's controls, in the order they are kept: its checkboxes', its
+// choices', its buttons'. Nothing if the section has no control, a control lacks a callback, a
+// choice has fewer than two values, or a name is not letters and digits or is given twice.
+std::optional<std::vector<std::wstring>> NamesOf(const std::vector<Toggle> &toggles, const std::vector<Choice> &choices,
+                                                 const std::vector<Button> &buttons)
+{
+    const bool complete =
+        std::ranges::all_of(toggles, [](const Toggle &toggle) { return toggle.get && toggle.set; }) &&
+        std::ranges::all_of(
+            choices, [](const Choice &choice) { return choice.get && choice.set && choice.values.size() >= 2; }) &&
+        std::ranges::all_of(buttons, [](const Button &button) { return static_cast<bool>(button.pressed); });
+    std::vector<std::wstring> names;
+    std::ranges::transform(toggles, std::back_inserter(names), &Toggle::name);
+    std::ranges::transform(choices, std::back_inserter(names), &Choice::name);
+    std::ranges::transform(buttons, std::back_inserter(names), &Button::name);
+    if (names.empty() || !complete)
+    {
+        return std::nullopt;
+    }
+    for (auto name = names.begin(); name != names.end(); ++name)
+    {
+        if (!core::ValidActionName(*name) || std::find(names.begin(), name, *name) != name)
+        {
+            return std::nullopt;
+        }
+    }
+    return names;
+}
+
 } // namespace
 
-bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices, Column column, Tab tab)
+bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Choice> choices, Column column, Tab tab,
+                std::vector<Button> buttons)
 {
-    if (toggles.empty() && choices.empty())
-    {
-        return false;
-    }
-    std::vector<std::wstring> names;
-    for (const Toggle &toggle : toggles)
-    {
-        if (!toggle.get || !toggle.set)
-        {
-            return false;
-        }
-        names.push_back(toggle.name);
-    }
-    for (const Choice &choice : choices)
-    {
-        if (!choice.get || !choice.set || choice.values.size() < 2)
-        {
-            return false;
-        }
-        names.push_back(choice.name);
-    }
-    for (std::size_t i = 0; i < names.size(); ++i)
-    {
-        if (!core::ValidActionName(names[i]) || std::find(names.begin(), names.begin() + static_cast<std::ptrdiff_t>(i),
-                                                          names[i]) != names.begin() + static_cast<std::ptrdiff_t>(i))
-        {
-            return false;
-        }
-    }
-    if (!Attach())
+    const auto names = NamesOf(toggles, choices, buttons);
+    if (!names || !Attach())
     {
         return false;
     }
     const std::lock_guard lock(g_mutex);
     std::vector<std::string> options;
-    for (const std::wstring &name : names)
+    for (const std::wstring &name : *names)
     {
         std::string option(kOptionPrefix);
         for (const wchar_t c : name)
@@ -646,11 +705,15 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
     std::size_t next = 0;
     for (Toggle &toggle : toggles)
     {
-        g_entries.push_back({std::move(toggle), std::nullopt, std::move(options[next++]), section, 0});
+        g_entries.push_back({std::move(toggle), std::nullopt, std::nullopt, std::move(options[next++]), section, 0});
     }
     for (Choice &choice : choices)
     {
-        g_entries.push_back({std::nullopt, std::move(choice), std::move(options[next++]), section, 0});
+        g_entries.push_back({std::nullopt, std::move(choice), std::nullopt, std::move(options[next++]), section, 0});
+    }
+    for (Button &button : buttons)
+    {
+        g_entries.push_back({std::nullopt, std::nullopt, std::move(button), std::move(options[next++]), section, 0});
     }
     return true;
 }

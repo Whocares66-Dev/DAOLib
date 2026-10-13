@@ -20,6 +20,7 @@ constexpr std::int32_t kControlHeight = 30; // what a checkbox takes of its row
 constexpr std::int32_t kDropdownPitch = 2 * kRow;
 constexpr std::int32_t kSliderPitch = 41;
 constexpr std::int32_t kDropdownHeight = kDropdownPitch - (kRow - kControlHeight);
+constexpr std::int32_t kButtonPitch = 52;  // a button's 46, and as much under it as a slider has
 constexpr std::uint16_t kDepthStep = 6;    // as the designer's own placements are apart
 constexpr std::int32_t kSetUpRegister = 2; // in SetupOptionsMenuInitFunctions: where the set-up functions are kept
 
@@ -49,6 +50,13 @@ constexpr TabLayout kGameTab = {{{"OptLootShimmer_mc", 403, 15, 40, 4}, {"OptSho
 // game's, its rows from kVideoRightTop to the Game tab's last row on the
 // screen.
 constexpr TabLayout kVideoTab = {{{"OptFBFX_mc", 0, 15, 41, 6}, {"", 448, 38, 37, 4}}};
+// The Online tab: a clip a column, each at 222 on the screen where the Game
+// tab's one is at 200, so that its last row is the Game tab's on the screen;
+// the bars 17 and 14 left of the checkboxes, which is where the tab's own
+// are. It has no slider or dropdown of the game's: a section's stand as the
+// Game tab's do.
+constexpr TabLayout kOnlineTab = {
+    {{"OptAutoDLOldEntitlements_mc", 381, 17, 40, 4}, {"OptAutoUploadProfile_mc", 381, 14, 40, 4}}};
 constexpr std::int32_t kVideoRightX = 35;    // the right column's checkboxes, where the game's own stood
 constexpr std::int32_t kVideoRightTop = -30; // its first row: a heading there has its bar level with "Screen"'s
 
@@ -85,13 +93,24 @@ constexpr std::int32_t kBarUnder = kRow + 1;
 
 constexpr const TabLayout &LayoutOf(Tab tab)
 {
-    return tab == Tab::Video ? kVideoTab : kGameTab;
+    switch (tab)
+    {
+    case Tab::Video:
+        return kVideoTab;
+    case Tab::Online:
+        return kOnlineTab;
+    case Tab::Game:
+        break;
+    }
+    return kGameTab;
 }
 
 constexpr std::string_view kFirstSetUp = "OptAutoPause_mc_init";
 constexpr std::string_view kHeadingText = "txt_Game";
 constexpr std::string_view kSlider = "OptTextureQuality_mc"; // the Video tab's: the symbol a choice is
 constexpr std::string_view kPicker = "OptDifficulty_mc";     // the Game tab's: the symbol a dropdown is
+constexpr std::string_view kButton = "RestoreDefaults_mc";   // the screen's: the symbol a button is
+constexpr std::string_view kSetMessage = "ClientOptions.SetClientOptionMessage ";
 
 // r2.<instance>_init = OptionsUtils.MakeOptionToggleInit(option, label,
 // tooltip); the arguments pushed last first, as compiled script has them.
@@ -152,6 +171,32 @@ gfx::Bytes HeadingSetUp(std::string_view instance, std::string_view title)
                  Do(Op::SetMember)});
 }
 
+// A button's:
+//   r2.<instance>_init = function () {
+//       this.m_nSoundType = SoundEvents.ST_OPTIONS_BUTTON_CLICK;
+//       this.SetText(label);
+//       this.SetButtonAction(function () { ExternalCommands.SendMessage("<set message> <option> 1"); });
+//       OptionsUtils.AddTooltip(this, tooltip);
+//   };
+// as the movie writes Restore Defaults's, with the message a ticked
+// checkbox sends and a checkbox's tooltip.
+gfx::Bytes ButtonSetUp(const Button &button)
+{
+    using namespace gfx;
+    const std::string message = std::string(kSetMessage) + button.option + " 1";
+    const Bytes click = Join({Push({Text(message), Integer(1), Text("ExternalCommands")}), Do(Op::GetVariable),
+                              Push({Text("SendMessage")}), Do(Op::CallMethod), Do(Op::Pop)});
+    const Bytes body =
+        Join({Push({Register(1), Text("m_nSoundType"), Text("SoundEvents")}), Do(Op::GetVariable),
+              Push({Text("ST_OPTIONS_BUTTON_CLICK")}), Do(Op::GetMember), Do(Op::SetMember),
+              Push({Text(button.label), Integer(1), Register(1), Text("SetText")}), Do(Op::CallMethod), Do(Op::Pop),
+              Function(click), Push({Integer(1), Register(1), Text("SetButtonAction")}), Do(Op::CallMethod),
+              Do(Op::Pop), Push({Text(button.tooltip), Register(1), Integer(2), Text("OptionsUtils")}),
+              Do(Op::GetVariable), Push({Text("AddTooltip")}), Do(Op::CallMethod), Do(Op::Pop)});
+    return Join({Push({Register(kSetUpRegister), Text(ControlInstance(button.option) + "_init")}), Function(body),
+                 Do(Op::SetMember)});
+}
+
 // The game's heading: the text clip it exports, and the bar the same clip
 // of the movie places under it.
 struct Heading
@@ -190,17 +235,18 @@ std::optional<std::uint16_t> SymbolOf(std::span<const std::byte> movie, std::str
 }
 
 // What a section is made of, where the movie has it: the game's heading,
-// its slider with named stops and its dropdown.
+// its slider with named stops, its dropdown and its button.
 struct Symbols
 {
     std::optional<Heading> heading;
     std::optional<std::uint16_t> slider;
     std::optional<std::uint16_t> picker;
+    std::optional<std::uint16_t> button;
 };
 
 Symbols SymbolsOf(std::span<const std::byte> movie)
 {
-    return {FindHeading(movie), SymbolOf(movie, kSlider), SymbolOf(movie, kPicker)};
+    return {FindHeading(movie), SymbolOf(movie, kSlider), SymbolOf(movie, kPicker), SymbolOf(movie, kButton)};
 }
 
 const Moved *PlaceOf(std::span<const Moved> moves, std::string_view name)
@@ -362,7 +408,8 @@ std::optional<std::array<gfx::Instance, 2>> ColumnsOf(std::span<const std::byte>
 // Whether something a clip places reaches into the row at `y` of the column
 // whose checkboxes stand at `x`: a bar is higher than a row, and lies in
 // two, as a dropdown does. A slider takes all of its 41, so that the row
-// its section ends in is taken however many sliders it has.
+// its section ends in is taken however many sliders it has, and a button
+// all of its 52 likewise.
 bool Taken(const std::vector<gfx::Instance> &placed, const Symbols &symbols, std::int32_t x, std::int32_t y)
 {
     return std::ranges::any_of(placed, [&](const gfx::Instance &instance) {
@@ -378,6 +425,10 @@ bool Taken(const std::vector<gfx::Instance> &placed, const Symbols &symbols, std
         else if (instance.character == symbols.picker)
         {
             height = kDropdownHeight;
+        }
+        else if (instance.character == symbols.button)
+        {
+            height = kButtonPitch;
         }
         return instance.x >= x - kColumnReach && instance.x <= x + kColumnReach && instance.y < y + kRow &&
                instance.y + height > y;
@@ -395,18 +446,27 @@ std::string HeadingInstance(const Slot &slot, Tab tab)
 {
     // The Game tab's as they were before a section had a tab: another
     // plugin's older copy of the library names its headings so.
-    const std::string_view on = tab == Tab::Video ? "DAOLibVideoSectionAt" : "DAOLibSectionAt";
+    std::string_view on = "DAOLibSectionAt";
+    if (tab == Tab::Video)
+    {
+        on = "DAOLibVideoSectionAt";
+    }
+    else if (tab == Tab::Online)
+    {
+        on = "DAOLibOnlineSectionAt";
+    }
     return std::string(on) + std::to_string(slot.x) + "x" + std::to_string(slot.y) + "_mc";
 }
 
 std::size_t RowsOf(const Section &section)
 {
-    std::int32_t choices = 0;
+    // What stands under the checkboxes, which leaves the rows: in pixels.
+    auto under = static_cast<std::int32_t>(section.buttons.size()) * kButtonPitch;
     for (const Choice &choice : section.choices)
     {
-        choices += choice.dropdown ? kDropdownPitch : kSliderPitch;
+        under += choice.dropdown ? kDropdownPitch : kSliderPitch;
     }
-    return kHeadingRows + section.toggles.size() + static_cast<std::size_t>((choices + kRow - 1) / kRow);
+    return kHeadingRows + section.toggles.size() + static_cast<std::size_t>((under + kRow - 1) / kRow);
 }
 
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab)
@@ -524,7 +584,8 @@ struct Additions
 // Places a section in `rows`, free rows one under the other in one column
 // of its tab, as many as RowsOf says: the game's bar and heading text, then
 // its checkboxes, a row each, which are what the column's last control is,
-// then its choices. Nothing in a movie without the game's heading.
+// then its choices, then its buttons. Nothing in a movie without the game's
+// heading.
 void PlaceSection(const Section &section, std::span<const Slot> rows, const std::array<gfx::Instance, 2> &columns,
                   const Symbols &symbols, Additions &additions)
 {
@@ -565,6 +626,14 @@ void PlaceSection(const Section &section, std::span<const Slot> rows, const std:
         additions.SetUp(choice.dropdown ? DropdownSetUp(choice) : SliderSetUp(choice));
         y += choice.dropdown ? kDropdownPitch : kSliderPitch;
     }
+    // A button stands where the column's checkboxes do, under the last
+    // choice.
+    for (const Button &button : section.buttons)
+    {
+        place(ControlInstance(button.option), symbols.button.value_or(0), top.x, y);
+        additions.SetUp(ButtonSetUp(button));
+        y += kButtonPitch;
+    }
 }
 
 // Places a tab's sections, in the order given, in the rows the tab has
@@ -587,14 +656,16 @@ void PlaceTab(std::span<const std::byte> movie, Tab tab, std::span<const Section
             continue;
         }
         // The first rows free one under the other in one column, enough
-        // for the heading and every control; and each choice a symbol the
-        // movie has.
+        // for the heading and every control; and each choice and button a
+        // symbol the movie has.
         const std::size_t rows = RowsOf(section);
         const std::size_t first = FirstRun(*slots, rows, section.column);
-        const bool choicesFit = std::ranges::all_of(section.choices, [&](const Choice &choice) {
-            return (choice.dropdown ? symbols.picker : symbols.slider).has_value();
-        });
-        if ((section.toggles.empty() && section.choices.empty()) || !choicesFit || first == slots->size())
+        const bool symbolsFit = (section.buttons.empty() || symbols.button) &&
+                                std::ranges::all_of(section.choices, [&](const Choice &choice) {
+                                    return (choice.dropdown ? symbols.picker : symbols.slider).has_value();
+                                });
+        const bool empty = section.toggles.empty() && section.choices.empty() && section.buttons.empty();
+        if (empty || !symbolsFit || first == slots->size())
         {
             return;
         }
@@ -623,7 +694,7 @@ std::optional<gfx::Bytes> AddSections(std::span<const std::byte> movie, std::spa
     const std::optional<gfx::Bytes> laid = video ? LayOutVideo(movie) : std::nullopt;
     movie = laid ? std::span<const std::byte>(*laid) : movie;
     Additions additions;
-    for (const Tab tab : {Tab::Game, Tab::Video})
+    for (const Tab tab : {Tab::Game, Tab::Video, Tab::Online})
     {
         PlaceTab(movie, tab, sections, symbols, additions, shown);
     }

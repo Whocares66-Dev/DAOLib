@@ -391,6 +391,24 @@ MUTANTS: list[Mutant] = [
         '{"", 483, 38, 37, 4}',
     ),
     Mutant(
+        "options-online-last-row: the Online tab's columns end at the Game tab's last row, above the screen's buttons",
+        OPTIONS,
+        '{"OptAutoDLOldEntitlements_mc", 381,',
+        '{"OptAutoDLOldEntitlements_mc", 416,',
+    ),
+    Mutant(
+        "options-button-rows: the row under a button's own, which it reaches into, is taken for the next plugin's section",
+        OPTIONS,
+        "            height = kButtonPitch;",
+        "            height = kControlHeight;",
+    ),
+    Mutant(
+        "options-button-symbol: a section with a button is left out of a movie that has not the game's button",
+        OPTIONS,
+        "(section.buttons.empty() || symbols.button) &&",
+        "(section.buttons.empty() || true) &&",
+    ),
+    Mutant(
         "options-tabs-apart: a section left out of one tab does not keep another tab's out",
         OPTIONS,
         "        if (section.tab != tab)\n        {\n            continue;",

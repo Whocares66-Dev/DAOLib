@@ -84,6 +84,11 @@ constexpr std::uint16_t kVideoTab = 316;
 constexpr std::uint16_t kDetailText = 98;
 constexpr std::uint16_t kDetailBar = 310;
 constexpr std::uint16_t kGammaPicture = 313;
+constexpr std::uint16_t kOnlineLeft = 319;
+constexpr std::uint16_t kOnlineRight = 320;
+constexpr std::uint16_t kNarrowCheckbox = 90;
+constexpr std::uint16_t kButton = 237;
+constexpr std::uint16_t kButtons = 292;
 
 // The main timeline's placement of the Video tab's "Detail" bar.
 Bytes DetailBarAt(int x, int y)
@@ -94,8 +99,9 @@ Bytes DetailBarAt(int x, int y)
 // The options movie in small: the game's own heading (its text clip
 // exported, over a bar), the Game tab with the last checkbox of each
 // column and two more controls, and the function that makes their set-up
-// functions. Without `pickers` it has none of the game's dropdowns.
-Bytes OptionsMovie(bool pickers = true)
+// functions. Without `pickers` it has none of the game's dropdowns, and
+// without `button` not the screen's Restore Defaults.
+Bytes OptionsMovie(bool pickers = true, bool button = true)
 {
     Bytes tab;
     Put(tab, kGameTab, 2);
@@ -172,6 +178,35 @@ Bytes OptionsMovie(bool pickers = true)
     Add(detail, ShortTag(1, {}));
     Put(detail, 0, 2);
 
+    // The Online tab as the game has it: a clip a column, checkboxes 36
+    // apart, the right one's second set in and narrower. And the clip of
+    // the screen's buttons, Restore Defaults above its origin.
+    Bytes onlineLeft;
+    Put(onlineLeft, kOnlineLeft, 2);
+    Put(onlineLeft, 1, 2);
+    Add(onlineLeft, DesignerPlace(1, kCheckbox, 0, 0, "OptSendTelemetry_mc"));
+    Add(onlineLeft, DesignerPlace(7, kCheckbox, 0, 36, "OptAutoDLOldEntitlements_mc"));
+    Add(onlineLeft, ShortTag(1, {}));
+    Put(onlineLeft, 0, 2);
+    Bytes onlineRight;
+    Put(onlineRight, kOnlineRight, 2);
+    Put(onlineRight, 1, 2);
+    Add(onlineRight, DesignerPlace(1, kCheckbox, 0, 0, "OptAutoScreenshot_mc"));
+    Add(onlineRight, DesignerPlace(7, kCheckbox, 0, 72, "OptUploadScreen_mc"));
+    Add(onlineRight, DesignerPlace(13, kCheckbox, 0, 108, "OptAutoUploadProfile_mc"));
+    Add(onlineRight, DesignerPlace(19, kNarrowCheckbox, 25, 36, "OptAutoScreenshotNotification_mc"));
+    Add(onlineRight, ShortTag(1, {}));
+    Put(onlineRight, 0, 2);
+    Bytes buttons;
+    Put(buttons, kButtons, 2);
+    Put(buttons, 1, 2);
+    if (button)
+    {
+        Add(buttons, DesignerPlace(25, kButton, 474, -46, "RestoreDefaults_mc"));
+    }
+    Add(buttons, ShortTag(1, {}));
+    Put(buttons, 0, 2);
+
     Bytes tags = Exports({{kHeading, "KeyBindingHeader"},
                           {kCheckbox, "checkbox_mc"},
                           {kHeadingText, "txt_Game"},
@@ -182,9 +217,15 @@ Bytes OptionsMovie(bool pickers = true)
     Add(tags, LongTag(39, video));
     Add(tags, LongTag(39, detail));
     Add(tags, LongTag(39, tab));
+    Add(tags, LongTag(39, onlineLeft));
+    Add(tags, LongTag(39, onlineRight));
+    Add(tags, LongTag(39, buttons));
     Add(tags, LongTag(59, script));
     Add(tags, DetailBarAt(524, 131));
     Add(tags, DesignerPlace(62, kVideoTab, 82, 155, ""));
+    Add(tags, DesignerPlace(63, kOnlineLeft, 87, 222, ""));
+    Add(tags, DesignerPlace(70, kOnlineRight, 538, 222, "OnlineProfileGroup_mc"));
+    Add(tags, DesignerPlace(30, kButtons, 84, 674, ""));
     Add(tags, ShortTag(1, {}));
     return Movie(tags);
 }
@@ -994,4 +1035,112 @@ TEST_CASE("a tab's sections are not kept out by another tab's want of room", "[o
     };
     CHECK(Holds(*both, setUp("DAOLibV", "V")));
     CHECK(Holds(*both, setUp("DAOLibG", "G")));
+}
+
+TEST_CASE("the Online tab's free rows are under its two columns, to the Game tab's last on the screen", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const auto slots = FreeSlots(OptionsMovie(), Tab::Online);
+    REQUIRE(slots);
+    // Each column a clip of its own, at 222 on the screen: nine rows under
+    // the left's two checkboxes, seven under the right's four.
+    REQUIRE(slots->size() == 16);
+    CHECK(slots->front() == Slot{0, 71, 0});
+    CHECK((*slots)[8] == Slot{0, 351, 0});
+    CHECK((*slots)[9] == Slot{0, 143, 1});
+    CHECK(slots->back() == Slot{0, 353, 1});
+}
+
+TEST_CASE("a button is the screen's own, under its section's checkboxes, and takes the rows it reaches into",
+          "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    const Bytes movie = OptionsMovie();
+    Section section{"Multiplayer", {{"DAOLibListen", "Listen", ""}}};
+    section.buttons.push_back({"DAOLibHost", "Host a game", "Lets a friend join"});
+    section.buttons.push_back({"DAOLibJoin", "Join a game", ""});
+    section.tab = Tab::Online;
+    CHECK(RowsOf(section) == 6); // a heading's two, the checkbox's, and the buttons' 104 in three
+    std::vector<bool> shown;
+    const auto patched = AddSections(movie, std::vector<Section>{section}, shown);
+    REQUIRE(patched);
+    CHECK(shown == std::vector<bool>{true});
+
+    // In the left column's clip: the heading's bar 17 left of the
+    // checkboxes, the checkbox in the third row, and the buttons where the
+    // checkboxes stand, 52 apart, as the symbol Restore Defaults is.
+    const Slot top{0, 71, 0};
+    const auto heading = gfx::FindInstance(*patched, HeadingInstance(top, Tab::Online));
+    const auto box = gfx::FindInstance(*patched, ControlInstance("DAOLibListen"));
+    const auto host = gfx::FindInstance(*patched, ControlInstance("DAOLibHost"));
+    const auto join = gfx::FindInstance(*patched, ControlInstance("DAOLibJoin"));
+    REQUIRE((heading && box && host && join));
+    CHECK(HeadingInstance(top, Tab::Online) != HeadingInstance(top, Tab::Game));
+    CHECK(HeadingInstance(top, Tab::Online) != HeadingInstance(top, Tab::Video));
+    CHECK(heading->sprite == kOnlineLeft);
+    CHECK(heading->x == -17 + 24);
+    CHECK(heading->y == 71 + 6 + 13);
+    CHECK(box->sprite == kOnlineLeft);
+    CHECK(box->character == kCheckbox);
+    CHECK(box->y == 141);
+    CHECK(host->sprite == kOnlineLeft);
+    CHECK(host->character == kButton);
+    CHECK(host->x == 0);
+    CHECK(host->y == 176);
+    CHECK(join->character == kButton);
+    CHECK(join->y == 228);
+
+    // A button's set-up: its text, a click that sends what a ticked
+    // checkbox sends, and its tooltip.
+    const Bytes click = gfx::Join({gfx::Push({gfx::Text("ClientOptions.SetClientOptionMessage DAOLibHost 1"),
+                                              gfx::Integer(1), gfx::Text("ExternalCommands")}),
+                                   gfx::Do(gfx::Op::GetVariable), gfx::Push({gfx::Text("SendMessage")}),
+                                   gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::Pop)});
+    CHECK(Holds(*patched, gfx::Push({gfx::Register(2), gfx::Text("OptDAOLibHost_mc_init")})));
+    CHECK(Holds(*patched,
+                gfx::Push({gfx::Text("Host a game"), gfx::Integer(1), gfx::Register(1), gfx::Text("SetText")})));
+    CHECK(Holds(*patched, gfx::Join({gfx::Function(click),
+                                     gfx::Push({gfx::Integer(1), gfx::Register(1), gfx::Text("SetButtonAction")}),
+                                     gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::Pop)})));
+    CHECK(Holds(*patched, gfx::Join({gfx::Push({gfx::Text("Lets a friend join"), gfx::Register(1), gfx::Integer(2),
+                                                gfx::Text("OptionsUtils")}),
+                                     gfx::Do(gfx::Op::GetVariable), gfx::Push({gfx::Text("AddTooltip")}),
+                                     gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::Pop)})));
+
+    // The rows the buttons reach into are taken for whoever comes next:
+    // three of the left column's nine are left, and the other tabs are as
+    // they were.
+    const auto after = FreeSlots(*patched, Tab::Online);
+    REQUIRE(after);
+    CHECK(after->size() == 3 + 7);
+    CHECK(after->front() == Slot{0, 281, 0});
+    CHECK(FreeSlots(*patched, Tab::Game) == FreeSlots(movie, Tab::Game));
+}
+
+TEST_CASE("a section of buttons alone goes in, but not in a movie with no button of the game's", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    Section section{"Multiplayer", {}};
+    section.buttons.push_back({"DAOLibHost", "Host a game", ""});
+    section.tab = Tab::Online;
+    section.column = 1;
+    std::vector<bool> shown;
+    const auto patched = AddSections(OptionsMovie(), std::vector<Section>{section}, shown);
+    REQUIRE(patched);
+    CHECK(Shown(shown) == 1);
+    // In the right column's clip, as asked: the button in the third row.
+    const auto host = gfx::FindInstance(*patched, ControlInstance("DAOLibHost"));
+    REQUIRE(host);
+    CHECK(host->sprite == kOnlineRight);
+    CHECK(host->y == 143 + 70);
+    // A button is higher than a row: the one under its own is taken too,
+    // and three of the column's seven are left.
+    const auto after = FreeSlots(*patched, Tab::Online);
+    REQUIRE(after);
+    CHECK(after->size() == 9 + 3);
+    CHECK((*after)[9] == Slot{0, 283, 1});
+
+    shown.assign(9, true);
+    CHECK_FALSE(AddSections(OptionsMovie(true, false), std::vector<Section>{section}, shown));
+    CHECK(Shown(shown) == 0);
 }

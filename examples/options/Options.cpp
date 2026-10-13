@@ -33,6 +33,11 @@
 // too, with more sliders than the column has rows left: it is not on the
 // screen, the log has the library's warning for it, and its state is "no
 // room".
+//
+// A fifth, "DAOLib example online", goes on the Online tab, under its left
+// column: a checkbox, and under it two buttons, the screen's own as Restore
+// Defaults is. Each click of a button is logged with how many it has had,
+// and the screen stays open.
 // What it does goes to example_options.log.
 #include "dao/Options.h"
 #include "dao/Frame.h"
@@ -56,7 +61,8 @@ constexpr const wchar_t *kTitle = L"DAOLib example";
 constexpr const wchar_t *kChoiceTitle = L"DAOLib example choice";
 constexpr const wchar_t *kVideoTitle = L"DAOLib example video";
 constexpr const wchar_t *kLeftOutTitle = L"DAOLib example left out";
-constexpr std::array kTitles = {kTitle, kChoiceTitle, kVideoTitle, kLeftOutTitle};
+constexpr const wchar_t *kOnlineTitle = L"DAOLib example online";
+constexpr std::array kTitles = {kTitle, kChoiceTitle, kVideoTitle, kLeftOutTitle, kOnlineTitle};
 
 std::atomic<bool> g_plain{false};
 std::atomic<bool> g_startsOn{true};
@@ -65,6 +71,8 @@ std::atomic<bool> g_leftOut{false};
 std::atomic<std::int32_t> g_speed{1};
 std::atomic<std::int32_t> g_mode{1};
 std::atomic<std::int32_t> g_look{0};
+std::atomic<bool> g_online{false};
+std::atomic<std::int32_t> g_presses{0};
 
 const char *Name(dao::options::SectionState state)
 {
@@ -185,7 +193,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     spdlog::info("the choice added: {}; one value refused: {}", choiceAdded, singleRefused);
 
     // On the Video tab: a checkbox and a slider, five of the right column's fourteen rows; and a
-    // section after it that the tab has no room for, five sliders being ten rows.
+    // section after it that the tab has no room for: its heading, its checkbox and six sliders
+    // are eleven rows, and nine are left. (With five it fits to the row, as the game showed
+    // 2026-10-12, the sliders standing 41 apart since DAOLib #84.)
     dao::options::Choice look;
     look.name = L"ExampleLook";
     look.label = L"A choice on Video";
@@ -204,8 +214,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         kVideoTitle, {Kept(L"ExampleVideo", L"A box on Video", L"A setting on the Video tab", g_video)}, {look},
         dao::options::Column::Either, dao::options::Tab::Video);
     std::vector<dao::options::Choice> tooMany;
-    for (const wchar_t *name :
-         {L"ExampleLeftOutA", L"ExampleLeftOutB", L"ExampleLeftOutC", L"ExampleLeftOutD", L"ExampleLeftOutE"})
+    for (const wchar_t *name : {L"ExampleLeftOutA", L"ExampleLeftOutB", L"ExampleLeftOutC", L"ExampleLeftOutD",
+                                L"ExampleLeftOutE", L"ExampleLeftOutF"})
     {
         dao::options::Choice filler;
         filler.name = name;
@@ -219,6 +229,26 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         dao::options::AddSection(kLeftOutTitle, {Kept(L"ExampleLeftOut", L"Not on the screen", L"", g_leftOut)},
                                  std::move(tooMany), dao::options::Column::Either, dao::options::Tab::Video);
     spdlog::info("the Video tab's added: {}; the one it has no room for added: {}", videoAdded, leftOutAdded);
+
+    // On the Online tab: a checkbox and two buttons. A button with no `pressed` is refused.
+    dao::options::Button first;
+    first.name = L"ExampleButton";
+    first.label = L"A button";
+    first.tooltip = L"Each click is logged";
+    first.pressed = [] { spdlog::info("ExampleButton pressed: {} time(s)", ++g_presses); };
+    dao::options::Button second;
+    second.name = L"ExampleSecondButton";
+    second.label = L"A second button";
+    second.pressed = [] { spdlog::info("ExampleSecondButton pressed"); };
+    dao::options::Button idle;
+    idle.name = L"ExampleIdleButton";
+    idle.label = L"refused";
+    const bool onlineAdded = dao::options::AddSection(
+        kOnlineTitle, {Kept(L"ExampleOnline", L"A box on Online", L"A setting on the Online tab", g_online)}, {},
+        dao::options::Column::Either, dao::options::Tab::Online, {first, second});
+    const bool idleRefused = !dao::options::AddSection(L"Refused button", {}, {}, dao::options::Column::Either,
+                                                       dao::options::Tab::Online, {idle});
+    spdlog::info("the Online tab's added: {}; a button with nothing to run refused: {}", onlineAdded, idleRefused);
     dao::OnFrame(&Frame);
     return true;
 }

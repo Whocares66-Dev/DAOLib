@@ -80,6 +80,22 @@
 //   above Restore Defaults: fourteen rows, a heading and twelve, which is
 //   a heading, two checkboxes and eight sliders.
 //
+// - The Online tab (read 2026-10-12, DAOLib #104) is two clips the main
+//   timeline places, one a column, under the bars "Connection" and
+//   "Profile", which stand where the Game tab's do: the left at (87, 222)
+//   with two checkboxes, the last OptAutoDLOldEntitlements_mc at (0, 36),
+//   and the right at (538, 222) with four, the last
+//   OptAutoUploadProfile_mc at (0, 108). So a section is placed there as on
+//   the Game tab, each column in its own clip, down to the Game tab's last
+//   row on the screen: nine rows at the left and seven at the right.
+//
+// - A button is the screen's own Restore Defaults (RestoreDefaults_mc, a
+//   symbol 358 wide and 46 high), whose set-up function gives it its text
+//   with SetText and what a click does with SetButtonAction. A section's is
+//   the same symbol under a checkbox's kind of name, its click sending
+//   "ClientOptions.SetClientOptionMessage <option> 1" as a checkbox's does;
+//   it asks to be told no value.
+//
 // - The Controls tab's key list is built in script: AddHeader(text) for a
 //   section and AddKeyBinding("TogglePause") for each action, the last of
 //   them HideMainInterface. A plugin's actions are listed by the same
@@ -120,17 +136,27 @@ struct Choice
     bool dropdown = false;
 };
 
+// A button: the option a click of it sends 1 for (letters and digits), its
+// text, and what it says when the mouse rests on it. UTF-8.
+struct Button
+{
+    std::string option;
+    std::string label;
+    std::string tooltip;
+};
+
 // The tab a section is on.
 enum class Tab : std::uint8_t
 {
     Game,
     Video,
+    Online,
 };
 
 // A section that takes whichever column has room first.
 inline constexpr std::int32_t kEitherColumn = -1;
 
-// A section's rows: its checkboxes, then its choices.
+// A section's rows: its checkboxes, then its choices, then its buttons.
 struct Section
 {
     std::string title;
@@ -138,6 +164,7 @@ struct Section
     // `= {}` so that a section written {title, toggles} leaves it out
     // without clang's missing-field-initializers.
     std::vector<Choice> choices = {}; // NOLINT(readability-redundant-member-init)
+    std::vector<Button> buttons = {}; // NOLINT(readability-redundant-member-init)
     // The column the section would be in, 0 the left or 1 the right, if that column has the
     // rows; kEitherColumn for the first that has. `= ...` for the same reason.
     std::int32_t column = kEitherColumn; // NOLINT(readability-redundant-member-init)
@@ -159,8 +186,8 @@ struct Slot
 inline constexpr std::size_t kHeadingRows = 2;
 
 // How many of a column's free rows a section takes: two for its heading, one
-// a checkbox, two a dropdown, and 41 pixels of the rows' 35 a slider, to the
-// whole row above.
+// a checkbox, two a dropdown, and 41 pixels of the rows' 35 a slider and 52
+// a button, to the whole row above.
 std::size_t RowsOf(const Section &section);
 
 // A tab's free rows, in the order they are filled: down the left column
@@ -172,16 +199,16 @@ std::size_t RowsOf(const Section &section);
 // read.
 std::optional<std::vector<Slot>> FreeSlots(std::span<const std::byte> movie, Tab tab = Tab::Game);
 
-// The name a control for an option is placed under, a checkbox or a
-// choice, and the name of a heading's text in a row: by the tab and the
+// The name a control for an option is placed under, a checkbox, a choice
+// or a button, and the name of a heading's text in a row: by the tab and the
 // row, so that no two plugins' headings share one.
 std::string ControlInstance(std::string_view option);
 std::string HeadingInstance(const Slot &slot, Tab tab = Tab::Game);
 
 // The movie with as many of the sections as their tabs have rows for, each
-// a heading, its checkboxes and its choices one under the other in one
-// column, the sliders as close as the game's own, a section never split or
-// begun without room for all of it.
+// a heading, its checkboxes, its choices and its buttons one under the
+// other in one column, the sliders as close as the game's own, a section
+// never split or begun without room for all of it.
 // With a section for the Video tab among them, that tab's own controls are
 // first put in its left column, set closer, which leaves the right column
 // to sections; once, however many copies of the library patch the movie.
