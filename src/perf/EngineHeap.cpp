@@ -290,6 +290,13 @@ LONG CALLBACK ReadPastEnd(EXCEPTION_POINTERS *info)
     if (VirtualAlloc(page, kPage, MEM_COMMIT, PAGE_READWRITE) == nullptr &&
         VirtualAlloc(page, kPage, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE) == nullptr)
     {
+        // The game is about to crash on this read, and why the page could not be made is what
+        // its crash log will want (DAOLib #105: one such read was not caught, and nothing said
+        // which way it fell through).
+        spdlog::warn("engine heap: the code at {:#010x} read {:#010x}, past the end of a block of the engine's, and "
+                     "no page could be made there: the page is {}, error {}",
+                     dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(record.ExceptionAddress)), at,
+                     now.State == MEM_FREE ? "free" : "reserved", GetLastError());
         return EXCEPTION_CONTINUE_SEARCH;
     }
     if (!g_checking.load(std::memory_order_relaxed) &&

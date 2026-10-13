@@ -243,6 +243,7 @@ add_library(
     SHARED
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
+    src/fix/MouseRecords.cpp
     src/fix/SavedFileName.cpp
     src/perf/EngineHeap.cpp
     src/perf/AllProcessors.cpp

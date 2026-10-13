@@ -91,6 +91,11 @@ struct AddressSpace
     }
 };
 AddressSpace g_addressSpace;
+// For an access violation: what the address space held at the address and just before its
+// page, asked as the crash came in. A fault a little past the end of memory that is there
+// reads differently from one in memory that never was (DAOLib #105).
+MEMORY_BASIC_INFORMATION g_faultPage{};
+MEMORY_BASIC_INFORMATION g_pageBefore{};
 
 // How much of the crashing thread's stack the scans read: 64 KiB.
 constexpr std::size_t kScanWords = 16384;
@@ -493,6 +498,32 @@ class Report
         w.Blank();
     }
 
+    // One page's place in the address space, in a few words.
+    static std::string PageSays(const MEMORY_BASIC_INFORMATION &page)
+    {
+        const auto base = reinterpret_cast<std::uintptr_t>(page.BaseAddress);
+        if (page.RegionSize == 0)
+        {
+            return "not known";
+        }
+        if (page.State == MEM_FREE)
+        {
+            return fmt::format("free, {} KiB of it from {:#010x}", page.RegionSize >> 10, base);
+        }
+        std::string_view kind = "private";
+        if (page.Type == MEM_IMAGE)
+        {
+            kind = "a module's";
+        }
+        else if (page.Type == MEM_MAPPED)
+        {
+            kind = "a mapped file's";
+        }
+        return fmt::format("{}, {} memory of the mapping at {:#010x}, protection {:#x}",
+                           page.State == MEM_COMMIT ? "committed" : "reserved and not committed", kind,
+                           reinterpret_cast<std::uintptr_t>(page.AllocationBase), page.Protect);
+    }
+
     void Exception(Writer &w)
     {
         const auto code = static_cast<std::uint32_t>(g_record.ExceptionCode);
@@ -506,6 +537,8 @@ class Report
             w.Line("\t{} {:#010x} {}",
                    dao::core::AccessKind(static_cast<std::uint32_t>(g_record.ExceptionInformation[0])), target,
                    Annotate(target));
+            w.Line("\tthe page there: {}", PageSays(g_faultPage));
+            w.Line("\tthe page before: {}", PageSays(g_pageBefore));
         }
         std::array<std::uint8_t, 16> bytes{};
         if (ScanCopy(bytes.data(), at, bytes.size()))
@@ -1065,6 +1098,16 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
         g_threadId = GetCurrentThreadId();
         // Before the writer's thread, whose stack is itself an allocation.
         g_addressSpace = MeasureAddressSpace();
+        if (g_record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && g_record.NumberParameters >= 2)
+        {
+            constexpr ULONG_PTR kPageMask = 0xFFF;
+            const ULONG_PTR page = g_record.ExceptionInformation[1] & ~kPageMask;
+            VirtualQuery(reinterpret_cast<const void *>(page), &g_faultPage, sizeof g_faultPage);
+            if (page != 0)
+            {
+                VirtualQuery(reinterpret_cast<const void *>(page - 1), &g_pageBefore, sizeof g_pageBefore);
+            }
+        }
         if (g_reserve != nullptr)
         {
             VirtualFree(g_reserve, 0, MEM_RELEASE);

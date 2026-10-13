@@ -46,6 +46,7 @@
 #include "dao/Resources.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
+#include "fix/MouseRecords.h"
 #include "fix/SavedFileName.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
@@ -212,6 +213,7 @@ void BeforeTheGame()
     perf::InstallEngineHeap();
     fix::InstallArchiveReadFix();
     fix::InstallSavedFileNameFix();
+    fix::InstallMouseRecordsFix();
     perf::InstallFastLoad();
     LoadPlugins();
     spdlog::debug("starting the game");

@@ -1265,6 +1265,23 @@ DAO_ADDRESS(kCClientExoApp_GetAreaById, 10511)
 // are ours.
 DAO_ADDRESS(kThreadedGraphicsDriver_SaveToFile, 32291)
 DAO_ADDRESS(kThreadedGraphicsDriver_SaveToFileOther, 32292)
+// The mouse's records (fix/MouseRecords.h, DAOLib #105), read 2026-10-12
+// after a crash at 0x008803A6. ReadMouse is __thiscall on the
+// ECInput::RawInputWin32, called from its slot 1 (0x008804F0) after the
+// keyboard's (0x0087FCF0) with the same this. It asks DirectInput how many
+// buffered records the mouse has (GetDeviceData, the device at +0x24, 0x14
+// bytes a record), allocates that many (0x008800BA, operator new), reads
+// them and walks them, the walk's index the local at [esp+0x24]. After the
+// walk, behind a byte for each axis that moved ([esp+0x1B], [esp+0x1A]), it
+// makes the movement's event from the dwords at +8 and +0xC, the time stamp
+// and sequence, of the record at the index, which by then is the count: one
+// past the last (+0x460 and +0x4C8 from the function's start, the four
+// reads at +0x466, +0x469, +0x4C8 and +0x4CF). The walk is entered only
+// with a count above zero, so the record before always exists. The address
+// library's session read the function in the three builds: 0x589 bytes in
+// each, the same instructions at the same offsets, GOG's and EA's differing
+// only in calls' targets and one global's address. The name is ours.
+DAO_ADDRESS(kRawInputWin32_ReadMouse, 24180)
 // The frame's present, read 2026-10-11 for DAOLib #73, after a profile (#68)
 // found the arrival's wait for rooms held to the monitor. Present is
 // D3DDriver::D3DGraphicsDriver's slot 10 (vftable 0x00B2E174), __thiscall,
