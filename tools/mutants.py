@@ -136,8 +136,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "install-sortcopies: copies of different resources are sorted, not left as given",
         INSTALL,
-        "{\n    Sort(*this, copies);\n}\n\nstd::string Index::EngineSource",
-        "{\n    (void)copies;\n}\n\nstd::string Index::EngineSource",
+        "{\n    Sort(*this, copies);\n}\n\nvoid Index::SortFiles",
+        "{\n    (void)copies;\n}\n\nvoid Index::SortFiles",
     ),
     Mutant(
         "install-engine-source: a loose file's source is its folder, not the file",
@@ -297,6 +297,12 @@ MUTANTS: list[Mutant] = [
         M2DA,
         "return worksheet.Single() ? lower == worksheet.prefix : lower.starts_with(worksheet.prefix);",
         "return lower.starts_with(worksheet.prefix);",
+    ),
+    Mutant(
+        "install-files-by-name: a source lists its own files by name",
+        INSTALL,
+        "return !names.empty() && names[a] < names[b];",
+        "return !names.empty() && names[a] > names[b];",
     ),
     Mutant(
         "addinorder-from-end: the game takes AddIns.xml's items from the last",

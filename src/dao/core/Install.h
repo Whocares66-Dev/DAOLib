@@ -113,6 +113,13 @@ struct Options
     std::string textures = "high"; // a folder of packages\core	extures: "high" or "medium"
 };
 
+// A file by its name, and a copy of it.
+struct NamedCopy
+{
+    std::string name;
+    Copy copy;
+};
+
 struct Stats
 {
     double ms = 0; // how long the index took to build
@@ -178,9 +185,12 @@ class Index
     // gives one resource's copies in; the order of files of different names the game lists, as a
     // merged table takes its files in (dao/core/M2da.h).
     void SortCopies(std::vector<Copy> &copies) const;
+    // Sorts files, each a name and the copy of it the game takes, into the order the game lists
+    // its files: by their copies' sources as SortCopies, then, of one source's, by name. The order
+    // a merged table takes its files in (dao/core/M2da.h).
+    void SortFiles(std::vector<NamedCopy> &files) const;
     // Returns the game's source a copy is read from, as a key: its base ("game:" or "documents:")
-    // and its archive's path, or its own file's folder, in lower case. Copies of one source are listed in that source's
-    // own order, which is not read (m2da::Merge's `sources`).
+    // and its archive's path, or its own file's folder, in lower case.
     std::string EngineSource(const Copy &copy) const;
 
     // Returns true if a copy's bytes can be read: not in an enciphered or compressed archive.

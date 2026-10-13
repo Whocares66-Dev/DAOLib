@@ -110,29 +110,22 @@ TEST_CASE("of an ID's rows the game keeps the first in the parts' order", "[gda]
         {
             taken.push_back(std::get<std::wstring>(row.cells[1]));
         }
-        CHECK(row.settled);
     }
     std::ranges::sort(taken);
     CHECK(taken == std::vector<std::wstring>{L"a", L"mod's", L"new"});
     CHECK(merged.conflicts == 1);
 }
 
-TEST_CASE("a part whose first column is not ID gives no row, and in one source the order is not settled", "[gda][m2da]")
+TEST_CASE("a part whose first column is not ID gives no row", "[gda][m2da]")
 {
     const auto late = Table({"Label", "ID"}, {{std::string("late"), 1}});
     const auto first = Table({"ID", "Label"}, {{1, std::string("first")}});
-    const auto second = Table({"ID", "Label"}, {{1, std::string("second")}});
-    const std::vector<const GdaFile *> parts{&late, &first, &second};
-    const std::vector<std::size_t> sources{0, 1, 1}; // the two last from one source
-    const auto merged = m2da::Merge(parts, sources);
+    const std::vector<const GdaFile *> parts{&late, &first};
+    const auto merged = m2da::Merge(parts);
     CHECK(merged.skipped == std::vector<std::size_t>{0});
     const auto taken = std::ranges::find_if(merged.rows, [](const m2da::Row &row) { return row.taken; });
     REQUIRE(taken != merged.rows.end());
     CHECK(taken->part == 1);
-    CHECK_FALSE(taken->settled);
-    // From sources of their own, the first is settled.
-    const auto apart = m2da::Merge(parts);
-    CHECK(std::ranges::find_if(apart.rows, [](const m2da::Row &row) { return row.taken; })->settled);
 }
 
 TEST_CASE("tables merge by ID: a row parts give alike once, different rows each a conflict", "[gda][m2da]")

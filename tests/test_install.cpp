@@ -153,6 +153,32 @@ TEST_CASE("copies of different resources sort into the sources' order, each with
     CHECK(index->EngineSource((*ogres)[1]) == "game:packages/core/override");
 }
 
+TEST_CASE("files of one source sort by name, after their sources' order", "[install]")
+{
+    files::TempFolder root;
+    // One archive with its files out of order by name, and a loose file ahead of it.
+    root.Write(L"game/packages/core/data/2da.erf", files::Erf({{"abi_zz.gda", files::FromText("zz")},
+                                                               {"abi_b.gda", files::FromText("b")},
+                                                               {"abi_m10.gda", files::FromText("m10")},
+                                                               {"abi_m9.gda", files::FromText("m9")}}));
+    root.Write(L"game/packages/core/override/abi_q.gda", files::FromText("override"));
+    const auto index = install::Index::Build(root.path / L"game", {});
+    std::vector<install::NamedCopy> listed;
+    for (const char *name : {"abi_zz.gda", "abi_m9.gda", "ABI_q.gda", "abi_m10.gda", "abi_b.gda"})
+    {
+        listed.push_back({name, index->Find(name)->front()});
+    }
+    index->SortFiles(listed);
+    std::vector<std::string> names;
+    names.reserve(listed.size());
+    for (const auto &file : listed)
+    {
+        names.push_back(file.name);
+    }
+    // The override first (priority 1), then the archive's by name, character by character.
+    CHECK(names == std::vector<std::string>{"ABI_q.gda", "abi_b.gda", "abi_m10.gda", "abi_m9.gda", "abi_zz.gda"});
+}
+
 TEST_CASE("a copy in an enciphered archive is listed and not read", "[install]")
 {
     const Folder folder;

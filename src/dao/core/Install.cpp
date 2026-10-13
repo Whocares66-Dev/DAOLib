@@ -760,9 +760,11 @@ Key KeyOf(const Index &index, const Copy &copy)
     return {kind, std::move(where)};
 }
 
-// A resource's copies sorted as the resource manager sorts its sources: those the game has
-// first, then by priority, kind and name.
-void Sort(const Index &index, std::vector<Copy> &copies)
+// The places of copies in the order the game meets them: those it has first, then as the
+// resource manager sorts its sources (priority, kind, name, the later first), then, of one
+// source's files, by their names (`names`, where given): a source lists its own files by name,
+// whether an archive or a folder (seen in play 2026-10-13, dev/FILES.md).
+std::vector<std::size_t> GameOrder(const Index &index, std::span<const Copy> copies, std::span<const std::string> names)
 {
     std::vector<Key> keys;
     keys.reserve(copies.size());
@@ -775,7 +777,7 @@ void Sort(const Index &index, std::vector<Copy> &copies)
     {
         order[i] = i;
     }
-    std::ranges::stable_sort(order, [&copies, &keys](std::size_t a, std::size_t b) {
+    std::ranges::stable_sort(order, [&copies, &keys, &names](std::size_t a, std::size_t b) {
         const bool hasA = copies[a].unused == Unused::No;
         const bool hasB = copies[b].unused == Unused::No;
         if (hasA != hasB)
@@ -790,8 +792,19 @@ void Sort(const Index &index, std::vector<Copy> &copies)
         {
             return keys[a].kind < keys[b].kind;
         }
-        return keys[a].name > keys[b].name;
+        if (keys[a].name != keys[b].name)
+        {
+            return keys[a].name > keys[b].name;
+        }
+        return !names.empty() && names[a] < names[b];
     });
+    return order;
+}
+
+// A resource's copies sorted into the order the game meets them.
+void Sort(const Index &index, std::vector<Copy> &copies)
+{
+    const std::vector<std::size_t> order = GameOrder(index, copies, {});
     std::vector<Copy> sorted;
     sorted.reserve(copies.size());
     for (const std::size_t i : order)
@@ -806,6 +819,27 @@ void Sort(const Index &index, std::vector<Copy> &copies)
 void Index::SortCopies(std::vector<Copy> &copies) const
 {
     Sort(*this, copies);
+}
+
+void Index::SortFiles(std::vector<NamedCopy> &files) const
+{
+    std::vector<Copy> copies;
+    std::vector<std::string> names;
+    copies.reserve(files.size());
+    names.reserve(files.size());
+    for (const NamedCopy &file : files)
+    {
+        copies.push_back(file.copy);
+        names.push_back(Lower(file.name));
+    }
+    const std::vector<std::size_t> order = GameOrder(*this, copies, names);
+    std::vector<NamedCopy> sorted;
+    sorted.reserve(files.size());
+    for (const std::size_t i : order)
+    {
+        sorted.push_back(std::move(files[i]));
+    }
+    files = std::move(sorted);
 }
 
 std::string Index::EngineSource(const Copy &copy) const

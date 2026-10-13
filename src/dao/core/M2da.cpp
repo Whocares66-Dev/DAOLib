@@ -25,8 +25,8 @@
 // a part whose first column is not ID (hash 0x66FBC936) gives none, and a row
 // whose ID the array has already is dropped (0x004EC910 answers -1), so the
 // first part in the list to give an ID keeps it. A script's lookup then finds
-// the row by ID in that array (0x004EC130). In what order one source lists
-// its own names is not read (its index, 0x004E6A90).
+// the row by ID in that array (0x004EC130). A source lists its own files by
+// their names (seen in play, below; its index, 0x004E6A90, not read).
 //
 // Seen in play 2026-10-13 (GOG's game, through Eluvian's script tool):
 // GetM2DAInt(268, "TitleStrRef", 25) is 445854, Awakening's
@@ -35,6 +35,14 @@
 // rows, not the 14 with aip_archer_dwarf, _elf and _human; GetM2DARows(4),
 // prj_, is 76, prj_base.gda's 67 and more, where the longest prefix would
 // give the worksheet prj_base's file to prj_base alone.
+//
+// One source's own order, seen in play 2026-10-13: test tables of
+// achievements (table 268) giving row 25 each a value of its own, in one ERF
+// in a plugin's override\ folder (ahead of every add-in), and the game asked
+// for the row. Of achievements_zz1 and _zz2 the first, the entries in either
+// order; of _b and _a, _a; of _q and _c, _c; of _m9 and _m10, _m10; of five
+// files in a shuffled order, _b2, the first by name; and loose in the folder,
+// of _y, _e and _s, written in that order, _e. Each time the first by name.
 #include "dao/core/M2da.h"
 
 #include <algorithm>
@@ -132,22 +140,13 @@ bool Collapse(std::vector<Row> &rows, const std::vector<std::size_t> &ofId, std:
     return true;
 }
 
-// Each ID's first row in the parts' order marked as the one the game keeps; unsettled where
-// another part of the same source gives the ID another row, as which of the two the game meets
-// first is the source's own order, not read.
-void MarkTaken(std::vector<Row> &rows, const std::unordered_map<std::int64_t, std::vector<std::size_t>> &takenOf,
-               std::span<const std::size_t> sources)
+// Each ID's first row in the parts' order marked as the one the game keeps.
+void MarkTaken(std::vector<Row> &rows, const std::unordered_map<std::int64_t, std::vector<std::size_t>> &takenOf)
 {
-    const auto sourceOf = [&sources](std::size_t part) { return part < sources.size() ? sources[part] : part; };
     for (const auto &[id, ofId] : takenOf)
     {
         Row &first = rows[ofId.front()];
         first.taken = true;
-        first.settled = std::ranges::none_of(ofId, [&](std::size_t r) {
-            const Row &other = rows[r];
-            return other.part != first.part && sourceOf(other.part) == sourceOf(first.part) &&
-                   other.cells != first.cells;
-        });
     }
 }
 
@@ -226,7 +225,7 @@ std::vector<std::size_t> WorksheetsOf(std::span<const Worksheet> worksheets, std
     return found;
 }
 
-Merged Merge(std::span<const GdaFile *const> parts, std::span<const std::size_t> sources)
+Merged Merge(std::span<const GdaFile *const> parts)
 {
     Merged merged;
     const auto columnOf = MergeColumns(parts, merged.columns);
@@ -263,7 +262,7 @@ Merged Merge(std::span<const GdaFile *const> parts, std::span<const std::size_t>
             merged.rows.push_back(std::move(row));
         }
     }
-    MarkTaken(merged.rows, takenOf, sources);
+    MarkTaken(merged.rows, takenOf);
     std::vector<bool> dropped(merged.rows.size(), false);
     for (const auto &[id, ofId] : rowsOf)
     {

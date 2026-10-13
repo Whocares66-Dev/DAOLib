@@ -67,8 +67,6 @@ struct Row
     std::optional<std::int64_t> id;   // its ID column's value
     bool conflict = false;            // another part gives its ID a different row
     bool taken = false;               // the game's: the first row of its ID in the parts' order
-    bool settled = true;              // false where which row is first rests on the order of
-                                      // files within one source, which is not read
     std::vector<std::size_t> alike;   // the other parts that give this same row
 };
 
@@ -84,11 +82,8 @@ struct Merged
 // Returns the parts merged as the game merges them: rows keyed by their ID column, a row parts
 // give alike given once, different rows for one ID each given and marked a conflict, and of each
 // ID's rows the first in the parts' order taken.
-// @param parts the table's files in the order the game lists them (by their sources' order,
-// dev/FILES.md, each file's copy the one the game takes); none may be null
-// @param sources for each part, a number its source alone has: the order of parts of one source
-// is not read, so a row taken over another of the same source is not settled. Empty: each part a
-// source of its own.
-Merged Merge(std::span<const GdaFile *const> parts, std::span<const std::size_t> sources = {});
+// @param parts the table's files in the order the game lists them: of each name the copy the game
+// takes, sorted by install::Index::SortFiles (their sources' order, then by name); none may be null
+Merged Merge(std::span<const GdaFile *const> parts);
 
 } // namespace dao::core::m2da
