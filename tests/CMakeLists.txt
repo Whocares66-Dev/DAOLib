@@ -10,6 +10,8 @@ add_executable(
     test_code.cpp
     test_crashlog.cpp
     test_erf.cpp
+    test_gdafile.cpp
+    test_gff3.cpp
     test_gff4.cpp
     test_gfxmovie.cpp
     test_heldevents.cpp
@@ -17,6 +19,7 @@ add_executable(
     test_level.cpp
     test_lightprobes.cpp
     test_input.cpp
+    test_install.cpp
     test_instance.cpp
     test_msvc8.cpp
     test_optionsmovie.cpp
