@@ -1,9 +1,39 @@
+// Notes on the archives:
+//
+// Version 2.0, read 2026-10-11 as tools/script_commands.py's erf_entries
+// reads the game's own: "ERF V2.0" as sixteen bytes of UTF-16, the number of
+// files as 32 bits, a year, a day and a word, and from byte 32 an entry of
+// 72 bytes for each: the name as 32 UTF-16 units, NUL-padded, then where its
+// bytes start and how many there are.
+//
+// Version 2.2, as xoreos reads it (src/aurora/erffile.cpp, readV22Header and
+// readV22ResList) and as Eluvian's resources tool read the add-ins' names
+// (2026-10-02): the same count at 16, then flags at 32, a module id at 36 and
+// a password's MD5 at 40, and from byte 56 entries of 76 bytes, the name and
+// offset as 2.0's, then the packed size before the size. The flags' bits 4 to
+// 7 say how the files are enciphered (2, xoreos's kEncryptionBlowfishDAO:
+// Blowfish under a numeric password whose MD5 the header holds; where the
+// game gets it is unread) and bits 29 to 31 how they are compressed. Every
+// one of the GOG install's 377 is enciphered and none compressed, counted
+// 2026-10-12; their directories are not enciphered, so their names are read.
+//
+// The archives are large (modelmeshdata.erf is 425 MiB), so a reader takes
+// the directory alone and then each file it wants by its place. The Archive
+// is ElgaraShaders' (src/LevelFiles.h, 2026-10-11), moved here for every
+// reader of the game's files (DAOLib #106, step 2): held open, a room of the
+// Circle read in half a second where opening the archive for each reading
+// took seven, on a thread whose reading gives way to everything; not held, a
+// terrain level's five hundred archives do not run a process out of the 512
+// files it may hold open.
 #include "dao/core/Erf.h"
 
 #include "dao/core/Bytes.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <fstream>
+#include <mutex>
 
 namespace dao::core::erf
 {
@@ -12,32 +42,86 @@ namespace
 {
 
 constexpr std::size_t kNameUnits = 32;
-constexpr std::array<char16_t, 8> kMagic{u'E', u'R', u'F', u' ', u'V', u'2', u'.', u'0'};
+constexpr std::size_t kMagicSize = 16;
+constexpr std::size_t kFlags = 32;
+constexpr std::array<char16_t, 8> kMagic20{u'E', u'R', u'F', u' ', u'V', u'2', u'.', u'0'};
+constexpr std::array<char16_t, 8> kMagic22{u'E', u'R', u'F', u' ', u'V', u'2', u'.', u'2'};
+// No archive of the game's has a directory near this (modelmeshdata.erf's
+// 425 MiB hold some 20,000 files, 1.4 MiB of directory); a count past it is a
+// damaged or foreign file, not a reason to ask for gigabytes.
+constexpr std::size_t kMostDirectory = std::size_t{64} << 20;
+
+bool Is(std::span<const std::byte> bytes, const std::array<char16_t, 8> &magic)
+{
+    return bytes.size() >= kMagicSize && std::memcmp(bytes.data(), magic.data(), kMagicSize) == 0;
+}
+
+std::wstring Lower(std::wstring_view text)
+{
+    std::wstring lower(text);
+    for (wchar_t &letter : lower)
+    {
+        if (letter >= L'A' && letter <= L'Z')
+        {
+            letter = static_cast<wchar_t>(letter - L'A' + L'a');
+        }
+    }
+    return lower;
+}
 
 } // namespace
 
-std::optional<std::uint32_t> EntryCount(std::span<const std::byte> header)
+std::size_t Header::DirectorySize() const
 {
-    if (header.size() < kHeaderSize || std::memcmp(header.data(), kMagic.data(), sizeof kMagic) != 0)
+    return version == Version::V22 ? kHeaderSize22 + (std::size_t{count} * kEntrySize22)
+                                   : kHeaderSize + (std::size_t{count} * kEntrySize);
+}
+
+std::optional<Header> ReadHeader(std::span<const std::byte> start)
+{
+    Header header;
+    if (Is(start, kMagic20) && start.size() >= kHeaderSize)
+    {
+        header.version = Version::V20;
+    }
+    else if (Is(start, kMagic22) && start.size() >= kHeaderSize22)
+    {
+        header.version = Version::V22;
+        header.flags = ReadAt<std::uint32_t>(start, kFlags).value_or(0);
+    }
+    else
     {
         return std::nullopt;
     }
-    return ReadAt<std::uint32_t>(header, sizeof kMagic);
+    header.count = ReadAt<std::uint32_t>(start, kMagicSize).value_or(0);
+    return header;
+}
+
+std::optional<std::uint32_t> EntryCount(std::span<const std::byte> header)
+{
+    if (header.size() < kHeaderSize || !Is(header, kMagic20))
+    {
+        return std::nullopt;
+    }
+    return ReadAt<std::uint32_t>(header, kMagicSize);
 }
 
 std::vector<Entry> Entries(std::span<const std::byte> start)
 {
     std::vector<Entry> entries;
-    const std::optional<std::uint32_t> count = EntryCount(start);
-    if (!count)
+    const std::optional<Header> header = ReadHeader(start);
+    if (!header)
     {
         return entries;
     }
-    const std::size_t whole = (start.size() - kHeaderSize) / kEntrySize;
-    entries.reserve(std::min<std::size_t>(*count, whole));
-    for (std::size_t i = 0; i < *count && i < whole; ++i)
+    const bool v22 = header->version == Version::V22;
+    const std::size_t first = v22 ? kHeaderSize22 : kHeaderSize;
+    const std::size_t size = v22 ? kEntrySize22 : kEntrySize;
+    const std::size_t whole = (start.size() - first) / size;
+    entries.reserve(std::min<std::size_t>(header->count, whole));
+    for (std::size_t i = 0; i < header->count && i < whole; ++i)
     {
-        const std::size_t at = kHeaderSize + (i * kEntrySize);
+        const std::size_t at = first + (i * size);
         Entry entry;
         for (std::size_t unit = 0; unit < kNameUnits; ++unit)
         {
@@ -48,11 +132,118 @@ std::vector<Entry> Entries(std::span<const std::byte> start)
             }
             entry.name.push_back(static_cast<wchar_t>(letter));
         }
-        entry.offset = ReadAt<std::uint32_t>(start, at + (kNameUnits * sizeof(char16_t))).value_or(0);
-        entry.size = ReadAt<std::uint32_t>(start, at + (kNameUnits * sizeof(char16_t)) + 4).value_or(0);
+        const std::size_t numbers = at + (kNameUnits * sizeof(char16_t));
+        entry.offset = ReadAt<std::uint32_t>(start, numbers).value_or(0);
+        if (v22)
+        {
+            entry.packed = ReadAt<std::uint32_t>(start, numbers + 4).value_or(0);
+            entry.size = ReadAt<std::uint32_t>(start, numbers + 8).value_or(0);
+        }
+        else
+        {
+            entry.size = ReadAt<std::uint32_t>(start, numbers + 4).value_or(0);
+            entry.packed = entry.size;
+        }
         entries.push_back(std::move(entry));
     }
     return entries;
+}
+
+struct Archive::Stream
+{
+    std::mutex lock;
+    std::ifstream file;
+};
+
+std::optional<Archive> Archive::Open(const std::filesystem::path &path, bool held)
+{
+    std::ifstream file(path, std::ios::binary);
+    std::vector<std::byte> start(kHeaderSize22);
+    file.read(reinterpret_cast<char *>(start.data()), static_cast<std::streamsize>(start.size()));
+    start.resize(static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
+    const std::optional<Header> header = ReadHeader(start);
+    if (!header)
+    {
+        return std::nullopt;
+    }
+    // The directory, or as much of it as the file holds.
+    const std::size_t wanted = std::min(header->DirectorySize(), kMostDirectory);
+    if (wanted > start.size())
+    {
+        const std::size_t had = start.size();
+        start.resize(wanted);
+        file.clear();
+        file.read(reinterpret_cast<char *>(start.data() + had), static_cast<std::streamsize>(wanted - had));
+        start.resize(had + static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
+    }
+    Archive archive;
+    archive.path_ = path;
+    archive.header_ = *header;
+    if (held)
+    {
+        archive.stream_ = std::make_shared<Stream>(); // its file opened at the first read
+    }
+    archive.entries_ = erf::Entries(start);
+    archive.byName_.reserve(archive.entries_.size());
+    for (std::size_t i = 0; i < archive.entries_.size(); ++i)
+    {
+        archive.byName_.emplace_back(Lower(archive.entries_[i].name), i);
+    }
+    // In the names' order, and of two files of one name the first.
+    std::ranges::stable_sort(archive.byName_, {}, &std::pair<std::wstring, std::size_t>::first);
+    return archive;
+}
+
+const Entry *Archive::Find(std::wstring_view name) const
+{
+    const std::wstring wanted = Lower(name);
+    const auto found = std::ranges::lower_bound(byName_, wanted, {}, &std::pair<std::wstring, std::size_t>::first);
+    return found != byName_.end() && found->first == wanted ? &entries_[found->second] : nullptr;
+}
+
+std::optional<std::vector<std::byte>> Archive::Read(const Entry &entry) const
+{
+    if (!Readable())
+    {
+        return std::nullopt;
+    }
+    std::vector<std::byte> bytes(entry.size);
+    const auto read = [&](std::ifstream &file) {
+        if (!file.is_open())
+        {
+            file.open(path_, std::ios::binary);
+        }
+        file.clear();
+        file.seekg(entry.offset);
+        return static_cast<bool>(
+            file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())));
+    };
+    bool whole = false;
+    if (stream_ != nullptr)
+    {
+        const std::scoped_lock guard(stream_->lock);
+        whole = read(stream_->file);
+    }
+    else
+    {
+        std::ifstream file;
+        whole = read(file);
+    }
+    if (!whole)
+    {
+        return std::nullopt;
+    }
+    return bytes;
+}
+
+std::optional<std::vector<std::byte>> Archive::Read(std::wstring_view name) const
+{
+    const Entry *entry = Find(name);
+    if (entry == nullptr)
+    {
+        return std::nullopt;
+    }
+    return Read(*entry);
 }
 
 } // namespace dao::core::erf

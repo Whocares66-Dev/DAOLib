@@ -114,6 +114,7 @@ FIELDPATH = "src/dao/core/FieldPath.h"
 PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
+ERF = "src/dao/core/Erf.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -124,6 +125,31 @@ INPUT = "src/dao/core/InputCode.h"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # The archives (#106): version 2.2's directory, and a file read by name.
+    Mutant(
+        "erf-v22-packed-first: version 2.2's entry has the packed size before the size",
+        ERF,
+        "entry.size = ReadAt<std::uint32_t>(start, numbers + 8).value_or(0);",
+        "entry.size = ReadAt<std::uint32_t>(start, numbers + 4).value_or(0);",
+    ),
+    Mutant(
+        "erf-v22-flags: version 2.2's flags are read from the header",
+        ERF,
+        "header.flags = ReadAt<std::uint32_t>(start, kFlags).value_or(0);",
+        "header.flags = 0;",
+    ),
+    Mutant(
+        "erf-enciphered-unread: an enciphered archive's bytes are never given as a file's",
+        ERF,
+        "if (!Readable())",
+        "if (false)",
+    ),
+    Mutant(
+        "erf-first-of-a-name: of two files of one name, the archive's first is found",
+        ERF,
+        "std::ranges::stable_sort(archive.byName_",
+        "std::ranges::sort(archive.byName_",
+    ),
     # The GFF4 reader and the files read with it: saves, conversations, talk tables,
     # and the crash log's parse of whatever buffer a stack word points at. Damaged
     # bytes must never be read past or misread.
