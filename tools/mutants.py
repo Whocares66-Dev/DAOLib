@@ -115,6 +115,11 @@ PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
 ERF = "src/dao/core/Erf.cpp"
+GFF3 = "src/dao/core/Gff3.cpp"
+GDAFILE = "src/dao/core/GdaFile.cpp"
+M2DA = "src/dao/core/M2da.cpp"
+ADDINS = "src/dao/core/AddIns.cpp"
+INSTALL = "src/dao/core/Install.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -125,6 +130,86 @@ ERF = "src/dao/core/Erf.cpp"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # The readers moved in from Eluvian's ghilana (#106): GFF3, a GDA table,
+    # the M2DA merge, AddIns.xml, an install's sources and copies.
+    Mutant(
+        "gff3-type-strict: a number field of another type gives nothing",
+        GFF3,
+        "if (field == nullptr || field->type != type || !IsInline(type))",
+        "if (field == nullptr || !IsInline(type))",
+    ),
+    Mutant(
+        "gff3-sections-inside: a file whose list indices run past its end is refused",
+        GFF3,
+        "!Inside(size, h.indices, h.indicesSize) || !Inside(size, h.lists, h.listsSize))",
+        "!Inside(size, h.indices, h.indicesSize))",
+    ),
+    Mutant(
+        "gff3-child-bounded: a struct field naming no struct gives nothing",
+        GFF3,
+        "field->data >= file_->Sections().structCount)",
+        "false)",
+    ),
+    Mutant(
+        "gff3-field-indices: a struct of several fields finds them through the field indices",
+        GFF3,
+        "        if (count > 1)",
+        "        if (count > 99)",
+    ),
+    Mutant(
+        "gda-cell-by-column: each column's cell is its own field",
+        GDAFILE,
+        "kFirstCell + static_cast<std::uint32_t>(i)",
+        "kFirstCell",
+    ),
+    Mutant(
+        "gda-type: only a G2DA is read as a table",
+        GDAFILE,
+        'if (!file || file->Type() != "G2DA")',
+        "if (!file)",
+    ),
+    Mutant(
+        "m2da-merged-first: a file is an M2DA's before an old table's",
+        M2DA,
+        "for (const bool merged : {true, false})",
+        "for (const bool merged : {false, true})",
+    ),
+    Mutant(
+        "m2da-alike-across-parts: rows alike are folded only across files",
+        M2DA,
+        "return rows[v].part != rows[r].part && rows[v].cells == rows[r].cells;",
+        "return rows[v].cells == rows[r].cells;",
+    ),
+    Mutant(
+        "m2da-conflict-across-parts: a file's own two rows of an ID are no conflict",
+        M2DA,
+        "if (versions.size() < 2 || partsOf.size() < 2)",
+        "if (versions.size() < 2)",
+    ),
+    Mutant(
+        "addins-attribute-word: an attribute is found by its whole name, not inside another's",
+        ADDINS,
+        "at > 0 && (tag[at - 1] == ' ' || tag[at - 1] == '\\t' || tag[at - 1] == '\\n' || tag[at - 1] == '\\r');",
+        "at > 0;",
+    ),
+    Mutant(
+        "install-no-audio: FMOD's audio is no resource",
+        INSTALL,
+        'if (extension == "fsb" || extension == "fev" || name == "manifest.xml")',
+        'if (name == "manifest.xml")',
+    ),
+    Mutant(
+        "install-override-apart: the core's override folder is a source of its own",
+        INSTALL,
+        "if (!skip.empty() && it->is_directory(type) && Lower(Utf8(it->path())) == skipped)",
+        "if (false)",
+    ),
+    Mutant(
+        "install-copies-by-source: a resource's copies go in their sources' order",
+        INSTALL,
+        "std::ranges::stable_sort(copies, {}, &Copy::source);",
+        "(void)copies;",
+    ),
     # The archives (#106): version 2.2's directory, and a file read by name.
     Mutant(
         "erf-v22-packed-first: version 2.2's entry has the packed size before the size",

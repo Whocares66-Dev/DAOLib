@@ -144,6 +144,7 @@ include(DAOLib)
 add_library(
     daolib_core
     STATIC
+    src/dao/core/AddIns.cpp
     src/dao/core/CallSite.cpp
     src/dao/core/Conversation.cpp
     src/dao/core/Dds.cpp
@@ -151,11 +152,15 @@ add_library(
     src/dao/core/Exceptions.cpp
     src/dao/core/Fingerprint.cpp
     src/dao/core/FunctionTable.cpp
+    src/dao/core/GdaFile.cpp
+    src/dao/core/Gff3.cpp
     src/dao/core/Gff4.cpp
     src/dao/core/GfxMovie.cpp
     src/dao/core/Inflate.cpp
+    src/dao/core/Install.cpp
     src/dao/core/Level.cpp
     src/dao/core/LightProbes.cpp
+    src/dao/core/M2da.cpp
     src/dao/core/OptionsMovie.cpp
     src/dao/core/Pe.cpp
     src/dao/core/RayCast.cpp
