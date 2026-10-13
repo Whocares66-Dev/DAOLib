@@ -178,9 +178,9 @@ class Index
     // gives one resource's copies in; the order of files of different names the game lists, as a
     // merged table takes its files in (dao/core/M2da.h).
     void SortCopies(std::vector<Copy> &copies) const;
-    // Returns the game's source a copy is read from, as a key: its archive's path, or its own
-    // file's folder, in lower case. Copies of one source are listed in that source's own order,
-    // which is not read (m2da::Merge's `sources`).
+    // Returns the game's source a copy is read from, as a key: its base ("game:" or "documents:")
+    // and its archive's path, or its own file's folder, in lower case. Copies of one source are listed in that source's
+    // own order, which is not read (m2da::Merge's `sources`).
     std::string EngineSource(const Copy &copy) const;
 
     // Returns true if a copy's bytes can be read: not in an enciphered or compressed archive.

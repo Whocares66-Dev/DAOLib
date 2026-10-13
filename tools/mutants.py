@@ -142,8 +142,14 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "install-engine-source: a loose file's source is its folder, not the file",
         INSTALL,
-        "return KeyOf(*this, copy).name;",
-        "return Lower(Where(copy));",
+        "+ KeyOf(*this, copy).name;",
+        "+ Lower(Where(copy));",
+    ),
+    Mutant(
+        "install-engine-source-base: the player's override and the install's are two sources",
+        INSTALL,
+        '(sources_[copy.source].base == Base::Documents ? "documents:" : "game:")',
+        'std::string("game:")',
     ),
     # The readers moved in from Eluvian's ghilana (#106): GFF3, a GDA table,
     # the M2DA merge, AddIns.xml, an install's sources and copies.

@@ -810,7 +810,9 @@ void Index::SortCopies(std::vector<Copy> &copies) const
 
 std::string Index::EngineSource(const Copy &copy) const
 {
-    return KeyOf(*this, copy).name;
+    // The base first: the game's and the player's override folders, and an add-in's folder in
+    // the game's and in Documents, have the same path within their bases.
+    return (sources_[copy.source].base == Base::Documents ? "documents:" : "game:") + KeyOf(*this, copy).name;
 }
 
 void Index::Order()

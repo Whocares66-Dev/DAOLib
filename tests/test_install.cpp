@@ -145,8 +145,12 @@ TEST_CASE("copies of different resources sort into the sources' order, each with
         *ogres, [&index](const install::Copy &c) { return index->Where(c) == "packages/core/data/2da.erf"; });
     REQUIRE(inCore != ogres->end());
     CHECK(index->EngineSource(first("abi_base.gda")) == index->EngineSource(*inCore));
-    CHECK(index->EngineSource(first("abi_base.gda")) == "packages/core/data/2da.erf");
-    CHECK(index->EngineSource(first("ogre.utc")) == "packages/core/override");
+    CHECK(index->EngineSource(first("abi_base.gda")) == "game:packages/core/data/2da.erf");
+    // The player's override and the install's are two sources, though their paths within their
+    // bases are the same.
+    REQUIRE(ogres->size() >= 2);
+    CHECK(index->EngineSource((*ogres)[0]) == "documents:packages/core/override");
+    CHECK(index->EngineSource((*ogres)[1]) == "game:packages/core/override");
 }
 
 TEST_CASE("a copy in an enciphered archive is listed and not read", "[install]")
