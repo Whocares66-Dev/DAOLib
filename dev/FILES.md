@@ -40,9 +40,11 @@ Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and
 | 100006 | `AUDIO_VO:` | `packages\core\audio\vo\...` |
 | 100007 | a loaded level's `ENV:<level>\` RIMs | `packages\core\env\<level>\` |
 | 100008 | `AUDIO_SOUND:` | `packages\core\audio\sound\` |
-| about 200000 − 7*i* | an offer (`BUILD_OFFERS:<UID>\`) | the install's `Offers\<UID>\`, behind the core |
+| about 200000 − 7*i* | an offer, a DLC's advertisement (`BUILD_OFFERS:<UID>\`) | the install's `Offers\<UID>\`, behind the core |
 
 **Add-ins.** The enabled add-ins of `Settings\AddIns.xml` are taken in descending order of their `Priority` attribute, and the *i*-th (from 0) gets a base of 9000 − 7*i*: under `ADDINS:` if the add-in's folder is in Documents, else 10000 more under `BUILD_ADDINS:` (0x005ECB30 tries the one, then the other, 0x005EF460 counts down from 9000 by 7). So **an add-in with a lower `Priority` attribute wins**: here the promotional items' (`Priority="1"`) at 18734 and up, the Golems of Amgarrak's (`595`) at 19000. Within one add-in, seen: `core\data`, `core\env`, their `talktables\` and `movies\`, and the `module\` folders of an add-in that extends the loaded campaign at the base; `core\audio` at −2; `core\textures\high` at −3; `core\override` at −6. The loader asks with the base and −1 to −6 for its other folders; the ones not listed were not in this install.
+
+**Offers.** An offer is not a DLC but its advertisement: what the game shows of a DLC the player does not own. Each DLC is in the install twice, as an add-in (`Addins\DAO_PRC_CP_1\`, the content: its module, data, levels, voice) and as an offer (`Offers\dao_prc_ocp_1\`), whose `manifest.xml` is `<Manifest Type="Offer">` with an `OfferItem` (`o_PRC_CP1_Cailan`, `Presentation="16"`), the DLC's title and store text. An offer holds little: Return to Ostagar's a `gui.erf`, a `2da.erf`, models, animations and talk tables; Leliana's Song's a `gui.erf` and talk tables; the Blood Dragon armour's one picture (read 2026-10-12). Behind everything, an offer can only add names no other source has, and never shadows the core or the DLC it sells, which may be installed beside it as here. Where each offer shows in the game was not looked at.
 
 **Sources that come and go.** The campaign's are added when a campaign loads and the level's `ENV:` RIMs while the level is loaded; neither is there at the main menu. A plugin's folders come with the plugin.
 
