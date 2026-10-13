@@ -839,6 +839,18 @@ DAO_ADDRESS(kResources_Find, 5034)
 // frame); kind 1 takes in subfolders and makes any .erf or .rim inside a
 // source of its own, kind 0 (ENV: alone) loose files only. A tie in
 // priority is broken by the source's slot 8. The names are ours.
+//
+// The order, read 2026-10-12 (DAOLib #106, dev/FILES.md): the manager's
+// list of its sources (its +8 the head of a std::list, +0xC its count, a
+// node's source at +8) is kept by AddSource's insert, which puts a new source
+// before the first for which 0x004E6660 answers true: that one's priority
+// (+0x60) is higher, or equal and its slot 8 higher (a DirectorySource 0, or
+// 1 with its +0xC0 set; a RIMSource 2; an ErfSource 3), or both equal and its
+// name (+4) earlier. Its index (0x004C7C50) keeps each name's sources in the
+// same order, and a file comes from the first. The add-ins' priorities: the
+// loader (0x005EF460) counts down from 9000 by 7 an add-in, and 0x005ECB30
+// adds a folder under ADDINS: at the priority given, or under BUILD_ADDINS:
+// at 10000 more.
 DAO_ADDRESS(kResMan_SetUpSources, 343)
 DAO_ADDRESS(kResMan_Manager, 4667)
 DAO_ADDRESS(kResMan_AddSource, 4671)

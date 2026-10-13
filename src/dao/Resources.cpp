@@ -73,6 +73,13 @@
 // at the main menu): 7,769 names for dds, with its dot or without, a
 // plugin's own override file and the game's among them; 4,089 for mao, an
 // add-in's among them; none for a type the game has not; each name once.
+// Where a file comes from (DAOLib #106, dev/FILES.md): the manager's own list
+// of its sources, which AddSource keeps in the order a file is looked for, and
+// a resource's source (+0x1C). Seen in play 2026-10-12 (examples/resources with
+// a where.txt, GOG's game from game\gogrun): 488 sources at the main menu and
+// 859 with a save loaded in Forest Clearing; test files of one name in the
+// Documents override, the install's, the plugin's, an add-in's and the core
+// patch each read from the first of them the list has, and SourceOf named it.
 #include "dao/Resources.h"
 
 #include "dao/Addresses.h"
@@ -116,6 +123,7 @@ constexpr std::size_t kResourceSource = 0x1C;   // the source it came from
 constexpr std::size_t kResourceOffset = 0x28;   // where its bytes begin in the source's file
 constexpr std::size_t kResourceFileSize = 0x2C; // and how many they are
 constexpr std::size_t kSourceName = 0x04;       // a source's name: an alias and a file, for an archive
+constexpr std::size_t kSourcePriority = 0x60;   // a source's priority, the lower looked in first
 constexpr std::size_t kSourceClosed = 0x68;     // a source: closing, or closed
 constexpr std::size_t kSourceOpen = 0x69;       // and opened
 constexpr std::size_t kSourceFolder = 0xA4;     // a DirectorySource's folder, ending in a separator
@@ -332,6 +340,12 @@ class Found
         return bytes;
     }
 
+    // The source the resource came from, or 0.
+    [[nodiscard]] std::uintptr_t Source() const
+    {
+        return handle_ != 0 ? TryRead<std::uintptr_t>(handle_ + kResourceSource).value_or(0) : 0;
+    }
+
   private:
     std::uintptr_t handle_ = 0;
 };
@@ -455,6 +469,32 @@ void Watch()
     }
 }
 
+// A source as a plugin is told of it, or nothing if it does not read as one.
+std::optional<Source> SourceAt(std::uintptr_t source)
+{
+    const auto vftable = TryRead<std::uintptr_t>(source);
+    const auto priority = TryRead<std::int32_t>(source + kSourcePriority);
+    auto name = EngineText(source + kSourceName);
+    if (!vftable || !priority || !name)
+    {
+        return std::nullopt;
+    }
+    Source found{.name = std::move(*name), .priority = *priority};
+    if (*vftable == Module::Address(addr::kDirectorySource_Vftable))
+    {
+        found.kind = SourceKind::Folder;
+    }
+    else if (*vftable == Module::Address(addr::kRimSource_Vftable))
+    {
+        found.kind = SourceKind::Rim;
+    }
+    else if (*vftable == Module::Address(addr::kErfSource_Vftable))
+    {
+        found.kind = SourceKind::Archive;
+    }
+    return found;
+}
+
 } // namespace
 
 std::optional<std::vector<std::byte>> Read(std::wstring_view file)
@@ -556,6 +596,54 @@ bool RemoveFolder(const std::filesystem::path &folder)
         return true;
     }
     return std::erase(g_added, name) != 0 && Take(name);
+}
+
+// The manager's list of its sources, which AddSource keeps in the order a file is looked for:
+// by priority, then by the source's kind (its slot 8: a folder 0 or 1, a RIM 2, an .erf 3), then
+// by name, the later first (0x004E6660). Each name's sources are kept in the same order in the
+// manager's index (0x004C7C50), and a file is taken from the first of them.
+std::vector<Source> Sources()
+{
+    constexpr std::size_t kListHead = 0x08;  // in the manager: its list of sources' head node
+    constexpr std::size_t kListSize = 0x0C;  // and how many it holds
+    constexpr std::size_t kNodeValue = 0x08; // in a node: the source, the next node at +0
+    // Far more than the game makes (some 13,000 archives and folders); a list longer is a misread.
+    constexpr std::uint32_t kMostSources = 1U << 16U;
+
+    std::vector<Source> sources;
+    const auto manager = reinterpret_cast<std::uintptr_t>(Manager());
+    const auto head = manager != 0 ? TryRead<std::uintptr_t>(manager + kListHead) : std::nullopt;
+    const std::uint32_t count = manager != 0 ? TryRead<std::uint32_t>(manager + kListSize).value_or(0) : 0;
+    if (!head || *head == 0 || count > kMostSources)
+    {
+        return sources;
+    }
+    sources.reserve(count);
+    std::uintptr_t node = TryRead<std::uintptr_t>(*head).value_or(0);
+    for (std::uint32_t i = 0; i < count && node != 0 && node != *head; ++i)
+    {
+        const std::uintptr_t source = TryRead<std::uintptr_t>(node + kNodeValue).value_or(0);
+        if (source != 0 && TryRead<std::uint8_t>(source + kSourceClosed).value_or(1) == 0)
+        {
+            if (auto found = SourceAt(source))
+            {
+                sources.push_back(std::move(*found));
+            }
+        }
+        node = TryRead<std::uintptr_t>(node).value_or(0);
+    }
+    return sources;
+}
+
+std::optional<Source> SourceOf(std::wstring_view file)
+{
+    if (file.empty())
+    {
+        return std::nullopt;
+    }
+    const Found found(file);
+    const std::uintptr_t source = found.Source();
+    return source != 0 ? SourceAt(source) : std::nullopt;
 }
 
 } // namespace dao::resources

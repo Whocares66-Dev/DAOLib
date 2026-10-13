@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -69,5 +70,41 @@ bool AddFolder(const std::filesystem::path &folder);
 // Call it where AddFolder is called. A file the game has loaded already stays as it is until the
 // game loads it again.
 bool RemoveFolder(const std::filesystem::path &folder);
+
+// What kind of place a source is.
+enum class SourceKind
+{
+    Folder,  // loose files, in a folder and its subfolders
+    Rim,     // an archive the game reads whole, a level's or an area's
+    Archive, // an .erf
+    Other,
+};
+
+// One of the places the game finds its files in.
+struct Source
+{
+    // The game's name for it: a folder's path, or an alias and an archive, L"DATA:guiexport.erf".
+    std::wstring name;
+    // Lower is looked in first. Of two with the same, a folder comes before a RIM and a RIM
+    // before an .erf, and then the later name in the alphabet first.
+    std::int32_t priority = 0;
+    SourceKind kind = SourceKind::Other;
+};
+
+// Returns the places the game finds its files in, in the order it looks in them: a file comes
+// from the first that has it.
+// @return empty if the game's sources are not set up yet, or the game is not a build the
+// library knows
+//
+// Call it on the game thread, once the game has started. Loading a level or a campaign adds and
+// takes away sources.
+std::vector<Source> Sources();
+
+// Returns the place the game takes a file from: the first of Sources() that has it.
+// @param file the file name with its extension, such as L"rules_core.ncs"
+// @return nullopt if the game has no file by that name
+//
+// It loads the file to find out, as Exists does, so call it on the game thread.
+std::optional<Source> SourceOf(std::wstring_view file);
 
 } // namespace dao::resources

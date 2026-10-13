@@ -16,6 +16,12 @@
 // them in a file read.txt beside the DLL, a line each: once the game is
 // first exploring a level, each is read and logged with its length and a
 // sum over its bytes.
+//
+// Where the game takes a file from: every place it finds its files in is
+// logged in the order it looks in them, on the first frame and once a level
+// is being explored, and for each file named in where.txt (a line each) the
+// place it is taken from, and the start of what it holds, so that test files
+// of one name put in several places show which the game reads.
 #include "dao/Resources.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
@@ -82,6 +88,58 @@ void LogNames(const wchar_t *type, const wchar_t *known)
                  dao::Utf8(known), has, names.empty() ? std::string("none") : dao::Utf8(names.front()));
 }
 
+const char *KindName(dao::resources::SourceKind kind)
+{
+    switch (kind)
+    {
+    case dao::resources::SourceKind::Folder:
+        return "folder";
+    case dao::resources::SourceKind::Rim:
+        return "rim";
+    case dao::resources::SourceKind::Archive:
+        return "erf";
+    default:
+        return "other";
+    }
+}
+
+// Every place the game finds its files in, in the order it looks; then where each file
+// where.txt names comes from.
+void LogSources(const char *when)
+{
+    const std::vector<dao::resources::Source> sources = dao::resources::Sources();
+    spdlog::info("{}: {} sources, in the order the game looks in them", when, sources.size());
+    for (std::size_t i = 0; i < sources.size(); ++i)
+    {
+        spdlog::info("  {:5} {:7} {:6} {}", i, sources[i].priority, KindName(sources[i].kind),
+                     dao::Utf8(sources[i].name));
+    }
+    std::ifstream list(dao::Module::OwnFolder() / L"where.txt");
+    for (std::string line; std::getline(list, line);)
+    {
+        if (line.empty())
+        {
+            continue;
+        }
+        const std::wstring file(line.begin(), line.end()); // the game's file names are ASCII
+        const auto source = dao::resources::SourceOf(file);
+        const auto bytes = dao::resources::Read(file);
+        std::string start;
+        for (const std::byte byte : bytes.value_or(std::vector<std::byte>{}))
+        {
+            const auto letter = static_cast<char>(byte);
+            if (start.size() == 40 || letter == '\r' || letter == '\n')
+            {
+                break;
+            }
+            start.push_back(letter >= ' ' && letter <= '~' ? letter : '.');
+        }
+        spdlog::info("{}: {} is from {} ({} {}), holding \"{}\"", when, line,
+                     source ? dao::Utf8(source->name) : std::string("nowhere"), source ? source->priority : 0,
+                     source ? KindName(source->kind) : "-", start);
+    }
+}
+
 // The files read.txt names, read once the game is first exploring a level.
 void InALevel()
 {
@@ -91,6 +149,7 @@ void InALevel()
         return;
     }
     done = true;
+    LogSources("in a level");
     std::ifstream list(dao::Module::OwnFolder() / L"read.txt");
     for (std::string line; std::getline(list, line);)
     {
@@ -127,6 +186,7 @@ void EachFrame()
     spdlog::info("taking it away again: {}", dao::resources::RemoveFolder(Extra()));
     spdlog::info("adding it: {}", dao::resources::AddFolder(Extra()));
     LogTexture("added in a running game");
+    LogSources("on the first frame");
 }
 
 } // namespace
