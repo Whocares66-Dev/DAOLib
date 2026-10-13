@@ -32,6 +32,7 @@ Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and
 | 50004 | its data, the area's RIMs among it | `modules\single player\data\` |
 | 50006, 50007 | its voice and sound | `modules\single player\audio\...` |
 | 50008 | its own folder | `modules\single player\` |
+| 70000 + 100*i* and up | the *i*-th package the loaded campaign's `.cif` lists (`CampaignCIFPackagesList`): override +0, textures' patch +1, patch +2, locale +3, env +4, textures +5, data +6, voice +7, sound +8 (0x005FCE80, read 2026-10-13, DAOLib #113). Awakening and the add-ins that extend it list `core_ep1`; the main campaign lists none | `packages\<name>\` (`PACKAGES:<name>\`) |
 | 100000 | `PATCH:` | `packages\core\patch\` |
 | 100002 | `ENV:` | `packages\core\env\` |
 | 100003 | `TEXTURES:` | `packages\core\textures\high\` (`texturepack.erf`) |

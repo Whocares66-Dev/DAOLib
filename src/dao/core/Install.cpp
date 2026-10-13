@@ -31,9 +31,22 @@
 // locale -4, patch -5, override -6, for its core\ and, while it extends the
 // loaded campaign, its module\ (0x005EF460; the names pushed before each
 // call). An offer's 200000 - 7i, all its folders.
+//
+// A campaign's packages (DAOLib #113, read 2026-10-13): loading a campaign
+// (0x005FCE80) reads its .cif, the campaign's name and ".cif" by the resource
+// manager, and for the i-th name of its CampaignCIFPackagesList (17124) adds
+// that package's folders under PACKAGES:<name>\ at 70000 + 100i and more:
+// override 0, textures' patch 1, patch 2, locale 3, env 4, textures 5, data 6,
+// voice 7, sound 8 (0x00011173 and the offsets from it). So a package is
+// behind the campaign's folders (50000) and ahead of the core's (100000).
+// Awakening's lists core_ep1, and so do the add-ins that extend it; the main
+// campaign's lists none (Eluvian's session read every .cif of the GOG
+// install, 2026-10-13). Leaving a campaign takes them away again
+// (0x005FC140).
 #include "dao/core/Install.h"
 
 #include "dao/core/AddInOrder.h"
+#include "dao/core/Gff4.h"
 
 #include <algorithm>
 #include <atomic>
@@ -143,6 +156,7 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
         }
         index->AddArchive(index->pending_[i], reads[i]);
     }
+    index->ReadPackages();
     index->Order();
     index->pending_.clear();
     index->pending_.shrink_to_fit();
@@ -228,6 +242,13 @@ void Index::Walk()
     const fs::path coreOverride = core / L"override";
     Collect(AddSource("core", "core", Base::Game, core), core, coreOverride);
     Collect(AddSource("override:game", "override", Base::Game, coreOverride), coreOverride, {});
+    for (const auto &[name, folder] : Folders(game_ / L"packages"))
+    {
+        if (Lower(name) != "core")
+        {
+            Collect(AddSource("package:" + Lower(name), "package", Base::Game, folder), folder, {});
+        }
+    }
     for (const auto &[name, folder] : Folders(game_ / L"modules"))
     {
         const bool campaign = Lower(name) == "single player";
@@ -320,6 +341,46 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
         ++source.files;
         source.unreadable += readable ? 0 : 1;
         ++stats_.copies;
+    }
+}
+
+// The loaded campaign's .cif is its name with no spaces and ".cif" (singleplayer.cif,
+// dao_prc_ep_1.cif); any copy of it that reads gives its packages.
+void Index::ReadPackages()
+{
+    std::string name;
+    for (const char c : Lower(options_.campaign))
+    {
+        if (c != ' ')
+        {
+            name.push_back(c);
+        }
+    }
+    const auto copies = resources_.find(name + ".cif");
+    if (name.empty() || copies == resources_.end())
+    {
+        return;
+    }
+    constexpr std::uint32_t kPackagesList = 17124; // CampaignCIFPackagesList
+    for (const Copy &copy : copies->second)
+    {
+        const auto bytes = Readable(copy) ? Read(copy) : std::nullopt;
+        const auto file = bytes ? gff4::File::Parse(*bytes) : std::nullopt;
+        const auto root = file ? file->Root() : std::nullopt;
+        if (!root)
+        {
+            continue;
+        }
+        for (const std::wstring &package : root->Strings(kPackagesList))
+        {
+            std::string text;
+            for (const wchar_t c : package)
+            {
+                text.push_back(static_cast<char>(c < 0x80 ? c : '?'));
+            }
+            packages_.push_back(Lower(text));
+        }
+        return;
     }
 }
 
@@ -424,6 +485,8 @@ constexpr std::int32_t kAddInBase = 9000;     // the first add-in the game takes
 constexpr std::int32_t kAddInStep = 7;        // less for each after it
 constexpr std::int32_t kInGameFolder = 10000; // more for an add-in in the game's folder
 constexpr std::int32_t kOfferBase = 200000;
+constexpr std::int32_t kPackageBase = 70000; // the loaded campaign's first package
+constexpr std::int32_t kPackageStep = 100;   // more for each after it
 
 std::vector<std::string_view> Segments(std::string_view path)
 {
@@ -518,6 +581,53 @@ Place CampaignPlace(std::span<const std::string_view> path, const Options &optio
         return {50008};
     }
     return {50008, Unused::Folder};
+}
+
+// A file of a package's, by its path in packages\<name>, the package's base given.
+Place PackagePlace(std::span<const std::string_view> path, std::int32_t base, const Options &options)
+{
+    if (path.size() < 2)
+    {
+        return {base, Unused::Folder};
+    }
+    const std::string_view top = path[0];
+    if (top == "override")
+    {
+        return {base};
+    }
+    if (top == "patch")
+    {
+        return {base + 2};
+    }
+    if (top == "locale")
+    {
+        return {base + 3, path.size() > 2 && path[1] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "env")
+    {
+        return path.size() == 2 ? Place{base + 4} : Place{base + 4, Unused::Level};
+    }
+    if (top == "textures" && path.size() > 2)
+    {
+        if (path[1] == "patch_" + options.textures)
+        {
+            return {base + 1};
+        }
+        return {base + 5, path[1] == options.textures ? Unused::No : Unused::Textures};
+    }
+    if (top == "data")
+    {
+        return {base + 6};
+    }
+    if (top == "audio" && path[1] == "vo")
+    {
+        return {base + 7, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "audio" && path[1] == "sound")
+    {
+        return {base + 8};
+    }
+    return {base, Unused::Folder};
 }
 
 // A file of an add-in's core\ or module\, by its path in that folder, the add-in's base given.
@@ -630,6 +740,19 @@ class Placer
         if (source.kind == "core")
         {
             return {CorePlace(parts, options)};
+        }
+        if (source.kind == "package")
+        {
+            const auto &loaded = index_.Packages();
+            const auto slot = std::ranges::find(loaded, UidOf(source));
+            if (slot == loaded.end())
+            {
+                Place found = PackagePlace(parts, kPackageBase, options);
+                found.unused = Unused::Campaign;
+                return {found};
+            }
+            const auto i = static_cast<std::int32_t>(slot - loaded.begin());
+            return {PackagePlace(parts, kPackageBase + (kPackageStep * i), options)};
         }
         if (source.kind == "campaign" || source.kind == "module")
         {

@@ -115,6 +115,9 @@ class Struct
     std::vector<Struct> Structs(std::uint32_t label) const;
     // A list of U32 or S32 values.
     std::vector<std::uint32_t> Numbers(std::uint32_t label) const;
+    // A list of strings: a campaign's CampaignCIFPackagesList. Empty for a field that is no such
+    // list; a string that does not read stops the list there.
+    std::vector<std::wstring> Strings(std::uint32_t label) const;
     // The floats of a field that is made of them: one for an F32, three for
     // a Vector3, four for a Vector4, a Quaternion or a Color, sixteen for a
     // Matrix. None for a field of another type.

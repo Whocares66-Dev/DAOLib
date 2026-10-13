@@ -15,6 +15,7 @@
 //   module:<name>         <game>\modules\<name>, another
 //   addin:<uid>           <game>\Addins\<uid>, or <documents>\AddIns\<uid> (a player's)
 //   offer:<uid>           <game>\Offers\<uid>
+//   package:<name>        <game>\packages\<name>, a package a campaign loads (core_ep1)
 //   plugin:<name>         <game>\bin_ship\daolib\plugins\<name>\override (DAOLib #43)
 //   override:documents    <documents>\packages\core\override
 //
@@ -55,7 +56,7 @@ enum class Base
 struct Source
 {
     std::string id;   // "addin:dao_prc_cp_1"
-    std::string kind; // "core", "override", "campaign", "module", "addin", "offer", "plugin"
+    std::string kind; // "core", "override", "campaign", "module", "addin", "offer", "plugin", "package"
     Base base = Base::Game;
     std::string folder;            // relative to its base folder, UTF-8 with forward slashes
     std::optional<AddIn> settings; // an add-in's or offer's item in AddIns.xml or offers.xml
@@ -79,7 +80,8 @@ inline constexpr std::uint32_t kLoose = 0xFFFFFFFF;
 enum class Unused : std::uint8_t
 {
     No,       // the game has it
-    Campaign, // another campaign's, or an add-in's for another campaign
+    Campaign, // another campaign's, an add-in's for another campaign, or a package the loaded
+              // campaign does not load
     Level,    // a level's own, which the game has only while the level is loaded
     Language, // another language's voice or text
     Textures, // another texture quality's
@@ -168,6 +170,12 @@ class Index
     {
         return options_;
     }
+    // Returns the packages the loaded campaign loads, in its order, in lower case: its .cif's
+    // CampaignCIFPackagesList ("core_ep1" for Awakening); empty for the main campaign or none.
+    const std::vector<std::string> &Packages() const
+    {
+        return packages_;
+    }
     // Returns every resource by its name in lower case (UTF-8), with its copies in the order the
     // game looks for it: those it has first, the one it takes at the front.
     const std::map<std::string, std::vector<Copy>, std::less<>> &Resources() const
@@ -218,6 +226,7 @@ class Index
     void Collect(std::uint32_t source, const std::filesystem::path &root, const std::filesystem::path &skip);
     std::vector<DirectoryRead> ReadDirectories() const;
     void AddArchive(const Pending &pending, DirectoryRead &read);
+    void ReadPackages();
     void Order();
 
     std::filesystem::path game_;
@@ -231,6 +240,7 @@ class Index
     std::vector<Pending> pending_;
     std::vector<std::string> loose_;
     std::map<std::string, std::vector<Copy>, std::less<>> resources_;
+    std::vector<std::string> packages_;
 
     // The archives last read from, held open.
     mutable std::mutex openLock_;

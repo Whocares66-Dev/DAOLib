@@ -432,4 +432,38 @@ std::vector<std::uint32_t> Struct::Numbers(std::uint32_t label) const
     return out;
 }
 
+// A list of strings is its count and then a string's slot an element, each the offset of the
+// string's length and characters, as a string field's own slot is (tools/gff4.py reads them so).
+std::vector<std::wstring> Struct::Strings(std::uint32_t label) const
+{
+    std::vector<std::wstring> out;
+    const Field *field = Shape().Find(label);
+    if (field == nullptr || (field->flags & kList) == 0 || (field->flags & kStruct) != 0 ||
+        field->type != static_cast<std::uint16_t>(Type::String))
+    {
+        return out;
+    }
+    const auto list = file_->U32(at_ + field->offset);
+    if (!list || *list == kNull)
+    {
+        return out;
+    }
+    const std::size_t at = file_->DataOffset() + *list;
+    const auto count = file_->U32(at);
+    if (!count || *count > file_->Bytes().size() / 4)
+    {
+        return out;
+    }
+    for (std::uint32_t i = 0; i < *count; ++i)
+    {
+        auto text = file_->StringAt(at + 4 + (std::size_t{4} * i));
+        if (!text)
+        {
+            break;
+        }
+        out.push_back(std::move(*text));
+    }
+    return out;
+}
+
 } // namespace dao::core::gff4

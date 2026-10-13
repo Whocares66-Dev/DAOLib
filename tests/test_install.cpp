@@ -312,6 +312,64 @@ TEST_CASE("a campaign's files, and an add-in's for it, are the game's only while
     CHECK((*z)[1].unused == install::Unused::Campaign);
 }
 
+namespace
+{
+// A campaign's .cif whose CampaignCIFPackagesList names these packages.
+files::Bytes Cif(const std::vector<std::string> &packages)
+{
+    constexpr std::uint32_t kPackagesList = 17124;
+    constexpr std::uint16_t kString = 14;
+    constexpr std::uint16_t kList = 0x8000;
+    files::Gff4 cif("CIF ", "V0.1", {{"CIF ", 4, {{kPackagesList, kString, kList, 0}}}});
+    const std::uint32_t root = cif.Reserve(4);
+    const std::uint32_t list = cif.Reserve(4 + (4 * packages.size()));
+    cif.Set32(list, static_cast<std::uint32_t>(packages.size()));
+    for (std::size_t i = 0; i < packages.size(); ++i)
+    {
+        cif.Set32(list + 4 + static_cast<std::uint32_t>(4 * i), cif.String(packages[i]));
+    }
+    cif.Set32(root, list);
+    return cif.bytes;
+}
+} // namespace
+
+TEST_CASE("a campaign's packages are its sources, behind its own folders and ahead of the core", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/data/m.mao", files::FromText("core"));
+    root.Write(L"game/packages/core_ep1/data/m.mao", files::FromText("ep1"));
+    root.Write(L"game/packages/core_ep1/patch/p.gda", files::FromText("ep1 patch"));
+    root.Write(L"game/packages/core_ep1/textures/high/t.dds", files::FromText("ep1 high"));
+    root.Write(L"game/packages/core_ep1/textures/medium/t.dds", files::FromText("ep1 medium"));
+    root.Write(L"game/packages/second/data/m.mao", files::FromText("second"));
+    root.Write(L"game/modules/single player/singleplayer.cif", Cif({}));
+    root.Write(L"game/Addins/dao_prc_ep_1/module/dao_prc_ep_1.cif", Cif({"core_ep1", "Second"}));
+
+    // The main campaign loads none: the core's copy, and the package's not the game's.
+    const auto origins = install::Index::Build(root.path / L"game", {});
+    CHECK(origins->Packages().empty());
+    const auto *m = origins->Find("m.mao");
+    REQUIRE(m != nullptr);
+    CHECK(Text(origins->Read(m->front())) == "core");
+    CHECK(Named(*origins, "package:core_ep1")->kind == "package");
+    CHECK(std::ranges::count_if(*m, [](const auto &c) { return c.unused == install::Unused::Campaign; }) == 2);
+
+    // Awakening's .cif names two, the first ahead of the second, both ahead of the core.
+    const auto awakening = install::Index::Build(root.path / L"game", {}, {.campaign = "DAO_PRC_EP_1"});
+    CHECK(awakening->Packages() == std::vector<std::string>{"core_ep1", "second"});
+    const auto in = Order(*awakening, "m.mao");
+    CHECK(in == std::vector<std::string>{"package:core_ep1", "package:second", "core"});
+    const auto *ep1 = awakening->Find("m.mao");
+    CHECK((*ep1)[0].priority == 70006);
+    CHECK((*ep1)[1].priority == 70106);
+    CHECK(awakening->Find("p.gda")->front().priority == 70002);
+    const auto *t = awakening->Find("t.dds");
+    REQUIRE(t->size() == 2);
+    CHECK(Text(awakening->Read(t->front())) == "ep1 high");
+    CHECK(t->front().priority == 70005);
+    CHECK(t->back().unused == install::Unused::Textures);
+}
+
 TEST_CASE("a level's own files, another language's and another quality's are kept, and put after", "[install]")
 {
     files::TempFolder root;

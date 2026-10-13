@@ -651,6 +651,24 @@ MUTANTS: list[Mutant] = [
         "        if (file.size() - kPixels + first >= first)",
     ),
     Mutant(
+        "install-package-order: a campaign's later package is behind its earlier",
+        INSTALL,
+        "kPackageBase + (kPackageStep * i)",
+        "kPackageBase - (kPackageStep * i)",
+    ),
+    Mutant(
+        "install-package-campaign: a package the loaded campaign does not load is not the game's",
+        INSTALL,
+        "            if (slot == loaded.end())",
+        "            if (false)",
+    ),
+    Mutant(
+        "install-package-patch: a package's patch is ahead of its data",
+        INSTALL,
+        "        return {base + 2};",
+        "        return {base + 7};",
+    ),
+    Mutant(
         "options-tabs-apart: a section left out of one tab does not keep another tab's out",
         OPTIONS,
         "        if (section.tab != tab)\n        {\n            continue;",
