@@ -943,6 +943,30 @@ DAO_DATA(kErfSource_Vftable, 63047)
 DAO_DATA(kDirectorySource_Vftable, 63048)
 DAO_DATA(kRimSource_Vftable, 63045)
 DAO_DATA(kFileAccess_Vftable, 62906)
+// A RIM's file (dao/Resources.h, DAOLib #102), read 2026-10-12. A RIMSource
+// holds no open file once it has loaded: its task (0x004CE970) reads
+// everything after the directory into one block (0x004CE5B0: a seek to the
+// first file's offset, the source's +0x100, and +0x104 bytes read into
+// +0xEC), then deletes the source's FileAccess and clears +0xB8 (0x004CE739).
+// A RIM whose +0x108 is not zero is unpacked first (0x004CC370), and its
+// files' offsets are then into the unpacked block and not the file. One
+// with bit 0x10 of its flags (+0x10C) frees the block when its load is done
+// (0x004CEAB1), so nothing of the file is in memory after.
+//
+// So the file is opened again by its path, which the engine's own opener of
+// an archive (0x004D0800) makes from the source's name, an alias and a file,
+// with the alias table's resolver: __thiscall (std::wstring *out, const
+// std::wstring &name), `ret 8`, on what Get answers (a __cdecl with no
+// arguments; null before the table is made). It constructs `out`, and gives
+// it the path the alias before the name's ':' stands for and, straight
+// after it, what follows the ':' in lower case; an alias the table has not
+// is put back before its ':', which is how a full path passes through, and
+// a name with no ':' is given back as it is. The table is a list (alias at
+// +0, path at +0x1C, next at +0x38) made at start-up; Path takes no lock.
+// The address library's session read both in the three builds, 2026-10-12:
+// the same code in each. The two names are ours.
+DAO_ADDRESS(kFileAliases_Get, 4467)
+DAO_ADDRESS(kFileAliases_Path, 4712)
 // Find's fast way, read 2026-10-03 for the model-load crash (DAOLib issue #3,
 // issue #3). On the main thread (the id in 0x00C2B590, set at
 // start-up) with the game exploring or in a fight (GameModeController's

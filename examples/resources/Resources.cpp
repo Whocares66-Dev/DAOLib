@@ -10,8 +10,16 @@
 // gone, the folder added again and the texture back. A second texture is in
 // override\, to show beside it what is there whatever the plugin does. What
 // it finds goes to example_resources.log.
+//
+// A level's own files are in archives the game loads with the level and
+// reads whole (a RIM). To hold any of them against its copy on disk, name
+// them in a file read.txt beside the DLL, a line each: once the game is
+// first exploring a level, each is read and logged with its length and a
+// sum over its bytes.
 #include "dao/Resources.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
+#include "dao/GameModes.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
@@ -24,6 +32,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -73,8 +82,30 @@ void LogNames(const wchar_t *type, const wchar_t *known)
                  dao::Utf8(known), has, names.empty() ? std::string("none") : dao::Utf8(names.front()));
 }
 
-void OnFirstFrame()
+// The files read.txt names, read once the game is first exploring a level.
+void InALevel()
 {
+    static bool done = false;
+    if (done || dao::CClientExoApp::CurrentMode() != dao::GameMode::Explore)
+    {
+        return;
+    }
+    done = true;
+    std::ifstream list(dao::Module::OwnFolder() / L"read.txt");
+    for (std::string line; std::getline(list, line);)
+    {
+        if (!line.empty())
+        {
+            const std::wstring file(line.begin(), line.end()); // the game's file names are ASCII
+            spdlog::info("in a level, {} is {}", line, dao::resources::Exists(file) ? "found" : "not found");
+            LogFile(file.c_str());
+        }
+    }
+}
+
+void EachFrame()
+{
+    InALevel();
     static bool done = false;
     if (done)
     {
@@ -109,6 +140,6 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     spdlog::info("adding extra\\ as the plugin loads: {}", dao::resources::AddFolder(Extra()));
-    dao::OnFrame(&OnFirstFrame);
+    dao::OnFrame(&EachFrame);
     return true;
 }

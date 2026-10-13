@@ -52,6 +52,20 @@
 // read whole, each the same bytes as its file read outside the game
 // (132, 87,536, 212 and 2,097,280 bytes, by a sum over them).
 //
+// A level's archive, a RIM, holds no open file once it has loaded (DAOLib
+// #102; dao/Addresses.h, "A RIM's file"): a plugin in Redcliffe found a
+// level's textures and read nothing of them. A RIM's texture is read from
+// the RIM's file opened again, by the path the engine's alias table gives
+// for the source's name, as the engine's own opener of an archive asks it.
+// Seen in play 2026-10-12 (examples/resources with its read.txt, GOG's game,
+// a save in Redcliffe at night, level lak100n): three textures of
+// lak100n.gpu.rim read whole (16,512, 174,904 and 131,200 bytes), each the
+// same bytes as in the RIM's file by a sum over them, and a room's
+// definition, a mesh and a material of lak100n.rim as before, the same as
+// theirs. Not seen: a packed RIM, which answers nothing. A tile's own
+// textures (lak100n_0_1_0.gpu.rim's) were not found by name there at all,
+// which is a matter of finding and not of reading.
+//
 // The names of a type (DAOLib #96): the manager's own ListNames, which the
 // game uses to gather its merged tables (dao/Addresses.h, "The names the
 // manager has"), into a list of the engine's made and freed by the engine's
@@ -101,11 +115,13 @@ constexpr std::size_t kResourceName = 0x00;     // the name it is found by, the 
 constexpr std::size_t kResourceSource = 0x1C;   // the source it came from
 constexpr std::size_t kResourceOffset = 0x28;   // where its bytes begin in the source's file
 constexpr std::size_t kResourceFileSize = 0x2C; // and how many they are
+constexpr std::size_t kSourceName = 0x04;       // a source's name: an alias and a file, for an archive
 constexpr std::size_t kSourceClosed = 0x68;     // a source: closing, or closed
 constexpr std::size_t kSourceOpen = 0x69;       // and opened
 constexpr std::size_t kSourceFolder = 0xA4;     // a DirectorySource's folder, ending in a separator
 constexpr std::size_t kArchiveFile = 0xB8;      // an ErfSource's one open file, a FileAccess
 constexpr std::size_t kFileHandle = 0x04;       // a FileAccess's handle
+constexpr std::size_t kRimUnpacked = 0x108;     // a RIMSource: its block's size unpacked, 0 if it is not packed
 constexpr std::size_t kDecipherSlot = 6;
 // Longer than any path the game makes; a length past it is taken as a misread.
 constexpr std::uint32_t kMostCharacters = 2048;
@@ -172,6 +188,27 @@ bool ReadArchive(std::uintptr_t source, std::uint32_t offset, std::vector<std::b
            ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &read, &at) != 0 && read == bytes.size();
 }
 
+// A RIM's bytes, from its file opened again: a RIM closes its one file once its task has read
+// it whole (dao/Addresses.h, "A RIM's file"). The path is the engine's, asked of its alias table
+// as its own opener of an archive asks. Nothing for a packed RIM, whose files' offsets are into
+// the unpacked block.
+bool ReadRim(std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+{
+    using GetFn = std::uintptr_t(__cdecl *)();
+    using PathFn = core::WStringRep *(__fastcall *)(std::uintptr_t, int, core::WStringRep *, const core::WStringRep *);
+    const std::uintptr_t aliases = reinterpret_cast<GetFn>(Module::Address(addr::kFileAliases_Get))();
+    if (aliases == 0 || TryRead<std::uint32_t>(source + kRimUnpacked).value_or(1) != 0)
+    {
+        return false;
+    }
+    WString path;
+    reinterpret_cast<PathFn>(Module::Address(addr::kFileAliases_Path))(
+        aliases, 0, path.Engine(), reinterpret_cast<const core::WStringRep *>(source + kSourceName));
+    std::ifstream file(std::filesystem::path(path.View()), std::ios::binary);
+    return file && file.seekg(offset) &&
+           file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
 // A resource's file fetched from its source beside the engine, as the engine fetches it and
 // under the source's lock as the engine does: the source open, its bytes read from where they
 // lie, and the source's own way with bytes fresh from its file run over them (slot 6: an
@@ -183,9 +220,9 @@ bool Fetch(std::uintptr_t resource, std::uintptr_t source, std::uint32_t offset,
     using DecipherFn = bool(__fastcall *)(std::uintptr_t, int, void *, std::uint32_t);
     const std::uintptr_t kind = TryRead<std::uintptr_t>(source).value_or(0);
     const bool loose = kind == Module::Address(addr::kDirectorySource_Vftable);
-    // A RIMSource is an ErfSource (its base at +0), and its file is the same kind of archive.
-    const bool archive =
-        kind == Module::Address(addr::kErfSource_Vftable) || kind == Module::Address(addr::kRimSource_Vftable);
+    // A RIMSource is an ErfSource (its base at +0) that keeps no file open.
+    const bool rim = kind == Module::Address(addr::kRimSource_Vftable);
+    const bool archive = rim || kind == Module::Address(addr::kErfSource_Vftable);
     const auto decipher = TryRead<std::uintptr_t>(kind + (kDecipherSlot * sizeof(std::uintptr_t)));
     if ((!loose && !archive) || !decipher || *decipher == 0)
     {
@@ -199,9 +236,21 @@ bool Fetch(std::uintptr_t resource, std::uintptr_t source, std::uint32_t offset,
     }
     const bool open = TryRead<std::uint8_t>(source + kSourceClosed).value_or(1) == 0 &&
                       TryRead<std::uint8_t>(source + kSourceOpen).value_or(0) != 0;
-    const bool fetched =
-        open && (loose ? ReadLoose(resource, source, offset, bytes) : ReadArchive(source, offset, bytes)) &&
-        reinterpret_cast<DecipherFn>(*decipher)(source, 0, bytes.data(), static_cast<std::uint32_t>(bytes.size()));
+    bool read = false;
+    if (!open)
+    {
+        // Nothing to read from.
+    }
+    else if (loose)
+    {
+        read = ReadLoose(resource, source, offset, bytes);
+    }
+    else
+    {
+        read = rim ? ReadRim(source, offset, bytes) : ReadArchive(source, offset, bytes);
+    }
+    const bool fetched = read && reinterpret_cast<DecipherFn>(*decipher)(source, 0, bytes.data(),
+                                                                         static_cast<std::uint32_t>(bytes.size()));
     reinterpret_cast<UnlockFn>(Module::Address(addr::kResourceSource_Unlock))(source, 0);
     return fetched;
 }
