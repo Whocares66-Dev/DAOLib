@@ -75,18 +75,64 @@ TEST_CASE("worksheets are read from m2da_base's rows, none for an empty prefix",
     CHECK(sheets[0].merged);
 }
 
-TEST_CASE("a file is part of the longest prefix of m2da_base's, else of 2da_base's", "[gda][m2da]")
+TEST_CASE("a file is part of every worksheet of m2da_base's it starts with, else of 2da_base's", "[gda][m2da]")
 {
     const std::vector<m2da::Worksheet> sheets{{1, L"Abilities", L"abi_", true},
                                               {9, L"More", L"abi_x_", true},
                                               {7, L"Portraits", L"portraits", true},
+                                              {10076, L"AI archer", L"aip_archer", true},
+                                              {10077, L"AI dwarf archer", L"aip_archer_dwarf", true},
                                               {112, L"Ability Base", L"abi_base", false},
                                               {14, L"Ability Types", L"abilitytype", false}};
-    CHECK(m2da::WorksheetOf(sheets, L"ABI_base") == 0U);
-    CHECK(m2da::WorksheetOf(sheets, L"abi_x_more") == 1U);
-    CHECK(m2da::WorksheetOf(sheets, L"portraits_turnbased") == 2U);
-    CHECK(m2da::WorksheetOf(sheets, L"abilitytype") == 4U);
-    CHECK_FALSE(m2da::WorksheetOf(sheets, L"ab"));
+    CHECK(m2da::WorksheetsOf(sheets, L"ABI_base") == std::vector<std::size_t>{0});
+    // Both: the game fills each worksheet's table with every file that starts with its prefix.
+    CHECK(m2da::WorksheetsOf(sheets, L"abi_x_more") == std::vector<std::size_t>{0, 1});
+    CHECK(m2da::WorksheetsOf(sheets, L"portraits_turnbased") == std::vector<std::size_t>{2});
+    // A single table (10001 to 10999) is its own file alone.
+    CHECK(sheets[3].Single());
+    CHECK_FALSE(sheets[0].Single());
+    CHECK(m2da::WorksheetsOf(sheets, L"aip_archer") == std::vector<std::size_t>{3});
+    CHECK(m2da::WorksheetsOf(sheets, L"aip_archer_dwarf") == std::vector<std::size_t>{4});
+    CHECK(m2da::WorksheetsOf(sheets, L"abilitytype") == std::vector<std::size_t>{6});
+    CHECK(m2da::WorksheetsOf(sheets, L"ab").empty());
+}
+
+TEST_CASE("of an ID's rows the game keeps the first in the parts' order", "[gda][m2da]")
+{
+    const auto mod = Table({"ID", "Label"}, {{2, std::string("mod's")}, {3, std::string("new")}});
+    const auto core = Table({"ID", "Label"}, {{1, std::string("a")}, {2, std::string("core's")}});
+    const std::vector<const GdaFile *> parts{&mod, &core};
+    const auto merged = m2da::Merge(parts);
+    std::vector<std::wstring> taken;
+    for (const auto &row : merged.rows)
+    {
+        if (row.taken)
+        {
+            taken.push_back(std::get<std::wstring>(row.cells[1]));
+        }
+        CHECK(row.settled);
+    }
+    std::ranges::sort(taken);
+    CHECK(taken == std::vector<std::wstring>{L"a", L"mod's", L"new"});
+    CHECK(merged.conflicts == 1);
+}
+
+TEST_CASE("a part whose first column is not ID gives no row, and in one source the order is not settled", "[gda][m2da]")
+{
+    const auto late = Table({"Label", "ID"}, {{std::string("late"), 1}});
+    const auto first = Table({"ID", "Label"}, {{1, std::string("first")}});
+    const auto second = Table({"ID", "Label"}, {{1, std::string("second")}});
+    const std::vector<const GdaFile *> parts{&late, &first, &second};
+    const std::vector<std::size_t> sources{0, 1, 1}; // the two last from one source
+    const auto merged = m2da::Merge(parts, sources);
+    CHECK(merged.skipped == std::vector<std::size_t>{0});
+    const auto taken = std::ranges::find_if(merged.rows, [](const m2da::Row &row) { return row.taken; });
+    REQUIRE(taken != merged.rows.end());
+    CHECK(taken->part == 1);
+    CHECK_FALSE(taken->settled);
+    // From sources of their own, the first is settled.
+    const auto apart = m2da::Merge(parts);
+    CHECK(std::ranges::find_if(apart.rows, [](const m2da::Row &row) { return row.taken; })->settled);
 }
 
 TEST_CASE("tables merge by ID: a row parts give alike once, different rows each a conflict", "[gda][m2da]")

@@ -277,6 +277,25 @@ TEST_CASE("a level's own files, another language's and another quality's are kep
     CHECK(Text(german->Read(german->Find("v.txt")->front())) == "de");
 }
 
+TEST_CASE("a talk table of another language is not the game's", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/data/talktables/core_en-us.tlk", files::FromText("en"));
+    root.Write(L"game/packages/core/data/talktables/core_en-us_f.tlk", files::FromText("en, hers"));
+    root.Write(L"game/packages/core/data/talktables/core_fr-fr.tlk", files::FromText("fr"));
+    root.Write(L"game/packages/core/data/talktables/core_pseudo.tlk", files::FromText("pseudo"));
+    root.Write(L"game/packages/core/data/talktables/notes_v2.tlk", files::FromText("no language"));
+    const auto english = install::Index::Build(root.path / L"game", {});
+    CHECK(english->Find("core_en-us.tlk")->front().unused == install::Unused::No);
+    CHECK(english->Find("core_en-us_f.tlk")->front().unused == install::Unused::No);
+    CHECK(english->Find("core_fr-fr.tlk")->front().unused == install::Unused::Language);
+    CHECK(english->Find("core_pseudo.tlk")->front().unused == install::Unused::Language);
+    CHECK(english->Find("notes_v2.tlk")->front().unused == install::Unused::No);
+    const auto french = install::Index::Build(root.path / L"game", {}, {.language = "FR-FR"});
+    CHECK(french->Find("core_fr-fr.tlk")->front().unused == install::Unused::No);
+    CHECK(french->Find("core_en-us.tlk")->front().unused == install::Unused::Language);
+}
+
 TEST_CASE("of copies in one folder, a loose file before an archive, the later archive's name first", "[install]")
 {
     files::TempFolder root;

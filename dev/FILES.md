@@ -50,6 +50,18 @@ Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and
 
 **Sources that come and go.** The campaign's are added when a campaign loads and the level's `ENV:` RIMs while the level is loaded; neither is there at the main menu. A plugin's folders come with the plugin.
 
+## Merged tables
+
+A data table the game merges (an M2DA: abilities, items, portraits, most of what the scripts' `TABLE_*` name) is not one winning file but the rows of many: the core's `abi_base.gda`, an add-in's `abi_cp1.gda`, a mod's `abi_mymod.gda`. Read in the exe 2026-10-13 (`dao/core/M2da.cpp` has the addresses) and seen in play:
+
+- **Which files.** At start the game lists every GDA file it has, its sources in the order above, each name once, from the source that wins it. `m2da_base` is itself merged, from every file starting `m2da_`. Then each of its rows makes a table of the row's `Worksheet` from **every file whose name starts with the worksheet, in any case**: so `aip_archer_dwarf.gda` would be part of `aip_archer`'s table as well as its own. But a row whose ID is **10001 to 10999** (the AI's packages, `aip_*`) is a single table, loaded from the one file of the worksheet's own name and not merged. A file whose first column is not `ID` gives no rows.
+- **Which row.** The table's rows are one array sorted by ID, filled file by file in the list's order, and **a row whose ID the table has already is dropped**: of the rows of one ID, the game keeps the first file's, which is the file of the source looked in first. An add-in's or a mod's row beats the core's of the same ID, and a mod in a plugin's or the player's override beats an add-in's. Two rows of one ID in one file: the first.
+- **Seen in play** (GOG's game, the script commands through Eluvian): `GetM2DAInt(268, "TitleStrRef", 25)` is 445854, from Awakening's `achievements_ep1.gda`, where the core's `patch003.erf` has `-1` in `achievements.gda`; `GetM2DARows(10076)`, `aip_archer`, is 12, its own file's rows and not the 14 with `aip_archer_dwarf`, `_elf` and `_human`; `GetM2DARows(4)`, `prj_`, is 76, `prj_base.gda`'s 67 and more, which a rule of the longest prefix (`prj_base` is a worksheet too) would have left at none.
+
+`dao::core::m2da` applies it: `WorksheetsOf` gives every worksheet a file is part of, `Takes` says whether one is, and `Merge` marks each ID's row the game keeps (`taken`), given the files in the game's order.
+
+Talk tables: the game asks for one by a name it makes of the table's, the language's and `.tlk` (`core_en-us.tlk`; `_f.tlk` for the female player's), so a talk table of another language is never the game's; `install::Index` marks it `Unused::Language`.
+
 ## Seen in play
 
 GOG's game from `game\gogrun`, `examples/resources` with a `where.txt`, 2026-10-12. Text files of one name were put in several places, each holding the name of its place, and the game read each from the place the rules say:
@@ -71,4 +83,4 @@ The same at the main menu and with the save loaded. The game's own: `rules_core.
 - **An add-in's folders this install has none of** (−1, −4, −5 of the base): read in the code, not seen.
 - **`ADDINS:`'s** add-ins, installed from a `.dazip` into Documents: none were installed here.
 - **Other builds**: read in GOG's; the code is the same in Steam's (GOG's code) and the address library's session found the resource manager the same in EA's.
-- **Merged tables** (`M2DA_*`, `2da_base.gda`'s lists): a table the game merges from many files has rows from all of them, by the merge's own rules, not one winning file.
+- **The order of two files of one merged table in one source**: the order the source lists its own names in (its index, 0x004E6A90), not read. `m2da::Merge` marks a row so decided unsettled.

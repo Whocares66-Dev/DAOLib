@@ -172,8 +172,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "m2da-merged-first: a file is an M2DA's before an old table's",
         M2DA,
-        "for (const bool merged : {true, false})",
-        "for (const bool merged : {false, true})",
+        "if (!found.empty())",
+        "if (false)",
     ),
     Mutant(
         "m2da-alike-across-parts: rows alike are folded only across files",
@@ -247,6 +247,36 @@ MUTANTS: list[Mutant] = [
         INSTALL,
         "if (found.unused == Unused::No && UidOf(source) != campaign_)",
         "if (false)",
+    ),
+    Mutant(
+        "install-talk-table-language: a talk table of another language is not the game's",
+        INSTALL,
+        "return isCode && code != language;",
+        "return isCode && language.empty();",
+    ),
+    Mutant(
+        "m2da-first-taken: of an ID's rows the game keeps the first",
+        M2DA,
+        "Row &first = rows[ofId.front()];",
+        "Row &first = rows[ofId.back()];",
+    ),
+    Mutant(
+        "m2da-id-first-column: a part whose first column is not ID gives no row",
+        M2DA,
+        "const bool gives = id && *id == 0;",
+        "const bool gives = id.has_value();",
+    ),
+    Mutant(
+        "m2da-every-worksheet: a file is part of every worksheet it starts with",
+        M2DA,
+        "found.push_back(i);\n        }\n    }\n    if (!found.empty())",
+        "found.push_back(i);\n            break;\n        }\n    }\n    if (!found.empty())",
+    ),
+    Mutant(
+        "m2da-single: a single table is its own file alone",
+        M2DA,
+        "return worksheet.Single() ? lower == worksheet.prefix : lower.starts_with(worksheet.prefix);",
+        "return lower.starts_with(worksheet.prefix);",
     ),
     Mutant(
         "addinorder-from-end: the game takes AddIns.xml's items from the last",

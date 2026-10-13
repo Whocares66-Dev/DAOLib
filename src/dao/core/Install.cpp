@@ -125,6 +125,8 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
     index->game_ = game;
     index->documents_ = documents;
     index->options_ = options;
+    index->options_.language = Lower(options.language); // as the folders' and files' names are compared
+    index->options_.textures = Lower(options.textures);
     if (!documents.empty())
     {
         index->addIns_ = ReadAddIns(ReadText(documents / L"Settings" / L"AddIns.xml"), "AddInItem");
@@ -705,6 +707,38 @@ class Placer
     bool offersSettled_ = true;
 };
 
+// Whether a file is a talk table of another language than the game's. The game asks for a talk
+// table by a name it makes of the table's, the language's and ".tlk", or "_f.tlk" for the female
+// player's (0x004E5862 to 0x004E5AFF, its literals "_", "_f" and ".tlk"): core_en-us.tlk,
+// core_en-us_f.tlk. Every talk table of the GOG install is so named, ten languages of each
+// (2026-10-13), so one of another language is never the game's.
+bool IsOtherLanguage(std::string_view name, std::string_view language)
+{
+    constexpr std::string_view kTalkTable = ".tlk";
+    constexpr std::string_view kFemale = "_f";
+    if (!name.ends_with(kTalkTable))
+    {
+        return false;
+    }
+    name.remove_suffix(kTalkTable.size());
+    if (name.ends_with(kFemale))
+    {
+        name.remove_suffix(kFemale.size());
+    }
+    const auto underscore = name.rfind('_');
+    if (underscore == std::string_view::npos)
+    {
+        return false;
+    }
+    const std::string_view code = name.substr(underscore + 1);
+    // A language's code: two letters, a dash, two letters (en-us), or the game's "pseudo".
+    const bool isCode =
+        code == "pseudo" || (code.size() == 5 && code[2] == '-' &&
+                             std::ranges::all_of(code.substr(0, 2), [](char c) { return c >= 'a' && c <= 'z'; }) &&
+                             std::ranges::all_of(code.substr(3), [](char c) { return c >= 'a' && c <= 'z'; }));
+    return isCode && code != language;
+}
+
 // What the resource manager sorts a source by after its priority: its kind (its slot 8: a loose
 // file's folder 0, a RIM 2, an ERF 3) and its name, the later first.
 struct Key
@@ -774,11 +808,12 @@ void Index::Order()
     const Placer placer(*this);
     for (auto &[name, copies] : resources_)
     {
+        const bool otherLanguage = IsOtherLanguage(name, options_.language);
         for (Copy &copy : copies)
         {
             const Placed placed = placer.Of(copy);
             copy.priority = placed.place.priority;
-            copy.unused = placed.place.unused;
+            copy.unused = placed.place.unused == Unused::No && otherLanguage ? Unused::Language : placed.place.unused;
             copy.settled = placed.settled;
         }
         Sort(*this, copies);
