@@ -15,16 +15,26 @@
 // that is the listing the names and the stories in the comments belong to:
 // Preferred goes from a running address back to that. It needs the GOG
 // build's file as well, which ships beside the others.
+//
+// An exe whose headers no file is named for is looked up by its code too
+// (DAOLib #110): a repack of a known build, Steamless' output or the Nexus
+// "decrypted Steam" exe, has the build's code under other headers, and the
+// address library's code index (daoaddr::CodeIndex) says which build's file
+// that code is. The code is read from the exe on disk, where no hook of ours
+// or anyone's is, and only when no file is named for the headers.
 #include "dao/Module.h"
 
 #include "dao/core/Instance.h"
 #include "dao/core/Pe.h"
+#include "daoaddr/CodeIndex.h"
 
 #include <Windows.h>
 
 #include <array>
+#include <fstream>
 #include <span>
 #include <utility>
+#include <vector>
 
 namespace dao::Module
 {
@@ -72,9 +82,60 @@ constexpr std::uint32_t kFarthest = 0x10000;
 struct Libraries
 {
     std::filesystem::path folder;
+    std::filesystem::path file;
+    bool byCode = false;                     // the file is the one of the exe's code, not of its headers
     std::optional<daoaddr::Library> running; // the build this process is
     std::optional<daoaddr::Library> listing; // GOG's, if that is another
 };
+
+// A file of the folder, if it is the build's: the name says the build, and the header inside
+// must say the same.
+std::optional<daoaddr::Library> LoadBuild(const std::filesystem::path &folder, const daoaddr::BuildInfo &build)
+{
+    auto library = daoaddr::Library::Load(folder / daoaddr::FileName(build));
+    if (library && library->Build() == build)
+    {
+        return library;
+    }
+    return std::nullopt;
+}
+
+// The known build whose code the exe on disk has, by the folder's code index: each range the
+// index holds a hash of is read from the file, and the first that matches names the build.
+// Nothing if the folder has no index, or the exe is none of the index's.
+std::optional<daoaddr::BuildInfo> BuildOfCode(const std::filesystem::path &folder)
+{
+    const auto index = daoaddr::CodeIndex::Load(folder / daoaddr::CodeIndexFileName());
+    if (!index)
+    {
+        return std::nullopt;
+    }
+    std::ifstream exe(Path(), std::ios::binary);
+    std::vector<std::byte> headers(0x1000);
+    exe.read(reinterpret_cast<char *>(headers.data()), static_cast<std::streamsize>(headers.size()));
+    headers.resize(static_cast<std::size_t>(exe.gcount()));
+    for (const daoaddr::CodeRange &range : index->Ranges())
+    {
+        const auto offset = core::FileOffsetOf(headers, range.rva, range.length);
+        if (!offset)
+        {
+            continue;
+        }
+        std::vector<std::byte> code(range.length);
+        exe.clear();
+        exe.seekg(*offset);
+        exe.read(reinterpret_cast<char *>(code.data()), static_cast<std::streamsize>(code.size()));
+        if (static_cast<std::size_t>(exe.gcount()) != code.size())
+        {
+            continue;
+        }
+        if (const auto build = index->Match(range, code))
+        {
+            return build;
+        }
+    }
+    return std::nullopt;
+}
 
 // Read once, by each DLL for itself: the files do not change under a
 // running game, and Address asks every time.
@@ -87,35 +148,45 @@ const Libraries &Loaded()
         {
             return out;
         }
-        const std::string name = daoaddr::FileName(*want);
         const auto own = OwnFolder();
         // Beside the loader: for the loader itself, for a plugin in its folder
         // daolib\plugins\<name> (DAOLib #26), and for either when the loader
         // sits beside the exe.
-        for (const auto &folder : {own / L"daolib" / L"addresses", own.parent_path().parent_path() / L"addresses",
-                                   Path().parent_path() / L"daolib" / L"addresses"})
-        {
-            auto library = daoaddr::Library::Load(folder / name);
-            if (!library)
-            {
-                continue;
-            }
-            // The name says the build; the header inside must say the same.
-            if (library->Build() != *want)
-            {
-                continue;
-            }
+        const std::array folders{own / L"daolib" / L"addresses", own.parent_path().parent_path() / L"addresses",
+                                 Path().parent_path() / L"daolib" / L"addresses"};
+        const auto accept = [&](const std::filesystem::path &folder, std::optional<daoaddr::Library> library,
+                                bool byCode) {
             out.folder = folder;
+            out.file = folder / daoaddr::FileName(library->Build());
+            out.byCode = byCode;
             out.running = std::move(library);
-            if (*want != kListing)
+            if (out.running->Build() != kListing)
             {
-                out.listing = daoaddr::Library::Load(folder / daoaddr::FileName(kListing));
-                if (out.listing && out.listing->Build() != kListing)
-                {
-                    out.listing.reset();
-                }
+                out.listing = LoadBuild(folder, kListing);
             }
-            break;
+        };
+        for (const auto &folder : folders)
+        {
+            if (auto library = LoadBuild(folder, *want))
+            {
+                accept(folder, std::move(library), false);
+                return out;
+            }
+        }
+        // No file is named for these headers. A repack of a build the library knows has that
+        // build's code, and its file.
+        for (const auto &folder : folders)
+        {
+            const auto build = BuildOfCode(folder);
+            if (!build)
+            {
+                continue;
+            }
+            if (auto library = LoadBuild(folder, *build))
+            {
+                accept(folder, std::move(library), true);
+                return out;
+            }
         }
         return out;
     }();
@@ -187,6 +258,16 @@ const daoaddr::Library *Library()
 std::filesystem::path AddressFolder()
 {
     return Loaded().folder;
+}
+
+std::filesystem::path AddressFile()
+{
+    return Loaded().file;
+}
+
+bool MatchedByCode()
+{
+    return Loaded().byCode;
 }
 
 std::uintptr_t Address(AddressId id)

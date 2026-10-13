@@ -48,6 +48,16 @@ inline bool IsKnownExecutable()
 // @return an empty path if none was found
 std::filesystem::path AddressFolder();
 
+// Returns the address file in use. It is the one named for the exe's header fields, or, when
+// none is, the one of the known build whose code the exe has (MatchedByCode).
+// @return an empty path if there is none
+std::filesystem::path AddressFile();
+
+// Returns whether the address file in use was found by the exe's code, not its headers: a repack
+// of a known build (Steamless' output, the Nexus "decrypted Steam" exe) whose code is that
+// build's. The file's own Library()->Build() is then the known build's, not the exe's.
+bool MatchedByCode();
+
 // Returns the folder of the DLL this copy of the library is linked into: a plugin's own folder
 // (daolib\plugins\<name>), or the loader's.
 // @return an empty path if the DLL cannot be found

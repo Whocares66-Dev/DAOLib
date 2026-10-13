@@ -8,6 +8,7 @@ access until it is granted, dev/BUILDS.md).
     python tools/ea_play.py --preset release
     python tools/ea_play.py --for 45 --when-free 20   wait first until no game has run for 20 s
     python tools/ea_play.py --examples resume,saves   with examples\\resume and examples\\saves too
+    python tools/ea_play.py --plugins C:\\a\\turnbased,C:\\a\\eluvian   and these plugins' folders, as deployed
     python tools/ea_play.py --for 120 --examples resume --force-load
                                              into the last save unattended, its missing content forced past
 
@@ -182,11 +183,12 @@ def load_library(process, dll):
     return code.value
 
 
-def stage(preset, examples=()):
+def stage(preset, examples=(), folders=()):
     """build\\<preset>\\play: what tools/deploy.ps1 would put in the game, the
     loader, the plugins that are not examples and the examples named, their
-    PDBs and Ghidra's function names. The path of the loader there, or None
-    with no build."""
+    PDBs and Ghidra's function names, and each of `folders`, a plugin's own folder as
+    deployed (daolib\\plugins\\<name>), under its name. The path of the loader there, or
+    None with no build."""
     build = os.path.normpath(os.path.join(HERE, "..", "build", preset))
     if not os.path.exists(os.path.join(build, "dinput8.dll")):
         return None
@@ -204,6 +206,10 @@ def stage(preset, examples=()):
             shutil.copy2(
                 os.path.join(plugins, name), os.path.join(play, "daolib", "plugins")
             )
+    for folder in folders:
+        shutil.copytree(
+            folder, os.path.join(play, "daolib", "plugins", os.path.basename(folder))
+        )
     functions = os.path.join(HERE, "..", "game", "ghidra", "functions.tsv")
     if os.path.exists(functions):
         shutil.copy2(functions, os.path.join(play, "daolib"))
@@ -283,7 +289,10 @@ def main(argv):
     examples = (
         argv[argv.index("--examples") + 1].split(",") if "--examples" in argv else ()
     )
-    loader = stage(preset, examples)
+    folders = (
+        argv[argv.index("--plugins") + 1].split(",") if "--plugins" in argv else ()
+    )
+    loader = stage(preset, examples, folders)
     if not loader:
         print(
             f"no build\\{preset}\\dinput8.dll; run tools\\build.ps1 -Preset {preset} first",

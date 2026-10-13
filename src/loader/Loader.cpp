@@ -62,7 +62,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -273,6 +277,61 @@ bool WaitForGameCode()
     return true;
 }
 
+// A plugin built before DAOLib #110 looks for the file named by the exe's headers, and has no
+// code index. When this exe was found by its code, the loader makes that file: the build's own,
+// its header changed to the exe's (daoaddr::Retarget), beside the others. Every plugin then
+// finds it as it finds any file. Kept up to date, so a newer address file is not left behind
+// by an older copy; a folder that cannot be written leaves the plugins built since to find
+// the exe by its code themselves, and the others to touch nothing.
+void MakeHeaderNamedFile(const daoaddr::BuildInfo &build)
+{
+    const std::filesystem::path source = dao::Module::AddressFile();
+    const std::filesystem::path target = dao::Module::AddressFolder() / daoaddr::FileName(build);
+    std::ifstream in(source, std::ios::binary);
+    const std::vector<char> text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    const auto moved = daoaddr::Retarget(std::as_bytes(std::span(text)), build);
+    if (!moved)
+    {
+        return;
+    }
+    const auto same = [&] {
+        std::ifstream have(target, std::ios::binary);
+        const std::vector<char> old{std::istreambuf_iterator<char>(have), std::istreambuf_iterator<char>()};
+        return old.size() == moved->size() && std::memcmp(old.data(), moved->data(), old.size()) == 0;
+    };
+    if (same())
+    {
+        return;
+    }
+    // Beside it first and renamed over it, so that a game started twice at once never reads half a file.
+    std::filesystem::path temp = target;
+    temp += L".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary);
+        out.write(reinterpret_cast<const char *>(moved->data()), static_cast<std::streamsize>(moved->size()));
+        if (!out)
+        {
+            spdlog::warn("could not write {}: plugins built before the code index (DAOLib #110) will not find their "
+                         "addresses",
+                         target.string());
+            return;
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temp, target, error);
+    if (error)
+    {
+        std::filesystem::remove(temp, error);
+        spdlog::warn("could not write {}: plugins built before the code index (DAOLib #110) will not find their "
+                     "addresses",
+                     target.string());
+        return;
+    }
+    spdlog::info("made {} for plugins built before the code index (DAOLib #110): the build's file with this exe's "
+                 "headers",
+                 target.string());
+}
+
 void Attach()
 {
     // Before the log is opened: an instance's log is in the instance's own folder.
@@ -301,14 +360,21 @@ void Attach()
     if (!build || library == nullptr)
     {
         spdlog::error("the address library has no file for this build of the game ({} beside the loader, under "
-                      "daolib\\addresses); plugins are not loaded",
+                      "daolib\\addresses), and its code is no known build's; plugins are not loaded",
                       build ? daoaddr::FileName(*build) : std::string("an exe whose headers do not read"));
         return;
     }
     // The file by name, not its folder alone: which build's file was read is
     // the first thing to check when an ID is not where it should be.
     spdlog::info("address library: {} IDs for this build, from {}", library->Count(),
-                 (dao::Module::AddressFolder() / daoaddr::FileName(*build)).string());
+                 dao::Module::AddressFile().string());
+    if (dao::Module::MatchedByCode())
+    {
+        spdlog::info("no file is named for this exe's headers, but its code is that of the build with link stamp "
+                     "{:#x}, image size {:#x} (DAOLib #110): that build's file is read",
+                     library->Build().linkStamp, library->Build().sizeOfImage);
+        MakeHeaderNamedFile(*build);
+    }
     // A wrapped build's headers give the wrapper's entry point, not the
     // game's, which the address library knows by its ID like any function.
     if (library->Rva(dao::addr::kEntryPoint) != build->entryPointRva)

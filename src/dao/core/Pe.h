@@ -25,4 +25,12 @@ struct Section
 // in both. Nothing if the bytes are not a PE image or have no such section.
 std::optional<Section> FindSection(std::span<const std::byte> image, std::string_view name);
 
+// Where a run of an image's bytes is in the file on disk, from the headers: a section's raw data
+// starts at its own offset, not at its RVA.
+// @param rva where the run starts, from the image's base
+// @param length how many bytes it has
+// @return the file offset of its first byte, or nothing if the run is not all in one section's
+// raw data (or there are no headers)
+std::optional<std::uint32_t> FileOffsetOf(std::span<const std::byte> image, std::uint32_t rva, std::uint32_t length);
+
 } // namespace dao::core

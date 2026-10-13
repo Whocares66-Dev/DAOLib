@@ -20,6 +20,8 @@ constexpr std::size_t kSectionHeaderSize = 40;
 constexpr std::size_t kSectionName = 0;
 constexpr std::size_t kSectionVirtualSize = 8;
 constexpr std::size_t kSectionVirtualAddress = 12;
+constexpr std::size_t kSectionRawSize = 16;
+constexpr std::size_t kSectionRawOffset = 20;
 
 } // namespace
 
@@ -60,6 +62,43 @@ std::optional<Section> FindSection(std::span<const std::byte> image, std::string
         if (have == name)
         {
             return Section{.rva = *rva, .virtualSize = *size};
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::uint32_t> FileOffsetOf(std::span<const std::byte> image, std::uint32_t rva, std::uint32_t length)
+{
+    const auto dosMagic = ReadAt<std::uint16_t>(image, 0);
+    const auto lfanew = ReadAt<std::uint32_t>(image, kLfanewOffset);
+    if (!dosMagic || *dosMagic != kDosMagic || !lfanew)
+    {
+        return std::nullopt;
+    }
+    const std::size_t nt = *lfanew;
+    const auto signature = ReadAt<std::uint32_t>(image, nt);
+    const auto count = ReadAt<std::uint16_t>(image, nt + kFileHeaderSectionCount);
+    const auto optionalSize = ReadAt<std::uint16_t>(image, nt + kFileHeaderOptionalSize);
+    if (!signature || *signature != kNtSignature || !count || !optionalSize)
+    {
+        return std::nullopt;
+    }
+    const std::size_t table = nt + kOptionalHeader + *optionalSize;
+    for (std::size_t i = 0; i < *count; ++i)
+    {
+        const std::size_t at = table + (i * kSectionHeaderSize);
+        const auto sectionRva = ReadAt<std::uint32_t>(image, at + kSectionVirtualAddress);
+        const auto rawSize = ReadAt<std::uint32_t>(image, at + kSectionRawSize);
+        const auto rawOffset = ReadAt<std::uint32_t>(image, at + kSectionRawOffset);
+        if (!sectionRva || !rawSize || !rawOffset)
+        {
+            return std::nullopt;
+        }
+        // In 64 bits, so that a run at the end of the address space cannot wrap into a section.
+        const std::uint64_t end = std::uint64_t{rva} + length;
+        if (rva >= *sectionRva && end <= std::uint64_t{*sectionRva} + *rawSize)
+        {
+            return *rawOffset + (rva - *sectionRva);
         }
     }
     return std::nullopt;

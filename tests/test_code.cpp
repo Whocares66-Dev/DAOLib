@@ -98,3 +98,40 @@ TEST_CASE("the game's .text, when there is a copy of the exe")
     in.read(reinterpret_cast<char *>(head.data()), static_cast<std::streamsize>(head.size()));
     CHECK(FindSection(head, ".text") == Section{.rva = 0x1000, .virtualSize = 0x6d86aa});
 }
+
+TEST_CASE("a run of bytes is found in the file at its section's own offset")
+{
+    // Two sections whose raw data is not where their RVAs are, as in the game's exe: .text's
+    // is 0x400 into the file and 0x1000 into the image.
+    std::vector<std::byte> image(0x200);
+    auto put16 = [&](std::size_t at, std::uint16_t v) { std::memcpy(&image[at], &v, 2); };
+    auto put32 = [&](std::size_t at, std::uint32_t v) { std::memcpy(&image[at], &v, 4); };
+    put16(0, 0x5a4d);
+    put32(0x3c, 0x80);
+    put32(0x80, 0x4550);
+    put16(0x80 + 6, 2);
+    const std::size_t table = 0x80 + 24;
+    std::memcpy(&image[table], ".text", 5);
+    put32(table + 8, 0x100);   // virtual size, which the run is not held to
+    put32(table + 12, 0x1000); // RVA
+    put32(table + 16, 0x200);  // raw size
+    put32(table + 20, 0x400);  // raw offset
+    std::memcpy(&image[table + 40], ".rdata", 6);
+    put32(table + 40 + 8, 0x80);
+    put32(table + 40 + 12, 0x3000);
+    put32(table + 40 + 16, 0x80);
+    put32(table + 40 + 20, 0x600);
+
+    using dao::core::FileOffsetOf;
+    CHECK(FileOffsetOf(image, 0x1000, 0x100) == 0x400U);
+    CHECK(FileOffsetOf(image, 0x1010, 0x20) == 0x410U);
+    // Up to the section's last byte of raw data, a few past its virtual size, and not one more.
+    CHECK(FileOffsetOf(image, 0x1000, 0x200) == 0x400U);
+    CHECK_FALSE(FileOffsetOf(image, 0x1000, 0x201).has_value());
+    CHECK(FileOffsetOf(image, 0x3000, 0x80) == 0x600U);
+    // A run across two sections, or in none, or that wraps, is nowhere.
+    CHECK_FALSE(FileOffsetOf(image, 0x11f0, 0x2000).has_value());
+    CHECK_FALSE(FileOffsetOf(image, 0x2000, 1).has_value());
+    CHECK_FALSE(FileOffsetOf(image, 0xfffffff0U, 0x20).has_value());
+    CHECK_FALSE(FileOffsetOf({}, 0x1000, 1).has_value());
+}

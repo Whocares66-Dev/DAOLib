@@ -93,6 +93,9 @@ New-Item -ItemType Directory -Force $addresses | Out-Null
 Copy-Item -Force $builtLoader $binShip
 Copy-Item -Force $builtPdb $binShip
 foreach ($file in $addressFiles) { Copy-Item -Force $file.FullName $addresses }
+# The code index: which build's file an exe's code is, for an exe whose headers no file is
+# named for (a repack of a known build, DAOLib #110).
+foreach ($file in Get-ChildItem -Path $builtAddresses -Filter '*.index') { Copy-Item -Force $file.FullName $addresses }
 
 $readme = @"
 $title

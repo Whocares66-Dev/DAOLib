@@ -1,7 +1,9 @@
 #include "dao/core/Fingerprint.h"
+#include "dao/core/Pe.h"
 
 #include "dao/Addresses.h"
 
+#include "daoaddr/CodeIndex.h"
 #include "daoaddr/Library.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -184,4 +186,56 @@ TEST_CASE("the EA app's exe in game/ea/, when there is one, is a build the addre
     CAPTURE(got->timeDateStamp, got->sizeOfImage, got->entryPointRva, got->imageBase, got->is32Bit);
     CHECK(got->is32Bit);
     CHECK(LibraryKnows(*got));
+}
+
+// DAOLib #110: an exe whose headers no file is named for is looked up by its code, which Module
+// reads from the exe on disk by the section's raw offset. The same steps over an image made here.
+TEST_CASE("code read from a file by its section's raw offset is the build whose code it is")
+{
+    constexpr std::uint32_t kLength = 0x40;
+    std::vector<std::byte> image(0x400 + kLength + 0x10); // sixteen bytes of padding after the code
+    auto put32 = [&](std::size_t at, std::uint32_t v) { std::memcpy(&image[at], &v, 4); };
+    put32(0x3c, 0x80);
+    image[0] = std::byte{'M'};
+    image[1] = std::byte{'Z'};
+    put32(0x80, 0x4550);
+    const std::uint16_t sections = 1;
+    std::memcpy(&image[0x80 + 6], &sections, 2);
+    const std::size_t table = 0x80 + 24;
+    std::memcpy(&image[table], ".text", 5);
+    put32(table + 8, kLength + 0x10); // this exe's own virtual size is longer than the build's
+    put32(table + 12, 0x1000);
+    put32(table + 16, 0x400);
+    put32(table + 20, 0x400);
+    for (std::size_t i = 0; i < kLength; ++i)
+    {
+        image[0x400 + i] = static_cast<std::byte>(i * 7);
+    }
+    const std::vector<std::byte> code(image.begin() + 0x400, image.begin() + 0x400 + kLength);
+    const auto text = "DAOCODE 1\n00001000 " + std::string("00000040 ") + daoaddr::ToHex(daoaddr::Sha256(code)) +
+                      " 4eb19d53 009ec0a2 004e3024 00400000 gog\n";
+    const auto index = daoaddr::CodeIndex::Parse(text);
+    REQUIRE(index.has_value());
+    REQUIRE(index->Ranges().size() == 1);
+    const auto range = index->Ranges().front();
+
+    const auto offset = dao::core::FileOffsetOf(image, range.rva, range.length);
+    REQUIRE(offset.has_value());
+    const std::span<const std::byte> read(image.data() + *offset, range.length);
+    const auto build = index->Match(range, read);
+    REQUIRE(build.has_value());
+    CHECK(daoaddr::FileName(*build) == "daoaddresses-4eb19d53-009ec0a2-004e3024-00400000.bin");
+
+    // Another exe's code, or any byte of it changed, is no build's.
+    image[0x400 + 5] = std::byte{0xCC};
+    CHECK_FALSE(index->Match(range, std::span<const std::byte>(image.data() + *offset, range.length)).has_value());
+}
+
+TEST_CASE("the code index packed from the table names GOG's code")
+{
+    const auto index =
+        daoaddr::CodeIndex::Load(std::filesystem::path(DAO_ADDRESS_DATA_DIR) / daoaddr::CodeIndexFileName());
+    REQUIRE(index.has_value());
+    CHECK_FALSE(index->Ranges().empty());
+    CHECK(index->Ranges().front() == daoaddr::CodeRange{.rva = 0x1000, .length = 0x6d86aa});
 }

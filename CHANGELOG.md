@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A repack of the game is found by its code:** an exe whose headers no address file is named for, but whose code is a known build's (Steamless' output, the Nexus "decrypted Steam" exe with or without the 4GB flag), reads that build's file, found by a hash of its `.text` read from the exe on disk. `loader.log` says so; a wrapped exe or one whose code is changed is found by its headers or not at all, as before (#110). Plugins built before it find the file they ask for: the loader makes it, the matched build's with the exe's header.
+
 ## 0.1.0
 
 The first release, for Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam:

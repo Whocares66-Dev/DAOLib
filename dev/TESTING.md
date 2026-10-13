@@ -52,6 +52,14 @@ It does not play: a start to the main menu is what every setting shares. What a 
 
 All three run as the game as ever: the shared profile, `Documents\BioWare\Dragon Age`, and its `daolib\loader.log`.
 
+## Which exes the loader finds a file for (`tools\version_matrix.py`, 2026-10-13, DAOLib #110)
+
+Each exe is kept in `C:\Modding\DAOVersions\<store>\DAOrigins-<variant>-<version>.exe` (`MANIFEST.sha256` beside them): GOG's, Steam's stock, Steamless' output of it, the Nexus "decrypted Steam" exe with and without the 4GB flag, and EA's, stock and its decrypted dump. `python tools\version_matrix.py` stages each into the install it belongs to (GOG's, Steam's), with this tree's loader and address files, starts the game with Steam's variables (`SteamAppId=47810`) where the stub wants them, waits for Eluvian's `health` to count frames, loads `AutoSave_3` of Lyna (a fight in Redcliffe) through Eluvian's `saves`, and reads `loader.log` and `turnbased.log`. It ends the game after each, and puts back the stock exe (checked by hash), the loader and the address files. THIS STARTS THE GAME; have none open. It needs Eluvian and turnbased in each install's `daolib\plugins`.
+
+It expects of each: the file the loader read (GOG's by its headers for GOG's exe, Steam's own for the stock exe, GOG's by the exe's code for the other three), Eluvian's frames running, turnbased ready, and the world loaded.
+
+Seen 2026-10-13, all five ok: GOG's exe, Steam's stock exe (wrapped, then decrypted), Steamless' output (`SizeOfImage` `0x9ed000`), the Nexus exe and the Nexus exe with the 4GB flag (`0x96a000`), each into combat in Redcliffe with the turn-based mod ready and Eluvian answering. For the last three the loader logged the code match and made the header-named file, which is how turnbased and Eluvian (built before the code index) found their addresses. EA's exe is not in it: its folder is not writable, and the EA app starts the game named by the registry's `Path`, which is Steam's folder here. With `HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age`'s `Path` set to `C:\Program Files\EA Games\Dragon Age` for the run (the user's leave, 2026-10-13; put back after, checked) `tools\ea_play.py --plugins <turnbased and Eluvian folders>` started EA's stock exe: its own file (103567 IDs), `wrapped`, `decrypted`, turnbased and Eluvian loaded, frames running, and the same save into combat with 4 hostile creatures.
+
 ## The settings
 
 A setting on the exe's Compatibility tab is a layer: a value named by the exe's path under `HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`, which is how the script sets one and takes it out. What matters to the loader is which shim DLLs Windows loads for the layer, before the exe's own imports and from the system folder with everything they import (read on Windows 10 19045, 2026-10-12):

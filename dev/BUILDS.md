@@ -35,6 +35,18 @@ A DAOLib release holds the submodule at one of those tags, and `package.ps1` wri
 
 `LoaderInfo::knownExecutable` says whether there is a file, and `kPluginApiVersion` is 2: a plugin built against 1 holds addresses, and the loader's version check refuses it.
 
+## An exe the headers do not know, by its code (2026-10-13, DAOLib #110)
+
+A file is named by the four header fields, so a repack of a build that changes the headers has no file, and nothing loaded. The Nexus "decrypted Steam" exe (mod 5989) is one: GOG's link stamp and entry point, `SizeOfImage` `0x96a000` (no `.reloc`), and with the 4GB flag too. Its `.text` is GOG's, so are Steamless' output's (`0x9ed000`), and the IDs depend on the code and not the headers.
+
+So when no file is named for the headers, `dao::Module` reads the exe's `.text` from the file on disk (not from memory, where the loader's own hooks are; each range the address library's code index, `daolib\addresses\daoaddresses-code.index`, holds a hash of, at the section's raw offset: `dao::core::FileOffsetOf`), and `daoaddr::CodeIndex::Match` says which build's code it is. That build's file is read, and its header must say the same build, as for any file. `loader.log` says so: `no file is named for this exe's headers, but its code is that of the build with link stamp 0x4eb19d53, image size 0x9ec0a2 (DAOLib #110): that build's file is read`. `dao::Module::MatchedByCode()` and `AddressFile()` say it to a plugin.
+
+What this does not do: a wrapped exe (stock Steam, EA) has its `.text` encrypted on disk and hashes to nothing, so those are found by their headers first, as before. An exe whose code is edited matches no build and is an unknown one, which is right. The headers are looked up first, so a build with its own file never costs a hash; the lookup is a read of 7 MB and a SHA-256 of it, once per DLL, only for an exe the headers do not find.
+
+**Plugins built before this have no code index** (a plugin links its own copy of `dao::Module`: turnbased and Eluvian at DAOLib 0.1.0 found no address for an exe their copy cannot name a file for, and said `could not detour ... at 0x00000000`). So when the loader finds an exe by its code it makes the file those plugins ask for: the matched build's own, its header changed to the exe's (`daoaddr::Retarget`), as `daoaddresses-<the exe's four fields>.bin` beside the others, and says so in `loader.log` (`made ... for plugins built before the code index`). It is made again when it differs, so a newer address file is not left behind, and `deploy.ps1` takes it out with the other files the build did not make; the loader makes it at the next start. A folder it cannot write leaves those plugins with nothing, and says so as a warning.
+
+**Seen in play 2026-10-13**, the Nexus exe with the 4GB flag in Steam's install, no hand-made file: the line above, `103293 IDs for this build` from GOG's file, the entry point detoured (unwrapped, as its headers say: the entry point is GOG's), the plugins loaded and the game to the menu. The same exe had no file before (a player's `loader.log`, #110): plugins not loaded.
+
 ## What an ID cannot do
 
 All in the address library's `dev\BUILDS.md`; what matters to a plugin:

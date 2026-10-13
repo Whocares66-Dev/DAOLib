@@ -160,6 +160,12 @@ foreach ($name in $built) {
     }
     Copy-Item -Force $from $to
 }
+# The code index beside them: which build's file an exe's code is, for an exe whose headers
+# no file is named for (a repack of a known build, DAOLib #110): it only says which of the
+# files above to read.
+foreach ($file in Get-ChildItem -Path $builtAddresses -Filter '*.index') {
+    Copy-Item -Force $file.FullName (Join-Path $addresses $file.Name)
+}
 # The folder holds what this build has and nothing else: a file the address
 # library no longer writes (the names by link stamp alone, before its
 # ae992b3) would be stale here, and a loader that still asked for it would
