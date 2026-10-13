@@ -43,6 +43,25 @@ inline constexpr ObjectId kMostNewId = 0x3FFFFFFF;
 ObjectId CreateAs(ObjectId id, std::int32_t type, const Resource &tmpl, const CScriptLocation &location,
                   std::wstring_view overrideScript = L"", bool spawnActive = true, bool noPermanentDeath = false);
 
+// Creates an item on a creature or a placeable from a template, as the scripts'
+// CreateItemOnObject does, under an id of the caller's choosing.
+// @param id the id to give it, from kLeastNewId to kMostNewId
+// @param target the creature or placeable whose inventory it goes into
+// @param stackSize, tag, suppressNotification, droppable as CreateItemOnObject's arguments
+// @return the id of the item made: `id`, or another if an object already has `id`, or
+//  kInvalidObject if nothing was made
+//
+// The first item the command makes takes the id. A stack larger than one item of the template
+// holds is made as several items, and the rest get ids of the game's own choosing. Where
+// `target` already has a stack the item can join, that stack grows by the amount and keeps its
+// own id; the item made is then not in the inventory, though its id is what is returned. Any
+// intercept of CreateItemOnObject sees this call too. If `id` is above every id given so far,
+// new objects are numbered on from it.
+//
+// Call it on the game thread, in a loaded game.
+ObjectId CreateItemAs(ObjectId id, const Resource &tmpl, ObjectId target, std::int32_t stackSize = 1,
+                      std::wstring_view tag = L"", bool suppressNotification = false, bool droppable = true);
+
 // Returns the id the last new object got. The next gets one more.
 // @return nullopt before a game is loaded, or in a build of the game the library does not know
 //

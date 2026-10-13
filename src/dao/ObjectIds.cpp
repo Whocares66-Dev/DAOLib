@@ -232,6 +232,37 @@ ObjectId CreateAs(ObjectId id, std::int32_t type, const Resource &tmpl, const CS
     return made;
 }
 
+// The same road as CreateAs (DAOLib #103): the scripts' CreateItemOnObject (0x00673630) makes
+// the items first (0x007595A0, a vector of them, one for each stack the size asks for), each an
+// object constructed with -1, and only then puts them in the target's inventory, so the first
+// object of the command is the first item.
+//
+// Seen in play 2026-10-12 (examples/objectids, GOG's game, a Redcliffe autosave): a bag
+// (gen_ip_bodybag) made under 0x434C3 got it, and 1,950 coins (gen_im_copper) made in it under
+// 0x434C4 got that, a stack of 1,950, one item in the bag. Fifty more asked for under the same
+// id got the next free one, 0x435F4: the first stack was then 2,000 and the bag still held one
+// item, and 0x435F4 was still an object, a stack of 50 that is in no inventory, which is the
+// command's own way with an item that joins a stack.
+ObjectId CreateItemAs(ObjectId id, const Resource &tmpl, ObjectId target, std::int32_t stackSize, std::wstring_view tag,
+                      bool suppressNotification, bool droppable)
+{
+    if (id < kLeastNewId || id > kMostNewId)
+    {
+        return kInvalidObject;
+    }
+    if (!AttachAddObject())
+    {
+        return kInvalidObject;
+    }
+    g_wantedThread = GetCurrentThreadId();
+    g_wanted = id;
+    const ObjectId made =
+        script::api::CreateItemOnObject(tmpl, target, stackSize, tag, suppressNotification ? 1 : 0, droppable ? 1 : 0);
+    // Still wanted if nothing was constructed: no such template, no such target.
+    g_wanted = kInvalidObject;
+    return made;
+}
+
 std::optional<ObjectId> LastNewId()
 {
     const auto pool = FirstPool();

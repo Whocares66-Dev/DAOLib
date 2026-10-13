@@ -49,6 +49,10 @@ using dao::ObjectId;
 
 const dao::Resource kTemplate{L"gen00fl_dog.utc"};
 constexpr std::int32_t kCreature = dao::script::constants::OBJECT_TYPE_CREATURE;
+constexpr std::int32_t kPlaceable = dao::script::constants::OBJECT_TYPE_PLACEABLE;
+// What the scripts leave where a creature died by the party's hand, and what they put in it.
+const dao::Resource kBag{L"gen_ip_bodybag.utp"};
+const dao::Resource kCoins{L"gen_im_copper.uti"};
 
 void Log(const char *what, ObjectId got, ObjectId expected)
 {
@@ -86,6 +90,25 @@ void Show(ObjectId player)
     const ObjectId behind = *start + 500;
     const ObjectId filled = objects::CreateAs(behind, kCreature, kTemplate, where);
     Log("made under a free id behind", filled, behind);
+
+    // What a kill leaves, as another game made it: the bag under one id and the coins in it
+    // under another, then coins asked for under the id the first have.
+    const ObjectId bagId = *start + 700;
+    const ObjectId bag = objects::CreateAs(bagId, kPlaceable, kBag, where);
+    const ObjectId coins = objects::CreateItemAs(bagId + 1, kCoins, bag, 1950);
+    spdlog::info("a bag under 0x{:x}: got 0x{:x}; coins in it under 0x{:x}: got 0x{:x}, {}; a stack of {}, {} "
+                 "item(s) in the bag",
+                 bagId, bag, bagId + 1, coins, coins == bagId + 1 ? "as expected" : "NOT as expected",
+                 api::GetItemStackSize(coins), api::GetItemsInInventory(bag).Size());
+    const ObjectId more = objects::CreateItemAs(bagId + 1, kCoins, bag, 50);
+    spdlog::info("more coins under the id in use: got 0x{:x}, {} an object, a stack of {}; the first coins now a "
+                 "stack of {}; {} item(s) in the bag; the last new id is 0x{:x}",
+                 more, api::IsObjectValid(more) != 0 ? "still" : "no longer", api::GetItemStackSize(more),
+                 api::GetItemStackSize(coins), api::GetItemsInInventory(bag).Size(), objects::LastNewId().value_or(0));
+    if (bag != dao::kInvalidObject)
+    {
+        api::DestroyObject(bag);
+    }
 
     // The game's own numbering moved far ahead: what the scripts make next is there.
     const ObjectId apart = *start + 0x100000;
