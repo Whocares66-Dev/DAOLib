@@ -15,12 +15,31 @@
 // and is no resource.
 //
 // Written for Eluvian's ghilana 2026-10-12 and moved here (DAOLib #106).
+//
+// The order (DAOLib #106, step 4; dev/FILES.md, where the evidence is): each
+// copy's place is the folder the resource manager takes it from, and that
+// folder's priority. The core's: the player's override 0, the install's 1,
+// PATCH: 100000, LOCALE: 100001, ENV: 100002 (its own files; a level's
+// env\<level>\ 100007, and only while the level is loaded), TEXTURES:
+// 100003, DATA:'s RIMs 100004, DATA: 100005, AUDIO_VO: 100006,
+// AUDIO_SOUND: 100008. A DAOLib plugin's override\ 2. The loaded campaign's
+// (its CAMP_ aliases, 0x005FD051 on): override 50000, patch 50002, locale
+// 50003, data 50004, toolset 50005, voice 50006, sound 50007, its own folder
+// 50008. An add-in's: a base of 9000 - 7i for the i-th the game takes
+// (AddInOrder.h), 10000 more in the game's folder than in Documents, and
+// within it data and env at the base, sound -1, voice -2, textures -3,
+// locale -4, patch -5, override -6, for its core\ and, while it extends the
+// loaded campaign, its module\ (0x005EF460; the names pushed before each
+// call). An offer's 200000 - 7i, all its folders.
 #include "dao/core/Install.h"
+
+#include "dao/core/AddInOrder.h"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <fstream>
+#include <span>
 #include <sstream>
 #include <thread>
 
@@ -99,12 +118,13 @@ std::vector<std::pair<std::string, fs::path>> Folders(const fs::path &folder)
 
 } // namespace
 
-std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &documents)
+std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &documents, const Options &options)
 {
     const auto start = std::chrono::steady_clock::now();
     auto index = std::make_unique<Index>();
     index->game_ = game;
     index->documents_ = documents;
+    index->options_ = options;
     if (!documents.empty())
     {
         index->addIns_ = ReadAddIns(ReadText(documents / L"Settings" / L"AddIns.xml"), "AddInItem");
@@ -121,12 +141,7 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
         }
         index->AddArchive(index->pending_[i], reads[i]);
     }
-    // Each resource's copies in the sources' order: the walk added the loose
-    // files as it met them and the archives' after.
-    for (auto &[name, copies] : index->resources_)
-    {
-        std::ranges::stable_sort(copies, {}, &Copy::source);
-    }
+    index->Order();
     index->pending_.clear();
     index->pending_.shrink_to_fit();
     index->stats_.archives = index->archives_.size();
@@ -388,6 +403,386 @@ std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
         return std::nullopt;
     }
     return archive->Read(archive->Entries()[copy.entry]);
+}
+
+namespace
+{
+
+// Where the game's loader puts a folder: its priority, or why it takes none.
+struct Place
+{
+    std::int32_t priority = 0;
+    Unused unused = Unused::No;
+};
+
+constexpr std::int32_t kPlayersOverride = 0;
+constexpr std::int32_t kGameOverride = 1;
+constexpr std::int32_t kPluginFolder = 2;
+constexpr std::int32_t kAddInBase = 9000;     // the first add-in the game takes, from Documents
+constexpr std::int32_t kAddInStep = 7;        // less for each after it
+constexpr std::int32_t kInGameFolder = 10000; // more for an add-in in the game's folder
+constexpr std::int32_t kOfferBase = 200000;
+
+std::vector<std::string_view> Segments(std::string_view path)
+{
+    std::vector<std::string_view> out;
+    while (!path.empty())
+    {
+        const auto slash = path.find('/');
+        out.push_back(path.substr(0, slash));
+        path = slash == std::string_view::npos ? std::string_view() : path.substr(slash + 1);
+    }
+    return out;
+}
+
+// A file of the core's, by its path in packages\core.
+Place CorePlace(std::span<const std::string_view> path, const Options &options)
+{
+    if (path.size() < 2)
+    {
+        return {0, Unused::Folder};
+    }
+    const std::string_view top = path[0];
+    if (top == "patch")
+    {
+        return {100000};
+    }
+    if (top == "locale")
+    {
+        return {100001, path.size() > 2 && path[1] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "env")
+    {
+        return path.size() == 2 ? Place{100002} : Place{100007, Unused::Level};
+    }
+    if (top == "textures")
+    {
+        return {100003, path.size() > 2 && path[1] == options.textures ? Unused::No : Unused::Textures};
+    }
+    if (top == "data")
+    {
+        // DATA:'s own RIMs come before its folders and ERFs (0x004031B8).
+        return path.size() == 2 && Extension(std::string(path[1])) == "rim" ? Place{100004} : Place{100005};
+    }
+    if (top == "audio" && path[1] == "vo")
+    {
+        return {100006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "audio" && path[1] == "sound")
+    {
+        return {100008};
+    }
+    return {0, Unused::Folder};
+}
+
+// A file of the loaded campaign's, by its path in the campaign's folder.
+Place CampaignPlace(std::span<const std::string_view> path, const Options &options)
+{
+    if (path.size() < 2)
+    {
+        return {50008};
+    }
+    const std::string_view top = path[0];
+    if (top == "override")
+    {
+        return {50000};
+    }
+    if (top == "patch")
+    {
+        return {50002};
+    }
+    if (top == "locale")
+    {
+        return {50003, path.size() > 2 && path[1] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "data")
+    {
+        return {50004};
+    }
+    if (top == "toolset")
+    {
+        return {50005};
+    }
+    if (top == "audio" && path[1] == "vo")
+    {
+        return {50006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "audio" && path[1] == "sound")
+    {
+        return {50007};
+    }
+    if (top == "env")
+    {
+        return {50008};
+    }
+    return {50008, Unused::Folder};
+}
+
+// A file of an add-in's core\ or module\, by its path in that folder, the add-in's base given.
+Place AddInPlace(std::span<const std::string_view> path, std::int32_t base, const Options &options)
+{
+    if (path.size() < 2)
+    {
+        return {base};
+    }
+    const std::string_view top = path[0];
+    if (top == "data" || top == "env")
+    {
+        return {base};
+    }
+    if (top == "audio" && path[1] == "sound")
+    {
+        return {base - 1};
+    }
+    if (top == "audio" && path[1] == "vo")
+    {
+        return {base - 2, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "textures")
+    {
+        return {base - 3, path.size() > 2 && path[1] == options.textures ? Unused::No : Unused::Textures};
+    }
+    if (top == "locale")
+    {
+        return {base - 4, path.size() > 2 && path[1] == options.language ? Unused::No : Unused::Language};
+    }
+    if (top == "patch")
+    {
+        return {base - 5};
+    }
+    if (top == "override")
+    {
+        return {base - 6};
+    }
+    return {base, Unused::Folder};
+}
+
+// The places of the items the game takes, by their UID in lower case.
+std::map<std::string, std::int32_t, std::less<>> Slots(const std::vector<AddIn> &items, bool enabledOnly)
+{
+    std::map<std::string, std::int32_t, std::less<>> slots;
+    const std::vector<std::size_t> order = AddInOrder(items, enabledOnly);
+    for (std::size_t i = 0; i < order.size(); ++i)
+    {
+        slots.emplace(Lower(items[order[i]].uid), static_cast<std::int32_t>(i));
+    }
+    return slots;
+}
+
+// A copy's place, and whether the order it rests on was seen.
+struct Placed
+{
+    Place place;
+    bool settled = true;
+};
+
+// Places each copy as the game's loader places its folder.
+class Placer
+{
+  public:
+    explicit Placer(const Index &index)
+        : index_(index), addInSlots_(Slots(index.AddIns(), true)), offerSlots_(Slots(index.Offers(), false)),
+          campaign_(Lower(index.Set().campaign))
+    {
+        std::map<std::string, bool, std::less<>> offerFolders;
+        for (const Source &source : index.Sources())
+        {
+            const std::string uid = UidOf(source);
+            if (source.kind == "addin" && (!addInFolders_.contains(uid) || source.base == Base::Documents))
+            {
+                addInFolders_[uid] = source.base;
+            }
+            else if (source.kind == "offer")
+            {
+                offerFolders[uid] = true;
+            }
+        }
+        // What was not seen: whether a disabled add-in, or one with no folder, takes a place in
+        // the game's count. Where neither is, the order is the one seen in play.
+        addInsSettled_ = std::ranges::all_of(index.AddIns(), [this](const AddIn &item) {
+            return item.enabled.value_or(false) && addInFolders_.contains(Lower(item.uid));
+        });
+        offersSettled_ = std::ranges::all_of(
+            index.Offers(), [&offerFolders](const AddIn &item) { return offerFolders.contains(Lower(item.uid)); });
+    }
+
+    Placed Of(const Copy &copy) const
+    {
+        const Source &source = index_.Sources()[copy.source];
+        std::string path = Lower(index_.Where(copy));
+        const std::string folder = Lower(source.folder) + "/";
+        if (path.starts_with(folder))
+        {
+            path.erase(0, folder.size());
+        }
+        const std::vector<std::string_view> parts = Segments(path);
+        const Options &options = index_.Set();
+        if (source.kind == "override")
+        {
+            return {{source.base == Base::Documents ? kPlayersOverride : kGameOverride}};
+        }
+        if (source.kind == "plugin")
+        {
+            return {{kPluginFolder}};
+        }
+        if (source.kind == "core")
+        {
+            return {CorePlace(parts, options)};
+        }
+        if (source.kind == "campaign" || source.kind == "module")
+        {
+            Place found = CampaignPlace(parts, options);
+            if (found.unused == Unused::No && UidOf(source) != campaign_)
+            {
+                found.unused = Unused::Campaign;
+            }
+            return {found};
+        }
+        if (source.kind == "offer")
+        {
+            const auto slot = offerSlots_.find(UidOf(source));
+            const Place found = slot == offerSlots_.end() ? Place{kOfferBase, Unused::Disabled}
+                                                          : Place{kOfferBase - (kAddInStep * slot->second)};
+            return {found, offersSettled_};
+        }
+        return {AddInCopy(source, parts), addInsSettled_};
+    }
+
+  private:
+    static std::string UidOf(const Source &source)
+    {
+        return Lower(Utf8(fs::path(source.folder).filename()));
+    }
+
+    // A copy of an add-in's, by its path in the add-in's folder.
+    Place AddInCopy(const Source &source, std::span<const std::string_view> parts) const
+    {
+        const std::string uid = UidOf(source);
+        const auto slot = addInSlots_.find(uid);
+        if (slot == addInSlots_.end())
+        {
+            return {kAddInBase, Unused::Disabled};
+        }
+        const bool inGame = source.base == Base::Game;
+        const std::int32_t base = kAddInBase - (kAddInStep * slot->second) + (inGame ? kInGameFolder : 0);
+        if (inGame && addInFolders_.at(uid) == Base::Documents)
+        {
+            return {base, Unused::Folder}; // the player's copy in Documents is taken instead
+        }
+        if (parts.size() < 2)
+        {
+            return {base};
+        }
+        const std::span<const std::string_view> rest = parts.subspan(1);
+        const Options &options = index_.Set();
+        if (parts[0] == "core")
+        {
+            return AddInPlace(rest, base, options);
+        }
+        if (parts[0] != "module")
+        {
+            return {base, Unused::Folder};
+        }
+        const std::string extends = source.settings ? Lower(source.settings->extends) : std::string();
+        if (!campaign_.empty() && uid == campaign_ && extends.empty())
+        {
+            return CampaignPlace(rest, options); // the campaign is this add-in's own
+        }
+        Place found = AddInPlace(rest, base, options);
+        if (found.unused == Unused::No && (campaign_.empty() || extends != campaign_))
+        {
+            found.unused = Unused::Campaign;
+        }
+        return found;
+    }
+
+    const Index &index_;
+    std::map<std::string, std::int32_t, std::less<>> addInSlots_;
+    std::map<std::string, std::int32_t, std::less<>> offerSlots_;
+    std::map<std::string, Base, std::less<>> addInFolders_; // an add-in's folder, Documents' over the game's
+    std::string campaign_;
+    bool addInsSettled_ = true;
+    bool offersSettled_ = true;
+};
+
+// What the resource manager sorts a source by after its priority: its kind (its slot 8: a loose
+// file's folder 0, a RIM 2, an ERF 3) and its name, the later first.
+struct Key
+{
+    std::uint8_t kind;
+    std::string name;
+};
+
+Key KeyOf(const Index &index, const Copy &copy)
+{
+    std::string where = Lower(index.Where(copy));
+    if (copy.archive == kLoose)
+    {
+        const auto slash = where.rfind('/');
+        where.resize(slash == std::string::npos ? 0 : slash);
+        return {0, std::move(where)};
+    }
+    const std::uint8_t kind = Extension(where) == "rim" ? 2 : 3;
+    return {kind, std::move(where)};
+}
+
+// A resource's copies sorted as the resource manager sorts its sources: those the game has
+// first, then by priority, kind and name.
+void Sort(const Index &index, std::vector<Copy> &copies)
+{
+    std::vector<Key> keys;
+    keys.reserve(copies.size());
+    for (const Copy &copy : copies)
+    {
+        keys.push_back(KeyOf(index, copy));
+    }
+    std::vector<std::size_t> order(copies.size());
+    for (std::size_t i = 0; i < order.size(); ++i)
+    {
+        order[i] = i;
+    }
+    std::ranges::stable_sort(order, [&copies, &keys](std::size_t a, std::size_t b) {
+        const bool hasA = copies[a].unused == Unused::No;
+        const bool hasB = copies[b].unused == Unused::No;
+        if (hasA != hasB)
+        {
+            return hasA;
+        }
+        if (copies[a].priority != copies[b].priority)
+        {
+            return copies[a].priority < copies[b].priority;
+        }
+        if (keys[a].kind != keys[b].kind)
+        {
+            return keys[a].kind < keys[b].kind;
+        }
+        return keys[a].name > keys[b].name;
+    });
+    std::vector<Copy> sorted;
+    sorted.reserve(copies.size());
+    for (const std::size_t i : order)
+    {
+        sorted.push_back(copies[i]);
+    }
+    copies = std::move(sorted);
+}
+
+} // namespace
+
+void Index::Order()
+{
+    const Placer placer(*this);
+    for (auto &[name, copies] : resources_)
+    {
+        for (Copy &copy : copies)
+        {
+            const Placed placed = placer.Of(copy);
+            copy.priority = placed.place.priority;
+            copy.unused = placed.place.unused;
+            copy.settled = placed.settled;
+        }
+        Sort(*this, copies);
+    }
 }
 
 } // namespace dao::core::install

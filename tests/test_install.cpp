@@ -1,6 +1,7 @@
 // An install's sources and copies (dao/core/Install.h), and the settings
 // that list its add-ins (dao/core/AddIns.h), over a folder made in the test
 // as the GOG install is laid out.
+#include "dao/core/AddInOrder.h"
 #include "dao/core/AddIns.h"
 #include "dao/core/GdaHash.h"
 #include "dao/core/Install.h"
@@ -8,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
 #include <string>
 
 namespace files = dao::test::files;
@@ -94,20 +96,25 @@ TEST_CASE("an install's sources, each with its archives and loose files", "[inst
     CHECK(index->AddIns().size() == 1);
 }
 
-TEST_CASE("every copy of a resource, by its name in any case, each read", "[install]")
+TEST_CASE("every copy of a resource, by its name in any case, in the game's order, each read", "[install]")
 {
     const Folder folder;
     const auto index = folder.Build();
     const auto *copies = index->Find("OGRE.utc");
     REQUIRE(copies != nullptr);
-    REQUIRE(copies->size() == 4); // the core's archive, its override, the plugin's, Documents'
-    CHECK(index->Where((*copies)[0]) == "packages/core/data/2da.erf");
+    REQUIRE(copies->size() == 4);
+    // The player's override, the install's, the plugin's, the core's archive (dev/FILES.md).
     std::vector<std::string> read;
+    std::vector<std::int32_t> priorities;
     for (const auto &copy : *copies)
     {
         read.push_back(Text(index->Read(copy)));
+        priorities.push_back(copy.priority);
+        CHECK(copy.unused == install::Unused::No);
     }
-    CHECK(read == std::vector<std::string>{"ogre", "override", "plugin", "documents"});
+    CHECK(read == std::vector<std::string>{"documents", "override", "plugin", "ogre"});
+    CHECK(priorities == std::vector<std::int32_t>{0, 1, 2, 100005});
+    CHECK(index->Where(copies->back()) == "packages/core/data/2da.erf");
     CHECK(index->Resources().contains("abi_base.gda"));
     CHECK(index->Find("nothing.utc") == nullptr);
     CHECK(index->Measured().resources == index->Resources().size());
@@ -167,4 +174,228 @@ TEST_CASE("an attribute is found by its whole name, not inside another's", "[add
     REQUIRE(items.size() == 1);
     CHECK(items[0].uid == "DAO_PRC_DRK_EP1");
     CHECK(items[0].extends == "DAO_PRC_EP_1");
+}
+
+namespace
+{
+
+// Who each copy of a resource is from, in the order the index gives them.
+std::vector<std::string> Order(const install::Index &index, std::string_view name)
+{
+    std::vector<std::string> out;
+    if (const auto *copies = index.Find(name))
+    {
+        for (const auto &copy : *copies)
+        {
+            out.push_back(index.Sources()[copy.source].id + (copy.unused == install::Unused::No ? "" : " (unused)"));
+        }
+    }
+    return out;
+}
+
+const char *const kThreeAddIns =
+    R"(<AddInsList>)"
+    R"(<AddInItem UID="A_HIGH" Priority="200" Enabled="1" ExtendedModuleUID="Single Player"/>)"
+    R"(<AddInItem UID="B_LOW" Priority="100" Enabled="1" ExtendedModuleUID="DAO_PRC_EP_1"/>)"
+    R"(<AddInItem UID="C_DOCS" Priority="300" Enabled="1" ExtendedModuleUID=""/>)"
+    R"(</AddInsList>)";
+
+} // namespace
+
+TEST_CASE("add-ins in the game's order: a lower Priority first, a player's in Documents before all", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/data/x.gda", files::FromText("core"));
+    root.Write(L"game/Addins/a_high/core/data/x.gda", files::FromText("a"));
+    root.Write(L"game/Addins/b_low/core/data/x.gda", files::FromText("b"));
+    root.Write(L"documents/AddIns/c_docs/core/data/x.gda", files::FromText("c"));
+    root.Write(L"game/Addins/a_high/core/data/y.gda", files::FromText("a data"));
+    root.Write(L"game/Addins/a_high/core/override/y.gda", files::FromText("a override"));
+    root.Write(L"documents/Settings/AddIns.xml", files::FromText(kThreeAddIns));
+    const auto index = install::Index::Build(root.path / L"game", root.path / L"documents");
+    CHECK(Order(*index, "x.gda") == std::vector<std::string>{"addin:c_docs", "addin:b_low", "addin:a_high", "core"});
+    const auto *x = index->Find("x.gda");
+    REQUIRE(x != nullptr);
+    // Taken highest Priority first, from 9000 down by 7, 10000 more in the game's folder.
+    CHECK((*x)[0].priority == 9000);
+    CHECK((*x)[1].priority == 19000 - 14);
+    CHECK((*x)[2].priority == 19000 - 7);
+    CHECK((*x)[0].settled);
+    // An add-in's override before its data: its base less 6.
+    const auto *y = index->Find("y.gda");
+    REQUIRE(y != nullptr);
+    CHECK(Text(index->Read(y->front())) == "a override");
+    CHECK(y->front().priority == 19000 - 7 - 6);
+}
+
+TEST_CASE("a campaign's files, and an add-in's for it, are the game's only while it is loaded", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/modules/single player/data/z.are", files::FromText("campaign"));
+    root.Write(L"game/modules/other/data/z.are", files::FromText("other"));
+    root.Write(L"game/Addins/a_high/module/data/z.are", files::FromText("a"));
+    root.Write(L"game/Addins/b_low/module/data/z.are", files::FromText("b"));
+    root.Write(L"game/Addins/c_docs/module/data/z.are", files::FromText("c"));
+    root.Write(L"documents/Settings/AddIns.xml", files::FromText(kThreeAddIns));
+    const auto origins = install::Index::Build(root.path / L"game", root.path / L"documents");
+    const auto taken = Order(*origins, "z.are");
+    REQUIRE(taken.size() == 5);
+    CHECK(taken[0] == "addin:a_high");
+    CHECK(taken[1] == "campaign");
+    const auto none = install::Index::Build(root.path / L"game", root.path / L"documents", {.campaign = ""});
+    CHECK(none->Find("z.are")->front().unused == install::Unused::Campaign);
+    // A campaign of an add-in's own: its module is the campaign, at the campaign's priorities.
+    const auto own = install::Index::Build(root.path / L"game", root.path / L"documents", {.campaign = "C_DOCS"});
+    const auto *z = own->Find("z.are");
+    REQUIRE(z != nullptr);
+    CHECK(own->Sources()[z->front().source].id == "addin:c_docs");
+    CHECK(z->front().priority == 50004);
+    CHECK((*z)[1].unused == install::Unused::Campaign);
+}
+
+TEST_CASE("a level's own files, another language's and another quality's are kept, and put after", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/env/lvl100/t.dds", files::FromText("level"));
+    root.Write(L"game/packages/core/textures/medium/t.dds", files::FromText("medium"));
+    root.Write(L"game/packages/core/textures/high/t.dds", files::FromText("high"));
+    root.Write(L"game/packages/core/audio/vo/de-de/v.txt", files::FromText("de"));
+    root.Write(L"game/packages/core/audio/vo/en-us/v.txt", files::FromText("en"));
+    const auto index = install::Index::Build(root.path / L"game", {});
+    const auto *t = index->Find("t.dds");
+    REQUIRE(t != nullptr);
+    REQUIRE(t->size() == 3);
+    CHECK(Text(index->Read((*t)[0])) == "high");
+    std::vector<install::Unused> why{(*t)[1].unused, (*t)[2].unused};
+    std::ranges::sort(why);
+    CHECK(why == std::vector<install::Unused>{install::Unused::Level, install::Unused::Textures});
+    const auto *v = index->Find("v.txt");
+    REQUIRE(v != nullptr);
+    CHECK(Text(index->Read(v->front())) == "en");
+    CHECK(v->back().unused == install::Unused::Language);
+    const auto german = install::Index::Build(root.path / L"game", {}, {.language = "de-de"});
+    CHECK(Text(german->Read(german->Find("v.txt")->front())) == "de");
+}
+
+TEST_CASE("of copies in one folder, a loose file before an archive, the later archive's name first", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/patch/p.gda", files::FromText("loose"));
+    root.Write(L"game/packages/core/patch/patch000.erf", files::Erf({{"p.gda", files::FromText("000")}}));
+    root.Write(L"game/packages/core/patch/patch001.erf", files::Erf({{"p.gda", files::FromText("001")}}));
+    const auto index = install::Index::Build(root.path / L"game", {});
+    const auto *p = index->Find("p.gda");
+    REQUIRE(p != nullptr);
+    std::vector<std::string> read;
+    for (const auto &copy : *p)
+    {
+        read.push_back(Text(index->Read(copy)));
+    }
+    CHECK(read == std::vector<std::string>{"loose", "001", "000"});
+}
+
+TEST_CASE("a disabled add-in's copies are not the game's, and with one the order is not settled", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/Addins/a_high/core/data/x.gda", files::FromText("a"));
+    root.Write(L"game/Addins/off/core/data/x.gda", files::FromText("off"));
+    root.Write(L"documents/Settings/AddIns.xml",
+               files::FromText(R"(<AddInsList><AddInItem UID="A_HIGH" Priority="200" Enabled="1"/>)"
+                               R"(<AddInItem UID="OFF" Priority="1" Enabled="0"/></AddInsList>)"));
+    const auto index = install::Index::Build(root.path / L"game", root.path / L"documents");
+    CHECK(Order(*index, "x.gda") == std::vector<std::string>{"addin:a_high", "addin:off (unused)"});
+    CHECK(index->Find("x.gda")->back().unused == install::Unused::Disabled);
+    CHECK_FALSE(index->Find("x.gda")->front().settled);
+}
+
+TEST_CASE("the game's order of its add-ins: MSVC 2005's sort over AddIns.xml from its end", "[install]")
+{
+    // AddIns.xml on the GOG install, 2026-10-12, in its order: UID and Priority.
+    const std::vector<std::pair<const char *, int>> file{
+        {"DAO_PRC_EP_1", 110},      {"DAO_PRC_CP_1", 200},    {"DAO_PRC_CP_2", 100},      {"DAO_PRC_CP_3", 300},
+        {"DAO_PRC_CP_7", 302},      {"DAO_PRC_DRK", 500},     {"DAO_PRC_DRK_DAO", 501},   {"DAO_PRC_DRK_EP1", 502},
+        {"DAO_PRC_GIB", 595},       {"DAO_PRC_GIB_DAO", 100}, {"DAO_PRC_GIB_EP1", 450},   {"DAO_PRC_LEL", 510},
+        {"DAO_PRC_LEL_DAO", 511},   {"DAO_PRC_LEL_EP1", 512}, {"DAO_PRC_NRX_1", 1},       {"DAO_PRC_STR", 100},
+        {"DAO_PRC_STR_DAO", 501},   {"DAO_PRC_STR_EP1", 502}, {"DAO_EP1_PROMO_BTK", 100}, {"DAO_EP1_PROMO_GBK", 100},
+        {"DAO_EP1_PROMO_PAN", 100}, {"DAO_PRC_PROMO_1", 1},   {"DAO_PRC_PROMO_2", 1},     {"DAO_PRC_PROMO_3", 1},
+        {"DAO_PRC_PROMO_4", 1},     {"DAO_PRC_PROMO_5", 1},   {"DAO_PRC_PROMO_BTK", 100}, {"DAO_PRC_PROMO_C2", 1},
+        {"DAO_PRC_PROMO_EDG", 1},   {"DAO_PRC_PROMO_EMB", 1}, {"DAO_PRC_PROMO_GBK", 100}, {"DAO_PRC_PROMO_HOD", 1},
+        {"DAO_PRC_PROMO_LKS", 1},   {"DAO_PRC_PROMO_LNP", 1}, {"DAO_PRC_PROMO_ME", 1},    {"DAO_PRC_PROMO_PAN", 100},
+        {"DAO_PRC_PROMO_VGL", 1},   {"DAO_PRC_PROMO_WAR", 1}, {"DAO_PRC_PROMO_WKD", 1},
+    };
+    // The order the game took them in, by their folders' priorities in play (dev/FILES.md).
+    const std::vector<std::string> seen{
+        "DAO_PRC_GIB",       "DAO_PRC_LEL_EP1",   "DAO_PRC_LEL_DAO",   "DAO_PRC_LEL",       "DAO_PRC_DRK_EP1",
+        "DAO_PRC_STR_EP1",   "DAO_PRC_DRK_DAO",   "DAO_PRC_STR_DAO",   "DAO_PRC_DRK",       "DAO_PRC_GIB_EP1",
+        "DAO_PRC_CP_7",      "DAO_PRC_CP_3",      "DAO_PRC_CP_1",      "DAO_PRC_EP_1",      "DAO_PRC_CP_2",
+        "DAO_PRC_PROMO_PAN", "DAO_PRC_PROMO_GBK", "DAO_PRC_PROMO_BTK", "DAO_EP1_PROMO_PAN", "DAO_EP1_PROMO_GBK",
+        "DAO_EP1_PROMO_BTK", "DAO_PRC_STR",       "DAO_PRC_GIB_DAO",   "DAO_PRC_PROMO_WAR", "DAO_PRC_NRX_1",
+        "DAO_PRC_PROMO_3",   "DAO_PRC_PROMO_4",   "DAO_PRC_PROMO_5",   "DAO_PRC_PROMO_C2",  "DAO_PRC_PROMO_2",
+        "DAO_PRC_PROMO_EDG", "DAO_PRC_PROMO_EMB", "DAO_PRC_PROMO_HOD", "DAO_PRC_PROMO_LKS", "DAO_PRC_PROMO_LNP",
+        "DAO_PRC_PROMO_ME",  "DAO_PRC_PROMO_1",   "DAO_PRC_PROMO_VGL", "DAO_PRC_PROMO_WKD",
+    };
+    std::vector<dao::core::AddIn> items;
+    items.reserve(file.size());
+    for (const auto &[uid, priority] : file)
+    {
+        dao::core::AddIn item;
+        item.uid = uid;
+        item.priority = priority;
+        item.enabled = true;
+        items.push_back(item);
+    }
+    std::vector<std::string> taken;
+    for (const std::size_t i : dao::core::AddInOrder(items, true))
+    {
+        taken.push_back(items[i].uid);
+    }
+    CHECK(taken == seen);
+}
+
+TEST_CASE("the game's order of its offers: offers.xml's from its end, by Priority", "[install]")
+{
+    // offers.xml on the GOG install, 2026-10-12, and the order the game took them in.
+    const std::vector<std::pair<const char *, int>> file{
+        {"DAO_PRC_OCP_13", 100}, {"DAO_PRC_DRK_O", 503},     {"DAO_PRC_GIB_O", 100},
+        {"DAO_PRC_LEL_O", 513},  {"DAO_PRC_OPROMO_ME", 512}, {"DAO_PRC_STR_O", 503},
+        {"DAO_PRC_ONRX_1", 1},   {"DAO_PRC_OCP_1", 199},     {"DAO_PRC_OCP_2", 99}};
+    const std::vector<std::string> seen{"DAO_PRC_LEL_O",  "DAO_PRC_OPROMO_ME", "DAO_PRC_STR_O",
+                                        "DAO_PRC_DRK_O",  "DAO_PRC_OCP_1",     "DAO_PRC_GIB_O",
+                                        "DAO_PRC_OCP_13", "DAO_PRC_OCP_2",     "DAO_PRC_ONRX_1"};
+    std::vector<dao::core::AddIn> items;
+    items.reserve(file.size());
+    for (const auto &[uid, priority] : file)
+    {
+        dao::core::AddIn item;
+        item.uid = uid;
+        item.priority = priority;
+        items.push_back(item);
+    }
+    std::vector<std::string> taken;
+    for (const std::size_t i : dao::core::AddInOrder(items, false))
+    {
+        taken.push_back(items[i].uid);
+    }
+    CHECK(taken == seen);
+}
+
+// The GOG install, where there is one: the index's choice against what the game itself said
+// it took (examples/resources's where.txt, 2026-10-12). Hidden, as it reads ten thousand
+// archives: run it by its tag, dao_core_tests "[install-real]".
+TEST_CASE("on the GOG install, the copy the index puts first is the one the game took", "[.][install-real]")
+{
+    const std::filesystem::path game = L"C:/Program Files (x86)/GOG Galaxy/Games/Dragon Age Origins";
+    if (!std::filesystem::exists(game / L"bin_ship"))
+    {
+        SKIP("no GOG install here");
+    }
+    const auto index = install::Index::Build(game, {});
+    const auto *rules = index->Find("rules_core.ncs");
+    REQUIRE(rules != nullptr);
+    CHECK(index->Where(rules->front()) == "packages/core/data/designerscripts.rim");
+    CHECK(rules->front().priority == 100004);
+    const auto *base = index->Find("2da_base.gda");
+    REQUIRE(base != nullptr);
+    CHECK(index->Where(base->front()) == "packages/core/patch/patch003.erf");
+    CHECK(base->front().priority == 100000);
 }

@@ -18,8 +18,13 @@
 //   plugin:<name>         <game>\bin_ship\daolib\plugins\<name>\override (DAOLib #43)
 //   override:documents    <documents>\packages\core\override
 //
-// Which copy of a resource the game takes is not said: that is the resource
-// manager's in the exe, unread (DAOLib #106, step 4).
+// Each resource's copies are in the order the game looks for it, the first
+// the one it takes, as dev/FILES.md says the resource manager orders its
+// sources (read in the exe and seen in play, DAOLib #106, step 4). Some
+// depend on what the game is doing, which the caller says (Options): the
+// campaign loaded, the language, the texture quality; a level's own files
+// count only while the level is loaded, which a tool with no game cannot
+// know, so they are marked and put after.
 #pragma once
 
 #include "dao/core/AddIns.h"
@@ -70,6 +75,19 @@ struct ArchiveRecord
 
 inline constexpr std::uint32_t kLoose = 0xFFFFFFFF;
 
+// Why the game does not have a copy, while set as the index's Options say.
+enum class Unused : std::uint8_t
+{
+    No,       // the game has it
+    Campaign, // another campaign's, or an add-in's for another campaign
+    Level,    // a level's own, which the game has only while the level is loaded
+    Language, // another language's voice or text
+    Textures, // another texture quality's
+    Disabled, // an add-in AddIns.xml does not have enabled, or an offer offers.xml does not list
+    Folder,   // in no folder the game takes files from (a toolset's, an add-in's copy in the game
+              // folder when the player's in Documents has the same one)
+};
+
 // One copy of a resource.
 struct Copy
 {
@@ -77,6 +95,22 @@ struct Copy
     std::uint32_t archive = kLoose; // a place in Archives(), or kLoose for a file of its own
     std::uint32_t entry = 0;        // its entry in the archive, or a place among the loose files
     std::uint32_t size = 0;
+    // The game's priority for its place: of the copies it has, it takes the one of the lowest, and
+    // of equal ones a loose file before a RIM before an ERF, then the later name (dev/FILES.md).
+    std::int32_t priority = 0;
+    Unused unused = Unused::No;
+    // False where the order rests on what was not seen: an AddIns.xml with an add-in disabled or
+    // with no folder, which may or may not take a place in the game's count.
+    bool settled = true;
+};
+
+// What the game is doing, which decides some of the places it takes files from.
+struct Options
+{
+    std::string campaign = "Single Player"; // the loaded campaign, as AddIns.xml's ExtendedModuleUID names
+                                            // one; empty for none (the main menu)
+    std::string language = "en-us";
+    std::string textures = "high"; // a folder of packages\core	extures: "high" or "medium"
 };
 
 struct Stats
@@ -94,7 +128,8 @@ class Index
     // Returns the index of an install: its sources walked, every archive's directory read on
     // several threads, AddIns.xml and offers.xml read from the Documents folder.
     // @param documents Documents\BioWare\Dragon Age, or an instance's; empty for none
-    static std::unique_ptr<Index> Build(const std::filesystem::path &game, const std::filesystem::path &documents);
+    static std::unique_ptr<Index> Build(const std::filesystem::path &game, const std::filesystem::path &documents,
+                                        const Options &options = {});
 
     const std::filesystem::path &Folder(Base base) const
     {
@@ -121,13 +156,18 @@ class Index
     {
         return archives_;
     }
-    // Returns every resource by its name in lower case (UTF-8), with its copies in the order of
-    // their sources.
+    // Returns what the game was taken to be doing when the index was built.
+    const Options &Set() const
+    {
+        return options_;
+    }
+    // Returns every resource by its name in lower case (UTF-8), with its copies in the order the
+    // game looks for it: those it has first, the one it takes at the front.
     const std::map<std::string, std::vector<Copy>, std::less<>> &Resources() const
     {
         return resources_;
     }
-    // Returns a resource's copies, by its name in any case; null for none.
+    // Returns a resource's copies, by its name in any case, in the game's order; null for none.
     const std::vector<Copy> *Find(std::string_view name) const;
     // Returns the place of the source of an id, in any case.
     std::optional<std::uint32_t> SourceOf(std::string_view id) const;
@@ -137,7 +177,9 @@ class Index
     // Returns true if a copy's bytes can be read: not in an enciphered or compressed archive.
     bool Readable(const Copy &copy) const;
     // Returns a copy's bytes.
-    // @return nullopt if it is not Readable, or its file has changed or gone since the index
+    // @return nullopt if it is not Readable, or its file has gone or shrunk since the index. An
+    // archive rewritten since may give another file's bytes: build the index again after the
+    // install changes.
     std::optional<std::vector<std::byte>> Read(const Copy &copy) const;
 
   private:
@@ -157,9 +199,11 @@ class Index
     void Collect(std::uint32_t source, const std::filesystem::path &root, const std::filesystem::path &skip);
     std::vector<DirectoryRead> ReadDirectories() const;
     void AddArchive(const Pending &pending, DirectoryRead &read);
+    void Order();
 
     std::filesystem::path game_;
     std::filesystem::path documents_;
+    Options options_;
     Stats stats_;
     std::vector<AddIn> addIns_;
     std::vector<AddIn> offers_;

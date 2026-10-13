@@ -120,6 +120,7 @@ GDAFILE = "src/dao/core/GdaFile.cpp"
 M2DA = "src/dao/core/M2da.cpp"
 ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
+ADDINORDER = "src/dao/core/AddInOrder.h"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -204,11 +205,66 @@ MUTANTS: list[Mutant] = [
         "if (!skip.empty() && it->is_directory(type) && Lower(Utf8(it->path())) == skipped)",
         "if (false)",
     ),
+    # The game's order (#106, step 4; dev/FILES.md).
     Mutant(
-        "install-copies-by-source: a resource's copies go in their sources' order",
+        "install-order-lowest-first: of the copies the game has, the lowest priority first",
         INSTALL,
-        "std::ranges::stable_sort(copies, {}, &Copy::source);",
-        "(void)copies;",
+        "return copies[a].priority < copies[b].priority;",
+        "return copies[a].priority > copies[b].priority;",
+    ),
+    Mutant(
+        "install-order-loose-first: a loose file before an archive of the same priority",
+        INSTALL,
+        "return keys[a].kind < keys[b].kind;",
+        "return keys[a].kind > keys[b].kind;",
+    ),
+    Mutant(
+        "install-order-later-name: of two archives in one folder, the later name first",
+        INSTALL,
+        "return keys[a].name > keys[b].name;",
+        "return keys[a].name < keys[b].name;",
+    ),
+    Mutant(
+        "install-order-unused-after: the copies the game has come before those it has not",
+        INSTALL,
+        "return hasA;",
+        "return hasB;",
+    ),
+    Mutant(
+        "install-addin-game-folder: an add-in in the game's folder is 10000 behind one in Documents",
+        INSTALL,
+        "(inGame ? kInGameFolder : 0)",
+        "0",
+    ),
+    Mutant(
+        "install-addin-override: an add-in's override comes six before its data",
+        INSTALL,
+        "return {base - 6};",
+        "return {base};",
+    ),
+    Mutant(
+        "install-campaign-loaded: a campaign's files are the game's only while it is loaded",
+        INSTALL,
+        "if (found.unused == Unused::No && UidOf(source) != campaign_)",
+        "if (false)",
+    ),
+    Mutant(
+        "addinorder-from-end: the game takes AddIns.xml's items from the last",
+        ADDINORDER,
+        "for (std::size_t i = items.size(); i-- > 0;)",
+        "for (std::size_t i = 0; i < items.size(); ++i)",
+    ),
+    Mutant(
+        "addinorder-highest-first: the highest Priority is taken first",
+        ADDINORDER,
+        "return items[a].priority.value_or(0) > items[b].priority.value_or(0);",
+        "return items[a].priority.value_or(0) < items[b].priority.value_or(0);",
+    ),
+    Mutant(
+        "addinorder-median: the pivot is MSVC 2005's median of three",
+        ADDINORDER,
+        "if (less_(a_[last], a_[mid]))",
+        "if (less_(a_[mid], a_[last]))",
     ),
     # The archives (#106): version 2.2's directory, and a file read by name.
     Mutant(
