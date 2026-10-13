@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace dao::core::dds
@@ -46,5 +47,32 @@ struct Image
 // @return nullopt for bytes that are not a DDS file this reads, or that stop short of the
 // picture
 std::optional<Image> Decode(std::span<const std::byte> file, std::uint32_t sideMost = 0);
+
+// What a DDS file holds besides its pixels.
+enum class Shape : std::uint8_t
+{
+    Flat,
+    Cube,   // a cube map: six faces
+    Volume, // slices of a three-dimensional texture
+};
+
+struct Description
+{
+    // "DXT1", "DXT3" or "DXT5"; "B8G8R8" or "B8G8R8A8" for 24 or 32 bits a pixel not packed;
+    // another four-letter code as the file has it; or "<n> bits" for another plain format
+    std::string format;
+    std::uint32_t width = 0; // of the largest picture
+    std::uint32_t height = 0;
+    // The pictures the bytes hold, the largest first, counted as Decode walks them; 1 for a
+    // cube or a volume, whose bytes after the first picture are not walked
+    std::uint32_t pictures = 0;
+    std::uint32_t headerPictures = 0; // the header's own count, which the game's files get wrong
+    Shape shape = Shape::Flat;
+    bool decodes = false; // whether Decode reads the file
+};
+
+// Returns what a DDS file holds, without decoding its pixels.
+// @return nullopt for bytes that are not a DDS file, or whose header gives no size
+std::optional<Description> Describe(std::span<const std::byte> file);
 
 } // namespace dao::core::dds

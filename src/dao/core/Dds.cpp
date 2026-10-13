@@ -160,49 +160,153 @@ std::size_t BytesOf(std::uint32_t format, std::size_t plainBytes, std::uint32_t 
     return std::size_t{(width + 3) / 4} * ((height + 3) / 4) * (format == kDxt1 ? 8U : 16U);
 }
 
-} // namespace
+// A DDS file's header, as far as it is read here.
+struct Header
+{
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t count = 0;    // the pictures the header says it has
+    std::uint32_t more = 0;     // the second capabilities: a cube map, a volume
+    std::uint32_t format = 0;   // the four-letter code, or 0 for a plain format
+    std::uint32_t bits = 0;     // a plain format's bits a pixel
+    bool packed = false;        // DXT1, DXT3 or DXT5
+    std::size_t plainBytes = 0; // 3 or 4 for a plain format Decode reads, 0 otherwise
 
-std::optional<Image> Decode(std::span<const std::byte> file, std::uint32_t sideMost)
+    [[nodiscard]] bool Decodes() const
+    {
+        return width != 0 && height != 0 && width <= kSideMost && height <= kSideMost && (packed || plainBytes != 0);
+    }
+};
+
+std::optional<Header> HeaderOf(std::span<const std::byte> file)
 {
     if (file.size() < kPixels || ReadAt<std::uint32_t>(file, 0) != kMagic)
     {
         return std::nullopt;
     }
-    Image image;
-    image.height = ReadAt<std::uint32_t>(file, 12).value_or(0);
-    image.width = ReadAt<std::uint32_t>(file, 16).value_or(0);
-    const std::uint32_t more = ReadAt<std::uint32_t>(file, 112).value_or(0);
-    const std::uint32_t format = ReadAt<std::uint32_t>(file, 84).value_or(0);
-    const std::uint32_t bits = ReadAt<std::uint32_t>(file, 88).value_or(0);
-    const bool packed = format == kDxt1 || format == kDxt3 || format == kDxt5;
-    const std::size_t plainBytes = !packed && format == 0 && (bits == 24 || bits == 32) ? bits / 8 : 0;
-    if (image.width == 0 || image.height == 0 || image.width > kSideMost || image.height > kSideMost ||
-        (!packed && plainBytes == 0))
+    Header header;
+    header.height = ReadAt<std::uint32_t>(file, 12).value_or(0);
+    header.width = ReadAt<std::uint32_t>(file, 16).value_or(0);
+    header.count = ReadAt<std::uint32_t>(file, 28).value_or(0);
+    header.format = ReadAt<std::uint32_t>(file, 84).value_or(0);
+    header.bits = ReadAt<std::uint32_t>(file, 88).value_or(0);
+    header.more = ReadAt<std::uint32_t>(file, 112).value_or(0);
+    header.packed = header.format == kDxt1 || header.format == kDxt3 || header.format == kDxt5;
+    header.plainBytes =
+        !header.packed && header.format == 0 && (header.bits == 24 || header.bits == 32) ? header.bits / 8 : 0;
+    return header;
+}
+
+// The pictures a flat file's bytes hold, from the largest down, as many as there are whole:
+// by the bytes and not by the header's count, which the game's own beckmann.dds gets wrong (it
+// holds all ten of its pictures and counts one, DAOLib #96). Calls `each` with every picture's
+// offset and size, the largest first, until it answers false. A cube's or a volume's bytes after
+// its first picture are its other faces or slices, and are not walked.
+template <class Each> void WalkPictures(std::span<const std::byte> file, const Header &header, Each each)
+{
+    std::size_t at = kPixels;
+    std::uint32_t width = header.width;
+    std::uint32_t height = header.height;
+    while (each(at, width, height) && (header.more & kNotFlat) == 0 && std::max(width, height) > 1)
+    {
+        const std::size_t next = at + BytesOf(header.format, header.plainBytes, width, height);
+        const std::uint32_t smallerWidth = std::max(width / 2, 1U);
+        const std::uint32_t smallerHeight = std::max(height / 2, 1U);
+        if (next > file.size() ||
+            file.size() - next < BytesOf(header.format, header.plainBytes, smallerWidth, smallerHeight))
+        {
+            return;
+        }
+        at = next;
+        width = smallerWidth;
+        height = smallerHeight;
+    }
+}
+
+std::string FormatName(const Header &header)
+{
+    if (header.format == 0)
+    {
+        if (header.bits == 24)
+        {
+            return "B8G8R8";
+        }
+        if (header.bits == 32)
+        {
+            return "B8G8R8A8";
+        }
+        return std::to_string(header.bits) + " bits";
+    }
+    std::string code;
+    for (std::uint32_t shift = 0; shift < 32; shift += 8)
+    {
+        const auto c = static_cast<char>((header.format >> shift) & 0xFFU);
+        code.push_back(c >= ' ' && c <= '~' ? c : '?');
+    }
+    return code;
+}
+
+} // namespace
+
+std::optional<Image> Decode(std::span<const std::byte> file, std::uint32_t sideMost)
+{
+    const std::optional<Header> header = HeaderOf(file);
+    if (!header || !header->Decodes())
     {
         return std::nullopt;
     }
-    // Down the file's pictures to the one asked for, by the pictures its bytes hold and not by
-    // the count its header gives: the game's own beckmann.dds is marked as having smaller
-    // pictures, holds all ten of them, and counts one (DAOLib #96). A cube's or a volume's
-    // bytes after its first picture are its other faces or slices, and are not walked.
+    // Down the file's pictures to the one asked for: the first no larger than `sideMost` a
+    // side, or the smallest the file holds whole.
+    Image image;
     std::size_t at = kPixels;
-    while (sideMost != 0 && (more & kNotFlat) == 0 && std::max(image.width, image.height) > sideMost)
-    {
-        const std::size_t next = at + BytesOf(format, plainBytes, image.width, image.height);
-        const std::uint32_t width = std::max(image.width / 2, 1U);
-        const std::uint32_t height = std::max(image.height / 2, 1U);
-        if (next > file.size() || file.size() - next < BytesOf(format, plainBytes, width, height))
-        {
-            break;
-        }
-        at = next;
+    WalkPictures(file, *header, [&](std::size_t offset, std::uint32_t width, std::uint32_t height) {
+        at = offset;
         image.width = width;
         image.height = height;
-    }
+        return sideMost != 0 && std::max(width, height) > sideMost;
+    });
     image.rgba.resize(static_cast<std::size_t>(image.width) * image.height * 4);
     const std::span<const std::byte> data = file.subspan(at);
-    const bool read = packed ? DecodeBlocks(data, format, image) : DecodePlain(data, plainBytes, image);
+    const bool read =
+        header->packed ? DecodeBlocks(data, header->format, image) : DecodePlain(data, header->plainBytes, image);
     return read ? std::optional<Image>(std::move(image)) : std::nullopt;
+}
+
+std::optional<Description> Describe(std::span<const std::byte> file)
+{
+    const std::optional<Header> header = HeaderOf(file);
+    if (!header || header->width == 0 || header->height == 0)
+    {
+        return std::nullopt;
+    }
+    Description description;
+    description.format = FormatName(*header);
+    description.width = header->width;
+    description.height = header->height;
+    description.headerPictures = header->count;
+    description.shape = Shape::Flat;
+    if ((header->more & 0x200U) != 0)
+    {
+        description.shape = Shape::Cube;
+    }
+    else if ((header->more & 0x200000U) != 0)
+    {
+        description.shape = Shape::Volume;
+    }
+    description.decodes = header->Decodes();
+    if (description.decodes)
+    {
+        // The first picture counts only where its bytes are whole, as Decode needs them.
+        const std::size_t first = BytesOf(header->format, header->plainBytes, header->width, header->height);
+        if (file.size() - kPixels >= first)
+        {
+            WalkPictures(file, *header, [&](std::size_t, std::uint32_t, std::uint32_t) {
+                ++description.pictures;
+                return true;
+            });
+        }
+    }
+    return description;
 }
 
 } // namespace dao::core::dds

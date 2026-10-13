@@ -115,6 +115,7 @@ PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
 ERF = "src/dao/core/Erf.cpp"
+DDS = "src/dao/core/Dds.cpp"
 GFF3 = "src/dao/core/Gff3.cpp"
 GDAFILE = "src/dao/core/GdaFile.cpp"
 M2DA = "src/dao/core/M2da.cpp"
@@ -636,6 +637,18 @@ MUTANTS: list[Mutant] = [
         OPTIONS,
         "(section.buttons.empty() || symbols.button) &&",
         "(section.buttons.empty() || true) &&",
+    ),
+    Mutant(
+        "dds-pictures-by-bytes: a file's pictures are counted by what its bytes hold, not by its header's count",
+        DDS,
+        "    while (each(at, width, height) && (header.more & kNotFlat) == 0 && std::max(width, height) > 1)",
+        "    while (each(at, width, height) && (header.more & kNotFlat) == 0 && std::max(width, height) > 2)",
+    ),
+    Mutant(
+        "dds-first-whole: a first picture the bytes stop short of is not counted",
+        DDS,
+        "        if (file.size() - kPixels >= first)",
+        "        if (file.size() - kPixels + first >= first)",
     ),
     Mutant(
         "options-tabs-apart: a section left out of one tab does not keep another tab's out",

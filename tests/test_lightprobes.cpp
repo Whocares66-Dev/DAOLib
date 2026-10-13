@@ -256,6 +256,78 @@ TEST_CASE("a file's smaller pictures are found by its bytes, whatever its header
     CHECK(face->rgba[0] == 1);
 }
 
+TEST_CASE("a file is described without decoding: format, size, pictures as its bytes hold them, shape", "[dds]")
+{
+    // The beckmann.dds case: three pictures held, one counted by the header.
+    std::vector<std::byte> file = PlainDds(4, 24, 1);
+    file.insert(file.end(), (4 * 4 * 3) + (2 * 2 * 3) + (1 * 1 * 3), std::byte{1});
+    std::optional<dds::Description> about = dds::Describe(file);
+    REQUIRE(about.has_value());
+    CHECK(about->format == "B8G8R8");
+    CHECK(about->width == 4);
+    CHECK(about->height == 4);
+    CHECK(about->pictures == 3);
+    CHECK(about->headerPictures == 1);
+    CHECK(about->shape == dds::Shape::Flat);
+    CHECK(about->decodes);
+
+    // Cut into the smallest: two whole pictures.
+    file.pop_back();
+    about = dds::Describe(file);
+    REQUIRE(about.has_value());
+    CHECK(about->pictures == 2);
+
+    // A cube map: its first picture only, the rest being faces.
+    const std::uint32_t cube = 0x200;
+    std::memcpy(file.data() + 112, &cube, 4);
+    about = dds::Describe(file);
+    REQUIRE(about.has_value());
+    CHECK(about->shape == dds::Shape::Cube);
+    CHECK(about->pictures == 1);
+    const std::uint32_t volume = 0x200000;
+    std::memcpy(file.data() + 112, &volume, 4);
+    CHECK(dds::Describe(file)->shape == dds::Shape::Volume);
+
+    // DXT5 of one block: its code, one picture.
+    std::vector<std::byte> dxt(128 + 16);
+    const std::uint32_t magic = 0x20534444;
+    const std::uint32_t side = 4;
+    const std::uint32_t dxt5 = 0x35545844;
+    std::memcpy(dxt.data(), &magic, 4);
+    std::memcpy(dxt.data() + 12, &side, 4);
+    std::memcpy(dxt.data() + 16, &side, 4);
+    std::memcpy(dxt.data() + 84, &dxt5, 4);
+    about = dds::Describe(dxt);
+    REQUIRE(about.has_value());
+    CHECK(about->format == "DXT5");
+    CHECK(about->pictures == 1);
+    CHECK(about->decodes);
+
+    // A first picture the bytes stop short of: described, none counted, not decoded.
+    dxt.pop_back();
+    about = dds::Describe(dxt);
+    REQUIRE(about.has_value());
+    CHECK(about->pictures == 0);
+    CHECK_FALSE(dds::Decode(dxt).has_value());
+
+    // A format Decode does not read is still described, by its code or its bits.
+    const std::uint32_t ati2 = 0x32495441; // "ATI2"
+    std::memcpy(dxt.data() + 84, &ati2, 4);
+    about = dds::Describe(dxt);
+    REQUIRE(about.has_value());
+    CHECK(about->format == "ATI2");
+    CHECK_FALSE(about->decodes);
+    CHECK(about->pictures == 0);
+    about = dds::Describe(PlainDds(2, 16, 1));
+    REQUIRE(about.has_value());
+    CHECK(about->format == "16 bits");
+    CHECK_FALSE(about->decodes);
+
+    // Not a DDS, or one with no size.
+    CHECK_FALSE(dds::Describe({}).has_value());
+    CHECK_FALSE(dds::Describe(PlainDds(0, 32, 1)).has_value());
+}
+
 TEST_CASE("a ray meets the nearest triangle, from either side, and the tree agrees with trying each", "[raycast]")
 {
     const std::vector<Triangle> box = Box(5, 4);
