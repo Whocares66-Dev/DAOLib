@@ -1,5 +1,5 @@
-// A creature's damage per hand, the character record's figure (dao/Damage.h; DAOLib #108, the
-// turn-based mod's issue 112).
+// A creature's weapon damage per hand (dao/Damage.h; DAOLib #108, the
+// turn-based mod's issue 112), the estimate the character record shows for the party.
 //
 // Read 2026-10-13. The engine computes none of it: rows 49 (Damage_OffHand) and 50
 // (Damage_MainHand) of properties.gda are plain attributes with EngineLink 0. The script
@@ -44,7 +44,7 @@ constexpr std::int32_t kDamageOffHand = 49;    // properties.gda
 constexpr std::int32_t kDamageMainHand = 50;
 } // namespace
 
-std::optional<SheetDamage> ForSheet(ObjectId creature)
+std::optional<HandDamage> PerHand(ObjectId creature)
 {
     if (!script::CommandsReady() || GetCurrentThreadId() != script::ScriptThreadId())
     {
@@ -67,7 +67,7 @@ std::optional<SheetDamage> ForSheet(ObjectId creature)
     }
     api::SignalEvent(module, *event.get(), 1);
 
-    SheetDamage damage;
+    HandDamage damage;
     damage.mainHand = api::GetCreatureProperty(creature, kDamageMainHand);
     if (const float off = api::GetCreatureProperty(creature, kDamageOffHand); off > 0)
     {
