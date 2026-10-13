@@ -128,6 +128,7 @@ class Archive
     Header header_;
     std::vector<Entry> entries_;
     std::vector<std::pair<std::wstring, std::size_t>> byName_; // lower case, sorted
+    std::uint64_t size_ = 0;                                   // the file's, when opened
     struct Stream;
     std::shared_ptr<Stream> stream_; // the held file
 };

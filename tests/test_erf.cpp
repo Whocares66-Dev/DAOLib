@@ -198,6 +198,7 @@ TEST_CASE("of many files of one name, the archive's first is found", "[erf]")
     // Past the 32 a sort leaves to an insertion sort, which keeps the order
     // of equal names as a sort need not.
     std::vector<File> files;
+    files.reserve(200);
     for (int i = 0; i < 200; ++i)
     {
         files.push_back({i % 2 == 0 ? "same.txt" : "other" + std::to_string(i), std::to_string(i)});
@@ -239,6 +240,23 @@ TEST_CASE("a file that runs past the archive's end is not read", "[erf]")
     REQUIRE(opened);
     REQUIRE(opened->Find(L"cut") != nullptr);
     CHECK_FALSE(opened->Read(L"cut").has_value());
+}
+
+TEST_CASE("a file whose size is past the archive's is refused before its bytes are asked for", "[erf]")
+{
+    auto bytes = Build(false, {{"huge", "0123"}});
+    // The entry's size, after its name and offset: near 4 GiB, which a
+    // 32-bit test cannot allocate and must not be asked to.
+    const std::size_t size = archive::kHeaderSize + 64 + 4;
+    bytes[size] = bytes[size + 1] = bytes[size + 2] = std::byte{0xFF};
+    bytes[size + 3] = std::byte{0xF0};
+    const TempFile file(bytes);
+    const auto opened = archive::Archive::Open(file.path);
+    REQUIRE(opened);
+    const archive::Entry *huge = opened->Find(L"huge");
+    REQUIRE(huge != nullptr);
+    CHECK(huge->size == 0xF0FFFFFFU);
+    CHECK_FALSE(opened->Read(*huge).has_value());
 }
 
 TEST_CASE("an archive whose directory is cut short gives the entries it holds whole", "[erf]")

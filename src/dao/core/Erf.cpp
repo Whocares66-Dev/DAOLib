@@ -166,6 +166,8 @@ std::optional<Archive> Archive::Open(const std::filesystem::path &path, bool hel
     {
         return std::nullopt;
     }
+    std::error_code unknown;
+    const std::uintmax_t fileSize = std::filesystem::file_size(path, unknown);
     // The directory, or as much of it as the file holds.
     const std::size_t wanted = std::min(header->DirectorySize(), kMostDirectory);
     if (wanted > start.size())
@@ -179,6 +181,7 @@ std::optional<Archive> Archive::Open(const std::filesystem::path &path, bool hel
     Archive archive;
     archive.path_ = path;
     archive.header_ = *header;
+    archive.size_ = unknown ? 0 : fileSize;
     if (held)
     {
         archive.stream_ = std::make_shared<Stream>(); // its file opened at the first read
@@ -203,7 +206,10 @@ const Entry *Archive::Find(std::wstring_view name) const
 
 std::optional<std::vector<std::byte>> Archive::Read(const Entry &entry) const
 {
-    if (!Readable())
+    // A file the archive does not hold whole is refused before its bytes are
+    // asked for: a damaged directory's size can be near 4 GiB, which a
+    // 32-bit plugin cannot have (review of #106 step 2, 2026-10-12).
+    if (!Readable() || std::uint64_t{entry.offset} + entry.size > size_)
     {
         return std::nullopt;
     }

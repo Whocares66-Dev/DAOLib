@@ -141,14 +141,20 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "erf-enciphered-unread: an enciphered archive's bytes are never given as a file's",
         ERF,
-        "if (!Readable())",
-        "if (false)",
+        "if (!Readable() || std::uint64_t",
+        "if (std::uint64_t",
     ),
     Mutant(
         "erf-first-of-a-name: of two files of one name, the archive's first is found",
         ERF,
         "std::ranges::stable_sort(archive.byName_",
         "std::ranges::sort(archive.byName_",
+    ),
+    Mutant(
+        "erf-size-bounded: a file past the archive's end is refused before it is allocated",
+        ERF,
+        "if (!Readable() || std::uint64_t{entry.offset} + entry.size > size_)",
+        "if (!Readable())",
     ),
     # The GFF4 reader and the files read with it: saves, conversations, talk tables,
     # and the crash log's parse of whatever buffer a stack word points at. Damaged
