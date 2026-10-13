@@ -18,8 +18,11 @@
     would fight another plugin that does): -Examples camera,saves, or -Examples * for
     all. An example not named is taken out of the game if it is there.
 
-    -Remove deletes them again, and the whole bin_ship\daolib folder, which returns the
-    game to stock: dinput8.dll there is ours alone, the system's stays in SysWOW64 untouched.
+    -Remove deletes them again: the loader, and the plugins this build makes. Plugins in
+    the folder that this build does not make are another session's, and are left with the
+    address files they read; with none left, the whole bin_ship\daolib folder goes too,
+    which returns the game to stock. dinput8.dll there is ours alone, the system's stays in
+    SysWOW64 untouched.
     A version.dll there is the loader under its name before DAOLib #93, and is taken out
     either way: two loaders in one game would each load the plugins.
     The logs are elsewhere (Documents) and stay.
@@ -88,7 +91,21 @@ if ($Remove) {
     foreach ($f in @($loader, $loaderPdb) + $oldLoader) {
         if (Test-Path $f) { Remove-Item -Force $f; Show-Ok "removed $f" }
     }
-    if (Test-Path $daolib) { Remove-Item -Recurse -Force $daolib; Show-Ok "removed $daolib" }
+    # Only the plugins this build makes: another session's plugins in the same install are
+    # left where they are (a merge check's -Remove once took two of them out of Steam's
+    # install with the whole folder, 2026-10-13). Without the loader they do not load.
+    $made = Join-Path $repo "build\$Preset\daolib\plugins"
+    if (Test-Path $made) {
+        foreach ($folder in Get-ChildItem -Path $made -Directory) {
+            $there = Join-Path $plugins $folder.Name
+            if (Test-Path $there) { Remove-Item -Recurse -Force $there; Show-Ok "removed $there" }
+        }
+    }
+    $others = @(if (Test-Path $plugins) { Get-ChildItem -Path $plugins -Directory })
+    if ($others.Count -gt 0) {
+        Show-Info "left in place, not this build's: $(($others | ForEach-Object { $_.Name }) -join ', '); and the address files they read"
+    }
+    elseif (Test-Path $daolib) { Remove-Item -Recurse -Force $daolib; Show-Ok "removed $daolib" }
     return
 }
 
