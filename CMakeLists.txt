@@ -225,6 +225,7 @@ add_library(
     src/dao/Orders.cpp
     src/dao/Abilities.cpp
     src/dao/Attack.cpp
+    src/dao/Damage.cpp
     src/dao/Vfx.cpp
     src/dao/CommandEvents.cpp
     src/dao/Equipment.cpp
