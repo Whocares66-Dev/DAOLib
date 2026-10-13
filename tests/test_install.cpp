@@ -120,6 +120,35 @@ TEST_CASE("every copy of a resource, by its name in any case, in the game's orde
     CHECK(index->Measured().resources == index->Resources().size());
 }
 
+TEST_CASE("copies of different resources sort into the sources' order, each with its engine source", "[install]")
+{
+    const Folder folder;
+    const auto index = folder.Build();
+    const auto first = [&index](std::string_view name) { return index->Find(name)->front(); };
+    // Given out of order: the core's table, an offer's item, the player's add-in's item, the
+    // player's override.
+    std::vector<install::Copy> copies{first("abi_base.gda"), first("x.uti"), first("p.uti"), first("ogre.utc")};
+    index->SortCopies(copies);
+    std::vector<std::string> where;
+    where.reserve(copies.size());
+    for (const auto &copy : copies)
+    {
+        where.push_back(index->Where(copy));
+    }
+    // Those the game has first, by priority: the player's override, the core's archive; then the
+    // player's add-in, which AddIns.xml does not list, and the offer, which no offers.xml does.
+    CHECK(where == std::vector<std::string>{"packages/core/override/ogre.utc", "packages/core/data/2da.erf",
+                                            "AddIns/players_mod/core/override/p.uti", "Offers/dao_prc_o/core/x.uti"});
+    // Two files of one archive are of one source; a loose file's is its folder.
+    const auto *ogres = index->Find("ogre.utc");
+    const auto inCore = std::ranges::find_if(
+        *ogres, [&index](const install::Copy &c) { return index->Where(c) == "packages/core/data/2da.erf"; });
+    REQUIRE(inCore != ogres->end());
+    CHECK(index->EngineSource(first("abi_base.gda")) == index->EngineSource(*inCore));
+    CHECK(index->EngineSource(first("abi_base.gda")) == "packages/core/data/2da.erf");
+    CHECK(index->EngineSource(first("ogre.utc")) == "packages/core/override");
+}
+
 TEST_CASE("a copy in an enciphered archive is listed and not read", "[install]")
 {
     const Folder folder;

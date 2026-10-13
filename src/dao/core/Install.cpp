@@ -803,6 +803,16 @@ void Sort(const Index &index, std::vector<Copy> &copies)
 
 } // namespace
 
+void Index::SortCopies(std::vector<Copy> &copies) const
+{
+    Sort(*this, copies);
+}
+
+std::string Index::EngineSource(const Copy &copy) const
+{
+    return KeyOf(*this, copy).name;
+}
+
 void Index::Order()
 {
     const Placer placer(*this);

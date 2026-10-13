@@ -131,6 +131,20 @@ ADDINORDER = "src/dao/core/AddInOrder.h"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # The order made public for a merged table's files (#106): copies of any names sorted by
+    # their sources, and the engine source a copy is read from.
+    Mutant(
+        "install-sortcopies: copies of different resources are sorted, not left as given",
+        INSTALL,
+        "{\n    Sort(*this, copies);\n}\n\nstd::string Index::EngineSource",
+        "{\n    (void)copies;\n}\n\nstd::string Index::EngineSource",
+    ),
+    Mutant(
+        "install-engine-source: a loose file's source is its folder, not the file",
+        INSTALL,
+        "return KeyOf(*this, copy).name;",
+        "return Lower(Where(copy));",
+    ),
     # The readers moved in from Eluvian's ghilana (#106): GFF3, a GDA table,
     # the M2DA merge, AddIns.xml, an install's sources and copies.
     Mutant(
