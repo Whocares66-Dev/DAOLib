@@ -12,6 +12,7 @@ Players install only the loader and the address files. The library is never inst
 
 ## Getting started
 
+- **[The loader]({{ '/loader.html' | relative_url }})** is what a player installs: how it loads the game, and the fixes and performance changes it puts in.
 - **[Writing a plugin]({{ '/guide.html' | relative_url }})** walks through a first plugin, how to build and ship it, and which part of the library to use for what.
 - **[The API reference]({{ '/api/' | relative_url }})** lists the library by namespace: `dao::gui` for the Flash interface, `dao::world` for geometry and paths, `dao::abilities` for abilities and cooldowns, `dao::saves` for save games, and so on.
 

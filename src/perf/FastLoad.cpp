@@ -28,8 +28,9 @@ constexpr const wchar_t *kSection = L"FastLoad";
 constexpr const wchar_t *kKey = L"On";
 
 // The switch is the options screen's, on the game thread; the parts ask from the update thread
-// and, the loading screen's, from the render thread.
-std::atomic<bool> g_on{true};
+// and, the loading screen's, from the render thread. Off until the player turns it on: it is a
+// change to the game's speed, not a fix, so it is the player's to choose (the user, 2026-10-13).
+std::atomic<bool> g_on{false};
 std::int64_t g_lastUpdate = 0;
 
 // The loader's own settings: daolib.ini beside the logs, so an instance of the game has its own.
@@ -98,7 +99,7 @@ void InstallFastLoad()
         spdlog::warn("fast load: the loading mode's update could not be detoured, so none of it is in");
         return;
     }
-    g_on.store(GetPrivateProfileIntW(kSection, kKey, 1, Settings().c_str()) != 0, std::memory_order_relaxed);
+    g_on.store(GetPrivateProfileIntW(kSection, kKey, 0, Settings().c_str()) != 0, std::memory_order_relaxed);
     fastload::lists::Attach();
     fastload::rooms::Attach();
     fastload::screen::Attach();

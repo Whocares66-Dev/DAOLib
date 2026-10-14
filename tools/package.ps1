@@ -114,7 +114,13 @@ Coming from DAOLib 0.1.0
 
 Mods for DAOLib
   Each mod is a folder of its own, extracted into bin_ship\daolib\plugins\<mod>\.
-  DAOLib does nothing without at least one mod.
+  Without one, DAOLib still corrects a few faults of the game's own and makes it faster.
+
+Fixes and fast loading
+  The loader corrects faults of the game's own, always, and makes it faster: the engine's
+  memory from the system's heap, and every processor for the game. Fast loading is off
+  until you tick "Fast loading" under Performance on the options screen's Game tab.
+  https://whocares66-dev.github.io/DAOLib/loader.html lists each.
 
 Another mod that is a dinput8.dll
   Two files cannot have the name. Keep DAOLib's as dinput8.dll and put the other mod's

@@ -33,6 +33,11 @@ heading_anchors: true
 back_to_top: true
 back_to_top_text: Back to top
 aux_links_new_tab: false
+# Boxes a paragraph is put in with `{: .warning }` on the line after it.
+callouts:
+  warning:
+    title: "⚠️ Upgrading from 0.1.0"
+    color: yellow
 defaults:
   - scope:
       path: ""

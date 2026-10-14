@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+## 0.2.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.2.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.2.0):
+
+- **The loader is `dinput8.dll` now, not `version.dll`:** a compatibility setting on the game's exe ("Disable fullscreen optimizations" among them) had Windows answer the game's `version.dll` with its own, so DAOLib never ran and wrote no log (#93). From 0.1.0, delete `bin_shipersion.dll` and `version.pdb` first, or every mod loads twice. Another mod's `dinput8.dll` keeps working renamed `dinput8.chain.dll` beside it. Each store's game was started under each compatibility setting a player may have ticked before this release (#97), and in EA's and Steam's wrapped builds mods load as the game's runtime starts (#94).
+- **Faster loading:** the engine's memory comes from the system's heap in place of its own 850 MiB of pools (#69), the game runs on every processor where GOG's exe kept it to two (#92), and fast load keeps the areas and rooms the party leaves, loads the indoor areas beside it ahead, and takes the loading screen's black in and out faster (#64, #71, #72, #73, #81, #83). Fast load is off until it is ticked on the options screen's Game tab ("Fast loading", #115); `DAOLIB_ENGINE_HEAP=0`, `DAOLIB_ALL_PROCESSORS=0` and `DAOLIB_FAST_LOAD=0` leave each out.
 - **A repack of the game is found by its code:** an exe whose headers no address file is named for, but whose code is a known build's (Steamless' output, the Nexus "decrypted Steam" exe with or without the 4GB flag), reads that build's file, found by a hash of its `.text` read from the exe on disk. `loader.log` says so; a wrapped exe or one whose code is changed is found by its headers or not at all, as before (#110). Plugins built before it find the file they ask for: the loader makes it, the matched build's with the exe's header.
+- **Two more fixes to the game:** the mouse's movement is timed by the last input it read, not one past it, a read that crashed the game once its memory was the system's heap (#105), and a screenshot's file name is no longer read past its end (#78). A crash log's last lines are of the logs this run of the game wrote, not older ones (#57).
+- **More of the library for mod authors:** an area's sky and sunlight (#62), options sections with dropdowns, buttons and Video and Online tabs (#66, #79, #82, #104), the game's files by name, a mod's own folder of them, and textures as their source holds them (#85, #96, #100, #102), objects and items under ids a mod chooses (#86, #87, #103), movement keys held by a mod (#95), how far creatures are shown (#88), and a creature's weapon damage per hand (#108). `daolib_core` reads the game's archives, tables, talk tables, templates, textures and levels with no game running, 64-bit as well, and says which copy of a file the game takes (#106, #111, #113).
 
 ## 0.1.0
 

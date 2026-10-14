@@ -464,7 +464,7 @@ class Site:
     def index_page(self):
         self.current = "/api/"
         out = self.front_matter(
-            title="API reference", nav_order=3, has_children=True, permalink="/api/"
+            title="API reference", nav_order=4, has_children=True, permalink="/api/"
         )
         out += [
             "# API reference",

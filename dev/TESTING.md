@@ -94,3 +94,13 @@ Not reachable here: **Windows 11.** This machine is Windows 10. One of the two p
 | GOG (the private copy) | all twelve, and `DISABLETHEMES` | every one passed |
 | EA | all twelve, and `DISABLETHEMES` | every one passed |
 | Steam | the two of a merge through the script; all twelve and `DISABLETHEMES` by hand the same hour (the loader loaded, the start's cue, the engine heap, the plugins, no fault log) | every one passed |
+
+2026-10-13, the release build of 0.2.0 (#114, `f857ac1`), each build's game through `play_matrix.ps1 -All` after `deploy.ps1 -Preset release`, EA's with `-SwitchPath`; `loader (daolib 0.2.0)` and each build's own address file in every `loader.log`:
+
+| Build | Settings | Result |
+|---|---|---|
+| GOG | all twelve, with `elgarashaders`, `eluvian`, `example`, `probe` and `turnbased` | every one passed |
+| Steam | all twelve, with `example` and `probe` | every one passed |
+| EA | all twelve, with `example` and `probe` | eleven passed; `WINXPSP2` kept no game up, twice, with the loader never run (`loader.log` not rewritten, no fault log). Vanilla EA, no `dinput8.dll` in the folder, kept none up under `WINXPSP2` either, so it is EA's exe or the EA app under that layer and not DAOLib. It passed on 2026-10-12 (above); what changed is not known |
+
+The same day the three repacks through `tools\version_matrix.py --preset release` (Steamless' output, the Nexus exe, and the Nexus exe with the 4GB flag): each found GOG's file by its code, made the file of its own headers, and loaded a save into combat in Redcliffe with `turnbased` ready.

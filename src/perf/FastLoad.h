@@ -19,7 +19,7 @@
 // They share one detour of the loading mode's update, from which each is
 // told of every update before the engine's runs, and one switch: "Fast
 // loading" in the options screen's Game tab, kept in daolib.ini beside the
-// logs. Off, every part stands down from the next loading screen: nothing
+// logs, and off until the player turns it on (#115). Off, every part stands down from the next loading screen: nothing
 // is kept, nothing is loaded ahead, and the loading screen is the
 // engine's. In play, 2026-10-11, GOG, a door between Redcliffe village and
 // its tavern: 2.2 to 3.0 s and 0.7 to 0.9 s as the game was that morning

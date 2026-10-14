@@ -193,6 +193,8 @@ class Install:
         loader = self.bin / "dinput8.dll"
         if self.had_loader:
             shutil.copy2(self.saved / "dinput8.dll", loader)
+        else:
+            loader.unlink(missing_ok=True)
         folder = self.bin / "daolib" / "addresses"
         shutil.rmtree(folder, ignore_errors=True)
         if self.had_addresses:

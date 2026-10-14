@@ -7,7 +7,7 @@ SkyrimFollowerTactics sites are). Its pages come from three places:
   through tools/doxygen_filter.py) and writes XML, which tools/doxygen_xml.py
   turns into a page per namespace and class;
 - the guide (guide.html): dev/PLUGINS.md;
-- the front page and the styling: docs/.
+- the front page, the loader's page and the styling: docs/.
 
 The working tree's docs are the site's root ("Current"); each release tag
 vX.Y.Z is built from that tag's own headers and guide, with today's styling,
@@ -95,7 +95,7 @@ def guide_page(source):
     """dev/PLUGINS.md as the site's guide page."""
     body = (source / "dev" / "PLUGINS.md").read_text(encoding="utf-8")
     front = (
-        "---\ntitle: Writing a plugin\nnav_order: 2\npermalink: /guide.html\n---\n\n"
+        "---\ntitle: Writing a plugin\nnav_order: 3\npermalink: /guide.html\n---\n\n"
     )
     # Kept from Liquid, as the API pages are: its examples have C++ braces.
     (source / "docs" / "guide.md").write_text(
