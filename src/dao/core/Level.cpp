@@ -1,12 +1,11 @@
 #include "dao/core/Level.h"
 
 #include "dao/core/Bytes.h"
+#include "dao/core/Model.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <functional>
-#include <limits>
 #include <utility>
 
 namespace dao::core::level
@@ -60,27 +59,6 @@ constexpr std::uint32_t kTypeHalf4 = 16;
 
 constexpr std::size_t kNodesDeep = 64; // a model's tree deeper than this is not one
 
-float Half(std::uint16_t half)
-{
-    const std::uint32_t sign = (half >> 15) & 1U;
-    const std::uint32_t exponent = (half >> 10) & 31U;
-    const std::uint32_t fraction = half & 1023U;
-    float value = 0;
-    if (exponent == 0)
-    {
-        value = std::ldexp(static_cast<float>(fraction), -24);
-    }
-    else if (exponent == 31)
-    {
-        value = fraction == 0 ? std::numeric_limits<float>::infinity() : std::numeric_limits<float>::quiet_NaN();
-    }
-    else
-    {
-        value = std::ldexp(static_cast<float>(fraction | 1024U), static_cast<int>(exponent) - 25);
-    }
-    return sign != 0 ? -value : value;
-}
-
 // How many floats a vertex element of a type holds; 0 for a type that is not floats.
 std::size_t FloatsOf(std::uint32_t type)
 {
@@ -118,7 +96,7 @@ bool Element(std::span<const std::byte> vertices, std::size_t at, std::uint32_t 
             {
                 return false;
             }
-            to[i] = Half(*value);
+            to[i] = model::Half(*value);
         }
         else
         {

@@ -128,6 +128,12 @@ class Struct
     // field that is no such list or runs out of the file.
     std::span<const std::byte> ListBytes(std::uint32_t label, Type element) const;
 
+    // Where the struct is in the file's bytes.
+    std::size_t Offset() const
+    {
+        return at_;
+    }
+
   private:
     std::optional<std::size_t> Slot(std::uint32_t label, Type type) const;
 
@@ -178,6 +184,52 @@ class File
     std::string typeVersion_;
     std::size_t data_ = 0;
     std::vector<Template> templates_;
+};
+
+// Where a list's new elements go: over the old ones when they fit, or at the
+// file's end. A list two fields share would change for both in place; the
+// meshes' vertex and index buffers are each one field's.
+enum class Place : std::uint8_t
+{
+    InPlaceIfFits,
+    Append,
+};
+
+// A GFF4 file changed field by field: a copy of its bytes in which a value is
+// written over its slot, and a string or a list that does not fit where it
+// was is appended to the data and its slot pointed at it. Nothing already in
+// the file moves, so every Struct of the File it was made from still points
+// at its own struct, and a file nothing was set in is the same bytes.
+class Editor
+{
+  public:
+    explicit Editor(const File &file);
+
+    // Writes a whole number over a scalar field, at the field's own width and
+    // sign. False for a field that is no whole number, a reference, or none.
+    bool SetNumber(const Struct &in, std::uint32_t label, std::int64_t value);
+    // Writes the floats of a field made of them: one for an F32, three for a
+    // Vector3, four for a Vector4, Quaternion or Color, sixteen for a Matrix.
+    // False for another count or type.
+    bool SetFloats(const Struct &in, std::uint32_t label, std::span<const float> values);
+    // Appends a string and points the field at it.
+    bool SetString(const Struct &in, std::uint32_t label, std::wstring_view text);
+    // Sets a list field's elements: `count` of them, `elements` their bytes
+    // as the list keeps them (a list of structs in place, its structs').
+    bool SetList(const Struct &in, std::uint32_t label, std::span<const std::byte> elements, std::uint32_t count,
+                 Place place);
+
+    const std::vector<std::byte> &Bytes() const
+    {
+        return bytes_;
+    }
+
+  private:
+    std::optional<std::size_t> Slot(const Struct &in, std::uint32_t label, std::uint16_t &type) const;
+    std::uint32_t Append(std::span<const std::byte> data);
+
+    std::size_t data_;
+    std::vector<std::byte> bytes_;
 };
 
 namespace detail

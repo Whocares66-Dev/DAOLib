@@ -160,6 +160,8 @@ add_library(
     src/dao/core/Inflate.cpp
     src/dao/core/Install.cpp
     src/dao/core/Level.cpp
+    src/dao/core/Model.cpp
+    src/dao/core/ModelWrite.cpp
     src/dao/core/LightProbes.cpp
     src/dao/core/M2da.cpp
     src/dao/core/OptionsMovie.cpp

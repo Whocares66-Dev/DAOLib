@@ -467,3 +467,168 @@ std::vector<std::wstring> Struct::Strings(std::uint32_t label) const
 }
 
 } // namespace dao::core::gff4
+
+namespace dao::core::gff4
+{
+
+namespace
+{
+
+// A whole-number type's width, 0 for a type that is none.
+std::size_t WidthOf(std::uint16_t type)
+{
+    switch (static_cast<Type>(type))
+    {
+    case Type::U8:
+    case Type::S8:
+        return 1;
+    case Type::U16:
+    case Type::S16:
+        return 2;
+    case Type::U32:
+    case Type::S32:
+        return 4;
+    case Type::U64:
+    case Type::S64:
+        return 8;
+    default:
+        return 0;
+    }
+}
+
+std::size_t FloatsIn(std::uint16_t type)
+{
+    switch (static_cast<Type>(type))
+    {
+    case Type::F32:
+        return 1;
+    case Type::Vector3:
+        return 3;
+    case Type::Vector4:
+    case Type::Quaternion:
+    case Type::Color:
+        return 4;
+    case Type::Matrix:
+        return 16;
+    default:
+        return 0;
+    }
+}
+
+} // namespace
+
+Editor::Editor(const File &file) : data_(file.DataOffset()), bytes_(file.Bytes().begin(), file.Bytes().end())
+{
+}
+
+std::optional<std::size_t> Editor::Slot(const Struct &in, std::uint32_t label, std::uint16_t &type) const
+{
+    const Field *field = in.Shape().Find(label);
+    if (field == nullptr)
+    {
+        return std::nullopt;
+    }
+    type = field->type;
+    const std::size_t at = in.Offset() + field->offset;
+    if (at + 4 > bytes_.size())
+    {
+        return std::nullopt;
+    }
+    return at;
+}
+
+std::uint32_t Editor::Append(std::span<const std::byte> data)
+{
+    // Kept to four bytes, as the game's files keep their lists and strings.
+    bytes_.resize((bytes_.size() + 3) & ~std::size_t{3});
+    const std::size_t at = bytes_.size();
+    bytes_.insert(bytes_.end(), data.begin(), data.end());
+    return static_cast<std::uint32_t>(at - data_);
+}
+
+bool Editor::SetNumber(const Struct &in, std::uint32_t label, std::int64_t value)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    const std::size_t width = WidthOf(type);
+    if (!at || width == 0 || (field->flags & (kList | kStruct | kReference)) != 0 || *at + width > bytes_.size())
+    {
+        return false;
+    }
+    std::memcpy(bytes_.data() + *at, &value, width); // little-endian: the low bytes are the narrower value
+    return true;
+}
+
+bool Editor::SetFloats(const Struct &in, std::uint32_t label, std::span<const float> values)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || FloatsIn(type) != values.size() || (field->flags & (kList | kStruct | kReference)) != 0 ||
+        *at + values.size_bytes() > bytes_.size())
+    {
+        return false;
+    }
+    std::memcpy(bytes_.data() + *at, values.data(), values.size_bytes());
+    return true;
+}
+
+bool Editor::SetString(const Struct &in, std::uint32_t label, std::wstring_view text)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || type != static_cast<std::uint16_t>(Type::String) || (field->flags & (kList | kStruct)) != 0)
+    {
+        return false;
+    }
+    // Its count of UTF-16 units with the NUL, the units, the NUL; never written over an old
+    // string, which another field may share.
+    std::vector<std::byte> data(4 + ((text.size() + 1) * 2));
+    const auto count = static_cast<std::uint32_t>(text.size() + 1);
+    std::memcpy(data.data(), &count, 4);
+    for (std::size_t i = 0; i < text.size(); ++i)
+    {
+        const auto unit = static_cast<std::uint16_t>(text[i]);
+        std::memcpy(data.data() + 4 + (i * 2), &unit, 2);
+    }
+    const std::uint32_t offset = Append(data);
+    std::memcpy(bytes_.data() + *at, &offset, 4);
+    return true;
+}
+
+bool Editor::SetList(const Struct &in, std::uint32_t label, std::span<const std::byte> elements, std::uint32_t count,
+                     Place place)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || (field->flags & kList) == 0)
+    {
+        return false;
+    }
+    std::uint32_t old = 0;
+    std::memcpy(&old, bytes_.data() + *at, 4);
+    if (place == Place::InPlaceIfFits && old != kNull && data_ + old + 4 <= bytes_.size())
+    {
+        std::uint32_t oldCount = 0;
+        std::memcpy(&oldCount, bytes_.data() + data_ + old, 4);
+        const std::size_t element = count == 0 ? 0 : elements.size() / count;
+        const std::size_t room = bytes_.size() - (data_ + old + 4);
+        if (std::size_t{oldCount} * element >= elements.size() && room >= elements.size())
+        {
+            std::memcpy(bytes_.data() + data_ + old, &count, 4);
+            std::memcpy(bytes_.data() + data_ + old + 4, elements.data(), elements.size());
+            return true;
+        }
+    }
+    std::vector<std::byte> data(4 + elements.size());
+    std::memcpy(data.data(), &count, 4);
+    std::memcpy(data.data() + 4, elements.data(), elements.size());
+    const std::uint32_t offset = Append(data);
+    std::memcpy(bytes_.data() + *at, &offset, 4);
+    return true;
+}
+
+} // namespace dao::core::gff4
