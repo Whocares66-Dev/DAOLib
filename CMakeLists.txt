@@ -155,6 +155,7 @@ add_library(
     src/dao/core/GdaFile.cpp
     src/dao/core/Gff3.cpp
     src/dao/core/Gff4.cpp
+    src/dao/core/LogNames.cpp
     src/dao/core/GfxMovie.cpp
     src/dao/core/Inflate.cpp
     src/dao/core/Install.cpp

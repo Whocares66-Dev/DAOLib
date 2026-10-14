@@ -1,5 +1,6 @@
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
+#include "dao/core/LogNames.h"
 #include "dao/core/Pages.h"
 #include "dao/core/StackText.h"
 
@@ -64,6 +65,36 @@ TEST_CASE("lines that do not parse are skipped, not fatal")
                                             "\n");
     CHECK(table.Size() == 1);
     CHECK(table.Find(0x00401005)->name == "Good");
+}
+
+TEST_CASE("a report quotes the logs its own game writes, and no other file of the folder")
+{
+    using dao::core::IsOwnLog;
+    // The game with the plain names: its DLLs' logs, and no game's numbered ones.
+    CHECK(IsOwnLog("loader.log", true, 4242));
+    CHECK(IsOwnLog("elgarashaders.log", true, 4242));
+    CHECK_FALSE(IsOwnLog("eluvian.59456.log", true, 4242));
+    CHECK_FALSE(IsOwnLog("eluvian.4242.log", true, 4242));
+    // A game started beside it: the logs under its own id, not the plain ones, not another's.
+    CHECK(IsOwnLog("loader.4242.log", false, 4242));
+    CHECK_FALSE(IsOwnLog("loader.log", false, 4242));
+    CHECK_FALSE(IsOwnLog("loader.59456.log", false, 4242));
+    CHECK_FALSE(IsOwnLog("loader.42420.log", false, 4242));
+    // A name with a dot of its own is a plain name.
+    CHECK(IsOwnLog("my.plugin.log", true, 4242));
+    CHECK(IsOwnLog("my.plugin.4242.log", false, 4242));
+    // Never a report, a session before's, or what is no log.
+    for (const bool owns : {true, false})
+    {
+        CHECK_FALSE(IsOwnLog("crash-2026-10-12-17-55-33.log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("hang-2026-10-11-13-18-53.log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("exit-2026-10-11-13-18-53.log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("loader.previous.log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("loader.4242.previous.log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("eluvian.4242.events.jsonl", owns, 4242));
+        CHECK_FALSE(IsOwnLog(".log", owns, 4242));
+        CHECK_FALSE(IsOwnLog("", owns, 4242));
+    }
 }
 
 TEST_CASE("exception codes have their names")

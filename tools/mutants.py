@@ -97,6 +97,7 @@ TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
 GFX = "src/dao/core/GfxMovie.cpp"
 OPTIONS = "src/dao/core/OptionsMovie.cpp"
+LOGNAMES = "src/dao/core/LogNames.cpp"
 INFLATE = "src/dao/core/Inflate.cpp"
 RANGE = "src/dao/core/Range.h"
 RELOCATE = "src/dao/core/Relocate.h"
@@ -667,6 +668,12 @@ MUTANTS: list[Mutant] = [
         INSTALL,
         "        return {base + 2};",
         "        return {base + 7};",
+    ),
+    Mutant(
+        "lognames-other-process: a report does not quote the log of a game running beside its own",
+        LOGNAMES,
+        "return !ownsLogs && last == std::to_string(pid);",
+        "return !ownsLogs || last == std::to_string(pid);",
     ),
     Mutant(
         "options-tabs-apart: a section left out of one tab does not keep another tab's out",

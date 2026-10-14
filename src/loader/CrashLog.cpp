@@ -13,6 +13,7 @@
 #include "dao/core/Exceptions.h"
 #include "dao/core/FunctionTable.h"
 #include "dao/core/Gff4.h"
+#include "dao/core/LogNames.h"
 #include "dao/core/Pages.h"
 #include "dao/core/Relocate.h"
 #include "dao/core/StackText.h"
@@ -894,6 +895,18 @@ class Report
         w.Blank();
     }
 
+    // Whether a file was written since this game started: one a game before left under a
+    // name this game would use is not this game's (DAOLib #57: a plugin's log weeks old).
+    static bool WrittenInThisRun(const std::filesystem::path &file)
+    {
+        FILETIME started{};
+        FILETIME unused{};
+        WIN32_FILE_ATTRIBUTE_DATA data{};
+        return GetProcessTimes(GetCurrentProcess(), &started, &unused, &unused, &unused) != FALSE &&
+               GetFileAttributesExW(file.c_str(), GetFileExInfoStandard, &data) != FALSE &&
+               CompareFileTime(&data.ftLastWriteTime, &started) >= 0;
+    }
+
     static void LastLogLines(Writer &w)
     {
         // Each DLL's log writes its lines out on a thread of its own, up to
@@ -904,8 +917,9 @@ class Report
         for (const auto &entry : std::filesystem::directory_iterator(dao::LogDirectory(), ec))
         {
             const auto name = entry.path().filename().string();
-            // Not a crash log, nor the session before's (DAOLib #47).
-            if (entry.path().extension() != ".log" || name.starts_with("crash-") || name.ends_with(".previous.log"))
+            // This game's own logs, written in this run: the folder is shared with the games
+            // running beside it and keeps what earlier ones left (DAOLib #57).
+            if (!dao::core::IsOwnLog(name, dao::OwnsLogs(), GetCurrentProcessId()) || !WrittenInThisRun(entry.path()))
             {
                 continue;
             }

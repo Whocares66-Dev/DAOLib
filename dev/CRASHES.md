@@ -16,7 +16,7 @@ The loader (`src/loader/CrashLog.cpp`) installs a crash logger before anything e
 | GFF4 FILES ON THE STACK | A stack value in the first 64 KiB that points at a GFF4 file's bytes: a file the game is reading. Its length is the word after it (the game passes a file's bytes so) or else as far as the memory goes; a copy is parsed (`dao/core/Gff4.h`) and the line gives the file's type, its root's template and the root's strings by label (`dev/gff4_fields.csv`). For a model that is `6000`, `MMHName`, the model's name. |
 | ENGINE STRINGS IN THE STACK'S FRAMES | The engine's `std::wstring`s lying in the stack's first 64 KiB (`dao/core/StackText.h`): a function's own strings, the name of the file or object it is loading among them. Each text once, innermost first; some are left over from earlier calls. |
 | MODULES, DAOLIB PLUGINS | Everything loaded, with its range; our plugins |
-| LAST LINES OF ... | The last twelve lines of every DAOLib log |
+| LAST LINES OF ... | The last twelve lines of each log this game wrote in this run: `<name>.log` for the game that has the plain names, `<name>.<process id>.log` for one started beside it, and only a file written since the game started. The folder is shared with the games running beside it and keeps what earlier ones left, and a report used to quote them all (DAOLib #57: a crash log of 1,390 lines, most of them old sessions; with the rule, seen 2026-10-12 with the probe's deliberate crash, 359 lines quoting three logs of the folder's 24). No report (`crash-`, `hang-`, `exit-`) and no `.previous.log` is quoted. |
 
 Names come from three places:
 - **Our DLLs:** their PDBs, which `tools\deploy.ps1` copies beside them.
