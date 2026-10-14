@@ -2,7 +2,12 @@
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "name": "daolib",
     "version-string": "0.1.0",
-    "dependencies": [],
+    "dependencies": [
+        {
+            "name": "directxtex",
+            "default-features": false
+        }
+    ],
     "features": {
         "game": {
             "description": "The loader, daolib and the plugins: what goes into the game (x86)",

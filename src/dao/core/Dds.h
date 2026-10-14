@@ -4,8 +4,8 @@
 // pixels a side; DXT1 and DXT3 are read too, and pictures of 32 and of 24
 // bits that are not packed, since a texture a mod makes may be any of them.
 // Of the textures the game's materials name, 2,145 are DXT1, 1,325 DXT5 and
-// 98 of 24 bits (the shaders' session, 2026-10-12, DAOLib #96). A picture of
-// 16 bits a pixel is not read.
+// 98 of 24 bits (the shaders' session, 2026-10-12, DAOLib #96). Of 16 bits a
+// pixel, A4R4G4B4 is read, the creatures' tint masks' (DAOLib #120); no other.
 //
 // A DDS file is "DDS ", a header of 124 bytes (its height at byte 12 of the
 // file, its width at 16, the pixel format's four-letter code at 84, its
@@ -58,8 +58,9 @@ enum class Shape : std::uint8_t
 
 struct Description
 {
-    // "DXT1", "DXT3" or "DXT5"; "B8G8R8" or "B8G8R8A8" for 24 or 32 bits a pixel not packed;
-    // another four-letter code as the file has it; or "<n> bits" for another plain format
+    // "DXT1", "DXT3" or "DXT5"; "B8G8R8", "B8G8R8A8" or "A4R4G4B4" for 24, 32 or 16 bits a
+    // pixel not packed; another four-letter code as the file has it; or "<n> bits" for another
+    // plain format
     std::string format;
     std::uint32_t width = 0; // of the largest picture
     std::uint32_t height = 0;
@@ -74,5 +75,26 @@ struct Description
 // Returns what a DDS file holds, without decoding its pixels.
 // @return nullopt for bytes that are not a DDS file, or whose header gives no size
 std::optional<Description> Describe(std::span<const std::byte> file);
+
+// How Encode keeps a picture: the formats the game's own maps are in.
+enum class Format : std::uint8_t
+{
+    Dxt1,       // a diffuse map: opaque, its alpha dropped
+    Dxt5,       // a diffuse map with alpha, a specular, emissive or other map
+    Dxt5Normal, // a normal map, given with x, y, z in red, green, blue; kept as the game's are, x in alpha
+    A4R4G4B4,   // 16 bits a pixel, a tint mask's
+    A8R8G8B8,   // 32 bits a pixel, not packed
+};
+
+// Returns a DDS file of a picture as the game keeps its textures: the picture
+// and each half of the one before it down to a pixel, four pixels averaged
+// into one, under the header the game's files have.
+// @return empty for a picture whose sides are not powers of two, or whose
+// pixels are not width × height × 4 bytes
+std::vector<std::byte> Encode(const Image &image, Format format);
+
+// Returns a normal map as decoded from the game's layout (x in alpha, y in
+// green) with x, y, z in red, green and blue, z made from x and y, alpha 255.
+Image Normals(const Image &decoded);
 
 } // namespace dao::core::dds

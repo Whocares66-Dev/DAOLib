@@ -9,6 +9,7 @@ add_executable(
     test_angle.cpp
     test_code.cpp
     test_crashlog.cpp
+    test_dds_write.cpp
     test_erf.cpp
     test_gdafile.cpp
     test_gff3.cpp

@@ -130,7 +130,7 @@ bool DecodeBlocks(std::span<const std::byte> data, std::uint32_t format, Image &
 }
 
 // A picture that is not packed, of `bytes` a pixel: blue, green, red, and with four an
-// alpha; with three every pixel is opaque.
+// alpha; with three every pixel is opaque; with two, A4R4G4B4, four bits each.
 bool DecodePlain(std::span<const std::byte> data, std::size_t bytes, Image &image)
 {
     const std::size_t pixels = image.rgba.size() / 4;
@@ -142,6 +142,17 @@ bool DecodePlain(std::span<const std::byte> data, std::size_t bytes, Image &imag
     {
         const std::span<const std::byte> from = data.subspan(pixel * bytes, bytes);
         const std::size_t to = pixel * 4;
+        if (bytes == 2)
+        {
+            const std::uint16_t packed = ReadAt<std::uint16_t>(from, 0).value_or(0);
+            for (std::size_t channel = 0; channel < 4; ++channel)
+            {
+                // Red at bits 8, green 4, blue 0, alpha 12.
+                const unsigned shift = channel == 3 ? 12U : 8U - (4U * static_cast<unsigned>(channel));
+                image.rgba[to + channel] = static_cast<std::uint8_t>(((packed >> shift) & 15U) * 17U);
+            }
+            continue;
+        }
         image.rgba[to] = std::to_integer<std::uint8_t>(from[2]);
         image.rgba[to + 1] = std::to_integer<std::uint8_t>(from[1]);
         image.rgba[to + 2] = std::to_integer<std::uint8_t>(from[0]);
@@ -194,6 +205,12 @@ std::optional<Header> HeaderOf(std::span<const std::byte> file)
     header.packed = header.format == kDxt1 || header.format == kDxt3 || header.format == kDxt5;
     header.plainBytes =
         !header.packed && header.format == 0 && (header.bits == 24 || header.bits == 32) ? header.bits / 8 : 0;
+    // A4R4G4B4, the tint masks', by its masks: red 0x0F00, alpha 0xF000.
+    if (header.format == 0 && header.bits == 16 && ReadAt<std::uint32_t>(file, 92) == 0x0F00U &&
+        ReadAt<std::uint32_t>(file, 104) == 0xF000U)
+    {
+        header.plainBytes = 2;
+    }
     return header;
 }
 
@@ -234,6 +251,10 @@ std::string FormatName(const Header &header)
         if (header.bits == 32)
         {
             return "B8G8R8A8";
+        }
+        if (header.plainBytes == 2)
+        {
+            return "A4R4G4B4";
         }
         return std::to_string(header.bits) + " bits";
     }

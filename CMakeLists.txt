@@ -136,10 +136,9 @@ include(DAOLib)
 # a tool that reads the game's files with no game links, and it builds for
 # x86 and x64 alike (DAOLib #106).
 #
-# It never includes <Windows.h> (CLAUDE.md's one architectural rule), and the
-# build keeps that: _WINDOWS_ is the guard <Windows.h> opens with, so with it
-# defined the header is empty and a use of the Windows API in core fails to
-# compile.
+# It never reads the running game (CLAUDE.md's one architectural rule).
+# Windows and its libraries are fine in it (the user, 2026-10-14): DirectXTex
+# compresses the textures dao/core/DdsWrite.cpp writes (DAOLib #120).
 # ---------------------------------------------------------------------------
 add_library(
     daolib_core
@@ -148,6 +147,7 @@ add_library(
     src/dao/core/CallSite.cpp
     src/dao/core/Conversation.cpp
     src/dao/core/Dds.cpp
+    src/dao/core/DdsWrite.cpp
     src/dao/core/Erf.cpp
     src/dao/core/Exceptions.cpp
     src/dao/core/Fingerprint.cpp
@@ -178,7 +178,10 @@ dao_apply_warnings(daolib_core)
 dao_release_symbols(daolib_core)
 target_compile_features(daolib_core PUBLIC cxx_std_20)
 target_include_directories(daolib_core PUBLIC "${PROJECT_SOURCE_DIR}/src")
-target_compile_definitions(daolib_core PRIVATE _WINDOWS_)
+find_package(directxtex CONFIG REQUIRED)
+target_link_libraries(daolib_core PRIVATE Microsoft::DirectXTex)
+# <Windows.h>, which DirectXTex's headers bring, without its min and max macros.
+target_compile_definitions(daolib_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 add_library(DAOLib::core ALIAS daolib_core)
 
 if(DAO_CORE_ONLY)
