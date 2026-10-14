@@ -19,6 +19,7 @@ add_executable(
     test_level.cpp
     test_model.cpp
     test_model_write.cpp
+    test_morph.cpp
     test_lightprobes.cpp
     test_input.cpp
     test_install.cpp
