@@ -2,9 +2,10 @@
 // (DAOLib #117): a mesh with chunks' vertices and triangles replaced, and a
 // hierarchy with nodes' transforms, materials and bones changed and its
 // bounding boxes made again. Both go through gff4::Editor, so nothing they do
-// not change moves. New chunks and mesh nodes are added too (DAOLib #118), for
-// a part split past a chunk's bones or a piece made in an editor: each a copy
-// of a struct the file already has, renamed and put at the end of its list.
+// not change moves. New chunks, mesh nodes (DAOLib #118) and bones (#119) are
+// added too, for a part split past a chunk's bones, a piece made in an
+// editor, or a vertex weighted to a bone the model lacks: each a copy of a
+// struct the file already has, renamed and put at the end of its list.
 //
 // What a new chunk and a new mesh node must agree with, read 2026-10-14 over
 // all 17,792 .mmh the game takes and their .msh: a mesh node names its chunk
@@ -12,8 +13,30 @@
 // are in the same order, in 34 not, so the order is not what binds them. A
 // mesh node's id (MMHID) repeats within 14 files. Its children are its
 // attributes and its transform, and in 7,090 of them animation exports too,
-// which a new node does not take. Every child in the children lists is a struct (flags
-// 0x4000), none null.
+// which a new mesh node does not take. Every child in the children lists is a
+// struct (flags 0x4000), none null.
+//
+// What a new bone must agree with, read the same day: an animation names the
+// channels it drives ("lowerback_rotation", an .ani's AnimationNodeName), and
+// each node exports its two under those names, its own in lower case: the
+// rotation's controller type 2 and tag type 0, the translation's 0 and 1. In
+// all 2,985 files sampled the exports' controller indices are 0 to n - 1 and
+// MMHTotalExports is n; the bones' indices are 0 to n - 1 and MMHTotalBones
+// is n in 3,644 of the 3,659 with bones. Of 233,071 bones, 3 export nothing
+// (material_defaults.mmh).
+//
+// What else a written model leans on, read the same day; nothing here writes
+// them. A head's morph (.mor) names mesh nodes (FaceM1, EyesM1, LashesM1)
+// and holds a place for each vertex of their chunks, by index:
+// hm_arl210cr_chamberlain.mor's 2,282, 373 and 274 are those chunks' counts,
+// each place within 4.3 mm of the chunk's own. So a morphed part's vertex
+// count and order must stay, and its places are the morph's, not the mesh's.
+// A .phy is a tree of the model's node names (all 17,763 name only nodes
+// their .mmh has) with collision shapes: capsules on the bones of every
+// creature and head, PhysX's cooked shapes only in areas' and placeables',
+// none of them the mesh's vertices. Each level of detail (_0, _2, _3) is a
+// .mmh of its own, with its own .msh, .phy and smaller skeleton (the ogre's
+// _2: 30 bones, 86 exports).
 //
 // The layout a mesh is packed in again is the game's, read 2026-10-14 over
 // 3,000 of the .msh it takes (tools/gff4.py): the chunks' vertices in the
@@ -848,88 +871,214 @@ std::string Edit(gff4::Editor &editor, const Node &node, const gff4::Struct &at,
     return why;
 }
 
-// A new mesh node's struct: a copy of the node it is like, with its own names, bones, and
-// transform, and the attributes of the node it is like; no animation exports.
-std::optional<gff4::Struct> MakeMeshNode(gff4::Editor &editor, const gff4::Struct &like, const MeshNode &node,
-                                         std::uint32_t totalBones, std::string &why)
+// A generic list's elements for structs: each its template and its reference.
+std::vector<std::byte> Entries(const gff4::Editor &editor, std::span<const gff4::Struct> structs)
+{
+    std::vector<std::byte> out(structs.size() * 8);
+    for (std::size_t i = 0; i < structs.size(); ++i)
+    {
+        Put(out, i * 8, static_cast<std::uint32_t>(structs[i].Index()) | (gff4::kStruct << 16));
+        Put(out, (i * 8) + 4, editor.Reference(structs[i]));
+    }
+    return out;
+}
+
+// A new node's transform: copies of the translation and rotation of the node it is like, set to its own.
+std::string Transform(gff4::Editor &editor, const gff4::Struct &like, const NewNode &node,
+                      std::vector<gff4::Struct> &children)
 {
     const std::optional<gff4::Struct> trsl = ChildOf(like, "trsl");
     const std::optional<gff4::Struct> rota = ChildOf(like, "rota");
-    std::optional<gff4::Struct> made = editor.Add(like);
-    std::optional<gff4::Struct> t = trsl ? editor.Add(*trsl) : std::nullopt;
-    std::optional<gff4::Struct> r = rota ? editor.Add(*rota) : std::nullopt;
+    const std::optional<gff4::Struct> t = trsl ? editor.Add(*trsl) : std::nullopt;
+    const std::optional<gff4::Struct> r = rota ? editor.Add(*rota) : std::nullopt;
     const std::array<float, 4> translation{node.translation[0], node.translation[1], node.translation[2], 1};
-    if (!made || !t || !r || !editor.SetFloats(*t, kTranslation, translation) ||
-        !editor.SetFloats(*r, kRotation, node.rotation) || !editor.SetString(*made, kMmhName, node.name) ||
-        !editor.SetString(*made, kMeshGroupName, node.mesh.chunk) ||
-        !editor.SetString(*made, kMaterialObject, node.mesh.material) ||
-        !editor.SetString(*made, kNodeId, node.mesh.part))
+    if (!t || !r || !editor.SetFloats(*t, kTranslation, translation) || !editor.SetFloats(*r, kRotation, node.rotation))
     {
-        why = "the mesh node it is like is not kept as the game's are";
-        return std::nullopt;
+        return "the node it is like keeps no translation and rotation";
     }
-    if (why = SetBones(editor, *made, node.mesh.bonesUsed, totalBones, gff4::Place::Append); !why.empty())
-    {
-        return std::nullopt;
-    }
-    // In the order the ogre's Mesh1 keeps them: its attributes, then its transform.
-    std::vector<gff4::Struct> kept;
-    std::ranges::copy_if(like.Structs(kChildren), std::back_inserter(kept),
-                         [](const gff4::Struct &child) { return child.Label() == "attr"; });
-    kept.push_back(*t);
-    kept.push_back(*r);
-    std::vector<std::byte> children(kept.size() * 8);
-    for (std::size_t i = 0; i < kept.size(); ++i)
-    {
-        Put(children, i * 8, static_cast<std::uint32_t>(kept[i].Index()) | (gff4::kStruct << 16));
-        Put(children, (i * 8) + 4, editor.Reference(kept[i]));
-    }
-    if (!editor.SetList(*made, kChildren, children, static_cast<std::uint32_t>(kept.size()), gff4::Place::Append))
-    {
-        why = "the new node's children could not be written";
-        return std::nullopt;
-    }
-    return made;
+    children.push_back(*t);
+    children.push_back(*r);
+    return {};
 }
 
-// Each new mesh node made and put among its parent's children.
-std::string AddMeshNodes(gff4::Editor &editor, const gff4::File &file, const Hierarchy &tree,
-                         const std::vector<gff4::Struct> &structs, std::span<const MeshNode> added, const Mesh *written)
+// A new mesh node's struct: a copy of the node it is like with its own names, bones and transform, and
+// that node's attributes; no animation exports.
+std::string MakeMeshNode(gff4::Editor &editor, const gff4::Struct &made, const gff4::Struct &like, const NewNode &node,
+                         std::uint32_t totalBones)
 {
-    const auto first = std::ranges::find(tree.nodes, "mshh", &Node::kind);
-    for (const MeshNode &node : added)
+    const MeshRef &mesh = *node.mesh;
+    if (!editor.SetString(made, kMeshGroupName, mesh.chunk) ||
+        !editor.SetString(made, kMaterialObject, mesh.material) || !editor.SetString(made, kNodeId, mesh.part))
     {
-        const int like = node.like >= 0 ? node.like : static_cast<int>(first - tree.nodes.begin());
-        const auto known = [&](int i) { return i >= 0 && static_cast<std::size_t>(i) < structs.size(); };
-        const std::string what = "new mesh node " + Narrow(node.name) + ": ";
-        if (!known(like) || tree.nodes[static_cast<std::size_t>(like)].kind != "mshh")
+        return "the mesh node it is like is not kept as the game's are";
+    }
+    if (std::string why = SetBones(editor, made, mesh.bonesUsed, totalBones, gff4::Place::Append); !why.empty())
+    {
+        return why;
+    }
+    // In the order the ogre's Mesh1 keeps them: its attributes, then its transform.
+    std::vector<gff4::Struct> children;
+    std::ranges::copy_if(like.Structs(kChildren), std::back_inserter(children),
+                         [](const gff4::Struct &child) { return child.Label() == "attr"; });
+    if (std::string why = Transform(editor, like, node, children); !why.empty())
+    {
+        return why;
+    }
+    const std::vector<std::byte> entries = Entries(editor, children);
+    return editor.SetList(made, kChildren, entries, static_cast<std::uint32_t>(children.size()), gff4::Place::Append)
+               ? std::string{}
+               : "the new node's children could not be written";
+}
+
+// The names the game's bones export their channels by: the bone's name in lower case and the
+// channel's ("lowerback_rotation").
+std::wstring Lower(std::wstring name)
+{
+    std::ranges::transform(name, name.begin(), [](wchar_t c) {
+        return c >= L'A' && c <= L'Z' ? static_cast<wchar_t>(c + (L'a' - L'A')) : c;
+    });
+    return name;
+}
+
+// A new bone's struct: a copy of the bone it is like with its own name, bone index and transform, and
+// its own two exports, the rotation's controller `firstExport` and the translation's the next, in the
+// order the ogre's bones keep them: translation, rotation, then the transform.
+std::string MakeBone(gff4::Editor &editor, const gff4::Struct &made, const gff4::Struct &like, const NewNode &node,
+                     std::uint32_t bone, std::uint32_t firstExport)
+{
+    if (!editor.SetNumber(made, kBoneIndex, bone))
+    {
+        return "the bone it is like is not kept as the game's are";
+    }
+    std::vector<gff4::Struct> children;
+    for (const auto &[type, index, suffix] :
+         {std::tuple{0U, firstExport + 1, L"_translation"}, std::tuple{2U, firstExport, L"_rotation"}})
+    {
+        const std::vector<gff4::Struct> all = like.Structs(kChildren);
+        const auto kept = std::ranges::find_if(all, [&](const gff4::Struct &child) {
+            return child.Label() == "xprt" && child.Get<std::uint32_t>(kExportControllerType) == type;
+        });
+        const std::optional<gff4::Struct> copy = kept == all.end() ? std::nullopt : editor.Add(*kept);
+        if (!copy || !editor.SetString(*copy, kExportName, Lower(node.name) + suffix) ||
+            !editor.SetNumber(*copy, kExportControllerIndex, index))
         {
-            return what + "no mesh node to make it like";
+            return "the bone it is like keeps no export of its rotation and translation";
         }
-        if (node.parent != -1 && !known(node.parent))
+        children.push_back(*copy);
+    }
+    if (std::string why = Transform(editor, like, node, children); !why.empty())
+    {
+        return why;
+    }
+    const std::vector<std::byte> entries = Entries(editor, children);
+    return editor.SetList(made, kChildren, entries, static_cast<std::uint32_t>(children.size()), gff4::Place::Append)
+               ? std::string{}
+               : "the new node's children could not be written";
+}
+
+// The bone counts as the new nodes change them: the model's, and the next bone and export.
+struct Counts
+{
+    std::uint32_t bones = 0; // with the new bones
+    std::uint32_t nextBone = 0;
+    std::uint32_t nextExport = 0;
+};
+
+// The node a new node is like: the one asked for, or the first of its kind.
+int LikeOf(const Hierarchy &tree, const NewNode &node)
+{
+    if (node.like >= 0)
+    {
+        return node.like;
+    }
+    const auto first = std::ranges::find_if(tree.nodes, [&](const Node &n) {
+        return node.mesh ? n.kind == "mshh" : n.kind == "node" && n.bone.has_value();
+    });
+    return static_cast<int>(first - tree.nodes.begin());
+}
+
+// A new node's parent's struct: the model's top, one of its nodes, or a new node made before it.
+std::optional<gff4::Struct> ParentOf(const gff4::File &file, const std::vector<gff4::Struct> &structs,
+                                     const std::vector<gff4::Struct> &made, int parent)
+{
+    if (parent == -1)
+    {
+        return file.Root();
+    }
+    const auto at = static_cast<std::size_t>(parent);
+    if (at < structs.size())
+    {
+        return structs[at];
+    }
+    return made[at - structs.size()];
+}
+
+// One new node made and put among its parent's children; `made` holds the new nodes before it.
+std::string AddNode(gff4::Editor &editor, const gff4::File &file, const Hierarchy &tree,
+                    const std::vector<gff4::Struct> &structs, std::vector<gff4::Struct> &made, const NewNode &node,
+                    const Mesh *written, Counts &counts)
+{
+    const int like = LikeOf(tree, node);
+    const auto in = [](int i, std::size_t size) { return i >= 0 && std::cmp_less(i, size); };
+    if (!in(like, structs.size()) || (node.mesh ? tree.nodes[static_cast<std::size_t>(like)].kind != "mshh"
+                                                : !tree.nodes[static_cast<std::size_t>(like)].bone))
+    {
+        return node.mesh ? "no mesh node to make it like" : "no bone to make it like";
+    }
+    if (node.parent != -1 && !in(node.parent, structs.size() + made.size()))
+    {
+        return "no node " + std::to_string(node.parent) + " in the model or before it to put it under";
+    }
+    if (node.mesh && written != nullptr &&
+        std::ranges::find(written->chunks, node.mesh->chunk, &Chunk::name) == written->chunks.end())
+    {
+        return "no chunk " + Narrow(node.mesh->chunk) + " in the mesh";
+    }
+    const gff4::Struct &likeStruct = structs[static_cast<std::size_t>(like)];
+    const std::optional<gff4::Struct> fresh = editor.Add(likeStruct);
+    if (!fresh || !editor.SetString(*fresh, kMmhName, node.name))
+    {
+        return "the node it is like is not kept as the game's are";
+    }
+    std::string why;
+    if (node.mesh)
+    {
+        why = MakeMeshNode(editor, *fresh, likeStruct, node, counts.bones);
+    }
+    else
+    {
+        why = MakeBone(editor, *fresh, likeStruct, node, counts.nextBone++, counts.nextExport);
+        counts.nextExport += 2;
+    }
+    if (!why.empty())
+    {
+        return why;
+    }
+    made.push_back(*fresh);
+    const std::optional<gff4::Struct> parent = ParentOf(file, structs, made, node.parent);
+    const std::vector<std::byte> entry = Entries(editor, std::span(&made.back(), 1));
+    return parent && editor.Extend(*parent, kChildren, entry, 1) ? std::string{}
+                                                                 : "its parent's children could not be written";
+}
+
+// Each new node made and put among its parent's children, and the model's counts of bones and
+// exports raised for the new bones.
+std::string AddNodes(gff4::Editor &editor, const gff4::File &file, const Hierarchy &tree,
+                     const std::vector<gff4::Struct> &structs, std::span<const NewNode> added, const Mesh *written,
+                     Counts counts)
+{
+    std::vector<gff4::Struct> made;
+    for (const NewNode &node : added)
+    {
+        if (std::string why = AddNode(editor, file, tree, structs, made, node, written, counts); !why.empty())
         {
-            return what + "no node " + std::to_string(node.parent) + " in the model to put it under";
+            return "new node " + Narrow(node.name) + ": " + why;
         }
-        if (written != nullptr &&
-            std::ranges::find(written->chunks, node.mesh.chunk, &Chunk::name) == written->chunks.end())
-        {
-            return what + "no chunk " + Narrow(node.mesh.chunk) + " in the mesh";
-        }
-        std::string why;
-        const std::optional<gff4::Struct> made =
-            MakeMeshNode(editor, structs[static_cast<std::size_t>(like)], node, tree.totalBones, why);
-        if (!made)
-        {
-            return what + why;
-        }
-        std::vector<std::byte> entry(8);
-        Put(entry, 0, static_cast<std::uint32_t>(made->Index()) | (gff4::kStruct << 16));
-        Put(entry, 4, editor.Reference(*made));
-        const gff4::Struct parent = node.parent == -1 ? *file.Root() : structs[static_cast<std::size_t>(node.parent)];
-        if (!editor.Extend(parent, kChildren, entry, 1))
-        {
-            return what + "its parent's children could not be written";
-        }
+    }
+    if (counts.nextBone != tree.totalBones && (!editor.SetNumber(*file.Root(), kTotalBones, counts.nextBone) ||
+                                               !editor.SetNumber(*file.Root(), kTotalExports, counts.nextExport)))
+    {
+        return "the model's counts of bones and exports are not kept as the game's are";
     }
     return {};
 }
@@ -1011,7 +1160,7 @@ std::string WriteBoxes(gff4::Editor &editor, const Hierarchy &tree, const std::v
 } // namespace
 
 Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits,
-                       std::span<const MeshNode> added, const Mesh *written)
+                       std::span<const NewNode> added, const Mesh *written)
 {
     Written out;
     const std::optional<gff4::File> file = gff4::File::Parse(original);
@@ -1028,6 +1177,12 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
     }
     const std::vector<gff4::Struct> structs = detail::NodeStructs(*file);
     gff4::Editor editor(*file);
+    const auto bones =
+        static_cast<std::uint32_t>(std::ranges::count_if(added, [](const NewNode &n) { return !n.mesh; }));
+    const std::optional<gff4::Struct> root = file->Root();
+    const Counts counts{.bones = tree->totalBones + bones,
+                        .nextBone = tree->totalBones,
+                        .nextExport = root ? root->Get<std::uint32_t>(kTotalExports).value_or(0) : 0};
     for (const NodeEdit &edit : edits)
     {
         if (edit.node < 0 || static_cast<std::size_t>(edit.node) >= structs.size())
@@ -1036,13 +1191,13 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
             return out;
         }
         const auto index = static_cast<std::size_t>(edit.node);
-        if (std::string why = Edit(editor, tree->nodes[index], structs[index], edit, tree->totalBones); !why.empty())
+        if (std::string why = Edit(editor, tree->nodes[index], structs[index], edit, counts.bones); !why.empty())
         {
             out.error = "node " + std::to_string(edit.node) + ": " + why;
             return out;
         }
     }
-    if (out.error = AddMeshNodes(editor, *file, *tree, structs, added, written); !out.error.empty())
+    if (out.error = AddNodes(editor, *file, *tree, structs, added, written, counts); !out.error.empty())
     {
         return out;
     }
@@ -1057,11 +1212,11 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
             node.rotation = edit.rotation.value_or(node.rotation);
             node.scale = edit.scale ? edit.scale : node.scale;
         }
-        for (const MeshNode &node : added)
+        for (const NewNode &node : added)
         {
             Node made;
             made.name = node.name;
-            made.kind = "mshh";
+            made.kind = node.mesh ? "mshh" : "node";
             made.parent = node.parent;
             made.translation = node.translation;
             made.rotation = node.rotation;

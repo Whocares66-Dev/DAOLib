@@ -365,12 +365,12 @@ TEST_CASE("a new mesh node is put under its parent, like another, and in the box
     const std::optional<model::Mesh> written = Read(mesh.bytes, meshFile);
     REQUIRE(written);
 
-    model::MeshNode horn;
+    model::NewNode horn;
     horn.parent = 1; // Bone0, turned a quarter about z and scaled by 2
     horn.name = L"HornMesh";
     horn.translation = dao::core::Point{1, 0, 0};
     horn.mesh = model::MeshRef{.chunk = L"Horn", .material = L"horn", .part = L"_2", .bonesUsed = {1}};
-    const std::vector<model::MeshNode> added{horn};
+    const std::vector<model::NewNode> added{horn};
     const model::Written out = model::WriteHierarchy(files::SlabModel(), {}, added, &*written);
     REQUIRE(out.error.empty());
 
@@ -390,8 +390,8 @@ TEST_CASE("a new mesh node is put under its parent, like another, and in the box
     CHECK(made.mesh->part == L"_2");
     CHECK(made.mesh->bonesUsed == std::vector<std::int32_t>{1});
     CHECK(tree->nodes[4].mesh->bonesUsed == std::vector<std::int32_t>{1, 0}); // Mesh1's, as it was
-    // GOB's third child is Bone0, whose fourth, after its turn, scale and Bone1, is the new node.
-    const gff4::Struct node = after->Root()->Structs(6999)[0].Structs(6999)[2].Structs(6999)[3];
+    // GOB's third child is Bone0, whose last, after its own, is the new node.
+    const gff4::Struct node = after->Root()->Structs(6999)[0].Structs(6999)[2].Structs(6999).back();
     CHECK(node.Structs(6999)[0].String(6049) == L"BaseLight"); // Mesh1's attribute
 
     // Horn's places through its (1, 0, 0) and Bone0's turn and scale: (0, 2, 0), (0, 4, 0), (-2, 2, 0)
@@ -412,26 +412,91 @@ TEST_CASE("a new mesh node is not written like no mesh, under no node, or for no
     std::optional<gff4::File> meshFile;
     const std::optional<model::Mesh> mesh = Read(meshBytes, meshFile);
     REQUIRE(mesh);
-    model::MeshNode good;
+    model::NewNode good;
     good.parent = 0;
     good.name = L"Second";
     good.mesh = model::MeshRef{.chunk = L"Cap", .material = L"ogre", .part = L"", .bonesUsed = {0}};
-    const std::vector<model::MeshNode> fine{good};
+    const std::vector<model::NewNode> fine{good};
     CHECK(model::WriteHierarchy(bytes, {}, fine, &*mesh).error.empty());
 
-    model::MeshNode unlike = good;
+    model::NewNode unlike = good;
     unlike.like = 1; // Bone0 is no mesh
-    model::MeshNode orphan = good;
+    model::NewNode orphan = good;
     orphan.parent = 9;
-    model::MeshNode chunkless = good;
-    chunkless.mesh.chunk = L"Horn";
-    model::MeshNode boneless = good;
-    boneless.mesh.bonesUsed = {3};
-    for (const model::MeshNode &bad : {unlike, orphan, chunkless, boneless})
+    model::NewNode chunkless = good;
+    chunkless.mesh->chunk = L"Horn";
+    model::NewNode boneless = good;
+    boneless.mesh->bonesUsed = {3};
+    for (const model::NewNode &bad : {unlike, orphan, chunkless, boneless})
     {
-        const std::vector<model::MeshNode> added{bad};
+        const std::vector<model::NewNode> added{bad};
         CHECK_FALSE(model::WriteHierarchy(bytes, {}, added, &*mesh).error.empty());
     }
+}
+
+TEST_CASE("a new bone takes the next bone index and exports, and a new mesh node may use it", "[model]")
+{
+    model::NewNode bone;
+    bone.parent = 1; // Bone0
+    bone.name = L"HornBone";
+    bone.translation = dao::core::Point{0, 0, 1};
+    model::NewNode mesh;
+    mesh.parent = 4; // the new bone: the model's nodes are 0 to 3
+    mesh.name = L"HornMesh";
+    mesh.mesh = model::MeshRef{.chunk = L"Cap", .material = L"horn", .part = L"", .bonesUsed = {3}};
+    const std::vector<model::NewNode> added{bone, mesh};
+    const model::Written out = model::WriteHierarchy(files::SlabModel(), {}, added);
+    REQUIRE(out.error.empty());
+
+    const std::optional<gff4::File> after = gff4::File::Parse(out.bytes);
+    REQUIRE(after);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*after);
+    REQUIRE(tree);
+    CHECK(tree->totalBones == 4);
+    CHECK(after->Root()->Get<std::uint32_t>(6275) == 5U); // the exports, 3 and the new bone's 2
+    REQUIRE(tree->nodes.size() == 6);                     // GOB, Bone0, Bone1, HornBone, HornMesh, Mesh1
+    const model::Node &made = tree->nodes[3];
+    CHECK(made.name == L"HornBone");
+    CHECK(made.parent == 1);
+    CHECK(made.bone == 3);
+    CHECK(made.translation == dao::core::Point{0, 0, 1});
+    CHECK(tree->bones == std::vector<int>{2, 1, -1, 3});
+    CHECK(tree->nodes[4].parent == 3);
+    CHECK(tree->nodes[4].mesh->bonesUsed == std::vector<std::int32_t>{3});
+
+    const gff4::Struct node = after->Root()->Structs(6999)[0].Structs(6999)[2].Structs(6999).back();
+    const std::vector<gff4::Struct> exports = node.Structs(6999);
+    REQUIRE(exports.size() == 5); // its translation's export, its rotation's, its transform, HornMesh
+    CHECK(exports[0].String(6052) == L"hornbone_translation");
+    CHECK(exports[0].Get<std::uint32_t>(6274) == 4U);
+    CHECK(exports[1].String(6052) == L"hornbone_rotation");
+    CHECK(exports[1].Get<std::uint32_t>(6274) == 3U);
+    // Bone0's own, as they were.
+    CHECK(after->Root()->Structs(6999)[0].Structs(6999)[2].Structs(6999)[0].String(6052) == L"bone0_translation");
+}
+
+TEST_CASE("a new bone is not written like no bone, like one with no exports, or past the bones", "[model]")
+{
+    const std::vector<std::byte> bytes = files::SlabModel();
+    model::NewNode bone;
+    bone.parent = 1;
+    bone.name = L"HornBone";
+    model::NewNode unlike = bone;
+    unlike.like = 3; // Mesh1
+    model::NewNode bare = bone;
+    bare.like = 2; // Bone1 exports nothing
+    model::NewNode later = bone;
+    later.parent = 4; // no new node before it
+    for (const model::NewNode &bad : {unlike, bare, later})
+    {
+        const std::vector<model::NewNode> added{bad};
+        CHECK_FALSE(model::WriteHierarchy(bytes, {}, added).error.empty());
+    }
+    model::NewNode mesh;
+    mesh.name = L"HornMesh";
+    mesh.mesh = model::MeshRef{.chunk = L"Cap", .material = L"horn", .part = L"", .bonesUsed = {4}};
+    const std::vector<model::NewNode> past{bone, mesh}; // one new bone makes 3 the last
+    CHECK_FALSE(model::WriteHierarchy(bytes, {}, past).error.empty());
 }
 
 TEST_CASE("the ogre in game/models, when there, takes a second body as a new chunk and mesh node", "[model]")
@@ -472,12 +537,12 @@ TEST_CASE("the ogre in game/models, when there, takes a second body as a new chu
     REQUIRE(tree);
     const auto first = std::ranges::find(tree->nodes, "mshh", &model::Node::kind);
     REQUIRE(first != tree->nodes.end());
-    model::MeshNode node;
+    model::NewNode node;
     node.parent = first->parent;
     node.name = L"Second";
     node.mesh = *first->mesh;
-    node.mesh.chunk = L"Second";
-    const std::vector<model::MeshNode> added{node};
+    node.mesh->chunk = L"Second";
+    const std::vector<model::NewNode> added{node};
     const model::Written hierarchy = model::WriteHierarchy(treeBytes, {}, added, &*after);
     REQUIRE(hierarchy.error.empty());
     const std::optional<gff4::File> grown = gff4::File::Parse(hierarchy.bytes);
@@ -486,6 +551,23 @@ TEST_CASE("the ogre in game/models, when there, takes a second body as a new chu
     REQUIRE(read);
     CHECK(read->nodes.size() == tree->nodes.size() + 1);
     CHECK(std::ranges::count(read->nodes, "mshh", &model::Node::kind) == 2);
+
+    // And a bone under its first, whose exports follow the model's 224.
+    model::NewNode bone;
+    bone.parent = tree->bones[0];
+    bone.name = L"Extra";
+    const std::vector<model::NewNode> bones{bone};
+    const model::Written boned = model::WriteHierarchy(treeBytes, {}, bones);
+    REQUIRE(boned.error.empty());
+    const std::optional<gff4::File> boneFile = gff4::File::Parse(boned.bytes);
+    REQUIRE(boneFile);
+    const std::optional<model::Hierarchy> withBone = model::HierarchyOf(*boneFile);
+    REQUIRE(withBone);
+    CHECK(withBone->totalBones == tree->totalBones + 1);
+    CHECK(boneFile->Root()->Get<std::uint32_t>(6275) == treeFile->Root()->Get<std::uint32_t>(6275).value_or(0) + 2);
+    const int extra = withBone->bones.back();
+    REQUIRE(extra >= 0);
+    CHECK(withBone->nodes[static_cast<std::size_t>(extra)].name == L"Extra");
 }
 
 TEST_CASE("the game's meshes in game/models, when there, come back the same bytes as read", "[model]")

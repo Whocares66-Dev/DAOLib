@@ -239,27 +239,37 @@ struct NodeEdit
     std::optional<std::vector<std::int32_t>> bonesUsed; // a mesh node's, the whole list
 };
 
-// A new mesh node, for WriteHierarchy: a chunk of the mesh drawn under a node.
-struct MeshNode
+// A new node, for WriteHierarchy: a mesh node, drawing a chunk of the mesh,
+// or with no mesh, a bone. A new bone takes the next bone index after the
+// model's and the new bones before it, and exports its rotation and
+// translation as "<name>_rotation" and "<name>_translation", as the game's
+// bones do; no animation names them, so it keeps its own transform under its
+// parent.
+struct NewNode
 {
-    int parent = -1; // its parent's index in Hierarchy::nodes, -1 for the model's top
-    int like = -1;   // the mesh node whose other settings it takes (shadows, attributes), -1 for the first
+    // Its parent's index in Hierarchy::nodes, -1 for the model's top; past
+    // them, a new node given before it, Hierarchy::nodes.size() the first.
+    int parent = -1;
+    // The node whose other settings it takes, -1 for the first of its kind: a mesh node's shadows and
+    // attributes, a bone's sound.
+    int like = -1;
     std::wstring name;
     Point translation{};
     Quaternion rotation{0, 0, 0, 1};
-    MeshRef mesh; // its chunk, material, id (part) and bones
+    std::optional<MeshRef> mesh; // its chunk, material, id (part) and bones; none for a bone
 };
 
 // Returns a hierarchy file (.mmh) with the given nodes changed and the new
-// mesh nodes added, each after its parent's other children. With `written`,
-// the mesh as written for it, each bounding box in the file is made again:
-// the box of the chunks of the mesh nodes under its node, through the
+// nodes added, each after its parent's other children. With `written`, the
+// mesh as written for it, each bounding box in the file is made again: the
+// box of the chunks of the mesh nodes under its node, through the
 // transforms between. Fails on a node that is not in the file, a transform
 // the node does not already keep, a material or bone list on a node that is
-// no mesh, more than kMostBonesInChunk bones or a bone the model has not, a
-// new node's chunk that `written` has not, or a model that keeps mesh data
-// of its own ("msgr", the banners').
+// no mesh, more than kMostBonesInChunk bones or a bone the model has not
+// (its new bones counted), a new node's chunk that `written` has not, a
+// node like it that is not of its kind or lacks a transform or exports, or a
+// model that keeps mesh data of its own ("msgr", the banners').
 Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits,
-                       std::span<const MeshNode> added = {}, const Mesh *written = nullptr);
+                       std::span<const NewNode> added = {}, const Mesh *written = nullptr);
 
 } // namespace dao::core::model

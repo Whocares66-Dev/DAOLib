@@ -166,11 +166,14 @@ inline std::vector<std::byte> SlabMesh(bool cut = false)
 }
 
 // The model "slab.mmh" of the mesh "slab.msh", with three bones: GOB, moved
-// by (0, 0, 1), holding Bone0 (bone 1, turned a quarter about z, scale 2)
-// with Bone1 under it (bone 0, moved by (0, 1, 0)), then the mesh node Mesh1
+// by (0, 0, 1), holding Bone0 (bone 1, turned a quarter about z, scale 2,
+// and as the game's bones are, its exports "bone0_translation" and
+// "bone0_rotation", controllers 1 and 0, and a translation, here none) with
+// Bone1 under it (bone 0, moved by (0, 1, 0)), then the mesh node Mesh1
 // (chunk Body, material ogre, part _1, its blend indices counting in bones 1
 // and 0, and as the game's mesh nodes are, an attribute "BaseLight" and a
-// transform, here none), then an animation export, which is no node. GOB keeps a bounding
+// transform, here none), then GOB's export "gob_gobrotation", controller 2,
+// which is no node. Its total of exports is 3. GOB keeps a bounding
 // box, from (-9, -9, -9) to (9, 9, 9) until one is made again. With
 // `banner`, GOB also holds an "msgr", mesh data of the model's own.
 inline std::vector<std::byte> SlabModel(bool banner = false)
@@ -178,25 +181,30 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     namespace gff4 = dao::core::gff4;
     const std::uint16_t children = gff4::kList | gff4::kReference;
     dao::test::Builder b = dao::test::Start(
-        "MMH ",
-        {{"mdlh", 16, {{6000, 14, 0, 0}, {6005, 14, 0, 4}, {6256, 4, 0, 8}, {6999, dao::test::kGeneric, children, 12}}},
-         {"node", 12, {{6000, 14, 0, 0}, {6254, 5, 0, 4}, {6999, dao::test::kGeneric, children, 8}}},
-         {"mshh",
-          24,
-          {{6000, 14, 0, 0},
-           {6001, 14, 0, 4},
-           {6004, 14, 0, 8},
-           {6006, 14, 0, 12},
-           {6255, 5, gff4::kList, 16},
-           {6999, dao::test::kGeneric, children, 20}}},
-         {"trsl", 16, {{6047, 12, 0, 0}}},
-         {"rota", 16, {{6048, 13, 0, 0}}},
-         {"scal", 4, {{6278, 8, 0, 0}}},
-         {"xprt", 4, {{6290, 4, 0, 0}}},
-         {"bbox", 32, {{6054, 12, 0, 0}, {6055, 12, 0, 16}}},
-         {"msgr", 4, {{6000, 14, 0, 0}}},
-         {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}}});
-    const std::size_t root = dao::test::Struct(b, 16);
+        "MMH ", {{"mdlh",
+                  20,
+                  {{6000, 14, 0, 0},
+                   {6005, 14, 0, 4},
+                   {6256, 4, 0, 8},
+                   {6999, dao::test::kGeneric, children, 12},
+                   {6275, 4, 0, 16}}},
+                 {"node", 12, {{6000, 14, 0, 0}, {6254, 5, 0, 4}, {6999, dao::test::kGeneric, children, 8}}},
+                 {"mshh",
+                  24,
+                  {{6000, 14, 0, 0},
+                   {6001, 14, 0, 4},
+                   {6004, 14, 0, 8},
+                   {6006, 14, 0, 12},
+                   {6255, 5, gff4::kList, 16},
+                   {6999, dao::test::kGeneric, children, 20}}},
+                 {"trsl", 16, {{6047, 12, 0, 0}}},
+                 {"rota", 16, {{6048, 13, 0, 0}}},
+                 {"scal", 4, {{6278, 8, 0, 0}}},
+                 {"xprt", 16, {{6238, 4, 0, 0}, {6052, 14, 0, 4}, {6053, 4, 0, 8}, {6274, 4, 0, 12}}},
+                 {"bbox", 32, {{6054, 12, 0, 0}, {6055, 12, 0, 16}}},
+                 {"msgr", 4, {{6000, 14, 0, 0}}},
+                 {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}}});
+    const std::size_t root = dao::test::Struct(b, 20);
     const std::size_t gob = dao::test::Struct(b, 12);
     const std::size_t gobAt = dao::test::Struct(b, 16);
     const std::size_t bone0 = dao::test::Struct(b, 12);
@@ -205,7 +213,10 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     const std::size_t bone1 = dao::test::Struct(b, 12);
     const std::size_t bone1At = dao::test::Struct(b, 16);
     const std::size_t mesh = dao::test::Struct(b, 24);
-    const std::size_t exported = dao::test::Struct(b, 4);
+    const std::size_t exported = dao::test::Struct(b, 16);
+    const std::size_t bone0Moves = dao::test::Struct(b, 16);
+    const std::size_t bone0Turns = dao::test::Struct(b, 16);
+    const std::size_t bone0At = dao::test::Struct(b, 16);
     const std::size_t box = dao::test::Struct(b, 32);
     const std::size_t meshData = dao::test::Struct(b, 4);
     const std::size_t meshLight = dao::test::Struct(b, 8);
@@ -223,6 +234,19 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     b.U32(root + 4, b.String(u"slab.msh"));
     b.U32(root + 8, 3);
     b.U32(root + 12, dao::test::Children(b, {{1, gob}}));
+    b.U32(root + 16, 3);
+    // An export as the game's are: a translation's controller type 0 and tag type 1, a rotation's 2 and 0.
+    const auto exports = [&](std::size_t at, const char16_t *name, std::uint32_t type, std::uint32_t tag,
+                             std::uint32_t index) {
+        b.U32(at, tag);
+        b.U32(at + 4, b.String(name));
+        b.U32(at + 8, type);
+        b.U32(at + 12, index);
+    };
+    exports(exported, u"gob_gobrotation", 8, 4, 2);
+    exports(bone0Moves, u"bone0_translation", 0, 1, 1);
+    exports(bone0Turns, u"bone0_rotation", 2, 0, 0);
+    dao::test::Floats(b, bone0At, {0, 0, 0, 1});
     b.U32(gob, b.String(u"GOB"));
     b.U32(gob + 4, 0xFFFFFFFF);
     std::vector<std::pair<std::uint16_t, std::size_t>> gobChildren{
@@ -234,7 +258,9 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     b.U32(gob + 8, dao::test::Children(b, gobChildren));
     b.U32(bone0, b.String(u"Bone0"));
     b.U32(bone0 + 4, 1);
-    b.U32(bone0 + 8, dao::test::Children(b, {{4, bone0Turn}, {5, bone0Scale}, {1, bone1}}));
+    b.U32(bone0 + 8,
+          dao::test::Children(
+              b, {{6, bone0Moves}, {6, bone0Turns}, {3, bone0At}, {4, bone0Turn}, {5, bone0Scale}, {1, bone1}}));
     b.U32(bone1, b.String(u"Bone1"));
     b.U32(bone1 + 4, 0);
     b.U32(bone1 + 8, dao::test::Children(b, {{3, bone1At}}));
