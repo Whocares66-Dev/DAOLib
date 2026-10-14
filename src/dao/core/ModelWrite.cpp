@@ -2,7 +2,18 @@
 // (DAOLib #117): a mesh with chunks' vertices and triangles replaced, and a
 // hierarchy with nodes' transforms, materials and bones changed and its
 // bounding boxes made again. Both go through gff4::Editor, so nothing they do
-// not change moves.
+// not change moves. New chunks and mesh nodes are added too (DAOLib #118), for
+// a part split past a chunk's bones or a piece made in an editor: each a copy
+// of a struct the file already has, renamed and put at the end of its list.
+//
+// What a new chunk and a new mesh node must agree with, read 2026-10-14 over
+// all 17,792 .mmh the game takes and their .msh: a mesh node names its chunk
+// by name (MMHMeshGroupName); in 13,651 files the mesh nodes and the chunks
+// are in the same order, in 34 not, so the order is not what binds them. A
+// mesh node's id (MMHID) repeats within 14 files. Its children are its
+// attributes and its transform, and in 7,090 of them animation exports too,
+// which a new node does not take. Every child in the children lists is a struct (flags
+// 0x4000), none null.
 //
 // The layout a mesh is packed in again is the game's, read 2026-10-14 over
 // 3,000 of the .msh it takes (tools/gff4.py): the chunks' vertices in the
@@ -20,6 +31,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <utility>
@@ -202,6 +214,7 @@ struct Packed
     std::uint32_t minIndex = 0;
     std::uint32_t verticesReferenced = 0;
     bool changed = false;
+    std::optional<std::wstring> added; // a new chunk's name
 };
 
 Packed AsItWas(const Chunk &chunk)
@@ -357,6 +370,25 @@ std::string Pack(const Chunk &original, const ChunkData &given, Packed &out)
         out = was;
     }
     return {};
+}
+
+// A new chunk, packed from nothing.
+std::string PackNew(const ChunkData &given, Packed &out)
+{
+    if (given.declaration.empty() || std::ranges::none_of(given.declaration, [](const Element &e) {
+            return e.usage == Usage::Position && e.usageIndex == 0;
+        }))
+    {
+        return "a new chunk needs a declaration with a Position";
+    }
+    const Chunk none;
+    std::string why = Layout(none, given, out);
+    why = why.empty() ? Vertices(none, given, out) : why;
+    why = why.empty() ? Triangles(none, given, out) : why;
+    out.declarationChanged = true;
+    out.changed = true;
+    out.added = given.name;
+    return why;
 }
 
 // The chunk a ChunkData is for: by its index, or by its name where no other chunk has it.
@@ -518,9 +550,19 @@ namespace
 std::string PackAll(const Mesh &mesh, std::span<const ChunkData> chunks, std::vector<Packed> &packed)
 {
     std::vector<const ChunkData *> given(mesh.chunks.size(), nullptr);
+    std::vector<std::wstring> names;
+    std::ranges::transform(mesh.chunks, std::back_inserter(names), &Chunk::name);
     for (const ChunkData &chunk : chunks)
     {
-        if (std::string why = Match(mesh, chunk, given); !why.empty())
+        if (chunk.added && (chunk.index || std::ranges::find(names, chunk.name) != names.end()))
+        {
+            return "a new chunk needs a name no other chunk has, and no index: " + Narrow(chunk.name);
+        }
+        if (chunk.added)
+        {
+            names.push_back(chunk.name);
+        }
+        else if (std::string why = Match(mesh, chunk, given); !why.empty())
         {
             return why + ": " + Narrow(chunk.name);
         }
@@ -538,11 +580,27 @@ std::string PackAll(const Mesh &mesh, std::span<const ChunkData> chunks, std::ve
         {
             return Narrow(chunk.name) + ": " + why;
         }
-        if (one.indexFormat == 1 && mesh.chunks.size() > 1)
+        packed.push_back(std::move(one));
+    }
+    for (const ChunkData &chunk : chunks)
+    {
+        if (!chunk.added)
         {
-            return Narrow(chunk.name) + ": more than 65535 vertices, which the game has only in a mesh of one chunk";
+            continue;
+        }
+        Packed one;
+        if (std::string why = PackNew(chunk, one); !why.empty())
+        {
+            return Narrow(chunk.name) + ": " + why;
         }
         packed.push_back(std::move(one));
+    }
+    for (std::size_t i = 0; i < packed.size() && packed.size() > 1; ++i)
+    {
+        if (packed[i].indexFormat == 1)
+        {
+            return Narrow(names[i]) + ": more than 65535 vertices, which the game has only in a mesh of one chunk";
+        }
     }
     return {};
 }
@@ -584,6 +642,40 @@ Buffers PackBuffers(const std::vector<Packed> &packed)
     return out;
 }
 
+// A struct for each new chunk, a copy of the first chunk's with a name of its own, put after the
+// original's in the mesh's list of them.
+std::string AddChunks(gff4::Editor &editor, const gff4::Struct &root, std::vector<gff4::Struct> &structs,
+                      const std::vector<Packed> &packed)
+{
+    const std::size_t original = structs.size();
+    if (original == packed.size())
+    {
+        return {};
+    }
+    const gff4::Field *list = root.Shape().Find(kMeshChunks);
+    if (original == 0 || list == nullptr || (list->flags & gff4::kReference) == 0)
+    {
+        return "the mesh has no chunk kept as the game's are to make a new one like";
+    }
+    std::vector<std::byte> references;
+    for (std::size_t i = original; i < packed.size(); ++i)
+    {
+        const std::optional<gff4::Struct> chunk = editor.Add(structs[0]);
+        if (!chunk || !editor.SetString(*chunk, kName, *packed[i].added))
+        {
+            return "a new chunk could not be made";
+        }
+        structs.push_back(*chunk);
+        references.resize(references.size() + 4);
+        Put(references, references.size() - 4, editor.Reference(*chunk));
+    }
+    if (!editor.Extend(root, kMeshChunks, references, static_cast<std::uint32_t>(packed.size() - original)))
+    {
+        return "the new chunks could not be listed";
+    }
+    return {};
+}
+
 // The buffers and every chunk's fields written into the file; a changed chunk's bounds made again
 // from its vertices as packed.
 std::string WriteAll(gff4::Editor &editor, const gff4::File &file, const Mesh &mesh, const std::vector<Packed> &packed,
@@ -598,14 +690,18 @@ std::string WriteAll(gff4::Editor &editor, const gff4::File &file, const Mesh &m
     {
         return "the mesh's buffers are not kept as the game's are";
     }
-    const std::vector<gff4::Struct> structs = root->Structs(kMeshChunks);
+    std::vector<gff4::Struct> structs = root->Structs(kMeshChunks);
+    if (std::string why = AddChunks(editor, *root, structs, packed); !why.empty())
+    {
+        return why;
+    }
     for (std::size_t i = 0; i < packed.size(); ++i)
     {
         const auto [vertexOffset, startIndex] = buffers.places[i];
         std::string why = WriteChunk(editor, file, structs[i], packed[i], vertexOffset, startIndex);
         if (why.empty() && packed[i].changed)
         {
-            Chunk written = mesh.chunks[i];
+            Chunk written = i < mesh.chunks.size() ? mesh.chunks[i] : Chunk{};
             written.declaration = packed[i].declaration;
             written.vertexSize = packed[i].vertexSize;
             written.vertexCount = packed[i].vertexCount;
@@ -687,7 +783,30 @@ bool HasBanner(const gff4::Struct &from, std::size_t deep)
     return std::ranges::any_of(children, [&](const gff4::Struct &child) { return HasBanner(child, deep + 1); });
 }
 
-std::string Edit(gff4::Editor &editor, const Node &node, const gff4::Struct &at, const NodeEdit &edit)
+// A mesh node's bones, each one the model has, no more than one chunk's shaders take.
+std::string SetBones(gff4::Editor &editor, const gff4::Struct &at, const std::vector<std::int32_t> &bones,
+                     std::uint32_t totalBones, gff4::Place place)
+{
+    if (bones.size() > kMostBonesInChunk)
+    {
+        return "more than " + std::to_string(kMostBonesInChunk) +
+               " bones in one chunk; the game's own meshes use at most " + std::to_string(kMostBonesInChunk);
+    }
+    if (std::ranges::any_of(bones, [&](std::int32_t b) { return b < 0 || std::cmp_greater_equal(b, totalBones); }))
+    {
+        return "a bone the model has not; it has " + std::to_string(totalBones);
+    }
+    std::vector<std::byte> list(bones.size() * 4);
+    std::memcpy(list.data(), bones.data(), list.size());
+    if (!editor.SetList(at, kBonesUsed, list, static_cast<std::uint32_t>(bones.size()), place))
+    {
+        return "the node's bones are not kept as the game's are";
+    }
+    return {};
+}
+
+std::string Edit(gff4::Editor &editor, const Node &node, const gff4::Struct &at, const NodeEdit &edit,
+                 std::uint32_t totalBones)
 {
     const auto transform = [&](std::string_view label, std::uint32_t field, std::span<const float> values) {
         const std::optional<gff4::Struct> child = ChildOf(at, label);
@@ -724,20 +843,95 @@ std::string Edit(gff4::Editor &editor, const Node &node, const gff4::Struct &at,
     }
     if (why.empty() && edit.bonesUsed)
     {
-        if (edit.bonesUsed->size() > kMostBonesInChunk)
-        {
-            return "more than " + std::to_string(kMostBonesInChunk) +
-                   " bones in one chunk; the game's own meshes use at most " + std::to_string(kMostBonesInChunk);
-        }
-        std::vector<std::byte> list(edit.bonesUsed->size() * 4);
-        std::memcpy(list.data(), edit.bonesUsed->data(), list.size());
-        if (!editor.SetList(at, kBonesUsed, list, static_cast<std::uint32_t>(edit.bonesUsed->size()),
-                            gff4::Place::InPlaceIfFits))
-        {
-            why = "the node's bones are not kept as the game's are";
-        }
+        why = SetBones(editor, at, *edit.bonesUsed, totalBones, gff4::Place::InPlaceIfFits);
     }
     return why;
+}
+
+// A new mesh node's struct: a copy of the node it is like, with its own names, bones, and
+// transform, and the attributes of the node it is like; no animation exports.
+std::optional<gff4::Struct> MakeMeshNode(gff4::Editor &editor, const gff4::Struct &like, const MeshNode &node,
+                                         std::uint32_t totalBones, std::string &why)
+{
+    const std::optional<gff4::Struct> trsl = ChildOf(like, "trsl");
+    const std::optional<gff4::Struct> rota = ChildOf(like, "rota");
+    std::optional<gff4::Struct> made = editor.Add(like);
+    std::optional<gff4::Struct> t = trsl ? editor.Add(*trsl) : std::nullopt;
+    std::optional<gff4::Struct> r = rota ? editor.Add(*rota) : std::nullopt;
+    const std::array<float, 4> translation{node.translation[0], node.translation[1], node.translation[2], 1};
+    if (!made || !t || !r || !editor.SetFloats(*t, kTranslation, translation) ||
+        !editor.SetFloats(*r, kRotation, node.rotation) || !editor.SetString(*made, kMmhName, node.name) ||
+        !editor.SetString(*made, kMeshGroupName, node.mesh.chunk) ||
+        !editor.SetString(*made, kMaterialObject, node.mesh.material) ||
+        !editor.SetString(*made, kNodeId, node.mesh.part))
+    {
+        why = "the mesh node it is like is not kept as the game's are";
+        return std::nullopt;
+    }
+    if (why = SetBones(editor, *made, node.mesh.bonesUsed, totalBones, gff4::Place::Append); !why.empty())
+    {
+        return std::nullopt;
+    }
+    // In the order the ogre's Mesh1 keeps them: its attributes, then its transform.
+    std::vector<gff4::Struct> kept;
+    std::ranges::copy_if(like.Structs(kChildren), std::back_inserter(kept),
+                         [](const gff4::Struct &child) { return child.Label() == "attr"; });
+    kept.push_back(*t);
+    kept.push_back(*r);
+    std::vector<std::byte> children(kept.size() * 8);
+    for (std::size_t i = 0; i < kept.size(); ++i)
+    {
+        Put(children, i * 8, static_cast<std::uint32_t>(kept[i].Index()) | (gff4::kStruct << 16));
+        Put(children, (i * 8) + 4, editor.Reference(kept[i]));
+    }
+    if (!editor.SetList(*made, kChildren, children, static_cast<std::uint32_t>(kept.size()), gff4::Place::Append))
+    {
+        why = "the new node's children could not be written";
+        return std::nullopt;
+    }
+    return made;
+}
+
+// Each new mesh node made and put among its parent's children.
+std::string AddMeshNodes(gff4::Editor &editor, const gff4::File &file, const Hierarchy &tree,
+                         const std::vector<gff4::Struct> &structs, std::span<const MeshNode> added, const Mesh *written)
+{
+    const auto first = std::ranges::find(tree.nodes, "mshh", &Node::kind);
+    for (const MeshNode &node : added)
+    {
+        const int like = node.like >= 0 ? node.like : static_cast<int>(first - tree.nodes.begin());
+        const auto known = [&](int i) { return i >= 0 && static_cast<std::size_t>(i) < structs.size(); };
+        const std::string what = "new mesh node " + Narrow(node.name) + ": ";
+        if (!known(like) || tree.nodes[static_cast<std::size_t>(like)].kind != "mshh")
+        {
+            return what + "no mesh node to make it like";
+        }
+        if (node.parent != -1 && !known(node.parent))
+        {
+            return what + "no node " + std::to_string(node.parent) + " in the model to put it under";
+        }
+        if (written != nullptr &&
+            std::ranges::find(written->chunks, node.mesh.chunk, &Chunk::name) == written->chunks.end())
+        {
+            return what + "no chunk " + Narrow(node.mesh.chunk) + " in the mesh";
+        }
+        std::string why;
+        const std::optional<gff4::Struct> made =
+            MakeMeshNode(editor, structs[static_cast<std::size_t>(like)], node, tree.totalBones, why);
+        if (!made)
+        {
+            return what + why;
+        }
+        std::vector<std::byte> entry(8);
+        Put(entry, 0, static_cast<std::uint32_t>(made->Index()) | (gff4::kStruct << 16));
+        Put(entry, 4, editor.Reference(*made));
+        const gff4::Struct parent = node.parent == -1 ? *file.Root() : structs[static_cast<std::size_t>(node.parent)];
+        if (!editor.Extend(parent, kChildren, entry, 1))
+        {
+            return what + "its parent's children could not be written";
+        }
+    }
+    return {};
 }
 
 // A point of a mesh node's space carried to the space of its ancestor `top`, through the
@@ -816,7 +1010,8 @@ std::string WriteBoxes(gff4::Editor &editor, const Hierarchy &tree, const std::v
 
 } // namespace
 
-Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits, const Mesh *written)
+Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits,
+                       std::span<const MeshNode> added, const Mesh *written)
 {
     Written out;
     const std::optional<gff4::File> file = gff4::File::Parse(original);
@@ -841,15 +1036,19 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
             return out;
         }
         const auto index = static_cast<std::size_t>(edit.node);
-        if (std::string why = Edit(editor, tree->nodes[index], structs[index], edit); !why.empty())
+        if (std::string why = Edit(editor, tree->nodes[index], structs[index], edit, tree->totalBones); !why.empty())
         {
             out.error = "node " + std::to_string(edit.node) + ": " + why;
             return out;
         }
     }
+    if (out.error = AddMeshNodes(editor, *file, *tree, structs, added, written); !out.error.empty())
+    {
+        return out;
+    }
     if (written != nullptr)
     {
-        // The boxes are through the transforms as edited.
+        // The boxes are through the transforms as edited, the new nodes' among them.
         Hierarchy edited = *tree;
         for (const NodeEdit &edit : edits)
         {
@@ -857,6 +1056,17 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
             node.translation = edit.translation.value_or(node.translation);
             node.rotation = edit.rotation.value_or(node.rotation);
             node.scale = edit.scale ? edit.scale : node.scale;
+        }
+        for (const MeshNode &node : added)
+        {
+            Node made;
+            made.name = node.name;
+            made.kind = "mshh";
+            made.parent = node.parent;
+            made.translation = node.translation;
+            made.rotation = node.rotation;
+            made.mesh = node.mesh;
+            edited.nodes.push_back(std::move(made));
         }
         if (std::string why = WriteBoxes(editor, edited, structs, *written); !why.empty())
         {

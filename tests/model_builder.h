@@ -169,7 +169,8 @@ inline std::vector<std::byte> SlabMesh(bool cut = false)
 // by (0, 0, 1), holding Bone0 (bone 1, turned a quarter about z, scale 2)
 // with Bone1 under it (bone 0, moved by (0, 1, 0)), then the mesh node Mesh1
 // (chunk Body, material ogre, part _1, its blend indices counting in bones 1
-// and 0), then an animation export, which is no node. GOB keeps a bounding
+// and 0, and as the game's mesh nodes are, an attribute "BaseLight" and a
+// transform, here none), then an animation export, which is no node. GOB keeps a bounding
 // box, from (-9, -9, -9) to (9, 9, 9) until one is made again. With
 // `banner`, GOB also holds an "msgr", mesh data of the model's own.
 inline std::vector<std::byte> SlabModel(bool banner = false)
@@ -193,7 +194,8 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
          {"scal", 4, {{6278, 8, 0, 0}}},
          {"xprt", 4, {{6290, 4, 0, 0}}},
          {"bbox", 32, {{6054, 12, 0, 0}, {6055, 12, 0, 16}}},
-         {"msgr", 4, {{6000, 14, 0, 0}}}});
+         {"msgr", 4, {{6000, 14, 0, 0}}},
+         {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}}});
     const std::size_t root = dao::test::Struct(b, 16);
     const std::size_t gob = dao::test::Struct(b, 12);
     const std::size_t gobAt = dao::test::Struct(b, 16);
@@ -206,6 +208,11 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     const std::size_t exported = dao::test::Struct(b, 4);
     const std::size_t box = dao::test::Struct(b, 32);
     const std::size_t meshData = dao::test::Struct(b, 4);
+    const std::size_t meshLight = dao::test::Struct(b, 8);
+    const std::size_t meshAt = dao::test::Struct(b, 16);
+    const std::size_t meshTurn = dao::test::Struct(b, 16);
+    dao::test::Floats(b, meshAt, {0, 0, 0, 1});
+    dao::test::Floats(b, meshTurn, {0, 0, 0, 1});
     dao::test::Floats(b, box, {-9, -9, -9, 1, 9, 9, 9, 1});
     b.U32(meshData, 0xFFFFFFFF);
     dao::test::Floats(b, gobAt, {0, 0, 1, 1});
@@ -236,7 +243,9 @@ inline std::vector<std::byte> SlabModel(bool banner = false)
     b.U32(mesh + 8, b.String(u"_1"));
     b.U32(mesh + 12, b.String(u"Body"));
     b.U32(mesh + 16, b.Numbers({1, 0}));
-    b.U32(mesh + 20, dao::test::Children(b, {}));
+    b.U32(meshLight, b.String(u"BaseLight"));
+    b.U32(meshLight + 4, b.String(u"BaseLight"));
+    b.U32(mesh + 20, dao::test::Children(b, {{9, meshLight}, {3, meshAt}, {4, meshTurn}}));
     return b.bytes;
 }
 

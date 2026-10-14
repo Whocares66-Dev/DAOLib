@@ -197,9 +197,10 @@ inline constexpr std::size_t kMostBonesInChunk = 67;
 // A chunk's new vertices and triangles, for WriteMesh.
 struct ChunkData
 {
-    std::wstring name;                // a chunk of the original, matched by name
+    std::wstring name;                // a chunk of the original, matched by name; or the new chunk's
     std::optional<std::size_t> index; // or by its place in Mesh::chunks, where names repeat
-    std::vector<Element> declaration; // empty for the original chunk's
+    bool added = false;               // a new chunk, after the original's, with a name no other chunk has
+    std::vector<Element> declaration; // empty for the original chunk's; a new chunk's own, with a Position
     // One vector a declaration element, in its order, each a value a vertex;
     // blend indices as Values too, rounded to whole numbers.
     std::vector<std::vector<Value>> values;
@@ -214,15 +215,17 @@ struct Written
 };
 
 // Returns a mesh file (.msh) with the given chunks' vertices and triangles
-// replaced and the rest kept. The shared buffers are packed again in the
-// chunks' order, each chunk's counts, offsets, index format and bounds
-// written to match; a chunk not given keeps its vertices and triangles.
-// With no chunk given, or each given as it was read, the original's bytes.
-// Fails on an unknown name or index, a name several chunks have and no index,
-// a value count that is not the vertex count, an
-// index past the vertices, a blend index of kMostBonesInChunk or more, more
-// than 65535 vertices in a mesh of several chunks, or a declaration whose
-// elements overlap or leave the vertex.
+// replaced, the chunks given as added put after the original's, and the
+// rest kept. The shared buffers are packed again in the chunks' order, each
+// chunk's counts, offsets, index format and bounds written to match; a chunk
+// not given keeps its vertices and triangles. A new chunk takes the first
+// chunk's other fields. With no chunk given, or each given as it was read,
+// the original's bytes. Fails on an unknown name or index, a name several
+// chunks have and no index, a new chunk whose name is taken or that has no
+// declaration or no Position, a value count that is not the vertex count,
+// an index past the vertices, a blend index of kMostBonesInChunk or more,
+// more than 65535 vertices in a mesh of several chunks, or a declaration
+// whose elements overlap or leave the vertex.
 Written WriteMesh(std::span<const std::byte> original, std::span<const ChunkData> chunks);
 
 // A change to one node of a hierarchy, for WriteHierarchy.
@@ -236,14 +239,27 @@ struct NodeEdit
     std::optional<std::vector<std::int32_t>> bonesUsed; // a mesh node's, the whole list
 };
 
-// Returns a hierarchy file (.mmh) with the given nodes changed. With
-// `written`, the mesh as written for it, each bounding box in the file is
-// made again: the box of the chunks of the mesh nodes under its node,
-// through the transforms between. Fails on a node that is not in the file,
-// a transform the node does not already keep, a material or bone list on a
-// node that is no mesh, more than kMostBonesInChunk bones, or a model that
-// keeps mesh data of its own ("msgr", the banners').
+// A new mesh node, for WriteHierarchy: a chunk of the mesh drawn under a node.
+struct MeshNode
+{
+    int parent = -1; // its parent's index in Hierarchy::nodes, -1 for the model's top
+    int like = -1;   // the mesh node whose other settings it takes (shadows, attributes), -1 for the first
+    std::wstring name;
+    Point translation{};
+    Quaternion rotation{0, 0, 0, 1};
+    MeshRef mesh; // its chunk, material, id (part) and bones
+};
+
+// Returns a hierarchy file (.mmh) with the given nodes changed and the new
+// mesh nodes added, each after its parent's other children. With `written`,
+// the mesh as written for it, each bounding box in the file is made again:
+// the box of the chunks of the mesh nodes under its node, through the
+// transforms between. Fails on a node that is not in the file, a transform
+// the node does not already keep, a material or bone list on a node that is
+// no mesh, more than kMostBonesInChunk bones or a bone the model has not, a
+// new node's chunk that `written` has not, or a model that keeps mesh data
+// of its own ("msgr", the banners').
 Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits,
-                       const Mesh *written = nullptr);
+                       std::span<const MeshNode> added = {}, const Mesh *written = nullptr);
 
 } // namespace dao::core::model

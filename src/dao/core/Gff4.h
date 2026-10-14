@@ -133,6 +133,11 @@ class Struct
     {
         return at_;
     }
+    // Its template's index in the file's templates: a generic list's element names it.
+    std::size_t Index() const
+    {
+        return template_;
+    }
 
   private:
     std::optional<std::size_t> Slot(std::uint32_t label, Type type) const;
@@ -218,6 +223,20 @@ class Editor
     // as the list keeps them (a list of structs in place, its structs').
     bool SetList(const Struct &in, std::uint32_t label, std::span<const std::byte> elements, std::uint32_t count,
                  Place place);
+    // Adds `count` elements after a list's own, `elements` their bytes as the
+    // list keeps them (4 a reference, 8 a generic element). The whole list is
+    // appended to the data and the field pointed at it; the old one is left.
+    bool Extend(const Struct &in, std::uint32_t label, std::span<const std::byte> elements, std::uint32_t count);
+    // Appends a copy of a struct, its references still pointing where its
+    // own do. Returns the copy, for this Editor's Set calls: the File reads
+    // nothing of it. Nothing for a struct that runs out of the bytes.
+    std::optional<Struct> Add(const Struct &like);
+    // Returns a struct's offset from the start of the data, which a
+    // reference to it holds.
+    std::uint32_t Reference(const Struct &to) const
+    {
+        return static_cast<std::uint32_t>(to.Offset() - data_);
+    }
 
     const std::vector<std::byte> &Bytes() const
     {
@@ -228,6 +247,7 @@ class Editor
     std::optional<std::size_t> Slot(const Struct &in, std::uint32_t label, std::uint16_t &type) const;
     std::uint32_t Append(std::span<const std::byte> data);
 
+    const File *file_;
     std::size_t data_;
     std::vector<std::byte> bytes_;
 };

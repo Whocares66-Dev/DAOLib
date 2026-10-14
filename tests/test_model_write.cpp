@@ -224,7 +224,7 @@ TEST_CASE("a hierarchy's nodes are changed in place and its boxes made again fro
     edits[1].node = 3; // Mesh1
     edits[1].material = L"ogre_red";
     edits[1].bonesUsed = std::vector<std::int32_t>{0, 1, 2};
-    const model::Written written = model::WriteHierarchy(bytes, edits, &*mesh);
+    const model::Written written = model::WriteHierarchy(bytes, edits, {}, &*mesh);
     REQUIRE(written.error.empty());
 
     const std::optional<gff4::File> after = gff4::File::Parse(written.bytes);
@@ -259,7 +259,233 @@ TEST_CASE("a hierarchy is not written for a node it lacks, a transform a node do
     edits[0].node = 3;
     edits[0].bonesUsed = std::vector<std::int32_t>(68, 0);
     CHECK_FALSE(model::WriteHierarchy(bytes, edits).error.empty());
+    edits[0].bonesUsed = std::vector<std::int32_t>{3}; // the model has bones 0 to 2
+    CHECK_FALSE(model::WriteHierarchy(bytes, edits).error.empty());
     CHECK_FALSE(model::WriteHierarchy(files::SlabModel(true), {}).error.empty());
+}
+
+TEST_CASE("an editor adds a struct and lengthens a list, and leaves what was there", "[model][gff4]")
+{
+    const std::vector<std::byte> bytes = files::SlabMesh();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    gff4::Editor editor(*file);
+    const gff4::Struct body = file->Root()->Structs(8021)[0];
+    const std::optional<gff4::Struct> copy = editor.Add(body);
+    REQUIRE(copy);
+    CHECK(editor.SetNumber(*copy, 8001, 9));
+    std::vector<std::byte> reference(4);
+    const std::uint32_t to = editor.Reference(*copy);
+    std::memcpy(reference.data(), &to, 4);
+    CHECK(editor.Extend(*file->Root(), 8021, reference, 1));
+    CHECK_FALSE(editor.Extend(*file->Root(), 2, reference, 1)); // a string is no list
+
+    const std::vector<std::byte> after = editor.Bytes();
+    const std::optional<gff4::File> edited = gff4::File::Parse(after);
+    REQUIRE(edited);
+    const std::vector<gff4::Struct> chunks = edited->Root()->Structs(8021);
+    REQUIRE(chunks.size() == 3);
+    CHECK(chunks[0].Get<std::uint32_t>(8001) == 3U);
+    CHECK(chunks[2].Get<std::uint32_t>(8001) == 9U);
+    CHECK(chunks[2].String(2) == L"Body"); // the copy's string is the original's
+}
+
+namespace
+{
+
+// A new chunk "Horn": three places (0, 0, 0), (1, 0, 0) and (0, 1, 0) as three floats, one triangle.
+model::ChunkData Horn()
+{
+    return model::ChunkData{
+        .name = L"Horn",
+        .index = std::nullopt,
+        .added = true,
+        .declaration = {model::Element{.offset = 0, .format = model::Format::Float3, .usage = model::Usage::Position}},
+        .values = {{{0, 0, 0, 1}, {1, 0, 0, 1}, {0, 1, 0, 1}}},
+        .indices = {0, 1, 2}};
+}
+
+} // namespace
+
+TEST_CASE("a new chunk is put after the original's, packed and bounded as theirs are", "[model]")
+{
+    const std::vector<std::byte> bytes = files::SlabMesh();
+    const std::vector<model::ChunkData> given{Horn()};
+    const model::Written written = model::WriteMesh(bytes, given);
+    REQUIRE(written.error.empty());
+
+    std::optional<gff4::File> after;
+    const std::optional<model::Mesh> read = Read(written.bytes, after);
+    REQUIRE(read);
+    REQUIRE(read->chunks.size() == 3);
+    CHECK(read->chunks[0].declaration.size() == 7); // Body's own declaration, not the new chunk's
+    CHECK(model::Indices(read->chunks[1]) == std::vector<std::uint32_t>{1, 2, 2});
+    const model::Chunk &horn = read->chunks[2];
+    CHECK(horn.name == L"Horn");
+    CHECK(horn.vertexSize == 12);
+    CHECK(horn.vertexCount == 3);
+    CHECK(horn.vertexOffset == 208); // after Cap's 36 bytes at 160, padded
+    CHECK(horn.startIndex == 6);
+    CHECK(model::Indices(horn) == std::vector<std::uint32_t>{0, 1, 2});
+    CHECK(model::Floats(horn, horn.declaration[0])[2][1] == Approx(1));
+    const std::optional<gff4::Struct> bounds = after->Root()->Structs(8021)[2].Child(8020);
+    REQUIRE(bounds);
+    CHECK(bounds->Floats(8018) == std::vector<float>{1, 1, 0, 1});
+    const std::optional<gff4::Struct> bodyBounds = after->Root()->Structs(8021)[0].Child(8020);
+    CHECK(bodyBounds->Floats(8018) == std::vector<float>{2, 0, 0, 1}); // Body's, as it was
+}
+
+TEST_CASE("a new chunk is not written with a name taken, an index, or no place", "[model]")
+{
+    const std::vector<std::byte> bytes = files::SlabMesh();
+    model::ChunkData taken = Horn();
+    taken.name = L"Cap";
+    model::ChunkData indexed = Horn();
+    indexed.index = 0;
+    model::ChunkData undeclared = Horn();
+    undeclared.declaration.clear();
+    model::ChunkData placeless = Horn();
+    placeless.declaration[0].usage = model::Usage::Normal;
+    for (const model::ChunkData &bad : {taken, indexed, undeclared, placeless})
+    {
+        const std::vector<model::ChunkData> given{bad};
+        CHECK_FALSE(model::WriteMesh(bytes, given).error.empty());
+    }
+    const std::vector<model::ChunkData> twice{Horn(), Horn()};
+    CHECK_FALSE(model::WriteMesh(bytes, twice).error.empty());
+}
+
+TEST_CASE("a new mesh node is put under its parent, like another, and in the boxes", "[model]")
+{
+    const std::vector<std::byte> meshBytes = files::SlabMesh();
+    const std::vector<model::ChunkData> given{Horn()};
+    const model::Written mesh = model::WriteMesh(meshBytes, given);
+    REQUIRE(mesh.error.empty());
+    std::optional<gff4::File> meshFile;
+    const std::optional<model::Mesh> written = Read(mesh.bytes, meshFile);
+    REQUIRE(written);
+
+    model::MeshNode horn;
+    horn.parent = 1; // Bone0, turned a quarter about z and scaled by 2
+    horn.name = L"HornMesh";
+    horn.translation = dao::core::Point{1, 0, 0};
+    horn.mesh = model::MeshRef{.chunk = L"Horn", .material = L"horn", .part = L"_2", .bonesUsed = {1}};
+    const std::vector<model::MeshNode> added{horn};
+    const model::Written out = model::WriteHierarchy(files::SlabModel(), {}, added, &*written);
+    REQUIRE(out.error.empty());
+
+    const std::optional<gff4::File> after = gff4::File::Parse(out.bytes);
+    REQUIRE(after);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*after);
+    REQUIRE(tree);
+    REQUIRE(tree->nodes.size() == 5);
+    const model::Node &made = tree->nodes[3]; // after Bone0's other descendant, Bone1
+    CHECK(made.name == L"HornMesh");
+    CHECK(made.kind == "mshh");
+    CHECK(made.parent == 1);
+    CHECK(made.translation == dao::core::Point{1, 0, 0});
+    REQUIRE(made.mesh);
+    CHECK(made.mesh->chunk == L"Horn");
+    CHECK(made.mesh->material == L"horn");
+    CHECK(made.mesh->part == L"_2");
+    CHECK(made.mesh->bonesUsed == std::vector<std::int32_t>{1});
+    CHECK(tree->nodes[4].mesh->bonesUsed == std::vector<std::int32_t>{1, 0}); // Mesh1's, as it was
+    // GOB's third child is Bone0, whose fourth, after its turn, scale and Bone1, is the new node.
+    const gff4::Struct node = after->Root()->Structs(6999)[0].Structs(6999)[2].Structs(6999)[3];
+    CHECK(node.Structs(6999)[0].String(6049) == L"BaseLight"); // Mesh1's attribute
+
+    // Horn's places through its (1, 0, 0) and Bone0's turn and scale: (0, 2, 0), (0, 4, 0), (-2, 2, 0)
+    // and its box's fourth corner (-2, 4, 0); with Body's (0, 0, 0) to (2, 0, 0).
+    const auto children = after->Root()->Structs(6999)[0].Structs(6999);
+    const auto box = std::ranges::find_if(children, [](const gff4::Struct &s) { return s.Label() == "bbox"; });
+    REQUIRE(box != children.end());
+    CHECK(box->Floats(6054)[0] == Approx(-2));
+    CHECK(box->Floats(6054)[1] == Approx(0).margin(1e-5));
+    CHECK(box->Floats(6055)[0] == Approx(2));
+    CHECK(box->Floats(6055)[1] == Approx(4));
+}
+
+TEST_CASE("a new mesh node is not written like no mesh, under no node, or for no chunk", "[model]")
+{
+    const std::vector<std::byte> bytes = files::SlabModel();
+    const std::vector<std::byte> meshBytes = files::SlabMesh();
+    std::optional<gff4::File> meshFile;
+    const std::optional<model::Mesh> mesh = Read(meshBytes, meshFile);
+    REQUIRE(mesh);
+    model::MeshNode good;
+    good.parent = 0;
+    good.name = L"Second";
+    good.mesh = model::MeshRef{.chunk = L"Cap", .material = L"ogre", .part = L"", .bonesUsed = {0}};
+    const std::vector<model::MeshNode> fine{good};
+    CHECK(model::WriteHierarchy(bytes, {}, fine, &*mesh).error.empty());
+
+    model::MeshNode unlike = good;
+    unlike.like = 1; // Bone0 is no mesh
+    model::MeshNode orphan = good;
+    orphan.parent = 9;
+    model::MeshNode chunkless = good;
+    chunkless.mesh.chunk = L"Horn";
+    model::MeshNode boneless = good;
+    boneless.mesh.bonesUsed = {3};
+    for (const model::MeshNode &bad : {unlike, orphan, chunkless, boneless})
+    {
+        const std::vector<model::MeshNode> added{bad};
+        CHECK_FALSE(model::WriteHierarchy(bytes, {}, added, &*mesh).error.empty());
+    }
+}
+
+TEST_CASE("the ogre in game/models, when there, takes a second body as a new chunk and mesh node", "[model]")
+{
+    const std::filesystem::path folder =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "models";
+    if (!std::filesystem::exists(folder / "cn_bdy_ogr_0.msh") || !std::filesystem::exists(folder / "cn_bdy_ogra_0.mmh"))
+    {
+        SKIP("no ogre in game/models (ghilana's extract writes the game's meshes there)");
+    }
+    const std::vector<std::byte> meshBytes = FromDisk(folder / "cn_bdy_ogr_0.msh");
+    std::optional<gff4::File> meshFile;
+    const std::optional<model::Mesh> mesh = Read(meshBytes, meshFile);
+    REQUIRE(mesh);
+    REQUIRE(mesh->chunks.size() == 1);
+    model::ChunkData second = AsRead(mesh->chunks[0]);
+    second.name = L"Second";
+    second.added = true;
+    second.declaration = mesh->chunks[0].declaration;
+    for (model::Value &place : second.values[0]) // the declaration's first element is the place
+    {
+        place[0] += 2;
+    }
+    const std::vector<model::ChunkData> given{second};
+    const model::Written written = model::WriteMesh(meshBytes, given);
+    REQUIRE(written.error.empty());
+    std::optional<gff4::File> afterFile;
+    const std::optional<model::Mesh> after = Read(written.bytes, afterFile);
+    REQUIRE(after);
+    REQUIRE(after->chunks.size() == 2);
+    CHECK(after->chunks[1].vertexCount == mesh->chunks[0].vertexCount);
+    CHECK(model::Indices(after->chunks[1]) == model::Indices(mesh->chunks[0]));
+
+    const std::vector<std::byte> treeBytes = FromDisk(folder / "cn_bdy_ogra_0.mmh");
+    const std::optional<gff4::File> treeFile = gff4::File::Parse(treeBytes);
+    REQUIRE(treeFile);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*treeFile);
+    REQUIRE(tree);
+    const auto first = std::ranges::find(tree->nodes, "mshh", &model::Node::kind);
+    REQUIRE(first != tree->nodes.end());
+    model::MeshNode node;
+    node.parent = first->parent;
+    node.name = L"Second";
+    node.mesh = *first->mesh;
+    node.mesh.chunk = L"Second";
+    const std::vector<model::MeshNode> added{node};
+    const model::Written hierarchy = model::WriteHierarchy(treeBytes, {}, added, &*after);
+    REQUIRE(hierarchy.error.empty());
+    const std::optional<gff4::File> grown = gff4::File::Parse(hierarchy.bytes);
+    REQUIRE(grown);
+    const std::optional<model::Hierarchy> read = model::HierarchyOf(*grown);
+    REQUIRE(read);
+    CHECK(read->nodes.size() == tree->nodes.size() + 1);
+    CHECK(std::ranges::count(read->nodes, "mshh", &model::Node::kind) == 2);
 }
 
 TEST_CASE("the game's meshes in game/models, when there, come back the same bytes as read", "[model]")

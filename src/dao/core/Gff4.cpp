@@ -517,7 +517,8 @@ std::size_t FloatsIn(std::uint16_t type)
 
 } // namespace
 
-Editor::Editor(const File &file) : data_(file.DataOffset()), bytes_(file.Bytes().begin(), file.Bytes().end())
+Editor::Editor(const File &file)
+    : file_(&file), data_(file.DataOffset()), bytes_(file.Bytes().begin(), file.Bytes().end())
 {
 }
 
@@ -629,6 +630,58 @@ bool Editor::SetList(const Struct &in, std::uint32_t label, std::span<const std:
     const std::uint32_t offset = Append(data);
     std::memcpy(bytes_.data() + *at, &offset, 4);
     return true;
+}
+
+bool Editor::Extend(const Struct &in, std::uint32_t label, std::span<const std::byte> elements, std::uint32_t count)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || (field->flags & kList) == 0 || count == 0 || elements.size() % count != 0)
+    {
+        return false;
+    }
+    const std::size_t element = elements.size() / count;
+    std::uint32_t old = 0;
+    std::memcpy(&old, bytes_.data() + *at, 4);
+    std::uint32_t oldCount = 0;
+    if (old != kNull)
+    {
+        if (data_ + old + 4 > bytes_.size())
+        {
+            return false;
+        }
+        std::memcpy(&oldCount, bytes_.data() + data_ + old, 4);
+        if (std::size_t{oldCount} * element > bytes_.size() - (data_ + old + 4))
+        {
+            return false;
+        }
+    }
+    const std::size_t kept = std::size_t{oldCount} * element;
+    std::vector<std::byte> data(4 + kept + elements.size());
+    const std::uint32_t total = oldCount + count;
+    std::memcpy(data.data(), &total, 4);
+    if (kept != 0)
+    {
+        std::memcpy(data.data() + 4, bytes_.data() + data_ + old + 4, kept);
+    }
+    std::memcpy(data.data() + 4 + kept, elements.data(), elements.size());
+    const std::uint32_t offset = Append(data);
+    std::memcpy(bytes_.data() + *at, &offset, 4);
+    return true;
+}
+
+std::optional<Struct> Editor::Add(const Struct &like)
+{
+    const std::size_t size = like.Shape().size;
+    if (like.Offset() < data_ || like.Offset() + size > bytes_.size())
+    {
+        return std::nullopt;
+    }
+    const std::vector<std::byte> copy(bytes_.begin() + static_cast<std::ptrdiff_t>(like.Offset()),
+                                      bytes_.begin() + static_cast<std::ptrdiff_t>(like.Offset() + size));
+    const std::uint32_t offset = Append(copy);
+    return Struct(*file_, like.Index(), data_ + offset);
 }
 
 } // namespace dao::core::gff4
