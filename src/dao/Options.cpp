@@ -170,6 +170,12 @@ namespace
 // to be told of, and the message a click sends.
 constexpr std::string_view kToken = "ClientOptions.";
 constexpr std::string_view kSetMessage = "ClientOptions.SetClientOptionMessage ";
+// The screen's Restore Defaults: "ClientOptions.RestoreDefaults <tab>", the tab as the movie numbers
+// it (OptionsMenu.as, read 2026-10-15 for DAOLib #140: OPTION_GROUP_GAME 0, ONLINE 1, CONTROLS 2,
+// AUDIO 3, VIDEO 4, MOVIES 5). CClientOptions' handler (0x005E61A0) resets the game's own options
+// of that group (0x005E49C0) and leaves this library's alone, so the message goes on to it and
+// each control of the tab with a default is given it here, through the click's path.
+constexpr std::string_view kRestoreMessage = "ClientOptions.RestoreDefaults ";
 // An option's name in the movie: the plugin's, marked as the library's.
 constexpr std::string_view kOptionPrefix = "DAOLib";
 
@@ -449,8 +455,55 @@ bool OnGetValue(const gui::Call &call)
 // A click: the FSCommand SendMessage with "ClientOptions.
 // SetClientOptionMessage <option> 1" (or 0), or a choice's index; a button
 // sends the 1.
+std::optional<Tab> TabOfGroup(std::string_view group)
+{
+    if (group == "0")
+    {
+        return Tab::Game;
+    }
+    if (group == "1")
+    {
+        return Tab::Online;
+    }
+    if (group == "4")
+    {
+        return Tab::Video;
+    }
+    return std::nullopt;
+}
+
+// Under g_mutex: each control on the tab with a default, queued as a click to that value.
+void QueueDefaults(Tab tab)
+{
+    for (std::size_t i = 0; i < g_entries.size(); ++i)
+    {
+        const Entry &entry = g_entries[i];
+        if (g_sections[entry.section].tab != tab)
+        {
+            continue;
+        }
+        if (entry.toggle && entry.toggle->defaultValue)
+        {
+            g_clicks.push_back({i, *entry.toggle->defaultValue ? 1 : 0});
+        }
+        else if (entry.choice && entry.choice->defaultValue)
+        {
+            g_clicks.push_back({i, *entry.choice->defaultValue});
+        }
+    }
+}
+
 bool OnSendMessage(void * /*owner*/, std::string_view args)
 {
+    if (args.starts_with(kRestoreMessage))
+    {
+        if (const auto tab = TabOfGroup(args.substr(kRestoreMessage.size())))
+        {
+            const std::lock_guard lock(g_mutex);
+            QueueDefaults(*tab);
+        }
+        return false; // the game's own options are the game's to restore
+    }
     if (!args.starts_with(kSetMessage))
     {
         return false;

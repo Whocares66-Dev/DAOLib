@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -39,6 +40,9 @@ struct Toggle
     std::wstring tooltip;                 // the text shown when the mouse is over the box
     std::function<bool()> get;            // returns the option's value; required
     std::function<bool(bool wanted)> set; // applies a click and returns the new value; required
+    // The value the screen's Restore Defaults gives it, through set, as a click would; none to
+    // leave it as it is.
+    std::optional<bool> defaultValue = std::nullopt;
 };
 
 // How a Choice is shown.
@@ -73,6 +77,9 @@ struct Choice
     ChoiceStyle style = ChoiceStyle::Slider;              // a slider, or a dropdown
     std::function<std::int32_t()> get;                    // returns the index of the chosen value
     std::function<std::int32_t(std::int32_t wanted)> set; // applies a change, returns the new index
+    // The index the screen's Restore Defaults gives it, through set, as a change would; none to
+    // leave it as it is.
+    std::optional<std::int32_t> defaultValue = std::nullopt;
 };
 
 // A button in a plugin's section, like the screen's own Restore Defaults.
