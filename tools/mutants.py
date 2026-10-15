@@ -115,6 +115,7 @@ FIELDPATH = "src/dao/core/FieldPath.h"
 PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
+MAO = "src/dao/core/MaterialObject.cpp"
 ERF = "src/dao/core/Erf.cpp"
 DDS = "src/dao/core/Dds.cpp"
 GFF3 = "src/dao/core/Gff3.cpp"
@@ -1011,6 +1012,24 @@ MUTANTS: list[Mutant] = [
         INPUT,
         " || text[kActionWord.size()] != L' ')",
         ")",
+    ),
+    Mutant(
+        "mao-end: the last close, where elements go before",
+        MAO,
+        "text.rfind(kClose)",
+        "text.find(kClose)",
+    ),
+    Mutant(
+        "mao-whole: an attribute's key is whole, not the end of another",
+        MAO,
+        "            at > 0 && (tag[at - 1]",
+        "            true || (tag[at - 1]",
+    ),
+    Mutant(
+        "mao-spaces: the spaces before the comment's end are not the path's",
+        MAO,
+        "while (!path.empty() && (path.back() == ' ' || path.back() == '\\t'))",
+        "while (false)",
     ),
 ]
 
