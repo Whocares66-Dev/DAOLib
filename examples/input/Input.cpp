@@ -30,6 +30,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <string_view>
 
@@ -124,9 +125,56 @@ void Walk()
     }
 }
 
+// The game's reaction withheld, toggled by a key the player binds (DAOLib #127; none by default, since a default can
+// take a key the game uses, as F9 is its Quick load), and what the keys and mouse do read all the same: a line whenever
+// one of W, A, S, D, Shift or the right mouse changes, or the mouse or the wheel moves, while it holds.
+bool g_withheld = false;
+
+void ToggleWithheld()
+{
+    g_withheld = !g_withheld;
+    dao::input::Withhold(g_withheld ? dao::input::kMovement | dao::input::kCameraTurn | dao::input::kCameraZoom |
+                                          dao::input::kCameraPan
+                                    : 0U);
+    spdlog::info("the game's reaction to the keys and mouse {}", g_withheld ? "withheld" : "given back");
+}
+
+void LogReadings()
+{
+    static std::array<bool, 6> was{};
+    const std::array<bool, 6> now{
+        dao::input::Down(dao::input::Key::W),         dao::input::Down(dao::input::Key::A),
+        dao::input::Down(dao::input::Key::S),         dao::input::Down(dao::input::Key::D),
+        dao::input::Down(dao::input::Key::LeftShift), dao::input::Down(dao::input::MouseButton::Right)};
+    const dao::input::MouseMove moved = dao::input::MouseDelta();
+    const std::int32_t notches = dao::input::WheelNotches();
+    if (g_withheld && (now != was || moved.x != 0 || moved.y != 0 || notches != 0))
+    {
+        spdlog::info("W {} A {} S {} D {} Shift {} right mouse {}; mouse {} {}; wheel {}", now[0], now[1], now[2],
+                     now[3], now[4], now[5], moved.x, moved.y, notches);
+    }
+    was = now;
+}
+
+// An action held rather than pressed (DAOLib #125): a line when its key, bound by the player, goes down and up.
+constexpr std::wstring_view kHeld = L"DAOLibExampleHeld";
+
+void LogHeld()
+{
+    static bool was = false;
+    const bool now = dao::input::Held(kHeld);
+    if (now != was)
+    {
+        spdlog::info("{} {}", dao::Utf8(kHeld), now ? "held" : "let go");
+        was = now;
+    }
+}
+
 void Frame()
 {
     Walk();
+    LogReadings();
+    LogHeld();
     using Clock = std::chrono::steady_clock;
     static const Clock::time_point started = Clock::now();
     static Clock::time_point last = started;
@@ -165,6 +213,12 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     const bool spaced = dao::input::RegisterAction({.name = L"Not A Name", .label = L"refused"}, [] {});
     const bool twice = dao::input::RegisterAction({.name = std::wstring(kPing), .label = L"refused"}, [] {});
     spdlog::info("registered: {} {}; refused as they should be: {} {}", ping, unbound, !spaced, !twice);
+    dao::input::RegisterAction({.name = L"DAOLibExampleWithhold",
+                                .label = L"DAOLib example: withhold the game's keys",
+                                .key = dao::input::Key::None},
+                               &ToggleWithheld);
+    dao::input::RegisterAction(
+        {.name = std::wstring(kHeld), .label = L"DAOLib example: log while held", .section = L"DAOLib example"}, [] {});
     dao::OnFrame(&Frame);
     return true;
 }

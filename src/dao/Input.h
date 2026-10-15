@@ -75,6 +75,15 @@ ActionState StateOf(std::wstring_view name);
 // an unknown name.
 std::uint64_t Presses(std::wstring_view name);
 
+// Returns whether a key the player bound to the named action is down now, in a game mode the
+// action names: for an action held rather than pressed, such as moving a camera.
+// @return false for an unknown name, an action the game has not accepted, or one bound to no key
+//  of the keyboard
+//
+// The modifiers the binding names must be down with the key; others may be down too. A binding
+// to a mouse button does not count. Call it from a frame callback.
+bool Held(std::wstring_view name);
+
 // Makes the game treat a pixel as the one under the mouse, without moving the mouse.
 // @param x the pixel's column, in the screen pixels that dao::world::ToScreen returns
 // @param y the pixel's row
@@ -108,5 +117,53 @@ enum class Move : std::uint8_t
 // This works even when the game's window is not in front. A direction stays held until it is
 // let go, so let go of what was held. Call it from any thread.
 void Hold(Move direction, bool held);
+
+// Returns whether a key is down now, as the game's input reads the keyboard, whatever the game
+// does with it: withheld (Withhold), unbound or in a menu, and whatever else is held with it.
+// @return false before the game reads its input, or with its window in the background
+bool Down(Key key);
+
+// A mouse button as the device numbers it, whatever the game's left-handed setting.
+enum class MouseButton : std::uint8_t
+{
+    Left,
+    Right,
+    Middle,
+    Fourth,
+    Fifth,
+};
+// Returns whether a mouse button is down now, as Down(Key) answers for a key.
+bool Down(MouseButton button);
+
+// How far the mouse moved: the device's own counts, x to the right and y down, unbounded by the
+// window or the screen.
+struct MouseMove
+{
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+};
+// Returns how far the mouse moved during the last frame, whatever the game does with it.
+//
+// The frame is the one dao::OnFrame runs: read it from a frame callback.
+MouseMove MouseDelta();
+// Returns the wheel's notches during the last frame, away from the player positive, whatever the
+// game does with them. Read it from a frame callback.
+std::int32_t WheelNotches();
+
+// What of the game's own reaction to the keys and mouse a plugin may withhold, or'd together.
+enum Reaction : std::uint32_t
+{
+    kMovement = 1,   // moving the controlled creature: the movement keys, steering, run forward
+    kCameraTurn = 2, // turning and tilting the camera: the right mouse's orbit, the camera keys
+    kCameraZoom = 4, // zooming: the wheel, Page Up and Page Down
+    kCameraPan = 8,  // panning: the middle mouse's drag and the camera's pan keys
+};
+// Withholds the game's own reaction to the keys and mouse, until given back.
+// @param reactions those to withhold, or'd; 0 gives all back
+//
+// What is withheld is the game's reading of its own inputs; a plugin's actions (RegisterAction)
+// still fire, and Down, MouseDelta and WheelNotches still answer. Clicks in the world are not
+// withheld. A movement a plugin holds (Hold) is withheld with the keys'. Call it from any thread.
+void Withhold(std::uint32_t reactions);
 
 } // namespace dao::input

@@ -422,4 +422,18 @@ struct UnpauseMessage : Message
     DAO_VFTABLE(68778);
 };
 
+// Notes on the zoom messages: no fields, 4 bytes each; the key bindings ZoomIn and ZoomOut, the
+// wheel's notches among them, send them to explore mode (seen 2026-10-15, DAOLib #127).
+
+// Zooms the explore camera in a step.
+struct CameraZoomInMessage : Message
+{
+    DAO_VFTABLE(68784);
+};
+// Zooms the explore camera out a step.
+struct CameraZoomOutMessage : Message
+{
+    DAO_VFTABLE(68785);
+};
+
 } // namespace dao::messages

@@ -63,11 +63,14 @@
 #include "dao/Input.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
 #include "dao/Guard.h"
 #include "dao/Gui.h"
 #include "dao/Hook.h"
+#include "dao/Messages.h"
 #include "dao/Module.h"
+#include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/core/Msvc8.h"
 #include "dao/core/OptionsMovie.h"
@@ -76,6 +79,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -96,6 +100,8 @@ struct Entry
     std::function<void()> pressed;
     ActionState state = ActionState::Waiting;
     std::uint64_t presses = 0;
+    // The engine's record of the action, GroupedInputs (dao/Addresses.h), once it took it.
+    const std::byte *record = nullptr;
 };
 
 std::mutex g_mutex;
@@ -181,6 +187,24 @@ bool HasAction(void *mappings, const core::WStringRep &name)
     return reinterpret_cast<HasFn>(slots[2])(actions, 0, hash);
 }
 
+// The record AddAction made last. Read 2026-10-15 for DAOLib #125 in GOG's exe: AddAction
+// (0x00894530) pushes the record it makes onto the vector at the mappings' +0xD8, its first and
+// last at +0xDC and +0xE0 (0x0049D170, then its back, 0x00893E20). A record's two keys are the
+// words at +0x110 and +0x114 (0x00893810, as the controls' save reads them, 0x00895980).
+const std::byte *NewestRecord(void *mappings)
+{
+    constexpr std::size_t kRecordsBegin = 0xDC;
+    constexpr std::size_t kRecordsEnd = 0xE0;
+    const auto at = reinterpret_cast<std::uintptr_t>(mappings);
+    const auto begin = TryRead<std::uintptr_t>(at + kRecordsBegin).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(at + kRecordsEnd).value_or(0);
+    if (begin == 0 || end <= begin)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<const std::byte *>(TryRead<std::uintptr_t>(end - sizeof(std::uintptr_t)).value_or(0));
+}
+
 // The action, what its keys send, and the modes that allow it.
 void AddToEngine(Entry &entry)
 {
@@ -203,6 +227,7 @@ void AddToEngine(Entry &entry)
         void(__fastcall *)(void *, int, const core::WStringRep *, const Label *, std::uint32_t, std::uint32_t);
     reinterpret_cast<AddActionFn>(Module::Address(addr::kGroupedInputMappings_AddAction))(mappings, 0, &name, &label, 0,
                                                                                           0);
+    entry.record = NewestRecord(mappings);
 
     // What the game's press-once actions are registered with: the
     // keyboard, on a press, and no key yet.
@@ -576,6 +601,248 @@ void Hold(Move direction, bool held)
 void ReleaseCursor()
 {
     g_cursorHeld.store(false, std::memory_order_relaxed);
+}
+
+namespace
+{
+
+// The game's devices, read 2026-10-15 for DAOLib #127 in GOG's exe. ECInput::RawInputWin32 reads
+// DirectInput each frame (its slot 1, 0x008804F0): the keyboard's state, 256 bytes by scan code
+// from +0x3D, a key down where bit 7 is set (0x0087DE50); the mouse's (ReadMouse, kRawInputWin32_
+// ReadMouse) from its buffered records, x and y added into +0x14 and +0x18, its buttons' state
+// from +0x188 a byte each, and each notch of the wheel (120 of its units) made an event of code
+// 0x16 away from the player or 0x17 toward, kind 0x50000. An event is 16 bytes, the input word,
+// the kind, a time and a sequence, pushed onto the vector at +4 of ReadMouse's argument, the
+// frame's queue (0x0087EBD0, `mov ecx, edi` with edi the argument). Something else sets +0x14
+// and +0x18 back between frames, so the first reading, of their difference frame to frame, saw
+// a drag's sign alternate (DAOTurnBased's test, 2026-10-15): each read's own addition is taken
+// here, across the call. The
+// game's own query (slot 2, 0x0087E350) answers a key only with exactly the modifiers held that
+// its word names, so these read the state itself.
+constexpr std::size_t kKeys = 0x3D;
+constexpr std::size_t kMouseX = 0x14;
+constexpr std::size_t kMouseY = 0x18;
+constexpr std::size_t kMouseButtons = 0x188;
+constexpr std::size_t kEventsBegin = 0x4;
+constexpr std::size_t kEventsEnd = 0x8;
+constexpr std::size_t kEventSize = 16;
+// The kind word carries the device's bit as the input word does (0x00880760 ors in the mouse's,
+// 0x20000000): the first reading compared it whole and counted no notch (DAOTurnBased's retest,
+// 2026-10-15).
+constexpr std::uint32_t kDeviceBits = 0xF0000000;
+constexpr std::uint32_t kWheelKind = 0x50000;
+constexpr std::uint32_t kWheelAway = 0x16;
+constexpr std::uint32_t kWheelToward = 0x17;
+constexpr std::size_t kButtons = 5;
+
+std::atomic<std::uintptr_t> g_rawInput{0};
+std::atomic<std::int32_t> g_wheelTotal{0};
+std::atomic<std::int32_t> g_totalX{0};
+std::atomic<std::int32_t> g_totalY{0};
+std::atomic<std::int32_t> g_frameX{0};
+std::atomic<std::int32_t> g_frameY{0};
+std::atomic<std::int32_t> g_frameWheel{0};
+
+using ReadMouseFn = void(__fastcall *)(void *raw, int edx, void *argument);
+Detour<ReadMouseFn> g_readMouse;
+
+std::size_t EventCount(std::uintptr_t queue)
+{
+    const auto begin = TryRead<std::uintptr_t>(queue + kEventsBegin).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(queue + kEventsEnd).value_or(0);
+    return begin != 0 && end >= begin ? (end - begin) / kEventSize : 0;
+}
+
+// The mouse read: the device noted, its movement added, and the wheel's notches it made events
+// of counted.
+void __fastcall ReadMouse(void *raw, int edx, void *argument)
+{
+    const auto at = reinterpret_cast<std::uintptr_t>(raw);
+    const auto queue = reinterpret_cast<std::uintptr_t>(argument);
+    g_rawInput.store(at, std::memory_order_relaxed);
+    const std::int32_t x = TryRead<std::int32_t>(at + kMouseX).value_or(0);
+    const std::int32_t y = TryRead<std::int32_t>(at + kMouseY).value_or(0);
+    const std::size_t before = EventCount(queue);
+    g_readMouse.Original()(raw, edx, argument);
+    g_totalX.fetch_add(TryRead<std::int32_t>(at + kMouseX).value_or(x) - x, std::memory_order_relaxed);
+    g_totalY.fetch_add(TryRead<std::int32_t>(at + kMouseY).value_or(y) - y, std::memory_order_relaxed);
+    const std::size_t after = EventCount(queue);
+    const auto begin = TryRead<std::uintptr_t>(queue + kEventsBegin).value_or(0);
+    std::int32_t notches = 0;
+    for (std::size_t i = before; i < after && begin != 0; ++i)
+    {
+        const auto word = TryRead<std::uint32_t>(begin + (i * kEventSize)).value_or(0);
+        const auto kind = TryRead<std::uint32_t>(begin + (i * kEventSize) + 4).value_or(0);
+        if ((kind & ~kDeviceBits) == kWheelKind && (word & 0xFFFFU) == kWheelAway)
+        {
+            ++notches;
+        }
+        else if ((kind & ~kDeviceBits) == kWheelKind && (word & 0xFFFFU) == kWheelToward)
+        {
+            --notches;
+        }
+    }
+    g_wheelTotal.fetch_add(notches, std::memory_order_relaxed);
+}
+
+// Each frame: what the mouse did since the last.
+void TakeFrame()
+{
+    static std::int32_t lastX = 0;
+    static std::int32_t lastY = 0;
+    static std::int32_t lastWheel = 0;
+    const std::int32_t x = g_totalX.load(std::memory_order_relaxed);
+    const std::int32_t y = g_totalY.load(std::memory_order_relaxed);
+    const std::int32_t wheel = g_wheelTotal.load(std::memory_order_relaxed);
+    g_frameX.store(x - lastX, std::memory_order_relaxed);
+    g_frameY.store(y - lastY, std::memory_order_relaxed);
+    g_frameWheel.store(wheel - lastWheel, std::memory_order_relaxed);
+    lastX = x;
+    lastY = y;
+    lastWheel = wheel;
+}
+
+void AttachReadings()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_readMouse.Attach(addr::kRawInputWin32_ReadMouse, &ReadMouse);
+        OnFrame(&TakeFrame);
+    });
+}
+
+// The game's numbered inputs (dao/Addresses.h, kInput_IsDown), by the order 0x00895F00 registers
+// their names in: 2 MoveCharacterForward and 43 CursorPosition among them, as read before.
+struct Withheld
+{
+    std::uint32_t reaction;
+    std::array<std::int32_t, 11> inputs; // -1 past the last
+};
+constexpr std::array<Withheld, 4> kWithheld{{
+    // AccelerateCharacterLateral and Forward, MoveCharacterForward, Backward, Left, Right,
+    // LookAndRunForward.
+    {kMovement, {0, 1, 2, 3, 4, 5, 6, -1, -1, -1, -1}},
+    // ControlCameraYaw, ControlCameraIncrease and DecreasePitch, CameraControlMode_Yaw and _Pitch,
+    // CameraControlMode (the right mouse), ControlCameraLeft and Right, FreeLookMode,
+    // MoveCameraLeft and Right.
+    {kCameraTurn, {7, 9, 10, 11, 12, 14, 21, 22, 25, 26, 27}},
+    // ControlCameraZoom, CameraControlMode_Zoom, ControlCameraZoomIn and Out.
+    {kCameraZoom, {8, 13, 23, 24, -1, -1, -1, -1, -1, -1, -1}},
+    // CameraPanMode, its _Horizontal and _Vertical, ControlCameraUp and Down, AnalogScrollValue.
+    {kCameraPan, {16, 17, 18, 19, 20, 51, -1, -1, -1, -1, -1}},
+}};
+std::atomic<std::uint32_t> g_withheld{0};
+
+using AllowsInputFn = bool(__fastcall *)(void *modes, int edx, const std::int32_t *id);
+Detour<AllowsInputFn> g_allowsInput;
+
+bool __fastcall AllowsInput(void *modes, int edx, const std::int32_t *id)
+{
+    const std::uint32_t withheld = g_withheld.load(std::memory_order_relaxed);
+    if (withheld != 0 && id != nullptr)
+    {
+        for (const Withheld &entry : kWithheld)
+        {
+            if ((withheld & entry.reaction) != 0 && std::ranges::find(entry.inputs, *id) != entry.inputs.end())
+            {
+                return false;
+            }
+        }
+    }
+    return g_allowsInput.Original()(modes, edx, id);
+}
+
+} // namespace
+
+// Read 2026-10-15 (above, and dao/Addresses.h, kInput_IsDown): every IsDown the game asks of an
+// input, and its axes (kInput_AxisPair), ask InputModes::AllowsInput first and answer nothing
+// where it says no, so a withheld input is one it says no to. The game's actions, the keys bound
+// to messages and a plugin's own, go by their texts (kInputModes_Allowed) and are not withheld.
+bool Down(Key key)
+{
+    AttachReadings();
+    const std::uintptr_t raw = g_rawInput.load(std::memory_order_relaxed);
+    const auto scan = static_cast<std::uint32_t>(key);
+    return raw != 0 && scan < 256 && (TryRead<std::uint8_t>(raw + kKeys + scan).value_or(0) & 0x80U) != 0;
+}
+
+bool Down(MouseButton button)
+{
+    AttachReadings();
+    const std::uintptr_t raw = g_rawInput.load(std::memory_order_relaxed);
+    const auto index = static_cast<std::size_t>(button);
+    return raw != 0 && index < kButtons &&
+           (TryRead<std::uint8_t>(raw + kMouseButtons + index).value_or(0) & 0x80U) != 0;
+}
+
+// An action's keys read from its record (NewestRecord, above) against the keyboard Down reads.
+bool Held(std::wstring_view name)
+{
+    constexpr std::array<std::size_t, 2> kKeyWords{0x110, 0x114};
+    constexpr std::uint32_t kDevice = 0xF0000000;
+    constexpr std::uint32_t kModifiers = kShift | kControl | kAlt;
+    constexpr std::uint32_t kScanCode = 0xFF;
+    std::array<std::uint32_t, 2> words{};
+    std::vector<GameMode> modes;
+    {
+        const std::lock_guard lock(g_mutex);
+        const auto found = std::ranges::find_if(g_actions, [&](const Entry &e) { return e.action.name == name; });
+        if (found == g_actions.end() || found->state != ActionState::Registered || found->record == nullptr)
+        {
+            return false;
+        }
+        const auto record = reinterpret_cast<std::uintptr_t>(found->record);
+        for (std::size_t i = 0; i < words.size(); ++i)
+        {
+            words.at(i) = TryRead<std::uint32_t>(record + kKeyWords.at(i)).value_or(0);
+        }
+        modes = found->action.modes;
+    }
+    auto *app = CClientExoApp::Get();
+    auto *controller = app != nullptr ? app->GameModes() : nullptr;
+    if (controller == nullptr || std::ranges::find(modes, controller->Mode()) == modes.end())
+    {
+        return false;
+    }
+    const auto modifierDown = [](std::uint32_t modifier, Key left, Key right) {
+        return Down(left) || Down(right) ? modifier : 0U;
+    };
+    const std::uint32_t modifiers = modifierDown(kShift, Key::LeftShift, Key::RightShift) |
+                                    modifierDown(kControl, Key::LeftControl, Key::RightControl) |
+                                    modifierDown(kAlt, Key::LeftAlt, Key::RightAlt);
+    return std::ranges::any_of(words, [&](std::uint32_t word) {
+        return (word & kDevice) == core::kKeyboard && (word & kScanCode) != 0 &&
+               (word & kModifiers & ~modifiers) == 0 && Down(static_cast<Key>(word & kScanCode));
+    });
+}
+
+MouseMove MouseDelta()
+{
+    AttachReadings();
+    return {g_frameX.load(std::memory_order_relaxed), g_frameY.load(std::memory_order_relaxed)};
+}
+
+std::int32_t WheelNotches()
+{
+    AttachReadings();
+    return g_frameWheel.load(std::memory_order_relaxed);
+}
+
+// The wheel zooms by the key bindings ZoomIn and ZoomOut, messages to explore mode and not
+// inputs AllowsInput is asked of: the wheel still zoomed while kCameraZoom held the zoom inputs
+// (DAOTurnBased's test, 2026-10-15). So their messages are taken as well.
+void Withhold(std::uint32_t reactions)
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_allowsInput.Attach(addr::kInputModes_AllowsInput, &AllowsInput);
+        const auto zoomWithheld = [](void *, const messages::Message &) {
+            return (g_withheld.load(std::memory_order_relaxed) & kCameraZoom) != 0;
+        };
+        messages::InterceptMessage(messages::CameraZoomInMessage::kVftable, zoomWithheld);
+        messages::InterceptMessage(messages::CameraZoomOutMessage::kVftable, zoomWithheld);
+    });
+    g_withheld.store(reactions, std::memory_order_relaxed);
 }
 
 } // namespace dao::input
