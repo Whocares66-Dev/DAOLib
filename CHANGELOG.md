@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.3.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.3.0). The loader and its contract with plugins are as in 0.2.0: a 0.2.0 plugin runs with it, and the plugins below need it.
+
+- **A camera of a mod's own:** the view drawn from where a mod puts it, the game's own fly camera with its keys held off and the game's camera given back as it was (#125), the field of view read and held (#126), and the mouse's cursor hidden and held while a mod turns the view, as the game's own orbit does (#132). What Photo Cam is built on.
+- **Keys and mouse for mods:** a key, a mouse button, the mouse's movement and the wheel read as the game reads them, and the game's own reaction to them held off while a mod uses them (#127); a mod's own keys held rather than pressed, and a mod's key map that shares keys with the game's walking and turning without unbinding them, on while the mod is in use (#130).
+- **The game's files changed as they load:** a mod patches a type of file as the game reads it (#124), now also for a file first read where the game asks its length before its bytes, as an add-in's materials are (#135); a mod's own folder of files watched, so a file it writes is found without a restart (#137); and a large file, a texture above all, read off the game thread (#138).
+- **The options screen and screenshots:** a mod's settings go back to their defaults with the screen's own Restore Defaults (#140), and a mod's own screen is kept out of the game's screenshots (#133).
+- **More of the game's files with no game running:** `daolib_core` reads and writes models, morphs, textures, templates, tables and talk tables, packs a mod as an ERF archive or DAUpdater's `.dazip` (#116 to #123), reads a material object (#128), and resizes a picture as Pillow's box filter does (#129).
+
 ## 0.2.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.2.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.2.0):
