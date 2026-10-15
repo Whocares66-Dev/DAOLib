@@ -35,6 +35,19 @@ namespace dao::resources
 // not the file; every other file is copied from what the game holds.
 std::optional<std::vector<std::byte>> Read(std::wstring_view file);
 
+// What ReadAsync hands back: the file's bytes, or nullopt as Read answers.
+using ReadDone = std::function<void(std::optional<std::vector<std::byte>> bytes)>;
+
+// Reads a copy of a file's bytes as Read does, but away from the game thread, and hands them to a
+// callback on the game thread when they are read.
+// @param file the file name with its extension
+// @param done runs once, on the game thread (dao/Frame.h), a frame or more later
+//
+// For a large file, a texture above all, that would hold the game thread for long enough to be
+// seen. The reads go one at a time, in the order asked. Call it once the game has started, from
+// any thread.
+void ReadAsync(std::wstring_view file, ReadDone done);
+
 // Returns whether the game has a file by this name, found the same way as Read finds it. It
 // loads the file to find out, so call it on the game thread too.
 bool Exists(std::wstring_view file);

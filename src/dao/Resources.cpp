@@ -84,6 +84,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Frame.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
@@ -95,14 +96,17 @@
 
 #include <algorithm>
 #include <array>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <cwctype>
+#include <deque>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <tuple>
 #include <utility>
 
@@ -512,6 +516,84 @@ std::optional<std::vector<std::byte>> Read(std::wstring_view file)
     }
     Found found(file);
     return IsProcessed(file) ? found.FileBytes() : found.Bytes();
+}
+
+namespace
+{
+
+// ReadAsync's reads: asked for, read on a thread of the library's, handed back on the game thread.
+// Read 2026-10-15 for DAOLib #138 (DAOElgaraShaders: a material's three textures read on the game
+// thread took up to 156 ms): Resources::Find on a thread other than the game's asks for the
+// resource and waits for it (0x004D5A50, then WaitLoaded), as the engine's own streaming threads
+// do, where on the game thread exploring it asks and goes on (0x004D5A90); and a texture's bytes
+// are fetched from its source under the source's own lock (Fetch, above). Neither needs the game
+// thread, so Read is run here as it is, on the library's one reading thread.
+struct Asked
+{
+    std::wstring file;
+    ReadDone done;
+};
+struct Answered
+{
+    ReadDone done;
+    std::optional<std::vector<std::byte>> bytes;
+};
+
+std::mutex g_asyncMutex;
+std::condition_variable g_asked;
+std::deque<Asked> g_toRead;     // under g_asyncMutex
+std::vector<Answered> g_toHand; // under g_asyncMutex
+
+void ReadThread()
+{
+    for (;;)
+    {
+        Asked asked;
+        {
+            std::unique_lock lock(g_asyncMutex);
+            g_asked.wait(lock, [] { return !g_toRead.empty(); });
+            asked = std::move(g_toRead.front());
+            g_toRead.pop_front();
+        }
+        std::optional<std::vector<std::byte>> bytes;
+        detail::Guard("a resource's read", [&] { bytes = Read(asked.file); });
+        const std::lock_guard lock(g_asyncMutex);
+        g_toHand.push_back({std::move(asked.done), std::move(bytes)});
+    }
+}
+
+void HandBack()
+{
+    std::vector<Answered> answered;
+    {
+        const std::lock_guard lock(g_asyncMutex);
+        answered = std::exchange(g_toHand, {});
+    }
+    for (Answered &answer : answered)
+    {
+        detail::Guard("a resource's read's callback", [&] { answer.done(std::move(answer.bytes)); });
+    }
+}
+
+} // namespace
+
+void ReadAsync(std::wstring_view file, ReadDone done)
+{
+    if (!done)
+    {
+        return;
+    }
+    static std::once_flag once;
+    std::call_once(once, [] {
+        // Never joined: the library's DLL stays until the process ends, and the thread with it.
+        std::thread(&ReadThread).detach();
+        OnFrame(&HandBack);
+    });
+    {
+        const std::lock_guard lock(g_asyncMutex);
+        g_toRead.push_back({std::wstring(file), std::move(done)});
+    }
+    g_asked.notify_one();
 }
 
 bool Exists(std::wstring_view file)
