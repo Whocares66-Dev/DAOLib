@@ -1479,7 +1479,7 @@ DAO_ADDRESS(kCameraControllerExplore_SnapToTarget, 18510)
 DAO_ADDRESS(kCameraControllerExplore_Update, 18526)
 DAO_ADDRESS(kCameraControllerExplore_OnTargetChanged, 18518)
 // The tactical view's frame, read 2026-09-30 for a pan that stopped short
-// (dao/CameraMoves.h). The explore controller's tactical step
+// (dao/Camera.h). The explore controller's tactical step
 // (0x00771060, __thiscall (seconds, target, party list), `ret 0xC`, from
 // its Update) first pulls the camera back toward the party (PullToParty,
 // __thiscall (float seconds, bool inView, party list), `ret 0xC`): while
@@ -1506,7 +1506,7 @@ DAO_ADDRESS(kSceneCameraManager_Update, 15038)
 DAO_ADDRESS(kSceneCamera_SetPitch, 15001)
 DAO_ADDRESS(kSceneCamera_Update, 15003)
 DAO_ADDRESS(kSceneCamera_SetYaw, 15000)
-// The camera's distances, read 2026-10-04 (dao/CameraMoves.h,
+// The camera's distances, read 2026-10-04 (dao/Camera.h,
 // SetCloseDistance; DAOLib #17). The orbit (SceneCamera's update) takes its
 // radius each frame as zoom x close + (1 - zoom) x far (0x006C2360; mode
 // 1 blends the pitch the same way, the behaviour's +0x48 with the camera's

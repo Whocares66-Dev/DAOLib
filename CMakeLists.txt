@@ -249,7 +249,7 @@ add_library(
     src/dao/Resources.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
-    src/dao/CameraMoves.cpp
+    src/dao/Camera.cpp
     src/dao/Clock.cpp
     src/dao/World.cpp
     src/dao/Effects.cpp

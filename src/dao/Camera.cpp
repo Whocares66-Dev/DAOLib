@@ -29,23 +29,27 @@
 // plugin's turn would look like the player's, and two pans would pull against each
 // other.
 
-#include "dao/CameraMoves.h"
-
 #include "dao/Camera.h"
+
+#include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/RenderCamera.h"
+#include "dao/SafeRead.h"
 #include "dao/core/Angle.h"
 #include "dao/generated/ScriptApi.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <numbers>
 #include <utility>
 #include <vector>
 
@@ -533,6 +537,162 @@ float CloseDistance()
 {
     const float *close = At<float>(addr::kCameraControllerExplore_CloseDistance);
     return close != nullptr ? *close : 0.0F;
+}
+
+} // namespace dao::camera
+
+// The field of view the scene is drawn with (DAOLib #126, for DAOPhotoCam).
+//
+// Read 2026-10-15 in GOG's exe: Renderer::PerspectiveCamera (its vtable
+// kPerspectiveCamera_Vftable) keeps its vertical field of view in radians at
+// +0x140, an aspect's multiplier at +0x144, near and far at +0x130 and
+// +0x134. Its slot 41 (0x00A25A70), __thiscall (fov, aspect multiplier,
+// near, far), `ret 0x10`, writes all four and sets +0x30, and slot 34
+// (0x00465AA0) remakes the projection (+0x40) from them through slot 40
+// (0x00A25AD0) when +0x30 is set: 0x004D3A60 (out, fov, the view's aspect
+// times +0x144, near, far), D3DXMatrixPerspectiveFovLH's arguments. Slot 33
+// (0x00A259F0) answers +0x140. The constructor's default is pi/2. Slot 3
+// (0x00A25A50), __thiscall (fov), `ret 4`, writes +0x140 alone and sets
+// +0x30; no other code writes +0x140 but the constructor (0x00A25B30). A
+// hold through slot 41 alone was not seen in play (2026-10-15, DAOTurnBased's
+// test): the game sets the field of view again through slot 3 before each
+// frame is drawn.
+//
+// So a held field of view is written to the scene's camera with +0x30 set,
+// and slots 3 and 41 are detoured so that the game's own calls for that
+// camera keep it: the game's latest value is noted, to give back when the
+// hold ends. The
+// detour runs on whatever thread sets the camera; it knows the scene's
+// camera by the one the game thread last saw, as dao/World.cpp finds it.
+
+namespace dao::camera
+{
+
+namespace
+{
+
+constexpr std::size_t kFieldOfView = 0x140; // radians, vertical
+constexpr std::size_t kRemake = 0x30;       // the projection is to be made again
+constexpr std::size_t kSetFieldOfViewSlot = 3;
+constexpr std::size_t kSetPerspectiveSlot = 41;
+
+std::atomic<void *> g_camera{nullptr}; // the scene's camera, as the game thread last saw it
+std::atomic<float> g_held{NAN};        // radians, NaN when nothing is held
+std::atomic<float> g_gameValue{NAN};   // the game's own, while one is held
+std::once_flag g_attachOnce;
+
+// The field of view a game's call for the scene's camera sets: the held one while there is one.
+float Wanted(void *camera, float fov)
+{
+    const float held = g_held.load();
+    if (std::isnan(held) || camera != g_camera.load())
+    {
+        return fov;
+    }
+    g_gameValue.store(fov);
+    return held;
+}
+
+using SetFieldOfViewFn = void(__fastcall *)(void *camera, int edx, float fov);
+Detour<SetFieldOfViewFn> g_setFieldOfView;
+
+void __fastcall SetCameraFieldOfView(void *camera, int edx, float fov)
+{
+    g_setFieldOfView.Original()(camera, edx, Wanted(camera, fov));
+}
+
+using SetPerspectiveFn = void(__fastcall *)(void *camera, int edx, float fov, float aspect, float nearPlane,
+                                            float farPlane);
+Detour<SetPerspectiveFn> g_setPerspective;
+
+void __fastcall SetPerspective(void *camera, int edx, float fov, float aspect, float nearPlane, float farPlane)
+{
+    g_setPerspective.Original()(camera, edx, Wanted(camera, fov), aspect, nearPlane, farPlane);
+}
+
+void Write(void *camera, float radians)
+{
+    auto *fields = static_cast<std::byte *>(camera);
+    *reinterpret_cast<float *>(fields + kFieldOfView) = radians;
+    *reinterpret_cast<std::uint8_t *>(fields + kRemake) = 1;
+}
+
+// Each frame on the game thread: the scene's camera noted for the detour, and a held field of
+// view kept on it, a camera the game made since among them.
+void Keep()
+{
+    void *camera = detail::RenderCamera();
+    void *const before = g_camera.exchange(camera);
+    const float held = g_held.load();
+    if (camera == nullptr || std::isnan(held))
+    {
+        return;
+    }
+    const auto now = TryRead<float>(reinterpret_cast<std::uintptr_t>(camera) + kFieldOfView);
+    if (now && *now != held)
+    {
+        if (camera != before)
+        {
+            g_gameValue.store(*now);
+        }
+        Write(camera, held);
+    }
+}
+
+void Attach()
+{
+    std::call_once(g_attachOnce, [] {
+        const auto *const table = reinterpret_cast<void *const *>(Module::Address(addr::kPerspectiveCamera_Vftable));
+        if (table != nullptr)
+        {
+            g_setFieldOfView.AttachTo(reinterpret_cast<SetFieldOfViewFn>(table[kSetFieldOfViewSlot]),
+                                      &SetCameraFieldOfView);
+            g_setPerspective.AttachTo(reinterpret_cast<SetPerspectiveFn>(table[kSetPerspectiveSlot]), &SetPerspective);
+        }
+        OnFrame(&Keep);
+    });
+}
+
+constexpr float kDegree = std::numbers::pi_v<float> / 180.0F;
+
+} // namespace
+
+std::optional<float> FieldOfView()
+{
+    void *camera = detail::RenderCamera();
+    const auto radians =
+        camera != nullptr ? TryRead<float>(reinterpret_cast<std::uintptr_t>(camera) + kFieldOfView) : std::nullopt;
+    return radians ? std::optional(*radians / kDegree) : std::nullopt;
+}
+
+void SetFieldOfView(std::optional<float> degrees)
+{
+    void *camera = detail::RenderCamera();
+    if (degrees && (*degrees < 1.0F || *degrees > 179.0F || !std::isfinite(*degrees)))
+    {
+        return;
+    }
+    Attach();
+    if (degrees)
+    {
+        if (std::isnan(g_held.load()) && camera != nullptr)
+        {
+            g_gameValue.store(TryRead<float>(reinterpret_cast<std::uintptr_t>(camera) + kFieldOfView).value_or(NAN));
+        }
+        g_camera.store(camera);
+        g_held.store(*degrees * kDegree);
+        if (camera != nullptr)
+        {
+            Write(camera, *degrees * kDegree);
+        }
+        return;
+    }
+    g_held.store(NAN);
+    const float game = g_gameValue.exchange(NAN);
+    if (camera != nullptr && !std::isnan(game))
+    {
+        Write(camera, game);
+    }
 }
 
 } // namespace dao::camera

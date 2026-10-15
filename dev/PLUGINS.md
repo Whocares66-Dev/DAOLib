@@ -160,7 +160,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Act through explore mode's click state | `GameModeExplore::SelectTarget`, `SelectedTarget`, `SetCursorObject` | `dao/GameModes.h` |
 | Ask the player to pick an ability's target | `modes->Explore()->RequestTarget(ability, caster)` | `dao/GameModes.h` |
 | Draw in the world with the game's own effects | `dao::vfx::PlaceRing`, any `vfx_base` row placed, scaled, moved and removed | `dao/Vfx.h` |
-| Move the camera smoothly | `dao::camera::PanTo(id, seconds)`, `EaseYaw`, `YawBehind(id)`, `EaseZoom(zoom, seconds)`; `examples/camera/` | `dao/CameraMoves.h` |
+| Move the camera smoothly | `dao::camera::PanTo(id, seconds)`, `EaseYaw`, `YawBehind(id)`, `EaseZoom(zoom, seconds)`; `examples/camera/` | `dao/Camera.h` |
 | Point the camera directly | `modes->Camera()->Follow(id)`, `Target()`, `Focus()`, `SnapToTarget()`, `Scene()->SetYaw()`, `TurnBehind(id)` | `dao/Camera.h`, `dao/GameModes.h` |
 | Frame a creature's portrait with a camera of your own | `dao::portraits::SetCamera(id, {.distance = 1.6f})`, then `RenderPortrait()` | `dao/Portraits.h`, `dao/Objects.h` |
 | Get a creature's portrait for a movie | `creature->RenderPortrait()`, `PortraitImage()`, `ReleasePortrait()` | `dao/Objects.h` |

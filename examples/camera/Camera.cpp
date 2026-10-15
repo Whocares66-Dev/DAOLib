@@ -1,4 +1,4 @@
-// Example: moving the camera smoothly (dao/CameraMoves.h, dao/Camera.h).
+// Example: moving the camera smoothly (dao/Camera.h).
 //
 // When the player selects another party member, the game's camera stays
 // put in the tactical view and, close in, pans without turning. This
@@ -12,13 +12,22 @@
 // it is each frame and stop if the player takes it mid-move, so the
 // player's own turning and panning are never fought; each move's end, and
 // why, is logged (OnMoveEnded). What it does goes to example_camera.log.
-#include "dao/CameraMoves.h"
+//
+// The field of view: a key the player binds ("DAOLib example: wide view", none by default) holds
+// it at 100 degrees, another ("narrow view") at 30, and pressing the held one again gives back
+// the game's. Each
+// press logs the field of view before and after, to see it held through a
+// conversation and from one area to the next, and given back exactly.
+#include "dao/Camera.h"
+#include "dao/Input.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 
 #include <spdlog/spdlog.h>
 
 #include <cmath>
+#include <optional>
+#include <vector>
 
 namespace
 {
@@ -63,6 +72,18 @@ void Ended(dao::camera::Move move, dao::camera::MoveEnd why)
                  std::hypot(offset.x, offset.y));
 }
 
+std::optional<float> g_held; // degrees
+
+void Toggle(float degrees)
+{
+    const auto before = dao::camera::FieldOfView();
+    g_held = g_held == degrees ? std::nullopt : std::optional(degrees);
+    dao::camera::SetFieldOfView(g_held);
+    const auto after = dao::camera::FieldOfView();
+    spdlog::info("field of view {}: {:.1f} degrees before, {:.1f} after", g_held ? "held" : "given back",
+                 before.value_or(-1.0F), after.value_or(-1.0F));
+}
+
 } // namespace
 
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
@@ -75,5 +96,12 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     }
     dao::camera::OnTargetChanged(&Selected);
     dao::camera::OnMoveEnded(&Ended);
+    const std::vector<dao::GameMode> modes{dao::GameMode::Explore, dao::GameMode::Combat, dao::GameMode::Dialog};
+    dao::input::RegisterAction(
+        {.name = L"ExampleCameraWideView", .label = L"DAOLib example: wide view", .modes = modes},
+        [] { Toggle(100.0F); });
+    dao::input::RegisterAction(
+        {.name = L"ExampleCameraNarrowView", .label = L"DAOLib example: narrow view", .modes = modes},
+        [] { Toggle(30.0F); });
     return true;
 }

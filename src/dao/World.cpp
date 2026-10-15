@@ -20,6 +20,8 @@
 
 #include "dao/World.h"
 
+#include "dao/RenderCamera.h"
+
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
@@ -1543,3 +1545,13 @@ bool SetCreatureShowDistance(std::optional<float> metres)
 }
 
 } // namespace dao::world
+
+namespace dao::detail
+{
+
+void *RenderCamera()
+{
+    return world::RenderCamera();
+}
+
+} // namespace dao::detail
