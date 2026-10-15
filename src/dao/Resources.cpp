@@ -778,6 +778,41 @@ void __fastcall ReadOnFirstUse(void *resource, int edx)
     }
 }
 
+bool HasPatch(const std::wstring &name)
+{
+    const std::wstring extension = ExtensionOf(name);
+    const std::lock_guard lock(g_loadMutex);
+    return std::ranges::any_of(g_loadPatches, [&](const auto &entry) { return entry.first == extension; });
+}
+
+// Resources::Size, __thiscall on a handle (the resource at its +0), a plain `ret`, answering the
+// resource's +0x30. Read 2026-10-15 for DAOLib #135: the material loader (0x004F72D0) asks Size
+// before Data, and Data makes the first read, so where a material is first read there, as an
+// add-in's are (DAOElgaraShaders: the Blood Dragon plate's pn_arm_bdaa.mao), Size answered the
+// file's length and the parser cut the patched text there: a comment added inside the root
+// broke the material, the same after it did not. The core's materials had mostly been read
+// before, and so drew right. So Size of a resource not yet read, of a type a patch is for, has
+// the engine read it first, through Data as the loader would next, and answers its length
+// patched.
+using SizeFn = std::uint32_t(__fastcall *)(void *handle, int edx);
+Detour<SizeFn> g_size;
+
+std::uint32_t __fastcall Size(void *handle, int edx)
+{
+    const std::uintptr_t resource =
+        handle != nullptr ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(handle)).value_or(0) : 0;
+    if (resource != 0 && TryRead<std::uint8_t>(resource + kResourceRead).value_or(1) == 0)
+    {
+        const std::optional<std::wstring> name = EngineText(resource + kResourceName);
+        if (name && HasPatch(Lower(*name)))
+        {
+            using DataFn = std::uintptr_t(__fastcall *)(void *, int);
+            reinterpret_cast<DataFn>(Module::Address(addr::kResources_Data))(handle, 0);
+        }
+    }
+    return g_size.Original()(handle, edx);
+}
+
 } // namespace
 
 // Read 2026-10-14 for DAOLib #124 (DAOElgaraShaders #19): the material loader (0x004F72D0) finds
@@ -801,6 +836,7 @@ void OnLoad(std::wstring_view extension, ResourcePatch patch)
     if (g_readOnFirstUse.Original() == nullptr)
     {
         g_readOnFirstUse.Attach(addr::kResource_ReadOnFirstUse, &ReadOnFirstUse);
+        g_size.Attach(addr::kResources_Size, &Size);
     }
 }
 

@@ -3,12 +3,15 @@
 
 #include "dao/Addresses.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 #include "dao/SafeRead.h"
 #include "dao/String.h"
 #include "dao/TypeName.h"
 #include "dao/core/Msvc8.h"
 
 #include <spdlog/spdlog.h>
+
+#include <intrin.h>
 
 #include <windows.h>
 
@@ -82,6 +85,57 @@ std::string Ends(std::uintptr_t at)
     return fmt::format("[{}] ... [{}]", shown(head), shown(tail));
 }
 
+bool Watched(std::uintptr_t resource)
+{
+    if (resource == 0)
+    {
+        return false;
+    }
+    const std::wstring name = Lower(reinterpret_cast<const dao::core::WStringRep *>(resource)->View());
+    return std::ranges::any_of(g_wanted, [&](const std::wstring &w) { return name.starts_with(w); });
+}
+
+std::string NameOf(std::uintptr_t resource)
+{
+    return dao::Utf8(reinterpret_cast<const dao::core::WStringRep *>(resource)->View());
+}
+
+// Resources::Size and Data, __thiscall on a handle (the resource at its +0), plain `ret`s.
+using HandleFn = std::uint32_t(__fastcall *)(void *handle, int edx);
+dao::Detour<HandleFn> g_size;
+dao::Detour<HandleFn> g_data;
+
+std::uint32_t __fastcall Size(void *handle, int edx)
+{
+    const auto caller = dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    const auto resource = dao::TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(handle)).value_or(0);
+    const bool watched = Watched(resource);
+    if (watched)
+    {
+        spdlog::info("reads: {} Size from {:#010x} before: {}", NameOf(resource), caller, Fields(resource));
+    }
+    const std::uint32_t size = g_size.Original()(handle, edx);
+    if (watched)
+    {
+        spdlog::info("reads: {} Size from {:#010x} answered {}: {}", NameOf(resource), caller, size, Fields(resource));
+    }
+    return size;
+}
+
+std::uint32_t __fastcall Data(void *handle, int edx)
+{
+    const auto caller = dao::Module::Preferred(reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    const auto resource = dao::TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(handle)).value_or(0);
+    const bool watched = Watched(resource);
+    const std::uint32_t data = g_data.Original()(handle, edx);
+    if (watched)
+    {
+        spdlog::info("reads: {} Data from {:#010x} answered {:#010x}: {}", NameOf(resource), caller, data,
+                     Fields(resource));
+    }
+    return data;
+}
+
 void __fastcall Read(void *resource, int edx)
 {
     const auto at = reinterpret_cast<std::uintptr_t>(resource);
@@ -123,11 +177,14 @@ void AttachReadWatch()
     }
     if (g_wanted.empty())
     {
+        spdlog::info("reads: off; DAOLIB_PROBE_READS names the resources to watch");
         return;
     }
-    if (!g_read.Attach(dao::addr::kResource_ReadOnFirstUse, &Read))
+    spdlog::info("reads: watching {} name prefixes", g_wanted.size());
+    if (!g_read.Attach(dao::addr::kResource_ReadOnFirstUse, &Read) ||
+        !g_size.Attach(dao::addr::kResources_Size, &Size) || !g_data.Attach(dao::addr::kResources_Data, &Data))
     {
-        spdlog::warn("reads: could not detour Resource::ReadOnFirstUse");
+        spdlog::warn("reads: could not detour a resource's read, Size or Data");
     }
 }
 
