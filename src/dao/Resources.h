@@ -15,7 +15,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -106,5 +108,30 @@ std::vector<Source> Sources();
 //
 // It loads the file to find out, as Exists does, so call it on the game thread.
 std::optional<Source> SourceOf(std::wstring_view file);
+
+// A patch to a file as the game reads it. It is given the file's name, in lower case with its
+// extension, and its bytes as the game found them, and returns the changed bytes, or nullopt to
+// leave them.
+using ResourcePatch =
+    std::function<std::optional<std::vector<std::byte>>(std::wstring_view name, std::span<const std::byte> bytes)>;
+
+// Patches every file of a type as the game reads it, whichever copy the game takes: a mod's, an
+// add-in's, a campaign's or the core's. Use it to add to the game's files where a whole
+// replacement would hide every other version of them.
+//
+//   dao::resources::OnLoad(L"mao", [](std::wstring_view name, std::span<const std::byte> bytes) {
+//       return WithMetalness(name, bytes); // the material with lines of the plugin's own added
+//   });
+//
+// @param extension the type, with its dot or without, in any case: L"mao", L".gda"
+//
+// The patch runs each time the game reads such a file's bytes: when it first uses the file, and
+// again if it has let the file go and uses it again. It runs on the thread that reads, any of the
+// game's, so it must not call the game; and while it runs, other reads from the same archive wait
+// for it. Patches for one type run in the order they were added, each on the previous one's
+// result; other plugins' patches run too, in no guaranteed order. Add patches at plugin load,
+// before the game reads anything. Textures (.dds) are not patched: the game turns their bytes into
+// its own form within the read. Nothing is written to disk.
+void OnLoad(std::wstring_view extension, ResourcePatch patch);
 
 } // namespace dao::resources

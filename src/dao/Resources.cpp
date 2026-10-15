@@ -84,6 +84,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
@@ -96,11 +97,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <cwctype>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <utility>
 
 namespace dao::resources
@@ -644,6 +647,161 @@ std::optional<Source> SourceOf(std::wstring_view file)
     const Found found(file);
     const std::uintptr_t source = found.Source();
     return source != 0 ? SourceAt(source) : std::nullopt;
+}
+
+namespace
+{
+
+// A resource's fields as its read leaves them (dao/Addresses.h, kResource_ReadOnFirstUse).
+constexpr std::size_t kResourceBytes = 0x20;    // its bytes, the engine's to free unless borrowed
+constexpr std::size_t kResourceLength = 0x30;   // their length as Resources::Size answers it
+constexpr std::size_t kResourceState = 0x34;    // 2 once read, 3 if the read failed
+constexpr std::size_t kResourceBorrowed = 0x3C; // the bytes are not the resource's to free
+constexpr std::size_t kResourceRead = 0x3D;     // the read is done
+constexpr std::int32_t kRead = 2;
+
+std::mutex g_loadMutex;
+std::vector<std::pair<std::wstring, ResourcePatch>> g_loadPatches; // by extension, lower case, no dot
+// The length each patched resource had before its patch, by the resource and its name: given back
+// before the game reads it again, so that its next read and patch start from the file.
+std::vector<std::tuple<std::uintptr_t, std::wstring, std::uint32_t>> g_patchedLengths;
+
+using ReadOnFirstUseFn = void(__fastcall *)(void *resource, int edx);
+Detour<ReadOnFirstUseFn> g_readOnFirstUse;
+
+std::wstring Lower(std::wstring_view text)
+{
+    std::wstring out(text);
+    std::ranges::transform(out, out.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    return out;
+}
+
+std::wstring ExtensionOf(const std::wstring &name)
+{
+    const std::size_t dot = name.rfind(L'.');
+    return dot == std::wstring::npos ? std::wstring{} : name.substr(dot + 1);
+}
+
+// Gives a resource the length it had before an earlier patch, if it had one.
+void GiveBackLength(std::uintptr_t resource, const std::wstring &name)
+{
+    const std::lock_guard lock(g_loadMutex);
+    const auto it = std::ranges::find_if(g_patchedLengths, [&](const auto &entry) {
+        return std::get<0>(entry) == resource && std::get<1>(entry) == name;
+    });
+    if (it != g_patchedLengths.end())
+    {
+        *reinterpret_cast<std::uint32_t *>(resource + kResourceLength) = std::get<2>(*it);
+        g_patchedLengths.erase(it);
+    }
+}
+
+// Runs the type's patches over a resource the game has just read, and gives it their result in a
+// buffer of the engine's own, which the engine frees as it would have freed the file's.
+void PatchRead(std::uintptr_t resource, const std::wstring &name)
+{
+    std::vector<ResourcePatch> patches;
+    {
+        const std::wstring extension = ExtensionOf(name);
+        const std::lock_guard lock(g_loadMutex);
+        for (const auto &[type, patch] : g_loadPatches)
+        {
+            if (type == extension)
+            {
+                patches.push_back(patch);
+            }
+        }
+    }
+    const auto bytes = TryRead<std::uintptr_t>(resource + kResourceBytes);
+    const auto length = TryRead<std::uint32_t>(resource + kResourceLength);
+    if (patches.empty() || !bytes || *bytes == 0 || !length || *length > kMostBytes ||
+        TryRead<std::int32_t>(resource + kResourceState) != kRead)
+    {
+        return;
+    }
+    std::vector<std::byte> current(*length);
+    if (!TryCopy(current.data(), *bytes, current.size()))
+    {
+        return;
+    }
+    bool changed = false;
+    for (const ResourcePatch &patch : patches)
+    {
+        detail::Guard("a resource's patch", [&] {
+            if (auto next = patch(name, current))
+            {
+                current = std::move(*next);
+                changed = true;
+            }
+        });
+    }
+    if (!changed || current.size() > kMostBytes)
+    {
+        return;
+    }
+    using NewFn = void *(__cdecl *)(std::size_t);
+    using DeleteFn = void(__cdecl *)(void *);
+    void *fresh =
+        reinterpret_cast<NewFn>(Module::Address(addr::kOperatorNew))(std::max<std::size_t>(current.size(), 1));
+    if (fresh == nullptr)
+    {
+        return;
+    }
+    std::memcpy(fresh, current.data(), current.size());
+    if (TryRead<std::uint8_t>(resource + kResourceBorrowed).value_or(1) == 0)
+    {
+        reinterpret_cast<DeleteFn>(Module::Address(addr::kOperatorDelete))(reinterpret_cast<void *>(*bytes));
+    }
+    *reinterpret_cast<std::uintptr_t *>(resource + kResourceBytes) = reinterpret_cast<std::uintptr_t>(fresh);
+    *reinterpret_cast<std::uint32_t *>(resource + kResourceLength) = static_cast<std::uint32_t>(current.size());
+    const std::lock_guard lock(g_loadMutex);
+    g_patchedLengths.emplace_back(resource, name, *length);
+}
+
+// ReadOnFirstUse, __thiscall on the resource, a plain `ret`. Both its callers, Resources::Data and
+// ReplaceBuffer, hold the resource's source's lock around it, so the patch and the swap after it
+// are under that lock too.
+void __fastcall ReadOnFirstUse(void *resource, int edx)
+{
+    const auto at = reinterpret_cast<std::uintptr_t>(resource);
+    const bool unread = TryRead<std::uint8_t>(at + kResourceRead).value_or(1) == 0;
+    std::optional<std::wstring> name = unread ? EngineText(at + kResourceName) : std::nullopt;
+    if (name)
+    {
+        *name = Lower(*name);
+        GiveBackLength(at, *name);
+    }
+    g_readOnFirstUse.Original()(resource, edx);
+    if (name && TryRead<std::uint8_t>(at + kResourceRead) == 1 && !IsProcessed(*name))
+    {
+        PatchRead(at, *name);
+    }
+}
+
+} // namespace
+
+// Read 2026-10-14 for DAOLib #124 (DAOElgaraShaders #19): the material loader (0x004F72D0) finds
+// "<name>.mao.xml", else "<name>.mao", and parses what Resources::Data answers, of the length
+// Resources::Size answers (the resource's +0x30; its +0x2C is the length in its source, which a
+// read fetches by and is left alone here). Data reads through ReadOnFirstUse, so its bytes pass
+// this detour first.
+void OnLoad(std::wstring_view extension, ResourcePatch patch)
+{
+    if (!patch)
+    {
+        return;
+    }
+    std::wstring type = Lower(extension);
+    if (type.starts_with(L'.'))
+    {
+        type.erase(0, 1);
+    }
+    const std::lock_guard lock(g_loadMutex);
+    g_loadPatches.emplace_back(std::move(type), std::move(patch));
+    if (g_readOnFirstUse.Original() == nullptr)
+    {
+        g_readOnFirstUse.Attach(addr::kResource_ReadOnFirstUse, &ReadOnFirstUse);
+    }
 }
 
 } // namespace dao::resources

@@ -22,6 +22,14 @@
 // is being explored, and for each file named in where.txt (a line each) the
 // place it is taken from, and the start of what it holds, so that test files
 // of one name put in several places show which the game reads.
+//
+// Patching a type as the game reads it (DAOLib #124): every material object
+// (.mao) the game reads gets an XML comment after its last line, counted and
+// the first few named in the log, and one is read back on the first frame
+// to show the comment there. With a file onload.txt beside the DLL, each of
+// its lines "material from to" also swaps the text `from` for `to` in that
+// material, a texture's name for another's, so that what the game draws
+// shows it used the patched bytes.
 #include "dao/Resources.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
@@ -34,12 +42,17 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -162,6 +175,41 @@ void InALevel()
     }
 }
 
+// The materials patched, and the swaps onload.txt asks for: material, from, to.
+std::atomic<int> g_patched{0};
+std::vector<std::array<std::string, 3>> g_swaps;
+constexpr std::string_view kMark = "<!-- example_resources -->";
+
+std::optional<std::vector<std::byte>> PatchMaterial(std::wstring_view name, std::span<const std::byte> bytes)
+{
+    std::string text(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    const std::string narrow = dao::Utf8(std::wstring(name));
+    for (const auto &[material, from, to] : g_swaps)
+    {
+        for (std::size_t at = 0; material == narrow && (at = text.find(from, at)) != std::string::npos;)
+        {
+            text.replace(at, from.size(), to);
+            at += to.size();
+        }
+    }
+    text += kMark;
+    if (const int count = ++g_patched; count <= 5)
+    {
+        spdlog::info("patched {} as the game read it, {} bytes now ({} so far)", narrow, text.size(), count);
+    }
+    return std::vector<std::byte>(reinterpret_cast<const std::byte *>(text.data()),
+                                  reinterpret_cast<const std::byte *>(text.data()) + text.size());
+}
+
+void LogPatched(const char *when)
+{
+    const auto bytes = dao::resources::Read(L"anvil_01.mao");
+    const bool marked =
+        bytes && std::string_view(reinterpret_cast<const char *>(bytes->data()), bytes->size()).ends_with(kMark);
+    spdlog::info("{}: {} materials patched; anvil_01.mao {}", when, g_patched.load(),
+                 marked ? "ends with the patch's comment" : "does not");
+}
+
 void EachFrame()
 {
     InALevel();
@@ -187,6 +235,7 @@ void EachFrame()
     spdlog::info("adding it: {}", dao::resources::AddFolder(Extra()));
     LogTexture("added in a running game");
     LogSources("on the first frame");
+    LogPatched("on the first frame");
 }
 
 } // namespace
@@ -200,6 +249,12 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     spdlog::info("adding extra\\ as the plugin loads: {}", dao::resources::AddFolder(Extra()));
+    std::ifstream swaps(dao::Module::OwnFolder() / L"onload.txt");
+    for (std::array<std::string, 3> swap; swaps >> swap[0] >> swap[1] >> swap[2];)
+    {
+        g_swaps.push_back(swap);
+    }
+    dao::resources::OnLoad(L"mao", &PatchMaterial);
     dao::OnFrame(&EachFrame);
     return true;
 }
