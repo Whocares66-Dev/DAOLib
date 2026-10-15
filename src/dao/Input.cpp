@@ -973,6 +973,63 @@ void ReleaseCursor()
 namespace
 {
 
+// The game's own hiding and holding of the cursor (dao/Addresses.h, kPlatformWin32_Vftable): the
+// platform at the game object's +0xC8, its slot 13 to hide and hold, 14 to give back. The fly
+// camera calls 14 each frame its own look is not held, so while a plugin holds the cursor the
+// detoured 14 does nothing.
+constexpr std::size_t kPlatform = 0xC8;
+constexpr std::size_t kHoldSlot = 13;
+constexpr std::size_t kGiveBackSlot = 14;
+
+using PlatformFn = void(__fastcall *)(void *platform, int edx);
+Detour<PlatformFn> g_giveBackCursor;
+std::atomic<bool> g_pluginHoldsCursor{false};
+
+void __fastcall GiveBackCursor(void *platform, int edx)
+{
+    if (!g_pluginHoldsCursor.load(std::memory_order_relaxed))
+    {
+        g_giveBackCursor.Original()(platform, edx);
+    }
+}
+
+void *Platform()
+{
+    const auto game = *reinterpret_cast<const std::uintptr_t *>(Module::Address(addr::kEclipseGame));
+    return game != 0 ? reinterpret_cast<void *>(TryRead<std::uintptr_t>(game + kPlatform).value_or(0)) : nullptr;
+}
+
+} // namespace
+
+void HoldCursor(bool held)
+{
+    const auto *const table = reinterpret_cast<PlatformFn const *>(Module::Address(addr::kPlatformWin32_Vftable));
+    static std::once_flag once;
+    std::call_once(once, [&] {
+        if (table != nullptr)
+        {
+            g_giveBackCursor.AttachTo(table[kGiveBackSlot], &GiveBackCursor);
+        }
+    });
+    void *platform = Platform();
+    if (platform == nullptr || table == nullptr)
+    {
+        return;
+    }
+    g_pluginHoldsCursor.store(held, std::memory_order_relaxed);
+    if (held)
+    {
+        table[kHoldSlot](platform, 0);
+    }
+    else
+    {
+        g_giveBackCursor.Original()(platform, 0);
+    }
+}
+
+namespace
+{
+
 // The game's devices, read 2026-10-15 for DAOLib #127 in GOG's exe. ECInput::RawInputWin32 reads
 // DirectInput each frame (its slot 1, 0x008804F0): the keyboard's state, 256 bytes by scan code
 // from +0x3D, a key down where bit 7 is set (0x0087DE50); the mouse's (ReadMouse, kRawInputWin32_

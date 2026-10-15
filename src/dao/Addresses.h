@@ -633,6 +633,17 @@ DAO_ADDRESS(kInputModes_Get, 24303)
 // whether the cursor is at the window's edge, for scrolling. The name is
 // ours.
 DAO_ADDRESS(kInput_AxisPair, 24340)
+// The cursor hidden and held, read 2026-10-15 for DAOLib #132:
+// Eclipse::PlatformWin32, the game object's (kEclipseGame) at its +0xC8.
+// Its slot 13 (0x00414630), __thiscall (), unless its flag at +0x5A is set:
+// keeps the cursor's clip (GetClipCursor), clips it to one pixel where it
+// is, tells the input system (0x0087DF00), hides it (ShowCursor(FALSE))
+// and sets the flag. Slot 14 (0x00414700) undoes it all where the flag is
+// set: the clip given back, ShowCursor(TRUE), the flag cleared. The explore
+// camera's input read calls them for its right-drag orbit (0x007EDFFB,
+// 0x007EE023), and the fly camera's look each frame (0x0076D620): 13 while
+// its look is held, else 14.
+DAO_DATA(kPlatformWin32_Vftable, 60745)
 // Whether an input is down (dao/Input.h, Hold; DAOLib #95), read 2026-10-12
 // from the drive command back. The player steering the controlled creature
 // is a steering object's update each frame (0x00764150): it makes a

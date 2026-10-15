@@ -195,6 +195,13 @@ void Frame()
     Walk();
     LogReadings();
     LogHeld(kHeld);
+    // The cursor hidden and held while that key is (DAOLib #132), as the game's right-drag orbit does.
+    static bool hidden = false;
+    if (dao::input::Held(kHeld) != hidden)
+    {
+        hidden = !hidden;
+        dao::input::HoldCursor(hidden);
+    }
     LogHeld(kMapAction);
     using Clock = std::chrono::steady_clock;
     static const Clock::time_point started = Clock::now();
@@ -238,8 +245,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                                 .label = L"DAOLib example: withhold the game's keys",
                                 .section = L"DAOLib example"},
                                &ToggleWithheld);
-    dao::input::RegisterAction(
-        {.name = std::wstring(kHeld), .label = L"DAOLib example: log while held", .section = L"DAOLib example"}, [] {});
+    dao::input::RegisterAction({.name = std::wstring(kHeld),
+                                .label = L"DAOLib example: log while held, the cursor hidden",
+                                .section = L"DAOLib example"},
+                               [] {});
     dao::input::RegisterAction({.name = L"DAOLibExampleMapToggle",
                                 .label = L"DAOLib example: the example's key map on or off",
                                 .section = L"DAOLib example"},

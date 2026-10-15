@@ -111,6 +111,14 @@ void PointCursor(std::int32_t x, std::int32_t y);
 // Hands the world pick back to the real mouse after PointCursor.
 void ReleaseCursor();
 
+// Hides the cursor and holds it where it is, as the game's right-drag orbit does, or shows it
+// there again.
+// @param held true to hide and hold it, false to give it back
+//
+// While it holds, the game's own giving back (its orbit's, its fly camera's) waits for this, and
+// MouseDelta still reads the mouse. Call it on the game thread.
+void HoldCursor(bool held);
+
 // One of the four ways the game's movement keys steer the controlled creature.
 enum class Move : std::uint8_t
 {
