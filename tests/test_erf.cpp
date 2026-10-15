@@ -275,3 +275,57 @@ TEST_CASE("what is no archive, or no file, opens as none", "[erf]")
     CHECK_FALSE(archive::Archive::Open(file.path).has_value());
     CHECK_FALSE(archive::Archive::Open(file.path.string() + ".missing").has_value());
 }
+
+TEST_CASE("an archive written is read back: names lower case and in order, files on four bytes", "[erf]")
+{
+    auto bytes = [](const std::string &text) {
+        std::vector<std::byte> out(text.size());
+        std::memcpy(out.data(), text.data(), text.size());
+        return out;
+    };
+    const std::vector<archive::Item> files{
+        {L"Ogre.UTC", bytes("an ogre")}, {L"abi_base.gda", bytes("the table")}, {L"cn_bdy_ogr_0.msh", bytes("a mesh")}};
+    using namespace std::chrono;
+    const std::vector<std::byte> written = archive::Write(files, sys_days{2026y / October / 14});
+    const auto header = archive::ReadHeader(written);
+    REQUIRE(header);
+    CHECK(header->version == archive::Version::V20);
+    CHECK(header->count == 3);
+    std::uint32_t year = 0;
+    std::uint32_t day = 0;
+    std::uint32_t word = 0;
+    std::memcpy(&year, written.data() + 20, 4);
+    std::memcpy(&day, written.data() + 24, 4);
+    std::memcpy(&word, written.data() + 28, 4);
+    CHECK(year == 126);
+    CHECK(day == 286); // 14 October 2026 is the 287th day
+    CHECK(word == 0xFFFFFFFFU);
+    const auto entries = archive::Entries(written);
+    REQUIRE(entries.size() == 3);
+    CHECK(entries[0].name == L"abi_base.gda");
+    CHECK(entries[1].name == L"cn_bdy_ogr_0.msh");
+    CHECK(entries[2].name == L"ogre.utc");
+    CHECK(entries[0].offset == archive::kHeaderSize + (3 * archive::kEntrySize)); // straight after the directory
+    CHECK(entries[1].offset == entries[0].offset + 12);                           // "the table", 9, to 12
+    CHECK(entries[2].offset % 4 == 0);
+
+    const TempFile file(written);
+    const auto opened = archive::Archive::Open(file.path);
+    REQUIRE(opened);
+    CHECK(Text(opened->Read(L"Ogre.utc").value()) == "an ogre");
+    CHECK(Text(opened->Read(L"cn_bdy_ogr_0.msh").value()) == "a mesh");
+}
+
+TEST_CASE("an archive is not written with no files, a name too long or not ASCII, or a name twice", "[erf]")
+{
+    const std::vector<std::byte> one{std::byte{1}};
+    CHECK(archive::Write({}).empty());
+    const std::vector<archive::Item> longName{{std::wstring(32, L'a'), one}};
+    CHECK(archive::Write(longName).empty());
+    const std::vector<archive::Item> longest{{std::wstring(31, L'a'), one}};
+    CHECK_FALSE(archive::Write(longest).empty());
+    const std::vector<archive::Item> accented{{L"é.gda", one}};
+    CHECK(archive::Write(accented).empty());
+    const std::vector<archive::Item> twice{{L"a.gda", one}, {L"A.GDA", one}};
+    CHECK(archive::Write(twice).empty());
+}

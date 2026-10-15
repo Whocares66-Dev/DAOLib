@@ -8,6 +8,7 @@
 //   const auto bytes = archive->Read(L"abi_base.gda");
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -132,5 +133,25 @@ class Archive
     struct Stream;
     std::shared_ptr<Stream> stream_; // the held file
 };
+
+// The most UTF-16 units a name in an archive has, its NUL after; the game's own have up to 31.
+inline constexpr std::size_t kLongestName = 31;
+
+// A file for Write: its name, with its extension, and its bytes.
+struct Item
+{
+    std::wstring name;
+    std::vector<std::byte> bytes;
+};
+
+// Returns an archive of version 2.0 of the files, laid out as the game's own:
+// the names in lower case and in order, each file's bytes after the
+// directory in that order, each starting on four bytes, and the header's
+// date the day it is written.
+// @return empty for no files, a name that is empty, longer than kLongestName
+// or not ASCII, or a name two files have, in any case
+std::vector<std::byte> Write(
+    std::span<const Item> files,
+    std::chrono::sys_days written = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()));
 
 } // namespace dao::core::erf

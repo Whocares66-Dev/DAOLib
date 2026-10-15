@@ -146,9 +146,11 @@ add_library(
     src/dao/core/AddIns.cpp
     src/dao/core/CallSite.cpp
     src/dao/core/Conversation.cpp
+    src/dao/core/DaZip.cpp
     src/dao/core/Dds.cpp
     src/dao/core/DdsWrite.cpp
     src/dao/core/Erf.cpp
+    src/dao/core/ErfWrite.cpp
     src/dao/core/Exceptions.cpp
     src/dao/core/Fingerprint.cpp
     src/dao/core/FunctionTable.cpp
