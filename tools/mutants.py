@@ -116,6 +116,7 @@ PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
 MAO = "src/dao/core/MaterialObject.cpp"
+PICTURE = "src/dao/core/Picture.cpp"
 ERF = "src/dao/core/Erf.cpp"
 DDS = "src/dao/core/Dds.cpp"
 GFF3 = "src/dao/core/Gff3.cpp"
@@ -1030,6 +1031,12 @@ MUTANTS: list[Mutant] = [
         MAO,
         "while (!path.empty() && (path.back() == ' ' || path.back() == '\\t'))",
         "while (false)",
+    ),
+    Mutant(
+        "picture-edge: a middle on the span's end is in it, as Pillow has it",
+        PICTURE,
+        "(at > -0.5 && at <= 0.5)",
+        "(at > -0.5 && at < 0.5)",
     ),
 ]
 
