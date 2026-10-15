@@ -76,6 +76,9 @@
 #include "dao/core/Msvc8.h"
 #include "dao/core/OptionsMovie.h"
 
+#include <spdlog/fmt/ranges.h>
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -192,10 +195,12 @@ bool HasAction(void *mappings, const core::WStringRep &name)
 // (0x00894530) pushes the record it makes onto the vector at the mappings' +0xD8, its first and
 // last at +0xDC and +0xE0 (0x0049D170, then its back, 0x00893E20). A record's two keys are the
 // words at +0x110 and +0x114 (0x00893810, as the controls' save reads them, 0x00895980).
+constexpr std::size_t kRecordsBegin = 0xDC;
+constexpr std::size_t kRecordsEnd = 0xE0;
+constexpr std::array<std::size_t, 2> kKeyWords{0x110, 0x114};
+
 const std::byte *NewestRecord(void *mappings)
 {
-    constexpr std::size_t kRecordsBegin = 0xDC;
-    constexpr std::size_t kRecordsEnd = 0xE0;
     const auto at = reinterpret_cast<std::uintptr_t>(mappings);
     const auto begin = TryRead<std::uintptr_t>(at + kRecordsBegin).value_or(0);
     const auto end = TryRead<std::uintptr_t>(at + kRecordsEnd).value_or(0);
@@ -204,6 +209,353 @@ const std::byte *NewestRecord(void *mappings)
         return nullptr;
     }
     return reinterpret_cast<const std::byte *>(TryRead<std::uintptr_t>(end - sizeof(std::uintptr_t)).value_or(0));
+}
+
+// A plugin's key maps (DAOLib #130; dao/Addresses.h, TakeKey). Binding a key takes it from every
+// action that has it (TakeKey), then gives it to the action bound (its record's SetKey), in
+// SetKey and in LoadKeyBindings alike. So the take is noted and, when the key is given, an action
+// it was taken from gets it back where the two are in different key maps, the game's own actions
+// being in none. While a map is on, every action outside it that has one of its keys is shadowed:
+// its mappings, numbered inputs and texts, refused where the modes are asked of them
+// (AllowsInput, Allowed), so its keys do nothing. Each plugin's copy of the library does this for
+// its own actions, one detour inside the other's; another plugin's actions are outside its maps.
+struct Mapped
+{
+    std::uintptr_t record;
+    std::wstring keymap;
+};
+std::mutex g_keymapMutex;              // taken after g_mutex where both are, never before
+std::vector<Mapped> g_mapped;          // this plugin's actions with their records, under g_keymapMutex
+std::vector<std::wstring> g_keymapsOn; // under g_keymapMutex
+std::atomic<bool> g_anyKeymapOn{false};
+
+// A numbered input's binding unbound while a map is on: the action's record and which of its
+// keys, the input system's binding, and the key to give it back.
+struct Silenced
+{
+    std::uintptr_t record;
+    std::size_t which;
+    std::int32_t binding;
+    std::uint32_t key;
+};
+// What the maps that are on shadow, made again when a key or a map changes.
+struct Shadow
+{
+    std::vector<std::wstring> texts;
+    std::vector<Silenced> silenced;
+};
+Shadow g_shadow; // under g_keymapMutex
+
+void NoteMapped(const Entry &entry)
+{
+    if (entry.record == nullptr)
+    {
+        return;
+    }
+    const std::lock_guard lock(g_keymapMutex);
+    g_mapped.push_back({reinterpret_cast<std::uintptr_t>(entry.record), entry.action.keymap});
+}
+
+template <class Range, class Value> bool Has(const Range &range, const Value &value)
+{
+    return std::ranges::find(range, value) != std::ranges::end(range);
+}
+
+// The record's map: empty for the game's actions and another plugin's.
+std::wstring KeymapOf(std::uintptr_t record)
+{
+    const auto found = std::ranges::find(g_mapped, record, &Mapped::record);
+    return found != g_mapped.end() ? found->keymap : std::wstring();
+}
+
+bool IsOn(std::wstring_view keymap)
+{
+    return !keymap.empty() && std::ranges::find(g_keymapsOn, keymap) != g_keymapsOn.end();
+}
+
+void *InputMapper()
+{
+    using GetFn = void *(__cdecl *)();
+    reinterpret_cast<GetFn>(Module::Address(addr::kInputMapper_Get))();
+    return *reinterpret_cast<void **>(Module::Address(addr::kInputMapper));
+}
+
+// The mapper's text for a handle: its vector at +4 (first +8, last +0xC), 0x28 bytes each, the
+// text at +8.
+const core::WStringRep *TextOf(std::int32_t handle)
+{
+    constexpr std::size_t kTextsBegin = 0x8;
+    constexpr std::size_t kTextsEnd = 0xC;
+    constexpr std::size_t kTextSize = 0x28;
+    constexpr std::size_t kText = 0x8;
+    const auto mapper = reinterpret_cast<std::uintptr_t>(InputMapper());
+    const auto begin = mapper != 0 ? TryRead<std::uintptr_t>(mapper + kTextsBegin).value_or(0) : 0;
+    const auto end = mapper != 0 ? TryRead<std::uintptr_t>(mapper + kTextsEnd).value_or(0) : 0;
+    const std::size_t count = begin != 0 && end > begin ? (end - begin) / kTextSize : 0;
+    if (handle < 0 || std::cmp_greater_equal(handle, count))
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<const core::WStringRep *>(begin + (static_cast<std::size_t>(handle) * kTextSize) + kText);
+}
+
+std::vector<std::uintptr_t> Records(void *mappings)
+{
+    const auto at = reinterpret_cast<std::uintptr_t>(mappings);
+    const auto begin = at != 0 ? TryRead<std::uintptr_t>(at + kRecordsBegin).value_or(0) : 0;
+    const auto end = at != 0 ? TryRead<std::uintptr_t>(at + kRecordsEnd).value_or(0) : 0;
+    std::vector<std::uintptr_t> records;
+    for (std::uintptr_t slot = begin; begin != 0 && slot < end; slot += sizeof(std::uintptr_t))
+    {
+        records.push_back(TryRead<std::uintptr_t>(slot).value_or(0));
+    }
+    std::erase(records, 0U);
+    return records;
+}
+
+// A record's name, a std::wstring at +0x11C (0x008927F0, which copies it out).
+constexpr std::size_t kRecordName = 0x11C;
+
+std::wstring NameOf(std::uintptr_t record)
+{
+    const auto *name = reinterpret_cast<const core::WStringRep *>(record + kRecordName);
+    return std::wstring(name->View());
+}
+
+std::array<std::uint32_t, 2> KeysOf(std::uintptr_t record)
+{
+    return {TryRead<std::uint32_t>(record + kKeyWords[0]).value_or(0),
+            TryRead<std::uint32_t>(record + kKeyWords[1]).value_or(0)};
+}
+
+// An action's mappings for one of its keys, as its record keeps them (+0xF0 for the first,
+// +0x100 for the second): 8 bytes each, a flag, then the input system's binding (the flag 0) or
+// the mapper's text.
+struct Mapping
+{
+    bool isText;
+    std::int32_t handle;
+};
+
+std::vector<Mapping> MappingsOf(std::uintptr_t record, std::size_t which)
+{
+    constexpr std::size_t kFirstKeyMappings = 0xF0;
+    constexpr std::size_t kSecondKeyMappings = 0x100;
+    constexpr std::size_t kMappingSize = 8;
+    const std::size_t list = record + (which == 0 ? kFirstKeyMappings : kSecondKeyMappings);
+    const auto begin = TryRead<std::uintptr_t>(list + 4).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(list + 8).value_or(0);
+    std::vector<Mapping> mappings;
+    for (std::uintptr_t at = begin; begin != 0 && at + kMappingSize <= end; at += kMappingSize)
+    {
+        mappings.push_back({TryRead<std::uint8_t>(at).value_or(0) != 0, TryRead<std::int32_t>(at + 4).value_or(-1)});
+    }
+    return mappings;
+}
+
+void *InputSystem()
+{
+    using GetFn = void *(__cdecl *)();
+    reinterpret_cast<GetFn>(Module::Address(addr::kInput_Get))();
+    return *reinterpret_cast<void **>(Module::Address(addr::kInput));
+}
+
+// The input system's binding made again for a key, 0 for none, as the record's SetKey does.
+void Bind(std::int32_t binding, std::uint32_t key)
+{
+    void *input = InputSystem();
+    if (input != nullptr)
+    {
+        using BindFn = void(__fastcall *)(void *, int, const std::int32_t *, const std::uint32_t *);
+        reinterpret_cast<BindFn>(Module::Address(addr::kInput_Bind))(input, 0, &binding, &key);
+    }
+}
+
+// An action with a key of a map that is on: its texts refused, and its numbered inputs' bindings
+// for that key unbound, so the input does not answer to it but does to the action's other key.
+void ShadowRecord(std::uintptr_t record, const std::vector<std::uint32_t> &keys, Shadow &shadow)
+{
+    for (const Mapping &mapping : MappingsOf(record, 0))
+    {
+        const core::WStringRep *text = mapping.isText ? TextOf(mapping.handle) : nullptr;
+        if (text != nullptr)
+        {
+            shadow.texts.emplace_back(text->View());
+        }
+    }
+    const std::array<std::uint32_t, 2> held = KeysOf(record);
+    for (std::size_t which = 0; which < held.size(); ++which)
+    {
+        if (held.at(which) == 0 || !Has(keys, held.at(which)))
+        {
+            continue;
+        }
+        for (const Mapping &mapping : MappingsOf(record, which))
+        {
+            if (!mapping.isText)
+            {
+                Bind(mapping.handle, 0);
+                shadow.silenced.push_back({record, which, mapping.handle, held.at(which)});
+            }
+        }
+    }
+}
+
+// The shadow made again, on the game thread under g_keymapMutex: the bindings unbound before
+// given back where their action still has that key, then the maps that are on shadowing anew.
+void Reshadow()
+{
+    for (const Silenced &silenced : g_shadow.silenced)
+    {
+        if (KeysOf(silenced.record).at(silenced.which) == silenced.key)
+        {
+            Bind(silenced.binding, silenced.key);
+        }
+    }
+    g_shadow = Shadow{};
+    if (g_keymapsOn.empty())
+    {
+        return;
+    }
+    const std::vector<std::uintptr_t> records = Records(Mappings());
+    std::vector<std::uint32_t> keys;
+    for (const std::uintptr_t record : records)
+    {
+        if (IsOn(KeymapOf(record)))
+        {
+            for (const std::uint32_t key : KeysOf(record))
+            {
+                if (key != 0)
+                {
+                    keys.push_back(key);
+                }
+            }
+        }
+    }
+    std::string shadowed;
+    for (const std::uintptr_t record : records)
+    {
+        if (!IsOn(KeymapOf(record)) &&
+            std::ranges::any_of(KeysOf(record), [&](std::uint32_t key) { return Has(keys, key); }))
+        {
+            ShadowRecord(record, keys, g_shadow);
+            shadowed += (shadowed.empty() ? "" : ", ") + Utf8(NameOf(record));
+        }
+    }
+    spdlog::info("input: key maps on shadow {}: {} bindings unbound, {} texts refused",
+                 shadowed.empty() ? "nothing" : shadowed, g_shadow.silenced.size(), g_shadow.texts.size());
+}
+
+bool ShadowedText(std::wstring_view text)
+{
+    if (!g_anyKeymapOn.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    const std::lock_guard lock(g_keymapMutex);
+    return Has(g_shadow.texts, text);
+}
+
+struct Taken
+{
+    std::uintptr_t record;
+    std::int32_t which;
+};
+struct Take
+{
+    std::uint32_t key;
+    std::vector<Taken> taken;
+    core::WStringRep *name; // the "already bound" action's, for the controls screen
+};
+thread_local std::optional<Take> t_take;
+
+using TakeKeyFn = void(__fastcall *)(void *mappings, int edx, core::WStringRep *name, const std::uint32_t *key);
+Detour<TakeKeyFn> g_takeKey;
+using SetRecordKeyFn = void(__fastcall *)(void *record, int edx, const std::uint32_t *key, std::int32_t which);
+Detour<SetRecordKeyFn> g_setRecordKey;
+
+void __fastcall TakeKey(void *mappings, int edx, core::WStringRep *name, const std::uint32_t *key)
+{
+    Take take{key != nullptr ? *key : 0U, {}, name};
+    for (const std::uintptr_t record : take.key != 0 ? Records(mappings) : std::vector<std::uintptr_t>())
+    {
+        const std::array<std::uint32_t, 2> keys = KeysOf(record);
+        for (std::size_t which = 0; which < keys.size(); ++which)
+        {
+            if (keys.at(which) == take.key)
+            {
+                take.taken.push_back({record, static_cast<std::int32_t>(which)});
+            }
+        }
+    }
+    g_takeKey.Original()(mappings, edx, name, key);
+    t_take = take.taken.empty() ? std::nullopt : std::optional(std::move(take));
+}
+
+void GiveBack(void *record, const std::uint32_t *key);
+
+// A key given to an action: those it was just taken from given theirs back, and the shadow made
+// again.
+void __fastcall SetRecordKey(void *record, int edx, const std::uint32_t *key, std::int32_t which)
+{
+    g_setRecordKey.Original()(record, edx, key, which);
+    GiveBack(record, key);
+    if (g_anyKeymapOn.load(std::memory_order_relaxed))
+    {
+        const std::lock_guard lock(g_keymapMutex);
+        Reshadow();
+    }
+}
+
+// The key given to the action bound: each it was just taken from in another map gets it back.
+void GiveBack(void *record, const std::uint32_t *key)
+{
+    if (!t_take || key == nullptr || *key != t_take->key)
+    {
+        return;
+    }
+    const Take take = std::move(*t_take);
+    t_take.reset();
+    const auto bound = reinterpret_cast<std::uintptr_t>(record);
+    std::uintptr_t kept = 0; // the last it was taken from and kept from, for the message
+    for (const Taken &taken : take.taken)
+    {
+        if (taken.record == bound)
+        {
+            continue;
+        }
+        bool share = false;
+        {
+            const std::lock_guard lock(g_keymapMutex);
+            share = KeymapOf(bound) != KeymapOf(taken.record);
+        }
+        if (share)
+        {
+            g_setRecordKey.Original()(reinterpret_cast<void *>(taken.record), 0, key, taken.which);
+        }
+        else
+        {
+            kept = taken.record;
+        }
+    }
+    // The controls screen's "already bound" line names an action the key was taken from and kept
+    // from, or none: the take named the last it took from, which may have it back (DAOTurnBased's
+    // test, 2026-10-15: Move backward bound to W named the map's action, not Move forward).
+    if (take.name == nullptr)
+    {
+        return;
+    }
+    if (kept != 0)
+    {
+        using AssignFn = void(__fastcall *)(core::WStringRep *, int, const core::WStringRep *);
+        reinterpret_cast<AssignFn>(Module::Address(addr::kStdWString_Assign))(
+            take.name, 0, reinterpret_cast<const core::WStringRep *>(kept + kRecordName));
+    }
+    else
+    {
+        take.name->size = 0;
+        const_cast<wchar_t *>(take.name->Characters())[0] = L'\0';
+    }
 }
 
 // The action, what its keys send, and the modes that allow it.
@@ -229,6 +581,7 @@ void AddToEngine(Entry &entry)
     reinterpret_cast<AddActionFn>(Module::Address(addr::kGroupedInputMappings_AddAction))(mappings, 0, &name, &label, 0,
                                                                                           0);
     entry.record = NewestRecord(mappings);
+    NoteMapped(entry);
 
     // What the game's press-once actions are registered with: the
     // keyboard, on a press, and no key yet.
@@ -307,6 +660,17 @@ void __cdecl ResetKeys()
 using AllowedFn = bool(__fastcall *)(void *, int, const core::WStringRep *);
 Detour<AllowedFn> g_allowed;
 
+// Under g_mutex: an action outside a map always answers, one in a map while it is on.
+bool KeymapAnswers(std::wstring_view keymap)
+{
+    if (keymap.empty())
+    {
+        return true;
+    }
+    const std::lock_guard lock(g_keymapMutex);
+    return IsOn(keymap);
+}
+
 bool __fastcall Allowed(void *modes, int edx, const core::WStringRep *text)
 {
     const bool allowed = g_allowed.Original()(modes, edx, text);
@@ -317,7 +681,7 @@ bool __fastcall Allowed(void *modes, int edx, const core::WStringRep *text)
     const auto name = core::ActionOfText(text->View());
     if (!name)
     {
-        return allowed;
+        return allowed && !ShadowedText(text->View());
     }
     // A plugin's action, but whose? Each plugin links its own copy of this
     // library and each copy detours this function, one inside the other.
@@ -331,7 +695,7 @@ bool __fastcall Allowed(void *modes, int edx, const core::WStringRep *text)
         if (g_actions[i].action.name == *name)
         {
             // Ours: no message has this name, so the engine is told no.
-            if (allowed)
+            if (allowed && KeymapAnswers(g_actions[i].action.keymap))
             {
                 ++g_actions[i].presses;
                 g_queued.push_back(i);
@@ -409,7 +773,9 @@ bool Attach()
     std::call_once(once, [] {
         attached = g_registerActions.Attach(addr::kInput_RegisterActions, &RegisterActions) &&
                    g_resetKeys.Attach(addr::kInput_ResetKeys, &ResetKeys) &&
-                   g_allowed.Attach(addr::kInputModes_Allowed, &Allowed);
+                   g_allowed.Attach(addr::kInputModes_Allowed, &Allowed) &&
+                   g_takeKey.Attach(addr::kGroupedInputMappings_TakeKey, &TakeKey) &&
+                   g_setRecordKey.Attach(addr::kGroupedInputs_SetKey, &SetRecordKey);
         if (attached)
         {
             OnFrame(&RunQueued);
@@ -789,7 +1155,6 @@ bool Down(MouseButton button)
 // An action's keys read from its record (NewestRecord, above) against the keyboard Down reads.
 bool Held(std::wstring_view name)
 {
-    constexpr std::array<std::size_t, 2> kKeyWords{0x110, 0x114};
     constexpr std::uint32_t kDevice = 0xF0000000;
     constexpr std::uint32_t kModifiers = kShift | kControl | kAlt;
     constexpr std::uint32_t kScanCode = 0xFF;
@@ -808,6 +1173,10 @@ bool Held(std::wstring_view name)
             words.at(i) = TryRead<std::uint32_t>(record + kKeyWords.at(i)).value_or(0);
         }
         modes = found->action.modes;
+        if (!KeymapAnswers(found->action.keymap))
+        {
+            return false;
+        }
     }
     auto *app = CClientExoApp::Get();
     auto *controller = app != nullptr ? app->GameModes() : nullptr;
@@ -870,6 +1239,23 @@ void detail::WithholdFlyCamera(bool withheld)
 {
     AttachWithholding();
     g_flyWithheld.store(withheld, std::memory_order_relaxed);
+}
+
+void SetKeymap(std::wstring_view keymap, bool on)
+{
+    if (keymap.empty())
+    {
+        return;
+    }
+    AttachWithholding();
+    const std::lock_guard lock(g_keymapMutex);
+    std::erase(g_keymapsOn, keymap);
+    if (on)
+    {
+        g_keymapsOn.emplace_back(keymap);
+    }
+    g_anyKeymapOn.store(!g_keymapsOn.empty(), std::memory_order_relaxed);
+    Reshadow();
 }
 
 } // namespace dao::input

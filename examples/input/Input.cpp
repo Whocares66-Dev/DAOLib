@@ -159,22 +159,43 @@ void LogReadings()
 // An action held rather than pressed (DAOLib #125): a line when its key, bound by the player, goes down and up.
 constexpr std::wstring_view kHeld = L"DAOLibExampleHeld";
 
-void LogHeld()
+void LogHeld(std::wstring_view name)
 {
-    static bool was = false;
-    const bool now = dao::input::Held(kHeld);
-    if (now != was)
+    static std::vector<std::pair<std::wstring, bool>> was;
+    auto found = std::ranges::find(was, name, &std::pair<std::wstring, bool>::first);
+    if (found == was.end())
     {
-        spdlog::info("{} {}", dao::Utf8(kHeld), now ? "held" : "let go");
-        was = now;
+        was.emplace_back(name, false);
+        found = std::prev(was.end());
     }
+    const bool now = dao::input::Held(name);
+    if (now != found->second)
+    {
+        spdlog::info("{} {}", dao::Utf8(name), now ? "held" : "let go");
+        found->second = now;
+    }
+}
+
+// A key map of the example's own (DAOLib #130): its action may have a key the game's actions
+// have, W say, and answers to it only while the map is on, when the game's action on that key does
+// nothing; off, the game has the key back.
+constexpr std::wstring_view kMap = L"DAOLibExampleMap";
+constexpr std::wstring_view kMapAction = L"DAOLibExampleMapForward";
+bool g_mapOn = false;
+
+void ToggleMap()
+{
+    g_mapOn = !g_mapOn;
+    dao::input::SetKeymap(kMap, g_mapOn);
+    spdlog::info("the example's key map {}", g_mapOn ? "on" : "off");
 }
 
 void Frame()
 {
     Walk();
     LogReadings();
-    LogHeld();
+    LogHeld(kHeld);
+    LogHeld(kMapAction);
     using Clock = std::chrono::steady_clock;
     static const Clock::time_point started = Clock::now();
     static Clock::time_point last = started;
@@ -215,10 +236,19 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     spdlog::info("registered: {} {}; refused as they should be: {} {}", ping, unbound, !spaced, !twice);
     dao::input::RegisterAction({.name = L"DAOLibExampleWithhold",
                                 .label = L"DAOLib example: withhold the game's keys",
-                                .key = dao::input::Key::None},
+                                .section = L"DAOLib example"},
                                &ToggleWithheld);
     dao::input::RegisterAction(
         {.name = std::wstring(kHeld), .label = L"DAOLib example: log while held", .section = L"DAOLib example"}, [] {});
+    dao::input::RegisterAction({.name = L"DAOLibExampleMapToggle",
+                                .label = L"DAOLib example: the example's key map on or off",
+                                .section = L"DAOLib example"},
+                               &ToggleMap);
+    dao::input::RegisterAction({.name = std::wstring(kMapAction),
+                                .label = L"DAOLib example: in the key map, log while held",
+                                .section = L"DAOLib example",
+                                .keymap = std::wstring(kMap)},
+                               [] { spdlog::info("{} pressed", dao::Utf8(kMapAction)); });
     dao::OnFrame(&Frame);
     return true;
 }

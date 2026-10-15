@@ -658,6 +658,45 @@ DAO_DATA(kInputModes, 102761)
 DAO_ADDRESS(kInputModes_Group, 24295)
 DAO_ADDRESS(kInputModeGroup_Allow, 24272)
 DAO_ADDRESS(kInputModes_Allowed, 24264)
+// One key to one action, and what an action answers to, read 2026-10-15 for
+// DAOLib #130 (dao/Input.cpp, keys shared by actions whose modes do not
+// overlap). SetKey (above) and LoadKeyBindings (0x0089573A, 0x00895863)
+// first call TakeKey, __thiscall on the mappings (std::wstring *out name,
+// const uint32 *key), `ret 8`: for every action's record (the mappings'
+// +0xDC) and both its keys (+0x110, +0x114, 0x00893810), a key equal to the
+// new one is cleared through the record's SetKey with 0, and the action's
+// name kept for the controls screen's "already bound" line; then they give
+// the action being bound the key through its record's SetKey, __thiscall
+// (const uint32 *key, int which), `ret 8`, which writes the word and binds
+// the key to each of the action's mappings. Those are at the record's +0xF0
+// for the first key (+0x100 for the second), a vector (first +4, last +8)
+// of 8 bytes each: a flag at +0, and at +4 either a numbered input (the
+// flag 0; dao/Input.h's Withhold) or a handle into the input mapper's
+// texts. The mapper (Get, __cdecl (), made on first use, kept at
+// g_inputMapper) keeps the texts as a vector at its +4 (first +8, last
+// +0xC) of 0x28 bytes each, the text a std::wstring at +8 (0x0087B630).
+// A mode's group (InputModes::Group) answers for a text and a numbered
+// input alike, each __thiscall (const std::wstring *) or (const int *),
+// `ret 4`, a bool: whether it allows it (InputModeGroup::AllowsText and
+// AllowsInput) and whether it bars it (BarsText, BarsInput); InputModes::
+// Allowed and AllowsInput ask them of every group that is on. The names
+// are ours.
+DAO_ADDRESS(kGroupedInputMappings_TakeKey, 24351)
+DAO_ADDRESS(kGroupedInputs_SetKey, 24350)
+DAO_ADDRESS(kInputMapper_Get, 24119)
+DAO_DATA(kInputMapper, 102721)
+// A numbered input's mapping is not the input but a binding of the input
+// system's (Get, __cdecl (), kept at g_input), made for it once a key
+// (0x00892210): an index into its vector at +4 (first +4, last +8) of 12
+// bytes each, the key word first, the input's list of them in a map at
+// +0x10, which IsDown reads. Bind, __thiscall (const int *binding, const
+// uint32 *key), `ret 8`, makes one again for a key; the record's SetKey
+// calls it for each of the action's numbered inputs (0x00894C40 made them).
+// Read 2026-10-15 after DAOTurnBased's test of #130 found the first
+// reading, which took the binding for the input, shadowed nothing.
+DAO_ADDRESS(kInput_Get, 24332)
+DAO_DATA(kInput, 102766)
+DAO_ADDRESS(kInput_Bind, 24310)
 DAO_ADDRESS(kMessageRegistry_Get, 3100)
 DAO_DATA(kMessageRegistry, 100247)
 DAO_ADDRESS(kMessageRegistry_Dispatch, 5090)

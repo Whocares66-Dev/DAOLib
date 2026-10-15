@@ -47,6 +47,11 @@ struct Action
     // The heading the controls screen lists the action under. Actions with the same section
     // share a heading.
     std::wstring section = L"Mods";
+    // The plugin's key map the action belongs to, or empty for none. An action in a key map and
+    // one outside it may have the same key, and the action answers only while its map is on
+    // (SetKeymap).
+    // An initializer, so a plugin may leave the field out of its designated initializer.
+    std::wstring keymap = {}; // NOLINT(readability-redundant-member-init)
 };
 
 // Registers an action and the callback its key runs.
@@ -83,6 +88,15 @@ std::uint64_t Presses(std::wstring_view name);
 // The modifiers the binding names must be down with the key; others may be down too. A binding
 // to a mouse button does not count. Call it from a frame callback.
 bool Held(std::wstring_view name);
+
+// Turns one of the plugin's key maps on or off, as a mode of its own: a free camera's keys on W,
+// A, S and D while it flies, the game's walking on them otherwise.
+// @param keymap the name actions give as Action::keymap
+//
+// While a map is on, its actions answer to their keys, in the game modes each names, and every
+// other action with one of those keys does not answer to it, the game's own among them; an
+// action's other key still works. Maps are off until turned on. Call it on the game thread.
+void SetKeymap(std::wstring_view keymap, bool on);
 
 // Makes the game treat a pixel as the one under the mouse, without moving the mouse.
 // @param x the pixel's column, in the screen pixels that dao::world::ToScreen returns
