@@ -33,7 +33,10 @@
 // colour from +0x60) puts the target, once made (0x00461DE2), in a list (0x00C1EAD8, taken out
 // as it goes, 0x0045FC84). The list is cleared each frame, every target bound in turn and cleared
 // to its colour (0x00456D20), at the end of the world's drawing (Renderer::EclipseUmbraCommander's
-// callback for 0xA1, 0x0045CCA2), once the graphics are up (their slot 62, +0x114).
+// callback for 0xA1, 0x0045CCA2), once the graphics are up (their slot 62, +0x114). Seen in
+// play the same day (DAOElgaraShaders' SMAA): autoclear="0 0 0 0" on the edge target in place
+// of a pass writing zeros, the edges gone again when SMAA is switched off (its debug view 0.00%
+// off, 1.73% on, 0.00% off again); the clear comes before the effects' chains run.
 #include "dao/Framebuffer.h"
 
 #include "dao/Addresses.h"
