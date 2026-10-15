@@ -21,6 +21,13 @@
 // saturation 0.85, contrast 1.02, brightness 1, and the night village's
 // saturation 0.82. Turning da_hsvmatrix off is therefore not the game's
 // own look: it left the picture about two thirds as bright as a load does.
+//
+// Seen in play 2026-10-15 (DAOElgaraShaders' SMAA; not read in the exe): in an effect's chain
+// (.ffx.xml), `bind <target> at 0 clear R0G0B0A0`, as da_bssrdf's has it, does not clear the
+// target every frame. A pass that writes only some of a target's pixels (SMAA's edges) left the
+// last frame's in it: launched off the target was empty, but turned on and then off its edges
+// stayed. A pass of its own writing zeros first cleared it. Whether the engine clears a target
+// only when it makes it, or only some targets, is not read.
 #include "dao/Framebuffer.h"
 
 #include "dao/Addresses.h"
