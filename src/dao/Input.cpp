@@ -61,6 +61,7 @@
 // again doubled nothing; Restore Defaults put the first back to F11 and
 // emptied the second; and a row of the game's own still rebound.
 #include "dao/Input.h"
+#include "dao/InputDetail.h"
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
@@ -358,7 +359,7 @@ void RunQueued()
     }
     for (auto &pressed : run)
     {
-        detail::Guard("an action's callback", pressed);
+        dao::detail::Guard("an action's callback", pressed);
     }
 }
 
@@ -732,12 +733,22 @@ constexpr std::array<Withheld, 4> kWithheld{{
     {kCameraPan, {16, 17, 18, 19, 20, 51, -1, -1, -1, -1, -1}},
 }};
 std::atomic<std::uint32_t> g_withheld{0};
+// The fly camera's own inputs, FlyCam_Yaw (28) to FlyCam_ElevateRatio (42), withheld while the
+// free view holds its mode (dao/Camera.cpp).
+constexpr std::int32_t kFirstFlyCamera = 28;
+constexpr std::int32_t kLastFlyCamera = 42;
+std::atomic<bool> g_flyWithheld{false};
 
 using AllowsInputFn = bool(__fastcall *)(void *modes, int edx, const std::int32_t *id);
 Detour<AllowsInputFn> g_allowsInput;
 
 bool __fastcall AllowsInput(void *modes, int edx, const std::int32_t *id)
 {
+    if (id != nullptr && g_flyWithheld.load(std::memory_order_relaxed) && *id >= kFirstFlyCamera &&
+        *id <= kLastFlyCamera)
+    {
+        return false;
+    }
     const std::uint32_t withheld = g_withheld.load(std::memory_order_relaxed);
     if (withheld != 0 && id != nullptr)
     {
@@ -828,10 +839,13 @@ std::int32_t WheelNotches()
     return g_frameWheel.load(std::memory_order_relaxed);
 }
 
+namespace
+{
+
 // The wheel zooms by the key bindings ZoomIn and ZoomOut, messages to explore mode and not
 // inputs AllowsInput is asked of: the wheel still zoomed while kCameraZoom held the zoom inputs
 // (DAOTurnBased's test, 2026-10-15). So their messages are taken as well.
-void Withhold(std::uint32_t reactions)
+void AttachWithholding()
 {
     static std::once_flag once;
     std::call_once(once, [] {
@@ -842,7 +856,20 @@ void Withhold(std::uint32_t reactions)
         messages::InterceptMessage(messages::CameraZoomInMessage::kVftable, zoomWithheld);
         messages::InterceptMessage(messages::CameraZoomOutMessage::kVftable, zoomWithheld);
     });
+}
+
+} // namespace
+
+void Withhold(std::uint32_t reactions)
+{
+    AttachWithholding();
     g_withheld.store(reactions, std::memory_order_relaxed);
+}
+
+void detail::WithholdFlyCamera(bool withheld)
+{
+    AttachWithholding();
+    g_flyWithheld.store(withheld, std::memory_order_relaxed);
 }
 
 } // namespace dao::input

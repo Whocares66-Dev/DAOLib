@@ -18,7 +18,11 @@
 // the game's. Each
 // press logs the field of view before and after, to see it held through a
 // conversation and from one area to the next, and given back exactly.
+//
+// The free view: another key ("DAOLib example: free view") takes the camera from where it is
+// and turns it slowly in place, a sixth of a turn in ten seconds, until pressed again.
 #include "dao/Camera.h"
+#include "dao/Frame.h"
 #include "dao/Input.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
@@ -84,6 +88,38 @@ void Toggle(float degrees)
                  before.value_or(-1.0F), after.value_or(-1.0F));
 }
 
+std::optional<dao::camera::View> g_free;
+
+void ToggleFree()
+{
+    g_free = g_free ? std::nullopt : dao::camera::CurrentView();
+    if (g_free && !dao::camera::SetFreeView(g_free))
+    {
+        spdlog::info("free view refused: the game is not exploring or fighting");
+        g_free.reset();
+        return;
+    }
+    if (!g_free)
+    {
+        dao::camera::SetFreeView(std::nullopt);
+    }
+    spdlog::info("free view {}", g_free ? "taken" : "given back");
+}
+
+void TurnFree()
+{
+    constexpr float kTurnPerFrame = 0.0035F; // radians: a sixth of a turn in ten seconds at 30 frames
+    if (g_free)
+    {
+        g_free->yaw += kTurnPerFrame;
+        if (!dao::camera::SetFreeView(g_free))
+        {
+            spdlog::info("free view ended by the game");
+            g_free.reset();
+        }
+    }
+}
+
 } // namespace
 
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
@@ -103,5 +139,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     dao::input::RegisterAction(
         {.name = L"ExampleCameraNarrowView", .label = L"DAOLib example: narrow view", .modes = modes},
         [] { Toggle(30.0F); });
+    dao::input::RegisterAction({.name = L"ExampleCameraFreeView",
+                                .label = L"DAOLib example: free view",
+                                .modes = {dao::GameMode::Explore, dao::GameMode::Combat, dao::GameMode::FlyCam}},
+                               &ToggleFree);
+    dao::OnFrame(&TurnFree);
     return true;
 }

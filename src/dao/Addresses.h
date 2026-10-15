@@ -1503,6 +1503,27 @@ DAO_ADDRESS(kCameraControllerBase_SetTarget, 21241)
 DAO_ADDRESS(kCameraControllerBase_Zoom, 21239)
 DAO_ADDRESS(kCameraControllerBase_TurnBehind, 21242)
 DAO_ADDRESS(kSceneCameraManager_Update, 15038)
+// The game's fly camera, read 2026-10-15 for DAOLib #125 (dao/Camera.h,
+// SetFreeView). GameModeFlyCam (GM_FLYCAM, 6) is a mode the scripts'
+// SetGameMode enters. Its entry (slot 7, 0x0076D560) turns on the input
+// group "GameModeFlyCam" and sets the renderer's near and far to 0.25 and
+// 4000; its update (slot 8, 0x0076DDF0) reads inputs 30 to 35
+// (FlyCam_MoveLeft ... FlyCam_MoveSlow, dao/Input.cpp's list) and moves the
+// camera at the mode's +0x58, set by the base GameMode's constructor, by
+// 15 m/s through its orientation: SetPosition, __thiscall (const Vector4
+// *where, float seconds, ?), `ret 0xC`, the camera's place at its +0x70.
+// The look (0x0076D620) adds the mouse to the orientation's yaw and pitch in
+// degrees (QuaternionYaw and QuaternionPitch, __cdecl (const quaternion
+// *), a float; the quaternion at the camera's +0x90), clamps the pitch to
+// +-90, makes the quaternion again (QuaternionFromYawPitchRoll, __cdecl (out
+// quaternion *, yaw, pitch, roll), degrees) and gives it to SetOrientation,
+// __thiscall (const quaternion *, float seconds, ?), `ret 0xC`. The names
+// are ours.
+DAO_ADDRESS(kSceneCamera_SetPosition, 15033)
+DAO_ADDRESS(kSceneCamera_SetOrientation, 15039)
+DAO_ADDRESS(kQuaternion_FromYawPitchRoll, 5699)
+DAO_ADDRESS(kQuaternion_Yaw, 5700)
+DAO_ADDRESS(kQuaternion_Pitch, 5701)
 DAO_ADDRESS(kSceneCamera_SetPitch, 15001)
 DAO_ADDRESS(kSceneCamera_Update, 15003)
 DAO_ADDRESS(kSceneCamera_SetYaw, 15000)

@@ -466,4 +466,34 @@ std::optional<float> FieldOfView();
 // from one area to the next. Call on the game thread.
 void SetFieldOfView(std::optional<float> degrees);
 
+// A view of the world: where the eye is and which way it looks.
+struct View
+{
+    Vector eye; // in the world, in metres
+    // The heading, in radians: 0 looks along +y, -pi/2 along +x, so x = -sin(yaw) and
+    // y = cos(yaw) are the way the view faces on the ground.
+    float yaw = 0.0F;
+    float pitch = 0.0F; // the tilt, in radians, from -pi/2 to pi/2, up positive
+};
+
+// Returns the view the scene is drawn from now: where a free view starts.
+// @return nullopt with no scene camera
+//
+// Call on the game thread.
+std::optional<View> CurrentView();
+
+// Draws the scene from a view of the plugin's own, until given back: the game's fly camera, the
+// camera loose from the party, placed where the view says each time this is called.
+// @param view the view, or nullopt to give the camera back to the mode the game was in
+// @return false, with nothing changed, if the game is not exploring or fighting when a free view
+//  begins, or has no camera; false too once the game has left the free view on its own
+//
+// Call it each frame from a frame callback while the view holds. The game's mode becomes
+// GameMode::FlyCam a frame after the first call, and its own fly camera keys are withheld; a
+// plugin moves the view itself, for example from dao::input's readings. The world's pick and
+// dao::world::ToScreen follow the drawn view. A script that changes the game's mode ends the
+// free view: the game goes to that mode, and the next call returns false. Given back, the game's
+// camera returns to where it was. Call on the game thread.
+bool SetFreeView(std::optional<View> view);
+
 } // namespace dao::camera

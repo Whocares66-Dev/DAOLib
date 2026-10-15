@@ -37,12 +37,14 @@
 #include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/InputDetail.h"
 #include "dao/Module.h"
 #include "dao/RenderCamera.h"
 #include "dao/SafeRead.h"
 #include "dao/core/Angle.h"
 #include "dao/generated/ScriptApi.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -693,6 +695,138 @@ void SetFieldOfView(std::optional<float> degrees)
     {
         Write(camera, game);
     }
+}
+
+} // namespace dao::camera
+
+namespace dao::camera
+{
+
+namespace
+{
+
+// The scene camera every mode drives, at a GameMode's +0x58 (dao/Addresses.h, the fly camera):
+// its place at +0x70, its orientation at +0x90 (x, y, z, w).
+constexpr std::size_t kModeSceneCamera = 0x58;
+constexpr std::size_t kEye = 0x70;
+constexpr std::size_t kOrientation = 0x90;
+constexpr float kDegrees = 180.0F / std::numbers::pi_v<float>;
+
+GameMode g_before = GameMode::Explore;
+bool g_free = false;
+bool g_flying = false; // the fly camera's mode seen since the free view began: it comes a frame later
+
+// Whether a free view went on, or ended without the plugin: a mode other than the fly camera's
+// after the game was seen in it, as a script's SetGameMode does (DAOPhotoCam's test, a fight).
+bool StillFree(const GameModeController *modes)
+{
+    if (modes->Mode() == GameMode::FlyCam)
+    {
+        g_flying = true;
+        return true;
+    }
+    return !g_flying;
+}
+
+void EndFree()
+{
+    input::detail::WithholdFlyCamera(false);
+    g_free = false;
+    g_flying = false;
+}
+
+GameModeController *Modes()
+{
+    auto *app = CClientExoApp::Get();
+    return app != nullptr ? app->GameModes() : nullptr;
+}
+
+std::uintptr_t SceneCameraOf(const GameModeController *modes)
+{
+    const auto mode =
+        reinterpret_cast<std::uintptr_t>(modes != nullptr ? modes->ModeObject(GameMode::FlyCam) : nullptr);
+    return mode != 0 ? TryRead<std::uintptr_t>(mode + kModeSceneCamera).value_or(0) : 0;
+}
+
+void Place(std::uintptr_t camera, const View &view)
+{
+    alignas(16) std::array<float, 4> eye{view.eye.x, view.eye.y, view.eye.z, 1.0F};
+    alignas(16) std::array<float, 4> turn{};
+    using FromFn = void(__cdecl *)(float *, float, float, float);
+    reinterpret_cast<FromFn>(Module::Address(addr::kQuaternion_FromYawPitchRoll))(turn.data(), view.yaw * kDegrees,
+                                                                                  view.pitch * kDegrees, 0.0F);
+    using SetFn = void(__fastcall *)(void *, int, const float *, float, std::int32_t);
+    auto *self = reinterpret_cast<void *>(camera);
+    reinterpret_cast<SetFn>(Module::Address(addr::kSceneCamera_SetPosition))(self, 0, eye.data(), 0.0F, 0);
+    reinterpret_cast<SetFn>(Module::Address(addr::kSceneCamera_SetOrientation))(self, 0, turn.data(), 0.0F, 0);
+}
+
+} // namespace
+
+// Read 2026-10-15 for DAOLib #125 (dao/Addresses.h, the fly camera): the game's fly camera mode
+// moves the scene camera by its own keys (inputs 28 to 42) through SetPosition and
+// SetOrientation, its yaw and pitch made into the orientation in degrees. Here the mode is
+// entered, its keys withheld (dao/InputDetail.h), and the camera placed by the plugin's view.
+//
+// Seen in play 2026-10-15 (DAOPhotoCam's session, GOG's game, the Forest Clearing): the mode
+// went to 6 a frame after the first call, and the picture was drawn from the view, yaw 0 along
+// +y and -90 along +x, pitch 30 the sky; CurrentView on entering matched the close camera's
+// eye, yaw -90 and pitch -5; placed each frame the eye moved smoothly and held poses stayed
+// put; leaving gave back explore a frame later with its camera exactly as before; from combat
+// the same, until a script's SetGameMode took the game from the fly camera to explore and on to
+// combat, ending the free view; the pick and ToScreen followed the drawn view; nothing near the
+// eye hid, faded or was clipped at 0.15 m.
+std::optional<View> CurrentView()
+{
+    const std::uintptr_t camera = SceneCameraOf(Modes());
+    const auto eye = camera != 0 ? TryRead<Vector>(camera + kEye) : std::nullopt;
+    if (!eye)
+    {
+        return std::nullopt;
+    }
+    using AngleFn = float(__cdecl *)(const void *);
+    const auto *turn = reinterpret_cast<const void *>(camera + kOrientation);
+    const float yaw = reinterpret_cast<AngleFn>(Module::Address(addr::kQuaternion_Yaw))(turn);
+    const float pitch = reinterpret_cast<AngleFn>(Module::Address(addr::kQuaternion_Pitch))(turn);
+    return View{*eye, yaw / kDegrees, pitch / kDegrees};
+}
+
+bool SetFreeView(std::optional<View> view)
+{
+    GameModeController *modes = Modes();
+    const std::uintptr_t camera = SceneCameraOf(modes);
+    if (!view)
+    {
+        if (g_free && modes != nullptr && StillFree(modes))
+        {
+            modes->SetMode(g_before);
+        }
+        EndFree();
+        return true;
+    }
+    if (camera == 0)
+    {
+        return false;
+    }
+    if (g_free && !StillFree(modes))
+    {
+        EndFree();
+        return false;
+    }
+    if (!g_free)
+    {
+        const GameMode now = modes->Mode();
+        if (now != GameMode::Explore && now != GameMode::Combat)
+        {
+            return false;
+        }
+        g_before = now;
+        input::detail::WithholdFlyCamera(true);
+        modes->SetMode(GameMode::FlyCam);
+        g_free = true;
+    }
+    Place(camera, *view);
+    return true;
 }
 
 } // namespace dao::camera
