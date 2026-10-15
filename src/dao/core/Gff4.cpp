@@ -671,6 +671,40 @@ bool Editor::Extend(const Struct &in, std::uint32_t label, std::span<const std::
     return true;
 }
 
+std::optional<std::vector<Struct>> Editor::CopyList(const Struct &in, std::uint32_t label, std::span<const Struct> like)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || (field->flags & (kList | kStruct | kReference)) != (kList | kStruct) ||
+        type >= file_->Templates().size())
+    {
+        return std::nullopt;
+    }
+    const std::size_t size = file_->Templates()[type].size;
+    std::vector<std::byte> data(4 + (like.size() * size));
+    const auto count = static_cast<std::uint32_t>(like.size());
+    std::memcpy(data.data(), &count, 4);
+    for (std::size_t i = 0; i < like.size(); ++i)
+    {
+        const Struct &one = like[i];
+        if (one.Index() != type || one.Offset() + size > bytes_.size())
+        {
+            return std::nullopt;
+        }
+        std::memcpy(data.data() + 4 + (i * size), bytes_.data() + one.Offset(), size);
+    }
+    const std::uint32_t offset = Append(data);
+    std::memcpy(bytes_.data() + *at, &offset, 4);
+    std::vector<Struct> copies;
+    copies.reserve(like.size());
+    for (std::size_t i = 0; i < like.size(); ++i)
+    {
+        copies.emplace_back(*file_, type, data_ + offset + 4 + (i * size));
+    }
+    return copies;
+}
+
 std::optional<Struct> Editor::Add(const Struct &like)
 {
     const std::size_t size = like.Shape().size;

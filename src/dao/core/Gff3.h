@@ -12,6 +12,7 @@
 // which must stay where it is while the Struct is used.
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -76,6 +77,11 @@ class Struct
     {
         return id_;
     }
+    // Its place among the file's structs.
+    std::uint32_t Index() const
+    {
+        return index_;
+    }
     const std::vector<Field> &Fields() const
     {
         return fields_;
@@ -104,6 +110,7 @@ class Struct
     std::optional<std::size_t> Data(std::string_view label, Type type, std::size_t size) const;
 
     const File *file_;
+    std::uint32_t index_ = 0;
     std::uint32_t id_ = 0;
     std::vector<Field> fields_;
 };
@@ -150,6 +157,38 @@ class File
     std::string type_;
     std::string version_;
     Header header_;
+};
+
+// A GFF3 file changed field by field (DAOLib #123): a template copied and
+// made another, its resref, tag, name or appearance set. A number is
+// written over its value; a string is appended to the field data and its
+// field pointed at it. The file's sections are laid out again behind the
+// header in the order the game's have them, so nothing a Struct of the File
+// names moves, and a file nothing was set in is the same bytes.
+class Editor
+{
+  public:
+    explicit Editor(const File &file);
+
+    // Writes a whole number over a field of Byte to Int64, at the field's
+    // width; false for a field of another type, or none.
+    bool SetNumber(const Struct &in, std::string_view label, std::int64_t value);
+    // Writes a Float or Double field.
+    bool SetFloat(const Struct &in, std::string_view label, double value);
+    // Sets a String or ResRef field to 8-bit text; false for a ResRef past 255 letters.
+    bool SetString(const Struct &in, std::string_view label, std::string_view text);
+    // Sets a LocString field: its string reference, and strings by language id.
+    bool SetLoc(const Struct &in, std::string_view label, const LocString &value);
+
+    std::vector<std::byte> Bytes() const;
+
+  private:
+    // The field entry of a struct's label, and its type; nothing for none.
+    std::optional<std::size_t> FieldOf(const Struct &in, std::string_view label, Type &type) const;
+    std::uint32_t AppendData(std::span<const std::byte> bytes);
+
+    std::array<char, 8> head_{};
+    std::vector<std::byte> structs_, fields_, labels_, data_, indices_, lists_;
 };
 
 namespace detail

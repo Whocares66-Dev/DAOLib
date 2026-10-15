@@ -5,6 +5,9 @@
 
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -129,4 +132,69 @@ TEST_CASE("a GFF3 file's 64-bit numbers, vectors and localised strings with text
     REQUIRE(text->strings.size() == 1);
     CHECK(text->strings[0].first == 0);
     CHECK(text->strings[0].second == "Ogres");
+}
+
+TEST_CASE("a GFF3 template edited reads back its numbers, strings and names, the rest as it was", "[gff3]")
+{
+    const auto bytes = Creature();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    gff3::Editor untouched(*file);
+    CHECK(untouched.Bytes() == bytes);
+
+    gff3::Editor editor(*file);
+    const auto root = file->Root();
+    const auto appearance = root->Child("Appearance Data");
+    REQUIRE(appearance);
+    CHECK(editor.SetNumber(*appearance, "Appearance_Type", 1001));
+    CHECK(editor.SetNumber(*root, "Rank", -7));
+    CHECK(editor.SetString(*root, "Tag", "red_ogre"));
+    CHECK(editor.SetLoc(*root, "LocName", gff3::LocString{0xFFFFFFFF, {{0, "Red Ogre"}}}));
+    CHECK_FALSE(editor.SetString(*root, "Plot", "x")); // a Byte is no string
+    CHECK_FALSE(editor.SetNumber(*root, "Tag", 1));    // a string is no number
+    CHECK_FALSE(editor.SetNumber(*root, "Nothing", 1));
+
+    const auto after = editor.Bytes();
+    const auto edited = gff3::File::Parse(after);
+    REQUIRE(edited);
+    const auto top = edited->Root();
+    CHECK(top->Child("Appearance Data")->Get<std::uint32_t>("Appearance_Type") == 1001U);
+    CHECK(top->Get<std::int32_t>("Rank") == -7);
+    CHECK(top->String("Tag") == "red_ogre");
+    const auto name = top->Loc("LocName");
+    REQUIRE(name);
+    CHECK(name->strref == 0xFFFFFFFF);
+    REQUIRE(name->strings.size() == 1);
+    CHECK(name->strings[0].second == "Red Ogre");
+    CHECK(top->Get<std::uint8_t>("Plot") == 1);
+    CHECK(top->List("Items")[0].ResRef("InventoryRes") == "gen_im_wep_axe");
+}
+
+TEST_CASE("the ogre's template in game/templates, when there, is the same bytes untouched, and takes edits", "[gff3]")
+{
+    const std::filesystem::path path =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "templates" / "ogre_default.utc";
+    if (!std::filesystem::exists(path))
+    {
+        SKIP("no ogre_default.utc in game/templates (ghilana's extract writes it there)");
+    }
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    std::vector<std::byte> bytes(chars.size());
+    std::memcpy(bytes.data(), chars.data(), chars.size());
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    CHECK(gff3::Editor(*file).Bytes() == bytes);
+    gff3::Editor editor(*file);
+    const auto appearance = file->Root()->Child("Appearance Data");
+    REQUIRE(appearance);
+    CHECK(editor.SetNumber(*appearance, "Appearance_Type", 9001));
+    CHECK(editor.SetString(*file->Root(), "Tag", "red_ogre"));
+    const auto after = editor.Bytes();
+    const auto edited = gff3::File::Parse(after);
+    REQUIRE(edited);
+    CHECK(edited->Root()->Child("Appearance Data")->Get<std::int32_t>("Appearance_Type") ==
+          9001); // an Int, 47 the ogre's
+    CHECK(edited->Root()->String("Tag") == "red_ogre");
+    CHECK(edited->Root()->Fields().size() == file->Root()->Fields().size());
 }

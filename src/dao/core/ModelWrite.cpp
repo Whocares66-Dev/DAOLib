@@ -1234,3 +1234,44 @@ Written WriteHierarchy(std::span<const std::byte> original, std::span<const Node
 }
 
 } // namespace dao::core::model
+
+namespace dao::core::model
+{
+
+// A .mmh's top struct keeps its name (MMHName) and its mesh file's (MMHModelHierarchyModelDataName),
+// a .msh's its name (Name), a .phy's the name of its .mmh (MMHName): each a string the rename sets.
+Written Renamed(std::span<const std::byte> original, std::wstring_view name, std::wstring_view meshFile)
+{
+    Written out;
+    const std::optional<gff4::File> file = gff4::File::Parse(original);
+    const std::optional<gff4::Struct> root = file ? file->Root() : std::nullopt;
+    if (!root || name.empty())
+    {
+        out.error = "the original is no model file";
+        return out;
+    }
+    gff4::Editor editor(*file);
+    bool ok = false;
+    if (file->Type() == "MMH")
+    {
+        ok = editor.SetString(*root, kMmhName, name) &&
+             (meshFile.empty() || editor.SetString(*root, kModelMeshFile, meshFile));
+    }
+    else if (file->Type() == "MESH")
+    {
+        ok = editor.SetString(*root, kName, name);
+    }
+    else if (file->Type() == "PHY")
+    {
+        ok = editor.SetString(*root, kMmhName, name);
+    }
+    if (!ok)
+    {
+        out.error = "the file is no hierarchy, mesh or physics file with a name of its own";
+        return out;
+    }
+    out.bytes = editor.Bytes();
+    return out;
+}
+
+} // namespace dao::core::model

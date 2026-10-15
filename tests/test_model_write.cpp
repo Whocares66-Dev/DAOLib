@@ -603,3 +603,28 @@ TEST_CASE("the game's meshes in game/models, when there, come back the same byte
     }
     CHECK(meshes > 0);
 }
+
+TEST_CASE("a model's files are renamed: a hierarchy's name and mesh file, a mesh's name", "[model]")
+{
+    const model::Written tree = model::Renamed(files::SlabModel(), L"red.mmh", L"red.msh");
+    REQUIRE(tree.error.empty());
+    const std::optional<gff4::File> treeFile = gff4::File::Parse(tree.bytes);
+    REQUIRE(treeFile);
+    const std::optional<model::Hierarchy> hierarchy = model::HierarchyOf(*treeFile);
+    REQUIRE(hierarchy);
+    CHECK(hierarchy->name == L"red.mmh");
+    CHECK(hierarchy->meshFile == L"red.msh");
+    CHECK(hierarchy->nodes.size() == 4);
+
+    const model::Written mesh = model::Renamed(files::SlabMesh(), L"red.msh");
+    REQUIRE(mesh.error.empty());
+    std::optional<gff4::File> meshFile;
+    const std::optional<model::Mesh> read = Read(mesh.bytes, meshFile);
+    REQUIRE(read);
+    CHECK(read->name == L"red.msh");
+    CHECK(read->chunks.size() == 2);
+
+    CHECK_FALSE(model::Renamed(files::SlabMesh(), L"").error.empty());
+    const std::vector<std::byte> notModel(16, std::byte{0});
+    CHECK_FALSE(model::Renamed(notModel, L"x.msh").error.empty());
+}

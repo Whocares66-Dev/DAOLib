@@ -116,7 +116,7 @@ std::optional<Struct> File::Root() const
     return Struct(*this, 0);
 }
 
-Struct::Struct(const File &file, std::uint32_t index) : file_(&file)
+Struct::Struct(const File &file, std::uint32_t index) : file_(&file), index_(index)
 {
     const auto &h = file.Sections();
     const auto bytes = file.Bytes();

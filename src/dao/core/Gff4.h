@@ -231,6 +231,10 @@ class Editor
     // own do. Returns the copy, for this Editor's Set calls: the File reads
     // nothing of it. Nothing for a struct that runs out of the bytes.
     std::optional<Struct> Add(const Struct &like);
+    // Sets a list of structs held in place to copies of `like`, appended to
+    // the data, and returns the copies, for this Editor's Set calls. Nothing
+    // for a field that is no such list, or a struct of another template.
+    std::optional<std::vector<Struct>> CopyList(const Struct &in, std::uint32_t label, std::span<const Struct> like);
     // Returns a struct's offset from the start of the data, which a
     // reference to it holds.
     std::uint32_t Reference(const Struct &to) const

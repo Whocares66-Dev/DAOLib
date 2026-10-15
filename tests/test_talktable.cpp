@@ -103,3 +103,15 @@ TEST_CASE("a file that is not a version 0.2 talk table is refused")
         CHECK_FALSE(TalkTableFile::Parse(std::span(bytes).first(30)));
     }
 }
+
+TEST_CASE("a talk table written reads back its strings, and is refused an id twice")
+{
+    const std::vector<std::pair<std::uint32_t, std::wstring>> strings{{900002, L"Red Ogre"}, {900001, L"Élan"}};
+    const auto table = dao::core::TalkTableFile::Parse(dao::core::TalkTableFile::Write(strings));
+    REQUIRE(table);
+    CHECK(table->Size() == 2);
+    CHECK(table->String(900002) == L"Red Ogre");
+    CHECK(table->String(900001) == L"Élan");
+    const std::vector<std::pair<std::uint32_t, std::wstring>> twice{{1, L"a"}, {1, L"b"}};
+    CHECK(dao::core::TalkTableFile::Write(twice).empty());
+}

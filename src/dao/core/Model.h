@@ -272,4 +272,12 @@ struct NewNode
 Written WriteHierarchy(std::span<const std::byte> original, std::span<const NodeEdit> edits,
                        std::span<const NewNode> added = {}, const Mesh *written = nullptr);
 
+// Returns a model's file under a new name, for a model copied to be another
+// (a new appearance's): a hierarchy (.mmh) with its own name and its mesh
+// file's, a mesh (.msh) or a physics file (.phy) with its name, the name of
+// the hierarchy it is for. The names are given whole, with extensions:
+// "cn_bdy_rdoa_0.mmh", "cn_bdy_rdoa_0.msh".
+// @param meshFile a hierarchy's mesh file; ignored for a mesh or a physics file
+Written Renamed(std::span<const std::byte> original, std::wstring_view name, std::wstring_view meshFile = {});
+
 } // namespace dao::core::model

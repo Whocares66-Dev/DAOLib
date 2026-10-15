@@ -174,3 +174,30 @@ TEST_CASE("a file's own two rows of one ID are no conflict between files, alike 
         CHECK_FALSE(merged.rows[0].conflict);
     }
 }
+
+TEST_CASE("a GDA file is written of new rows under an original's columns, and reads back", "[gda]")
+{
+    const auto original =
+        files::Gda({"ID", "Label", "Cost"}, {{1, std::string("Flurry"), 2.5F}}, Hashes({"ID", "Label", "Cost"}));
+    const std::vector<std::vector<GdaFile::Cell>> rows{{std::int64_t{100}, std::wstring(L"Horned"), 4.0},
+                                                       {std::int64_t{101}, std::wstring(L"Red"), 1.5}};
+    const auto written = GdaFile::Parse(GdaFile::Write(original, rows));
+    REQUIRE(written);
+    CHECK(written->Columns().size() == 3);
+    CHECK(written->ColumnOf("Label") == 1U);
+    REQUIRE(written->Rows().size() == 2);
+    CHECK(written->Rows() == rows);
+}
+
+TEST_CASE("a GDA file is not written of a row of another length or a cell of another kind", "[gda]")
+{
+    const auto original =
+        files::Gda({"ID", "Label", "Cost"}, {{1, std::string("Flurry"), 2.5F}}, Hashes({"ID", "Label", "Cost"}));
+    const std::vector<std::vector<GdaFile::Cell>> shortRow{{std::int64_t{100}, std::wstring(L"Horned")}};
+    CHECK(GdaFile::Write(original, shortRow).empty());
+    const std::vector<std::vector<GdaFile::Cell>> textForNumber{{std::wstring(L"100"), std::wstring(L"Horned"), 4.0}};
+    CHECK(GdaFile::Write(original, textForNumber).empty());
+    const auto empty = files::Gda({"ID"}, {}, Hashes({"ID"}));
+    const std::vector<std::vector<GdaFile::Cell>> one{{std::int64_t{1}}};
+    CHECK(GdaFile::Write(empty, one).empty()); // no row to copy the layout of
+}

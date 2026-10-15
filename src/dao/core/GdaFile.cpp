@@ -10,6 +10,8 @@
 
 #include "dao/core/GdaHash.h"
 
+#include <array>
+
 namespace dao::core
 {
 
@@ -112,6 +114,67 @@ std::optional<std::size_t> GdaFile::ColumnOf(std::uint32_t hash) const
 std::optional<std::size_t> GdaFile::ColumnOf(std::string_view name) const
 {
     return ColumnOf(GdaColumnHash(name));
+}
+
+namespace
+{
+
+// One cell written over its field of a row: a number, a float or a string as the field keeps it.
+bool SetCell(gff4::Editor &editor, const gff4::Struct &row, const gff4::Field &field, const GdaFile::Cell &cell)
+{
+    const auto type = static_cast<gff4::Type>(field.type);
+    if (const auto *number = std::get_if<std::int64_t>(&cell))
+    {
+        return type != gff4::Type::F32 && type != gff4::Type::F64 && type != gff4::Type::String &&
+               editor.SetNumber(row, field.label, *number);
+    }
+    if (const auto *real = std::get_if<double>(&cell))
+    {
+        const std::array<float, 1> value{static_cast<float>(*real)};
+        return type == gff4::Type::F32 && editor.SetFloats(row, field.label, value);
+    }
+    if (const auto *text = std::get_if<std::wstring>(&cell))
+    {
+        return type == gff4::Type::String && editor.SetString(row, field.label, *text);
+    }
+    return false;
+}
+
+} // namespace
+
+std::vector<std::byte> GdaFile::Write(std::span<const std::byte> original, std::span<const std::vector<Cell>> rows)
+{
+    const auto file = gff4::File::Parse(original);
+    const auto root = file && file->Type() == "G2DA" ? file->Root() : std::nullopt;
+    const std::vector<gff4::Struct> first = root ? root->Structs(kRowList) : std::vector<gff4::Struct>{};
+    if (!root || first.empty())
+    {
+        return {};
+    }
+    const std::size_t columns = root->Structs(kColumnList).size();
+    gff4::Editor editor(*file);
+    const std::vector<gff4::Struct> like(rows.size(), first[0]);
+    const auto copies = editor.CopyList(*root, kRowList, like);
+    if (!copies)
+    {
+        return {};
+    }
+    for (std::size_t r = 0; r < rows.size(); ++r)
+    {
+        if (rows[r].size() != columns)
+        {
+            return {};
+        }
+        for (std::size_t c = 0; c < columns; ++c)
+        {
+            const gff4::Field *field = (*copies)[r].Shape().Find(kFirstCell + static_cast<std::uint32_t>(c));
+            if (field == nullptr || !SetCell(editor, (*copies)[r], *field, rows[r][c]))
+            {
+                return {};
+            }
+        }
+    }
+    return editor.Bytes();
 }
 
 } // namespace dao::core

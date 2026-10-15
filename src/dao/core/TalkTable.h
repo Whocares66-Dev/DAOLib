@@ -37,6 +37,12 @@ class TalkTableFile
         return strings_;
     }
 
+    // Returns a talk table of the strings, as the game's are kept (GFF4 TLK V0.2), for a mod's
+    // own names: an add-in's core\data\talktables\<uid>_c_<language>.tlk, as the game's own
+    // add-ins have theirs.
+    // @return empty for an id given twice
+    static std::vector<std::byte> Write(std::span<const std::pair<std::uint32_t, std::wstring>> strings);
+
     static constexpr std::uint32_t kStringList = 19001;
     static constexpr std::uint32_t kStringId = 19002;
     static constexpr std::uint32_t kString = 19003;
