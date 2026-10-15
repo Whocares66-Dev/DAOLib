@@ -394,6 +394,18 @@ DAO_ADDRESS(kCCCreature_OnAnimationEvent, 14964)
 // objects (0x00536010, whose distances are an object's own times a factor).
 // The names are ours.
 DAO_ADDRESS(kAnimationManager_AddEvent, 21851)
+// Where an animation is in its cycle, read 2026-10-15 for DAOLib #131
+// (dao/Animation.h, SetPhase). An object's AnimationTask (its slot 2,
+// 0x008154D0) takes the frame's time from the game's clock (none while
+// paused) times the object's speed (+0x2E8) and steps the object (its slot
+// 25, 0x00546B90) by phases; phase 1 (slot 48, 0x00547580) advances each
+// of its animations (a vector at +0x17C, first +0x180, last +0x184) by
+// their slot 9. A ModelAnimationTree's (0x00814260) walks its nodes (a
+// vector at +0x10, first +0x14, last +0x18, 0x34 bytes each): a node's
+// place in its cycle is a 16-bit word at +0x2E, 0x10000 the whole cycle,
+// advanced by its rate (+0x20) times the time and wrapping (0x00811BE0);
+// the tree keeps the last at +0x30 before it advances. The names are ours.
+DAO_DATA(kModelAnimationTree_Vftable, 69616)
 DAO_DATA(kCreatureShowDistance, 96798)
 DAO_DATA(kObjectShowDistance, 96799)
 DAO_ADDRESS(kCCObject_RequestPath, 17573)

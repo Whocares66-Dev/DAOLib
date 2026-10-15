@@ -86,11 +86,14 @@
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Gda.h"
+#include "dao/GraphicsObject.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 
 namespace dao::animation
 {
@@ -248,6 +251,52 @@ Ability OfAbility(ObjectId creature, std::int32_t ability)
                    .conjureLoop = loop && *loop > 1 ? LengthOf(creature, loop) : std::nullopt,
                    .cast = LengthOf(creature, cast),
                    .castEnd = end && *end > 1 ? LengthOf(creature, end) : std::nullopt};
+}
+
+// Read 2026-10-15 for DAOLib #131 (dao/Addresses.h, kModelAnimationTree_Vftable): a creature's
+// graphics object keeps its animations in a vector at +0x17C; a ModelAnimationTree's nodes are a
+// vector at its +0x10, 0x34 bytes each, a node's place in its cycle the 16-bit word at +0x2E
+// (0x10000 the whole cycle) and the last place at +0x30. Both are set, so the next step blends
+// from where the node is now set and not from where it was.
+bool SetPhase(ObjectId creature, float phase)
+{
+    constexpr std::size_t kAnimationsBegin = 0x180;
+    constexpr std::size_t kAnimationsEnd = 0x184;
+    constexpr std::size_t kNodesBegin = 0x14;
+    constexpr std::size_t kNodesEnd = 0x18;
+    constexpr std::size_t kNodeSize = 0x34;
+    constexpr std::size_t kNodePlace = 0x2E;
+    constexpr std::size_t kNodeLastPlace = 0x30;
+    constexpr float kCycle = 65536.0F;
+    CClientExoApp *app = CClientExoApp::Get();
+    const std::uintptr_t graphics = detail::GraphicsObjectOf(app != nullptr ? app->GetObjectById(creature) : nullptr);
+    if (graphics == 0)
+    {
+        return false;
+    }
+    const auto place = static_cast<std::uint16_t>(
+        std::clamp(static_cast<std::uint32_t>(std::clamp(phase, 0.0F, 1.0F) * kCycle), 0U, 0xFFFFU));
+    const std::uintptr_t treeTable = Module::Address(addr::kModelAnimationTree_Vftable);
+    const auto begin = TryRead<std::uintptr_t>(graphics + kAnimationsBegin).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(graphics + kAnimationsEnd).value_or(0);
+    bool any = false;
+    for (std::uintptr_t slot = begin; begin != 0 && slot < end; slot += sizeof(std::uintptr_t))
+    {
+        const auto tree = TryRead<std::uintptr_t>(slot).value_or(0);
+        if (tree == 0 || TryRead<std::uintptr_t>(tree).value_or(0) != treeTable)
+        {
+            continue;
+        }
+        const auto first = TryRead<std::uintptr_t>(tree + kNodesBegin).value_or(0);
+        const auto last = TryRead<std::uintptr_t>(tree + kNodesEnd).value_or(0);
+        for (std::uintptr_t node = first; first != 0 && node + kNodeSize <= last; node += kNodeSize)
+        {
+            *reinterpret_cast<std::uint16_t *>(node + kNodePlace) = place;
+            *reinterpret_cast<std::uint16_t *>(node + kNodeLastPlace) = place;
+            any = true;
+        }
+    }
+    return any;
 }
 
 } // namespace dao::animation

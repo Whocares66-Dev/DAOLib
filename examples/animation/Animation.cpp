@@ -8,13 +8,20 @@
 // whether the library's figures are the engine's. A time-based turn bar
 // costs actions with them (the turn-based mod's).
 //
+// A key the player binds ("DAOLib example: hold everyone's pose") pauses the game and sets every
+// creature within 40 m to the start of its animations (SetPhase), so the same frame can be taken
+// again; pressed again, it unpauses. DAOLib #131.
+//
 // What it sees goes to example_animation.log.
 #include "dao/Animation.h"
 #include "dao/Abilities.h"
+#include "dao/ClientExoApp.h"
 #include "dao/CommandEvents.h"
+#include "dao/Input.h"
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 #include "dao/String.h"
+#include "dao/generated/ScriptApi.h"
 
 #include <spdlog/spdlog.h>
 
@@ -84,6 +91,33 @@ void Ended(dao::ObjectId who, const dao::Command &command, std::int32_t result)
                  Seconds(dao::animation::AttackDuration(who)));
 }
 
+bool g_posed = false;
+
+void TogglePose()
+{
+    auto *app = dao::CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return;
+    }
+    g_posed = !g_posed;
+    app->SetPaused(g_posed);
+    if (!g_posed)
+    {
+        spdlog::info("poses given back, unpaused");
+        return;
+    }
+    const dao::ObjectId controlled = dao::script::api::GetMainControlled();
+    const dao::script::Array near = dao::script::api::GetNearestObject(
+        controlled, static_cast<std::int32_t>(dao::script::constants::OBJECT_TYPE_CREATURE), 64, 0, 0, 1);
+    int held = 0;
+    for (std::size_t i = 0; i < near.Size(); ++i)
+    {
+        held += dao::animation::SetPhase(near.Object(i), 0.0F) ? 1 : 0;
+    }
+    spdlog::info("paused; {} of {} creatures near held at their animations' start", held, near.Size());
+}
+
 } // namespace
 
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
@@ -96,5 +130,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     }
     dao::commands::OnStart(&Started);
     dao::commands::OnEnd(&Ended);
+    dao::input::RegisterAction({.name = L"ExampleAnimationHoldPoses",
+                                .label = L"DAOLib example: hold everyone's pose",
+                                .section = L"DAOLib example"},
+                               &TogglePose);
     return true;
 }
