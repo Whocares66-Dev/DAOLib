@@ -22,12 +22,18 @@
 // saturation 0.82. Turning da_hsvmatrix off is therefore not the game's
 // own look: it left the picture about two thirds as bright as a load does.
 //
-// Seen in play 2026-10-15 (DAOElgaraShaders' SMAA; not read in the exe): in an effect's chain
-// (.ffx.xml), `bind <target> at 0 clear R0G0B0A0`, as da_bssrdf's has it, does not clear the
-// target every frame. A pass that writes only some of a target's pixels (SMAA's edges) left the
-// last frame's in it: launched off the target was empty, but turned on and then off its edges
-// stayed. A pass of its own writing zeros first cleared it. Whether the engine clears a target
-// only when it makes it, or only some targets, is not read.
+// What clears an effect's target, read 2026-10-15 after DAOElgaraShaders saw SMAA's edge target
+// keep the last frame's edges. A filter's `bind` line (0x00460CE0, tokens split on space and
+// tab) knows a target or `backbuffer` or `null`, `at` and an index, and `viewport` with
+// `original`, `recalculate` or `stored`, and nothing else: `clear` and a colour after it, as
+// da_bssrdf's chain has them, are skipped, and FBIBindTarget's run (its slot 2, 0x0045E410) only
+// sets the render target and the viewport. So a bind never clears. What does is the target's own
+// attribute: `<target ... autoclear="r g b a">` (four floats, as da_distortion's DistortionMask
+// has "0.5 0.5 0.5 0.705"; FBRenderTargetResource's 0x004617A0 sets its +0x4C flag 0x80 and the
+// colour from +0x60) puts the target, once made (0x00461DE2), in a list (0x00C1EAD8, taken out
+// as it goes, 0x0045FC84). The list is cleared each frame, every target bound in turn and cleared
+// to its colour (0x00456D20), at the end of the world's drawing (Renderer::EclipseUmbraCommander's
+// callback for 0xA1, 0x0045CCA2), once the graphics are up (their slot 62, +0x114).
 #include "dao/Framebuffer.h"
 
 #include "dao/Addresses.h"
