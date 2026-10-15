@@ -51,18 +51,20 @@ std::vector<std::wstring> Names(std::wstring_view type);
 
 // Adds a folder to the places the game finds its files in, as a plugin's override\ folder is.
 // @param folder the folder's full path
+// @param watched true to have the game find files written into the folder after it is added, as
+//  it does for the player's override folder; false to read it once, when it is added
 // @return false if it is not a folder, the game is not a build the library knows, or the game
 //  did not take it
 //
 // The game finds any file in the folder or its subfolders by name, ahead of its own archives and
 // patches and behind the player's override folder. A file that two added folders both have comes
-// from either. The folder is read once, when it is added. Adding a folder a second time does
-// nothing and returns true.
+// from either. A watched folder is listed again every fifth frame, so keep it small. Adding a
+// folder a second time does nothing and returns true.
 //
 // Call it from DAOLib_Load, where the folder is added as the game starts and true means only that
 // it will be, or on the game thread once the game is running. A file the game has loaded already
 // stays as it is until the game loads it again.
-bool AddFolder(const std::filesystem::path &folder);
+bool AddFolder(const std::filesystem::path &folder, bool watched = false);
 
 // Takes away a folder that AddFolder added, so the game finds the files it had elsewhere, or not
 // at all.

@@ -356,13 +356,16 @@ class Found
 // A folder as AddSource takes it.
 constexpr std::int32_t kDirectoryKind = 1;  // a folder with its subfolders and any .erf or .rim in it
 constexpr std::int32_t kFolderPriority = 2; // OVERRIDE: is 1, PATCH: 100000; a tie is not decided by it
-constexpr std::int32_t kWatch = 0;          // read once; OVERRIDE:'s 1 re-lists it every fifth frame
+// Read once (0), or listed again every fifth frame (1) as OVERRIDE: is: AddFolder's `watched`.
+constexpr std::int32_t kReadOnce = 0;
+constexpr std::int32_t kWatched = 1;
 
 std::mutex g_foldersMutex;
 bool g_sourcesSetUp = false;         // the game has set its sources up: a folder goes straight to it
 bool g_watching = false;             // how to learn of that has been seen to
 std::vector<std::wstring> g_waiting; // folders asked for before then
 std::vector<std::wstring> g_added;   // folders this copy of the library has given the game
+std::vector<std::wstring> g_watched; // those of them given or to be given watched
 
 // The name a folder's source has in the manager: its full path, ending in a
 // separator as the game's own folders' do. A release finds the source by
@@ -401,8 +404,9 @@ bool Give(const std::wstring &name)
     const auto add = reinterpret_cast<AddSourceFn>(Module::Address(addr::kResMan_AddSource));
     void *manager = add != nullptr ? Manager() : nullptr;
     WString path(name);
-    const bool added =
-        manager != nullptr && add(manager, 0, path.Engine(), kDirectoryKind, kFolderPriority, 0, nullptr, kWatch, 0);
+    const bool watched = std::ranges::find(g_watched, name) != g_watched.end();
+    const bool added = manager != nullptr && add(manager, 0, path.Engine(), kDirectoryKind, kFolderPriority, 0, nullptr,
+                                                 watched ? kWatched : kReadOnce, 0);
     spdlog::info("resources: {} {}", Shown(name),
                  added ? "is a source of the game's files" : "was not taken as a source");
     return added;
@@ -560,7 +564,7 @@ std::vector<std::wstring> Names(std::wstring_view type)
     return names;
 }
 
-bool AddFolder(const std::filesystem::path &folder)
+bool AddFolder(const std::filesystem::path &folder, bool watched)
 {
     std::error_code ec;
     if (!Module::IsKnownExecutable() || !std::filesystem::is_directory(folder, ec))
@@ -576,6 +580,10 @@ bool AddFolder(const std::filesystem::path &folder)
     if (has(g_added) || has(g_waiting))
     {
         return true;
+    }
+    if (watched)
+    {
+        g_watched.push_back(name);
     }
     if (!g_sourcesSetUp)
     {
@@ -594,6 +602,7 @@ bool RemoveFolder(const std::filesystem::path &folder)
 {
     const std::wstring name = SourceName(folder);
     const std::lock_guard lock(g_foldersMutex);
+    std::erase(g_watched, name);
     if (std::erase(g_waiting, name) != 0)
     {
         return true;
