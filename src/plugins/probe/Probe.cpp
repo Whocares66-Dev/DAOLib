@@ -20,12 +20,16 @@
 // - Every event the engine's queue delivers, counted by kind (Events.h).
 // - A spell's sub-actions while its caster conjures (Conjure.h).
 // - Who advances the Flash movies, paused and not (Movies.h).
+// - The HUD's movie records as they change, for the interface's fade (Hud.h).
+// - A named resource's read, around a plugin's patch of it (Reads.h).
 // - Every step of a loading screen, timed (Loading.h).
 #include "Census.h"
 #include "Conjure.h"
 #include "Events.h"
+#include "Hud.h"
 #include "Loading.h"
 #include "Movies.h"
+#include "Reads.h"
 #include "Recorder.h"
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
@@ -464,6 +468,8 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     probe::AttachEventWatch();
     probe::AttachConjureWatch();
     probe::AttachMovieWatch();
+    probe::AttachHudWatch();
+    probe::AttachReadWatch();
     probe::AttachLoadingWatch();
 
     // The census, on everything but what is hooked above.

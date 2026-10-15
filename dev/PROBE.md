@@ -16,6 +16,12 @@ The **sampler** (`Recorder.h`) suspends each thread for the moment it takes to c
 
 The game's logic runs as `Eclipse::UpdateTask` on some of the engine's worker threads, among fifty-odd threads that mostly wait or draw. In the first sessions that thread made up under 2% of all samples, so comparisons over all of them showed rendering and little else. Since 2026-09-30 the recorder also counts, apart, the samples with the update task's frame on the stack. `compare --update` compares those alone.
 
+The **movie watch** (`Movies.h`, DAOLib #134) logs to `probe.log` every two seconds who advanced the Flash movies (GFxMovieRoot::Advance: caller, thread, calls, the time given) and each movie record's step (its name, flags, the frame's and the game's time, whether a full menu restricted it), with whether the game was paused. It showed the game advancing the HUD and a plugin's screen with the frame's time while paused.
+
+The **HUD watch** (`Hud.h`, DAOLib #136) copies the records of the HUD's movies every half second and logs the dwords that changed, with the mode and pause. It showed the records made anew on a change of mode, no fade held in them.
+
+The **read watch** (`Reads.h`, DAOLib #135) is off unless `DAOLIB_PROBE_READS` names resources (comma-separated name prefixes): then, for each, the first read logged before and after, its source's class, stored and read lengths, bytes, state, and the first and last 16 bytes, around any plugin's patch of it (dao/Resources.h, OnLoad).
+
 Times in the two `.tsv` files are milliseconds since the probe loaded. The first line of each gives the local time that was, to line up with `probe.log` and with what you remember of the session.
 
 ## Reading it

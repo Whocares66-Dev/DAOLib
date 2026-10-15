@@ -369,7 +369,9 @@ if(DAO_BUILD_PLUGINS)
         SOURCES
             src/plugins/probe/Census.cpp
             src/plugins/probe/Conjure.cpp
+            src/plugins/probe/Hud.cpp
             src/plugins/probe/Movies.cpp
+            src/plugins/probe/Reads.cpp
             src/plugins/probe/Events.cpp
             src/plugins/probe/Loading.cpp
             src/plugins/probe/Probe.cpp
