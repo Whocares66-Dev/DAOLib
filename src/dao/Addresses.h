@@ -110,6 +110,31 @@ DAO_ADDRESS(kCClientExoApp_Constructor, 10640)
 // name is not in the exe. What `second` means is not yet read: the pause
 // key passes 1.
 DAO_ADDRESS(kCClientExoApp_SetPaused, 10547)
+// GFx's advance of a movie, read 2026-10-15 for DAOLib #134: GFxMovieRoot's
+// slot 30 (its vftable 0x00B4CA6C), __thiscall (float seconds, unsigned
+// frames to catch up), `ret 8`, answering the time to the next frame in
+// st(0); 3.6 KB, beside Display (slot 31). Slot 33 (0x0095B1C0), taken
+// first for it, is SetBackgroundAlpha: __thiscall (float), `ret 4`, a byte
+// at +0x8F7 of the alpha times 255, which the manager sets to 0 on a new
+// movie (CreateMovieView, 0x00514A9E). Who calls Advance each frame is the
+// probe's to see (src/plugins/probe/Movies.cpp).
+DAO_ADDRESS(kGFxMovieRoot_Advance, 28507)
+// Each movie's step, read 2026-10-15 for DAOLib #134 after the probe saw
+// one caller advance every movie each frame (0x0051AE44, the update
+// thread), paused or not: the manager's update (its slot 4, 0x005166C0)
+// goes through its records (+0x70) and calls this, __thiscall on a record
+// (float time, float other time, bool restricted), `ret 0xC`. A record
+// shown (+0x28) is advanced unless restricted (a full menu up) and its
+// flags (+0x24) lack 0x10; by the second time where its flags have 8, else
+// the first, times its speed (+0x30). Seen with the probe (DAOTurnBased's
+// and DAOPhotoCam's games, 2026-10-15): the first is the frame's time and
+// the second the game's, 0 while paused; the HUD's records and a plugin's
+// screen (AddScreen) have flags 0, so they are advanced with the frame's
+// time paused or not, in fly cam mode too, and a full menu narrows the
+// records advanced to its own. The manager also sets the byte at +0x9CB of
+// every new movie (GFxMovieRoot's slot 35, read back by slot 37, 0x00514A8F):
+// nothing else in the exe reads it. The name is ours.
+DAO_ADDRESS(kMovieRecord_Step, 6791)
 // The game mode controller, CClientExoApp+0x114 (dao/GameModes.h), read
 // 2026-09-30: its constructor, from the application's initialisation
 // (0x005DC052), and SetGameMode(mode, 0, 0), __thiscall, which its
