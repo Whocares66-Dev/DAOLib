@@ -397,8 +397,17 @@ bool ForceLoad()
 // was lost, the file "savegame". The handler (0x006D1C60) hands the game
 // the save screen's SaveLoad.SaveName as well as the message's name, and
 // the screen's is the one written; so the name is set there first, as the
-// screen sets it, and -1 is a slot chosen here. Both changes are not yet
-// seen in play.
+// screen sets it, and -1 is a slot chosen here.
+//
+// The message's own name is not the save's: read 2026-10-15 for DAOLib #141
+// (DAOPhotoCam found 813 copies of saves, 6.8 GB, in GOG's bin_ship),
+// SaveGame::Write (ID 12680, 0x00646280) names the save by the screen's
+// name, "savegame" with none, and then, where the message's name is not
+// empty, copies the written .das to it with CopyFileW (0x004C8FC0 at
+// 0x0064666E): a path, relative to the game's working folder, bin_ship. The
+// handler carries both through the loading mode (GameModeLoadingData's
+// +0xD8 and +0xF4, 0x006C5780). The save screen sends the message's name
+// empty, and so does this.
 bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
 {
     const std::uintptr_t proxy = Proxy();
@@ -435,13 +444,11 @@ bool Save(Kind kind, std::int32_t slot, std::wstring_view name)
     {
         screenName->SetText(name);
     }
-    // The name as the engine's string, which the handler copies; this one
-    // is freed here, by the engine's own functions (dao/String.h).
-    WString text(name);
+    // The message's name empty, as Make leaves it: a name there is a path the
+    // written save is copied to (above).
     auto message = messages::Make<messages::SaveGameMessage>();
     message.slot = slot;
     message.kind = static_cast<std::int32_t>(kind);
-    std::memcpy(message.name, text.Engine(), sizeof message.name);
     return SendToProxy(proxy, message);
 }
 

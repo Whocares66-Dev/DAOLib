@@ -246,16 +246,20 @@ static_assert(sizeof(CenterOnObjectMessage) == 8);
 // save's message is 0x28 bytes, a name after (an engine std::wstring, which its clone copies).
 // Read 2026-09-30, and seen in play the same day: the quicksave key sent slot -1, kind 2, no
 // name, and SaveGame::Write then wrote slot 1; a quickload sent slot 1, kind 2, and a load from
-// the menu slot 2, kind 0.
+// the menu slot 2, kind 0. The name, where not empty, is a path SaveGame::Write copies the
+// written .das to (CopyFileW, 0x0064666E; read 2026-10-15, DAOLib #141).
 
 // Asks the save proxy, the engine object that runs saving and loading, to save the game
 // (dao/Saves.h).
 struct SaveGameMessage : Message
 {
     DAO_VFTABLE(64880);
-    std::int32_t slot;    // the save slot; -1 lets the handler choose, as the quicksave key does
-    std::int32_t kind;    // 0 manual save, 1 autosave, 2 quicksave; 3 is a fourth, unnamed kind
-    std::byte name[0x1C]; // the save's name, an engine std::wstring (WStringRep, dao/core/Msvc8.h)
+    std::int32_t slot; // the save slot; -1 lets the handler choose, as the quicksave key does
+    std::int32_t kind; // 0 manual save, 1 autosave, 2 quicksave; 3 is a fourth, unnamed kind
+    // Not the save's name, which is the save screen's SaveLoad.SaveName: a path the written .das is
+    // copied to, relative to the game's folder; leave it empty, as the game does. An engine
+    // std::wstring (WStringRep, dao/core/Msvc8.h).
+    std::byte name[0x1C];
 };
 static_assert(sizeof(SaveGameMessage) == 0x28);
 

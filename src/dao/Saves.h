@@ -177,8 +177,9 @@ bool ForceLoad();
 // for a quicksave.
 // @param slot the slot number, or -1 for the next free one; for a manual save, that is the
 // current character's lowest slot with no save in it
-// @param name the save's name, shown in the load screen and used in its file name; if empty, the
-// file is named "savegame"
+// @param name the save's name, shown in the load screen and used in its file name (its spaces
+// dropped); if empty, the file is named "savegame". A quicksave or an autosave keeps the game's
+// own, unnamed
 // @return true if the game started the save; false where the game allows no saving (in combat or
 // a cutscene), before the game has finished starting, or when all 500 manual slots are taken
 //
