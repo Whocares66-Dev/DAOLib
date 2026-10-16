@@ -122,10 +122,18 @@ Fixes and fast loading
   until you tick "Fast loading" under Performance on the options screen's Game tab.
   https://whocares66-dev.github.io/DAOLib/loader.html lists each.
 
-Another mod that is a dinput8.dll
-  Two files cannot have the name. Keep DAOLib's as dinput8.dll and put the other mod's
-  beside it renamed dinput8.chain.dll: DAOLib passes the game's calls on to it, and
-  loader.log says "another mod's dinput8.dll is chained". One such mod at a time.
+Compatibility with other mods
+  A mod that is a dinput8.dll: two files cannot have the name. Keep DAOLib's as
+  dinput8.dll and put the other mod's beside it renamed dinput8.chain.dll: DAOLib passes
+  the game's calls on to it, and loader.log says "another mod's dinput8.dll is chained".
+  One such mod at a time.
+
+  ASI mods (DAFix and others): DAOLib loads *.asi files from bin_ship, bin_ship\scripts
+  and bin_ship\plugins, as Ultimate ASI Loader does. Install only the mod's .asi and .ini;
+  leave out the dinput8.dll and dinput8.ini that come with it, which are Ultimate ASI
+  Loader. Renamed dinput8.chain.dll, that loader closes the game. loader.log says
+  "loaded, an ASI plugin".
+  https://whocares66-dev.github.io/DAOLib/compatibility.html has more.
 
 Seeing that it works
   The loader writes Documents\BioWare\Dragon Age\daolib\loader.log at each start:

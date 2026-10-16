@@ -48,6 +48,7 @@
 #include "fix/ArchiveRead.h"
 #include "fix/MouseRecords.h"
 #include "fix/SavedFileName.h"
+#include "loader/Asi.h"
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
@@ -208,7 +209,8 @@ void LoadPlugins()
 }
 
 // What goes in before the game's own code runs, on its main thread, whichever
-// way in the build has: the loader's own parts, then the plugins.
+// way in the build has: the loader's own parts, then the plugins, then the
+// ASI plugins beside the loader (loader/Asi.cpp).
 void BeforeTheGame()
 {
     perf::InstallAllProcessors();
@@ -220,6 +222,7 @@ void BeforeTheGame()
     fix::InstallMouseRecordsFix();
     perf::InstallFastLoad();
     LoadPlugins();
+    loader::asi::LoadAll(SelfPath().parent_path());
     spdlog::debug("starting the game");
 }
 

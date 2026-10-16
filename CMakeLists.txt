@@ -310,6 +310,7 @@ add_dependencies(daolib daoaddr_data)
 add_library(
     loader
     SHARED
+    src/loader/Asi.cpp
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
     src/fix/MouseRecords.cpp
