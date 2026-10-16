@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-- **ASI mods load with DAOLib:** the loader loads `*.asi` files from `bin_ship`, `bin_ship\scripts` and `bin_ship\plugins` as Ultimate ASI Loader does, so a mod such as DAFix goes in without the `dinput8.dll` it ships, which is Ultimate ASI Loader and took DAOLib's place (#145).
+## 0.3.1
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.3.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.3.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **ASI mods load with DAOLib:** the loader loads `*.asi` files from `bin_ship`, `bin_ship\scripts` and `bin_ship\plugins`, as Ultimate ASI Loader does. Install a mod such as [DAFix](https://github.com/Lyall/DAFix) without the `dinput8.dll` and `dinput8.ini` it comes with ([compatibility](https://whocares66-dev.github.io/DAOLib/compatibility.html), #145).
+- **Saves:** a save made through the library is no longer also copied into `bin_ship` (#141).
+- **For tools without the game:** `daolib_core`'s install reader reads the plugins folder the game was started with, as `DAOLIB_PLUGINS` names it (#143), and reads an install in a third of the time, or less with archives' directories kept on disk between runs (#144).
 
 ## 0.3.0
 
