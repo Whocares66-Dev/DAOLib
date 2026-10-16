@@ -16,7 +16,8 @@
 //   addin:<uid>           <game>\Addins\<uid>, or <documents>\AddIns\<uid> (a player's)
 //   offer:<uid>           <game>\Offers\<uid>
 //   package:<name>        <game>\packages\<name>, a package a campaign loads (core_ep1)
-//   plugin:<name>         <game>\bin_ship\daolib\plugins\<name>\override (DAOLib #43)
+//   plugin:<name>         <plugins>\<name>\override, beside <name>.dll (DAOLib #43): <plugins>
+//                         is <game>\bin_ship\daolib\plugins, or the folder Options names (#143)
 //   override:documents    <documents>\packages\core\override
 //
 // Each resource's copies are in the order the game looks for it, the first
@@ -47,10 +48,12 @@
 namespace dao::core::install
 {
 
+// The folder a source's path is relative to: the game's, Documents', or the plugins folder.
 enum class Base
 {
     Game,
     Documents,
+    Plugins,
 };
 
 struct Source
@@ -112,7 +115,10 @@ struct Options
     std::string campaign = "Single Player"; // the loaded campaign, as AddIns.xml's ExtendedModuleUID names
                                             // one; empty for none (the main menu)
     std::string language = "en-us";
-    std::string textures = "high"; // a folder of packages\core	extures: "high" or "medium"
+    std::string textures = "high"; // a folder of packages\core\textures: "high" or "medium"
+    // The plugins folder the game was started with (DAOLIB_PLUGINS), read in place of the game's
+    // bin_ship\daolib\plugins; empty for the game's.
+    std::filesystem::path plugins{};
 };
 
 // A file by its name, and a copy of it.
@@ -140,9 +146,19 @@ class Index
     static std::unique_ptr<Index> Build(const std::filesystem::path &game, const std::filesystem::path &documents,
                                         const Options &options = {});
 
+    // Returns a base's folder: for Base::Plugins, the plugins folder read.
     const std::filesystem::path &Folder(Base base) const
     {
-        return base == Base::Game ? game_ : documents_;
+        switch (base)
+        {
+        case Base::Documents:
+            return documents_;
+        case Base::Plugins:
+            return plugins_;
+        case Base::Game:
+            break;
+        }
+        return game_;
     }
     const Stats &Measured() const
     {
@@ -197,7 +213,8 @@ class Index
     // its files: by their copies' sources as SortCopies, then, of one source's, by name. The order
     // a merged table takes its files in (dao/core/M2da.h).
     void SortFiles(std::vector<NamedCopy> &files) const;
-    // Returns the game's source a copy is read from, as a key: its base ("game:" or "documents:")
+    // Returns the game's source a copy is read from, as a key: its base ("game:", "documents:" or
+    // "plugins:")
     // and its archive's path, or its own file's folder, in lower case.
     std::string EngineSource(const Copy &copy) const;
 
@@ -231,6 +248,7 @@ class Index
 
     std::filesystem::path game_;
     std::filesystem::path documents_;
+    std::filesystem::path plugins_;
     Options options_;
     Stats stats_;
     std::vector<AddIn> addIns_;

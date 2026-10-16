@@ -39,8 +39,12 @@ struct Folder
                    files::Erf({{"abi_cp1.gda", files::FromText("ciphered")}}, true, 2U << 4));
         root.Write(L"game/Addins/dao_prc_cp_1/manifest.xml", files::FromText("<Manifest/>"));
         root.Write(L"game/Offers/dao_prc_o/core/x.uti", files::FromText("x"));
+        root.Write(L"game/bin_ship/daolib/plugins/mymod/mymod.dll", files::FromText("dll"));
         root.Write(L"game/bin_ship/daolib/plugins/mymod/override/ogre.utc", files::FromText("plugin"));
-        root.Write(L"game/bin_ship/daolib/plugins/nofiles/mymod.dll", files::FromText("dll"));
+        root.Write(L"game/bin_ship/daolib/plugins/nofiles/nofiles.dll", files::FromText("dll"));
+        // No plugin the loader loads: its DLL is not <name>.dll.
+        root.Write(L"game/bin_ship/daolib/plugins/misnamed/mymod.dll", files::FromText("dll"));
+        root.Write(L"game/bin_ship/daolib/plugins/misnamed/override/ogre.utc", files::FromText("misnamed"));
         root.Write(L"documents/Settings/AddIns.xml",
                    files::FromText(R"(<AddInsList><AddInItem UID="DAO_PRC_CP_1" Priority="200" Enabled="1">)"
                                    R"(<Title DefaultText="Return to Ostagar"/></AddInItem></AddInsList>)"));
@@ -151,6 +155,49 @@ TEST_CASE("copies of different resources sort into the sources' order, each with
     REQUIRE(ogres->size() >= 2);
     CHECK(index->EngineSource((*ogres)[0]) == "documents:packages/core/override");
     CHECK(index->EngineSource((*ogres)[1]) == "game:packages/core/override");
+    CHECK(index->EngineSource((*ogres)[2]) == "plugins:mymod/override");
+}
+
+TEST_CASE("a plugin's override is a source beside its DLL, in the plugins folder the game was started with",
+          "[install]")
+{
+    const Folder folder;
+    const auto game = folder.Build();
+    const auto *own = Named(*game, "plugin:mymod");
+    REQUIRE(own != nullptr);
+    CHECK(own->base == install::Base::Plugins);
+    CHECK(own->folder == "mymod/override");
+    CHECK(game->Folder(install::Base::Plugins) == folder.root.path / L"game" / L"bin_ship" / L"daolib" / L"plugins");
+    CHECK(Named(*game, "plugin:misnamed") == nullptr);
+
+    // A build tree's plugins, as DAOLIB_PLUGINS names them: read in place of the game's.
+    files::TempFolder tree;
+    tree.Write(L"plugins/mymod/mymod.dll", files::FromText("dll"));
+    tree.Write(L"plugins/mymod/override/ogre.utc", files::FromText("built"));
+    tree.Write(L"plugins/newmod/newmod.dll", files::FromText("dll"));
+    tree.Write(L"plugins/newmod/override/n.uti", files::FromText("n"));
+    install::Options options;
+    options.plugins = tree.path / L"plugins";
+    const auto built = install::Index::Build(folder.root.path / L"game", folder.root.path / L"documents", options);
+    CHECK(built->Folder(install::Base::Plugins) == options.plugins);
+    const auto *mymod = Named(*built, "plugin:mymod");
+    REQUIRE(mymod != nullptr);
+    CHECK(mymod->files == 1);
+    CHECK(Named(*built, "plugin:newmod") != nullptr);
+    const auto *ogres = built->Find("ogre.utc");
+    REQUIRE(ogres != nullptr);
+    std::vector<std::string> read;
+    for (const auto &copy : *ogres)
+    {
+        read.push_back(Text(built->Read(copy)));
+    }
+    // The game's own plugin's copy is not one: the game does not read that folder.
+    CHECK(read == std::vector<std::string>{"documents", "override", "built", "ogre"});
+
+    // A folder that is not there serves no plugin, as the loader loads none from it.
+    options.plugins = tree.path / L"nothing";
+    const auto none = install::Index::Build(folder.root.path / L"game", folder.root.path / L"documents", options);
+    CHECK(Named(*none, "plugin:mymod") == nullptr);
 }
 
 TEST_CASE("files of one source sort by name, after their sources' order", "[install]")

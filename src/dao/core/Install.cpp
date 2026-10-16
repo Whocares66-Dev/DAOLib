@@ -6,7 +6,10 @@
 // design), modules\single player the campaign with nearly 10,000 .rim files,
 // Addins\<uid> and Offers\<uid> the Ultimate Edition's add-ins (their 377
 // .erf files ERF V2.2, enciphered), bin_ship\daolib\plugins\<name>\override
-// DAOLib's plugins' files (DAOLib #43). Documents holds Settings\AddIns.xml
+// DAOLib's plugins' files (DAOLib #43): the loader serves a plugin's
+// override\ only for a plugin it finds, <name>\<name>.dll, and reads the
+// folder DAOLIB_PLUGINS names in place of the game's, not as well as it
+// (src/loader/Loader.cpp, #67, #143). Documents holds Settings\AddIns.xml
 // and offers.xml, AddIns\ (add-ins a player installed) and
 // packages\core\override. 10,612 archives, 539,436 copies of 235,278
 // resources; the index of them read in 4 to 5 seconds on sixteen threads in a
@@ -129,6 +132,21 @@ std::vector<std::pair<std::string, fs::path>> Folders(const fs::path &folder)
     return out;
 }
 
+// A base as the keys and ids name it.
+std::string BaseName(Base base)
+{
+    switch (base)
+    {
+    case Base::Game:
+        return "game";
+    case Base::Documents:
+        return "documents";
+    case Base::Plugins:
+        return "plugins";
+    }
+    return "game";
+}
+
 } // namespace
 
 std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &documents, const Options &options)
@@ -137,6 +155,7 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
     auto index = std::make_unique<Index>();
     index->game_ = game;
     index->documents_ = documents;
+    index->plugins_ = options.plugins.empty() ? game / L"bin_ship" / L"daolib" / L"plugins" : options.plugins;
     index->options_ = options;
     index->options_.language = Lower(options.language); // as the folders' and files' names are compared
     index->options_.textures = Lower(options.textures);
@@ -170,7 +189,7 @@ std::uint32_t Index::AddSource(std::string id, std::string kind, Base base, cons
 {
     if (std::ranges::any_of(sources_, [&id](const Source &s) { return s.id == id; }))
     {
-        id += base == Base::Documents ? "(documents)" : "(game)";
+        id += "(" + BaseName(base) + ")";
     }
     Source source;
     source.id = std::move(id);
@@ -264,13 +283,14 @@ void Index::Walk()
     {
         Collect(AddSource("offer:" + Lower(name), "offer", Base::Game, folder), folder, {});
     }
-    for (const auto &[name, folder] : Folders(game_ / L"bin_ship" / L"daolib" / L"plugins"))
+    for (const auto &[name, folder] : Folders(plugins_))
     {
         const fs::path override = folder / L"override";
         std::error_code error;
-        if (fs::is_directory(override, error))
+        if (fs::is_regular_file(folder / (folder.filename().wstring() + L".dll"), error) &&
+            fs::is_directory(override, error))
         {
-            Collect(AddSource("plugin:" + Lower(name), "plugin", Base::Game, override), override, {});
+            Collect(AddSource("plugin:" + Lower(name), "plugin", Base::Plugins, override), override, {});
         }
     }
     if (documents_.empty())
@@ -969,7 +989,7 @@ std::string Index::EngineSource(const Copy &copy) const
 {
     // The base first: the game's and the player's override folders, and an add-in's folder in
     // the game's and in Documents, have the same path within their bases.
-    return (sources_[copy.source].base == Base::Documents ? "documents:" : "game:") + KeyOf(*this, copy).name;
+    return BaseName(sources_[copy.source].base) + ":" + KeyOf(*this, copy).name;
 }
 
 void Index::Order()

@@ -152,8 +152,22 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "install-engine-source-base: the player's override and the install's are two sources",
         INSTALL,
-        '(sources_[copy.source].base == Base::Documents ? "documents:" : "game:")',
+        'BaseName(sources_[copy.source].base) + ":"',
         'std::string("game:")',
+    ),
+    # The plugins folder (#143): the one the game was started with, and only plugins the
+    # loader loads.
+    Mutant(
+        "install-plugins-folder: the plugins folder asked for is read in place of the game's",
+        INSTALL,
+        "options.plugins.empty() ? game",
+        "true ? game",
+    ),
+    Mutant(
+        "install-plugin-dll: a plugin's override is a source only beside its DLL",
+        INSTALL,
+        "fs::is_regular_file(folder / (folder.filename().wstring() + L\".dll\"), error) &&",
+        "true &&",
     ),
     # The readers moved in from Eluvian's ghilana (#106): GFF3, a GDA table,
     # the M2DA merge, AddIns.xml, an install's sources and copies.

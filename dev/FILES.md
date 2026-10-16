@@ -22,7 +22,7 @@ Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and
 |---|---|---|
 | 0 | `WRITE_OVERRIDE:` | `Documents\BioWare\Dragon Age\packages\core\override\`, the player's |
 | 1 | `OVERRIDE:` | the install's `packages\core\override\` |
-| 2 | a DAOLib plugin's `override\`, and folders a plugin adds (`dao::resources::AddFolder`) | `bin_ship\daolib\plugins\<name>\...` |
+| 2 | a DAOLib plugin's `override\`, beside its `<name>.dll`, and folders a plugin adds (`dao::resources::AddFolder`) | `bin_ship\daolib\plugins\<name>\...`, or the folder `DAOLIB_PLUGINS` names in its place (`install::Options::plugins`) |
 | about 9000 − 7*i* | an add-in installed in Documents (`ADDINS:<UID>\`) | `Documents\BioWare\Dragon Age\AddIns\<UID>\` |
 | about 19000 − 7*i* | an add-in installed in the game's folder (`BUILD_ADDINS:<UID>\`) | the install's `Addins\<UID>\` |
 | 20007 | `WRITE_DATA:` | |
