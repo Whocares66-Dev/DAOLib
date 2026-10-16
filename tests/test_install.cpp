@@ -562,6 +562,94 @@ TEST_CASE("the game's order of its offers: offers.xml's from its end, by Priorit
     CHECK(taken == seen);
 }
 
+namespace
+{
+
+// All an index says, as lines: its sources, its archives and every copy in its order.
+std::vector<std::string> Summary(const install::Index &index)
+{
+    std::vector<std::string> lines;
+    for (const auto &source : index.Sources())
+    {
+        lines.push_back(source.id + " " + source.folder + " " + std::to_string(source.archives) + " " +
+                        std::to_string(source.loose) + " " + std::to_string(source.files) + " " +
+                        std::to_string(source.unreadable));
+    }
+    for (const auto &archive : index.Archives())
+    {
+        lines.push_back(archive.path + " " + std::to_string(archive.header.count) + " " +
+                        std::to_string(archive.header.flags) + " " + std::to_string(archive.files));
+    }
+    for (const auto &[name, copies] : index.Resources())
+    {
+        for (const auto &copy : copies)
+        {
+            lines.push_back(name + " " + index.Where(copy) + " " + std::to_string(copy.entry) + " " +
+                            std::to_string(copy.size) + " " + std::to_string(copy.priority));
+        }
+    }
+    return lines;
+}
+
+} // namespace
+
+TEST_CASE("archives' directories kept in a cache folder are read again only when changed", "[install]")
+{
+    const Folder folder;
+    const files::TempFolder cache;
+    install::Options options;
+    options.cache = cache.path;
+    const auto build = [&folder, &options] {
+        return install::Index::Build(folder.root.path / L"game", folder.root.path / L"documents", options);
+    };
+    const auto none = folder.Build();
+    const std::size_t archives = none->Archives().size();
+    REQUIRE(archives >= 4);
+
+    const auto first = build();
+    CHECK(first->Measured().read == archives);
+    CHECK(first->Measured().kept == 0);
+    CHECK(std::filesystem::exists(cache.path / L"archives.bin"));
+    const auto second = build();
+    CHECK(second->Measured().read == 0);
+    CHECK(second->Measured().kept == archives);
+    CHECK(second->Measured().unopened == none->Measured().unopened); // a file that is no archive is tried again
+    CHECK(Summary(*second) == Summary(*none));
+    CHECK(Text(second->Read(second->Find("abi_base.gda")->front())) ==
+          Text(none->Read(none->Find("abi_base.gda")->front())));
+
+    // One archive changed, its size alone (its time put back): only it is read again, and the
+    // index is as one built without.
+    const std::filesystem::path b = folder.root.path / L"game/modules/other/data/b.rim";
+    const auto time = std::filesystem::last_write_time(b);
+    folder.root.Write(L"game/modules/other/data/b.rim",
+                      files::Erf({{"b.are", files::FromText("b")}, {"c.are", files::FromText("cc")}}));
+    std::filesystem::last_write_time(b, time);
+    const auto changed = build();
+    CHECK(changed->Measured().read == 1);
+    CHECK(changed->Measured().kept == archives - 1);
+    CHECK(Summary(*changed) == Summary(*folder.Build()));
+    CHECK(build()->Measured().read == 0);
+
+    // Its time alone, the same bytes: read again too.
+    std::filesystem::last_write_time(b, time + std::chrono::seconds(10));
+    CHECK(build()->Measured().read == 1);
+    CHECK(build()->Measured().read == 0);
+
+    // One gone: the rest are kept, and so is a file without it.
+    std::filesystem::remove(folder.root.path / L"game/modules/other/data/b.rim");
+    const auto fewer = build();
+    CHECK(fewer->Measured().read == 0);
+    CHECK(fewer->Measured().kept == archives - 1);
+    CHECK(install::LoadKept(cache.path).size() == archives - 1);
+
+    // A cache that does not read is none: every archive is read, and the file made again.
+    folder.root.Write(L"cache-bad/archives.bin", files::FromText("not a cache"));
+    options.cache = folder.root.path / L"cache-bad";
+    CHECK(build()->Measured().read == archives - 1);
+    CHECK(install::LoadKept(options.cache).size() == archives - 1);
+}
+
 // The GOG install, where there is one: the index's choice against what the game itself said
 // it took (examples/resources's where.txt, 2026-10-12). Hidden, as it reads ten thousand
 // archives: run it by its tag, dao_core_tests "[install-real]".
@@ -581,4 +669,25 @@ TEST_CASE("on the GOG install, the copy the index puts first is the one the game
     REQUIRE(base != nullptr);
     CHECK(index->Where(base->front()) == "packages/core/patch/patch003.erf");
     CHECK(base->front().priority == 100000);
+}
+
+// The GOG install's archives kept and read again from a cache, with the times each took. Hidden
+// as above: dao_core_tests "[install-real]".
+TEST_CASE("on the GOG install, an index built from its cache is the one built without", "[.][install-real]")
+{
+    const std::filesystem::path game = L"C:/Program Files (x86)/GOG Galaxy/Games/Dragon Age Origins";
+    if (!std::filesystem::exists(game / L"bin_ship"))
+    {
+        SKIP("no GOG install here");
+    }
+    const files::TempFolder cache;
+    install::Options options;
+    options.cache = cache.path;
+    const auto read = install::Index::Build(game, {}, options);
+    const auto kept = install::Index::Build(game, {}, options);
+    CHECK(kept->Measured().read == 0);
+    CHECK(kept->Measured().kept == read->Measured().read);
+    CHECK(Summary(*kept) == Summary(*read));
+    WARN("read " << read->Measured().ms << " ms, from the cache " << kept->Measured().ms << " ms, "
+                 << kept->Measured().kept << " archives");
 }

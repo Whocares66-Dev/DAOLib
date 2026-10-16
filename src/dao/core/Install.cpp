@@ -13,7 +13,10 @@
 // and offers.xml, AddIns\ (add-ins a player installed) and
 // packages\core\override. 10,612 archives, 539,436 copies of 235,278
 // resources; the index of them read in 4 to 5 seconds on sixteen threads in a
-// release build, a cache of the system's warm. FMOD's audio (.fsb, .fev, some
+// release build, a cache of the system's warm. Since DAOLib #144 (2026-10-16,
+// the game running beside it): 2.0 to 2.3 s, and 1.1 to 1.4 s with the
+// archives' directories kept (Options::cache), now that a path's place in its
+// base is lexical and opens no file. FMOD's audio (.fsb, .fev, some
 // 18,000 files) is left out, and an add-in's manifest.xml, which describes it
 // and is no resource.
 //
@@ -93,11 +96,13 @@ std::string Utf8(const fs::path &path)
     return {reinterpret_cast<const char *>(text.data()), text.size()};
 }
 
+// Every path here was found by walking under its base, so its place in it is lexical. Not
+// fs::relative, which makes both canonical and so opens each file: for the GOG install's ten
+// thousand archives that was half of Build (DAOLib #144).
 std::string Relative(const fs::path &path, const fs::path &base)
 {
-    std::error_code error;
-    const fs::path relative = fs::relative(path, base, error);
-    return Utf8(error ? path : relative);
+    const fs::path relative = path.lexically_relative(base);
+    return Utf8(relative.empty() ? path : relative);
 }
 
 std::string Extension(const std::string &name)
@@ -165,7 +170,9 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
         index->offers_ = ReadAddIns(ReadText(documents / L"Settings" / L"offers.xml"), "OfferItem");
     }
     index->Walk();
-    auto reads = index->ReadDirectories();
+    const KeptByPath kept = LoadKept(options.cache);
+    auto reads = index->ReadDirectories(kept);
+    index->KeepDirectories(reads, kept.size()); // before AddArchive takes the names
     for (std::size_t i = 0; i < index->pending_.size(); ++i)
     {
         if (!reads[i].header)
@@ -173,8 +180,10 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
             ++index->stats_.unopened;
             continue;
         }
+        ++(reads[i].kept ? index->stats_.kept : index->stats_.read);
         index->AddArchive(index->pending_[i], reads[i]);
     }
+    index->GatherResources();
     index->ReadPackages();
     index->Order();
     index->pending_.clear();
@@ -237,7 +246,17 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
         const std::string extension = Extension(name);
         if (extension == "erf" || extension == "rim")
         {
-            pending_.push_back(Pending{source, it->path()});
+            // The listing's size and time, which the walk has read already (MSVC's
+            // directory_entry keeps them from the folder's listing).
+            Pending pending{source, it->path()};
+            std::error_code sized;
+            std::error_code timed;
+            const auto size = it->file_size(sized);
+            const auto written = it->last_write_time(timed);
+            pending.stamped = !sized && !timed;
+            pending.size = size;
+            pending.written = written.time_since_epoch().count();
+            pending_.push_back(std::move(pending));
             continue;
         }
         if (extension == "fsb" || extension == "fev" || name == "manifest.xml")
@@ -247,8 +266,8 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
         std::error_code sizeError;
         const auto size = it->file_size(sizeError);
         loose_.push_back(Relative(it->path(), base));
-        resources_[name].push_back(Copy{source, kLoose, static_cast<std::uint32_t>(loose_.size() - 1),
-                                        static_cast<std::uint32_t>(std::min<std::uintmax_t>(size, kLargest))});
+        gathered_.emplace_back(name, Copy{source, kLoose, static_cast<std::uint32_t>(loose_.size() - 1),
+                                          static_cast<std::uint32_t>(std::min<std::uintmax_t>(size, kLargest))});
         ++sources_[source].loose;
         ++sources_[source].files;
         ++stats_.copies;
@@ -305,7 +324,40 @@ void Index::Walk()
     Collect(AddSource("override:documents", "override", Base::Documents, documentsOverride), documentsOverride, {});
 }
 
-std::vector<Index::DirectoryRead> Index::ReadDirectories() const
+Index::DirectoryRead Index::ReadDirectory(const Pending &pending, const KeptByPath &kept)
+{
+    DirectoryRead read;
+    std::error_code placed;
+    const fs::path absolute = fs::absolute(pending.path, placed);
+    if (pending.stamped && !placed)
+    {
+        read.key = Utf8(absolute);
+        read.size = pending.size;
+        read.written = pending.written;
+        const auto found = kept.find(read.key);
+        if (found != kept.end() && found->second.size == read.size && found->second.written == read.written)
+        {
+            read.header = found->second.header;
+            read.files = found->second.files;
+            read.kept = true;
+            return read;
+        }
+    }
+    const auto archive = erf::Archive::Open(pending.path);
+    if (!archive)
+    {
+        return read;
+    }
+    read.header = archive->Head();
+    read.files.reserve(archive->Entries().size());
+    for (const auto &entry : archive->Entries())
+    {
+        read.files.emplace_back(Lower(Utf8(fs::path(entry.name))), entry.size);
+    }
+    return read;
+}
+
+std::vector<Index::DirectoryRead> Index::ReadDirectories(const KeptByPath &kept) const
 {
     // Each into a slot of its own, put in the index after in the walk's
     // order, so the index is the same whichever thread read what.
@@ -316,25 +368,38 @@ std::vector<Index::DirectoryRead> Index::ReadDirectories() const
     readers.reserve(threads);
     for (unsigned t = 0; t < threads; ++t)
     {
-        readers.emplace_back([this, &reads, &next] {
+        readers.emplace_back([this, &reads, &next, &kept] {
             for (std::size_t i = next++; i < pending_.size(); i = next++)
             {
-                const auto archive = erf::Archive::Open(pending_[i].path);
-                if (!archive)
-                {
-                    continue;
-                }
-                reads[i].header = archive->Head();
-                reads[i].files.reserve(archive->Entries().size());
-                for (const auto &entry : archive->Entries())
-                {
-                    reads[i].files.emplace_back(Lower(Utf8(fs::path(entry.name))), entry.size);
-                }
+                reads[i] = ReadDirectory(pending_[i], kept);
             }
         });
     }
     readers.clear(); // each joined
     return reads;
+}
+
+void Index::KeepDirectories(const std::vector<DirectoryRead> &reads, std::size_t keptBefore) const
+{
+    if (options_.cache.empty())
+    {
+        return;
+    }
+    std::vector<KeptDirectory> keep;
+    bool changed = false;
+    for (const DirectoryRead &read : reads)
+    {
+        if (read.header && !read.key.empty())
+        {
+            keep.push_back({read.key, read.size, read.written, *read.header, read.files});
+            changed = changed || !read.kept;
+        }
+    }
+    // Written again when an archive was read, or one kept has gone.
+    if (changed || keep.size() != keptBefore)
+    {
+        SaveKept(options_.cache, keep);
+    }
 }
 
 void Index::AddArchive(const Pending &pending, DirectoryRead &read)
@@ -356,12 +421,30 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
         {
             continue;
         }
-        resources_[std::move(name)].push_back(
-            Copy{pending.source, index, static_cast<std::uint32_t>(e), std::min(size, kLargest)});
+        gathered_.emplace_back(std::move(name),
+                               Copy{pending.source, index, static_cast<std::uint32_t>(e), std::min(size, kLargest)});
         ++source.files;
         source.unreadable += readable ? 0 : 1;
         ++stats_.copies;
     }
+}
+
+// Into the map in one pass: sorted by name, stably so that each name's copies keep the walk's
+// order, and each name put in at the map's end. Half a million copies one at a time into the map
+// took longer than reading every archive's directory (DAOLib #144).
+void Index::GatherResources()
+{
+    std::ranges::stable_sort(gathered_, {}, &std::pair<std::string, Copy>::first);
+    for (auto &[name, copy] : gathered_)
+    {
+        if (resources_.empty() || std::prev(resources_.end())->first != name)
+        {
+            resources_.emplace_hint(resources_.end(), std::move(name), std::vector<Copy>{});
+        }
+        std::prev(resources_.end())->second.push_back(copy);
+    }
+    gathered_.clear();
+    gathered_.shrink_to_fit();
 }
 
 // The loaded campaign's .cif is its name with no spaces and ".cif" (singleplayer.cif,

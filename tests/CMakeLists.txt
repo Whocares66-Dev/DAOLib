@@ -7,6 +7,7 @@ add_executable(
     dao_core_tests
     crt_reports.cpp
     test_angle.cpp
+    test_archive_cache.cpp
     test_code.cpp
     test_crashlog.cpp
     test_dazip.cpp

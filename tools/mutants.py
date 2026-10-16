@@ -124,6 +124,7 @@ GDAFILE = "src/dao/core/GdaFile.cpp"
 M2DA = "src/dao/core/M2da.cpp"
 ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
+ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
@@ -166,8 +167,27 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "install-plugin-dll: a plugin's override is a source only beside its DLL",
         INSTALL,
-        "fs::is_regular_file(folder / (folder.filename().wstring() + L\".dll\"), error) &&",
+        'fs::is_regular_file(folder / (folder.filename().wstring() + L".dll"), error) &&',
         "true &&",
+    ),
+    # The archives' directories kept between builds (#144).
+    Mutant(
+        "install-cache-stale: an archive whose size changed is read again, not taken from the cache",
+        INSTALL,
+        "found->second.size == read.size && ",
+        "",
+    ),
+    Mutant(
+        "install-cache-time: an archive whose last-write time changed is read again",
+        INSTALL,
+        " && found->second.written == read.written",
+        "",
+    ),
+    Mutant(
+        "archive-cache-version: a cache of another version is no cache",
+        ARCHIVECACHE,
+        "*version != kVersion",
+        "false",
     ),
     # The readers moved in from Eluvian's ghilana (#106): GFF3, a GDA table,
     # the M2DA merge, AddIns.xml, an install's sources and copies.

@@ -65,6 +65,8 @@ struct Header
     }
     // How many bytes from the archive's first hold its header and directory.
     std::size_t DirectorySize() const;
+
+    bool operator==(const Header &) const = default;
 };
 
 // Returns what an archive's header says.

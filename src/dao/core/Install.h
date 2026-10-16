@@ -30,6 +30,7 @@
 #pragma once
 
 #include "dao/core/AddIns.h"
+#include "dao/core/ArchiveCache.h"
 #include "dao/core/Erf.h"
 
 #include <cstddef>
@@ -119,6 +120,9 @@ struct Options
     // The plugins folder the game was started with (DAOLIB_PLUGINS), read in place of the game's
     // bin_ship\daolib\plugins; empty for the game's.
     std::filesystem::path plugins{};
+    // A folder to keep the archives' directories in between builds (archives.bin): an archive
+    // whose path, size and last-write time are as kept is not read again. Empty for none.
+    std::filesystem::path cache{};
 };
 
 // A file by its name, and a copy of it.
@@ -135,6 +139,8 @@ struct Stats
     std::size_t copies = 0;
     std::size_t resources = 0;
     std::size_t unopened = 0; // .erf and .rim files that are no archive of version 2.0 or 2.2
+    std::size_t read = 0;     // archives whose directories were read from them
+    std::size_t kept = 0;     // archives whose directories came from Options::cache
 };
 
 class Index
@@ -231,18 +237,30 @@ class Index
     {
         std::uint32_t source;
         std::filesystem::path path;
+        // Its size and last-write time as the walk listed them, if they read.
+        bool stamped = false;
+        std::uint64_t size = 0;
+        std::int64_t written = 0;
     };
     struct DirectoryRead
     {
         std::optional<erf::Header> header;
         std::vector<std::pair<std::string, std::uint32_t>> files; // name in lower case, size
+        bool kept = false;                                        // from Options::cache
+        // What the cache keys it by: its absolute path, size and last-write time, if they read.
+        std::string key;
+        std::uint64_t size = 0;
+        std::int64_t written = 0;
     };
 
     void Walk();
     std::uint32_t AddSource(std::string id, std::string kind, Base base, const std::filesystem::path &folder);
     void Collect(std::uint32_t source, const std::filesystem::path &root, const std::filesystem::path &skip);
-    std::vector<DirectoryRead> ReadDirectories() const;
+    static DirectoryRead ReadDirectory(const Pending &pending, const KeptByPath &kept);
+    std::vector<DirectoryRead> ReadDirectories(const KeptByPath &kept) const;
+    void KeepDirectories(const std::vector<DirectoryRead> &reads, std::size_t keptBefore) const;
     void AddArchive(const Pending &pending, DirectoryRead &read);
+    void GatherResources();
     void ReadPackages();
     void Order();
 
@@ -258,6 +276,8 @@ class Index
     std::vector<Pending> pending_;
     std::vector<std::string> loose_;
     std::map<std::string, std::vector<Copy>, std::less<>> resources_;
+    // Every copy by its name in the walk's order, put into resources_ in one pass after.
+    std::vector<std::pair<std::string, Copy>> gathered_;
     std::vector<std::string> packages_;
 
     // The archives last read from, held open.
