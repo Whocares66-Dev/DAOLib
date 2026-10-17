@@ -48,6 +48,11 @@
     (Steam's installer writes it), -SwitchPath sets it to EA's for the runs and puts it back,
     from an elevated shell.
 
+    Each row's exe is a path of its own, and the game opens a port, so Windows Firewall asks
+    about each the first time it runs. -Firewall, from an elevated shell, adds an inbound block
+    rule for every row's exe path, every kept exe under every setting, in the rule group
+    "DAOLib play matrix", replacing the group's rules if it has any, and starts nothing.
+
     Not in the matrix, and why (dev/TESTING.md): 8-bit colour, 16-bit colour and 640 x 480,
     which change the desktop's own display mode while the game is up; Run as administrator,
     which asks at a prompt.
@@ -56,6 +61,7 @@
     .\tools\play_matrix.ps1                                  # the merge's rows, from build\debug
     .\tools\play_matrix.ps1 -Preset release -All             # the whole matrix, for a release
     .\tools\play_matrix.ps1 -Preset release -All -EaApp -SwitchPath
+    .\tools\play_matrix.ps1 -Firewall                        # once, elevated: no firewall prompts
     .\tools\play_matrix.ps1 -Exes nexus-laa -Layers WIN7RTM
 #>
 [CmdletBinding()]
@@ -69,7 +75,8 @@ param(
     [int] $Batch = 8,
     [string] $Versions = 'C:\Modding\DAOVersions',
     [switch] $EaApp,
-    [switch] $SwitchPath
+    [switch] $SwitchPath,
+    [switch] $Firewall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -192,8 +199,10 @@ function Copy-AsLink([string] $From, [string] $To) {
 
 # A row's folder: the store's bin_ship, the exe and the loader linked into it, and a junction
 # to each of the install's other folders.
+function Get-RowName([string] $Key, [int] $Index) { "matrix-$Key-$Index" }
+
 function Build-Row([hashtable] $Base, [string] $Key, [int] $Index, [string] $Layer) {
-    $name = "matrix-$Key-$Index"
+    $name = Get-RowName $Key $Index
     $folder = Join-Path $stage $name
     $install = $installs[$kept[$Key].Install]
     foreach ($dir in Get-ChildItem $install -Directory | Where-Object Name -NE 'bin_ship') {
@@ -358,6 +367,26 @@ function Invoke-Ea {
         if ($before) { Set-ItemProperty $pathKey -Name Path -Value $before; Show-Info "Path of $pathKey is $before again" }
     }
     return $failed
+}
+
+if ($Firewall) {
+    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw '-Firewall adds rules to Windows Firewall: run it from an elevated PowerShell'
+    }
+    $group = 'DAOLib play matrix'
+    Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    $made = 0
+    foreach ($key in $kept.Keys) {
+        for ($i = 0; $i -lt $whole.Count; $i++) {
+            $name = Get-RowName $key $i
+            $exe = Join-Path $stage "$name\bin_ship\DAOrigins.exe"
+            New-NetFirewallRule -DisplayName "$group`: $name" -Group $group -Direction Inbound -Program $exe -Action Block | Out-Null
+            $made++
+        }
+    }
+    Show-Ok "$made inbound block rules in the firewall's group '$group', one for each row's exe"
+    return
 }
 
 if (-not (Test-Path (Join-Path $build $loaderName))) { throw "No $build\$loaderName; run .\tools\build.ps1 -Preset $Preset first" }
