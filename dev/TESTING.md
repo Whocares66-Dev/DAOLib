@@ -6,39 +6,36 @@ Why it is here. 0.1.0 was seen in GOG's and Steam's games on one machine with no
 
 ## What is run, and when
 
-| When | Builds | Settings | Starts | Time |
+| When | Exes | Settings | Starts | Time |
 |---|---|---|---|---|
-| Before a merge to `master` that changes what is built (`src\`, `CMakeLists.txt`, `extern\`) | GOG, Steam, EA | none, and Disable fullscreen optimizations | 6 | about 5 minutes |
-| Before a release, on the release build that goes into the zip | GOG, Steam, EA | the whole matrix below | 36 | about 25 minutes |
+| Before a merge to `master` that changes what is built (`src\`, `CMakeLists.txt`, `extern\`) | GOG's and Steam's, and EA's with `-EaApp` | none, and Disable fullscreen optimizations | 4, and EA's 2 | about 2 minutes, and EA's 2 minutes |
+| Before a release, on the release build that goes into the zip | every kept exe that runs (below), and EA's with `-EaApp` | the whole matrix below | 72, and EA's 12 | about 13 minutes, and EA's 10 minutes |
 
 A merge of notes or tools alone builds nothing into the game and needs neither.
 
-`tools\play_matrix.ps1` does the starting and the checking; it runs the two settings of a merge unless told `-All`. **It starts the game, once per setting, and ends it:** say so first, and run it when no game as ever is up (other sessions' instances beside it are fine; it refuses while the game's own mutex is held).
+`tools\play_matrix.ps1` does the starting and the checking (DAOLib #146). **It starts the game, eight copies at a time (`-Batch`), and ends them:** say so first. A row is one exe under one setting. The exes are those kept in `C:\Modding\DAOVersions`, each checked against its manifest. Each row is staged in a folder of its own under `build\matrix`: the store's `bin_ship` with the row's exe and `build\<preset>`'s loader, address files and plugins (those that are not examples), hard-linked from one copy of each, and junctions to the install's other folders. A setting is a registry value keyed by the exe's path, so each row's exe has a path of its own. Each row's game is a DAOLib instance, `matrix-<exe>-<n>`, so the rows run together and beside any other game, and each is checked by its own `loader.log`. Its profile is given the default profile's Settings and marked seeded before its first start, so none of the player's saves are copied (0.6 MB each). Nothing is deployed and no install is written; the folders and junctions go at the end, each junction removed as a link first.
 
 ```powershell
-# GOG, from the private copy, so the shared install's files are not touched (others hold them open)
-.\tools\deploy.ps1 -Game game\gogrun\bin_ship
-.\tools\play_matrix.ps1 -Game game\gogrun\bin_ship
+.\tools\build.ps1 -Preset debug
+.\tools\play_matrix.ps1                                   # a merge: GOG's and Steam's exes; Steam must be running
 
-# Steam; Steam itself must be running
-.\tools\deploy.ps1 -Install steam
-.\tools\play_matrix.ps1 -Install steam
-.\tools\deploy.ps1 -Install steam -Remove
+.\tools\build.ps1 -Preset release
+.\tools\play_matrix.ps1 -Preset release -All              # a release: every kept exe, the whole matrix
 
-# EA, from an elevated shell
-.\tools\deploy.ps1 -Install ea
-.\tools\play_matrix.ps1 -Install ea -SwitchPath
+# EA's exe, after the others, from an elevated shell, deployed first
+.\tools\deploy.ps1 -Install ea -Preset release
+.\tools\play_matrix.ps1 -Preset release -All -EaApp -SwitchPath
 .\tools\deploy.ps1 -Install ea -Remove
 ```
 
-For a release add `-All` to each, with `-Preset release` on the deploys. The private copy keeps Eluvian in its plugins; move `daolib\plugins\eluvian` aside for the run, or a game as ever answers on Eluvian's port while it is up.
+EA's exe cannot be staged: it hands off to the EA app, which starts the game in the one folder the registry's `Path` names, as the game as ever. So `-EaApp` runs its rows after the others, one at a time, in EA's install, and refuses while the game as ever is up.
 
 A row passes when all of these hold, and the script fails on any that does not:
 
-- the `dinput8.dll` in the process is the one beside the exe, not the system's;
-- `loader.log`, written by this start, says the game's start was reached: `entry point reached` in GOG's build, `the game's code is running` in a wrapped one;
+- the `dinput8.dll` in the process is the row's, not the system's;
+- the row's `loader.log`, written by this start, says the game's start was reached: `entry point reached` in an unwrapped exe, `the game's code is running` in a wrapped one;
 - the engine heap went in (`the engine's memory is the system's heap`);
-- every plugin folder in the game has its `<name>.dll: loaded` line;
+- every plugin has its `<name>.dll: loaded` line, and the log names the row's instance;
 - no crash, hang or exit log was written;
 - after 30 seconds the process is still there, its window the game's own and answering.
 
@@ -104,3 +101,7 @@ Not reachable here: **Windows 11.** This machine is Windows 10. One of the two p
 | EA | all twelve, with `example` and `probe` | eleven passed; `WINXPSP2` kept no game up, twice, with the loader never run (`loader.log` not rewritten, no fault log). Vanilla EA, no `dinput8.dll` in the folder, kept none up under `WINXPSP2` either, so it is EA's exe or the EA app under that layer and not DAOLib. It passed on 2026-10-12 (above); what changed is not known |
 
 The same day the three repacks through `tools\version_matrix.py --preset release` (Steamless' output, the Nexus exe, and the Nexus exe with the 4GB flag): each found GOG's file by its code, made the file of its own headers, and loaded a save into combat in Redcliffe with `turnbased` ready.
+
+2026-10-16, the release build of 0.3.1 (`ee905f9`), the last run one setting at a time: GOG's (the private copy) and Steam's games, all twelve each with `example` and `probe`, every one passed; then Lyna's Redcliffe save loaded with the zip's `dinput8.dll` and Eluvian. EA's was left out (the user, that day: "Just skip ea").
+
+2026-10-16, the matrix side by side (#146), the debug build of `gh-146-parallel-matrix`, `example`, `probe` and `sparelist`, beside two other sessions' instances: the merge's four rows passed together; then the whole matrix, the six kept exes under all twelve settings, 72 rows. Read once at 30 s from a batch's last start, 15 rows of 72 failed at 12 a batch, each "its window does not answer", each among the last four started, with no fault log: a dozen copies starting at once reach the menu later than one does. Read until the window answers, up to 60 s more, all 72 passed at 12 a batch (11.4 minutes, windows answering by 40 to 64 s, median 54) and at 8 (13.1 minutes, 30 to 61 s, median 48). 8 is the default (the user: "You should probably run no more than eight at a time"). The staged folders and junctions were gone afterwards, the installs' folders whole, no layer left in the registry, and each instance's profile 0.6 MB.
