@@ -30,6 +30,7 @@ Always on.
 | Archive reads | Two resources read from one archive at once could get each other's bytes, which crashed the game ([#3](https://github.com/Whocares66-Dev/DAOLib/issues/3)). |
 | Saved file names | A screenshot's file name was read past its end, which could crash the game ([#78](https://github.com/Whocares66-Dev/DAOLib/issues/78)). |
 | Mouse records | The mouse's movement was timed from a record past the last one read, which could crash the game ([#105](https://github.com/Whocares66-Dev/DAOLib/issues/105)). |
+| Flickering lights | Fires and torches jumped from one brightness to the next many times a second; they now ease between them, about once a second ([#150](https://github.com/Whocares66-Dev/DAOLib/issues/150)). |
 
 ## Performance
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.4.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.4.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **Fires no longer strobe:** the game's flickering lights (fires and torches) were meant to ease from one brightness to the next, but a fault in the game made them jump instead, many times a second. They now ease, and change about once a second rather than up to twenty times. Every game with the loader gets it, whatever mods it has (#150).
+- **For mod authors:** the ambient light each object is drawn with, read and changed as the engine works it out (`dao/Lights.h`, #147); and the light SpeedTree's trees are drawn with, read and set, which changing the sunlight now sets as well (`dao/Atmosphere.h`, #148).
+
 ## 0.3.1
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.3.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.3.0). The loader and its contract with plugins are as in 0.3.0.
