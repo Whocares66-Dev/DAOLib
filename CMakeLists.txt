@@ -168,6 +168,7 @@ add_library(
     src/dao/core/ModelWrite.cpp
     src/dao/core/LightProbes.cpp
     src/dao/core/M2da.cpp
+    src/dao/core/MaterialDefinition.cpp
     src/dao/core/MaterialObject.cpp
     src/dao/core/Morph.cpp
     src/dao/core/OptionsMovie.cpp

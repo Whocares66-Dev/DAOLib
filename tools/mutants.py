@@ -116,6 +116,7 @@ PATH = "src/dao/core/Path.h"
 ANGLE = "src/dao/core/Angle.h"
 INPUT = "src/dao/core/InputCode.h"
 MAO = "src/dao/core/MaterialObject.cpp"
+XMLTAGS = "src/dao/core/XmlTags.h"
 PICTURE = "src/dao/core/Picture.cpp"
 ERF = "src/dao/core/Erf.cpp"
 DDS = "src/dao/core/Dds.cpp"
@@ -244,12 +245,6 @@ MUTANTS: list[Mutant] = [
         M2DA,
         "if (versions.size() < 2 || partsOf.size() < 2)",
         "if (versions.size() < 2)",
-    ),
-    Mutant(
-        "addins-attribute-word: an attribute is found by its whole name, not inside another's",
-        ADDINS,
-        "at > 0 && (tag[at - 1] == ' ' || tag[at - 1] == '\\t' || tag[at - 1] == '\\n' || tag[at - 1] == '\\r');",
-        "at > 0;",
     ),
     Mutant(
         "install-no-audio: FMOD's audio is no resource",
@@ -1055,10 +1050,10 @@ MUTANTS: list[Mutant] = [
         "text.find(kClose)",
     ),
     Mutant(
-        "mao-whole: an attribute's key is whole, not the end of another",
-        MAO,
-        "            at > 0 && (tag[at - 1]",
-        "            true || (tag[at - 1]",
+        "xml-whole: an attribute is found by its whole name, not inside another's",
+        XMLTAGS,
+        "const bool starts = at > 0 && Space(tag[at - 1]);",
+        "const bool starts = true;",
     ),
     Mutant(
         "mao-spaces: the spaces before the comment's end are not the path's",
