@@ -34,6 +34,14 @@
 // 0.41 0.79 from -0.0321 0.878 -0.477: unit vectors, the way the light
 // travels.
 //
+// The trees (DAOLib #148, read 2026-10-16; dao/Addresses.h at
+// kTreeLight_Direction) are lit by two globals that AreaLayout::Update hands
+// every tree renderer each frame, and that the area's load alone sets, from
+// the scene's sun: so they kept the load's light under any sunlight set
+// after it. The direction global points at the light, the load having
+// turned the sun's round; TreeLight's is the way the light travels, as the
+// sunlight's is. SetSunlight sets them as the load would.
+//
 // The presets are the game's atmosphere, clouds and fog tables, four rows
 // each (default, battle, night, lightning), as core_h.nss's
 // SetAtmosphericConditions, SetCloudConditions and SetFogConditions apply
@@ -192,6 +200,7 @@ bool SetSunlight(const Sunlight &light)
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightCharacterColor), light.characterColor.data(),
                 sizeof light.characterColor);
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightDirection), light.direction.data(), sizeof light.direction);
+    SetTreeLight({.direction = light.direction, .diffuse = light.color});
     return true;
 }
 
@@ -201,6 +210,40 @@ void ResetSunlight()
     {
         SetSunlight(*own);
     }
+}
+
+std::optional<TreeLight> CurrentTreeLight()
+{
+    if (!Module::IsKnownExecutable())
+    {
+        return std::nullopt;
+    }
+    const auto *toLight = reinterpret_cast<const float *>(Module::Address(addr::kTreeLight_Direction));
+    const auto *diffuse = reinterpret_cast<const float *>(Module::Address(addr::kTreeLight_Diffuse));
+    TreeLight light;
+    light.direction = {-toLight[0], -toLight[1], -toLight[2], toLight[3]};
+    std::memcpy(light.diffuse.data(), diffuse, sizeof light.diffuse);
+    return light;
+}
+
+bool SetTreeLight(const TreeLight &light)
+{
+    if (!Module::IsKnownExecutable())
+    {
+        return false;
+    }
+    const std::array<float, 3> toLight{-light.direction[0], -light.direction[1], -light.direction[2]};
+    using SetDirectionFn = void(__cdecl *)(const float *);
+    reinterpret_cast<SetDirectionFn>(Module::Address(addr::kTreeLight_SetDirection))(toLight.data());
+    std::memcpy(reinterpret_cast<void *>(Module::Address(addr::kTreeLight_Diffuse)), light.diffuse.data(),
+                sizeof light.diffuse);
+    return true;
+}
+
+bool ResetTreeLight()
+{
+    const auto sun = CurrentSunlight();
+    return sun && SetTreeLight({.direction = sun->direction, .diffuse = sun->color});
 }
 
 Sky WithAir(Sky sky, Preset preset)

@@ -12,8 +12,10 @@
 // What to look for in play, outdoors: the sky darkening to the night
 // table's purple and the ground going moonlit blue over a minute, then
 // back; the log has the share of night every ten seconds, and a line when
-// the area has its own look again. Trees, grass and buildings keep the
-// light their level was made with (dev/TODO.md), and a plugin that wants
+// the area has its own look again. The trees darken and go blue with the
+// sunlight; grass and buildings keep the light their level was made with
+// (dev/TODO.md). At the start the log has the trees' light beside the
+// sunlight, which the area's load lit them by. A plugin that wants
 // the whole picture darker or greyer as well has the framebuffer's colour
 // effect (dao/Framebuffer.h).
 //
@@ -77,6 +79,17 @@ void Frame()
         g_over = true;
         spdlog::info("the round is made: the area has its own sky and sunlight again");
         return;
+    }
+    if (!g_noon)
+    {
+        // The area's load lit the trees by its sunlight: the two should read the same here.
+        const TreeLight trees = CurrentTreeLight().value_or(TreeLight{});
+        spdlog::info(
+            "the trees' light {:.3f} {:.3f} {:.3f} from {:.3f} {:.3f} {:.3f}; the sunlight {:.3f} {:.3f} {:.3f} "
+            "from {:.3f} {:.3f} {:.3f}",
+            trees.diffuse[0], trees.diffuse[1], trees.diffuse[2], trees.direction[0], trees.direction[1],
+            trees.direction[2], sun->color[0], sun->color[1], sun->color[2], sun->direction[0], sun->direction[1],
+            sun->direction[2]);
     }
     g_noon = g_noon.value_or(now);
 

@@ -18,12 +18,14 @@
 // Both are the area's: a new area comes with its own. A sunlight that was set stays in its
 // area for as long as the game keeps that area loaded, so the party may come back to it;
 // AreaOwnSunlight answers the area's own there all the same. A change shows in the next frame. The sky is what is drawn
-// above and the haze in the distance, and lights nothing. Trees, grass and buildings keep the light their level was
-// made with, whatever the sunlight, and lights placed in the level (torches, windows) are not part of either.
+// above and the haze in the distance, and lights nothing. The trees are lit by a light of their own, which the
+// sunlight sets and which can be set apart from it. Grass and buildings keep the light their level was made with,
+// whatever the sunlight, and lights placed in the level (torches, windows) are not part of either.
 #pragma once
 
 #include "dao/core/Sky.h"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -70,12 +72,36 @@ std::optional<Sunlight> CurrentSunlight();
 // @return nullopt as for CurrentSky
 std::optional<Sunlight> AreaOwnSunlight();
 
-// Sets the sunlight.
+// Sets the sunlight, and the trees' light with it (ResetTreeLight).
 // @return false, with nothing changed, where CurrentSky would return nullopt
 bool SetSunlight(const Sunlight &light);
 
 // Returns the sunlight to the area's own.
 void ResetSunlight();
+
+// The light SpeedTree's trees are lit by, apart from the rest of the level: they take no ambient
+// light, no placed lights and no light probe.
+struct TreeLight
+{
+    std::array<float, 4> direction{}; // the way the light travels, a unit vector, and a fourth (1)
+    std::array<float, 4> diffuse{};   // red, green and blue, and a fourth
+
+    bool operator==(const TreeLight &) const = default;
+};
+
+// Returns the trees' light as they are drawn with it now.
+// @return nullopt where the running game is not one the library knows
+//
+// The area's load sets it from the area's sunlight; nothing else changes it but these calls.
+std::optional<TreeLight> CurrentTreeLight();
+
+// Sets the trees' light; it shows from the next frame, until the next area loads.
+// @return false, with nothing changed, as for CurrentTreeLight
+bool SetTreeLight(const TreeLight &light);
+
+// Lights the trees by the sunlight as it falls now, as the area's load does.
+// @return false, with nothing changed, where CurrentSunlight would return nullopt
+bool ResetTreeLight();
 
 // Returns `sky` with the sun, the air and the moon of a row of the game's atmosphere table.
 // @return `sky` unchanged if the table has no such row; a value the row leaves out is kept

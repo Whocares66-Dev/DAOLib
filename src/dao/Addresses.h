@@ -2430,6 +2430,20 @@ DAO_ADDRESS(kCCCreature_SetCombatState, 14734)
 // (0x00664A10), DAOLib #62.
 DAO_ADDRESS(kScriptBackend_ForScript_SetAtmosphere, 12271)
 
+// The trees' light (dao/Atmosphere.h). SpeedTree's shaders take
+// g_vLightDir and g_vLightDiffuse, which the tree renderer binds by name to
+// its own +0xBA8 and +0xBB8 (0x0052FB60 on); AreaLayout::Update copies them
+// into every tree renderer each frame (0x00532A10, 0x00530DB0) from these
+// two globals, four floats each. The area's load (0x005C89B0) sets them
+// once from the scene's sun (0x004625D0): the direction through the setter,
+// __cdecl (const float *direction, three floats), which normalises it,
+// stores it with a fourth of 1 and works out the light's angles at
+// 0x00C31688; the diffuse as it is. Without a sun, (0.577, 0.577, 0.577)
+// and nothing. Read 2026-10-16, DAOLib #148.
+DAO_DATA(kTreeLight_Direction, 100506)
+DAO_DATA(kTreeLight_Diffuse, 100509)
+DAO_ADDRESS(kTreeLight_SetDirection, 7246)
+
 // The framebuffer's effects (dao/Framebuffer.h), read 2026-10-10 from
 // FB_SetEffectResource's and FB_SetEffectEnabled's handlers (0x00651880,
 // 0x006519B0), DAOLib #62. The global holds the object that keeps them, a
