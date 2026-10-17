@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace dao::core::level
@@ -385,6 +387,150 @@ void LightsUnder(const gff4::Struct &node, const Point &parentAt, const Quaterni
     }
 }
 
+// A level layout's fields (dev/gff4_fields.csv).
+constexpr std::uint32_t kAreaId = 3011;
+constexpr std::uint32_t kAreaName = 3012;
+constexpr std::uint32_t kAreaRooms = 3016;
+constexpr std::uint32_t kAreaCenter = 3024;
+constexpr std::uint32_t kAreaSkyDome = 3025;
+constexpr std::uint32_t kAreaEffects = 3026;
+constexpr std::uint32_t kAreaGlobalWind = 3027;
+constexpr std::uint32_t kAreaLocalWinds = 3028;
+constexpr std::uint32_t kAreaRoomId = 3031;
+constexpr std::uint32_t kAreaRoomFile = 3033;
+constexpr std::uint32_t kAreaIsChunked = 3122;
+constexpr std::uint32_t kAreaChunkRows = 3123;
+constexpr std::uint32_t kAreaChunkColumns = 3124;
+constexpr std::uint32_t kAreaChunkWidth = 3125;
+constexpr std::uint32_t kAreaChunkHeight = 3126;
+constexpr std::uint32_t kAreaLayoutName = 3127;
+constexpr std::uint32_t kAreaStartPoint = 3128;
+constexpr std::uint32_t kAreaCutoffHeight = 3129;
+constexpr std::uint32_t kAreaCutoffEnabled = 3134;
+constexpr std::uint32_t kAreaMinimapLower = 3138;
+constexpr std::uint32_t kAreaMinimapUpper = 3139;
+constexpr std::uint32_t kAreaRoomLower = 3140;
+constexpr std::uint32_t kAreaRoomUpper = 3141;
+constexpr std::uint32_t kAreaForceCharacterLighting = 3142;
+constexpr std::uint32_t kAreaSunOccludedOnCharacters = 3148;
+constexpr std::uint32_t kAreaSunColourOnCharacters = 3149;
+constexpr std::uint32_t kAreaSunDirection = 3150;
+constexpr std::uint32_t kAreaSunColour = 3152;
+constexpr std::uint32_t kAreaTreeFile = 3353;
+constexpr std::uint32_t kAreaTrees = 3355;
+constexpr std::uint32_t kAreaTreeTint = 3377;
+constexpr std::uint32_t kAreaLightSubsets = 3800;
+constexpr std::uint32_t kAreaLightSubsetEntry = 3801;
+constexpr std::uint32_t kEffectFile = 5520;
+constexpr std::uint32_t kEffectName = 5521;
+constexpr std::uint32_t kEffectParameters = 5522;
+constexpr std::uint32_t kEffectParameterName = 5523;
+constexpr std::uint32_t kEffectParameterValue = 5524;
+constexpr std::uint32_t kWindFile = 22001;
+constexpr std::uint32_t kWindRadius = 22002;
+constexpr std::uint32_t kAtmosphere = 22500;
+constexpr std::uint32_t kClouds = 22600;
+
+using Named = std::pair<std::uint32_t, std::string_view>;
+
+// The atmosphere's and the clouds' fields by name, as xoreos names them (dev/gff4_fields.csv).
+constexpr std::array<Named, 24> kSkyNames{{
+    {22519, "AtmoSunColor"},
+    {22520, "AtmoSunIntensity"},
+    {22521, "AtmoTurbidity"},
+    {22522, "AtmoEarthReflectance"},
+    {22523, "AtmoMieMultiplier"},
+    {22524, "AtmoRayleighMultiplier"},
+    {22526, "AtmoDistanceMultiplier"},
+    {22528, "AtmoAlpha"},
+    {22529, "AtmoFogColor"},
+    {22530, "AtmoFogIntensity"},
+    {22531, "AtmoFogCap"},
+    {22532, "AtmoFogZenith"},
+    {22533, "AtmoFogWaterIntensity"},
+    {22534, "AtmoFogWaterCap"},
+    {22535, "AtmoFogTacticalMultiplier"},
+    {22620, "CloudDensity"},
+    {22621, "CloudSharpness"},
+    {22622, "CloudDepth"},
+    {22623, "CloudRangeMultiplier1"},
+    {22624, "CloudRangeMultiplier2"},
+    {22625, "CloudColor"},
+    {22700, "MoonScale"},
+    {22701, "MoonAlpha"},
+    {22703, "MoonRotation"},
+}};
+
+// A struct's floats, each field by its name, in the file's order; a field not named above keeps
+// its number.
+std::vector<NamedFloats> FloatsByName(const gff4::Struct &values)
+{
+    std::vector<NamedFloats> out;
+    for (const gff4::Field &field : values.Shape().fields)
+    {
+        const auto named = std::ranges::find(kSkyNames, field.label, &Named::first);
+        out.push_back({.name = named != kSkyNames.end() ? std::string(named->second) : std::to_string(field.label),
+                       .floats = values.Floats(field.label)});
+    }
+    return out;
+}
+
+std::array<float, 4> Four(const std::vector<float> &floats, std::array<float, 4> otherwise)
+{
+    if (floats.size() >= 4)
+    {
+        std::ranges::copy_n(floats.begin(), 4, otherwise.begin());
+    }
+    return otherwise;
+}
+
+FrameEffect EffectOf(const gff4::Struct &effect)
+{
+    FrameEffect out{.file = effect.String(kEffectFile).value_or(L""),
+                    .name = effect.String(kEffectName).value_or(L""),
+                    .parameters = {}};
+    for (const gff4::Struct &parameter : effect.Structs(kEffectParameters))
+    {
+        const std::vector<float> value = parameter.Floats(kEffectParameterValue);
+        out.parameters.emplace_back(parameter.String(kEffectParameterName).value_or(L""),
+                                    value.empty() ? 0.0F : value[0]);
+    }
+    return out;
+}
+
+// A layout's lists: its rooms, effects, trees, winds and light subsets.
+void ListsOf(const gff4::Struct &root, LevelLayout &out)
+{
+    for (const gff4::Struct &room : root.Structs(kAreaRooms))
+    {
+        out.rooms.push_back({.id = room.Get<std::int32_t>(kAreaRoomId).value_or(0),
+                             .file = room.String(kAreaRoomFile).value_or(L""),
+                             .lower = PointOf(room.Floats(kAreaRoomLower)),
+                             .upper = PointOf(room.Floats(kAreaRoomUpper))});
+    }
+    for (const gff4::Struct &effect : root.Structs(kAreaEffects))
+    {
+        if (FrameEffect read = EffectOf(effect); !read.name.empty() || !read.file.empty())
+        {
+            out.effects.push_back(std::move(read));
+        }
+    }
+    for (const gff4::Struct &tree : root.Structs(kAreaTrees))
+    {
+        out.trees.push_back(tree.String(kAreaTreeFile).value_or(L""));
+    }
+    for (const gff4::Struct &wind : root.Structs(kAreaLocalWinds))
+    {
+        out.localWinds.push_back({.at = PointOf(wind.Floats(kPosition)),
+                                  .file = wind.String(kWindFile).value_or(L""),
+                                  .radius = wind.Get<float>(kWindRadius).value_or(0.0F)});
+    }
+    for (const gff4::Struct &subset : root.Structs(kAreaLightSubsets))
+    {
+        out.lightSubsets.push_back(subset.Numbers(kAreaLightSubsetEntry));
+    }
+}
+
 } // namespace
 
 Point Turned(const Quaternion &turn, const Point &point)
@@ -452,6 +598,59 @@ Layout LayoutOf(const gff4::File &layout)
     {
         LightsUnder(*root, {}, {0, 0, 0, 1}, 0, out);
     }
+    return out;
+}
+
+std::optional<LevelLayout> LevelLayoutOf(const gff4::File &layout)
+{
+    const std::optional<gff4::Struct> root = layout.Root();
+    if (!root || root->Shape().Find(kAreaRooms) == nullptr || root->Shape().Find(kAtmosphere) == nullptr)
+    {
+        return std::nullopt;
+    }
+    LevelLayout out;
+    out.id = root->Get<std::int32_t>(kAreaId).value_or(0);
+    out.name = root->String(kAreaName).value_or(L"");
+    out.layoutName = root->String(kAreaLayoutName).value_or(L"");
+    out.center = PointOf(root->Floats(kAreaCenter));
+    out.skyDome = root->String(kAreaSkyDome).value_or(L"");
+    out.sunDirection = PointOf(root->Floats(kAreaSunDirection));
+    out.sunColour = Four(root->Floats(kAreaSunColour), {});
+    if (const std::vector<float> colour = root->Floats(kAreaSunColourOnCharacters); colour.size() >= 4)
+    {
+        out.sunColourOnCharacters = Four(colour, {});
+    }
+    if (const auto occluded = root->Get<std::uint8_t>(kAreaSunOccludedOnCharacters))
+    {
+        out.sunOccludedOnCharacters = *occluded != 0;
+    }
+    out.forceCharacterLighting = root->Get<std::int8_t>(kAreaForceCharacterLighting).value_or(0) != 0;
+    if (const std::optional<gff4::Struct> atmosphere = root->Child(kAtmosphere))
+    {
+        out.atmosphere = FloatsByName(*atmosphere);
+    }
+    if (const std::optional<gff4::Struct> clouds = root->Child(kClouds))
+    {
+        out.clouds = FloatsByName(*clouds);
+    }
+    out.treeTint = Four(root->Floats(kAreaTreeTint), {1, 1, 1, 1});
+    out.globalWind = root->String(kAreaGlobalWind).value_or(L"");
+    if (root->Get<std::int8_t>(kAreaIsChunked).value_or(0) != 0)
+    {
+        out.chunks = Chunks{.rows = root->Get<std::int32_t>(kAreaChunkRows).value_or(0),
+                            .columns = root->Get<std::int32_t>(kAreaChunkColumns).value_or(0),
+                            .width = root->Get<float>(kAreaChunkWidth).value_or(0.0F),
+                            .height = root->Get<float>(kAreaChunkHeight).value_or(0.0F)};
+    }
+    out.startPoint = root->String(kAreaStartPoint).value_or(L"");
+    out.cutoffHeight = root->Get<std::int32_t>(kAreaCutoffHeight);
+    if (const auto enabled = root->Get<std::int8_t>(kAreaCutoffEnabled))
+    {
+        out.cutoffEnabled = *enabled != 0;
+    }
+    out.minimapLower = PointOf(root->Floats(kAreaMinimapLower));
+    out.minimapUpper = PointOf(root->Floats(kAreaMinimapUpper));
+    ListsOf(*root, out);
     return out;
 }
 

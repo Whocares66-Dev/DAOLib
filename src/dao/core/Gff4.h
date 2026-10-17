@@ -120,7 +120,8 @@ class Struct
     std::vector<std::wstring> Strings(std::uint32_t label) const;
     // The floats of a field that is made of them: one for an F32, three for
     // a Vector3, four for a Vector4, a Quaternion or a Color, sixteen for a
-    // Matrix. None for a field of another type.
+    // Matrix, and the same for a generic field holding one of those. None for
+    // a field of another type.
     std::vector<float> Floats(std::uint32_t label) const;
     // The elements of a list of U8, U16, U32 or F32 as the file has them,
     // little-endian and one after another: a mesh's vertices and indices

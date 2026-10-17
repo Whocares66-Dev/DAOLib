@@ -27,6 +27,26 @@ std::string Label(std::span<const std::byte> bytes, std::size_t at)
     return label;
 }
 
+// How many floats a field of a type holds; 0 for a type that is not floats.
+std::size_t FloatsIn(std::uint16_t type)
+{
+    switch (static_cast<Type>(type))
+    {
+    case Type::F32:
+        return 1;
+    case Type::Vector3:
+        return 3;
+    case Type::Vector4:
+    case Type::Quaternion:
+    case Type::Color:
+        return 4;
+    case Type::Matrix:
+        return 16;
+    default:
+        return 0;
+    }
+}
+
 } // namespace
 
 const Field *Template::Find(std::uint32_t wanted) const
@@ -198,31 +218,35 @@ std::vector<float> Struct::Floats(std::uint32_t label) const
 {
     std::vector<float> floats;
     const Field *field = Shape().Find(label);
-    if (field == nullptr)
+    if (field == nullptr || (field->flags & (kList | kStruct)) != 0)
     {
         return floats;
     }
-    std::size_t count = 0;
-    switch (static_cast<Type>(field->type))
+    std::uint16_t type = field->type;
+    std::optional<std::size_t> slot;
+    if (type == static_cast<std::uint16_t>(Type::Generic))
     {
-    case Type::F32:
-        count = 1;
-        break;
-    case Type::Vector3:
-        count = 3;
-        break;
-    case Type::Vector4:
-    case Type::Quaternion:
-    case Type::Color:
-        count = 4;
-        break;
-    case Type::Matrix:
-        count = 16;
-        break;
-    default:
-        return floats;
+        // One generic element in the struct: a type and flags, then the value, or with the
+        // reference flag an offset to it (an effect's parameter in a level layout, DAOLib #154).
+        const std::size_t at = at_ + field->offset;
+        const auto word = file_->U32(at);
+        if (!word || ((*word >> 16) & (kList | kStruct)) != 0)
+        {
+            return floats;
+        }
+        type = static_cast<std::uint16_t>(*word & 0xFFFF);
+        slot = at + 4;
+        if ((field->flags & kReference) != 0)
+        {
+            const auto offset = file_->U32(*slot);
+            slot = offset && *offset != kNull ? std::optional(file_->DataOffset() + *offset) : std::nullopt;
+        }
     }
-    const auto slot = Slot(label, static_cast<Type>(field->type));
+    else
+    {
+        slot = Slot(label, static_cast<Type>(type));
+    }
+    const std::size_t count = FloatsIn(type);
     for (std::size_t i = 0; slot && i < count; ++i)
     {
         const auto value = ReadAt<float>(file_->Bytes(), *slot + (i * sizeof(float)));
@@ -491,25 +515,6 @@ std::size_t WidthOf(std::uint16_t type)
     case Type::U64:
     case Type::S64:
         return 8;
-    default:
-        return 0;
-    }
-}
-
-std::size_t FloatsIn(std::uint16_t type)
-{
-    switch (static_cast<Type>(type))
-    {
-    case Type::F32:
-        return 1;
-    case Type::Vector3:
-        return 3;
-    case Type::Vector4:
-    case Type::Quaternion:
-    case Type::Color:
-        return 4;
-    case Type::Matrix:
-        return 16;
     default:
         return 0;
     }

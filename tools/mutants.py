@@ -444,6 +444,12 @@ MUTANTS: list[Mutant] = [
         "        at = *offset;\n    }\n    return at;",
     ),
     Mutant(
+        "gff4-generic-reference-followed: a generic field's floats are read where its offset points",
+        GFF4,
+        "slot = offset && *offset != kNull ? std::optional(file_->DataOffset() + *offset) : std::nullopt;",
+        "slot = offset && *offset != kNull ? slot : std::nullopt;",
+    ),
+    Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
         GFF4,
         "        return std::wstring();\n    }\n    const std::size_t p = data_ + *offset;",

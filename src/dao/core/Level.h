@@ -20,6 +20,19 @@
 //     three or four floats or half floats; the second set of texture
 //     coordinates is the lightmap's.
 //
+// A level's own layout, <level>.arl in packages/core/env/ or an add-in's
+// core/env/, is GFF4 "ARL V4.0": its rooms, its sun, sky dome, atmosphere,
+// clouds and frame buffer effects, trees, wind, terrain chunks, minimap, and
+// its walkmesh grid (EnvAreaPathfindExport, not read here). Read 2026-10-17
+// over all 213 the game takes (DAOLib #154): every one has the rooms, the
+// sun, the atmosphere and the clouds; the atmosphere's later fields (fog on
+// water, the moon) are missing from 7, the chunks from all but the 80
+// terrain levels, the cut-off's switch from 15. One (orz703d) has an older fog
+// of its own (EnvFog*), not read. An effect's parameter value is a generic
+// field, always a float in these files. The effects used: da_bloom (208
+// levels), da_hsvmatrix (201), da_fade (13), da_dof (1); the 216 empty
+// entries beside them are left out.
+//
 // A room's own layout, <level>_<room>_ll.mmh in the room's .rim, is a model
 // like the rest whose nodes are the room's lights. Read 2026-10-17 over all
 // 2,581 layouts the game takes (DAOLib #152): each is a node "GOB" at the
@@ -43,6 +56,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace dao::core::level
@@ -146,6 +160,81 @@ struct Layout
 
 // Returns the lights of a room's layout, each at its place in the layout's space.
 Layout LayoutOf(const gff4::File &layout);
+
+// A room of a level, as its layout lists it.
+struct LevelRoom
+{
+    std::int32_t id = 0;
+    std::wstring file; // its definition's name, with no extension: lak303d_3672
+    Point lower{};     // its bounds' corners, in the level's space
+    Point upper{};
+};
+
+// A frame buffer effect a level turns on (da_bloom, da_hsvmatrix, da_fade, da_dof), with the
+// values it gives the effect's parameters.
+struct FrameEffect
+{
+    std::wstring file;
+    std::wstring name;
+    std::vector<std::pair<std::wstring, float>> parameters; // "Brightness", 1.0
+};
+
+// A value of the atmosphere or the clouds: its field's name ("AtmoSunIntensity") and its floats.
+struct NamedFloats
+{
+    std::string name;
+    std::vector<float> floats;
+};
+
+struct LocalWind
+{
+    Point at{};
+    std::wstring file; // a .wnd
+    float radius = 0;
+};
+
+// A terrain level's chunks: a grid of rows by columns, each width by height metres.
+struct Chunks
+{
+    std::int32_t rows = 0;
+    std::int32_t columns = 0;
+    float width = 0;
+    float height = 0;
+};
+
+// A level's layout (.arl) but its walkmesh grid, fields as written; a field some files lack is
+// optional.
+struct LevelLayout
+{
+    std::int32_t id = 0;
+    std::wstring name;       // "Circle Tower (Mage Origin) - Level 1"
+    std::wstring layoutName; // "lak303d"
+    std::vector<LevelRoom> rooms;
+    Point center{};
+    std::wstring skyDome; // a model: sb_day, sb_night, sb_newlayout; empty for none
+    std::vector<FrameEffect> effects;
+    Point sunDirection{};
+    std::array<float, 4> sunColour{}; // all 0 where the level has no sun
+    std::optional<std::array<float, 4>> sunColourOnCharacters;
+    std::optional<bool> sunOccludedOnCharacters;
+    bool forceCharacterLighting = false;
+    std::vector<NamedFloats> atmosphere; // the sun's scattering, fog and moon, in file order
+    std::vector<NamedFloats> clouds;
+    std::vector<std::wstring> trees; // SpeedTree files
+    std::array<float, 4> treeTint{1, 1, 1, 1};
+    std::wstring globalWind; // a .wnd; empty for none
+    std::vector<LocalWind> localWinds;
+    std::optional<Chunks> chunks; // a terrain level's
+    std::wstring startPoint;
+    std::optional<std::int32_t> cutoffHeight;
+    std::optional<bool> cutoffEnabled;
+    Point minimapLower{};
+    Point minimapUpper{};
+    std::vector<std::vector<std::uint32_t>> lightSubsets; // as written; not yet read in the exe
+};
+
+// Returns a level's layout, or nothing for a file that is not one.
+std::optional<LevelLayout> LevelLayoutOf(const gff4::File &layout);
 
 // A lightmapped part of a model placed in a room.
 struct LightmapPart

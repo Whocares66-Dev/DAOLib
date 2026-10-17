@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -214,6 +215,77 @@ std::vector<std::byte> LayoutFile()
     return b.bytes;
 }
 
+// A level's layout as the game's are (lak303d.arl, tools/gff4.py --templates), with a few of its
+// fields: room 3672 "lak303d_3672" from (-1, -2, -3) to (4, 5, 6), a sun along -z of colour
+// (0.5, 0.25, 0.125, 1), da_hsvmatrix with a Brightness of 0.75 held in a generic field, the
+// chunks' switch on with 10 rows, the cut-off on, an atmosphere of a sun's intensity and a field
+// with no name, and one tree.
+std::vector<std::byte> LevelLayoutFile()
+{
+    Builder b =
+        Start("ARL ", {{"AREA",
+                        80,
+                        {{3011, 5, 0, 0},
+                         {3012, 14, 0, 4},
+                         {3016, 1, gff4::kList | gff4::kStruct, 8},
+                         {3024, 10, 0, 12},
+                         {3026, 2, gff4::kList | gff4::kStruct, 24},
+                         {3150, 10, 0, 28},
+                         {3152, 15, 0, 40},
+                         {3122, 1, 0, 56},
+                         {3123, 5, 0, 60},
+                         {3134, 1, 0, 64},
+                         {22500, 4, gff4::kStruct, 68},
+                         {3355, 5, gff4::kList | gff4::kStruct, 76}}},
+                       {"ROOM", 32, {{3031, 5, 0, 0}, {3033, 14, 0, 4}, {3140, 10, 0, 8}, {3141, 10, 0, 20}}},
+                       {"FBE", 12, {{5520, 14, 0, 0}, {5521, 14, 0, 4}, {5522, 3, gff4::kList | gff4::kStruct, 8}}},
+                       {"FBEP", 12, {{5523, 14, 0, 0}, {5524, kGeneric, gff4::kReference, 4}}},
+                       {"ATMO", 8, {{22520, 8, 0, 0}, {22999, 8, 0, 4}}},
+                       {"SPT", 4, {{3353, 14, 0, 0}}}});
+    const std::size_t root = Struct(b, 80);
+    b.U32(root, 7);
+    b.U32(root + 4, b.String(u"Circle Tower"));
+    Floats(b, root + 12, {1, 2, 3});
+    Floats(b, root + 28, {0, 0, -1});
+    Floats(b, root + 40, {0.5F, 0.25F, 0.125F, 1});
+    b.U8(root + 56, 1);
+    b.U32(root + 60, 10);
+    b.U8(root + 64, 1);
+    Float(b, root + 68, 19.95F);
+    Float(b, root + 72, 3.0F);
+
+    const std::size_t rooms = b.bytes.size();
+    b.U32(rooms, 1);
+    const std::size_t room = Struct(b, 32);
+    b.U32(root + 8, static_cast<std::uint32_t>(rooms - b.data));
+    b.U32(room, 3672);
+    b.U32(room + 4, b.String(u"lak303d_3672"));
+    Floats(b, room + 8, {-1, -2, -3, 4, 5, 6});
+
+    const std::size_t effects = b.bytes.size();
+    b.U32(effects, 1);
+    const std::size_t effect = Struct(b, 12);
+    b.U32(root + 24, static_cast<std::uint32_t>(effects - b.data));
+    b.U32(effect, b.String(u"da_hsvmatrix"));
+    b.U32(effect + 4, b.String(u"da_hsvmatrix"));
+    const std::size_t parameters = b.bytes.size();
+    b.U32(parameters, 1);
+    const std::size_t parameter = Struct(b, 12);
+    b.U32(effect + 8, static_cast<std::uint32_t>(parameters - b.data));
+    b.U32(parameter, b.String(u"Brightness"));
+    b.U32(parameter + 4, static_cast<std::uint32_t>(gff4::Type::F32)); // the element's type, no flags
+    const std::size_t value = b.bytes.size();
+    Float(b, value, 0.75F);
+    b.U32(parameter + 8, static_cast<std::uint32_t>(value - b.data));
+
+    const std::size_t trees = b.bytes.size();
+    b.U32(trees, 1);
+    const std::size_t tree = Struct(b, 4);
+    b.U32(root + 76, static_cast<std::uint32_t>(trees - b.data));
+    b.U32(tree, b.String(u"Lak100d_tre_m_mossy"));
+    return b.bytes;
+}
+
 // A room at (100, 0, 0) that sees rooms 7 and 9, with the model "slab"
 // placed in it at (0, 0, 5), twice the size, its part "_a" in the atlas
 // "room.dds" at an offset of (0.5, 0.25) and a scale of (0.25, 0.5).
@@ -385,6 +457,55 @@ TEST_CASE("a model that is no layout has no lights", "[level]")
     CHECK(layout.probes.empty());
 }
 
+TEST_CASE("a level's layout has its rooms, sun, effects with their values, atmosphere and trees", "[level]")
+{
+    const std::vector<std::byte> bytes = LevelLayoutFile();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const std::optional<level::LevelLayout> read = level::LevelLayoutOf(*file);
+    REQUIRE(read.has_value());
+    CHECK(read->id == 7);
+    CHECK(read->name == L"Circle Tower");
+    CHECK(read->center == Point{1, 2, 3});
+    REQUIRE(read->rooms.size() == 1);
+    CHECK(read->rooms[0].id == 3672);
+    CHECK(read->rooms[0].file == L"lak303d_3672");
+    CHECK(read->rooms[0].lower == Point{-1, -2, -3});
+    CHECK(read->rooms[0].upper == Point{4, 5, 6});
+    CHECK(read->sunDirection == Point{0, 0, -1});
+    CHECK(read->sunColour == std::array<float, 4>{0.5F, 0.25F, 0.125F, 1});
+
+    // The parameter's value is a generic field's float, by reference.
+    REQUIRE(read->effects.size() == 1);
+    CHECK(read->effects[0].name == L"da_hsvmatrix");
+    REQUIRE(read->effects[0].parameters.size() == 1);
+    CHECK(read->effects[0].parameters[0].first == L"Brightness");
+    CHECK(read->effects[0].parameters[0].second == 0.75F);
+
+    REQUIRE(read->atmosphere.size() == 2);
+    CHECK(read->atmosphere[0].name == "AtmoSunIntensity");
+    CHECK(read->atmosphere[0].floats == std::vector<float>{19.95F});
+    CHECK(read->atmosphere[1].name == "22999");
+    CHECK(read->clouds.empty());
+
+    REQUIRE(read->chunks.has_value());
+    CHECK(read->chunks->rows == 10);
+    CHECK(read->chunks->columns == 0);
+    CHECK(read->cutoffEnabled == std::optional<bool>(true));
+    CHECK(!read->cutoffHeight.has_value());
+    CHECK(!read->sunColourOnCharacters.has_value());
+    CHECK(read->trees == std::vector<std::wstring>{L"Lak100d_tre_m_mossy"});
+    CHECK(read->treeTint == std::array<float, 4>{1, 1, 1, 1});
+}
+
+TEST_CASE("a room's layout is no level's layout", "[level]")
+{
+    const std::vector<std::byte> bytes = LayoutFile();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    CHECK(!level::LevelLayoutOf(*file).has_value());
+}
+
 TEST_CASE("a room's models' triangles come out in the level's space with their place in the atlas", "[level]")
 {
     const std::vector<std::byte> meshBytes = MeshFile();
@@ -483,5 +604,66 @@ TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp 
         CHECK(ambients == 1083);
         CHECK(probes == 951);
         CHECK(unlit == 26); // the files' own, never baked (dao/core/Level.h)
+    }
+}
+
+TEST_CASE("the game's level layouts in game/levels, when there, read with their rooms, effects and sky", "[level]")
+{
+    const std::filesystem::path folder =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "levels";
+    if (!std::filesystem::exists(folder))
+    {
+        SKIP("no game/levels in this checkout (ghilana's extract of *.arl writes them)");
+    }
+    std::size_t levels = 0;
+    std::size_t chunked = 0;
+    std::size_t bloom = 0;
+    std::size_t grade = 0;
+    std::size_t gradeBrightness = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        if (entry.path().extension() != ".arl")
+        {
+            continue;
+        }
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        std::vector<std::byte> bytes(chars.size());
+        std::memcpy(bytes.data(), chars.data(), chars.size());
+        const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+        INFO(entry.path().filename().string());
+        REQUIRE(file.has_value());
+        const std::optional<level::LevelLayout> read = level::LevelLayoutOf(*file);
+        REQUIRE(read.has_value());
+        CHECK(!read->rooms.empty());
+        CHECK(read->atmosphere.size() >= 7);
+        CHECK(read->clouds.size() == 6);
+        for (const level::NamedFloats &value : read->atmosphere)
+        {
+            CHECK(!value.floats.empty());
+        }
+        ++levels;
+        chunked += read->chunks ? 1 : 0;
+        for (const level::FrameEffect &effect : read->effects)
+        {
+            bloom += effect.name == L"da_bloom" ? 1 : 0;
+            if (effect.name == L"da_hsvmatrix")
+            {
+                ++grade;
+                CHECK(effect.parameters.size() == 4);
+                const auto brightness = std::ranges::find(effect.parameters, std::wstring(L"Brightness"),
+                                                          &std::pair<std::wstring, float>::first);
+                gradeBrightness += brightness != effect.parameters.end() && brightness->second == 1.0F ? 1 : 0;
+            }
+        }
+    }
+    CHECK(levels > 0);
+    // Every level layout the game takes (DAOLib #154): the counts tools/gff4.py read in them.
+    if (levels == 213)
+    {
+        CHECK(chunked == 80);
+        CHECK(bloom == 208);
+        CHECK(grade == 201);
+        CHECK(gradeBrightness == 195); // the others 0.9 (4), 1.1 and 1.2
     }
 }
