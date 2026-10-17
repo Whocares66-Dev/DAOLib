@@ -1369,6 +1369,15 @@ DAO_ADDRESS(kThreadedGraphicsDriver_SaveToFileOther, 32292)
 // each, the same instructions at the same offsets, GOG's and EA's differing
 // only in calls' targets and one global's address. The name is ours.
 DAO_ADDRESS(kRawInputWin32_ReadMouse, 24180)
+// A flickering light (fix/LightFlicker.h, DAOLib #150), read 2026-10-17 by the
+// address library's session and checked here. Update is slot 1 of the
+// controller, __thiscall (double dt), `ret 8`: it adds dt to the cycle's time
+// (+0x28, a double) and, past the cycle's length (+0x20), starts a new cycle
+// from the engine's own generator (Animation::g_randomWaveSeed, 0x00C39778);
+// within it, sets the light's intensity (the float at +4 points at) between
+// +0x18 and +0x1C by a smoothstep of t / cycle whose clamp, 0x0081578A to
+// 0x008157BB, always leaves 0. EA's is the same instructions, Steam's is GOG's.
+DAO_ADDRESS(kRandomWaveController_Update, 22011)
 // The frame's present, read 2026-10-11 for DAOLib #73, after a profile (#68)
 // found the arrival's wait for rooms held to the monitor. Present is
 // D3DDriver::D3DGraphicsDriver's slot 10 (vftable 0x00B2E174), __thiscall,

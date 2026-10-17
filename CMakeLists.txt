@@ -313,6 +313,7 @@ add_library(
     src/loader/Asi.cpp
     src/loader/CrashLog.cpp
     src/fix/ArchiveRead.cpp
+    src/fix/LightFlicker.cpp
     src/fix/MouseRecords.cpp
     src/fix/SavedFileName.cpp
     src/perf/EngineHeap.cpp

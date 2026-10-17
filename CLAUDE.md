@@ -33,7 +33,8 @@ src/fix/        corrections to the engine's own faults, one file each, built int
                 before the plugins load: always on, for every game, whatever plugins it has. A resource read at its own
                 offset in its archive's file (ArchiveRead), a saved file's name handed to the renderer in a buffer
                 of the kilobyte the renderer copies (SavedFileName), the mouse's movement timed by the last
-                record read and not the one past it (MouseRecords). dev/CRASHES.md has the crash each one fixed
+                record read and not the one past it (MouseRecords), a flickering light eased from one brightness to
+                the next and not jumping (LightFlicker). dev/CRASHES.md has the crashes the first three fixed
 src/perf/       what makes the game faster and corrects no fault, built into dinput8.dll the same way. The engine's
                 memory from the system's heap in place of its own 850 MiB of pools (EngineHeap, off with
                 DAOLIB_ENGINE_HEAP=0), the game on every processor where GOG's exe starts it on the

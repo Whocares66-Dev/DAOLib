@@ -46,6 +46,7 @@
 #include "dao/Resources.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
+#include "fix/LightFlicker.h"
 #include "fix/MouseRecords.h"
 #include "fix/SavedFileName.h"
 #include "loader/Asi.h"
@@ -220,6 +221,7 @@ void BeforeTheGame()
     fix::InstallArchiveReadFix();
     fix::InstallSavedFileNameFix();
     fix::InstallMouseRecordsFix();
+    fix::InstallLightFlickerFix();
     perf::InstallFastLoad();
     LoadPlugins();
     loader::asi::LoadAll(SelfPath().parent_path());
