@@ -5,9 +5,13 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -115,29 +119,98 @@ std::vector<std::byte> ModelFile()
                                {"node", 8, {{6000, 14, 0, 0}, {6999, kGeneric, children, 4}}},
                                {"mshh", 12, {{6006, 14, 0, 0}, {6004, 14, 0, 4}, {6999, kGeneric, children, 8}}},
                                {"trsl", 16, {{6047, 12, 0, 0}}},
-                               {"rota", 16, {{6048, 13, 0, 0}}},
-                               {"nlpr", 8, {{6000, 14, 0, 0}, {6999, kGeneric, children, 4}}}});
+                               {"rota", 16, {{6048, 13, 0, 0}}}});
     const std::size_t root = Struct(b, 8);
     const std::size_t node = Struct(b, 8);
     const std::size_t nodeAt = Struct(b, 16);
     const std::size_t mesh = Struct(b, 12);
     const std::size_t meshAt = Struct(b, 16);
     const std::size_t meshTurn = Struct(b, 16);
-    const std::size_t probe = Struct(b, 8);
-    const std::size_t probeAt = Struct(b, 16);
     Floats(b, nodeAt, {10, 0, 0, 1});
     Floats(b, meshAt, {0, 1, 0, 1});
     Floats(b, meshTurn, {0, 0, 0.70710678F, 0.70710678F});
-    Floats(b, probeAt, {1, 2, 3, 1});
     b.U32(root, b.String(u"slab"));
-    b.U32(root + 4, Children(b, {{1, node}, {5, probe}}));
+    b.U32(root + 4, Children(b, {{1, node}}));
     b.U32(node, b.String(u"Root"));
     b.U32(node + 4, Children(b, {{3, nodeAt}, {2, mesh}}));
     b.U32(mesh, b.String(u"Slab"));
     b.U32(mesh + 4, b.String(u"_a"));
     b.U32(mesh + 8, Children(b, {{3, meshAt}, {4, meshTurn}}));
+    return b.bytes;
+}
+
+// A room's layout as the game's are (lak303d_3699_ll.mmh): "GOB" at (1, 0, 0)
+// turned a quarter about z, and under it a flickering lamp "Lamp_RT01" at
+// (2, 0, 0), two ambient lights, "Ambient0" first, and a probe at (0, 0, 3)
+// with its cube, its irradiance's file and red matrix 0 to 15, green 100
+// on, blue 200 on.
+std::vector<std::byte> LayoutFile()
+{
+    const std::uint16_t children = gff4::kList | gff4::kReference;
+    Builder b = Start(
+        "MMH ", {{"mdlh", 4, {{6999, kGeneric, children, 0}}},
+                 {"node", 8, {{6000, 14, 0, 0}, {6999, kGeneric, children, 4}}},
+                 {"trsl", 16, {{6047, 12, 0, 0}}},
+                 {"rota", 16, {{6048, 13, 0, 0}}},
+                 {"nplt",
+                  64,
+                  {{6000, 14, 0, 16},
+                   {6004, 5, 0, 20},
+                   {6007, 15, 0, 0},
+                   {6008, 8, 0, 24},
+                   {6009, 0, 0, 44},
+                   {6249, 8, 0, 28},
+                   {6250, 8, 0, 32},
+                   {6251, 8, 0, 36},
+                   {6296, 0, 0, 45},
+                   {6339, 0, 0, 46},
+                   {6340, 0, 0, 48},
+                   {6345, 0, 0, 47},
+                   {6999, kGeneric, children, 40}}},
+                 {"nalt", 32, {{6000, 14, 0, 16}, {6010, 15, 0, 0}, {6340, 0, 0, 24}, {6999, kGeneric, children, 20}}},
+                 {"nlpr", 8, {{6000, 14, 0, 0}, {6999, kGeneric, children, 4}}},
+                 {"nrfl", 4, {{3104, 14, 0, 0}}},
+                 {"nirr", 208, {{6253, 14, 0, 192}, {6336, 16, 0, 0}, {6337, 16, 0, 64}, {6338, 16, 0, 128}}}});
+    const std::size_t root = Struct(b, 4);
+    const std::size_t gob = Struct(b, 8);
+    const std::size_t gobAt = Struct(b, 16);
+    const std::size_t gobTurn = Struct(b, 16);
+    const std::size_t lamp = Struct(b, 64);
+    const std::size_t lampAt = Struct(b, 16);
+    const std::size_t ambient = Struct(b, 32);
+    const std::size_t second = Struct(b, 32);
+    const std::size_t probe = Struct(b, 8);
+    const std::size_t probeAt = Struct(b, 16);
+    const std::size_t cube = Struct(b, 4);
+    const std::size_t irradiance = Struct(b, 208);
+    Floats(b, gobAt, {1, 0, 0, 1});
+    Floats(b, gobTurn, {0, 0, 0.70710678F, 0.70710678F});
+    Floats(b, lampAt, {2, 0, 0, 1});
+    Floats(b, probeAt, {0, 0, 3, 1});
+    Floats(b, lamp, {1.82F, 0.96F, 0.30F, 1});
+    Floats(b, lamp + 24, {8, 0.25F, 0.075F, 0.025F});
+    b.U8(lamp + 44, 1);
+    b.U8(lamp + 45, 2);
+    b.U8(lamp + 47, 1);
+    Floats(b, ambient, {0.104F, 0.112F, 0.108F, 1});
+    Floats(b, second, {0.5F, 0.5F, 0.5F, 1});
+    for (std::size_t i = 0; i < 16; ++i)
+    {
+        Float(b, irradiance + (4 * i), static_cast<float>(i));
+        Float(b, irradiance + 64 + (4 * i), static_cast<float>(100 + i));
+        Float(b, irradiance + 128 + (4 * i), static_cast<float>(200 + i));
+    }
+    b.U32(root, Children(b, {{1, gob}}));
+    b.U32(gob, b.String(u"GOB"));
+    b.U32(gob + 4, Children(b, {{2, gobAt}, {3, gobTurn}, {4, lamp}, {5, ambient}, {5, second}, {6, probe}}));
+    b.U32(lamp + 16, b.String(u"Lamp_RT01"));
+    b.U32(lamp + 40, Children(b, {{2, lampAt}}));
+    b.U32(ambient + 16, b.String(u"Ambient0"));
+    b.U32(second + 16, b.String(u"Ambient1"));
     b.U32(probe, b.String(u"NewLightProbe"));
-    b.U32(probe + 4, Children(b, {{3, probeAt}}));
+    b.U32(probe + 4, Children(b, {{2, probeAt}, {7, cube}, {8, irradiance}}));
+    b.U32(cube, b.String(u"lak303d_probe_2zz.dds"));
+    b.U32(irradiance + 192, b.String(u"lak303d_probe_2zz.mtx"));
     return b.bytes;
 }
 
@@ -240,7 +313,7 @@ TEST_CASE("a chunk whose first texture coordinates are not floats has none for i
     CHECK(cut[0].positions[2] == Point{0, 2, 0});
 }
 
-TEST_CASE("a model's mesh node has its place and turn through the nodes above it, and a layout its probe", "[level]")
+TEST_CASE("a model's mesh node has its place and turn through the nodes above it", "[level]")
 {
     const std::vector<std::byte> bytes = ModelFile();
     const std::optional<gff4::File> file = gff4::File::Parse(bytes);
@@ -255,10 +328,61 @@ TEST_CASE("a model's mesh node has its place and turn through the nodes above it
     const Point turned = level::Turned(model.nodes[0].turn, {1, 0, 0});
     CHECK(turned[0] == Approx(0.0F).margin(1e-5));
     CHECK(turned[1] == Approx(1.0F).margin(1e-5));
+}
 
-    const std::optional<Point> probe = level::ProbeOf(*file);
-    REQUIRE(probe.has_value());
-    CHECK(*probe == Point{1, 2, 3});
+TEST_CASE("a room's layout has its lamps, its ambient light and its probes, placed through the nodes above them",
+          "[level]")
+{
+    const std::vector<std::byte> bytes = LayoutFile();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const level::Layout layout = level::LayoutOf(*file);
+
+    REQUIRE(layout.lamps.size() == 1);
+    const level::Lamp &lamp = layout.lamps[0];
+    CHECK(lamp.name == L"Lamp_RT01");
+    // (2, 0, 0) turned a quarter is (0, 2, 0), then GOB's (1, 0, 0) added.
+    CHECK(lamp.at[0] == Approx(1.0F).margin(1e-5));
+    CHECK(lamp.at[1] == Approx(2.0F).margin(1e-5));
+    CHECK(lamp.at[2] == Approx(0.0F).margin(1e-5));
+    CHECK(lamp.colour == level::Colour{1.82F, 0.96F, 0.30F});
+    CHECK(lamp.radius == 8.0F);
+    CHECK(lamp.variation == 0.25F);
+    CHECK(lamp.period == 0.075F);
+    CHECK(lamp.periodDelta == 0.025F);
+    CHECK(lamp.isStatic);
+    CHECK(lamp.affectDomain == 2);
+    CHECK(!lamp.canBeOccluded);
+    CHECK(lamp.version == 1);
+
+    REQUIRE(layout.ambient.has_value());
+    CHECK(layout.ambient->name == L"Ambient0");
+    CHECK(layout.ambient->colour == level::Colour{0.104F, 0.112F, 0.108F});
+    CHECK(layout.ambient->at[0] == Approx(1.0F).margin(1e-5));
+
+    REQUIRE(layout.probes.size() == 1);
+    const level::Probe &probe = layout.probes[0];
+    CHECK(probe.name == L"NewLightProbe");
+    CHECK(probe.at[0] == Approx(1.0F).margin(1e-5));
+    CHECK(probe.at[1] == Approx(0.0F).margin(1e-5));
+    CHECK(probe.at[2] == Approx(3.0F).margin(1e-5));
+    CHECK(probe.cube == L"lak303d_probe_2zz.dds");
+    CHECK(probe.irradianceFile == L"lak303d_probe_2zz.mtx");
+    CHECK(probe.irradiance[0] == 0.0F);
+    CHECK(probe.irradiance[15] == 15.0F);
+    CHECK(probe.irradiance[16] == 100.0F);
+    CHECK(probe.irradiance[47] == 215.0F);
+}
+
+TEST_CASE("a model that is no layout has no lights", "[level]")
+{
+    const std::vector<std::byte> bytes = ModelFile();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const level::Layout layout = level::LayoutOf(*file);
+    CHECK(layout.lamps.empty());
+    CHECK(!layout.ambient.has_value());
+    CHECK(layout.probes.empty());
 }
 
 TEST_CASE("a room's models' triangles come out in the level's space with their place in the atlas", "[level]")
@@ -306,4 +430,58 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
 
     // A file that is no room's definition gives none.
     CHECK_FALSE(level::RoomOf(*mesh).has_value());
+}
+
+TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp lit and every probe named", "[level]")
+{
+    const std::filesystem::path folder =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "layouts";
+    if (!std::filesystem::exists(folder))
+    {
+        SKIP("no game/layouts in this checkout (ghilana's extract of *_ll.mmh writes them)");
+    }
+    std::size_t layouts = 0;
+    std::size_t lamps = 0;
+    std::size_t ambients = 0;
+    std::size_t probes = 0;
+    std::size_t unlit = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        if (entry.path().extension() != ".mmh")
+        {
+            continue;
+        }
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        std::vector<std::byte> bytes(chars.size());
+        std::memcpy(bytes.data(), chars.data(), chars.size());
+        const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+        INFO(entry.path().filename().string());
+        REQUIRE(file.has_value());
+        const level::Layout layout = level::LayoutOf(*file);
+        for (const level::Lamp &lamp : layout.lamps)
+        {
+            CHECK(lamp.radius > 0.0F);
+            CHECK(lamp.isStatic);
+        }
+        for (const level::Probe &probe : layout.probes)
+        {
+            CHECK(probe.cube.ends_with(L".dds"));
+            CHECK(probe.irradianceFile.ends_with(L".mtx"));
+            unlit += std::ranges::none_of(probe.irradiance, [](float value) { return value != 0.0F; }) ? 1 : 0;
+        }
+        ++layouts;
+        lamps += layout.lamps.size();
+        ambients += layout.ambient ? 1 : 0;
+        probes += layout.probes.size();
+    }
+    CHECK(layouts > 0);
+    // Every layout the game takes (DAOLib #152): the counts tools/gff4.py read in them.
+    if (layouts == 2581)
+    {
+        CHECK(lamps == 10673);
+        CHECK(ambients == 1083);
+        CHECK(probes == 951);
+        CHECK(unlit == 26); // the files' own, never baked (dao/core/Level.h)
+    }
 }

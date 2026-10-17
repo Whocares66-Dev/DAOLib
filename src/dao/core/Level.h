@@ -21,7 +21,17 @@
 //     coordinates is the lightmap's.
 //
 // A room's own layout, <level>_<room>_ll.mmh in the room's .rim, is a model
-// like the rest whose nodes are the room's lamps and its light probe.
+// like the rest whose nodes are the room's lights. Read 2026-10-17 over all
+// 2,581 layouts the game takes (DAOLib #152): each is a node "GOB" at the
+// origin, unturned, with as children its point lights ("nplt", 10,673 in
+// all), at most one ambient light ("nalt", in 1,083) and its light probes
+// ("nlpr", up to seven, in 918), each probe with a reflection cube ("nrfl")
+// and its irradiance ("nirr"). A light's place and turn are children of it,
+// as a mesh node's are. No layout has a spot light. Every lamp is static,
+// can be occluded 0 and affects domain 2; 1,654 flicker at a period of
+// 0.075 s give or take 0.025. 26 probes' irradiance is all 0 in the file
+// (brc201d's seven, orz703d's eleven, lak519d's one, and test levels':
+// combat2, rmtst01, rmtst03).
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -84,9 +94,58 @@ struct Model
 // Returns a model's mesh nodes (.mmh).
 Model ModelOf(const gff4::File &hierarchy);
 
-// Returns where the light probe of a room's layout (its _ll.mmh) is, in the
-// layout's space, or nothing if it has none.
-std::optional<Point> ProbeOf(const gff4::File &layout);
+using Colour = std::array<float, 3>; // linear red, green, blue; a lamp's may be above 1
+
+// A point light of a room's layout.
+struct Lamp
+{
+    std::wstring name;
+    Point at{}; // in the layout's space
+    Colour colour{};
+    float radius = 0; // metres
+    bool isStatic = false;
+    // Its flicker as the file has it: the engine's RandomWaveController takes these three,
+    // a light with a variation of 0 steady.
+    float variation = 0;
+    float period = 0;      // seconds
+    float periodDelta = 0; // seconds, the period's spread
+    std::uint8_t affectDomain = 0;
+    bool canBeOccluded = false;
+    bool useVariationTint = false;
+    std::uint8_t version = 0;
+};
+
+// The ambient light of a room's layout.
+struct Ambient
+{
+    std::wstring name;
+    Point at{};
+    Colour colour{};
+    bool useVariationTint = false;
+};
+
+// A light probe of a room's layout.
+struct Probe
+{
+    std::wstring name;
+    Point at{};
+    std::wstring cube;           // its reflection cube's file, such as lak303d_probe_2zz.dds
+    std::wstring irradianceFile; // the .mtx its irradiance was exported to
+    // Its irradiance: a 4x4 matrix each for red, green and blue, as dao/core/LightProbes.h's
+    // Irradiance keeps them; all 0 if the probe has none, or was never baked.
+    std::array<float, 48> irradiance{};
+};
+
+// The lights of a room's layout (its _ll.mmh).
+struct Layout
+{
+    std::vector<Lamp> lamps;
+    std::optional<Ambient> ambient; // the first, if it has more
+    std::vector<Probe> probes;
+};
+
+// Returns the lights of a room's layout, each at its place in the layout's space.
+Layout LayoutOf(const gff4::File &layout);
 
 // A lightmapped part of a model placed in a room.
 struct LightmapPart

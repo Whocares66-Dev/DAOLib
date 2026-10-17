@@ -22,15 +22,30 @@ constexpr std::uint32_t kRoomSees = 3047;
 constexpr std::uint32_t kRoomModels = 3050;
 constexpr std::uint32_t kModelScale = 3059;
 constexpr std::uint32_t kModelFile = 3063;
+constexpr std::uint32_t kProbeCube = 3104;
 constexpr std::uint32_t kLightmapPart = 3235;
 constexpr std::uint32_t kLightmapAtlas = 3323;
 constexpr std::uint32_t kLightmapOffsetScale = 3324;
 constexpr std::uint32_t kModelLightmaps = 3326;
+constexpr std::uint32_t kNodeName = 6000;
 constexpr std::uint32_t kNodeId = 6004;
 constexpr std::uint32_t kModelMeshFile = 6005;
 constexpr std::uint32_t kNodeMeshChunk = 6006;
+constexpr std::uint32_t kLampColour = 6007;
+constexpr std::uint32_t kLampRadius = 6008;
+constexpr std::uint32_t kLampStatic = 6009;
+constexpr std::uint32_t kAmbientColour = 6010;
 constexpr std::uint32_t kTranslation = 6047;
 constexpr std::uint32_t kRotation = 6048;
+constexpr std::uint32_t kLampVariation = 6249;
+constexpr std::uint32_t kLampPeriod = 6250;
+constexpr std::uint32_t kLampPeriodDelta = 6251;
+constexpr std::uint32_t kIrradianceFile = 6253;
+constexpr std::uint32_t kLampDomain = 6296;
+constexpr std::uint32_t kIrradianceRed = 6336; // green and blue follow
+constexpr std::uint32_t kLampOccluded = 6339;
+constexpr std::uint32_t kVariationTint = 6340;
+constexpr std::uint32_t kLampVersion = 6345;
 constexpr std::uint32_t kChildren = 6999;
 constexpr std::uint32_t kChunkVertexSize = 8000;
 constexpr std::uint32_t kChunkVertexCount = 8001;
@@ -275,30 +290,99 @@ void MeshNodes(const gff4::Struct &node, const Point &parentAt, const Quaternion
     }
 }
 
-std::optional<Point> ProbeUnder(const gff4::Struct &node, std::size_t deep)
+Colour ColourOf(const std::vector<float> &floats)
 {
-    if (deep > kNodesDeep)
+    return floats.size() >= 3 ? Colour{floats[0], floats[1], floats[2]} : Colour{};
+}
+
+bool Flag(const gff4::Struct &node, std::uint32_t label)
+{
+    return node.Get<std::uint8_t>(label).value_or(0) != 0;
+}
+
+Lamp LampOf(const gff4::Struct &node, const Point &at)
+{
+    Lamp lamp;
+    lamp.name = node.String(kNodeName).value_or(L"");
+    lamp.at = at;
+    lamp.colour = ColourOf(node.Floats(kLampColour));
+    lamp.radius = node.Get<float>(kLampRadius).value_or(0.0F);
+    lamp.isStatic = Flag(node, kLampStatic);
+    lamp.variation = node.Get<float>(kLampVariation).value_or(0.0F);
+    lamp.period = node.Get<float>(kLampPeriod).value_or(0.0F);
+    lamp.periodDelta = node.Get<float>(kLampPeriodDelta).value_or(0.0F);
+    lamp.affectDomain = node.Get<std::uint8_t>(kLampDomain).value_or(0);
+    lamp.canBeOccluded = Flag(node, kLampOccluded);
+    lamp.useVariationTint = Flag(node, kVariationTint);
+    lamp.version = node.Get<std::uint8_t>(kLampVersion).value_or(0);
+    return lamp;
+}
+
+Probe ProbeOf(const gff4::Struct &node, const Point &at)
+{
+    Probe probe;
+    probe.name = node.String(kNodeName).value_or(L"");
+    probe.at = at;
+    for (const gff4::Struct &part : node.Structs(kChildren))
     {
-        return std::nullopt;
-    }
-    for (const gff4::Struct &child : node.Structs(kChildren))
-    {
-        if (child.Label() == "nlpr")
+        if (part.Label() == "nrfl")
         {
-            Point at{};
-            Quaternion turn{0, 0, 0, 1};
-            PlaceOf(child, at, turn);
-            return at;
+            probe.cube = part.String(kProbeCube).value_or(L"");
         }
-        if (child.Shape().Find(kChildren) != nullptr)
+        else if (part.Label() == "nirr")
         {
-            if (const std::optional<Point> found = ProbeUnder(child, deep + 1))
+            probe.irradianceFile = part.String(kIrradianceFile).value_or(L"");
+            for (std::uint32_t channel = 0; channel < 3; ++channel)
             {
-                return found;
+                if (const std::vector<float> matrix = part.Floats(kIrradianceRed + channel); matrix.size() == 16)
+                {
+                    std::ranges::copy(matrix, probe.irradiance.begin() + (static_cast<std::ptrdiff_t>(channel) * 16));
+                }
             }
         }
     }
-    return std::nullopt;
+    return probe;
+}
+
+// The lights under a node of a layout, each placed through the nodes above it.
+void LightsUnder(const gff4::Struct &node, const Point &parentAt, const Quaternion &parentTurn, std::size_t deep,
+                 Layout &out)
+{
+    if (deep > kNodesDeep)
+    {
+        return;
+    }
+    for (const gff4::Struct &child : node.Structs(kChildren))
+    {
+        Point own{};
+        Quaternion ownTurn{0, 0, 0, 1};
+        PlaceOf(child, own, ownTurn);
+        const Point turned = Turned(parentTurn, own);
+        const Point at{parentAt[0] + turned[0], parentAt[1] + turned[1], parentAt[2] + turned[2]};
+        const std::string &label = child.Label();
+        if (label == "nplt")
+        {
+            out.lamps.push_back(LampOf(child, at));
+        }
+        else if (label == "nalt")
+        {
+            if (!out.ambient)
+            {
+                out.ambient = Ambient{.name = child.String(kNodeName).value_or(L""),
+                                      .at = at,
+                                      .colour = ColourOf(child.Floats(kAmbientColour)),
+                                      .useVariationTint = Flag(child, kVariationTint)};
+            }
+        }
+        else if (label == "nlpr")
+        {
+            out.probes.push_back(ProbeOf(child, at));
+        }
+        else if (child.Shape().Find(kChildren) != nullptr)
+        {
+            LightsUnder(child, at, Then(ownTurn, parentTurn), deep + 1, out);
+        }
+    }
 }
 
 } // namespace
@@ -361,10 +445,14 @@ Model ModelOf(const gff4::File &hierarchy)
     return model;
 }
 
-std::optional<Point> ProbeOf(const gff4::File &layout)
+Layout LayoutOf(const gff4::File &layout)
 {
-    const std::optional<gff4::Struct> root = layout.Root();
-    return root ? ProbeUnder(*root, 0) : std::nullopt;
+    Layout out;
+    if (const std::optional<gff4::Struct> root = layout.Root())
+    {
+        LightsUnder(*root, {}, {0, 0, 0, 1}, 0, out);
+    }
+    return out;
 }
 
 std::optional<Room> RoomOf(const gff4::File &definition)
