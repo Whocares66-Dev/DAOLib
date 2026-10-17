@@ -59,6 +59,9 @@ dao_apply_warnings(example_attack)
 add_daolib_plugin(example_atmosphere SOURCES atmosphere/Atmosphere.cpp)
 dao_apply_warnings(example_atmosphere)
 
+add_daolib_plugin(example_lights SOURCES lights/Lights.cpp)
+dao_apply_warnings(example_lights)
+
 add_daolib_plugin(
     example_resources
     SOURCES resources/Resources.cpp

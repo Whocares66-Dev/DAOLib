@@ -1,0 +1,172 @@
+// The ambient light each draw is given (dao/Lights.h).
+//
+// Read 2026-10-16 in the GOG exe, DAOLib #147; dao/Addresses.h has the
+// addresses at kLightState_Fill and after. An object's light state is
+// filled once a frame, when a material first asks for its lights:
+// Renderer::LightState::Fill sets the state's +0x80, g_vLightParams[4], to
+// its argument plus the colour of each ambient light in the state's +0x30.
+// OnAmbient detours Fill and hands the callbacks what it made, then writes
+// back what they set; every draw of the object that frame takes it from
+// there. The shaders that read it, from DAOElgaraShaders' disassembly
+// (2026-10-16): terrain1/2, static1 and prop1 all declare g_vLightParams;
+// SpeedTree's spt_* declare g_vLightDiffuse and g_vColorMultiplier instead.
+//
+// Which chooser chose a state's lights is not in the state, so the
+// choosers are detoured too and each state they choose for is recorded:
+// ChooseForLevel for the level's pieces, ChooseForMoving for what the
+// manager marks as moving. A state chosen before OnAmbient was first called
+// is Unknown until it is chosen again (on a light's or the object's change).
+//
+// Seen in play 2026-10-16 by DAOElgaraShaders, from a detour of its own on
+// Fill: the argument was zero in every sample, and most of a level's states
+// had no ambient light at all, so the ambient was (0, 0, 0, 1). Redcliffe
+// village: 79 of 82 states with none, 3 with one of 0.160 0.200 0.160. The
+// Arl of Denerim's dungeon: 121 of 130 with none, 9 with one of 0.082 0.084
+// 0.052.
+//
+// OnAmbient itself seen 2026-10-16 by DAOElgaraShaders, its callback
+// setting the level's states to a sky light of about 0.015 0.021 0.028 in
+// Redcliffe village by day: 30.7% of the frame changed, all of it the
+// level, the figures and the sky not. Of every 20,000 calls about 13,460
+// were ForLevel and 6,540 ForMoving, none Unknown (the callback added at
+// load).
+#include "dao/Lights.h"
+
+#include "dao/Addresses.h"
+#include "dao/Guard.h"
+#include "dao/Hook.h"
+#include "dao/Module.h"
+
+#include <cstddef>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace dao::lights
+{
+
+namespace
+{
+
+constexpr std::size_t kAmbient = 0x80;         // in the state: g_vLightParams[4], four floats
+constexpr std::size_t kAmbientLights = 0x34;   // in the state: begin and end of the chosen ambient lights
+constexpr std::size_t kNodeOfReference = 0x18; // in what an entry points to: the light's node
+constexpr std::size_t kStateOfNode = 0x68 / 4; // in the node's vtable: its light state
+constexpr std::size_t kMostAmbientLights = 64; // more than any state was seen with (one)
+
+using Callbacks = std::vector<std::function<void(Ambient &)>>;
+
+std::mutex g_mutex;
+std::shared_ptr<const Callbacks> g_callbacks; // replaced whole, never changed in place
+std::unordered_map<std::uintptr_t, Chosen> g_chosen;
+
+using FillFn = void(__fastcall *)(void *state, int edx, const float *base);
+using ChooseForLevelFn = void(__fastcall *)(void *manager, int edx, void **node, const void *sunDirection,
+                                            const void *sunColor, char ambientLights, char other);
+using ChooseForMovingFn = void(__fastcall *)(void *manager, int edx, void **node, const void *sunDirection,
+                                             const void *other, char ambientLights);
+using LightColorFn = void(__fastcall *)(const void *node, int edx, float *color);
+
+Detour<FillFn> g_fill;
+Detour<ChooseForLevelFn> g_chooseForLevel;
+Detour<ChooseForMovingFn> g_chooseForMoving;
+
+// The light state of a node, as the choosers find it.
+std::uintptr_t StateOf(void **node)
+{
+    using StateFn = std::uintptr_t(__fastcall *)(void *self, int edx);
+    void *self = *node;
+    const auto *vtable = *static_cast<StateFn *const *>(self);
+    return vtable[kStateOfNode](self, 0);
+}
+
+void Record(void **node, Chosen chosen)
+{
+    const std::uintptr_t state = StateOf(node);
+    if (state != 0)
+    {
+        const std::lock_guard lock(g_mutex);
+        g_chosen[state] = chosen;
+    }
+}
+
+void __fastcall ChooseForLevel(void *manager, int edx, void **node, const void *sunDirection, const void *sunColor,
+                               char ambientLights, char other)
+{
+    g_chooseForLevel.Original()(manager, edx, node, sunDirection, sunColor, ambientLights, other);
+    Record(node, Chosen::ForLevel);
+}
+
+void __fastcall ChooseForMoving(void *manager, int edx, void **node, const void *sunDirection, const void *other,
+                                char ambientLights)
+{
+    g_chooseForMoving.Original()(manager, edx, node, sunDirection, other, ambientLights);
+    Record(node, Chosen::ForMoving);
+}
+
+// The colours of the ambient lights Fill has just added, as it took them.
+std::size_t ReadLights(std::uintptr_t state, std::array<Color, kMostAmbientLights> &out)
+{
+    auto *const begin = *reinterpret_cast<void ***>(state + kAmbientLights);
+    auto *const end = *reinterpret_cast<void ***>(state + kAmbientLights + 4);
+    const auto color = reinterpret_cast<LightColorFn>(Module::Address(addr::kObjectNodeLight_Color));
+    std::size_t count = 0;
+    for (void **entry = begin; begin != nullptr && entry < end && count < out.size(); ++entry)
+    {
+        const auto reference = *static_cast<const std::uintptr_t *>(*entry);
+        if (reference != 0)
+        {
+            color(*reinterpret_cast<const void *const *>(reference + kNodeOfReference), 0, out[count++].data());
+        }
+    }
+    return count;
+}
+
+void __fastcall Fill(void *state, int edx, const float *base)
+{
+    g_fill.Original()(state, edx, base);
+    std::shared_ptr<const Callbacks> callbacks;
+    Chosen chosen = Chosen::Unknown;
+    const auto address = reinterpret_cast<std::uintptr_t>(state);
+    {
+        const std::lock_guard lock(g_mutex);
+        callbacks = g_callbacks;
+        if (const auto found = g_chosen.find(address); found != g_chosen.end())
+        {
+            chosen = found->second;
+        }
+    }
+    std::array<Color, kMostAmbientLights> lights{};
+    Ambient ambient;
+    std::memcpy(ambient.color.data(), reinterpret_cast<const float *>(address + kAmbient), sizeof(Color));
+    std::memcpy(ambient.base.data(), base, sizeof(Color));
+    ambient.lights = std::span<const Color>(lights.data(), ReadLights(address, lights));
+    ambient.chosen = chosen;
+    ambient.state = address;
+    for (const auto &callback : *callbacks)
+    {
+        detail::Guard("an ambient light callback", [&] { callback(ambient); });
+    }
+    std::memcpy(reinterpret_cast<float *>(address + kAmbient), ambient.color.data(), sizeof(Color));
+}
+
+} // namespace
+
+void OnAmbient(std::function<void(Ambient &)> callback)
+{
+    const std::lock_guard lock(g_mutex);
+    auto callbacks = g_callbacks ? std::make_shared<Callbacks>(*g_callbacks) : std::make_shared<Callbacks>();
+    callbacks->push_back(std::move(callback));
+    g_callbacks = std::move(callbacks);
+    if (!g_fill.IsAttached() && Module::IsKnownExecutable())
+    {
+        g_chooseForLevel.Attach(addr::kLightManager_ChooseForLevel, &ChooseForLevel);
+        g_chooseForMoving.Attach(addr::kLightManager_ChooseForMoving, &ChooseForMoving);
+        g_fill.Attach(addr::kLightState_Fill, &Fill);
+    }
+}
+
+} // namespace dao::lights

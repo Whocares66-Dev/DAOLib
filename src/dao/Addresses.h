@@ -2513,6 +2513,29 @@ DAO_ADDRESS(kObjectNodePointLight_Score, 7628)
 DAO_ADDRESS(kObjectNodeLightProbe_Score, 7629)
 DAO_ADDRESS(kLightState_Fill, 2848)
 
+// The ambient light each draw is given (dao/Lights.h). Fill (above, its one
+// argument a pointer to a float4) sets the state's +0x80, g_vLightParams[4],
+// to that argument plus the colour of each ambient light in the state's list
+// at +0x30 (begin +0x34, end +0x38; an entry's *entry + 0x18 is the node), w
+// 1. The argument is +0xC0 of the per-draw render context (the globals
+// 0x00C1E930 and 0x00C1EC00, made by 0x00466120, which zeroes it; no other
+// store to it was found), handed in by the shader parameters' provider
+// (0x004F8A10: 0x11 is g_vLightParams through 0x0046BAF0, 0x1B the probe's
+// cube through 0x0046BC40). A light's colour, __thiscall on the node (float4
+// *out), `ret 4`: the node's +0x1A0, times the float4 at *(+0x154) + 0x2D4
+// where the byte at +0x196 is set; Fill takes it for point and ambient lights
+// alike. Ambient lights (ObjectNodeAmbientLight, ILight kind 2, 0x004CCAE0)
+// go to the manager's +0x54 (AddLights), and the level's chooser takes them
+// into the state's +0x30 only for an object whose flags (its vtable's +0xA4)
+// have 0x10000: __thiscall on the manager (node **, the sun's direction, its
+// colour, char ambient lights, char one more), `ret 0x14`. The chooser for
+// what moves (kLightManager_ChooseForMoving) takes them only if its fourth
+// argument says so, and the manager's own call (0x004654E0, for a node with
+// 0x4000 in its +0x24) says not. Either finds the state by the node's
+// vtable's +0x68. Read 2026-10-16, DAOLib #147.
+DAO_ADDRESS(kLightManager_ChooseForLevel, 2693)
+DAO_ADDRESS(kObjectNodeLight_Color, 7605)
+
 // The resource manager making a source of files of one kind without putting
 // it in its list (ECResMan::ResMan::AddSource does that): __thiscall, the
 // source's path as a std::wstring in the engine's own names for its folders

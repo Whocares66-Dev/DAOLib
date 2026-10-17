@@ -246,6 +246,7 @@ add_library(
     src/dao/Strings.cpp
     src/dao/SubActions.cpp
     src/dao/Atmosphere.cpp
+    src/dao/Lights.cpp
     src/dao/Framebuffer.cpp
     src/dao/Party.cpp
     src/dao/Portraits.cpp
