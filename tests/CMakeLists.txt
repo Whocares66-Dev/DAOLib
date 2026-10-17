@@ -19,6 +19,7 @@ add_executable(
     test_gfxmovie.cpp
     test_heldevents.cpp
     test_inflate.cpp
+    test_grid.cpp
     test_level.cpp
     test_model.cpp
     test_model_write.cpp

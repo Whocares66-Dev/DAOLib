@@ -266,12 +266,15 @@ std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) 
     switch (element)
     {
     case Type::U8:
+    case Type::S8:
         size = 1;
         break;
     case Type::U16:
+    case Type::S16:
         size = 2;
         break;
     case Type::U32:
+    case Type::S32:
     case Type::F32:
         size = 4;
         break;

@@ -92,6 +92,7 @@ class Mutant:
 
 
 GFF4 = "src/dao/core/Gff4.cpp"
+GRID = "src/dao/core/Grid.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -448,6 +449,24 @@ MUTANTS: list[Mutant] = [
         GFF4,
         "slot = offset && *offset != kNull ? std::optional(file_->DataOffset() + *offset) : std::nullopt;",
         "slot = offset && *offset != kNull ? slot : std::nullopt;",
+    ),
+    Mutant(
+        "grid-kind-bits: a cell's kind is its low four bits, not the counters above them",
+        GRID,
+        "static_cast<std::uint8_t>(cells[at] & kKindBits)",
+        "static_cast<std::uint8_t>(cells[at])",
+    ),
+    Mutant(
+        "grid-second-place: a second-level entrance is in sixteenths of its block",
+        GRID,
+        "return {left + ((cut.blockCells * (place >> 4)) / 16), top + ((cut.blockCells * (place & 0x0F)) / 16)};",
+        "return {left + (place >> 4), top + (place & 0x0F)};",
+    ),
+    Mutant(
+        "grid-direction: an edge's direction 1 is the block to the right",
+        GRID,
+        "    {0, -1},\n    {1, 0},\n    {0, 1},",
+        "    {0, -1},\n    {0, 1},\n    {1, 0},",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
