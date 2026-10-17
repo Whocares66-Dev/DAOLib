@@ -20,6 +20,7 @@ add_executable(
     test_heldevents.cpp
     test_inflate.cpp
     test_grid.cpp
+    test_clip.cpp
     test_level.cpp
     test_model.cpp
     test_model_write.cpp

@@ -108,7 +108,7 @@ class Struct
     std::optional<std::wstring> String(std::uint32_t label) const;
     std::optional<TlkString> Tlk(std::uint32_t label) const;
 
-    // A struct field, held in place or by reference.
+    // A struct field, held in place or by reference, or a generic field holding a struct.
     std::optional<Struct> Child(std::uint32_t label) const;
     // A list of structs: of one template, in place or by reference, or a
     // generic list whose elements are structs of any template.

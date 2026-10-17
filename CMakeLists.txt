@@ -146,6 +146,7 @@ add_library(
     src/dao/core/AddIns.cpp
     src/dao/core/ArchiveCache.cpp
     src/dao/core/CallSite.cpp
+    src/dao/core/Clip.cpp
     src/dao/core/Conversation.cpp
     src/dao/core/DaZip.cpp
     src/dao/core/Dds.cpp

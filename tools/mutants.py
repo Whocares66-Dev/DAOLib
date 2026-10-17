@@ -93,6 +93,7 @@ class Mutant:
 
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
+CLIP = "src/dao/core/Clip.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -445,10 +446,10 @@ MUTANTS: list[Mutant] = [
         "        at = *offset;\n    }\n    return at;",
     ),
     Mutant(
-        "gff4-generic-reference-followed: a generic field's floats are read where its offset points",
+        "gff4-generic-reference-followed: a generic field's value is read where its offset points",
         GFF4,
-        "slot = offset && *offset != kNull ? std::optional(file_->DataOffset() + *offset) : std::nullopt;",
-        "slot = offset && *offset != kNull ? slot : std::nullopt;",
+        "        element.at = file.DataOffset() + *offset;",
+        "        element.at = *offset;",
     ),
     Mutant(
         "grid-kind-bits: a cell's kind is its low four bits, not the counters above them",
@@ -467,6 +468,24 @@ MUTANTS: list[Mutant] = [
         GRID,
         "    {0, -1},\n    {1, 0},\n    {0, 1},",
         "    {0, -1},\n    {0, 1},\n    {1, 0},",
+    ),
+    Mutant(
+        "clip-order: the largest part goes where the key's place says, the rest in order",
+        CLIP,
+        "{{0, 1, 2, 3}, {1, 0, 2, 3}, {1, 2, 0, 3}, {1, 2, 3, 0}}",
+        "{{0, 1, 2, 3}, {0, 1, 2, 3}, {1, 2, 0, 3}, {1, 2, 3, 0}}",
+    ),
+    Mutant(
+        "clip-64-split: a 64-bit rotation's middle part is the low word's top ten and the high word's low eleven",
+        CLIP,
+        "((low >> 22) | ((high & 0x7FFU) << 10))",
+        "((low >> 22) | ((high & 0x7FFU) << 11))",
+    ),
+    Mutant(
+        "clip-48-place: a 48-bit rotation's place is the first number's low bit, then the second's",
+        CLIP,
+        "((first & 1U) << 1U) | (second & 1U)",
+        "((second & 1U) << 1U) | (first & 1U)",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",

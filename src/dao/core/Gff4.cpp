@@ -47,6 +47,38 @@ std::size_t FloatsIn(std::uint16_t type)
     }
 }
 
+// A generic field's one element: its type and flags, and where its value is. The struct holds
+// the element's type and flags, then the value, or with the field's reference flag an offset to
+// it (an effect's parameter in a level layout, DAOLib #154; an animation's keys, DAOLib #157).
+struct Element
+{
+    std::uint16_t type = 0;
+    std::uint16_t flags = 0;
+    std::size_t at = 0;
+};
+
+std::optional<Element> GenericElement(const File &file, std::size_t slot, const Field &field)
+{
+    const auto word = file.U32(slot);
+    if (!word)
+    {
+        return std::nullopt;
+    }
+    Element element{.type = static_cast<std::uint16_t>(*word & 0xFFFF),
+                    .flags = static_cast<std::uint16_t>(*word >> 16),
+                    .at = slot + 4};
+    if ((field.flags & kReference) != 0)
+    {
+        const auto offset = file.U32(element.at);
+        if (!offset || *offset == kNull)
+        {
+            return std::nullopt;
+        }
+        element.at = file.DataOffset() + *offset;
+    }
+    return element;
+}
+
 } // namespace
 
 const Field *Template::Find(std::uint32_t wanted) const
@@ -226,21 +258,13 @@ std::vector<float> Struct::Floats(std::uint32_t label) const
     std::optional<std::size_t> slot;
     if (type == static_cast<std::uint16_t>(Type::Generic))
     {
-        // One generic element in the struct: a type and flags, then the value, or with the
-        // reference flag an offset to it (an effect's parameter in a level layout, DAOLib #154).
-        const std::size_t at = at_ + field->offset;
-        const auto word = file_->U32(at);
-        if (!word || ((*word >> 16) & (kList | kStruct)) != 0)
+        const std::optional<Element> element = GenericElement(*file_, at_ + field->offset, *field);
+        if (!element || (element->flags & (kList | kStruct)) != 0)
         {
             return floats;
         }
-        type = static_cast<std::uint16_t>(*word & 0xFFFF);
-        slot = at + 4;
-        if ((field->flags & kReference) != 0)
-        {
-            const auto offset = file_->U32(*slot);
-            slot = offset && *offset != kNull ? std::optional(file_->DataOffset() + *offset) : std::nullopt;
-        }
+        type = element->type;
+        slot = element->at;
     }
     else
     {
@@ -321,6 +345,16 @@ std::optional<TlkString> Struct::Tlk(std::uint32_t label) const
 std::optional<Struct> Struct::Child(std::uint32_t label) const
 {
     const Field *field = Shape().Find(label);
+    if (field != nullptr && field->type == static_cast<std::uint16_t>(Type::Generic) && (field->flags & kList) == 0)
+    {
+        const std::optional<Element> element = GenericElement(*file_, at_ + field->offset, *field);
+        if (!element || (element->flags & kStruct) == 0 || (element->flags & kList) != 0 ||
+            element->type >= file_->Templates().size())
+        {
+            return std::nullopt;
+        }
+        return Struct(*file_, element->type, element->at);
+    }
     if (field == nullptr || (field->flags & kStruct) == 0 || (field->flags & kList) != 0 ||
         field->type >= file_->Templates().size())
     {
