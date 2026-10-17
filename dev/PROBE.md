@@ -70,6 +70,8 @@ A getter no script calls in a session stays unchecked. The census saw `GETCOMBAT
 
 ## Loading screens
 
+Since 2026-10-17 the probe also watches the Direct3D device's `SetTexture` (`ColourCurve.h`, DAOLib #155): every texture one to four texels tall bound to sampler 1, which is where the frame's last pass takes its colour curve. `probe.log` has `colour curve candidate` with its size, format, pool and usage the first time one is bound, then `colour curve <texture>: its texels` and lines of hex texels (A8R8G8B8 as stored: blue, green, red, alpha) whenever they differ from the last reading, looked at every two seconds. The 4 x 4 white and black textures bound there too are not curves.
+
 Since 2026-10-10 the probe times every step of a loading screen (`Loading.h`, DAOLib #64). The loading game mode runs one state a frame, each a machine in numbered steps (`src/dao/Addresses.h`, "The loading mode's states"): state 5 is an area transition within the area list in memory, state 4 a swap to another list, state 3 a save, 2 and 8 a game starting or a save loading, 6 what follows each of them. A detour on the mode's update reads the state and its step before the engine runs them and times the call. In `probe.log`:
 
 - `loading watch: detoured GameModeLoading::Update at 0x006c9680` once at start-up.

@@ -23,7 +23,9 @@
 // - The HUD's movie records as they change, for the interface's fade (Hud.h).
 // - A named resource's read, around a plugin's patch of it (Reads.h).
 // - Every step of a loading screen, timed (Loading.h).
+// - The colour curve the frame's last pass is given, as the device has it (ColourCurve.h).
 #include "Census.h"
+#include "ColourCurve.h"
 #include "Conjure.h"
 #include "Events.h"
 #include "Hud.h"
@@ -465,6 +467,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     });
     WidenCreatureShow();
     probe::AttachScriptChecks();
+    probe::AttachColourCurveWatch();
     probe::AttachEventWatch();
     probe::AttachConjureWatch();
     probe::AttachMovieWatch();

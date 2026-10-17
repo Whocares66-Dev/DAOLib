@@ -373,6 +373,7 @@ if(DAO_BUILD_PLUGINS)
         probe
         SOURCES
             src/plugins/probe/Census.cpp
+            src/plugins/probe/ColourCurve.cpp
             src/plugins/probe/Conjure.cpp
             src/plugins/probe/Hud.cpp
             src/plugins/probe/Movies.cpp
