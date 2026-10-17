@@ -1,5 +1,5 @@
 // A flickering light eases from one brightness to the next, as the engine
-// meant, rather than jumping (DAOLib issue #150).
+// meant, rather than jumping, and no faster than a cycle a second (DAOLib issue #150).
 //
 // A light that flickers (fires, torches: 918 of the game's 9,024 room
 // lights) has an Animation::RandomWaveController<float>, whose Update runs
@@ -13,7 +13,10 @@
 //
 // Update is detoured. A frame that starts a new cycle goes to the engine's
 // own, so its random draws are the engine's, in its order; within a cycle
-// the light is set by the smoothstep the engine meant.
+// the light is set by the smoothstep the engine meant. A light whose data has
+// cycles shorter than a second on average has them stretched to that, since
+// even eased a fire at the data's pace read as a strobe; how deep it swings
+// is left as the data has it.
 #pragma once
 
 namespace fix

@@ -30,6 +30,12 @@ struct RandomWave
 static_assert(offsetof(RandomWave, from) == 0x18 && offsetof(RandomWave, to) == 0x1C);
 static_assert(offsetof(RandomWave, cycle) == 0x20 && offsetof(RandomWave, t) == 0x28 && sizeof(RandomWave) == 0x30);
 
+// The shortest a light's cycles are on average, in seconds. The data's, nearly
+// all 0.075 s give or take 0.025, read as a strobe even eased (the user,
+// 2026-10-17: "it's too fast. slow it down", then "try 1 / s"); a light the data
+// already has slower keeps its own pace, and the depth of the swing is the data's.
+constexpr double kShortestPeriod = 1.0;
+
 using UpdateFn = void(__fastcall *)(RandomWave *wave, int edx, double dt);
 dao::Detour<UpdateFn> g_update;
 
@@ -40,6 +46,11 @@ void __fastcall Update(RandomWave *wave, int edx, double dt)
     if (t > wave->cycle)
     {
         g_update.Original()(wave, edx, dt);
+        // The length the engine drew, period and spread stretched alike.
+        if (wave->period > 0.0F && wave->period < kShortestPeriod)
+        {
+            wave->cycle *= kShortestPeriod / wave->period;
+        }
         return;
     }
     wave->t = t;
@@ -67,7 +78,8 @@ void InstallLightFlickerFix()
                      "placed (issue #150)");
         return;
     }
-    spdlog::info("fixes: flickering lights ease from one brightness to the next (issue #150)");
+    spdlog::info(
+        "fixes: flickering lights ease from one brightness to the next, a cycle a second at the fastest (issue #150)");
 }
 
 } // namespace fix
