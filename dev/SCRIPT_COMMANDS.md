@@ -32,6 +32,15 @@ void ToggleGamePause(int bPause = TRUE) = 188;
 
 So a registration number is a script function number. The table is verified against a second, independent source, not only read off the code. `cscript.ldf` beside it declares a second interface of 160 functions for the client and console scripts (`ConsoleCommand`, `ShutDown`, ...). Their registration is a different shape, not yet read.
 
+### Commands script.ldf leaves out, read in the exe
+
+Read 2026-10-18 by lib-agent-2, for DAOParagonEngine's script engine; the CSV's signature column is script.ldf's, so these are kept here.
+
+- 396 `COMMAND_ADDTOPARTY`: `void AddToParty(object oCreatureToAdd, object oPlayer)`, commented out in script.ldf (line 7123). It pops two objects, ignores the second, and calls `ForScript_ADDTOPARTY(creature, 1)`.
+- 397 `COMMAND_REMOVEFROMPARTY`: `void RemoveFromParty(object oCreature)`, commented out (line 7139); `ForScript_ADDTOPARTY(creature, 0)`.
+- 859 `COMMAND_GETABILITYLIST`: not in script.ldf. It pops an object, an int and an int and pushes an `int[]` (tag 0x40) of ability ids: type 0 takes the abilities of types 1 to 3, 1 to 3 one type each, 4 none; a third int not 0 keeps only those still cooling down.
+- 10: not registered. `InitializeCommands`' 827 registrations skip it, and `ExecuteCommand` answers -642, which fails the script at that `ACTION`. Five shipped `.ncs` call it.
+
 ## Why this table is the first map of the engine
 
 - **Every function a script can call is named.** Each row's function is named in the address library's table (`tools/names.py --give`), and `tools/names.py` gives the names to Ghidra (`ScriptCommand::TOGGLEGAMEPAUSE` at `0x0066A7A0`), so the decompiler shows the engine's vocabulary instead of `FUN_0066a7a0`.
