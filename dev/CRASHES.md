@@ -47,6 +47,18 @@ A stall that ends leaves no crash log, so the loader also keeps a watchdog (DAOL
 
 It is an unhandled-exception filter, and the game's C runtime installs one of its own at start-up. So the logger also detours `SetUnhandledExceptionFilter`. A filter the game sets afterwards is remembered and called after ours, so the game's own handling still happens, and Windows Error Reporting still records the crash. The log is written on a new thread, because the crashing thread may be out of stack. The crashing thread waits up to a minute for it.
 
+## Exits nobody asked for: the window's log
+
+A game that exits as a window close does (game mode -1, then the loader's `ExitProcess(0)`) with no one having closed it leaves no crash log. So the loader logs, in `loader.log`, what reaches the game's window (`src/loader/WindowLog.cpp`, DAOLib #199; it logs only, every message passes on unchanged). A thread finds the window and puts `WH_CALLWNDPROC` (messages sent) and `WH_GETMESSAGE` (messages posted) hooks on the window's thread, again if the window is ever made on another. One line each:
+
+- `window 0x1a2b: WM_SYSCOMMAND SC_CLOSE, lParam 0x..., posted`: the title bar's close or Alt+F4 (sent or posted, and the lParam is the cursor for a click, 0 for a key).
+- `window 0x1a2b: WM_CLOSE, sent by this thread, after an SC_CLOSE in the second before`: the window procedure turned an SC_CLOSE into the close (the usual way for a user's close). `with no` SC_CLOSE before it, and `sent by another thread` or `posted`, is someone calling `SendMessage` or `PostMessage(WM_CLOSE)` on the window: a tool, a launcher, a test driver.
+- `WM_QUERYENDSESSION` and `WM_ENDSESSION`, with wParam and lParam: Windows logging off, shutting down or restarting (lParam bit `0x80000000` is a log off, `0x1` a restart of applications by the installer, `0x40000000` a forced close).
+- `window 0x1a2b: WM_ACTIVATEAPP, activated; other thread 1234 of process 5678 (C:\...\app.exe)`: another application gave the front to the game or took it (`deactivated`); the other thread is the one that was in front (activated) or took it (deactivated). `?` is a process that could not be read. A close arriving soon after a window took the front from the game is that window's key or click.
+- `window 0x1a2b: Esc keydown within 2 s of an activation` (also `F4`, `Alt`): a key that closes or leaves a game, pressed in the 2 s after the game was activated (a key meant for the application just left, arriving at this one). Keys held down are told once.
+
+Hooks, not a subclass: they are per thread, so a window made, re-made or destroyed on it needs nothing done, and they replace no window procedure of the game's. The two timing windows (a second from SC_CLOSE to WM_CLOSE, two seconds from an activation) are `dao::core::WindowWatch`, tested without the game.
+
 ## Out of address space
 
 The game is 32-bit, and Steam's and EA's executables are not large-address-aware: 2 GiB of address space, where GOG's has 4. A long session there ends with the space full and an allocation failing, and the crash that follows can be in any code: the play tester's, 2026-10-10 in Steam's game, was an access violation in `D3DDriver::D3DTextureVolume::vfunction22+0x27` (GOG `0x00874AB7`) with the process at 1,999 of 2,048 MiB and a largest free block of 3 MiB. The log of it was an empty file (DAOLib #56): the report allocates (the module list, the function names, dbghelp's symbols, every line it formats), and an allocation failing on the writer's thread ended the process with nothing written.

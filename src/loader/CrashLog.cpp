@@ -1199,30 +1199,6 @@ std::uint32_t HangSeconds()
     return end != text.data() ? static_cast<std::uint32_t>(std::min(value, 3600UL)) : 5;
 }
 
-// The game's window: visible, of this process, owned by no other.
-HWND GameWindow()
-{
-    struct Find
-    {
-        DWORD process = 0;
-        HWND found = nullptr;
-    } find{GetCurrentProcessId(), nullptr};
-    EnumWindows(
-        [](HWND window, LPARAM param) -> BOOL {
-            auto *f = reinterpret_cast<Find *>(param);
-            DWORD process = 0;
-            GetWindowThreadProcessId(window, &process);
-            if (process != f->process || !IsWindowVisible(window) || GetWindow(window, GW_OWNER) != nullptr)
-            {
-                return TRUE;
-            }
-            f->found = window;
-            return FALSE;
-        },
-        reinterpret_cast<LPARAM>(&find));
-    return find.found;
-}
-
 // What the game is doing, in words, and whether a stall now is one to log:
 // not before the game has a mode, while loading or at the main menu's
 // start-up, nor with the window minimised or gone. Read while the frame
@@ -1440,6 +1416,30 @@ DWORD WINAPI Watchdog(LPVOID /*unused*/)
 }
 
 } // namespace
+
+// The game's window: visible, of this process, owned by no other.
+HWND GameWindow()
+{
+    struct Find
+    {
+        DWORD process = 0;
+        HWND found = nullptr;
+    } find{GetCurrentProcessId(), nullptr};
+    EnumWindows(
+        [](HWND window, LPARAM param) -> BOOL {
+            auto *f = reinterpret_cast<Find *>(param);
+            DWORD process = 0;
+            GetWindowThreadProcessId(window, &process);
+            if (process != f->process || !IsWindowVisible(window) || GetWindow(window, GW_OWNER) != nullptr)
+            {
+                return TRUE;
+            }
+            f->found = window;
+            return FALSE;
+        },
+        reinterpret_cast<LPARAM>(&find));
+    return find.found;
+}
 
 void StartWatchdog()
 {

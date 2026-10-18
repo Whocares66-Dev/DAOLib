@@ -53,6 +53,7 @@
 #include "loader/CrashLog.h"
 #include "loader/Instance.h"
 #include "loader/Proxy.h"
+#include "loader/WindowLog.h"
 #include "perf/AllProcessors.h"
 #include "perf/EngineHeap.h"
 #include "perf/FastLoad.h"
@@ -217,6 +218,7 @@ void BeforeTheGame()
     perf::InstallAllProcessors();
     loader::instance::SeedSaves();
     loader::crashlog::StartWatchdog();
+    loader::windowlog::Start();
     perf::InstallEngineHeap();
     fix::InstallArchiveReadFix();
     fix::InstallSavedFileNameFix();

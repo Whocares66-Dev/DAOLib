@@ -28,6 +28,7 @@ add_executable(
     test_inflate.cpp
     test_grid.cpp
     test_walkpatch.cpp
+    test_windowwatch.cpp
     test_headpreset.cpp
     test_clip.cpp
     test_ldf.cpp

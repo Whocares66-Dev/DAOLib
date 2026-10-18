@@ -7,6 +7,8 @@
 // the hang logger, for a game that stops making frames without crashing.
 #pragma once
 
+#include <Windows.h>
+
 #include <filesystem>
 
 namespace loader::crashlog
@@ -28,5 +30,8 @@ void Install(const std::filesystem::path &loaderFolder);
 // into the game, before the plugins load: it counts frames with
 // dao::OnFrame.
 void StartWatchdog();
+
+// The game's window: visible, of this process, owned by no other; null before it exists.
+HWND GameWindow();
 
 } // namespace loader::crashlog

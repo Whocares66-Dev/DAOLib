@@ -343,6 +343,7 @@ add_library(
     src/loader/Instance.cpp
     src/loader/Loader.cpp
     src/loader/Proxy.cpp
+    src/loader/WindowLog.cpp
 )
 dao_apply_warnings(loader)
 dao_release_symbols(loader)
