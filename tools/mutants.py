@@ -94,6 +94,7 @@ class Mutant:
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
+NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
 CHARACTER = "src/dao/core/Character.cpp"
 CLIP = "src/dao/core/Clip.cpp"
@@ -543,6 +544,18 @@ MUTANTS: list[Mutant] = [
         CHARACTER,
         'head.hairModel = partOf(2, "Hair_Worksheet");',
         'head.hairModel = partOf(2, "Head_Worksheet");',
+    ),
+    Mutant(
+        "ncs-const-string-length: a CONST string is its two bytes, its count and its bytes",
+        NCS,
+        "i.length = 4 + *count;",
+        "i.length = 2 + *count;",
+    ),
+    Mutant(
+        "ncs-destruct-signed: DESTRUCT's offset of the part to keep is signed",
+        NCS,
+        "i.second = Signed(*keep, 2);",
+        "i.second = static_cast<std::int32_t>(*keep);",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",

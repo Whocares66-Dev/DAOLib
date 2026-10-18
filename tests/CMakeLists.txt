@@ -30,6 +30,7 @@ add_executable(
     test_materialdefinition.cpp
     test_materialobject.cpp
     test_morph.cpp
+    test_ncs.cpp
     test_lightprobes.cpp
     test_input.cpp
     test_install.cpp

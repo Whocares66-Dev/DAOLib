@@ -176,6 +176,7 @@ add_library(
     src/dao/core/MaterialDefinition.cpp
     src/dao/core/MaterialObject.cpp
     src/dao/core/Morph.cpp
+    src/dao/core/Ncs.cpp
     src/dao/core/OptionsMovie.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Picture.cpp
