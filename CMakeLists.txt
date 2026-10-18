@@ -144,6 +144,7 @@ add_library(
     daolib_core
     STATIC
     src/dao/core/AddIns.cpp
+    src/dao/core/Anb.cpp
     src/dao/core/ArchiveCache.cpp
     src/dao/core/Area.cpp
     src/dao/core/CallSite.cpp

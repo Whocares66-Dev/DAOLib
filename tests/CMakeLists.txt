@@ -6,6 +6,7 @@ find_package(Catch2 3 CONFIG REQUIRED)
 add_executable(
     dao_core_tests
     crt_reports.cpp
+    test_anb.cpp
     test_angle.cpp
     test_archive_cache.cpp
     test_area.cpp

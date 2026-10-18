@@ -43,7 +43,7 @@ The chest part's material node is one of `ArmorM1`, `RobeM1`, `ClothesM1`: to dr
 
 `0x0074b010` loads the head, for a `p` appearance:
 
-1. The neck: `apr_base`'s `Neck_Model` after the `%hc%hc_` prefix, if the row has one.
+1. The neck: `apr_base`'s `Neck_Model` after the `%hc%hc_` prefix, if the row has one. Nothing else guards it: no gore, helmet or `FullFace` check, and its mesh (`hm_hed_dcpa_0.mmh`, `HM_HED_DCP_NeckM1`) has `MMHMeshDefaultHidden` and `MMHMeshCutAway` 0, the first read at `0x005950fa`. So it is always drawn: a short cylinder at the neck, z 1.52 to 1.65 m, skinned to the head's bones, with `Face.mat` (`uh_hed_dcp.mao`), whose tint mask covers both its cut cap and its band, so it takes the skin tint like the face. The band sits under the head and the collar and the cap inside the head; the cap shows where the head is gone, a decapitation not read. Read by lib-agent-2, 2026-10-17; not seen in play whether the face covers the cap whole.
 2. With a helmet in slot 5, the helmet's model, and its worksheet row's `FullFace` column, kept at `CAppearance+0x5e`.
 3. With `FullFace` set: only the eyes, from a model named with `2` before its last letter (`cn_eye_glka` becomes `cn_eye_glk2a`). No face, hair, beard or lashes.
 4. Otherwise: eyes, face (its morph applied), beard, hair unless there is a helmet, and lashes.

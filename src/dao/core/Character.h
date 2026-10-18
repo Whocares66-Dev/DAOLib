@@ -122,7 +122,9 @@ struct Weapon
 // What a helmet leaves of the head.
 struct Head
 {
-    std::wstring neck;     // apr_base's Neck_Model with the prefix; empty for none
+    // apr_base's Neck_Model with the prefix; empty for none. Always drawn, skin-tinted like the
+    // face, under the head and collar: its cap shows only where the head is gone.
+    std::wstring neck;
     std::wstring helmet;   // empty for none
     bool fullFace = false; // the helmet's worksheet row's FullFace: only the eyes are drawn
     bool face = true;

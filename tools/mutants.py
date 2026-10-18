@@ -94,6 +94,7 @@ class Mutant:
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
+ANB = "src/dao/core/Anb.cpp"
 CHARACTER = "src/dao/core/Character.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
@@ -524,6 +525,12 @@ MUTANTS: list[Mutant] = [
         DDS,
         "if ((chain + bytes) * kFaces > room)",
         "if ((chain + bytes) * (kFaces - 1) > room)",
+    ),
+    Mutant(
+        "anb-replacement-followed: an animation no tree has is played as its Replacement",
+        ANB,
+        "        id = *replacement;\n",
+        "",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
