@@ -122,6 +122,8 @@ struct ConversationLine
     std::uint32_t animation = 0xFFFFFFFF; // a row of the Animations table played with the line; 0xFFFFFFFF for none
     std::wstring cutscene;                // the cutscene (.cut) the line plays, by name; empty for none
     bool cutsceneInLine = false;          // the line holds its own cutscene: ConversationFile::LineCutscene
+    std::wstring stageName;               // the stage the line's cut is set on (0x007D2AA0); may be empty
+    bool stageAtCurrentLocation = false;  // the stage placed at the speaker (0x007CD040)
     std::vector<LineSwitch> switches;     // objects activated or deactivated with the line, in the file's order
 };
 
@@ -168,8 +170,10 @@ class ConversationFile
     static constexpr std::uint32_t kScriptParameter = 12304;
     static constexpr std::uint32_t kLineChildren = 12400;
     static constexpr std::uint32_t kLineActive = 12500;
+    static constexpr std::uint32_t kLineStageName = 12100;
     static constexpr std::uint32_t kSwitchTag = 12102;
     static constexpr std::uint32_t kSwitchValue = 12103;
+    static constexpr std::uint32_t kLineStageAtCurrentLocation = 12104;
 
   private:
     explicit ConversationFile(gff4::File file);

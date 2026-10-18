@@ -104,6 +104,9 @@ std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) cons
         out.cutscene = cut->String(kLineCutResRef).value_or(L"");
         out.cutsceneInLine = cut->Label() == "CUT";
     }
+    // The stage's fields are the line's own, not the cut's (dev/PLOTS.md, "A line's cut").
+    out.stageName = line.String(kLineStageName).value_or(L"");
+    out.stageAtCurrentLocation = line.Get<std::uint8_t>(kLineStageAtCurrentLocation).value_or(0) != 0;
     for (const gff4::Struct &entry : line.Structs(kLineActive))
     {
         out.switches.push_back({entry.String(kSwitchTag).value_or(L""),

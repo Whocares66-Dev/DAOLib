@@ -63,6 +63,8 @@ const std::vector<FieldSpec> kLineFields = {
     {12213, 4, 0, 0x20},                                         // animation
     {12211, 0xFFFF, gff4::kReference, 0x58},                     // cutscene, generic
     {12500, kSwitchTemplate, gff4::kList | gff4::kStruct, 0x64}, // objects switched
+    {12100, 14, 0, 0x38},                                        // stage name
+    {12104, 0, 0, 0x3C},                                         // stage at the speaker
 };
 
 enum class Cut
@@ -92,6 +94,8 @@ struct LineSpec
     std::uint32_t animation = 0xFFFFFFFF;
     Cut cut = Cut::None;
     std::vector<std::pair<std::u16string, std::int32_t>> switches;
+    std::u16string stage;
+    bool stageAtSpeaker = false;
 };
 
 // A line's cutscene, appended to the data: a CUTR naming a .cut, or a CUT
@@ -145,6 +149,8 @@ void WriteLine(Builder &b, std::size_t at, const LineSpec &l)
     b.U8(at + 0x1E, l.noVo ? 0xFF : 0);
     b.U8(at + 0x1F, l.revert ? 0xFF : 0);
     b.U32(at + 0x20, l.animation);
+    b.U32(at + 0x38, b.String(l.stage));
+    b.U8(at + 0x3C, l.stageAtSpeaker ? 1 : 0);
     WriteCut(b, at, l.cut);
     // A list in place: a count, then the IMAP structs, each a tag's offset and a value.
     const std::size_t list = b.bytes.size();
@@ -241,25 +247,11 @@ std::vector<std::byte> TwoLines()
              false,
              820,
              Cut::Named,
-             {{u"bhm600cr_mouse_human", 1}, {u"PLAYER", 0}}},
-            {5678,
-             u"PLAYER",
-             u"OWNER",
-             2,
-             u"",
-             -1,
-             u"gen_cond",
-             3,
-             {},
-             true,
-             1,
-             false,
-             true,
-             false,
-             true,
-             0xFFFFFFFF,
-             Cut::Held,
-             {}},
+             {{u"bhm600cr_mouse_human", 1}, {u"PLAYER", 0}},
+             u"jowan_attack",
+             false},
+            {5678, u"PLAYER", u"OWNER", 2,     u"",  -1,         u"gen_cond", 3,  {},  true,
+             1,    false,     true,     false, true, 0xFFFFFFFF, Cut::Held,   {}, u"", true},
         },
         {false, true});
 }
@@ -301,6 +293,8 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(npc->switches[0].value == LineSwitch::Switch::ActivateAtStart);
     CHECK(npc->switches[1].tag == L"PLAYER");
     CHECK(npc->switches[1].value == LineSwitch::Switch::None);
+    CHECK(npc->stageName == L"jowan_attack");
+    CHECK_FALSE(npc->stageAtCurrentLocation);
 
     const auto reply = conversation->Line(1);
     REQUIRE(reply);
@@ -320,6 +314,8 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(reply->cutscene.empty());
     CHECK(reply->cutsceneInLine);
     CHECK(reply->switches.empty());
+    CHECK(reply->stageName.empty());
+    CHECK(reply->stageAtCurrentLocation);
     const auto held = conversation->LineCutscene(1);
     REQUIRE(held);
     CHECK(held->runTime == 8.5F);
@@ -437,6 +433,14 @@ TEST_CASE("the game's conversations in game/conversations, when there, each line
                 {
                     CHECK(*mouse == (on ? LineSwitch::Switch::ActivateAtStart : LineSwitch::Switch::None));
                 }
+            }
+        }
+        if (entry.path().filename() == "bhm100_cutscene_blood.dlg")
+        {
+            // The first two lines' cuts are set on Jowan's attack's stage (DAOLib #179).
+            for (const std::uint32_t i : {0U, 1U})
+            {
+                CHECK(conversation->Line(i)->stageName == L"jowan_attack");
             }
         }
         if (entry.path().filename() == "alistair_main.dlg")

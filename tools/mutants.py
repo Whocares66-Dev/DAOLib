@@ -668,6 +668,12 @@ MUTANTS: list[Mutant] = [
         "entry.Get<std::int32_t>(kSwitchTag)",
     ),
     Mutant(
+        "conversation-stage-at-location: a line's stage is at the speaker by its own field, not by noVoInGame's",
+        CONVERSATION,
+        "line.Get<std::uint8_t>(kLineStageAtCurrentLocation)",
+        "line.Get<std::uint8_t>(kLineNoVoInGame)",
+    ),
+    Mutant(
         "talktable-version: a Huffman-coded V0.5 table is refused",
         TALKTABLE,
         'file->TypeVersion() != "V0.2"',
