@@ -118,3 +118,66 @@ Shared facts, checked unless marked:
 - The area's and module's listener delivery and disabled sets (0x0067BFB0, 0x005FE840, 0x0067D6D0, 0x005FEB00, 0x00681750, 0x00601610, 0x00682930, 0x00601D00): taken to mirror the CCObject's.
 - What +0x4C of `CScriptEvent` holds; the save side of `EventListeners`.
 - The element access 0x0069BD60 for a negative index in `SetEventResource`.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/events.md` apply (an event on the stack is a copy; `CScriptEvent` is 0x50 bytes with type +0x20, creator +0x24, target +0x28 and own script +0x2C; the copy constructor drops the own script; null events reach handlers; failed pop -639, failed push -638). "Current event" below is the event the calling object is running: a game object with a CCObject view (slot 0x18) -> `+0x2A8`; type byte 4 (area, through slot 8) -> `+0x3C4`; type 3 (module, through slot 0x1C) -> `+0x390`.
+
+### SignalEvent (105)
+- **Handler:** 0x00657E40 (not shared). Pops oObject, the event (structure 0) and, only when paramCount > 2, bProcessImmediate (else 0). Looks the target up with `GetGameObjectById` 0x005D5840 and needs the commands/events system (`app+0x1AC`).
+- **Described in:** `dev/LOAD_EVENTS.md` ("A non-immediate `SignalEvent` (0x00657E40) queues the same way (0x00657EDE); only an immediate one is delivered at once (`DeliverNow`, 0x00657EFC)"), with uses in `dev/COMBAT.md` and `dev/CHARGEN.md`.
+- **Does:** bProcessImmediate == 0: queues the event on the target through 0x0064ACE0 with a delay of (0, 0), the sender OBJECT_SELF (`this+8`), the target id and a kind word 0xA. Non-zero: delivers it through 0x0064AD80, with the same sender, target and kind. The queue takes the copy. Returns 0. (checked)
+- **Edge cases:** an unknown target, or no system, deletes the event copy and the script goes on with nothing delivered (no failure, no result). Any object kind the table at `app+0xCC` holds works, areas and the module among them. The event's creator is not set: it is whatever `Event()` stored (the OBJECT_SELF at construction), so signalling someone else's event keeps the first sender. Any non-zero bProcessImmediate is immediate (the test is `!= 0`). A null event with a valid target is queued as null (not followed). (checked; the null case inferred)
+
+### DelayEvent (128)
+- **Handler:** 0x00657F30 (not shared). Pops fSeconds, oObject, the event and, only when paramCount >= 4, scriptname (a `std::wstring`; empty by default).
+- **Described in:** `dev/TURN_BASED.md` ("`DelayEvent` counts on the world timer ..., which pause stops and the game's speed scales"; the DoT and area-of-effect timers).
+- **Does:** if the target exists and the commands system is present: **a non-empty scriptname is stored in the event copy's own script (+0x2C), assigned as given** (no `.ncs` stripping, no cut at a dot), then fSeconds is split by the time manager (`app+0xD4`: 0x00A35D80 gives the whole units, 0x00A35CF0 the milliseconds; the unit length is its +0x50) and the event is queued through 0x0064ACE0 with that time, sender OBJECT_SELF, kind 0xA. Returns 0. (checked)
+- **Edge cases:** this is the one command that gives an event its own script: the copy constructor drops +0x2C, delivery (events.md) looks at `engineevents.gda` first, then the event's own script, then the object's, so a scriptname is used unless the event type has a table script (33-36, 65). An unknown target deletes the event and gives no error. A zero or negative fSeconds converts to (0, 0) (0x00A35CF0 returns 0 for a value that is not above 0; the whole-units half is inferred the same), so it is delivered on the next pass of the queue, as the DoT code's `DelayEvent(0.0)` relies on. The delay is on the world timer, not real time. (checked, the negative case inferred)
+
+### Event (106)
+- **Handler:** 0x006580D0 (not shared). Pops nEventType.
+- **Described in:** `dev/CHARGEN.md` and `dev/LOAD_EVENTS.md` (events the scripts make: `Event(1027)`), and `events.md` (the `CScriptEvent` layout, constructor 0x0069BAC0).
+- **Does:** makes a `CScriptEvent`, **type (+0x20) = nEventType and creator (+0x24) = OBJECT_SELF (`this+8`)**, with target -1 and an empty own script, and pushes it (copied). (checked)
+- **Edge cases:** the creator is OBJECT_SELF as an id, whether or not it names a live object (no lookup, unlike `Effect`). The type is not checked: 0 is an invalid event and any other number, known to no handler or not, makes a "valid" one. No parameters (arrays) yet: the script sets them with `SetEvent*`. An allocation failure is not tested (the constructor's result is written through). (checked)
+
+### GetCurrentEvent (108)
+- **Handler:** 0x00658210 (not shared). Looks up OBJECT_SELF (0x005D5840) and reads the current event (above).
+- **Described in:** `dev/TURN_BASED.md` (call counts), `dev/PROBE.md` (the answer is checked in play as a `CScriptEvent` that round-trips), `dev/script_commands/events.md` (shared facts: the offsets).
+- **Does:** pushes a copy of the event the object is handling, or a null event when there is none. (checked)
+- **Edge cases:** an OBJECT_SELF that is not found, or is not a CCObject view, an area or the module, gives a null event; so does an object that is running no event (the pointer is null outside delivery: 0x006985F0 restores it). A null event reads as type 0 and creator -1, but `GetEventTarget` and `GetEventObject` on it fault (see them). It is a copy: `SetEvent*` on it changes nothing in flight. The area's slot is +0x3C4 and the module's +0x390 (`dev/COMBAT.md`'s paragraph on `GetCurrentEffect` has them the other way round). (checked)
+
+### GetEventCreator (109)
+- **Handler:** 0x006582A0 (not shared). Pops the event, pushes `+0x24` with `StackPushObject`, frees the copy.
+- **Described in:** `dev/PROBE.md` and `dev/BUILDS.md` (checked in play against the library's accessor: 495 calls agreed); the field is in `events.md`.
+- **Does:** returns the creator id: whoever was OBJECT_SELF when `Event()` made it, or what `SetEventCreator` stored, or what the engine set when it built the event. (checked)
+- **Edge cases:** **a null event gives -1** (OBJECT_INVALID), no fault. The id is not validated, so the creator may be destroyed since. (checked)
+
+### GetEventType (111)
+- **Handler:** 0x00658390 (not shared). Pops the event, pushes `+0x20` as an int, frees the copy.
+- **Described in:** `dev/TURN_BASED.md` (the hottest of the event commands in play, with `GetCurrentEvent`), `dev/PROBE.md`, `events.md`.
+- **Does:** returns the event's type, the value that `Event()` or the engine wrote. (checked)
+- **Edge cases:** **a null event gives 0** (EVENT_TYPE_INVALID), no fault. Types the engine does not know come back as they were set. (checked)
+
+### GetEventObject (117)
+- **Handler:** 0x00650990 (not shared). Pops the event, then nIndex; calls `CDataArrays::GetObject` 0x00A5A2B0 (the event is its own `CDataArrays` at +0) and pushes the answer with `StackPushObject`.
+- **Described in:** `dev/CHARGEN.md` (`oChar = GetEventObject(ev, 0)` in `sys_chargen`) and `events.md` (`SetEventObject`).
+- **Does:** returns the object id stored at that index of the event's object list (+0x10). (checked)
+- **Edge cases:** an index at or past the end, a negative index (compared unsigned), or an event with no objects list returns -1 (OBJECT_INVALID). **A null event faults**: `GetObject` reads `[ecx+0x10]` with `ecx = 0` and nothing tests for it. The id is not validated. The popped copy is freed. (checked)
+
+### HandleEvent (121)
+- **Handler:** 0x006586D0 (not shared). Pops the event (structure 0), then the resource; cuts it at the first `.`; calls one of three delivery functions on OBJECT_SELF.
+- **Described in:** `dev/NCS.md` (the first-dot cut, by stem) and `events.md` (`HandleEvent_String`, the resource-name sibling).
+- **Does:** runs the event **at once, inline,** on OBJECT_SELF with that script (the stem of rScriptName), or with the object's own default script when rScriptName is empty (CCObject +0x26C, area +0x38C, module +0x1F8): CCObject 0x006985F0, area 0x0067BFB0, module 0x005FE840 (with a third argument 1). (checked)
+- **Edge cases:** it calls the delivery function directly, so **`engineevents.gda` is not consulted**, as for `HandleEvent_String`; the event's own script is not used; the object's disabled-event gate (`EnablevEvent`) applies for a CCObject. An OBJECT_SELF that is none of the three kinds, or none, deletes the event and runs nothing. A null event passes through quietly for a CCObject (the delivery function tests for it). A failed pop of either argument gives -639. (checked)
+
+### GetEventTarget (126)
+- **Handler:** 0x00659030 (not shared). Pops the event, pushes `+0x28` with `StackPushObject`, frees the copy.
+- **Described in:** `dev/PROBE.md` and `dev/BUILDS.md` (compared in play with the library's accessor); the field in `events.md` ("target set to the object if -1").
+- **Does:** returns the event's target id. For an event that has been delivered, 0x006985F0 had set it to the receiving object if it was -1; before delivery it is -1 unless the engine set it. (checked)
+- **Edge cases:** **a null event faults**: `[ecx+0x28]` is read with no null test (0x00659052), unlike `GetEventCreator` and `GetEventType`. For an event the script built with `Event()` the answer is -1 (OBJECT_INVALID). (checked)
+
+## Not read
+- 0x0064ACE0 and 0x0064AD80 (what the event queue does with the delay, the kind word 0xA and the sender, and whether a queued event survives the object's removal), and the time manager's unit (+0x50) and the rest of 0x00A35D80.
+- What `SignalEvent` does with a null event copy and a live target.
+- The area's and the module's delivery functions (0x0067BFB0, 0x005FE840) beyond their call.

@@ -242,3 +242,103 @@ Not read: whether an event queued to an inactive creature (the cleared move's CO
 - Which engine code sets a Sheathing command's int 1 (the delay before sub-action 48).
 - Table 123's identity, and the placeable branch of Interact's spot in detail.
 - None of the edge cases flagged as faults (RemoveCommand with a null command, StartConversation with an invalid target, Get/SetCommandFloat or Int on a command without parameters) was reproduced in play.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/commands.md` apply: every handler is `__thiscall (commandId, paramCount)`, returns 0, -639 on a failed pop and -638 on a failed push; a command on the stack is a copy (`CDataArrays` at command+4: `SetInteger` 0xA5B710, `SetObject` 0xA5B950, `SetVector` 0xA5A9B0, `SetFloat` 0xA5B7D0, `SetString` 0xA5BA10, `SetFlag` 0xA5B890); a start handler that adds no sub-action makes its command complete with success. Start and end handlers are at table offset 4 x type (filled at 0x00747480). The constructors below all leave the command null (type 0, no parameters) when the commands system (`app+0x1AC -> +0x6C`) is absent or the pool gives none, and still push it (checked).
+
+### AddCommand (533)
+- **Handler:** 0x0066E0E0 (not shared). Pops the object, the command (structure 2), bAddToFront, bStatic and, only when paramCount > 4, nOverrideAddBehavior (default -1 in the handler); calls `GetObjectById` 0x005D5BE0 and `CCObject::QueueCommand` 0x0073CD10.
+- **Described in:** `dev/TURN_BASED.md` ("Every queued action seems to pass through one function"; the `WR_AddCommand` paragraph) and `dev/COMBAT.md` ("Queuing it clears the queue").
+- **Does:** queues the popped copy on the object, taking ownership of it, and pushes 1 on success or 0 when the object is gone. The command is not checked in any way: its type, and whether the object is a creature, are left to the start handler.
+- **Edge cases:**
+  - **The handler overwrites the command's static word (+0xC) with bStatic** before queuing, so a command that its constructor made static (`CommandDeathBlow` 246 sets +0xC = 1, as does `CommandFly` 811) is queued non-static unless the script passes bStatic = TRUE. (checked, 0x0066E19B)
+  - No object for the id: the command copy goes back to the pool (0x0066DE30) and 0 is pushed; the script goes on. A null command with a valid object makes `QueueCommand` return 0 and queue nothing. (checked)
+  - `QueueCommand`: with override -1 it reads the override from `commands.gda` (table 94 through `g_gdaTables`, row = command type, column hash 0xED36668A, or 0x7569547A when the object's current command has the same type as the new one; the lookup is skipped for an explicit override). Override 1 = `ClearAllCommands(soft)`, 2 = hard, 3 = hard only if the new command's object 0 differs from the creature's attack target (combat data +4), 0 = none. Then bAddToFront == 1 exactly puts it at the head of the queue (+0x2CC, 0x0073CCD0), anything else at the tail (0x00698C30). (checked)
+  - script.ldf says adjacent duplicate commands are deleted: neither insert nor the code between does so (checked); anything of the kind would be at command start (not read). A player-issued command (+0x10) raises an event (type 0x5E) before queuing, and a type-25 command on a creature calls 0x0071DEE0 after (neither followed). (inferred)
+
+### SetCommandResult (716)
+- **Handler:** 0x0065C0B0 (not shared). Pops the object and nResult, calls `GetObjectById` 0x005D5BE0.
+- **Described in:** `dev/COMBAT.md` (the attack, "answers with `SetCommandResult(owner, COMMAND_RESULT_SUCCESS)`"); `dev/ABILITIES.md` (the COMMAND_PENDING answer).
+- **Does:** if the id names an object, writes nResult at `object+0x3D4`. Void; returns 0. (checked)
+- **State:** `CCObject+0x3D4`.
+- **Edge cases:** no object: nothing. There is no type check, no range check on nResult, and no check that a command is running, so the word is simply left there. The note in COMBAT.md that the command layer reads it is still inferred; this handler never touches a command. (checked)
+
+### ClearAllCommands (538)
+- **Handler:** 0x0065BDE0 (not shared). Pops the object, then nHardClear (always popped, no count test; the handler's own default is 1). Calls `GetObjectById` and `CCObject::ClearAllCommands` 0x0073C930 as `(hard = (nHardClear == 1), 0)`.
+- **Described in:** `dev/TURN_BASED.md` ("A soft ClearAllCommands mid-swing: the blow lands") for what soft and hard do; `dev/COMBAT.md` for the queue override.
+- **Does:** clears the queue and the current command; pushes 1 when the object was found, else 0 (script.ldf's "TRUE on success"). Only the value 1 is hard; 0, 2, -1 or any other value is soft. (checked)
+- **Edge cases:** no object: nothing is cleared and 0 is pushed. The push is the only result, so a script cannot tell a clear that left a static or uninterruptible command from a full one. (checked)
+
+### ClearAmbientDialogs (626)
+- **Handler:** 0x006510F0 (not shared). Pops one object; calls the ambient dialog manager's getter 0x006FEFA0 as `(id, id == OBJECT_INVALID, 1)` and its `Clear` 0x006FF8E0.
+- **Described in:** `dev/PLOTS.md` ("A second bark").
+- **Does:** removes the ambient entries (barks) for that owner, or all of them for OBJECT_INVALID, and always pushes 1. (checked)
+- **Edge cases:** the id is not looked up, so a stale or non-existent id just clears nothing and still gives 1; the handler never pushes 0 although script.ldf calls 0 failure. The getter creates the manager (0x44 bytes, global 0x00C35CF8) on first use, so the first call is also its construction. (checked)
+
+### GetCommandQueueSize (724)
+- **Handler:** 0x0066D1C0 (not shared). Pops the object, `GetObjectById`, reads the queue's count through 0x007B51E0 (`[queue+8]`, the queue at `object+0x2CC`).
+- **Described in:** `dev/TURN_BASED.md` (AI_DetermineCombatRound returns at once if the creature has a current command or anything queued).
+- **Does:** pushes the number of commands waiting, not counting the current one (which is at +0x2DC, outside the list), matching script.ldf. (checked)
+- **Edge cases:** no object: 0. No type check (any object has the queue). Static commands count like any other. A push failure gives -638. (checked)
+
+### GetCurrentCommand (539)
+- **Handler:** 0x0065BEF0 (not shared). `GetObjectById`, then `CCObject::GetCurrentCommand` 0x0073C5F0 (`[[object+0x2DC]]`); pushed as structure 2.
+- **Described in:** `dev/TURN_BASED.md` (the call table, and `AI_DetermineCombatRound`'s checks); `commands.md` (the record at +0x2DC).
+- **Does:** pushes a copy of the command that is running now; the copy is independent, so changing it does nothing to the running one. (checked)
+- **Edge cases:** no object, or nothing running: a null pointer is pushed, which scripts read as a command of type 0 (`GetCommandType` 0, `COMMAND_TYPE_INVALID`) with no error. script.ldf says to test with `GetCommandType`, which is right. Any object type works. (checked)
+
+### ClearCurrentCommand (540)
+- **Handler:** 0x0065BF50 (not shared). Pops the object, `GetObjectById`, calls `CCObject::ClearCurrentCommand` 0x0073C730 as `(-2, 0, 1, 0)`.
+- **Described in:** `dev/TURN_BASED.md` (the soft-clear paragraph, for the `ClearCurrentCommand(-2, 0, hard, 0)` form) and `dev/COMBAT.md` ("the current command, if not static, is cleared even mid-sub-action").
+- **Does:** ends the current command with result -2 (COMMAND_FAILED_COMMAND_CLEARED), which runs its end handler and sends COMMAND_COMPLETE(-2). The hard flag is fixed at 1 here, so a sub-action that cannot be interrupted does not hold it. (checked)
+- **Edge cases:** void; returns 0. No object: nothing. A static current command is not cleared (`commands.md`, `RemoveCommand`). The queue is left alone, so the next queued command starts on the next step. (checked)
+
+### CommandAttack (566)
+- **Handler:** 0x0066E710 (not shared). Pops oTarget, then nForcedResult only when paramCount > 1 (the handler's own default 0; script.ldf's `COMBAT_RESULT_INVALID` is 0 as well).
+- **Described in:** `dev/COMBAT.md` ("One command is one swing"; the COMMAND_PENDING paragraphs).
+- **Does:** builds type 1 (Attack): object 0 = the target, int 2 = nForcedResult. It is not static. (checked)
+- **Edge cases:** the target is not looked up here. **Start** (0x00742FD0): the mover must be a creature and the target id must name an object; otherwise it returns before adding any sub-action, so the command ends with success next step. Past those checks, and before anything is queued, it writes the target's id at `mover+0xC60 -> +4` (the creature's attack target, what `GetAttackTarget` reads: inferred) and reads float 5 (the approach timeout, `WR_AddCommand` sets it) from the parameters. (checked)
+
+### CommandDeathBlow (246)
+- **Handler:** 0x0066E860 (not shared). Pops an object (-1 until popped), nDeathType (default 0), and, when paramCount > 2, **a second object that replaces the first** (undocumented; scripts, with two parameters, never send it).
+- **Described in:** `dev/COMBAT.md` ("For a deathblow, ... the deathblow command is put at the front of the queue").
+- **Does:** builds type 38 (Deathblow): int 0 = nDeathType, object 0 = the first parameter (script.ldf calls it the attacker, not the target), and **sets static (+0xC) = 1**. (checked)
+- **Edge cases:** the start (0x00745E10) does nothing but succeed (no sub-action) unless the executor is a creature that passes 0x006A25A0; if the object is the executor itself a deathblow attack animation plays, else the damage animation. With nDeathType 0 it looks up the animation by the attacker's weapon in the data tables (hashes 0xDC9C928D and 0x8A442AFE; not followed), nonzero goes another way (0x00746180, not read). Being static, `AddCommand` clears it (see AddCommand) unless the script passes bStatic. End handler 0x00747360 not read. (checked for the constructor; the start inferred)
+
+### CommandWait (578)
+- **Handler:** 0x0066FDB0 (not shared). Pops fSeconds.
+- **Described in:** `dev/ANIMATION.md` (waits) and `dev/TURN_BASED.md` (the AI queues a wait when idle).
+- **Does:** builds type 13 (Wait) with int 0 = the seconds as milliseconds: negative seconds become 0, then `ftol(seconds x 1000.0)` (constant 0x00AEBC00). Not static. This matches script.ldf's "a negative value gives a wait time of zero". (checked)
+- **Start** (0x00742950): sub-action 36 (0x007A20C0) with a copy of the parameters, for any object; it counts the milliseconds down (0x007A1AE0, not read) and answers 1 when none are left, or -1 when the mover is null or 0x00695300 gives 1. A wait of 0 ends at once. A null parameter block makes the start return 0 with no sub-action. (checked)
+- **Edge cases:** NaN and huge values go through `ftol` unchecked (inferred).
+
+### CommandJumpToObject (580)
+- **Handler:** 0x0066FEF0 (not shared). Pops oTarget.
+- **Described in:** `dev/LOAD_EVENTS.md` (facing: a random angle at the two personal spaces' distance for any creature but the controlled one).
+- **Does:** builds type 9 with object 0 = the target; not static. **Start** (0x007426D0): sub-action 32 (0x007A3C80). (checked)
+- **Edge cases:** an invalid target is not caught at construction. The sub-action answers -3 (invalid data) if the mover or the target is missing, the mover is dead (slot 0x1D0 = 1), or the target is the mover itself; the command then fails with -3 and COMMAND_COMPLETE(-3). A target in another area goes by a transition message (0x005D5E90) instead of an in-place move; in the same area the mover's slot 0xF8 places it, the spot depending on the target's kind (a creature, a placeable (type 10) and one more kind are special-cased, not read). (checked up to the branches)
+
+### CommandJumpToLocation (581)
+- **Handler:** 0x00670010 (not shared). Pops the location (structure 1).
+- **Described in:** `dev/LOAD_EVENTS.md` and `dev/ANIMATION.md` (a jump to within 0.01 m of the controlled creature).
+- **Does:** builds type 10: vector 0 = position (+0..+8), vector 1 = orientation (+0x10..+0x18), flag 0 = 1 (meaning not followed; the sub-action does not appear to read it), object 0 = the location's area id (+0x20). Not static. The popped location is freed. **Start** (0x00742770): sub-action 33 (0x007A4100). (checked)
+- **Edge cases:** the sub-action looks the area up by id (0x005D5960) and ends with -3 if the mover is missing or dead, or the area does not exist; a location with no area (id -1) therefore always fails. The position is not checked against the walk grid in the part read. (checked up to the first branches)
+
+### CommandUseAbility (582)
+- **Handler:** 0x006701B0 (not shared). Pops, always all five and in this order: nAbilityId, oTarget (default -1), vTarget (3 floats), fConjureTime (default -1.0, constant 0x00AE2E00) and sAbilitySourceItemTag; no count test.
+- **Described in:** `dev/ABILITIES.md` ("Queuing them: the UseAbility step", 0x00743F50).
+- **Does:** builds type 25: int 0 = ability, object 0 = target, vector 0 = vTarget, float 0 = conjure time, **object 1 = -1** (the item; the start finds it by the string), string 0 = the item tag. Not static. (checked)
+- **Edge cases:** the construction checks nothing: an unknown ability id, a target of the wrong type or a negative conjure time is accepted, and the start (0x00743F50) then adds no sub-action, so the command ends with success without casting (ABILITIES.md; the rule from commands.md). Both oTarget and vTarget are kept in the record; which one is used is for the step (ABILITIES.md: a ground target takes the point). (checked for the constructor)
+
+### CommandUseObject (586)
+- **Handler:** 0x0066F770 (not shared). Pops oTarget and nAction.
+- **Described in:** `dev/PLACEABLES.md` ("From a script. `CommandUseObject` builds the same command and checks nothing").
+- **Does:** builds type 31 (UseObject): object 0 = the target, int 0 = the action; not static. (checked)
+- **Edge cases:** nAction is not range-checked (script.ldf: PLACEABLE_ACTION_*; the start handler 0x00745920 passes it on). **Start:** it needs a creature to run it and the target to exist; it then builds a sub-action block with object 0 = the target, flags 1 and 2 set and its float 0 and 1 zero (the approach and the facing, then the use, as script.ldf lists: not followed past the first lines). Without a creature or a target it returns early, so the command succeeds with nothing done (inferred from the early returns). (checked for the constructor)
+
+## Not read
+- The end handlers: 0x00747360 (Deathblow), 0x00746B30 (Attack), 0x00746BA0 (UseAbility), the UseObject and Wait ends (shared end 0x00746900 only).
+- The remaining half of `CommandDeathBlow`'s start (0x00745E10 past 0x00746180) and the UseObject start past the first sub-action block.
+- What `QueueCommand` does with the event 0x5E and with 0x0071DEE0; any de-duplication of queued commands.
+- 0x007A1AE0 (the wait's counter), and the kind-by-kind spots of sub-action 32.

@@ -248,3 +248,79 @@ Common facts used below [C]:
 - `CreatureProperties::GetCurrent` / slot 7 with an unknown property id.
 - The physics controller's class and its slot 0x2C; the {0, 0xB} variable key's form.
 - GetItemVisualEffectsIDs (781), outside this list.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/effect_access.md` apply (an effect on the stack is a copy; `CGameEffect` is 0x7C bytes; failed pop -639, failed push -638). One more, checked: **"OBJECT_SELF resolves to a game object" is `CClientExoApp::GetGameObjectById` 0x005D5840** (a lookup in the table at `app+0xCC`; it answers null for an unknown id); the constructors below set the creator only then, and otherwise leave the constructor's -1.
+
+### Engine_ApplyEffectOnObject (597)
+- **Handler:** 0x0065CA20 (not shared). Pops nDurationType, the effect (structure 3), oTarget, fDuration, oCreator and, only when paramCount >= 6, nAbilityId (else 0).
+- **Described in:** `dev/COMBAT.md` ("`Engine_ApplyEffectOnObject` pops ..."; the death effect and slot 0x168/0x16C paragraph) and `dev/script_commands/effect_access.md` (`CGameEffect::Prepare`).
+- **Does:** `Prepare(effect, durationType, duration, creator, ability)`, then hands the effect to the target's holder at `target+0x70` (0x007A1A20) and always returns 0. For a creature-type-7 effect it first clears an immortal creature (COMBAT.md). (checked)
+- **Edge cases:** **an object of any other kind is refused silently.** The target is found with 0x005D5BE0 and must have the type byte (+0x14) 4 (area), 6 (creature), 10 (placeable) or 12 (area of effect); items, triggers, stores, the module and a missing object get the effect deleted, nothing applied, and the script goes on with 0. A null effect copy returns 0 at once. The check is the only one: the duration type is normalised by `Prepare` (not here), and a dead target's acceptance is left to the apply path (`Effects_HandleApplyEffect` in the scripts). (checked)
+
+### Effect (19)
+- **Handler:** 0x0065C460 (not shared). Pops nType.
+- **Described in:** `dev/script_commands/effect_access.md` (the `CGameEffect` constructor, 0x00A652A0, and its id counter); no note describes the command itself.
+- **Does:** allocates 0x7C bytes, constructs `CGameEffect(nType)`, sets the creator to OBJECT_SELF when that is a live game object (0x00A58190 lookup, then 0x0079F410, the area-of-effect redirect), pushes it (copied) and deletes the local. (checked)
+- **Edge cases:** no check of nType: `Effect(0)` (EFFECT_TYPE_INVALID, the default) is a type-0 effect that has **no id** (the counter is read only for a non-zero type) and reads as invalid in `IsEffectValid`; any number, native or script type, is accepted. Duration type 0, priority and the rest are the constructor's. If the allocation failed the constructor's `this` is null and the code goes on to push it (not checked there). (checked)
+
+### EffectAreaOfEffect (634)
+- **Handler:** 0x00662610 (not shared). Pops nId, the resource rScript and, only when paramCount > 2, nAoEVfx (default 0).
+- **Described in:** `dev/TURN_BASED.md` (the gas trap uses it) and `dev/NCS.md` (which commands strip a script name's extension: this one was listed as not read).
+- **Does:** builds `CGameEffect(5)` (the area-of-effect type): **script int 0 = nId**, **script string 0 = rScript with the first `.ncs` removed** (a first-occurrence `replace` of the 4-character constant 0x00B00A38 `.ncs` by the empty string 0x00ADEF14, `std::wstring` 0x004C2FC0; which constant is the pattern and which the replacement is inferred from the order they are built in), creator = OBJECT_SELF set with the plain store 0x00A65250 (no area-of-effect redirect, unlike `Prepare`) when OBJECT_SELF is a game object, and **engine int 2 (EFFECT_INTEGER_VFX, the +0x54 arrays) = nAoEVfx** when it is above 0. Pushes it. (checked apart from the one inference)
+- **Edge cases:** the duration, and the area it makes, come from how it is applied (`Engine_ApplyEffectOnObject` or `...AtLocation` with `Prepare`, then the effect handler for type 5). Any `.ncs` inside the name goes, not only a trailing one; `.nss` or other extensions stay, and no stem cutting at the first `.` happens (unlike `HandleEvent`). The nId is not validated against `persistent.gda`. The script name is the AoE's own script (the AoE heartbeat, `dev/TURN_BASED.md`). (checked)
+
+### RemoveEffect (598)
+- **Handler:** 0x00674590 (not shared). Pops oTarget, then the effect (structure 3). Calls 0x005D5840 on the target, the object's slot 0x3C (its effects holder), `CGameEffect` matcher builder `ForScript_RemoveEffect` 0x006741E0, the holder's remover 0x007A0C90.
+- **Described in:** `dev/COMBAT.md` ("REMOVE_EFFECT is sent on `RemoveEffect` and on expiry"; the 0x007A0C50 holder walk).
+- **Does:** builds a matcher on the effect's **id (+0x20)** with function 0x006517B0 and removes what it matches from the target's holder, which sends EVENT_TYPE_REMOVE_EFFECT (34) per COMBAT.md; so it removes the applied effect, and any copies, that share the id with the one the script holds. Returns 0 (void). (checked up to the matcher; the matching itself inferred)
+- **Edge cases:** **an invalid target faults.** The handler calls slot 0x3C on 0x005D5840's answer with no null test (0x00674612), so an unknown id is an access violation at address 0 in the script thread, not a quiet no-op. A holder that is null (the object keeps none) and a null effect do nothing. **An effect whose own duration type (+0x28) is 5 or 6 is never removed** (checked: both skip to the free), so effects of those duration types (6 is one `Prepare` lets through; 5 it turns into 3 on apply, so only a copy that was never applied can hold it) cannot be removed by this command. A type-0 effect (no id) matches id 0 (inferred). The popped copy is freed. (checked)
+
+### GetEffectType (604)
+- **Handler:** 0x0065C270, shared with 605, 607, 608, 612, 620 (and the others in `effect_access.md`); the case for 604 is the first jump-table entry (`mov eax,[ecx+0x24]`, 0x0065C2B7).
+- **Described in:** `dev/COMBAT.md` (`Effects_HandleApplyEffect` switches on it) and `dev/PROBE.md` (checked in play against the library's accessor).
+- **Does:** pops the effect and pushes its type word (+0x24) as an int. (checked)
+- **Edge cases:** **a null effect gives -1** (default `eax = -1`), not 0, so a script that tests `GetEffectType(...) == EFFECT_TYPE_INVALID` (0) is not true of an empty value. The handler frees the copy. A type-0 effect from `Effect()` gives 0. (checked)
+
+### GetEffectCreator (612)
+- **Handler:** 0x0065C270 (shared), case at 0x0065C2D9 (`mov eax,[ecx+0x40]`); the push is `StackPushObject` 0x00A2D980, not the int one, since command number 0x264 is tested at 0x0065C2E2.
+- **Described in:** `dev/script_commands/effect_access.md` (the creator field and `Prepare`'s area-of-effect redirect).
+- **Does:** pushes the creator id (+0x40). The value is -1 for an effect that was never applied with a creator, else what `Prepare` stored: the creator, or for an area-of-effect creator its own creator (+0x4AC). (checked)
+- **Edge cases:** null effect: -1, which is OBJECT_INVALID as an object. The id is not checked: a creator that has since been destroyed is returned all the same, so a script must test it. (checked)
+
+### GetEffectDurationType (608)
+- **Handler:** 0x0065C270 (shared), case at 0x0065C2BC (`mov eax,[ecx+0x28]`).
+- **Described in:** `dev/script_commands/effect_access.md` (`Prepare`: duration type 1-4 or 6 kept, anything else 3 PERMANENT).
+- **Does:** pushes the duration type (+0x28) as an int. (checked)
+- **Edge cases:** null effect: -1. An effect not yet applied has whatever the constructor left (not read; probably 0), and after an application it is `Prepare`'s normalised value, so a script reads the normalised type, not the one it passed. (checked for the read; the constructor's value not read)
+
+### GetEffectAbilityID (620)
+- **Handler:** 0x0065C270 (shared), case at 0x0065C2C6 (`mov eax,[ecx+0x44]`).
+- **Described in:** `dev/script_commands/effect_access.md` (`SetEffectAbilityID`; `Prepare` writes the ability at +0x44).
+- **Does:** pushes the ability id (+0x44) as an int. (checked)
+- **Edge cases:** null effect: -1. The constructor leaves 0, and applying overwrites the word with the ability passed to the apply command (default 0), so an effect read after application shows the apply's value. (checked)
+
+### GetCurrentEffect (681)
+- **Handler:** 0x006604D0 (not shared). Looks up OBJECT_SELF with 0x005D5840 and reads the event being run: a game object with a CCObject view (slot 0x18) -> `+0x2A8`; type byte 4 (area) -> through slot 8, `+0x3C4`; type 3 (module) -> through slot 0x1C, `+0x390`. If that event's type (+0x20) is 33 or 34 it takes its effect 0 (0x0069BDB0).
+- **Described in:** `dev/COMBAT.md` ("`GetCurrentEffect` (681) and `SetIsCurrentEffectValid` (682) use the event the calling object is running"; that note gives the area's and the module's offsets the other way round: the code has area +0x3C4, module +0x390, as `dev/script_commands/events.md` has them).
+- **Does:** pushes a copy of the effect the APPLY_EFFECT or REMOVE_EFFECT event carries. (checked)
+- **Edge cases:** no OBJECT_SELF object, no event running, or an event of any other type: **a null effect is pushed** (the `edi = 0` default, pushed through structure 3; a null copies to null, per events.md), which `GetEffectType` reads as -1 and `IsEffectValid` as 0. This answers the open question in `effect_access.md`'s "Not read". It is a copy, so changing it does not touch the event's own effect. (checked; that the push of a null stays null is inferred)
+
+### SetIsCurrentEffectValid (682)
+- **Handler:** 0x00660580 (not shared). Pops nValid (the handler's own default is 0; scripts pass TRUE by default), finds the event the same way as `GetCurrentEffect`, takes the **effect inside the event itself** (0x0069BDB0, not a copy) and calls 0x00424030 with `(nValid == 0)`.
+- **Described in:** `dev/COMBAT.md` ("`SetIsCurrentEffectValid(nValid)` writes `!nValid` into the effect's invalid word, +0x48").
+- **Does:** writes `+0x48 = (nValid == 0)` on the live effect: any non-zero nValid makes it valid (0), 0 makes it invalid (1). `IsEffectValid` and the apply path read it afterwards. Returns 0. (checked)
+- **Edge cases:** it changes the effect in the event in flight, unlike every `SetEffect*` command, which work on copies; the result outlives the script. No OBJECT_SELF, no event, an event whose type is not 33 or 34, or no effect: nothing happens. Only the value 0 invalidates. (checked)
+
+### EffectDamage (833)
+- **Handler:** 0x00662870 (not shared). Pops fValue, nDamageType, nFlags and nImpactVFX, always all four (no count test; each starts at 0).
+- **Described in:** `dev/COMBAT.md` (`Combat_HandleAttackImpact` applies the damage; "`EffectDamage`, 0x00662950-0x00662974" for the impact VFX in script int 2) and the `effect_damage_h` paragraph.
+- **Does:** builds `CGameEffect(0x3F5)` (1013, EFFECT_TYPE_DAMAGE, not native): **float 0 = fValue, int 0 = nDamageType, int 1 = nFlags, int 2 = nImpactVFX**, creator = OBJECT_SELF when it is a game object, and pushes it. (checked)
+- **Edge cases:** no validation of any argument: a negative damage is stored as given (the script handler, not the engine, decides what it does), the damage type is not checked against the damage table, and the duration type stays 0 (the apply command sets it). The engine VFX int (EFFECT_INTEGER_VFX) stays unset, so the impact VFX is played by the scripts, not the engine (COMBAT.md). (checked)
+
+## Not read
+- The matching in 0x007A0C90 / 0x00670A80 beyond the matcher built (so exactly which effects `RemoveEffect` removes when copies differ in other fields), and what the holder does to the effect afterwards.
+- The `CGameEffect` constructor's values for the duration type and priority (only the id and type words were read).
+- Whether a null effect on the stack survives `StackPushEngineStructure` as null (assumed from `events.md`).
+- `CGameEffect::Prepare`'s handling here beyond `effect_access.md`'s account.

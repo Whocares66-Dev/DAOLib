@@ -126,4 +126,6 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, b
 - **Where the module passes `R"preev_item_acquired.nss"`:** `_Main_Plot/sp_module_item_acq.nss` picks `RESOURCE_SCRIPT_<PREFIX>_ITEM_ACQUIRED` by the item tag's prefix (line 506 on) and calls `HandleEvent(evEvent, rScript)` (line 528); it is included by `approval_h`, `global_objects_h` and `genpt_morrigan_main` (grepped).
 - **For a port:** strip at the first '.' in HandleEvent/SetEventScript (and the conversation/slideshow commands), then look up `<stem>.ncs`; do not derive the type from the extension.
 
-Not read: how `Resources::Find` treats a name with two extensions (`x.nss.ncs`), beyond finding nothing; the case-sensitivity of resource names; `HandleEvent_String` (133) and `EffectAreaOfEffect`'s use of its script name; the loaders' own dot searches at 0x005DE1C1, 0x006033A4, 0x0068F53B, 0x006A153D/0x006A15DC, 0x00747BD7.
+- **`EffectAreaOfEffect` removes the first ".ncs" from its script name** (`dev/script_commands/effect_access.md`; read 2026-10-18 by lib-agent-2).
+
+Not read: how `Resources::Find` treats a name with two extensions (`x.nss.ncs`), beyond finding nothing; the case-sensitivity of resource names; `HandleEvent_String` (133); the loaders' own dot searches at 0x005DE1C1, 0x006033A4, 0x0068F53B, 0x006A153D/0x006A15DC, 0x00747BD7.

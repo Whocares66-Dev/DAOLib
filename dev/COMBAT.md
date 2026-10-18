@@ -167,7 +167,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" 
 
 ### The current effect
 
-- `GetCurrentEffect` (681, `0x006604d0`) and `SetIsCurrentEffectValid` (682, `0x00660580`) use the event the calling object is running: an object's +0x2A8 through its slot 0x18, an area's +0x390, or the module's +0x3C4. If that event is type 33 or 34, its effect 0 is the current effect. Otherwise `GetCurrentEffect` returns no effect and `SetIsCurrentEffectValid` does nothing. Read.
+- `GetCurrentEffect` (681, `0x006604d0`) and `SetIsCurrentEffectValid` (682, `0x00660580`) use the event the calling object is running: an object's +0x2A8 through its slot 0x18, an area's +0x3C4, or the module's +0x390 (`GetCurrentEffect`, `0x006604D0`, tests the type byte +0x14: an area, type 4, reads +0x3C4 at `0x0066051F`, the module, type 3, +0x390 at `0x00660538`; corrected 2026-10-18 by lib-agent-2, the two were swapped). If that event is type 33 or 34, its effect 0 is the current effect. Otherwise `GetCurrentEffect` returns no effect and `SetIsCurrentEffectValid` does nothing. Read.
 - `SetIsCurrentEffectValid(nValid)` writes `!nValid` into the effect's invalid word, +0x48 (`0x00424030`). Read.
 
 ### Removing an effect: `EVENT_TYPE_REMOVE_EFFECT` (34)
