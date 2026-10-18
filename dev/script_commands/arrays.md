@@ -105,3 +105,17 @@ Shared facts, all checked unless marked:
 - `GameModeGUI`+0x84 (assumed: the leave-mode flag) and `GUIWorldMap`'s byte +0xBC (assumed: open).
 - What the area's +0x180 is (assumed: its tag); whether the explored-map bitmap is saved with the area.
 - The item template loader 0x007572D0 in full: which `.uti` fields fill +0x680/+0x69C and +0x4BC.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/NCS.md` ("A script array read or written past its end", the type tags 0x40 to 0x44 and 0x50 + n) and `src/dao/core/ScriptArray.h`.
+
+### GetArraySize (708)
+- **Handler:** 0x006608F0 (not shared). The untyped pop 0x00A2F720 (an `any`, as {type tag, value}), the array's size method 0x00A2DB80 (name inferred from its use), `StackPushInteger`, the free 0x00A2F7C0.
+- **Described in:** `dev/NCS.md` (the array tags and their cells); not as a command.
+- **Does:** pops the argument as an `any`. If the tag is one of the array tags, 0x40 to 0x44 (int, float, string, object, resource arrays) or 0x50 to 0x59 (engine-structure arrays), and the array pointer is non-null, it pushes the array's size (0x006609AF to 0x006609BC); anything else pushes 0. (checked)
+- **State:** none; the popped cell is released.
+- **Edge cases:** a non-array value (an int, a string, an object) pushes **0** and does not fail the script (checked). A null array pointer also pushes 0. A tag in 0x45 to 0x4F is not in the list, so it gives 0 as well (checked: the compare chain skips them). The count is the array's element count, so an array that was read past its end by index and not grown still reports its real size (`NCS.md`'s note on reads past the end). A failed pop is -639, a failed push -638.
+
+## Not read
+- 0x00A2DB80 inside (taken as the size from its use here and the command's purpose).

@@ -35,3 +35,29 @@ Shared facts (checked unless marked):
 - The map screen's side: how the GUI reads `MapNoteList` and draws a pin's icon and `MapNote` text.
 - Whether the shown-pins list is rebuilt when the player moves to another area (beyond the two callers of 0x007C4370 above).
 - `GetPlayerMapPatch` (651), `GetMapPinState` (653) and `GetPlayerMapPin` (654) beyond the one-line read of 653 above.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Shared facts (the map pin is a `CCWayPoint`; the null-slot rule of `ExecuteCommand`; the shown-pins list): top of `waypatches.md`.
+
+### GetPlayerMapPatch (651)
+- **Handler:** none. No row in `dev/script_commands.csv` and no registration in `InitializeCommands`: `dev/SCRIPT_COMMANDS.md` lists it among the 3 "declared, not registered in this exe". (checked: 652, 653 and 660 are registered at 0x00678DD0, 0x00678DE6 and 0x00678DFC, 22 bytes apart, which is the size of one registration, so none lies between them; 651 and 654 are in neither table)
+- **Described in:** `dev/SCRIPT_COMMANDS.md` (the count only), `waypatches.md` (the shared fact on null slots).
+- **Does:** nothing. Slot 651 stays zero from the table's clearing, so `ExecuteCommand` (0x0064DD60) returns **-642** before popping anything (the rule in `waypatches.md`).
+- **Edge cases:** any call aborts the calling script, whatever the arguments; nothing is pushed. script.ldf's "Nth object of a patch tag a player has" has no engine behind it. Like 649 and 650 there is no map-patch object behind it either. No script in the toolset calls it (inferred from `waypatches.md`'s grep for its siblings).
+
+### GetMapPinState (653)
+- **Handler:** 0x0065EE00 (not shared). `CClientExoApp::GetWayPointById` 0x005D5C60, `StackPushInteger`.
+- **Described in:** `waypatches.md` (the "State" line of `SetMapPinState`: "`GetMapPinState` reads +0x444 back, -1 for a non-waypoint") and `dev/SCRIPT_COMMANDS.md` (the field list, `CCWayPoint` +0x444).
+- **Does:** pops oMapPin and pushes the int at the waypoint's +0x444 (`MapNoteEnabled`), unchanged. (checked)
+- **State:** read only.
+- **Edge cases:** an invalid id, or an object that is not a waypoint, pushes **-1** (the result starts at -1, checked) and the script goes on. A waypoint answers whatever its +0x444 holds: 0 or 1 after a `SetMapPinState`, else the template's `MapNoteEnabled`; it is **not** limited by `HasMapNote` (+0x440), so a waypoint with no map note still answers its +0x444. script.ldf says TRUE or FALSE; -1 is outside that. A failed pop is -639, a failed push -638.
+
+### GetPlayerMapPin (654)
+- **Handler:** none, as 651: not in the CSV, not registered (`dev/SCRIPT_COMMANDS.md`). 653 is registered at 0x00678DE6 and 660 at 0x00678DFC, 22 bytes on, the size of one registration, so nothing was registered for 654 between them. (checked)
+- **Described in:** `dev/SCRIPT_COMMANDS.md` (the count only).
+- **Does:** nothing; `ExecuteCommand` returns **-642** for the empty slot.
+- **Edge cases:** any call aborts the script before a pop; nothing is pushed. No game script calls it (the same grep). script.ldf's "Nth object of a pin tag for a player" is not implemented.
+
+## Not read
+- Nothing further in the handlers; `GetPlayerMapPatch` and `GetPlayerMapPin` were checked only by absence from the registration table.

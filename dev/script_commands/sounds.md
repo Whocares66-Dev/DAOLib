@@ -79,3 +79,17 @@ Shared facts:
 - When the sound object's slot 0x160 tick runs, and the manager's state +0x5C (the value 9).
 - GUI scene 8's identity in PlaySoundSet's stand-in substitution, creature+0x969's meaning, 0x005C5E80 (the roll lost) and 0x0069FE50 past its call.
 - The area's +0x694 vector's full contents (it holds sound objects and triggers at least) and the reverb lookup 0x0067DCB0 in detail.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. The soundset tables (`sst_<name>`, `sse_<name>`) and the manager: `sounds.md` ("PlaySoundSet").
+
+### SetSoundSet (182)
+- **Handler:** 0x00664350 (not shared). `GetCreatureById` 0x005D58C0, then `ScriptBackend::ForScript_SetSoundSet` 0x006BD0E0 on the creature, called with the name and the flag 1.
+- **Described in:** `dev/CHARGEN.md` (the chargen screen calls it with the chosen sound set, the hero alone); `dev/script_backends.csv`.
+- **Does:** pops oTarget, then sSoundSet. For a creature: if the name equals the one at creature +0x96C (0x004C0DE0) it returns at once. Otherwise it releases the old set, stores the name at +0x96C and, because the flag is 1, also at +0x988; an empty name stops there. A non-empty name is handed to the sound manager's loader 0x005B80B0 (the `sse_` table `StrID` rows by name; `sounds.md`), and a result of 1 sets the creature's byte +0x969. (checked up to there; the rest of the loader not read)
+- **State:** creature +0x96C (the set `PlaySoundSet` reads), +0x988 and +0x969.
+- **Edge cases:** an invalid id or a non-creature does nothing; returns 0. The name is not checked against the `playersoundsets` table, so an unknown name is stored and `PlaySoundSet` then finds no rows (inferred from `sounds.md`: no table, nothing played). Re-setting the same name is a no-op. Any creature, not only the hero. A failed pop is -639.
+
+## Not read
+- The rest of 0x006BD0E0 after the table's first row lookup (0x006BD282 on), and what +0x969 means.

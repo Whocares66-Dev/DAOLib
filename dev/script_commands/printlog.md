@@ -98,3 +98,17 @@ Shared facts (checked):
 - What `HandleMessage_TakeScreenshotMessage` (0x00642050) does with the message: the capture, the folder and file name, hiding the interface.
 - Whether the world timer's total (GetTime) is saved, restored or reset on load or on an area change.
 - The world object's vtable slot +0x18 that LogTrace calls, beyond its use by GetTag.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. `printlog.md` says most of its group is compiled out of the shipped game; `Probe` is another of those.
+
+### Probe (680)
+- **Handler:** 0x0064E8B0 (not shared). `StackPopString` 0x00A2F4C0, `StackPopFloat` 0x00A2F410.
+- **Described in:** not in master's notes under this name (`dev/CRASHES.md` and `dev/PROBE.md` use "probe" for DAOLib's own plugin, which is unrelated).
+- **Does:** pops sOutput, then fValue, destroys the string, and returns 0. Nothing is written, logged or recorded. (checked: no call between the pops and the epilogue)
+- **State:** none.
+- **Edge cases:** the float is popped **always**, whatever paramCount says, so a call passing one argument still pops a second cell: the compiler fills the default 0 (script.ldf's `fValue = 0`), so a compiled script never misses it. A failed pop returns -639. Like the other `printlog` commands, a port may make it a no-op if it keeps the pops.
+
+## Not read
+- Whether any shipped script calls it (not grepped); it is declared in script.ldf's printlog group.

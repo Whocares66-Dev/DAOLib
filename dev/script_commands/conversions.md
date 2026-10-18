@@ -94,3 +94,17 @@ Shared facts (checked):
 ## Not read
 - The CRT's exact rounding for `%f` (0.5 cases) and its Unicode digit handling in wcstol/wcstod; the behaviour above is MSVC 8's documented behaviour, not traced.
 - Which script types the compiler lets reach ToString's `any` (only the handler's switch was read).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play.
+
+### ResourceToString (732)
+- **Handler:** 0x00655E90 (not shared). Pop 0x00A2F5F0 (a resource), `std::wstring` assign 0x004C2AB0, `StackPushString` 0x00A2D730.
+- **Described in:** `dev/TURN_BASED.md` ("`ResourceToString` keeps the extension"): it copies the resource's text unchanged, extension included.
+- **Does:** pops the resource with the special pop 0x00A2F5F0, not the string pop: it reads the VM stack's top cell, requires its type tag to be 0x60 (resource), takes the cell's `wstring` and copies it (checked, 0x00A2F617 to 0x00A2F62B), drops the cell, and pushes the copy as a string.
+- **State:** none.
+- **Edge cases:** an empty stack, or a top cell that is not a resource (tag other than 0x60, for example a string), makes the pop answer 0 and the handler returns **-639**, so the script fails (checked). Compiled scripts type their arguments, so a normal script only meets this if its bytecode is hand-made. The text is not changed in any way (no extension strip, no lowercasing). A failed push returns -638.
+
+## Not read
+- How the compiler makes a resource constant (the 0x60 cell), beyond `TURN_BASED.md`.

@@ -34,3 +34,24 @@ Shared facts: handlers are `__thiscall (commandId, paramCount)`, `ret 8`. A fail
 - The module-name bypass in 0x005DD310: what sets `g_eclipseGame`+0xF0/+0x104, and the `+0x1E8` branch, which calls app 0x005DCD00 with `app+0x58`.
 - The music object's +0x94 byte; the credits name given to GUI scene 62; what GUI scene 0's +0xC4 float holds.
 - `SetGameMode` (530) and `ToggleGamePause` (188) are in this group in script.ldf but were not asked for. 530's force-0 request is in `dev/TURN_BASED.md`.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Both are named at the end of `game_modes.md` as "not asked for".
+
+### SetGameMode (530)
+- **Handler:** 0x0065E4E0 (not shared). `GameModeController::SetGameMode` 0x006414A0 on the object at `[app+0x114]`, called as `(mode, 0, 0)`.
+- **Described in:** `dev/TURN_BASED.md` ("`SetGameMode` only files a request": the base slot and the stack, the update that takes a request, "a request for the current mode with force 0 is dropped", the switch and event 60) and `dev/COMBAT.md` (the death screen).
+- **Does:** pops one int and calls the controller with force 0 and data 0. Nothing switches yet: the request is filed and taken on the controller's next update (`TURN_BASED.md`). Returns 0 at once.
+- **State:** the controller's base slot (+0x8C) or stack (+0x9C), per `TURN_BASED.md`.
+- **Edge cases:** mode -1 (GM_INVALID) is filed as nothing (0x006414CF jumps over the work, checked). A mode outside 0 to 12 indexes the controller's mode table at +0x58 with no bound (0x006414D8, checked), so it reads past the array (inferred: undefined). **GM_LOADING (9) with no data** reads through the null data pointer (0x006414F3, checked; the fault itself inferred), so a script should not ask for it. The controller pointer `[app+0x114]` is not tested for null. A failed pop is -639. Setting the mode already current is dropped by the update (`TURN_BASED.md`).
+
+### ToggleGamePause (188)
+- **Handler:** 0x0066A7A0 (not shared). `CClientExoApp::SetPaused` 0x005D6740 `(bPause, 0)`.
+- **Described in:** `dev/TURN_BASED.md` ("Auto-pause is a script's doing": the pause at the first fight came from this command), `dev/SCRIPT_COMMANDS.md`.
+- **Does:** pops bPause; non-zero calls `SetPaused(true, false)`, zero calls `SetPaused(false, false)`. (checked) Returns 0.
+- **State:** the app's pause state (through `SetPaused`).
+- **Edge cases:** **despite the name it does not toggle** when the argument is there: it sets. Only when the pop **fails** (an empty stack, which a compiled call never gives, since the default is filled) does it toggle: it reads the byte at `app+0xD8+0xC` (0x00838210) and calls `SetPaused(!that, false)` (checked at 0x0066A7B4 to 0x0066A7D4) and returns 0 instead of -639. Any non-zero int pauses. The second `SetPaused` argument is 0 always.
+
+## Not read
+- 0x006414A0 beyond its first lines, `SetPaused`'s own effects (`TURN_BASED.md`), and what `app+0xD8` holds.

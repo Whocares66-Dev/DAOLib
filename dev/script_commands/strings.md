@@ -53,3 +53,17 @@ Shared facts (checked):
 ## Not read
 - The name of the `ClientOptions` +0x674 option that decorates talk strings.
 - The order in which `CTlkTable::GetString` searches several tables (see `src/dao/Tlk.h`, master `dev/` notes).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Strings are `std::wstring` (UTF-16); see the shared facts of `strings.md`.
+
+### GetStringLength (96)
+- **Handler:** 0x00657CC0 (not shared). `StackPopString` 0x00A2F4C0, `StackPushInteger` 0x00A2D650.
+- **Described in:** `dev/LIBRARY.md` (528 calls of it made from C++ inside script commands in play, all agreeing, 2026-09-30) and `dev/PROBE.md`; not as a handler.
+- **Does:** pops sString and pushes the string object's size field (+0x14 of the `std::wstring`, read at 0x00657D2B) as an int, in **UTF-16 code units**. (checked)
+- **State:** none.
+- **Edge cases:** "" gives 0. There is no cap, no character count and no check of surrogate pairs: a character outside the Basic Multilingual Plane counts 2 (inferred from the size being the unit count). A failed pop returns -639, a failed push -638.
+
+## Not read
+- Nothing else; the handler is 14 instructions around the two stack calls.

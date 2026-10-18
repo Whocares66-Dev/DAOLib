@@ -21,3 +21,38 @@ The perceived set is creature+0xC18 (a `std::set` of ids), kept by the perceptio
 ## Not read
 - `0x0064BB40` itself (the reputation manager's hostility test); taken from `dev/COMBAT.md`.
 - Whether a creature's +0xC18 set is cleared when it leaves the active party or dies (`ClearPerceptionList` 446 is another group's).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. A creature's perceived set is the `std::set` of ids at creature +0xC18, with a pending list at +0xC28 (`dev/COMBAT.md`, "Perception"). `GetCreatureById` is 0x005D58C0, `GetObjectById` 0x005D5BE0.
+
+### UT_GetNearestObjectByTag (360)
+- **Handler:** 0x0066DB20 (not shared; the engine's name is `COMMAND_GETSINGLENEARESTOBJECTBYTAG`). `GetObjectById`, `GetArea` 0x00695180, the area search `ScriptBackend::GetNearestObjects` 0x006849C0, `StackPushObject` 0x00A2D980.
+- **Described in:** `dev/PARTY.md` ("A search by tag finds inactive objects").
+- **Does:** pops oObject, sTag, nIncludeSelf (always); takes oObject's area and searches it for objects whose tag matches, with the type mask -1 (any), the group -1 (any), a result count of 1 and nIncludeSelf as the last argument (the argument meanings inferred from the pushes at 0x0066DBEE to 0x0066DC08); pushes the first of the result vector (the nearest to oObject) or OBJECT_INVALID if the result is empty. (checked apart from the argument meanings)
+- **State:** none written; the result vector is freed.
+- **Edge cases:** an invalid oObject, or one with no area, pushes **OBJECT_INVALID** (`edi` starts at -1) and the script goes on. A non-empty tag finds **inactive** objects too (`PARTY.md`); an empty tag does not. Only oObject's own area is searched. A failed pop is -639, a failed push -638.
+
+### TriggerPerception (166)
+- **Handler:** 0x0065A7B0 (not shared). `GetCreatureById`, a flag read 0x006A2CE0, the area's lookup 0x0067B430, then `CCCreature` 0x006B32A0.
+- **Described in:** `dev/COMBAT.md` ("Perception"), which describes the update that fills the set; this command is not named there.
+- **Does:** pops oPerceivingCreature, then oPerceivedCreature (an id, not looked up here). The perceiver must be a creature with an area, and the area must answer 0x0067B430(area, creature +0x150) non-null (the creature's room or tile; inferred). Then 0x006B32A0(perceived id, a flag, area, that result, &position) runs: it returns 0 for the creature itself, for one already in the set (0x008704D0), or when 0x006A2BB0 refuses; otherwise the perceived must exist as a creature (`GetCreatureById`), it is put in the set (0x006B3240) and the answer is **1**. The script gets that 1 or 0. (checked; 0x006A2BB0 and 0x006B3240 not read)
+- **State:** the perceiver's +0xC18 set (and whatever 0x006B3240 raises; not read).
+- **Edge cases:** an invalid perceiver or a non-creature gives 0 (the push is of `ebx`, zero). A perceived id that is not a creature gives 0. It does not run the line-of-sight and range test of the normal update (inferred from the call path: the test, if any, is 0x006A2BB0's). Whether it raises the APPEAR event was not read.
+
+### IsPerceiving (170)
+- **Handler:** 0x0066E040, shared with `IsInAOE` (336); the branch on command 0xAA (170) at 0x0066E08E.
+- **Described in:** `dev/COMBAT.md` ("Perception": the set at +0xC18, `IsPerceiving`) and `aoe.md` (the shared handler).
+- **Does:** pops oidA, then oidB; `GetCreatureById(oidA)`; for 170 it tests whether oidB is in the creature's set (0x008704D0 on +0xC18) and pushes that byte. (checked)
+- **State:** read only.
+- **Edge cases:** oidA not a creature, or invalid, pushes **0**. oidB is not looked up: any id not in the set, including an invalid or dead object's, is simply FALSE. It is one way: A's set holds B, not the reverse. It tells what the last perception update left, not what A could see now (`COMBAT.md`). A failed pop is -639.
+
+### ClearPerceptionList (446)
+- **Handler:** 0x0065A870 (not shared). `GetCreatureById`, then `CCCreature::ForScript_ClearPerceptionList` 0x006B8D20.
+- **Described in:** `dev/COMBAT.md` ("Perception": the set and the pending list); the command itself is not named there.
+- **Does:** pops oPerceiver; if it is a creature, empties its perceived set (+0xC18, via 0x006318E0) and its pending-appear list (+0xC28, via 0x005198D0). (checked)
+- **State:** creature +0xC18 and +0xC28.
+- **Edge cases:** an invalid or non-creature id does nothing and returns 0. **No DISAPPEAR event is raised** for the creatures dropped (the function raises none; checked), so a script that listens for it does not hear these. The next perception update refills the set from the creatures in range. A failed pop is -639.
+
+## Not read
+- 0x006A2BB0 (the perception test TriggerPerception relies on), 0x006B3240 (what is added and raised), 0x0067B430's use of creature +0x150.

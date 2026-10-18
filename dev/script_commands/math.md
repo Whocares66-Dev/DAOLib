@@ -104,3 +104,52 @@ Shared facts (checked):
 - `CCArea::LineOfSight`'s hit record (flag +0x54 bit 4, id +0x5C) as filled by the physics scene's slot 4, and what base type 8 is (`placeable_types.gda`).
 - The other users of the shared RNG (0x00672006, 0x00A41380) and the holder object at `[0x00C2BDF8]` (built at 0x004C013D).
 - `cos` (28), `acos` (31), `atan` (33), `log` (34), `pow` (35), `GetDistanceBetween` (37): not in this group's list.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Shared facts of `math.md` hold: floats are rounded to 32 bits between steps; a failed pop is -639, a failed push -638; the CRT routines return NaN out of their domain (inferred from the CRT, not read).
+
+### RandomFloat (767)
+- **Handler:** 0x0064EB20 (not shared). `StackPushFloat`.
+- **Described in:** `dev/script_commands/math.md` (the last bullet of the shared facts: the LCG, state 0x00C349AC, times 1/32767), `dev/TURN_BASED.md` (a command that ran only in combat).
+- **Does:** `state = state * 0x343FD + 0x269EC3`; takes bits 16 to 30; pushes that integer times 1/32767 (double at 0x00AF7EB0). (checked)
+- **Edge cases:** no arguments, so no pop; range [0.0, 1.0] inclusive (0x7FFF / 32767 = 1.0). The state is a plain global, so every script shares one sequence and it is the same on every launch (initial value in `math.md`). Unlike `Random` (25), not seeded from entropy. Only a failed push can fail it.
+
+### cos (28)
+- **Handler:** 0x0064EC30 (not shared). The CRT routine 0x008E6020 (the cosine; name inferred, the family of `_CIsin` 0x008E8990).
+- **Described in:** not in master's notes beyond the command table; `sin` (29) in `math.md` is the model.
+- **Does:** pops a float and pushes cos(x) in **radians**, no degree conversion (checked: no multiply before the call), as script.ldf says.
+- **Edge cases:** no range check of its own; infinity or NaN gives NaN (inferred from the CRT). A failed pop returns -639.
+
+### acos (31)
+- **Handler:** 0x0064ED50 (not shared). The CRT routine 0x008E5ED0 (the arc cosine; name inferred).
+- **Described in:** `math.md`, `asin` section ("`acos` has no such multiply").
+- **Does:** pops x and pushes acos(x) in radians. No conversion (checked), unlike `asin` and `atan`, which multiply the argument by pi/180 first.
+- **Edge cases:** the domain is the true [-1, 1]; outside it the CRT's NaN (inferred). `acos` is the only inverse trig command that does what script.ldf says.
+
+### atan (33)
+- **Handler:** 0x0064EE20 (not shared). The CRT routine 0x008E9FD0 (the arc tangent; name inferred).
+- **Described in:** `math.md`'s `asin` section is the sibling; `atan` itself is not described.
+- **Does:** pops x, **multiplies it by pi/180** (k, double 0x00AF14C0, checked at 0x0064EE44), and pushes atan(x * k) in radians. So atan(1.0) is atan(0.0174533), about 0.0174524, not 0.7854.
+- **Edge cases:** like `asin`, script.ldf is wrong about the argument. No domain limit; a very large x gives about 1.5708 as for any arctangent.
+
+### log (34)
+- **Handler:** 0x0064EE90 (not shared). The CRT routine 0x008E33E0 (the natural log; name inferred).
+- **Described in:** not in master's notes beyond the command table.
+- **Does:** pops x. If x is greater than 0 it pushes ln(x); **otherwise it pushes 0.0** (the result starts at 0.0 and the call is skipped when `x <= 0`: `fcom` then `test ah, 0x41` at 0x0064EEBB to 0x0064EEC4, checked).
+- **Edge cases:** log(0) and log of a negative give **0.0**, not -inf or NaN. A NaN input also skips the call (an unordered compare sets the same status bits; inferred from the flag test). script.ldf does not say so.
+
+### pow (35)
+- **Handler:** 0x0064EF00 (not shared). The CRT routine 0x008E8C50 (pow; name inferred).
+- **Described in:** not in master's notes beyond the command table.
+- **Does:** pops fValue, then fExponent; pushes pow(fValue, fExponent), with one special case: **when fValue == 0 and fExponent < 0 it pushes 0.0** instead of infinity (0x0064EF3A to 0x0064EF5A: base compared to zero with `fucom`, exponent with `fcom`, checked).
+- **Edge cases:** pow(0, 0) and pow(0, positive) go to the CRT (1.0 and 0.0; inferred). A NaN base goes to the CRT. A negative base with a fractional exponent gives the CRT's NaN (inferred).
+
+### GetDistanceBetween (37)
+- **Handler:** 0x00655A50 (not shared; the engine's name is `COMMAND_GETDISTANCEBETWEENOBJECTS`). `GetGameObjectById` 0x005D5840 twice, `Vector::Magnitude` 0x00451990.
+- **Described in:** `dev/script_backends.csv` (the backend name) and `dev/SCRIPT_COMMANDS.md` (the name difference); no note says what it does.
+- **Does:** pops oObjectA and oObjectB; each must pass the `CCObject` cast (vtable slot +0x18, as in `GetPosition`); pushes the length of (B.position - A.position), positions at +0x120. **3-D, z included**, in metres. (checked; that the magnitude is the Euclidean length is inferred from its name)
+- **Edge cases:** either id invalid, or an object failing the cast, pushes **-1.0** (the result starts at -1.0, 0x00AE2E00, checked). No area test: two objects in different areas give the plain difference of their coordinates. The same object twice gives 0.0. Inactive objects still answer.
+
+## Not read
+- The CRT routines 0x008E6020, 0x008E5ED0, 0x008E9FD0, 0x008E33E0 and 0x008E8C50 inside (named by their use only). `Vector::Magnitude` was not read.

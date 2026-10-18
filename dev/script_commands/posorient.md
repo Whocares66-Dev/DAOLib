@@ -55,3 +55,30 @@ Shared facts (checked):
 - 0x00A69C90 (called from the state setter on +0x70) and the owner's +0xC0 flag.
 - `CCObject::SetOrientation`'s slot +0x80 (whether a creature's model and physics turn at once).
 - `GetFacing` (17), not in this group: presumably the inverse with the same bMirrorYAxis rule.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. Conventions (position at object +0x120, orientation vector at +0x130, `Vector::ToAngle` 0x004EE570): top of `posorient.md`.
+
+### GetFacing (17)
+- **Handler:** 0x00655090 (not shared). `GetObjectById` 0x005D5BE0, `Vector::ToAngle` 0x004EE570, `StackPushFloat`.
+- **Described in:** `dev/script_commands/posorient.md` ("GetFacing (17), not in this group: presumably the inverse with the same bMirrorYAxis rule"); `locations.md` for the conventions.
+- **Does:** pops oTarget, then bMirrorYAxis only when paramCount > 1 (default 1, checked). Reads the orientation (+0x130, +0x134, +0x138); with bMirror equal to 1 it multiplies **y by -1.0** (double 0x00AF0E48), then pushes `ToAngle` of it in degrees. So the default gives script facing (0 = -Y, 90 = -X), which `SetFacing` takes; bMirror 0 gives the engine angle (0 = +Y).
+- **Edge cases:** an id `GetObjectById` does not find (invalid, or gone) pushes **-1.0** (0x00AE2E00, the result's initial value, checked). Any object kind with an id answers from whatever its +0x130 holds (no type check). The test is `== 1` (`cmp [esp+4], 1; jne`, checked), so bMirror values other than 1 (2, -1) do **not** mirror. The result range is (-180, 180] since `ToAngle` is atan2, not 0..360.
+
+### GetPosition (21)
+- **Handler:** 0x00655400 (not shared). `GetGameObjectById` 0x005D5840, then the object's vtable slot +0x18 three times, `StackPushVector` 0xA2D6D0.
+- **Described in:** `dev/PROBE.md` (the probe's check of `GetPosition`) only; this is the first note of the handler.
+- **Does:** pops oTarget; the object must answer slot +0x18 with non-null at each of three steps (the slot is used as a cast, as in `vars.md`: checked that it is called, the cast meaning inferred), then the 16 bytes at +0x120 of the second result are pushed as the vector (x, y, z and a fourth float).
+- **Edge cases:** an invalid id, or an object failing a cast (the party, GUI, tile and map objects, per `vars.md`'s list of objects without a `CCObject` cast), pushes **(0, 0, 0)** and succeeds (the vector starts zeroed, checked). Works for any kind of object with a `CCObject` part, active or not, in any area; no area test. A failed push returns -638.
+
+### SetPosition (22)
+- **Handler:** 0x006554B0 (not shared). `GetGameObjectById`; for a creature with bSafePosition: `GetArea` 0x00695180, a walk-grid search 0x006A2570 and 0x0073E370, the position setter 0x00695540.
+- **Described in:** `dev/LOAD_EVENTS.md` ("`SetPosition(..., TRUE)` to within 0.01 m of the controlled creature") and `dev/PARTY.md` (the party catch-up's `SetPosition`, 0x00632640); not as a command.
+- **Does:** pops oObject, vPosition, and bSafePosition (always popped; the compiler fills the default 1). **Not safe, or not a creature (type byte +0x14 is not 6):** `0x00695540(obj, &pos, 0)` writes the position as given. **Safe, creature:** it needs the creature's area; it searches for the nearest valid spot to the requested one (0x006A2570, then 0x0073E370 with a tolerance from 0x00AE7308); **only if that search answers 1** it clears the creature's movement state (0x007A0DC0, 0x007C1690, 0x007C1EA0, 0x00A65CF0) and sets the found position. If the search fails the creature **does not move at all** (checked).
+- **State:** object +0x120; for a safe creature also its movement and pathing state. For a creature in the party (0x0069F140 true, 0x006A7D30 false) that is farther than 0.01 m (0x00AF7498) from the controlled creature (0x005D5CC0), it first calls 0x006AA440 with the requested position (what that does was not read; inferred a party or formation note).
+- **Edge cases:** an invalid id or a failed cast does nothing; returns 0, the script goes on. With bSafePosition 0 the position is not checked against the area's bounds, and the object's area is **not** changed (use `SetLocation`; `locations.md`). A non-creature ignores bSafePosition.
+
+## Not read
+- 0x006A2570, 0x0073E370 and 0x006AA440 inside; the tolerance in 0x00AE7308; the movement-reset calls' effects.
+- The meaning of the vtable slot +0x18 (read as a cast to the `CCObject` part).

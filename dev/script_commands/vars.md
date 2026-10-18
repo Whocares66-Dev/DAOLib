@@ -139,3 +139,24 @@ Shared facts (checked unless marked), which hold for `GetLocalInt`/`SetLocalInt`
 - The writer's type filter (0x00704BA0 / 0x00705A70 in full) and the meaning of `CCObject`'s load flag (bit 0 of 0x0069AAD0's third argument, which picks the changed mark for template values). Hence why `dev/AI.md` saw a set int lost across a load.
 - The generic table copy 0x00705760 (all twelve types; called from 0x007589D0), and the dword at table+0xD0.
 - Who else calls `ForScript_SetLocalInt` (0x0066C046, 0x006BC631, 0x006D66E0, 0x007BC4DB, 0x007F0810, …) and with what create flag. One may create records outside a template (the PHYSICS_DISABLED key in `effect_access.md`).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe. Not seen in play. The shared facts at the top of `vars.md` (the variable table by object type, the interned names, the declare-first rule, the defaults on a miss) hold; they name these two handlers.
+
+### GetLocalInt (63)
+- **Handler:** 0x00655FA0 (not shared). `GetGameObjectById` 0x005D5840, the name interned by 0x004E8960, `ScriptBackend::ForScript_GetLocalInt` 0x00702E90, `StackPushInteger`.
+- **Described in:** `dev/script_commands/vars.md` (shared facts, which name 63/64), `dev/AI.md` (`GetCreatureFlag` is only `GetLocalInt`).
+- **Does:** pops oObject, then sVarName; picks the table (area +0x260, module +0x394, else the `CCObject` cast's +0x2E0); looks the name up among the **int** records only (type 1) and pushes the value. (checked)
+- **State:** read only.
+- **Edge cases:** an invalid id, or an object with no table (party, GUI, tile, map), pushes **0** and does not fail (the result starts at 0, 0x00656096, checked). A name that was never declared for the object, or declared under another type, gives 0. The cast is tried only for objects that are neither an area (type 4) nor the module (3). A failed pop is -639, a failed push -638.
+
+### SetLocalInt (64)
+- **Handler:** 0x00656120 (not shared). The same lookup, then `ForScript_SetLocalInt` 0x00703DB0 with the type 1, `ret 0x10`.
+- **Described in:** `dev/script_commands/vars.md` (shared facts), `dev/AI.md` (`SetCreatureFlag`).
+- **Does:** pops oObject, sVarName, nValue (in that order; the value always, the compiler fills nothing optional); finds the int record and stores the value at record +0xC and sets the record's "changed" byte (+0x10) to 1 (0x00703DC5 to 0x00703DD3, checked), so a save writes it.
+- **State:** the object's variable table; nothing queued, no event.
+- **Edge cases:** an undeclared name (or one declared with another type) is a silent no-op: the backend finds no record and calls 0x005C5E80, which is `xor al, al; ret` (checked), so no log line in this build. An invalid id or an object without a table does nothing and returns 0. Any 32-bit value is stored as is. A failed pop is -639.
+
+## Not read
+- The record lookup 0x00703BF0 inside beyond `vars.md`; whether a name match is case sensitive.

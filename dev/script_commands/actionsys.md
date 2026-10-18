@@ -76,3 +76,41 @@ Shared facts, all checked:
 - The module's +0x194 and who reads the VM's +0x196C (the debugger request).
 - That `ClientOptions`' +0x68 and +0x4F0 are the attributes named `DifficultyLevel` and `GraphicsDetailLevel` (the names are where the options are saved, not where the attributes are built).
 - G2DA's cell-by-index (0x004ED6F0) bounds on a row index; only M2DA's was read.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe (`tools\daoexe.py --disasm`). Not seen in play. Shared facts (table lookup, row IDs, the by-name fallback, -639/-638): the top of `actionsys.md`. Master's `dev/LIBRARY.md` (the "trap" line) and `dev/FILES.md` (seen in play) also use these.
+
+### GetM2DAString (9)
+- **Handler:** 0x00653EF0 (not shared). Same body as `GetM2DAResource` (13, 0x00654150) with `StackPushString` 0xA2D730 for the push.
+- **Described in:** `dev/script_commands/actionsys.md` ("GetM2DAResource", which says it is this body); `dev/LIBRARY.md` ("A trap").
+- **Does:** pops n2DA, sColumn, nRow, and s2DA only when paramCount > 3; reads the cell as text through the table's string getter (vtable +0x20) and pushes it as a string.
+- **Edge cases:** the only getter of the five that tests `g_gdaTables` (0x00C1D090) for null (0x0065400D, checked); on null, no table, no row ID or no column the pushed string is "" (checked). nRow is a row ID, not an index. s2DA is read only for n2DA = -1. On an integer column it pushes bytes read from memory (master's LIBRARY.md). A failed push returns -638.
+
+### GetM2DAInt (667)
+- **Handler:** 0x006544F0 (not shared). Same shape, the table's int getter (vtable +0x28), `StackPushInteger`.
+- **Described in:** `dev/script_commands/actionsys.md` ("GetHashedM2DAInt" is its hash-column twin); `dev/FILES.md` (seen in play), `dev/LIBRARY.md`.
+- **Does:** pops n2DA, sColumn (trimmed of " \t", lowercased, hashed), nRow, s2DA (only when paramCount > 3); pushes the cell as an int.
+- **Edge cases:** the result starts at **0** (checked, `edi` zeroed at 0x00654548), so a missing table, row or column gives 0 and no failure. No null check on `g_gdaTables`: it is read at once (0x006545E6, checked), so before the tables exist this would fault (inferred from that). nRow is a row ID. s2DA only for n2DA = -1.
+
+### GetM2DAFloat (138)
+- **Handler:** 0x006547C0 (not shared). Same shape with the table's slot +0x24 (called at 0x0065492A), `StackPushFloat` 0xA2D690.
+- **Described in:** `dev/LIBRARY.md` (the table through `dao::gda`); `dev/ITEMS.md` for a use.
+- **Does:** as `GetM2DAInt` but pushes a float. The result starts at 0.0 (`fldz`, 0x00654807, checked).
+- **Edge cases:** a missing table, row or column gives 0.0 and no failure. No null check on `g_gdaTables` (checked). The slot +0x24 is read as the float getter by its position between the string (+0x20) and int (+0x28) getters; what the M2DA and G2DA bodies do with a column of another type was not read.
+
+### GetM2DARows (11)
+- **Handler:** 0x006549D0 (not shared). The table's vtable slot +0x14 (called at 0x00654A92), `StackPushInteger`.
+- **Described in:** `dev/LIBRARY.md` (697 rows for abilities seen in play), `dev/FILES.md`.
+- **Does:** pops n2DA, and s2DA only when paramCount > 1; finds the table (by number, by name when n2DA = -1) and pushes its row count.
+- **Edge cases:** `g_gdaTables` is **not** tested for null (0x00654A64, checked); a missing table gives **0** (the count starts at 0). That slot +0x14 is the row count is inferred from its use and from the seen counts. The count is the number of rows, not the highest row ID, so with sparse IDs it is not a bound for `nRow`.
+
+### GetM2DAColumns (12)
+- **Handler:** 0x00654AE0 (not shared). The table's vtable slot +0x10 (0x00654B28), `StackPushInteger`.
+- **Described in:** `dev/LIBRARY.md` (51 columns for abilities, seen in play).
+- **Does:** pops n2DA only (script.ldf has no s2DA here) and pushes the column count.
+- **Edge cases:** n2DA is looked up by `FindTable` at once, so **-1 is not a by-name lookup** here; it finds no table and pushes **0** (checked: no branch on -1 in this handler). No null check on `g_gdaTables`. That slot +0x10 is the column count is inferred from its use and the seen count.
+
+## Not read
+- What the M2DA and G2DA getters do inside (slots +0x10, +0x14, +0x20, +0x24, +0x28) beyond `actionsys.md` and `src/dao/Gda.h`.
+- Why the hash helper 0x004C1150 takes a string pointer (the output string); the call shape is the one `actionsys.md` describes.
