@@ -122,10 +122,18 @@ TEST_CASE("a model's nodes are in the file's order with their transforms, bones 
     CHECK(gob.children == std::vector<int>{1, 3});
     CHECK(gob.translation[2] == Approx(1));
     CHECK_FALSE(gob.bone);
+    // Its export, the name a clip's channel goes by (DAOLib #177).
+    REQUIRE(gob.exports.size() == 1);
+    CHECK(gob.exports[0].name == L"gob_gobrotation");
+    CHECK(gob.exports[0].controllerType == 8);
+    CHECK(gob.exports[0].variableType == 4);
+    CHECK(gob.exports[0].controllerIndex == 2);
 
     const model::Node &bone0 = tree->nodes[1];
     CHECK(bone0.bone == 1);
     CHECK(bone0.rotation[2] == Approx(0.70710678F));
+    REQUIRE(bone0.exports.size() == 2);
+    CHECK(bone0.exports[1].name == L"bone0_rotation");
     CHECK(tree->nodes[2].translation[1] == Approx(1));
     REQUIRE(bone0.scale);
     CHECK(*bone0.scale == Approx(2));

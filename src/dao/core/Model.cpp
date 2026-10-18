@@ -196,6 +196,17 @@ void TransformOf(const gff4::Struct &from, Node &node)
         {
             node.scale = child.Get<float>(kScale);
         }
+        // A node's exports, read 2026-10-18 (DAOLib #177): plc_smferdrb_01_0.mmh's DoorLow
+        // exports doorlow_translation (6) and doorlow_rotation (8), the names
+        // ip_door.closetoopen.ani's channels go by; lib-agent-2 read that a placeable's clip
+        // drives the node so, rigidly.
+        else if (child.Label() == "xprt")
+        {
+            node.exports.push_back({.name = child.String(kExportName).value_or(L""),
+                                    .controllerType = child.Get<std::uint32_t>(kExportControllerType).value_or(0),
+                                    .variableType = child.Get<std::uint32_t>(kExportVariableType).value_or(0),
+                                    .controllerIndex = child.Get<std::uint32_t>(kExportControllerIndex).value_or(0)});
+        }
     }
 }
 

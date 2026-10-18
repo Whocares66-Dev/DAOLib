@@ -92,7 +92,10 @@ std::wstring FemaleTree(std::wstring_view tree)
     return female;
 }
 
-std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animation, std::span<const Tree *const> trees)
+// A placeable's clip has no fallback: its tree's slot 0x10 answers 0 (lib-agent-2's reading,
+// 2026-10-18, DAOLib #177), so a missing node plays nothing.
+std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animation, std::span<const Tree *const> trees,
+                           bool replacements)
 {
     std::int64_t id = animation;
     for (int hop = 0; hop < kMostReplacements; ++hop)
@@ -112,6 +115,10 @@ std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animatio
                     return Clip{.animation = id, .node = node, .tree = i};
                 }
             }
+        }
+        if (!replacements)
+        {
+            return std::nullopt;
         }
         const GdaFile::Cell *next = CellOf(animations, *row, "Replacement");
         const auto *replacement = next != nullptr ? std::get_if<std::int64_t>(next) : nullptr;

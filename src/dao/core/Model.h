@@ -163,6 +163,15 @@ struct MeshRef
     std::vector<std::int32_t> bonesUsed; // a blend index's bone in the model's bones
 };
 
+// A controller a node exports: the name an animation's channel goes by, and what it drives.
+struct Export
+{
+    std::wstring name;                // "doorlow_rotation", as ip_door.closetoopen.ani's channel names it
+    std::uint32_t controllerType = 0; // 8 a rotation, 6 a translation, as the files have them
+    std::uint32_t variableType = 0;
+    std::uint32_t controllerIndex = 0;
+};
+
 struct Node
 {
     std::wstring name;
@@ -174,6 +183,9 @@ struct Node
     std::optional<float> scale;
     std::optional<int> bone; // its index among the model's bones, if it is one
     std::optional<MeshRef> mesh;
+    // Its exports, its children of kind xprt: a clip's channel names one of them, not the node
+    // ("doorlow_rotation" for the node DoorLow).
+    std::vector<Export> exports;
 };
 
 struct Hierarchy

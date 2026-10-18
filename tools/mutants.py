@@ -533,6 +533,18 @@ MUTANTS: list[Mutant] = [
         "if ((chain + bytes) * (kFaces - 1) > room)",
     ),
     Mutant(
+        "model-export-name: a node's export is its xprt child's name",
+        "src/dao/core/Model.cpp",
+        '.name = child.String(kExportName).value_or(L""),',
+        '.name = child.String(kMmhName).value_or(L""),',
+    ),
+    Mutant(
+        "anb-no-replacement: a placeable's lookup follows no replacement",
+        ANB,
+        "        if (!replacements)\n",
+        "        if (!replacements && animation < 0)\n",
+    ),
+    Mutant(
         "anb-replacement-followed: an animation no tree has is played as its Replacement",
         ANB,
         "        id = *replacement;\n",

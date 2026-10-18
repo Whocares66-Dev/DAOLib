@@ -77,7 +77,10 @@ struct Clip
 // for its Replacement, and so on.
 // @param animations the animation tables merged (table 0)
 // @param trees the creature's trees in the order to look in them
+// @param replacements false to look up the animation's own node alone, as the engine does for a
+// placeable
 // @return nothing if the animation has no row, or neither it nor its replacements have a node
-std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animation, std::span<const Tree *const> trees);
+std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animation, std::span<const Tree *const> trees,
+                           bool replacements = true);
 
 } // namespace dao::core::anb

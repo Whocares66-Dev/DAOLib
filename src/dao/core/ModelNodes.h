@@ -29,6 +29,7 @@ inline constexpr std::uint32_t kTotalExports = 6275;
 inline constexpr std::uint32_t kExportName = 6052;
 inline constexpr std::uint32_t kExportControllerType = 6053;
 inline constexpr std::uint32_t kExportControllerIndex = 6274;
+inline constexpr std::uint32_t kExportVariableType = 6238;
 inline constexpr std::uint32_t kChunkVertexSize = 8000;
 inline constexpr std::uint32_t kChunkVertexCount = 8001;
 inline constexpr std::uint32_t kChunkIndexCount = 8002;

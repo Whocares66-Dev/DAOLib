@@ -119,3 +119,73 @@ The door's closed patches are 7 (unlocked) and 8 (locked); open is a turned stri
 - **The body bag's items** come in at sub-action 21, so one event delay before the script's `OpenInventory` shows them.
 
 Not read: the sound columns' player, the event filter 0x00698490, where a click is refused on an unusable placeable, and whether `AddEventDeltaTime`'s 10 is milliseconds.
+
+## A placeable's animations, initial state and state tables: read 2026-10-18
+
+Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `dev/PARAGON_DOORS.md` parts 2 and 3. Not seen in play. The load's calls to `SetPlaceableState(state, 1)` were checked in the disassembly.
+
+### The clip: found as a creature's is, from the type's BlendTree
+
+- **The tree.** When the model is ready (the animation component's callback 0x007520E0 → 0x00751FB0), the placeable gets one tree: `placeable_types.BlendTree` (column hash 0x70F463FA). It goes through `AnimBase` slot 0x8C (0x00A61B10), the same AddTree creatures use.
+- **Node names to ids.** AddTree maps each node's name to an id through table 0's `AnimName` (the merged Animations M2DA: `anim_base`, `anim_combat`, `anim_placeables`; 0x005CB4F0/0x005CB780). So an `anim_placeables` id plays the `.anb` node named by its `AnimName`, exactly as `anb::ClipOf` does.
+- **No Replacement fallback.** `CCObject` slot 0xB0 (0x0069B3D0) falls back to the Replacement row only when slot 0x10 answers non-zero. `CCPlaceable`'s slot 0x10 answers 0, so a missing node plays nothing.
+- **The door's tree** (`PRB_door.anb`):
+
+  | Node | Clip |
+  |---|---|
+  | `door_closetoopen` | `ip_door.closetoopen.ani` |
+  | `door_open` | `ip_door.open.ani` |
+  | `door_opentoclose` | `ip_door.opentoclose.ani` |
+  | `door_close` | `ip_door.closed.ani` |
+
+  Plus `door_closetoopen2`, `door_open2`, `door_opentoclose2`, `door_dying`, `door_dead` (and their 2s), and `bdmg`.
+  - The transitions are 0.7 s; the idles are a one-frame pose.
+  - `anim_placeables` Type is 0 on the transitions and 1 (looping) on the idles.
+- **The container's tree** (`PRB_container.anb`) points every node (`container_open`, `container_closetoopen`, `container_opentoclose`, `container_close`) at the one-frame `prp_chstwd_01.close.ani`. So a chest's lid never visibly moves, whatever its state.
+- **Sound.** `ip_door.closetoopen.evt` has an event (id 27, at 0.01 s) with the text `ClosedToOpened`, a `placeable_types` sound column's name. Inferred: the door's sound is played from the clip's event.
+
+### Rigid models: the clips move nodes, no bones
+
+- **The door.** `plc_smferdrb_01_0.mmh` has `MMHTotalBones` 0.
+  - Its mesh `DoorLow` is a child of `GOB`, with no bones used; the other nodes are `UserPoint01`/`02` and `SnaptoPoint01`.
+  - The `.msh` has no blend weights or indices.
+  - Its origin is the hinge (inferred from the bounding box, x 0 to 1.63).
+- **The door's clips.** The channels are `doorlow_rotation` (and `doorlow_translation` in the idle). They match the `.mmh`'s **export names** (`MMHExportExportName`), not the node's name: a channel drives the node whose export has its name, as a rigid transform.
+- **The wooden chest** (`PLC_ChstWD_01_0`) is the same: no bones; a `Lid` mesh (pivot 0, 0, 0.5) under `Body`; channels `body_*`, `lid_*`, `userpoint01_translation`.
+
+### Playing it
+
+`SetPlaceableState(s, 0)` plays the transition [old][new] as `(anim, 1.0, -1.0, 1)`.
+- **The arguments.** A blend of -1.0 snaps the node's weight at once (0x00815100), so there is no cross-fade into the transition. -2.0 fades over 20% of the clip's length (its TransitionTo chain summed, 0x006957A0), -3.0 over 5%, and any other value is a rate. The fourth argument (loop) is never read: looping comes from the tree's node, or `Type & 1`.
+- **The idle after.** The idle [new][new] is set as the next animation (0x006956D0: the component's +0x140, if it loops). When the transition ends, `CCObject` slot 0xCC (0x00696C50, inferred: animation ended) plays it as `(idle, 1.0, 3.0, 0)` (the 3.0 at 0x00AE7130). That is a blend at rate 3, about a third of a second if per second (inferred).
+
+### The initial state is the state controller's row, shown as its idle at once
+
+- **The field.** The `.are`'s placeable instance has `InitialState`; the `.utp` has none. The `.utp`'s `AnimContState` is not in the exe (inferred: the toolset copies it into the `.are`).
+- **The load, in order** (0x00683380 → 0x0074EFE0):
+  1. The placeable's field reader (slot 23, 0x00750370) runs over the `.utp`, then the instance, as creatures' does. Its fields: `Useable`, `Static`, `Appearance`, `BaseType`, `TurnRate`, `StateController`, `RoomID1`/`RoomID2`, `InitialState` → +0x658.
+  2. The state is 0 until the instance gives one.
+  3. The load step (slot 113, 0x007528D0) calls `SetPlaceableState(+0x658, 1)` (0x00752A88). When the model loads later, the model-ready callback makes the same call (0x00752076).
+- **The value** is the row of the type's `statecnt_*` table, the `PLC_STATE_*` constants in `2da_constants_h.nss`: for a door 0 Closed_Unlocked, 1 Closed_Locked, 2 Open, 3 Dead, 4 Open_2, 5 Dead_2.
+- **Flag 1** re-applies the state even when unchanged, plays no transition, and plays the idle [s][s] as `(anim, 1.0, -2.0, 1)`. It stamps the state's walk-grid patch, and makes the placeable inactive if the state has no actions.
+- **Out of range.** A state of -1 (0xFFFF) or out of range is stored as 0, and its animation lookup gives none.
+- **A save** keeps the state as `SavegameAreaPlaceableState` (16100, the u16 +0x658). It is restored into +0x658 (slot 34) and snapped the same way by the load step.
+- `0x0074FBC0`, the third flag-1 caller, is not a load: it re-snaps the state when a conversation or staged scene releases its actors (0x007F2800).
+
+### The statecnt_* tables
+
+- **The tables.** The core game has 20: `aoe`, `areatransition`, `bbase`, `bodybag`, `bridge`, `cage`, `container`, `container_static`, `door`, `door_secret`, `flipcover`, `furniture`, `informational`, `nonselectable_trap`, `puzzle`, `selectable_trap`, `static`, `topballista`, `trap_trigger`, `trigger`.
+- **The columns are always:** `ID`, `Label`, one column per state (N, the row count), `Action0`, `Success0`, `Success0a`, `Action1`, `Success1`, `Success1a`, `BlockVis`, `StrRef`. There are no other columns; the sounds are `placeable_types`'.
+- **The parser** (0x00A3BBB0, cached by name by 0x00A3BE40, a table with no rows dropped):
+  - It reads the state cells and the actions **by position**, from column 2.
+  - The number of action groups is (BlockVis's column − (N + 2)) ÷ 3, at most 2.
+  - `BlockVis` is the only column found by name (hash 0x86A27132). `ID`, `Label` and `StrRef` are not read. So the state columns must be exactly N, in row order.
+- **The cells.** Cell [row = from][column = to] is an `anim_placeables` id: [s][s] is the idle, the others transitions. A lookup with to = 0xFFFF means to = from.
+- **Actions.** An action of 0 is none, and a state with both 0 is made inactive (a door's Dead rows). A container's Dead row keeps OPEN_INVENTORY, so it stays lootable.
+- **Success and SuccessA.** `0x00A3BB10(state, action, variation)` gives Success for variation 0 and SuccessA otherwise, or 0xFFFF for an action the row doesn't have. A result of -1 means stay: `SetPlaceableActionResult` changes nothing for it. The variation is the use's int 0, the front side, which the scripts invert for OPEN (`dev/PLACEABLES.md`).
+- **BlockVis** (the door: 1 for the closed rows, 0 for Open, Open_2 and the Dead rows):
+  - At the area's add (slot 63, 0x00750B10), a placeable with a blocking state and two different `RoomID`s is registered as a door between those rooms (0x0068C190).
+  - The current state's BlockVis (0x0074BCC0) is then read by a room-to-room walk that passes through doors not blocking (0x00686A70; inferred: visibility between rooms).
+  - For a door (BaseType 1), 0x0074E850 sets a value on its model, 0.6 when open and 1.0 when shut (inferred: a fade or occlusion).
+  - A state change sets the area's +0x608 (inferred: visibility dirty).
+- **The walk grid's patch is chosen by the state's index** (0x0074DBA0: +0x690[state], skipped past the count at +0x694). The door's `.pwk` has six patches for its six states (that the file's order is the state's is inferred from the shapes: closed 7s, locked 8s, open a strip).

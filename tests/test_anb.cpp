@@ -159,8 +159,10 @@ TEST_CASE("an animation's clip by its AnimName in the first tree with it, else i
     CHECK(replaced->animation == 1);
     CHECK(replaced->node->file == L"mh_m.p.ani");
     CHECK(replaced->tree == 1);
-    CHECK_FALSE(anb::ClipOf(animations, 901, trees)); // no node and no replacement
-    CHECK_FALSE(anb::ClipOf(animations, 2, trees));   // no row
+    CHECK_FALSE(anb::ClipOf(animations, 901, trees));        // no node and no replacement
+    CHECK_FALSE(anb::ClipOf(animations, 900, trees, false)); // a placeable's: no fallback
+    CHECK(anb::ClipOf(animations, 640, trees, false)->node->file == L"mh_m.mov_tw_v1.ani");
+    CHECK_FALSE(anb::ClipOf(animations, 2, trees)); // no row
     CHECK(anb::FemaleTree(L"movement.anb") == L"movement_fem.anb");
 }
 
