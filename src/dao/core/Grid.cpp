@@ -3,6 +3,7 @@
 #include "dao/core/Grid.h"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <span>
 
@@ -27,6 +28,7 @@ constexpr std::uint32_t kSectorSize = 3094;
 constexpr std::uint32_t kSectors = 3095;
 constexpr std::uint32_t kMemory = 3096;
 constexpr std::uint32_t kRooms = 3114;
+constexpr std::uint32_t kPadding = 3120;
 constexpr std::uint32_t kSectorEntrances = 3115;
 constexpr std::uint32_t kSectorOffset = 3116;
 constexpr std::uint32_t kLinks = 3117;
@@ -34,6 +36,7 @@ constexpr std::uint32_t kCollision = 3744;
 constexpr std::uint32_t kCollisionData = 3745;
 
 constexpr std::uint8_t kKindBits = 0x0F;
+constexpr std::uint8_t kCounterBits = 0xF0;
 constexpr std::uint8_t kFirstUnwalkable = 5;
 constexpr std::uint32_t kWrap = 0x10000;
 
@@ -63,6 +66,15 @@ template <class T> std::vector<T> ListOf(const gff4::Struct &grid, std::uint32_t
 Point PointOf(const std::vector<float> &floats)
 {
     return floats.size() >= 3 ? Point{floats[0], floats[1], floats[2]} : Point{};
+}
+
+// A point's index along one axis, as 0x00A49410 and 0x00A49440 work it out: truncated by cvttsd2si, and negative
+// taken as 0. Past an int's range cvttsd2si answers INT_MIN, so that is 0 too.
+std::int32_t IndexOf(float at, float base, float padding, float cellSize)
+{
+    const double index = ((static_cast<double>(at) - padding - base) / cellSize) + 0.5;
+    constexpr double kPastInt = 2147483648.0;
+    return index >= 0.0 && index < kPastInt ? static_cast<std::int32_t>(index) : 0;
 }
 
 std::int32_t Across(std::int32_t cells, std::int32_t side)
@@ -229,6 +241,56 @@ std::optional<float> Grid::Height(std::int32_t row, std::int32_t column) const
     return at < heights.size() ? std::optional(static_cast<float>(heights[at]) * kHeightUnit) : std::nullopt;
 }
 
+Point Grid::Place(std::int32_t row, std::int32_t column) const
+{
+    return {base[0] + (static_cast<float>(column) * cellSize) + padding,
+            base[1] + (static_cast<float>(row) * cellSize) + padding, Height(row, column).value_or(0.0F)};
+}
+
+Cell Grid::CellAt(float x, float y) const
+{
+    return {.row = IndexOf(y, base[1], padding, cellSize), .column = IndexOf(x, base[0], padding, cellSize)};
+}
+
+void Grid::SetKind(std::int32_t row, std::int32_t column, std::uint8_t kind)
+{
+    if (row < 0 || column < 0 || row >= rows || column >= columns)
+    {
+        return;
+    }
+    const auto at =
+        (static_cast<std::size_t>(row) * static_cast<std::size_t>(columns)) + static_cast<std::size_t>(column);
+    if (at < cells.size())
+    {
+        cells[at] = static_cast<std::uint8_t>((cells[at] & kCounterBits) | (kind & kKindBits));
+    }
+}
+
+Grid GridOf(const gff4::Struct &area)
+{
+    Grid grid;
+    grid.columns = area.Get<std::int32_t>(kColumns).value_or(0);
+    grid.rows = area.Get<std::int32_t>(kRows).value_or(0);
+    grid.cellSize = area.Get<float>(kCellSize).value_or(0.0F);
+    grid.clearance = area.Get<float>(kClearance).value_or(0.0F);
+    const std::optional<float> padding = area.Get<float>(kPadding);
+    grid.padding = padding && !std::isnan(*padding) ? *padding : grid.cellSize / 2;
+    grid.base = PointOf(area.Floats(kBase));
+    grid.normal = PointOf(area.Floats(kNormal));
+    grid.cells = ListOf<std::uint8_t>(area, kCells, gff4::Type::U8);
+    grid.heights = ListOf<std::int16_t>(area, kHeights, gff4::Type::S16);
+    grid.rooms = ListOf<std::int8_t>(area, kRooms, gff4::Type::S8);
+    grid.links = ListOf<std::uint8_t>(area, kLinks, gff4::Type::U8);
+    grid.sectorSize = area.Get<std::int32_t>(kSectorSize).value_or(0);
+    const std::vector<std::uint8_t> memory = ListOf<std::uint8_t>(area, kMemory, gff4::Type::U8);
+    grid.abstraction = AbstractionOf(grid, SectorsOf(area), memory);
+    if (const std::optional<gff4::Struct> collision = area.Child(kCollision))
+    {
+        grid.collision = ListOf<std::uint8_t>(*collision, kCollisionData, gff4::Type::U8);
+    }
+    return grid;
+}
+
 std::optional<Grid> GridOf(const gff4::File &layout)
 {
     const std::optional<gff4::Struct> root = layout.Root();
@@ -238,25 +300,7 @@ std::optional<Grid> GridOf(const gff4::File &layout)
     {
         return std::nullopt;
     }
-    Grid grid;
-    grid.columns = area->Get<std::int32_t>(kColumns).value_or(0);
-    grid.rows = area->Get<std::int32_t>(kRows).value_or(0);
-    grid.cellSize = area->Get<float>(kCellSize).value_or(0.0F);
-    grid.clearance = area->Get<float>(kClearance).value_or(0.0F);
-    grid.base = PointOf(area->Floats(kBase));
-    grid.normal = PointOf(area->Floats(kNormal));
-    grid.cells = ListOf<std::uint8_t>(*area, kCells, gff4::Type::U8);
-    grid.heights = ListOf<std::int16_t>(*area, kHeights, gff4::Type::S16);
-    grid.rooms = ListOf<std::int8_t>(*area, kRooms, gff4::Type::S8);
-    grid.links = ListOf<std::uint8_t>(*area, kLinks, gff4::Type::U8);
-    grid.sectorSize = area->Get<std::int32_t>(kSectorSize).value_or(0);
-    const std::vector<std::uint8_t> memory = ListOf<std::uint8_t>(*area, kMemory, gff4::Type::U8);
-    grid.abstraction = AbstractionOf(grid, SectorsOf(*area), memory);
-    if (const std::optional<gff4::Struct> collision = area->Child(kCollision))
-    {
-        grid.collision = ListOf<std::uint8_t>(*collision, kCollisionData, gff4::Type::U8);
-    }
-    return grid;
+    return GridOf(*area);
 }
 
 } // namespace dao::core::navigation

@@ -93,6 +93,7 @@ class Mutant:
 
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
+WALKPATCH = "src/dao/core/WalkPatch.cpp"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
 CUTSCENE = "src/dao/core/Cutscene.cpp"
@@ -477,6 +478,20 @@ MUTANTS: list[Mutant] = [
         GRID,
         "    {0, -1},\n    {1, 0},\n    {0, 1},",
         "    {0, -1},\n    {0, 1},\n    {1, 0},",
+    ),
+    # A placeable's walk-grid patch stamped as 0x00A46CC0 does (#176): over a cell under 8 only, and turned from +y
+    # to the facing, clockwise for +x.
+    Mutant(
+        "walkpatch-below-8: a stamp leaves a cell of 8 as it is",
+        WALKPATCH,
+        "if (grid.Kind(cell.row, cell.column) < kBlocked)",
+        "if (grid.Kind(cell.row, cell.column) <= kBlocked)",
+    ),
+    Mutant(
+        "walkpatch-turn: facing +x turns the patch a quarter clockwise",
+        WALKPATCH,
+        ".sin = -facing[0] / length",
+        ".sin = facing[0] / length",
     ),
     Mutant(
         "clip-order: the largest part goes where the key's place says, the rest in order",

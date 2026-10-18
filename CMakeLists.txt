@@ -163,6 +163,7 @@ add_library(
     src/dao/core/FunctionTable.cpp
     src/dao/core/GdaFile.cpp
     src/dao/core/Grid.cpp
+    src/dao/core/WalkPatch.cpp
     src/dao/core/HeadPreset.cpp
     src/dao/core/Gff3.cpp
     src/dao/core/Gff3Write.cpp
