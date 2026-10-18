@@ -114,6 +114,16 @@ struct Tables
                                                           {15, {I(15), S(L"Prop02"), I(0)}},
                                                           {16, {I(16), S(L"Prop03"), I(0)}}})},
         {92, Table({"ID", "Gender"}, {{1, {I(1), S(L"m")}}, {2, {I(2), S(L"f")}}})},
+        // The tint tables' rows as the game's: 0 INVALID with no file, then a file each.
+        {81, Table({"ID", "Label", "MaskFile", "Apr"}, {{0, {I(0), S(L"INVALID"), S(L""), I(0)}},
+                                                        {4, {I(4), S(L"Hurlock"), S(L"CN_HED_HLKa_0t.dds"), I(16)}}})},
+        {82, Table({"ID", "Label", "MaskFile", "Apr"}, {{3, {I(3), S(L"Hurlock"), S(L"CN_BDY_HLKa_0t.dds"), I(16)}}})},
+        {83, Table({"ID", "Label", "TintFile", "Apr"},
+                   {{0, {I(0), S(L"INVALID"), S(L""), I(0)}}, {3, {I(3), S(L"Blue"), S(L"Blue.tnt"), I(0)}}})},
+        {84, Table({"ID", "Label", "TintFile", "Apr"}, {{1, {I(1), S(L"Red"), S(L"Red.tnt"), I(0)}}})},
+        {85, Table({"ID", "Label", "TintFile", "Apr"}, {{2, {I(2), S(L"Green"), S(L"Green.tnt"), I(0)}}})},
+        {86, Table({"ID", "Label", "TintFile", "Apr"}, {{13, {I(13), S(L"Gold"), S(L"T3_HLK_H01.tnt"), I(16)}}})},
+        {88, Table({"ID", "Label", "TintFile", "Apr"}, {{5, {I(5), S(L"Abomination"), S(L"T3_ABM_B02.tnt"), I(25)}}})},
     };
 
     character::TableOf Of() const
@@ -293,6 +303,41 @@ TEST_CASE("a template's head rows are its PartList's, each by its element's stru
                                                             character::kNoRow, character::kNoRow});
 }
 
+TEST_CASE("a template's tint fields are files of their tint tables, none for row 0", "[character]")
+{
+    const Tables tables;
+    auto tinted = Human(1, {});
+    tinted.headMorph.clear();
+    tinted.skinTint = 2;
+    tinted.hairColor = 1;
+    tinted.eyesColor = 3;
+    tinted.tattooTint = 13;
+    tinted.tattoo = 4;
+    tinted.bodyTint = 5;
+    tinted.bodyTintMask = 3;
+    const auto read = character::Resolve(tinted, Items(), tables.Of());
+    REQUIRE(read);
+    CHECK(read->tints.skin == L"Green.tnt");
+    CHECK(read->tints.hair == L"Red.tnt");
+    CHECK(read->tints.eyes == L"Blue.tnt");
+    CHECK(read->tints.tattoo == L"T3_HLK_H01.tnt");
+    CHECK(read->tints.tattooMask == L"CN_HED_HLKa_0t.dds");
+    CHECK(read->tints.body == L"T3_ABM_B02.tnt");
+    CHECK(read->tints.bodyMask == L"CN_BDY_HLKa_0t.dds");
+    tinted.eyesColor = 0; // INVALID
+    tinted.tattoo = 0;
+    tinted.skinTint = 7; // a row the table has not
+    const auto bare = character::Resolve(tinted, Items(), tables.Of());
+    REQUIRE(bare);
+    CHECK(bare->tints.eyes.empty());
+    CHECK(bare->tints.tattooMask.empty());
+    CHECK(bare->tints.skin.empty());
+    character::Template ogre;
+    ogre.appearance = 40;
+    ogre.eyesColor = 3;
+    CHECK(character::Resolve(ogre, Items(), tables.Of())->tints.eyes == L"Blue.tnt"); // one model too
+}
+
 TEST_CASE("a creature not built from parts is its one model", "[character]")
 {
     const Tables tables;
@@ -415,4 +460,12 @@ TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent d
     CHECK(elf->head.hairModel == L"em_har_blda");
     CHECK_FALSE(elf->head.eyesModel.empty());
     CHECK(elf->head.beardModel.empty());
+    // Its tint fields are rows 0 but EyesColor 3: eye_tints' Blue.tnt and no other file.
+    CHECK(noble->eyesColor == 3);
+    CHECK(elf->tints.eyes == L"Blue.tnt");
+    CHECK(elf->tints.skin.empty());
+    CHECK(elf->tints.hair.empty());
+    CHECK(elf->tints.tattooMask.empty());
+    CHECK(elf->tints.body.empty());
+    CHECK(parts->tints.hair == L"Red.tnt"); // Alistair's HairColor 1, which his morph's tints stand over
 }

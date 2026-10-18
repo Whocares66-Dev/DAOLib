@@ -148,6 +148,21 @@ struct Head
     std::wstring beardModel;
 };
 
+// The tint files the template's tint fields name, each its row's file in its tint table, as the
+// table writes it ("Blue.tnt", "CN_HED_HLKa_0t.dds"); empty for row 0 (INVALID), a row the
+// table has not, or one with none. A head morph's own tints (dao/core/Morph.h) stand in their
+// place for a morphed head; these are a morph-less one's.
+struct Tints
+{
+    std::wstring skin;       // SkinTint's row of skin_tints (85)
+    std::wstring hair;       // HairColor's of hair_tints (84)
+    std::wstring eyes;       // EyesColor's of eye_tints (83)
+    std::wstring tattoo;     // TattooTint's of tattoo_tints (86)
+    std::wstring tattooMask; // Tattoo's of head_tint_masks (81), a mask texture
+    std::wstring body;       // BodyTint's of body_tints (88)
+    std::wstring bodyMask;   // BodyTintMask's of body_tint_masks (82), a mask texture
+};
+
 struct Character
 {
     // True for a humanoid built from parts (apr_base's ModelType starting with P); false for a
@@ -159,11 +174,12 @@ struct Character
     std::vector<Weapon> weapons;
     Head head;
     std::string headMorph; // the template's
+    Tints tints;           // for a creature of one model too
 };
 
 // Returns a data table by its number in m2da_base (2 apr_base, 6 bitm_base, 80 naked_variation,
-// 91 weaponparts, 92 gender and the variation worksheets), merged as the game merges it; null
-// for none.
+// 81 to 88 the tint tables, 91 weaponparts, 92 gender and the variation worksheets), merged as
+// the game merges it; null for none.
 using TableOf = std::function<const m2da::Merged *(std::int64_t table)>;
 
 // Returns an item template by its name; nothing if there is none.

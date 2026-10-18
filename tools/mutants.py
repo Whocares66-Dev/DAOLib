@@ -551,6 +551,12 @@ MUTANTS: list[Mutant] = [
         'head.hairModel = partOf(2, "Head_Worksheet");',
     ),
     Mutant(
+        "character-tint-table: SkinTint is a row of skin_tints, not of another tint table",
+        CHARACTER,
+        '.skin = file(kSkinTints, creature.skinTint, "TintFile"),',
+        '.skin = file(kHairTints, creature.skinTint, "TintFile"),',
+    ),
+    Mutant(
         "ncs-const-string-length: a CONST string is its two bytes, its count and its bytes",
         NCS,
         "i.length = 4 + *count;",

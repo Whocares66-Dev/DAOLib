@@ -18,6 +18,13 @@ namespace
 constexpr std::int64_t kAppearances = 2;
 constexpr std::int64_t kItems = 6;
 constexpr std::int64_t kNakedVariations = 80;
+constexpr std::int64_t kHeadTintMasks = 81;
+constexpr std::int64_t kBodyTintMasks = 82;
+constexpr std::int64_t kEyeTints = 83;
+constexpr std::int64_t kHairTints = 84;
+constexpr std::int64_t kSkinTints = 85;
+constexpr std::int64_t kTattooTints = 86;
+constexpr std::int64_t kBodyTints = 88;
 constexpr std::int64_t kWeaponParts = 91;
 constexpr std::int64_t kGenders = 92;
 constexpr std::int32_t kClothing = 38;
@@ -429,6 +436,38 @@ std::optional<Item> ItemOf(const gff3::File &uti)
     };
 }
 
+namespace
+{
+
+// Notes on the tint tables, read 2026-10-18 (DAOLib #172): m2da_base names 81 head_tint_masks
+// ("Tattoos"), 82 body_tint_masks, 83 eye_tints, 84 hair_tints, 85 skin_tints, 86 tattoo_tints
+// ("Tattoos"), 87 tint_override (no file in the game) and 88 body_tints. Each has ID, Label, an
+// Apr column (the apr_base row it was made for, 0 for any) and the file: TintFile, a .tnt, in
+// the tint tables, MaskFile, a texture, in the two mask tables. Row 0 is INVALID with no file in
+// all; rows 1 to 3 of the eye, hair, skin and body tints are Red, Green and Blue.tnt; the rest
+// are monsters' (hurlocks', genlocks', werewolves', the dog's). Which field indexes which table
+// is by the tables' names and labels; the engine's side is not read beyond its reading the
+// fields into the appearance (0x00748B00: SkinTint at +0x1C, TattooTint +0x28, HairColor +0x2C,
+// EyesColor +0x30). No script reads the tables. So a template with rows 0, default_hm_noble.utc
+// but for its EyesColor 3 (Blue.tnt), names no tint; what the engine then draws the head with
+// (the material's own values, by the look of the .mao, which names no tint) is not read.
+Tints TintsOf(const Template &creature, const TableOf &tableOf)
+{
+    const auto file = [&tableOf](std::int64_t table, std::int32_t row, std::string_view column) {
+        const m2da::Merged *rows = tableOf(table);
+        return Text(rows, RowOf(rows, row), column);
+    };
+    return {.skin = file(kSkinTints, creature.skinTint, "TintFile"),
+            .hair = file(kHairTints, creature.hairColor, "TintFile"),
+            .eyes = file(kEyeTints, creature.eyesColor, "TintFile"),
+            .tattoo = file(kTattooTints, creature.tattooTint, "TintFile"),
+            .tattooMask = file(kHeadTintMasks, creature.tattoo, "MaskFile"),
+            .body = file(kBodyTints, creature.bodyTint, "TintFile"),
+            .bodyMask = file(kBodyTintMasks, creature.bodyTintMask, "MaskFile")};
+}
+
+} // namespace
+
 // How a creature is built goes by the first letter of apr_base's ModelType
 // (0x007490D0, 0x006C0DE0): P is a humanoid of parts; the rest are
 // apr_base's ModelName whole.
@@ -442,6 +481,7 @@ std::optional<Character> Resolve(const Template &creature, const ItemOfName &ite
     }
     Character character;
     character.headMorph = creature.headMorph;
+    character.tints = TintsOf(creature, tableOf);
     const auto type = Text(context.appearances, context.appearance, "ModelType");
     character.parts = !type.empty() && std::towlower(type[0]) == L'p';
     if (!character.parts)
