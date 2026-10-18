@@ -98,3 +98,18 @@ Of the 54 opcodes, 48 pairs of opcode and type appear; none of 0x2F, 0x31, 0x33,
 ## How a run ends
 
 The loop returns 0 for success (`ABORTSCRIPT`, or the program counter set to -1). Its failures, as the handlers return them: -639 a stack check or pop failed, -642 a division or modulo by zero (int or float), -640 an opcode out of range, -644 a type byte a handler does not take, -646 the counter past the code's end, -632 the 0x20000-instruction limit, -638 a push failed, -649 an array copy failed, -647 no command implementer, -648 an engine structure number out of range.
+
+## A script array read or written past its end
+
+**Reading** (`CPALTOPSP`/`CPALTOPBP`, 0x32/0x33; the handler 0x00A2F840, from the dispatch at 0x00A308A5):
+- The destination cell is pushed first, set to the element type's default: int 0, float 0.0, object `0xFFFFFFFF` (OBJECT_INVALID), and a null pointer for strings, resources and structures.
+- **An index above 1024, or negative** (`cmp edi, 0x400; ja`, unsigned, 0x00A2F8C8) fails the script with **-649** (0x00A31BC1) and ends the run.
+- **An index from 0 to 1024 that is past the end, element 0 of an empty array included,** is no error: the run goes on with the default (each type's `cmp edi, size; jae`, e.g. 0x00A2F913). A string or resource reads as an empty one (made from L""); an engine structure as a null pointer.
+- A missing array gives the same default.
+
+**Writing** (`CPSPTOAL`/`CPBPTOAL`, 0x30/0x31; 0x00A2EC20):
+- The same 1024 cap (0x00A2EC7A) fails the script with -649.
+- An index past the end **grows the array** to index + 1 and stores the element.
+- The gap is filled with 0 (inferred): object id 0, not OBJECT_INVALID; null strings.
+
+Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.

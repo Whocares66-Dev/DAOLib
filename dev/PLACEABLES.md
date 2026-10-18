@@ -189,3 +189,18 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
   - For a door (BaseType 1), 0x0074E850 sets a value on its model, 0.6 when open and 1.0 when shut (inferred: a fade or occlusion).
   - A state change sets the area's +0x608 (inferred: visibility dirty).
 - **The walk grid's patch is chosen by the state's index** (0x0074DBA0: +0x690[state], skipped past the count at +0x694). The door's `.pwk` has six patches for its six states (that the file's order is the state's is inferred from the shapes: closed 7s, locked 8s, open a strip).
+
+## A placeable clicked: Action0, always
+
+- **The left click.** `GameModeExplore::HandleMessage_PerformPrimaryActionOnTargetUnderCursorMessage` (0x007132B0) calls 0x00712830(target, kind, **0**) (0x007132D5, checked).
+  - For a placeable, the kind is 8 when either of the state's actions is set (0x0070CBE3).
+  - Kind 8 takes the selection's first member as the user, and passes `target->slot 0x100(0)`, the state row's **Action0**, to `Orders::UseObject` (0x00712C8F, 0x00712CD4).
+  - When Action0 is 0, the click does nothing, even if Action1 exists.
+  - No skill, lock or trap is looked at, and no variation is chosen; the variation is sub-action 21's front-side test.
+  - A dead creature whose body bag is set (+0x790) redirects to the bag (0x00712C34).
+- **The secondary action.** `PerformSecondaryActionOnTargetUnderCursorMessage` (0x00713300), and the two `…OnTarget` handlers for an object id in 0x00C06794, pass **Action1** the same way.
+  - The secondary kind is 4 when Action1 is 4 (DESTROY: an attack), else 8.
+  - Its default binding was not found.
+- **The tooltip.** It shows Action0's name, or Action1's while the input `ShowSecondaryInteraction` (50) is held. The names are table 100's rows by action (0x0070CDA0).
+
+Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.

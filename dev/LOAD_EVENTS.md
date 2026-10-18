@@ -22,9 +22,9 @@ The area's load is a machine of steps (`0x006c8ef0`, steps 1 to 8):
 
 Before them, at step 3, `EVENT_TYPE_AREALOAD_SPECIAL` (40, or 41 from a save) is run on the area's script at once, not queued (below). A saved game's load is told by the loading state's byte +0x68 (`0x006c90b8`), set only by load requests of kind 2 and 8. 37 and 80 are never raised.
 
-## A creature
+## An object placed
 
-`EVENT_TYPE_SPAWN` (3) goes to each creature once, the first time it is placed in an area (`CCCreature`'s slot 63, `0x006b6bc0`, its flag at +0xC54), and only if the creature's script takes event 3.
+`EVENT_TYPE_SPAWN` (3) goes to each creature, placeable and trigger once, the first time it is placed in an area, and only if its script takes event 3: a creature from its add-to-area (vtable +0xF8, index 62; `0x006b6bc0`, its flag at +0xC54), a placeable (`0x00750b10`, flag +0x6D0) and a trigger (`0x0079b6b0`, flag +0x500) the same way. An object restored from a save has the flag set, so a save's load sends none (corrected 2026-10-18 by lib-agent-2; below).
 
 ## AREALOAD_SPECIAL and the other load events
 
@@ -65,3 +65,72 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 ### `EVENT_TYPE_AREALIST_POSTLOAD` (80)
 
 - Not raised: no code stores 0x50 as an event's type (`mov dword [reg+0x20], 0x50`, none), and no `push 0x50` reaches the event gate or the plot event builder. No shipped script handles it either (`toolset\extract\scripts`, none). Read. It looks like a number reserved and never used.
+
+## EVENT_TYPE_SPAWN (3): once per object, for creatures, placeables and triggers
+
+**Where it is sent.** Three places build it, each the class's add-to-area (vtable +0xF8, index 62; `dev/LOAD_EVENTS.md`'s "slot 63" is Ghidra's 1-based count):
+
+| Class | Add-to-area | Flag |
+|---|---|---|
+| `CCCreature` | 0x006B6BC0 | +0xC54 |
+| `CCPlaceable` | 0x00750B10 | +0x6D0 (checked) |
+| `CCTrigger` | 0x0079B6B0 | +0x500 |
+
+Items, waypoints, stores and sounds get none.
+
+**How it is sent.**
+- It is sent only if the flag is 0 and the object's script takes event 3 (0x00698490(3)). The flag is then set to 1 either way.
+- A creature also skips it when added to the area it is already in.
+- It is **queued** (`AIMaster::AddEventDeltaTime(…, 10, ev)`), creator and target the object itself, with no ints.
+
+**`CreateObject`** (0x00669550 → 0x00687830 → 0x006861F0), in order:
+1. The object is constructed, with the flag 0.
+2. The template is loaded. For a creature, its `Equip_ItemList` is made and equipped and its `ItemList` filled (0x006BCC30), **before** SPAWN.
+3. The object is added to the area, which queues SPAWN.
+4. The orientation is set; the active flag is set from `bSpawnActive`; the override script is set; `bNoPermDeath` is stored.
+
+Two consequences:
+- A pooled template (`CreatePool`) reuses a creature by `SetPosition` and sends no SPAWN.
+- The event filter is checked against the template's script, before an override script is set (inferred: an override alone doesn't bring SPAWN).
+
+**Placed objects** (a first visit):
+- The area's loaders (creatures 0x00683820, placeables 0x00683380) put them on waiting lists. 0x0067F420 adds each one whose resources are ready, placeables before creatures.
+- That happens at the loading states' step 13; step 14 places the party (0x006C73C0).
+- So their SPAWNs are queued before state 6's AREALOAD_SPECIAL (40) and PRELOADEXIT (38).
+- Triggers, waypoints and stores are added as they load.
+
+**Never resent.**
+- No SPAWN field is saved, but an object restored from save data (its vtable +0x88) sets its flag to 1. So a save's load, or a return to an area kept in memory, sends no SPAWN.
+- The exception is a hero applied from the saved-heroes list (0x006D1850), which gets the flag 0 and SPAWN again.
+- `creature_core.nss` also guards with the local `CREATURE_SPAWNED`.
+
+Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
+
+## The party placed on arrival: the engine's formation
+
+The scripts only call `DoAreaTransition` (`UT_DoAreaTransition`, `utility_h.nss`:1051–1095); no script places followers after a load. The engine does, in 0x006C73C0 (the loading states' step 13/14, and the save load's step 0x15).
+- **The point.** It is the waypoint's position and facing (copied in 0x006C7080).
+- **The leader** is the controlled creature (`[[app+0xD0]+0x5C]`). It stands on the waypoint, facing the waypoint's way.
+- **Each other active party member** (the party's vector at +0x234) gets a slot (0x00631D90: its index in the vector, minus one; followers outside the party come after). Its spot is the leader's position plus the slot's offset, turned to the facing (0x007605B0 with table 0x00C0D2F0, checked):
+
+  | slot | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | x (right) | -1 | 1 | 0 | -2 | 2 | -3 | 3 | -1 | 1 | -3 | 3 |
+  | y (forward) | -0.5 | -0.5 | -1 | -1 | -1 | -1 | -1 | -2 | -2 | -2 | -2 |
+
+  - The slots are behind the leader, alternating left and right.
+  - When the party's byte +0x450 is 0, left and right swap (0↔1, 3↔4, 5↔6, 7↔8, 9↔10).
+- **The spot is checked.** A spot not free (`MovementController::IsFree`) moves to the nearest free cell within 2.0 m back toward the leader. With no straight walk to the leader, it takes a safe location around the leader within 5.0 m, starting at the two creatures' personal spaces added.
+- **Everyone faces the waypoint's way** (0x006C75C8).
+- **Last,** each creature's spot goes through `GetSafeLocation` within 20.0 m (0x00AE72FC), reachable, snapped to the ground; if that fails the spot is kept.
+- `GetSafeLocation` (0x0073E370) walks square rings outward by half a grid cell.
+- The loading data's byte +0x68 makes everyone keep their own position (inferred: a save's load).
+
+**Jumping to the leader mid-area** uses the same table (0x006AA440) for a party member that isn't the controlled creature:
+- `CommandJumpToObject(controlled creature)` keeps its own facing. Any other creature target gives a random angle at the two personal spaces' distance, facing the target.
+- `CommandJumpToLocation`, or `SetPosition(…, TRUE)`, to within 0.01 m of the controlled creature.
+- So `UT_LocalJump`'s party jump puts the leader on the waypoint and the followers into their slots (inferred).
+
+**Walking follow** uses another table (0x00C0D240: (∓1.5, -1), (0, -2.5), (∓1.5, -4), (∓3, -2), (∓1, -3), (∓3.5, -1)). `GetFollowerWouldBeLocation` answers from it, turned by the leader's movement.
+
+Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.

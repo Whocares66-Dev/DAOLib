@@ -91,3 +91,14 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - Made by the creature's slot 61 (`0x006B6F60`, read), for a current command of type 1 (attack) or 25 (use ability); inferred: on the cast animation's launch event. For an ability: `abi_base`'s `Flags` bit 0 set takes the equipped weapon's projectile (`bitm_base` `Projectile`, or the weapon's local override), else `abi_base`'s `Projectile` and `Crust_ID`. With no projectile (0), a use-ability goes straight to its impact (`0x006AF430(0)`). Otherwise `CreateObject` makes the projectile and sets: owner (+0x4BC), `prj_base` row (+0x4A4), crust (+0x4B4), from an ability (+0x4B8), the target point (+0x4E0, the target creature's position unless it is gone, else the event's location) and the target (+0x4C0); it is added to the area (`0x00679EA0`).
 - Its flight comes from `prj_base` (table 1006): `InitialSpeed`, `Acceleration`, `MinSpeed`, `TopSpeed`, `Simulation`, `ImpactTimeout`, read at `0x007E8156` and `0x007E6900`–`0x007E6984` (the flight's integration not read). Arcane Bolt (`abi_base` 200254: `Projectile` 137, `Range` 4, `Speed` 1, `Cooldown` 6.0, `Cost` 15.0, `ConjureAnim` 244, `CastAnim` 246, `SpellScript` `spell_singletarget.ncs`): `prj_base` 137 "Arcane Bolt", model `fxa_arc_bolt_p`, `InitialSpeed` 5.0, `Acceleration` 10.0, `MinSpeed` 15.0, `TopSpeed` 40.0 (m/s and m/s², inferred), static collisions 1. Chain Lightning's is 114: 10 initial, 10 acceleration, 20 top.
 - The spell's own script (`SpellScript`) is reached by `ability_core` through `Ability_DoRunSpellScript` with its own events (`EventSpellScriptCast`, `EventSpellScriptImpact`), not by the engine (read in the scripts).
+
+## IsModalAbilityActive and Engine_SetModalAbilityGUI share one list
+
+- `IsModalAbilityActive` (726, 0x0066DD80) searches the creature's stats' (+0x7C4 → `CCCreatureStats`) **+0xF8 vector of ability ids**.
+- `Engine_SetModalAbilityGUI` (725, 0x00669E80 → 0x0071DA90(ability, status, 0)) writes that same vector. Status 0 erases the id and anything else appends it; then it sets the quickbar button's toggle (0x00719A40).
+  - On a real change it may also send event 0x88 (on) or 0x89 (off) to the creature, when a table string is set and an equipment check passes (purpose not read).
+- **Its other writer** is a save's load: `SavegameCreatureModalAbilityList` (16468), through 0x0071DA90(id, 1, 1).
+- **The scripts call 725** from the upkeep effect: `effect_upkeep_h.nss`:107 on apply (TRUE), :212 on remove (FALSE).
+- So a modal ability is "active" exactly while its upkeep effect's handlers say so; the engine reads no effect for it.
+
+Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
