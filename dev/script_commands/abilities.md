@@ -15,3 +15,35 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, b
 ## Not read
 - The item class values at +0x6E0 beyond what the tests imply (2 melee, 3 shield, 6 ranged), and 0x00A664C0.
 - 0x0071A210 (the appearance group) and 0x0066DD60 (the mode test).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops/pushes and `GetCreatureById` 0x005D58C0: `dev/script_commands/commands.md`. The creature's stats are `creature+0x7C4` (`CCCreatureStats`).
+
+### Engine_SetModalAbilityGUI (725)
+- **Handler:** 0x00669E80 (not shared); pops creature, ability id, status (all unconditional) and calls `CCCreatureStats` 0x0071DA90(ability, status, 0) (checked).
+- **Described in:** `dev/ABILITIES.md`, "IsModalAbilityActive and Engine_SetModalAbilityGUI share one list".
+- **Does:** status 0 removes the ability id from the stats' +0xF8 vector, anything else appends it; sets the quickbar toggle (0x00719A40); may send event 0x88/0x89 on a real change. Called by the scripts' upkeep effect on apply and remove.
+- **Edge cases:** invalid or non-creature: nothing, returns 0 (checked). 0x0071DA90 returns at once if the stats have no owner (stats+0x5C null) (checked). Any non-zero status counts as ON (checked). The ability id is not validated here (the `ABI_base` row is looked up inside, hash 0x70F463FA, and its use inferred).
+
+### IsModalAbilityActive (726)
+- **Handler:** 0x0066DD80 (not shared) (checked).
+- **Described in:** `dev/ABILITIES.md`, same section (the +0xF8 vector).
+- **Does:** `GetCreatureById`, then pushes TRUE when the ability id is in the stats' +0xF8 vector (`std::vector<unsigned>::Contains` 0x008663A0), else FALSE.
+- **Edge cases:** invalid or non-creature: FALSE (`esi` zeroed first) (checked). It tests the list `Engine_SetModalAbilityGUI` and a save's load fill, not whether the effect is applied: a modal ability whose upkeep was removed by another route stays TRUE until 725 clears it (inferred from the writers in ABILITIES.md).
+
+### SetCooldown (194)
+- **Handler:** 0x0066A150 (not shared) (checked).
+- **Described in:** `dev/ABILITIES.md`, "Cooldown" (set by the scripts); `src/dao/Abilities.h` (`dao::abilities::SetCooldown`) and `dev/LIBRARY.md`.
+- **Does:** pops creature, ability id, float seconds and, **only when the argument count is 4 or more**, the item tag string (default empty); then `CCCreatureStats::SetCooldown` 0x0071DCE0(ability, seconds, tag) on the stats (checked). Remaining and total are both set to the seconds (Abilities.h).
+- **Edge cases:** invalid or non-creature: nothing, returns 0 (checked). A failed pop gives -639. No range check: 0 or a negative time is stored as given (the record's own handling inferred). For an item ability (type 4) the record is found by ability and item tag (0x0071CA00; checked in `GetRemainingCooldown`'s lookup), otherwise the tag is ignored (inferred).
+
+### GetRemainingCooldown (195)
+- **Handler:** 0x0066A280 (not shared); stats 0x0071CE60(ability, tag) (checked).
+- **Described in:** `dev/ABILITIES.md`, "Cooldown"; `src/dao/Abilities.h`.
+- **Does:** pops creature, ability id and, **only when the argument count is 3 or more**, the item tag; looks the record up (0x0071CA00 then 0x0071C250) and pushes its remaining seconds as a float via `StackPushFloat` (checked).
+- **Edge cases:** invalid or non-creature: pushes 0.0 (seeded `fldz`) (checked). No record for the ability (never set, or finished and dropped): 0.0 (0x0071CE85) (checked). A failed push returns -638.
+
+## Not read
+- The bodies of `CCCreatureStats::SetCooldown` 0x0071DCE0 and the record lookups 0x0071CA00/0x0071C250 (when a record is dropped, how the tag keys it).
+- 0x0071DA90's later branches (the event 0x88/0x89 conditions).

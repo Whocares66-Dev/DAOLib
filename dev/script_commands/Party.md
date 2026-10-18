@@ -195,3 +195,102 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 - The notification queue's consumer on party+0x330 (types 6 and 8).
 - SetTacticEntry's valid-list builders (0x007AFE80, 0x007AED50, 0x007AF6C0); who sets tactics +0xE4 (customized), +0xD4's other values, +0x5C (party AI on); the class at creature +0xC00 (`PartyTactics` inferred from its message handlers).
 - The stealth visuals' function 0x005B9450, the config at 0x005B9020+0x28, and app state 9.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops and pushes as `dev/script_commands/Party.md` says (-639 a failed pop, -638 a failed push). The party is `[[app 0xC327EC]+0xD0]+0x58` (getter 0x005D57C0). The tactics rules (index 1-based, odd defaults) are on master's `dev/PARTY.md`, "The script commands" table under section 1; that note already records `GetNumTactics` 0 while party AI is off and `IsTacticEnabled` needing Target, Condition and Command non-zero, so `%TEMP%\lib-agent-2-party-rules.md` need not be cited for them.
+
+### GetFollowerState (399)
+- **Handler:** 0x0065E670 (not shared) -> `CCParty` 0x00632810 (checked).
+- **Described in:** `dev/PARTY.md`, "SetFollowerState and RemoveFromParty" and its pool section (the map at party+0x2A8, find 0x006FE370, count at +0x2B4).
+- **Does:** pops the object and pushes the FollowerInfo state (+0) of the follower map entry for that id: 0 INVALID, 1 ACTIVE, 2 AVAILABLE, 3 UNAVAILABLE, 5 SUSPENDED, 6 LOADING, 7 LOCKEDACTIVE (script.ldf's constants).
+- **Edge cases:** no party, an empty map (count tested first), or no entry for the id (any invalid or non-creature id included): 0 (checked). No type check. It answers for the pool, not for the active party: AVAILABLE is "in the pool, not active".
+
+### SetFollowerState (706)
+- **Handler:** 0x0065E6E0 (not shared) -> `CCParty` 0x0063B9A0, a switch (table 0x0063BA0C) (checked).
+- **Described in:** `dev/PARTY.md`, "SetFollowerState and RemoveFromParty" (the state table).
+- **Does:** pops object and state; with a party, runs the switch (0 removes from party and pool and erases the map entry; 1 and 7 add to the pool and the active party; 2, 3, 5 leave the active party and store the state; 4 and 6 do nothing).
+- **Edge cases:** a state above 7 does nothing (`ja` past the table) (checked). No party: nothing. When the gate `0x00401F30` answers non-zero the handler first builds a telemetry-like record keyed by a four-character tag chosen from the state and the pool test ('NULL' by default; 'FLEV' for state 0 with the id in the pool; 'FJON' for a non-zero state with the id not in the pool; constants 0x4E554C4C, 0x464C4556, 0x464A4F4E), and in every case then runs the switch (checked as flow; the record's meaning inferred). No object-type check: the raw id is put in the map (checked). Returns 0.
+
+### IsFollower (129)
+- **Handler:** 0x00660CF0 (not shared) -> `CCParty` 0x00631830 (checked).
+- **Described in:** `dev/PARTY.md`, the pool section ("`IsFollower` 0x00631830 asks only" the active party at +0x234); `dev/script_commands/Party.md` for the shared offsets.
+- **Does:** pushes TRUE when the id is in the **active party** (+0x234) (vector contains, zero-extended to 0 or 1).
+- **Edge cases:** AVAILABLE and other pool-only members: FALSE (they are in the pool, not +0x234). No party, or an invalid or non-creature id: FALSE (checked). The hero in the active party answers TRUE. A non-party follower (`AddNonPartyFollower`'s list at +0x260) is FALSE.
+
+### GetPackage (317)
+- **Handler:** 0x00661430 (not shared) (checked).
+- **Described in:** `dev/PROPERTIES.md` (the creature's template load reads `Package` into +0x7E8); `dev/SCRIPT_COMMANDS.md` (the field table: `CCCreature` +0x7E8, `GetPackage`, int).
+- **Does:** `GetCreatureById`, then pushes the int at creature+0x7E8, the UTC template's `Package` (the class package row used for levelling and AI tables).
+- **Edge cases:** invalid or non-creature: 0 (checked). The value is whatever the template or `SetPackage`-style write left; the engine does not validate it against a table here.
+
+### GetPackageAI (318)
+- **Handler:** 0x00661490 (not shared) (checked).
+- **Described in:** `dev/PROPERTIES.md` (template load, `PackageAI` at +0x7EC); `dev/PARTY.md` (the AI's use: a package table, `<= 10011` becomes 10011).
+- **Does:** `GetCreatureById`, then pushes the int at creature+0x7EC (the `PackageAI` field).
+- **Edge cases:** invalid or non-creature: 0 (checked). Seen in play 330 times in a 2026-09-30 session returning the field (`dev/LIBRARY.md`).
+
+### GetNumTactics (772)
+- **Handler:** 0x0066D580 (not shared); the creature's tactics object from 0x007AD0D0 (checked).
+- **Described in:** `dev/PARTY.md`, the commands table ("size of `TacticsList`, but 0 when `Enabled` (+0x5C) is false"); `dev/LIBRARY.md`.
+- **Does:** pushes the count of the current tactic list at tactics+0x6C ((end - begin) / 4 over the pointer vector).
+- **Edge cases:** no creature, no tactics object, or `Enabled` (+0x5C, the party-AI switch `IsPartyAIEnabled` reads) false: 0 (checked at 0x0066D5B6). A non-follower has no tactics object, so 0. An empty list (begin pointer null): 0.
+
+### IsTacticEnabled (774)
+- **Handler:** 0x0066ACC0 (not shared); entry lookup 0x007ADCF0 with index - 1 (checked).
+- **Described in:** `dev/PARTY.md`, the commands table (774: entry Enabled && Target != 0 && Condition != 0 && Command != 0; it does not read +0x5C).
+- **Does:** pushes 1 when all four hold on the 1-based entry (the target type at +0x68, condition +0x88 and command +0xA8 each tested non-zero, and the enabled flag at +0x58), else 0.
+- **Edge cases:** index 0, negative or past the list: no entry, 0 (the lookup compares unsigned). No creature or tactics object: 0. A non-zero but invalid trio still counts as enabled (nothing validates here).
+
+### GetTacticTargetType (775)
+- **Handler:** 0x0066AD80 (not shared) (checked).
+- **Described in:** `dev/PARTY.md`, commands table (775: entry +0x68; missing -> 0); the value names are table 140 (`dev/LIBRARY.md`).
+- **Does:** pushes the entry's target type attribute (+0x68) for the 1-based index.
+- **Edge cases:** out-of-range index (unsigned compare), no creature or no tactics object: 0 (the default is `xor esi,esi`) (checked). Not gated by +0x5C: it answers while party AI is off.
+
+### GetTacticCondition (776)
+- **Handler:** 0x0066AEA0 (not shared) (checked from the table in PARTY.md; same shape as 775).
+- **Described in:** `dev/PARTY.md`, commands table (776: entry +0x88; missing -> 0); names in table 137.
+- **Does:** pushes the entry's condition attribute (+0x88).
+- **Edge cases:** missing entry or creature: 0 (inferred identical to 775; the OBJECT variant 373 differs, it answers -1).
+
+### GetTacticCommand (777)
+- **Handler:** 0x0066AFC0 (not shared) (same shape).
+- **Described in:** `dev/PARTY.md`, commands table (777: entry +0xA8; missing -> 0); names in table 141.
+- **Does:** pushes the entry's command type attribute (+0xA8).
+- **Edge cases:** missing entry or creature: 0.
+
+### GetTacticCommandParam (778)
+- **Handler:** 0x0066B050 (not shared) (same shape).
+- **Described in:** `dev/PARTY.md`, commands table (778: entry +0xB8; missing -> 0).
+- **Does:** pushes the entry's command parameter (+0xB8): an ability id for Use Ability, an item reference for Use Item (`Party.md`, SetTacticEntry).
+- **Edge cases:** missing entry or creature: 0. A parameter of -1 is stored as -1 and returned as such (for Use Item).
+
+### SetAtmosphere (800)
+- **Handler:** 0x00664A10 (not shared); `ScriptBackend::GetControlledArea` 0x0062FD10 on the party; the sky block at area+0x658's +0x120 (checked).
+- **Described in:** `src/dao/core/Sky.h` (the field table and refusals), `src/dao/Atmosphere.cpp` (the head), `dev/LIBRARY.md` (the area's look), `dev/SKY.md`.
+- **Does:** pops the parameter id (int) and the float; one float is written into the controlled creature's area's live sky block and the changed flag at +0x84 is set to 1 (jump table 0x00664CE4, 30 entries, one case per id; offsets in `Sky.h`).
+- **Edge cases:** ids 8, 19, 20, 21 and 23 (the RGB ids, which only `SetAtmosphereRGB` takes) and any id above 29: **returns -640 (0xFFFFFD80), failing the script** (checked). Id 29 writes block +0x7C (no ldf constant names it). No controlled area (no party or controlled creature): nothing, returns 0. No clamp. The effect is on the live block only; the area's own copy at layout+0x2A0 is untouched (see `ResetAtmosphere`).
+
+### ResetAtmosphere (802)
+- **Handler:** 0x00664E80 (no arguments, not shared) (checked).
+- **Described in:** `src/dao/Atmosphere.cpp` head (0x00664E80, 0x005CFBD0 copies the area's own block at layout+0x2A0 over the live one, then works the scattering out again) and `dev/LIBRARY.md`.
+- **Does:** the controlled creature's area's layout (area+0x658) `0x005CFBD0`: restores the sky from the area's own block, undoing every `SetAtmosphere` and `SetAtmosphereRGB`.
+- **Edge cases:** no controlled area: nothing, returns 0. It resets the sky only, not the sunlight set by a plugin, and not the framebuffer effects.
+
+### FB_SetEffectResource (803)
+- **Handler:** 0x00651880 (not shared); manager at the global 0x00C1E8B0 (checked).
+- **Described in:** `src/dao/Framebuffer.cpp` head (the effect and resource lookups) and `dev/LIBRARY.md`.
+- **Does:** pops effect name, resource name (two strings) and a float; finds the effect by name (0x00456CA0, case-insensitive per the play check in the file), the resource by name in the effect's map (0x004602D0); if its type (+4) is 3 (float) sets it (0x0045ED90).
+- **Edge cases:** no manager yet (global null), unknown effect, unknown resource, or a resource that is not a float: **silently nothing**, returns 0 (checked). A pop failure of either string or the float returns -639. The value is not validated or clamped.
+
+### FB_SetEffectEnabled (804)
+- **Handler:** 0x006519B0 (not shared) (checked).
+- **Described in:** `src/dao/Framebuffer.cpp` head and `dev/LIBRARY.md`.
+- **Does:** pops effect name and an int, finds the effect and calls 0x0045FA10(nEnabled != 0), which switches it on or off and tells its stages.
+- **Edge cases:** no manager or unknown effect: nothing, returns 0. Any non-zero int is TRUE. Turning `da_hsvmatrix` off leaves the picture dimmer than the area's grade (play note in the file).
+
+## Not read
+- The tactics getters 776 to 778 were not disassembled (shape taken from PARTY.md's table and 775/774's code); only 772, 774 and 775 were read.
+- What the tagged record in `SetFollowerState` does, and the gate 0x00401F30.
+- The `CCParty` body behind 0x00632810's map find beyond what `Party.md` records.

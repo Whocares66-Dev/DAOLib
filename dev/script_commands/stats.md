@@ -91,3 +91,84 @@ Shared facts (checked unless marked):
 - The ability record's +0x1F8 column; 0x00630460's list at creature+0x534 (inferred: property 15, Level).
 - The body of 0x0071E0D0 and 0x0071C7E0 in the ability removal.
 - `SetPlaceableHealth` (234) / placeable slot +0x124 (0x0074E8E0): not this group.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Shared pops/pushes (-639, -638, `GetCreatureById` 0x005D58C0, `GetObjectById` 0x005D5BE0): `dev/script_commands/commands.md`.
+
+### SetPlaceableHealth (234)
+- **Handler:** 0x0065A250 (not shared); `GetObjectById`, then the object's vtable slot +0x124 (SetHealth) with the value **sign-extended from its low 16 bits** (`movsx word`) and 1 (checked).
+- **Described in:** `dev/script_commands/stats.md`, the shared-facts paragraph (slot +0x124 named there) and "SetMaxHealth"; `dev/PLACEABLES.md` for what a dead placeable does.
+- **Does:** placeable (0x0074E8E0): stores the value at +0x66C with no clamp to the maximum; for a value <= 0 it first runs the death-side code (0x0069BA70(0) clears the byte +0x42C if the +0x678 attribute test is 0; then, if 0x0074D1B0 answers true, 0x0074DBA0 re-applies the state in +0x658 forced, and 0x0074D350(0)), then stores (checked as calls; their effect inferred: the dead state's animation). Creature (0x006A7DD0): the value as a float into `CCCreatureStats::SetCurrent` (0x0071B320) for property 7: the **current health**, clamped to the property's range, with the property-change notification (checked). It starts no death effect and no `KillCreature`.
+- **Edge cases:** invalid id: nothing, returns 0 (checked). Item, trigger, waypoint and other types: CCObject's slot is a bare `ret 8` (0x00738C90), so nothing (checked). Values outside -32768..32767 wrap (checked). The name says placeable but a creature works (checked); script.ldf does not say so.
+
+### IsDead (237)
+- **Handler:** 0x0065A3A0 (not shared); `GetObjectById`, then 0x00695300 = the object's slot +0x120 (GetHealth) and "health <= 0" (checked). It does **not** use the creature's IsDead slot +0x1D0 (0x006A3660, which treats a creature with no stats as dead), although the effect is the same for a creature with stats (checked).
+- **Described in:** `dev/COMBAT.md`, "Health and IsDead" (the slot version); `dev/script_commands/stats.md` for GetHealth's values per type.
+- **Does:** pushes TRUE when GetHealth is 0 or below. No death effect or flag is consulted (checked).
+- **Edge cases:** an invalid id pushes FALSE (the handler's `esi` is zeroed first). **An object whose GetHealth is -1 (item, trigger, AoE, sound, visual effect) answers TRUE**, a waypoint (GetHealth 1) FALSE, a placeable TRUE once +0x66C <= 0 (checked, derived from the GetHealth table in stats.md). A creature with no stats answers 0 health, so TRUE (checked in 0x006AB4B0's body per stats.md).
+
+### SetDead (729)
+- **Handler:** none. The command is in script.ldf (`void SetDead(object, int bDeadFlagValue)`) and the CSV has no row for it: the exe does not register it (`dev/SCRIPT_COMMANDS.md`, "Declared, not registered in this exe").
+- **Described in:** `dev/SCRIPT_COMMANDS.md` (the count table).
+- **Does:** nothing. A script's call reaches `ExecuteCommand` with no handler; the unregistered command 10 is shown there to answer -642, which fails the script (inferred for 729 from that, same path).
+- **Edge cases:** no shipped script calls it (searched `toolset\extract\scripts`). script.ldf's "dead flag" has no field in the engine (COMBAT.md: "no separate flag").
+
+### GetCreatureProperty (738)
+- **Handler:** 0x0066D0E0 (not shared): the helper 0x0066CF60 (also used by `GetCreatureAttribute` 248) and `StackPushFloat` 0x00A2D690 (checked).
+- **Described in:** `dev/PROPERTIES.md`, "GetCreatureProperty (738, `0x0066D0E0`)"; the by-type table in `dev/script_commands/stats.md`, "GetCreatureAttribute".
+- **Does:** pops creature, property, value type, reads TOTAL/BASE/CURRENT/MODIFIER (types 1 to 4, jump table 0x0066D090) and **pushes the float itself** (no truncation, unlike 248) (checked).
+- **Edge cases:** non-creature, no stats, or a value type outside 1..4: pushes -1.0 (0x00AE2E00; the helper's seed) (checked). All three arguments are popped unconditionally, so the ldf default for nValueType (TOTAL) is applied by the compiler, not the handler (checked). Property ids 1000 to 1999 and >= 2000: see stats.md (GetCreatureAttribute).
+
+### SetCreatureProperty (740)
+- **Handler:** 0x00669890 (not shared); pops creature, int, float, int in that order, all unconditionally (checked).
+- **Described in:** `dev/PROPERTIES.md`, "SetCreatureProperty (740) and UpdateCreatureProperty (741)".
+- **Does:** type 1 (TOTAL) and 2 (BASE) both call `CCCreatureStats::SetBase` 0x0071B230; 3 CURRENT `SetCurrent` 0x0071B320; 4 MODIFIER `SetModifier` 0x0071B280 (jump table 0x006699A4); each then calls the change notification 0x00719A00 (checked).
+- **Edge cases:** a value type outside 1..4, a non-creature, a creature with no stats: nothing, returns 0 (checked). **The script.ldf default (BASE) is the compiler's; setting "TOTAL" sets the base**, so the total changes by the same amount only if no clamp or link intervenes (checked). A property id the store lacks: the stats' setters do nothing visible (inferred).
+
+### UpdateCreatureProperty (741)
+- **Handler:** 0x006699C0 (not shared); same pops as 740 (creature, property, float, value type) (checked).
+- **Described in:** `dev/PROPERTIES.md`, same section as 740.
+- **Does:** adds the float: type 3 (CURRENT) via 0x0071B370, type 4 (MODIFIER) via 0x0071B2D0, each with the notification (checked).
+- **Edge cases:** types 1 (TOTAL) and 2 (BASE) and everything else: **nothing at all**, still returns 0 (checked). Non-creature or no stats: nothing. The current is clamped by the depletable's SetCurrent (PROPERTIES.md).
+
+### HasAbility (252)
+- **Handler:** 0x00669AB0, shared with `AddAbility` (253) and `RemoveAbility` (254); this command's case is 0xFC, at 0x00669C21 (checked).
+- **Described in:** `dev/script_commands/stats.md`, "RemoveAbility" (the shared handler, its `ABI_base` AbilityType read).
+- **Does:** pops creature and ability; reads `ABI_base` `AbilityType` (hash 0xE1A8F4EA, 0x00A2CCC0); if the ability is > 0, the creature exists and the row was read, pushes `CCCreatureStats::HasAbility` (0x0071BEC0: the ability id is in that type's vector, 0x007199D0) (checked).
+- **Edge cases:** ability <= 0, unknown ability (no `ABI_base` row), invalid or non-creature: pushes 0 (checked). Item abilities (type 4) are answered like any other type (checked). Only for 252 does a failed push give -638.
+
+### AddAbility (253)
+- **Handler:** 0x00669AB0, case 0xFD at 0x00669BB1 (checked).
+- **Described in:** `dev/script_commands/stats.md`, "RemoveAbility" (the refusal of type 4 is noted there).
+- **Does:** pops creature, ability, and bSendNotification **only when the argument count is above 2** (default FALSE); for ability > 0 and a known row with `AbilityType` != 4, calls `CCCreatureStats::AddAbility` 0x0071EAC0(ability, type, -1). If bSendNotification and the creature is in the party pool (0x006316F0), it queues a notification on party+0x330 (0x006291C0, with the ability and type) (checked; the notification's shape inferred from `Party.md`'s queue).
+- **Edge cases:** **an item ability (type 4) is silently not added.** A duplicate: 0x0071EAC0 sees `HasAbility` and returns early unless the type is 4 (checked). Unknown ability, ability <= 0, invalid or non-creature: nothing. Returns 0.
+
+### GetCreatureMana (242)
+- **Handler:** 0x0066CC30, the same handler as `GetCreatureStamina` (238) (checked).
+- **Described in:** `dev/script_commands/stats.md`, "GetCreatureStamina (238) / GetCreatureMana (242)".
+- **Does:** property 8's CURRENT, truncated to int. There is no separate mana: mage and warrior share property 8.
+- **Edge cases:** as there: non-creature or no stats -1; no property 8: 0.
+
+### SetCreatureMana (243)
+- **Handler:** 0x0066CD00, shared with `SetCreatureStamina` (239) (checked).
+- **Described in:** `dev/script_commands/stats.md`, "SetCreatureStamina (239) / SetCreatureMana (243)".
+- **Does:** property 8's SetCurrent, clamped to [minimum, TOTAL]; no change notification (0x00719A00 is not called here).
+- **Edge cases:** as there: invalid or non-creature, nothing; returns 0.
+
+### GetCreatureMaxMana (244)
+- **Handler:** 0x0066CDC0, shared with `GetCreatureMaxStamina` (240) (checked).
+- **Described in:** `dev/script_commands/stats.md`, "GetCreatureMaxStamina (240) / GetCreatureMaxMana (244)".
+- **Does:** property 8's TOTAL (base + WIL link + modifier, clamped 0..9999), truncated.
+- **Edge cases:** as there: -1 for invalid, non-creature or no stats; 0 with no property 8.
+
+### SetCreatureMaxMana (245)
+- **Handler:** 0x0066CE90, shared with `SetCreatureMaxStamina` (241) (checked).
+- **Described in:** `dev/script_commands/stats.md`, "SetCreatureMaxStamina (241) / SetCreatureMaxMana (245)".
+- **Does:** property 8's SetBase: the maximum becomes value + the WIL link + modifier, not the value; the current is re-clamped down, never raised.
+- **Edge cases:** as there: invalid or non-creature, nothing. script.ldf's "set the maximum" is only true when the WIL link and modifier are 0.
+
+## Not read
+- The body of the placeable death-side calls 0x0074D1B0, 0x0074DBA0 and 0x0074D350 in 0x0074E8E0 beyond their entry (what state change they make).
+- The exact behaviour of `CCCreatureStats::AddAbility` 0x0071EAC0 past its first branches (passives, GUI records, party recompute).
+- Whether property ids missing from the store are guarded in `SetBase`/`SetCurrent` (0x00642E20 for the id).
