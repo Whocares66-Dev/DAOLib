@@ -27,7 +27,7 @@ An object's active flag and the searches it limits, the party pool carried on an
 The party (`[app+0xD0]+0x58`) has:
 - +0x234, the active party (`IsFollower` 0x00631830 asks only it);
 - +0x244, the party pool (`GetPartyPoolList` 0x00672AC0);
-- +0x2A8, a map of creature id to follower state.
+- +0x2A8, a map of creature id to follower state: an `stdext::hash_map<id, FollowerInfo>` by a second reading, its value the state +0, substate +4, locked +8 and follow-the-leader +9 (`dev/script_commands/Party.md`; the container type not re-checked).
 
 **The arrival** (0x006C73C0, the loading states' step 14, and a save's load) walks the pool, +0x244 (0x006C7410, checked), with no test of state, active flag or hired flag:
 - **In the active party** (0x006C7574): placed in the formation (`dev/LOAD_EVENTS.md`), the leader on the waypoint.
@@ -45,7 +45,7 @@ The party (`[app+0xD0]+0x58`) has:
 
 | State | What it does |
 |---|---|
-| 0 INVALID | out of +0x234 (0x006377E0), then 0x0063B8B0: out of the pool and **its map entry erased** (0x0063A1D0, `std::map::erase`) |
+| 0 INVALID | out of +0x234 (0x006377E0), then 0x0063B8B0: out of the pool and **its map entry erased** (0x0063A1D0, the map's erase) |
 | 1 ACTIVE, 7 LOCKEDACTIVE | 0x0063A020: into the pool if missing and the state stored; then 0x00637560 into +0x234, activating it if inactive (slot +0x140(1)) |
 | 2 AVAILABLE, 3 UNAVAILABLE, 5 SUSPENDED | out of +0x234, then 0x0063A020 |
 | 4, 6 LOADING | nothing |

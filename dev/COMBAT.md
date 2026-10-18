@@ -56,7 +56,7 @@ A failure skips the candidate, except in a stealth-detection case. Once perceive
 
 - Candidates are what the area's query returns; the perceiver itself and anyone already in the set (`0x008704D0`) are skipped. Read. No group filter beyond hostility.
 - Hostility: `0x006A2B80(other)` is `IsObjectHostile(perceiver, other)` (when the client app's +0x1B0 is set). Read.
-- A hostile candidate whose +0x7F0 is non-zero (stealthed, inferred from rules_core's "bStealthed") is not added to the set: when in range and in sight it restarts the countdown (`0x006A3690`) and an APPEAR is raised only when +0xC3C is set (or for the controlled creature without party flag 0x10, read). The stealth detection term (the candidate's +0xB94, a rounded value against party+0x414+0x14, and a class 7 with party flag 0x20) is read but not understood.
+- A hostile candidate whose +0x7F0 is non-zero (stealthed, inferred from rules_core's "bStealthed") is not added to the set: when in range and in sight it restarts the countdown (`0x006A3690`) and an APPEAR is raised only when +0xC3C is set (or for the controlled creature without party flag 0x10, read). The stealth detection term (the candidate's +0xB94, a rounded value against party+0x414+0x14, and a class 7 with party flag 0x20) is read but not understood. +0xB94 is the creature's trackable flag: `SetCreatureCanBeTracked` (764) writes it at `0x0066BFF7` (read 2026-10-18 by lib-agent-2; inferred: loaded from the template's Trackable).
 - Otherwise a candidate in range is added to the set and APPEAR raised at once (`0x006B3240`: `0x006B1120` inserts the id, then `0x006AFCF0(other, 0, 0)`); one in the party's range but not the creature's own is added with no event. Read.
 
 ### The events

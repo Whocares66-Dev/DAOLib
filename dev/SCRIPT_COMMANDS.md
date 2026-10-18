@@ -12,6 +12,12 @@ call  CVirtualMachineCommands::Register ; 0x0064DD40, table[id] = function
 
 `tools/script_commands.py` walks `.text` for that shape and writes `dev/script_commands.csv`: `id,name,function_va,registered_at_va,script_name,signature`, one row per command. As read on 2026-09-29, 827 commands are registered and 692 have an implementation. The other 135 are registered with a null function. Examples are `COMMAND_ADDSPELL`, `COMMAND_BANPLAYER` and the `COMMAND_COMMAND*` creature-command family. The client exe knows their numbers and names but implements them elsewhere, or not at all.
 
+## Each command's handler, by group
+
+Every live function of `script.ldf`, by its `@addtogroup`: what its handler does, the engine state it touches, and its edge cases, under the ldf's exact name. Read by lib-agent-2 from 2026-10-18 for DAOParagonEngine's baseline (its #27), one file per group; a function a subsystem note already covers points there.
+
+- [Party](script_commands/Party.md)
+
 ## Cross-checked against script.ldf
 
 The game ships the toolset compiler's declaration of every engine function: `script.ldf`, in `packages\core\data\scripts.erf`. Each declaration carries its command number:
