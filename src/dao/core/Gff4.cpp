@@ -217,7 +217,22 @@ const Template &Struct::Shape() const
 std::optional<std::size_t> Struct::Slot(std::uint32_t label, Type type) const
 {
     const Field *field = Shape().Find(label);
-    if (field == nullptr || field->type != static_cast<std::uint16_t>(type) || (field->flags & (kList | kStruct)) != 0)
+    if (field == nullptr || (field->flags & (kList | kStruct)) != 0)
+    {
+        return std::nullopt;
+    }
+    // A generic field holding one value of the type: a campaign's variable,
+    // its value's type in the element (singleplayer.cif's ScriptVarTable).
+    if (field->type == static_cast<std::uint16_t>(Type::Generic))
+    {
+        const std::optional<Element> element = GenericElement(*file_, at_ + field->offset, *field);
+        if (!element || element->type != static_cast<std::uint16_t>(type) || (element->flags & (kList | kStruct)) != 0)
+        {
+            return std::nullopt;
+        }
+        return element->at;
+    }
+    if (field->type != static_cast<std::uint16_t>(type))
     {
         return std::nullopt;
     }
@@ -238,6 +253,11 @@ std::optional<std::wstring> Struct::String(std::uint32_t label) const
 {
     // A string's slot always holds an offset, flagged a reference or not.
     const Field *field = Shape().Find(label);
+    if (field != nullptr && field->type == static_cast<std::uint16_t>(Type::Generic))
+    {
+        const auto slot = Slot(label, Type::String);
+        return slot ? file_->StringAt(*slot) : std::nullopt;
+    }
     if (field == nullptr || field->type != static_cast<std::uint16_t>(Type::String) ||
         (field->flags & (kList | kStruct)) != 0)
     {

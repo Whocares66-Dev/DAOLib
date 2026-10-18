@@ -565,6 +565,12 @@ MUTANTS: list[Mutant] = [
         "else if (text[i] == separator && !quoted)",
     ),
     Mutant(
+        "gff4-generic-value-typed: a generic field's value reads only as its element's own type",
+        GFF4,
+        "if (!element || element->type != static_cast<std::uint16_t>(type) || (element->flags & (kList | kStruct)) != 0)",
+        "if (!element || (element->flags & (kList | kStruct)) != 0)",
+    ),
+    Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
         GFF4,
         "        return std::wstring();\n    }\n    const std::size_t p = data_ + *offset;",

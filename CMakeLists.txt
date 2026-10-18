@@ -148,6 +148,7 @@ add_library(
     src/dao/core/ArchiveCache.cpp
     src/dao/core/Area.cpp
     src/dao/core/CallSite.cpp
+    src/dao/core/Campaign.cpp
     src/dao/core/Character.cpp
     src/dao/core/Clip.cpp
     src/dao/core/Conversation.cpp

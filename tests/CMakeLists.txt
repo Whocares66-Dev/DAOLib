@@ -10,6 +10,7 @@ add_executable(
     test_angle.cpp
     test_archive_cache.cpp
     test_area.cpp
+    test_campaign.cpp
     test_character.cpp
     test_code.cpp
     test_crashlog.cpp

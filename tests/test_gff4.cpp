@@ -334,3 +334,50 @@ TEST_CASE("a field read as the wrong type gives nothing")
     CHECK_FALSE(lines[1].Get<std::int32_t>(99999));
     CHECK(lines[1].Numbers(ConversationFile::kLineSpeaker).empty());
 }
+
+namespace
+{
+
+// A campaign's variable as singleplayer.cif lays it out (tools/gff4.py --templates): its name, its
+// type and its value, the value a generic field held by reference, whose element names the
+// value's own type.
+std::vector<std::byte> Variable(std::uint16_t type, bool asString)
+{
+    Builder b = dao::test::Start(
+        "CIF ",
+        {{"VARS", 16, {{17001, 14, 0, 0}, {17003, dao::test::kGeneric, gff4::kReference, 4}, {17002, 0, 0, 12}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    b.U32(root, b.String(u"LOG_ACTIVE"));
+    b.U8(root + 12, asString ? 12 : 1);
+    b.U32(root + 4, type);
+    const std::size_t value = dao::test::Struct(b, 4);
+    if (asString)
+    {
+        b.U32(value, b.String(u"plt_main")); // a string's value is an offset to it
+    }
+    else
+    {
+        b.U32(value, 42);
+    }
+    b.U32(root + 8, static_cast<std::uint32_t>(value - b.data));
+    return b.bytes;
+}
+
+} // namespace
+
+TEST_CASE("a generic field holding one value reads as that value's type, and as no other")
+{
+    const auto whole = Variable(5, false); // S32
+    const auto file = gff4::File::Parse(whole);
+    REQUIRE(file);
+    CHECK(file->Root()->Get<std::int32_t>(17003) == 42);
+    CHECK_FALSE(file->Root()->Get<float>(17003));
+    CHECK_FALSE(file->Root()->String(17003));
+    CHECK(file->Root()->Get<std::uint8_t>(17002) == 1);
+
+    const auto text = Variable(14, true); // ECString
+    const auto other = gff4::File::Parse(text);
+    REQUIRE(other);
+    CHECK(other->Root()->String(17003) == L"plt_main");
+    CHECK_FALSE(other->Root()->Get<std::int32_t>(17003));
+}
