@@ -201,3 +201,91 @@ Not read: the other eleven tag-index removers' classes, one by one; the order of
 - The flight itself: how bWideAngle shapes the arc, homing's steering, `ImpactTimeout`.
 - The area a script projectile is placed in.
 - What the model's slot 0x58 parameters (1.0, 0.0, 1.0, 5.0) are, and what the Animations table's `State` 1 means.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetGameObjectById` 0x005D5840 returns any game object, `GetObjectById` 0x005D5BE0 only a `CCObject` (cast slot +0x18); the type byte is object +0x14. "Checked" = read in the disassembly, "inferred" = not.
+
+### GetObjectType (207)
+- **Handler:** 0x00659470 (not shared). It calls `GetGameObjectById`. (checked)
+- **Described in:** `dev/script_commands/objects.md` (shared facts: the type byte at +0x14); the probe's checks in `dev/PROBE.md` and `dev/LIBRARY.md`.
+- **Does:** pushes `1 << (type byte - 1)`, the OBJECT_TYPE_* bit (creature byte 6 gives 32, placeable 10 gives 512, item 7 gives 64).
+- **Edge cases:** an invalid or stale id pushes 0 (OBJECT_TYPE_INVALID). Areas, the module, the party and maps answer too, since the lookup is the unrestricted one (module byte 3 gives 4, area byte 4 gives 8). (checked) A type byte of 0 would shift by 255 & 31 and give 0x80000000 (inferred from the x86 shift). Push failure -638.
+
+### GetTag (209)
+- **Handler:** 0x006596A0 (not shared). `GetGameObjectById` and the object's cast slots. (checked)
+- **Described in:** `dev/script_commands/objects.md`, "SetTag (210)" and the tag index; the probe checked 411 calls (`dev/LIBRARY.md`).
+- **Does:** copies the object's tag wstring and pushes it: a `CCObject` from +0xB8, an area (type 4) from area +0x180, the module (type 3) from module +0x24C, a map patch (type 17) from its location record +0x130. (checked)
+- **Edge cases:** an invalid id, or any other type (party, map), pushes "" (the string constructed first, never assigned). A tag is not truncated to 64 characters here (only the index is). (checked) Failed pop -639, failed push -638.
+
+### CreatePool (213)
+- **Handler:** 0x006598D0 (not shared). It pops a resource, then an int, calls the area lookup 0x005D6B30 and `CCArea::CreatePool` 0x00687410. (checked)
+- **Described in:** `dev/LOAD_EVENTS.md`, "EVENT_TYPE_SPAWN (3)" (a pooled template reuses a creature by `SetPosition` and sends no SPAWN).
+- **Does:** pushes TRUE if it made a pool for the template in the area of the controlled creature (area id at its +0x254). (checked)
+- **Edge cases:** it answers FALSE, with no pool and no failure, unless **the game mode is 9 (GM_LOADING)** (`[app+0x114]`+0x74's +0x5C compared with 9 at 0x00687453), **nPoolSize is 1 to 50** (0 or more than 0x32 is refused), and the area has no pool for that resource yet (the pool map at area +0x1D0). (checked) With no controlled creature or area it pushes FALSE. When it succeeds it clears the pool's id vector to -1 for each slot and registers it. The pool is filled by `CreateObject`, which reuses a free pooled creature through `SetPosition`. A failed pop of either argument returns -639.
+
+### CreateObject (306)
+- **Handler:** 0x00669550 (not shared). It calls the area lookup 0x005D6B30 and `CCArea::CreateObject` 0x00687830 (which tries the pool, else 0x006861F0). (checked)
+- **Described in:** `dev/LOAD_EVENTS.md`, "EVENT_TYPE_SPAWN (3)" (the order of construction, template load, SPAWN, orientation, active flag, override script); `dev/PARTY.md`, "CreateObject then a hire".
+- **Does:** pops nObjectType, the resource, the location, sOverrideScript, bSpawnActive, and bNoPermDeath only when the param count is over 5 (default 0). The type bit is turned into the type byte by `floor(log2(n)) + 1` (0x006696A3 to 0x006696C4), so OBJECT_TYPE_CREATURE (32) becomes 6. The object is made at the location's position in the area of the **controlled creature**, not the location's area. It sets the orientation from the location, SetActive(bSpawnActive != 0) (slot +0x140), the override script when not empty, and for a creature that came from a pool resets it (0x006AB900) and writes bNoPermDeath at creature +0xBD8. (checked)
+- **Edge cases:** the location's own area id is ignored (checked: only its position and orientation floats are read). With no controlled creature's area, or if the area makes nothing (a bad template or type), it pushes OBJECT_INVALID and the script goes on. A type of 0 or a non-power of two is accepted by the conversion and the area decides (inferred). The location copy is freed only on the success path. Failed pops -639, a failed push -638.
+
+### CreateItemOnObject (212)
+- **Handler:** 0x00673630 (not shared). It calls 0x005D5C20 (the target's inventory), 0x007595A0 (make the items) and 0x007634B0 (add them). (checked)
+- **Described in:** `dev/ITEMS.md`, "`CreateItemOnObject` (212)".
+- **Does:** pops the resource, the target, nStackSize, the tag, bSuppressNotification, and bDroppable only when the param count is 6 or more (default TRUE). Makes the items, sets each item's droppable byte (+0x4B0), adds them with the inventory flags 0x10 (0x14 when suppressed) set in the global 0x00C371B4 and put back after, and pushes the first item's id. If the target also answers the placeable cast (slot +0x24), it calls 0x0069BA70(1). (checked)
+- **Edge cases:** nStackSize of 0 or less, a target without an inventory (nothing found by 0x005D5C20), or a commands object whose `[this+4]` is not 1 pushes OBJECT_INVALID and does nothing else; the script is not failed. (checked) The tag is passed to the item maker (ITEMS.md). Failed pops -639, a failed push -638.
+
+### SetObjectActive (140)
+- **Handler:** 0x006618B0 (not shared). `GetObjectById`, then the object's slot +0x140 (SetActive), the effects holder (+0x70) tests, and the command pool (`app+0x1AC`→+0x6C). (checked)
+- **Described in:** `dev/PARTY.md`, "Active: the effects holder's slot +0x6C, and the object's slot +0x140"; `dev/ANIMATION.md` (the +0x421 pending flag).
+- **Does:** pops the object, nActive, then nAnimation (param count 3 or more) and nVFX (4 or more), each defaulting to 0. Activating: nothing if already active; else it clears a pending deactivation (0x0073C930), calls +0x140(1), and, when nAnimation is non-zero and the holder's 0x0079F270 answers 0 or less, queues command type 0x0D (play animation) at the front. Deactivating: nothing if already inactive; with an animation it queues command 0x0E, sets +0x421 = 1 and calls 0x0069BA70(0); without it calls +0x140(0) at once. A non-zero nVFX is applied only when nAnimation is also non-zero (both are tested at 0x00661B4D) and the holder's count is 0 or less: it builds a 0x7C-byte effect record (kind 2, the animation's 0x00694E50 value at +0x2C, nVFX as its id) and applies it through 0x0079F410 and 0x007A1A20. (checked; the record's meaning inferred)
+- **Edge cases:** only a `CCObject` works: an invalid id, an area, the module or the party does nothing. The animation and the VFX are skipped while the holder reports a positive 0x0079F270 (inferred: effects or commands already playing). A follower in the active party is never deactivated (PARTY.md). Returns 0.
+
+### GetObjectActive (141)
+- **Handler:** 0x00668A20, the shared object getter (case `0x8D` at 0x00668AB5). (checked)
+- **Described in:** `dev/PARTY.md`, "Active: the effects holder's slot +0x6C, and the object's slot +0x140" ("`GetObjectActive` (141) is the test").
+- **Does:** `GetObjectById`, then slot +0x6C of the base at +0x70, which holds +0x2C5 set and +0x421 clear; pushes 1 or 0.
+- **Edge cases:** an invalid id, or a non-`CCObject`, pushes 0. A deactivation still pending its animation (+0x421) reads as inactive. Push failure -638.
+
+### GetAILevel (221)
+- **Handler:** 0x00659DE0 (not shared). `GetObjectById`, then object +0x2B0. (checked)
+- **Described in:** `dev/AI.md`, "One creature's AI switched off"; `dev/SCRIPT_COMMANDS.md`, "Fields".
+- **Does:** pushes the AIMaster level stored at +0x2B0 (-1 when the creature is in no list; 0 to 4 else).
+- **Edge cases:** an invalid id or a non-`CCObject` pushes -1, not 0. Any `CCObject` is accepted (items, placeables). Push failure -638. (checked)
+
+### SetAILevel (222)
+- **Handler:** 0x00659E40 (not shared). `GetObjectById`, then `AIMaster::Set` 0x0064B480 on `app+0x1AC`, or slot +0x154 (UpdateAILevel). (checked)
+- **Described in:** `dev/AI.md`, "One creature's AI switched off"; `dev/PARTY.md`, "The AI and the controlled creature" (+0x2B4 stops the engine's own changes).
+- **Does:** pops the object and the level. -1 clears the script's override (+0x2B4 = 0) and calls UpdateAILevel, so the engine chooses again. Any other value is handed to `AIMaster::Set` and then +0x2B4 = 1.
+- **Edge cases:** an invalid id does nothing. The level is not range-checked here (0 to 4 are lists, per PARTY.md, and `AIMaster::Set` decides for anything else; its body was not read). Any `CCObject` works. Returns 0.
+
+### GetModule (224)
+- **Handler:** 0x00669850 (not shared). `CClientExoApp::GetModule` 0x005D4FC0, then the module's id (attribute +4, 0x0053CC40). (checked)
+- **Described in:** `dev/CHARGEN.md` ("creator is the module, or -1 with no module") and `dev/script_commands/objects.md` (the module is a game object of type 3).
+- **Does:** pushes the module's object id.
+- **Edge cases:** with no module loaded (before a module starts) it pushes OBJECT_INVALID (-1). The id answers `IsObjectValid` but is not a `CCObject`, so most object commands treat it as invalid (`GetObjectById` refuses it). Push failure -638. (checked)
+
+### IsConjuring (731)
+- **Handler:** 0x00659CC0 (not shared). `GetCreatureById`, then `CCCreature::ForScript_IsConjuring` 0x0073C7B0. (checked)
+- **Described in:** `dev/TURN_BASED.md`, "A command's timed phases and the creature's clock" (answers the running sub-action's type; 7 through the conjure).
+- **Does:** pushes 1 when the first sub-action of the current command (`[creature+0x2DC]+0xC`, first action's first word) is type 7, else 0.
+- **Edge cases:** a non-creature, a creature with no current command, and one with no sub-actions push 0. (checked) Push failure -638.
+
+### SetAimLoopDuration (394)
+- **Handler:** 0x00659D30, shared with `SetAttackDuration` (353); this is the case `0x161 + 0x29` (0x18A) at 0x00659DA8. (checked)
+- **Described in:** `dev/COMBAT.md`, "The attack command" (sets the aim's time); `dev/SCRIPT_COMMANDS.md`, "Fields" (combat +0x60).
+- **Does:** pops the creature and the float seconds (-639 if either pop fails). Converts to milliseconds (`* 1000.0`, truncated through 0x008E34F0) and writes it at combat data +0x60. (checked)
+- **Edge cases:** a non-creature does nothing. A creature without combat data would fault (no test, inferred). Negative or huge values are written as is. Returns 0.
+
+### SetAttackDuration (353)
+- **Handler:** 0x00659D30, shared with `SetAimLoopDuration` (394); the case is `sub ecx,0x161` at 0x00659DA0. (checked)
+- **Described in:** `dev/COMBAT.md`, "The attack command" (step 5: the swing's length is `SetAttackDuration` for a humanoid with a weapon); `dev/SCRIPT_COMMANDS.md`, "Fields" (combat +0x64; the text there names +0x60 for both and the handler splits them: 353 writes +0x64, 394 writes +0x60).
+- **Does:** pops the creature and the float seconds and writes `trunc(seconds * 1000.0)` at combat data +0x64. (checked)
+- **Edge cases:** same as `SetAimLoopDuration`: a non-creature does nothing, no range check, no test of the combat data. Returns 0. The value is a per-creature field the attack command reads; it is not cleared between attacks (inferred).
+
+## Not read
+- `CCArea::CreateObject`'s (0x00687830, 0x006861F0) per-type creation and what each OBJECT_TYPE does with a bad template.
+- `AIMaster::Set` (0x0064B480) for levels outside 0 to 4.
+- What `[this+4]` of the commands object is (the gate of `CreateItemOnObject`) and what 0x0079F270 counts in `SetObjectActive`.
+- The bodies of 0x0079F410 and 0x007A1A20 (the VFX of `SetObjectActive`).

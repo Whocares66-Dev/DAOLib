@@ -34,3 +34,34 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
 - **Handler:** 0x0065BBE0. Checked.
 - **Does:** `+0x3B8 = 0`, `+0x3BC = 0` on any object. No notification. Checked.
 - **Edge cases:** invalid object → no-op.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetCreatureById` 0x005D58C0, `GetObjectById` 0x005D5BE0; a `CCObject`'s group id is +0x3C0, its team id +0x3C4, its reaction override flag +0x3B8 and value +0x3BC; the reputation manager is `app+0x1B0`. "Checked" = read in the disassembly, "inferred" = not.
+
+### IsObjectHostile (468)
+- **Handler:** 0x0065BA20 (not shared; the script_commands.csv names it COMMAND_ISHOSTILE). It calls 0x0064BB40 on `app+0x1B0`. (checked)
+- **Described in:** `dev/script_commands/reaction.md`, "Group hostility: summary" (the rule at 0x0064B900); `dev/COMBAT.md`, "Who" (the perception update uses it).
+- **Does:** pops the source and the target and pushes 1 if the source treats the target as hostile: both are turned into creatures (`GetCreatureById`) and the manager decides by override and the group matrix. (checked up to the wrapper; the decision is the group file's)
+- **Edge cases:** with no reputation manager (`app+0x1B0` null) it pushes 0 without failing. A non-creature on either side (items, placeables, the party) gives 0. (checked) The result is the same for (a, b) as for (b, a) when neither has an override. Failed pops -639, a failed push -638.
+
+### GetGroupId (469)
+- **Handler:** 0x0065BAA0 (not shared). `GetObjectById`, then object +0x3C0. (checked)
+- **Described in:** `dev/script_commands/reaction.md`, "Group hostility: summary" (the group id at +0x3C0); `dev/SCRIPT_COMMANDS.md`, "Fields".
+- **Does:** pushes the group id as the int stored (GROUP_PC 0, GROUP_HOSTILE 1, GROUP_FRIENDLY 2, GROUP_NEUTRAL 3, and the template's own ids).
+- **Edge cases:** an invalid id, or an area, the module or the party (not a `CCObject`), pushes -1, not 0 (0 is GROUP_PC). Any `CCObject` answers, not only creatures: items and placeables hold whatever their template gave. (checked) The probe saw 42 of 42 calls agree (`dev/BUILDS.md`).
+
+### SetTeamId (806)
+- **Handler:** 0x0065BC30 (not shared). `GetObjectById`, the object's slot +0xA0 (its area), then the area's team registry: 0x00687A50 (remove from the old team) and 0x00687980 (add to the new). (checked)
+- **Described in:** `dev/SCRIPT_COMMANDS.md`, "Fields" (`GetTeamId`, written by `SetTeamId`, at +0x3C4).
+- **Does:** pops the object and the team id; takes the object out of the area's list for its old team, puts it in the list for the new one, and then stores the id at +0x3C4. (checked; that these are the area's team lists is inferred from the call order)
+- **Edge cases:** an invalid id or a non-`CCObject` does nothing. **An object that has no area (slot +0xA0 answers null) is not changed at all**: the store at +0x3C4 is skipped. (checked) The two registry calls ignore an id of -1, so setting the team to -1 only removes the old entry. Any int is stored; no range test. Returns 0.
+
+### GetTeamId (807)
+- **Handler:** 0x0065BCD0 (not shared). `GetObjectById`, then object +0x3C4. (checked)
+- **Described in:** `dev/SCRIPT_COMMANDS.md`, "Fields" (`GetTeamId`, written by `SetTeamId`); `dev/LIBRARY.md` (the probe's field check).
+- **Does:** pushes the stored team id.
+- **Edge cases:** an invalid id, or an area, the module or the party, pushes -1 (the constant at 0x00B0D948), not 0. A fresh object's team is whatever its template or the default holds (-1 for none is inferred). Any `CCObject` answers. (checked)
+
+## Not read
+- The bodies of the registry calls 0x00687A50 and 0x00687980 (what the area does with its team lists) and the manager's wrapper 0x0064BB40 beyond its two creature lookups.

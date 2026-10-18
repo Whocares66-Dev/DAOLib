@@ -34,3 +34,22 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
 - **Handler:** 0x0065A140 (object, object) → `ScriptBackend::ForScript_GetThreatValueByObjectID` 0x00740FA0. Checked.
 - **Does:** linear search for oEnemy, returns its `threat + +8`. Checked.
 - **Edge cases:** enemy not in the table → 0.0. Non-creature → 0.0. oEnemy is not validated, so OBJECT_INVALID finds an entry only if one was added with it (checked).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetCreatureById` 0x005D58C0; the threat table is the vector at combat data (`[creature+0xC60]`) +0xC of 12-byte entries `{id, threat, 0}`, sorted descending after each update. "Checked" = read in the disassembly, "inferred" = not.
+
+### ClearEnemyThreat (203)
+- **Handler:** 0x00659F80 (not shared). `GetCreatureById`, then the table's find 0x00740D70 and erase 0x00741840, through 0x00741900 on combat +0xC. (checked)
+- **Described in:** `dev/script_commands/threatsystem.md`, "Threat table: summary" (its only writers are `UpdateThreatTable`, `ClearThreatTable` and this).
+- **Does:** pops the creature and the enemy id, finds the enemy's entry and erases it, so the rest keep their order. (checked)
+- **Edge cases:** a non-creature does nothing; an enemy with no entry does nothing (the find answers -1). The enemy is not validated, so an id of a dead or removed object still clears its entry. A creature without combat data would fault (no test, inferred). Returns 0.
+
+### GetThreatEnemy (200)
+- **Handler:** 0x0065A000 (not shared). `GetCreatureById`, then 0x00740CC0 on combat +0xC. (checked)
+- **Described in:** `dev/script_commands/threatsystem.md`, "Threat table: summary" (index 0 is the most hated, the order a sort after each update leaves).
+- **Does:** pops the creature and the index and pushes the entry's object id at that index. It does not push the threat value (`GetThreatValueByIndex` does). (checked)
+- **Edge cases:** an index at or past the table's size (compared unsigned, so a negative index too), an empty or never-filled table, and a non-creature all push OBJECT_INVALID (-1, the default). (checked) Entries are not checked for validity: the id may be of a dead creature or any object that was passed to `UpdateThreatTable`. Push failure -638.
+
+## Not read
+- Whether a creature always has combat data (a creature without it would fault in both handlers).

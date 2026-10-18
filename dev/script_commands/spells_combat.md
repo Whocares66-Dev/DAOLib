@@ -68,3 +68,109 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
 - 0x0071EF00's full removal (effects, quickbar) for CharGen_ClearAbilityList; 0x006368F0's whole body beyond the selection clear.
 - `+0xBD8` as `NoPermDeath`: the template load's write was not read.
 - What fills record +0x40 (nProjectileTarget) downstream in the projectile.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetCreatureById` 0x005D58C0 (null for a non-creature), `GetObjectById` 0x005D5BE0. The combat data is `[creature+0xC60]`. "Checked" = read in the disassembly, "inferred" = not.
+
+### GetAttackTarget (522)
+- **Handler:** 0x00655000, shared with `GetArea` (223); the case is `cmp edi,0x20A` at 0x00655061. It calls `GetObjectById`, then the object's cast slot +0x10 (creature).
+- **Described in:** `dev/script_commands/objects.md`, "GetArea (223)" for the shared handler; its use in `dev/TURN_BASED.md` ("Commands that ran only in combat") and `dev/PARTY.md` ("The AI and the controlled creature").
+- **Does:** pushes the object id at combat data +4. (checked) Who writes combat +4 was not read.
+- **Edge cases:** an invalid id, a non-creature (not a creature by the cast) and a creature with no combat data all push OBJECT_INVALID (-1, the default in esi). (checked) A creature whose +4 was never set pushes whatever it holds (-1 for none is inferred). Push failure -638.
+
+### GetAttackImpactDamageEffect (695)
+- **Handler:** 0x0065E180 (not shared). It calls `GetCreatureById` and the combat data's 0x007C3770 (a find by id in the list at combat +0x6C, then 0x004E9640 on combat +0x68). (checked)
+- **Described in:** `dev/COMBAT.md`, "The attack command": "fetches the kept effect".
+- **Does:** pops the attacker and the effect id, finds the copy `SetAttackResult` kept for that id, and pushes it as an engine structure (type 3). After the push the handler deletes its own copy (vtable slot 0 with 1). (checked)
+- **Edge cases:** a non-creature attacker, or an id with no kept effect, pushes a null effect (esi 0). (checked) That the find also takes the entry out of the kept list, so a second call with the same id answers null, is inferred from the second call (0x004E9640) on the list; not confirmed. There is no null test on the combat data: a creature without one would fault (inferred). Push failure -638 leaves the copy undeleted.
+
+### SetAttackResult (691)
+- **Handler:** 0x0065DE40 (not shared). It calls `GetCreatureById`, the current command (0x0073C5F0: `[[creature+0x2DC]]`), `CDataArrays::GetObject` (0x00A5A2B0) and the hand records 0x006A0160 / 0x006A0170 (creature +0xB54, index 0 and 1). (checked)
+- **Described in:** `dev/COMBAT.md`, "The attack command" (what each hand's record gets).
+- **Does:** pops the attacker, then (int result, effect) twice. For each hand it stores the result at +0, the current command's object 0 at +4 (the target), and, unless the result is 3 (miss) and the effect is non-null with its +0x24 non-zero, the effect's id (+0x20) at +8 and a 0x7C-byte copy of the effect kept in the combat data (0x007C3840). (checked)
+- **Edge cases:** a non-creature attacker, or an attacker with no current command, does nothing but still frees both popped effects. (checked) A command whose object 0 is missing (the read answers -1) also stops it before either hand is written, so neither hand gets its result. (checked) A miss leaves that hand's effect id as it was. The popped effect copies are always freed. Returns 0. No test of the combat data (inferred fault if null).
+
+### SetCombatState (525)
+- **Handler:** 0x0065DD60 (not shared). It calls `GetCreatureById`, then `CCCreature::SetCombatState` 0x006AE0A0. (checked)
+- **Described in:** `dev/ANIMATION.md`, "The combat state (checked)".
+- **Does:** pops the creature and the int and passes the int unchanged. The native stores it at combat +0 only when it differs from the stored one; a change runs the enter (1) or leave (any other value) routine and queues the draw or sheathe. (checked)
+- **Edge cases:** a non-creature does nothing. Any int is accepted and stored: only 1 counts as "in combat" for the routines, so 2 stores 2 and runs the leave routine. (checked) Returns 0.
+
+### GetCombatState (526)
+- **Handler:** 0x0065DDD0 (not shared). `GetCreatureById`, then `[[creature+0xC60]]`. (checked)
+- **Described in:** `dev/SCRIPT_COMMANDS.md`, "Fields" (combat state at combat +0); written by `SetCombatState` (`dev/ANIMATION.md`).
+- **Does:** pushes the int at combat data +0. (checked)
+- **Edge cases:** a non-creature pushes 0. A creature with no combat data would fault (no null test, inferred). Push failure -638.
+
+### GetWeaponAttackRating (693)
+- **Handler:** 0x0066A3B0, shared with 699, 700, 701 and 703; the case is index 0 of the jump table at 0x0066A578 (id - 0x2B5), body 0x0066A424. (checked)
+- **Described in:** `dev/ITEMS.md`, "The four weapon commands (one implementation)"; and its "The weapon style, and GetWeaponStrengthModifier" (read 2026-10-18 by lib-agent-2), which found 693/703 push the default -0.1 for an invalid attacker.
+- **Does:** pops the attacker and the hand flag, takes the hand's weapon and pushes the float of `bitm_base` `CombatRating` (0x006A8680). Exactly 1 selects the main hand, any other value the off hand. (checked)
+- **Edge cases:** a non-creature attacker pushes -0.1 (the float at 0x00B0839C). A creature with no weapon in that hand pushes 0.0 (the backend starts at 0 and the item lookup fails). (checked) Failed pops -639, a failed push -638.
+
+### GetCreatureRank (183)
+- **Handler:** 0x0066BB30 (not shared). `GetCreatureById`, then 0x0053CC40 on creature +0x4B0 (an attribute: its int is at +0xC, so the field is +0x4BC). (checked)
+- **Described in:** `dev/COMBAT.md`, "A placed creature's load" (Rank is read from the template at 0x006C088F and nothing derives from it).
+- **Does:** pushes the creature's Rank int (RANK_* from the template).
+- **Edge cases:** a non-creature pushes 0. No range check on the value. (checked) Push failure -638.
+
+### GetCombatantType (763)
+- **Handler:** 0x00664640 (not shared). `GetCreatureById`, then creature +0xBD4. (checked)
+- **Described in:** `dev/PROPERTIES.md`, "Load from a template, and from a save" (the template's `Combatant`); `dev/ITEMS.md` ("0x006A88F0, step by step": 1, non-combatant, is never scaled).
+- **Does:** pushes the template's `Combatant` int (CREATURE_TYPE_*).
+- **Edge cases:** a non-creature pushes 0, the same as a plain combatant. (checked) In play it answered 0 only (`dev/LIBRARY.md`).
+
+### ShowDeathScreen (771)
+- **Handler:** 0x00660D60 (not shared). It calls the party (0x005D57C0), the party's 0x0062EBA0, then the game mode controller (`[app+0x114]`) 0x006414A0 (2, 0, 0). (checked)
+- **Described in:** `dev/COMBAT.md`, "GM_DEAD" (it sets `CapturedOnDeath` and `SetGameMode(2)`).
+- **Does:** pops an int; 1 passes true as "captured". It always sets the game mode to dead (2) after that. (checked)
+- **Edge cases:** any value but 1 means not captured. There is no check that the party is dead or that the mode is not already 2. Returns 0; a failed pop -639.
+
+### SetDeathHint (321)
+- **Handler:** 0x00660DC0 (not shared). (checked)
+- **Described in:** `dev/COMBAT.md`, "GM_DEAD" (step 5: `GUIDeath.DeathHint` comes from `SetDeathHint`).
+- **Does:** pops the hint row, then, only if given (param count of at least 2), the table: it defaults to 205 (0xCD). It asks the GUI manager (`[app+0x158]`, slot +0x60) for scene 0x13, `GUIDeath`, then the GDA table with that id: it reads the row's string column (hash 0x406341BE) and sets that text on the scene's DeathHint field through the scene's object at +0xC0, slot +0x54. (checked up to the lookup; the column's name is inferred)
+- **Edge cases:** if scene 0x13 does not exist, the table does not, or the row has no such string, nothing happens (no script failure). Returns 0.
+
+### GetWeaponBaseDamage (699)
+- **Handler:** 0x0066A3B0, shared; the body is at 0x0066A455. (checked)
+- **Described in:** `dev/ITEMS.md`, "The four weapon commands (one implementation)".
+- **Does:** pushes the **int** of `bitm_base` `BaseDamage` for the hand's weapon (0x006A86F0), 1 selecting the main hand.
+- **Edge cases:** a non-creature attacker pushes -1 (an int, not the float default of its siblings). A creature with no weapon, or a base item with no such column, pushes 0. (checked)
+
+### GetWeaponStrengthModifier (701)
+- **Handler:** 0x0066A3B0, shared; the case is at 0x0066A4B6. (checked)
+- **Described in:** `dev/ITEMS.md`, "The four weapon commands (one implementation)"; and its "The weapon style, and GetWeaponStrengthModifier" (read 2026-10-18 by lib-agent-2), which found it never reaches the column.
+- **Does:** always pushes the default -0.1.
+- **Edge cases:** the case pops only the weapon hand flag and then looks up the creature `-1` (always null), so its `StrengthModifier` backend (0x006A8770) is never called. (checked) The attacker is popped but unused. This differs from script.ldf's description. Failed pops -639.
+
+### GetWeaponArmorPenetration (703)
+- **Handler:** 0x0066A3B0, shared; the case is at 0x0066A4EC. (checked)
+- **Described in:** `dev/ITEMS.md`, "The four weapon commands (one implementation)"; and its "The weapon style, and GetWeaponStrengthModifier" (read 2026-10-18 by lib-agent-2).
+- **Does:** pops the attacker, then the target, then the hand flag. The result is `bitm_base` `ArmourPenetration` of the hand's weapon, from 0x006A87E0 (the target is passed). (checked)
+- **Edge cases:** a non-creature attacker **or** a non-creature target pushes -0.1. A missing weapon pushes 0.0. (checked)
+
+### SpawnBodyBag (672)
+- **Handler:** 0x0065E3A0 (not shared). `GetCreatureById`, then `CCCreature::SpawnBodyBag` 0x006A91E0. (checked)
+- **Described in:** `dev/COMBAT.md`, "The body bag".
+- **Does:** pops the creature and, if given (param count over 1), bForce; calls the native with `bForce != 0`. (checked)
+- **Edge cases:** a non-creature does nothing. Default `bForce` is 0, so a living creature, one without loot and no bag yet, or a pooled creature gets no bag (the native's tests, COMBAT.md). The handler returns 0.
+
+### SetCreaturesGlobalMaxTimeBeforeDecay (702)
+- **Handler:** 0x00665630 (not shared). The case is `cmp [esp+8],0x2BE` at 0x00665655. (checked)
+- **Described in:** `dev/COMBAT.md`, "The body bag": the corpse timer is counted against `[0x00C021C4]`, 60000 ms by default.
+- **Does:** pops an int and stores it at `[0x00C021C4]`.
+- **Edge cases:** no range check: 0 or a negative value is stored as is (a decay at the next check is inferred). The value is a global, not per creature. It is the engine's static, so a save does not keep it (inferred). Returns 0.
+
+### SetBodybagDecayDelay (698)
+- **Handler:** 0x0066BE50, shared with 296, 328, 329, 333, 335, 642, 643, 645, 676, 758, 764, 805, 813 and 839; the case is `cmp ebx,0x2BA` at 0x0066C125. (checked)
+- **Described in:** `dev/COMBAT.md`, "The body bag" (it calls the corpse's decay delay, 0x0069F360, on the bag's creature).
+- **Does:** pops the object and, if given, the delay in ms (otherwise 0). The object must pass the placeable cast (slot +0x24) with `IsBodyBag` (+0x600) set. It then gets the creature at +0x664 and calls 0x0069F360(delay). (checked)
+- **Edge cases:** an invalid object, a placeable that is not a body bag, a bag whose creature is gone, and any non-placeable do nothing. The delay is not range-checked. With the argument omitted the delay is 0. Returns 0. (checked)
+
+## Not read
+- Who writes combat data +4 (the target `GetAttackTarget` reads), and when it is cleared.
+- `0x004E9640` and `0x007C3840`: whether a fetch removes the kept effect, and how long a kept effect lives.
+- `0x006A0160`/`0x006A0170` (hand records) for a creature with no combat data.
+- The bodies of `0x0062EBA0` and `0x006414A0` (`ShowDeathScreen`), and the table lookup and scene call at the end of `SetDeathHint`.
