@@ -149,7 +149,7 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 Read 2026-10-18 in the GOG exe, the game's files and the scripts by lib-agent-2 (with subagents) for DAOParagonEngine's side-by-side of the Harrowing's Fade. Not seen in play. The key claims were checked again in the disassembly or the files.
 
 - **The area script:** `bhm600ar_fade_harrowing.are` runs `bhm000ar_generic_area`. On `AREALOAD_POSTLOADEXIT` in `BHM_AR_FADE`, the first time, it saves and calls `BeginTrainingMode(TRAINING_SESSION_TACTICAL_VIEW)` (`bhm000ar_generic_area.nss`:144–151). The `.are` has no camera field.
-- **`SetTrainingMode`** (command 842, 0x006636F0 → 0x00692E90 on [app]+0x498):
+- **`SetTrainingMode`** (command 842, 0x006636F0 → 0x00692E90 on the module's +0x498, `CClientExoApp::GetModule` `0x005D4FC0` then `mov ecx, [eax+0x498]` at `0x0066374B`; corrected 2026-10-18 by lib-agent-2, not the app's):
   - It drops the session when `ShowTutorials` (`ClientOptions` +0x98) is off, or the session's bit is set in `CompletedTraining` (+0x1C8, kept in the options, not the save).
   - It pauses in explore or combat.
   - It raises `EVENT_TYPE_TRAINING_BEGIN` (1059) through `genev_tutorial`.
