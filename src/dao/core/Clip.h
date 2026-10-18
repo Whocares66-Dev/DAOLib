@@ -35,6 +35,12 @@
 // of the nine bones keyed only at its start and end have c_blacbeara_0.mmh's
 // own rotations to the third decimal (the root, GOD and the eyes' base are
 // turned). Every channel's last key is at 65535, the clip's end.
+//
+// A translation key is an offset added to the node's rest translation, not a
+// place: the engine's node adds rest, animation and FaceFX translations
+// (0x0055E9D0, dev/CHARACTERS.md), and a rotation key replaces the rest
+// rotation. Seen in DAOParagonEngine: rest + key stands a man upright under
+// mov.walkf.ani with its god_rotation, where the keys alone fold him up.
 #pragma once
 
 #include "dao/core/Gff4.h"
