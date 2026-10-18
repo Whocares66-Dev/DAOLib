@@ -93,6 +93,7 @@ class Mutant:
 
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
+AREA = "src/dao/core/Area.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
@@ -486,6 +487,18 @@ MUTANTS: list[Mutant] = [
         CLIP,
         "((first & 1U) << 1U) | (second & 1U)",
         "((second & 1U) << 1U) | (first & 1U)",
+    ),
+    Mutant(
+        "area-unturned: an object with no WOrientation is unturned, w 1",
+        AREA,
+        'Number(in, "WOrientation", 1.0F)',
+        'Number(in, "WOrientation", 0.0F)',
+    ),
+    Mutant(
+        "area-variable-float: a variable whose Value is a Float is a float, not dropped",
+        AREA,
+        "            variable.value = *real;\n",
+        "",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",

@@ -8,6 +8,7 @@ add_executable(
     crt_reports.cpp
     test_angle.cpp
     test_archive_cache.cpp
+    test_area.cpp
     test_code.cpp
     test_crashlog.cpp
     test_dazip.cpp

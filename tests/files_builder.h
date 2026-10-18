@@ -276,6 +276,11 @@ class Gff3
         structs_.emplace_back(id, values);
         return static_cast<std::uint32_t>(structs_.size() - 1);
     }
+    // Gives a struct made earlier its fields: the top struct, made first, once what it holds is.
+    void Set(std::uint32_t index, const std::vector<Value> &values)
+    {
+        structs_.at(index).second = values;
+    }
     std::uint32_t ExoString(std::string_view text)
     {
         const auto at = static_cast<std::uint32_t>(fieldData_.size());
