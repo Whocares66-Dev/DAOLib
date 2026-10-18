@@ -27,7 +27,7 @@ An object's active flag and the searches it limits, the party pool carried on an
 The party (`[app+0xD0]+0x58`) has:
 - +0x234, the active party (`IsFollower` 0x00631830 asks only it);
 - +0x244, the party pool (`GetPartyPoolList` 0x00672AC0);
-- +0x2A8, a map of creature id to follower state: an `stdext::hash_map<id, FollowerInfo>` by a second reading, its value the state +0, substate +4, locked +8 and follow-the-leader +9 (`dev/script_commands/Party.md`; the container type not re-checked).
+- +0x2A8, a map of creature id to follower state: an `stdext::hash_map<id, FollowerInfo>` (MSVC 8's `_Hash`), its value the state +0, substate +4, locked +8 and follow-the-leader +9 (`dev/script_commands/Party.md`). Its find, `0x006FE370`, hashes the id as itself, masks it by +0x20 and halves it when at or past the max index +0x24 (linear hashing), indexes the bucket vector at +0x14..+0x18 (8-byte iterator pairs) and walks the list at +4; the count is the map's +0xC (party+0x2B4), which `GetFollowerState` (`0x00632810`) tests first (checked 2026-10-18 by lib-agent-2).
 
 **The arrival** (0x006C73C0, the loading states' step 14, and a save's load) walks the pool, +0x244 (0x006C7410, checked), with no test of state, active flag or hired flag:
 - **In the active party** (0x006C7574): placed in the formation (`dev/LOAD_EVENTS.md`), the leader on the waypoint.
