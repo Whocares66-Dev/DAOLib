@@ -66,15 +66,13 @@ Read in the GOG install, the toolset's installer and the exe by lib-agent-2 (wit
 - `SGeometry`'s layout has no public header: it is to be read from the exe's `GetGeometry` callers or the DLL (not read).
 - **So the plain route** is a small x86 baker on the player's machine. It loads the game's own DLL and, for each `.spt`, runs `LoadTree`, `SetTreeSize(−1, −1)`, `Compute(NULL, 1, true)` and `GetGeometry` per level of detail, and writes a cache the port reads. With the seed fixed and the size the file's, one bake per file should be exact, instances differing only by their transform (inferred: not yet run).
 
-## The trees as drawn (read 2026-10-18 by lib-agent-2)
-
-# SpeedTree at run time in DA:O: the geometry structs, billboards, tint and wind
+## SpeedTree at run time: the geometry structs, billboards, tint and wind (read 2026-10-18 by lib-agent-2)
 
 For DAOParagonEngine #31. Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x400000), `bin_ship\speedtreert.dll` (SpeedTreeRT 4.1, base 0x10000000) and vanilla's `spt_*` shader listings (`C:\project\DAOElgaraShaders\build\scratch\materials\listings\`, fxc 9.19.949.2111). Not run, not seen in play. "Checked" = read in the disassembly, listing or file; "inferred" = reasoned from what was read.
 
-## 1. SGeometry, SIndexed and SLeaf in 4.1's layout
+### 1. SGeometry, SIndexed and SLeaf in 4.1's layout
 
-### SGeometry (0x198 bytes; its constructor 0x10025D50, checked)
+#### SGeometry (0x198 bytes; its constructor 0x10025D50, checked)
 
 | Offset | Field | Evidence |
 |---|---|---|
@@ -87,7 +85,7 @@ For DAOParagonEngine #31. Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\D
 
 `GetGeometry(SGeometry&, mask)` 0x1002ABB0: bit 1 branches, 2 fronds, 4 leaves, 8 billboards (checked).
 
-### SIndexed (0x60 bytes = 24 dwords; ctor 0x10023DA0, filled by 0x1002A390 for branches, checked)
+#### SIndexed (0x60 bytes = 24 dwords; ctor 0x10023DA0, filled by 0x1002A390 for branches, checked)
 
 | [i] | Offset | Field | Source in the DLL | The exe |
 |---|---|---|---|---|
@@ -120,7 +118,7 @@ For DAOParagonEngine #31. Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\D
 - then FLOAT2 texcoords for layers 0 (diffuse), 2 (normal), 1 (detail) when non-null, and always a last FLOAT2 for layer 7 (shadow), zeros when that layer is null.
 The fronds use the branch methods too (the same two calls).
 
-### SLeaf (0x48 bytes, a vtable at +0; ctor 0x10023E30, copy ctor 0x100014E0)
+#### SLeaf (0x48 bytes, a vtable at +0; ctor 0x10023E30, copy ctor 0x100014E0)
 
 Read in the exe's leaf-card filler 0x52C5B0 and leaf-mesh filler 0x52C8E0 (checked), the DLL's fill 0x1001D740 and the shader `spt_leafcards.vsh`:
 
@@ -148,7 +146,7 @@ Read in the exe's leaf-card filler 0x52C5B0 and leaf-mesh filler 0x52C8E0 (check
 - **[3]/[4] are the rock and rustle scalars (checked):** `oth000d`'s grass `.spt`s hold 21000 = 0.2, 21001 = 0.4, exactly the peer's grass values; its trees hold 0/0 (no leaf rocking). The exe copies SLeaf[0]'s two to the model's +0xAB0/+0xAB4 (0x52C5E9–0x52C5FD), then writes `(rock, rustle, 0, 0)` to the model's +0xC6C (0x531316–0x531387). The material setup binds +0xC6C to `g_vLeafAngleScalars` by name (0x5301A0–0x5301B5), which is c59 in the leaf shaders. In `spt_leafcards.vsh`: `rock = c59.x · g_vLeafAngles[a].x`, `rustle = c59.y · g_vLeafAngles[a].y`, a = the leaf's angle index (below). They are neither alpha-test values nor cluster indices.
 - `SLeaf` has no alpha-test value in 4.1's layout: nothing between +0x0C and +0x44 is read as one.
 
-### SCard (0x24 bytes; ctor 0x10023EF0 sets +0x00–0x14 to −1.0 and +0x18–0x20 to 0)
+#### SCard (0x24 bytes; ctor 0x10023EF0 sets +0x00–0x14 to −1.0 and +0x18–0x20 to 0)
 
 | Offset | Field | Use in the exe (0x52C79A–0x52C819) |
 |---|---|---|
@@ -167,7 +165,7 @@ Read in the exe's leaf-card filler 0x52C5B0 and leaf-mesh filler 0x52C8E0 (check
 - TEXCOORD2 = (angleOffset0 rad, angleOffset1 rad, leaf % GetNumLeafAngleMatrices(), dimming[leaf])
 - TEXCOORD3 = (idx0, weight0, idx1, weight1)
 
-## 2. SMesh (0x20 bytes; ctor 0x10023EB0 zeroes 8 dwords)
+### 2. SMesh (0x20 bytes; ctor 0x10023EB0 zeroes 8 dwords)
 
 | Offset | Field | Evidence (exe 0x52C8E0, checked unless marked) |
 |---|---|---|
@@ -189,9 +187,9 @@ Read in the exe's leaf-card filler 0x52C5B0 and leaf-mesh filler 0x52C8E0 (check
 - TEXCOORD5 = (idx0, weight0, idx1, weight1).
 The counts come first (0x52C170): a mesh leaf adds `m_nNumVertices` to the mesh vertex count (+0x734) and `m_nNumIndices` to the index count (+0xAB8); a card leaf adds 6 vertices (+0x574) and 2 triangles. The two leaf SGeometry copies are the model's +0x594 (cards) and +0x754 (meshes), each from `GetGeometry(…, 4)` (0x52C110).
 
-## 3. The billboards: the image by view angle, and the fade from the 3-D tree
+### 3. The billboards: the image by view angle, and the fade from the 3-D tree
 
-### The vertex the exe writes (per instance, 4 corners of 0x50 bytes; 0x530A20, checked)
+#### The vertex the exe writes (per instance, 4 corners of 0x50 bytes; 0x530A20, checked)
 
 The model's billboard SGeometry is at +0x914, from `GetGeometry(…, 8)` (0x533D6A), so its S360Billboard is at +0x9DC. S360Billboard (0x34 bytes, ctor 0x10023F30, filled by `GetBillboardGeometry` 0x10024650, checked):
 - +0x00/+0x04: width and height;
@@ -213,7 +211,7 @@ The model's billboard SGeometry is at +0x914, from `GetGeometry(…, 8)` (0x533D
 
 **`g_v360TexCoords` (c0–c119)**, filled by 0x530B70: each model takes N consecutive slots from a running count (model+0xFC). Slot i = `(tbl[i][4], tbl[i][5], tbl[i][0], tbl[i][1])` from the DLL's 8-float table at S360Billboard+0x0C (stride 0x20), read as `(u_left, v_bottom, u_right, v_top)` by the corner selectors below.
 
-### spt_billboards0.vsh and spt_billboards1.vsh (vanilla, fxc 9.19.949.2111; checked line by line)
+#### spt_billboards0.vsh and spt_billboards1.vsh (vanilla, fxc 9.19.949.2111; checked line by line)
 
 - **The angle:** θ = `atan2(dy, dx)` of (tree − camera) in the xy plane (`v0.xyz − g_vCameraPosition`, a polynomial atan2), plus the yaw `v2.w`, wrapped into [0, 2π).
 - **The image:** `s = θ·N/2π`, `i = floor(s)`, `f = s − i`.
@@ -228,7 +226,7 @@ The model's billboard SGeometry is at +0x914, from `GetGeometry(…, 8)` (0x533D
   - The corners' texcoords (c139–c142 selectors) are, for corner 0 (right, top), `(e.z, e.w)`; corner 1 (left, top) `(e.x, e.w)`; corner 2 (left, bottom) `(e.x, e.y)`; corner 3 (right, bottom) `(e.z, e.y)`. Here e is `g_v360TexCoords[slot]`.
 - The normal map's basis per corner comes from `g_amBBTangents`/`Binormals`/`Normals` (c124–c135), indexed by the corner.
 
-### Where the billboard comes in within LOD 0..1
+#### Where the billboard comes in within LOD 0..1
 
 The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `dev/TREES.md`):
 - `lod ≤ 0`: the instance's +0x6C (draw the billboard) = 1 and +0x70 (the billboard fade) = 1; nothing else.
@@ -259,7 +257,7 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
 
 `ComputeLodCurve` (0x10024DB0) is `a + (b − a)·t^e`, or `b + (a − b)·(1 − t)^e` inverted. `ComputeLodCurveBB` (0x10024E20) is the same over `(t − F)/(1 − a)`, where F = +0xF0 (checked, but not on the path above).
 
-## 4. The instance tint: g_vColorMultiplier
+### 4. The instance tint: g_vColorMultiplier
 
 - **Where it comes from (checked):** at instance creation, 0x5CBFD5 calls 0x52E1D0 with the node record's +0x14 (`EnvTreeColorTint`). That copies the one float4 into the instance's **+0x30, +0x40 and +0x50** unchanged. There is no multiply, and the level tint is not involved.
 - **Per draw (checked):** 0x530C60 calls 0x52DFA0 for each (instance, geometry kind) draw. 0x52DFA0 writes the model's per-draw constants from the instance, then picks the tint by the kind being drawn (model+0xBA4) and writes it with 0x4D4DF0 to **model+0xC5C**:
@@ -279,7 +277,7 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
 - **Billboards** take the branch tint (+0x30) as the vertex's TEXCOORD3, not the constant. The pixel shader: `color = sat(tex.rgb × (diffuse·max(N·L,0)·lerp(v6.x, v6.y, g_vLightDiffuse.w)·((tint.w − 1)·0.6 + 1) + tint.rgb))`.
 - **`EnvTreeColorLevelTint`** (3377): read at 0x5D000F–0x5D008F into the area's tree-controller-list object at +0x90 (default (0, 0, 0, 1)). No reader of it was found in the tree draw path; it does not reach `g_vColorMultiplier` (checked by the copy above; "unused" is inferred).
 
-## 5. The wind: CSpeedWind from oth000d_193.wnd
+### 5. The wind: CSpeedWind from oth000d_193.wnd
 
 - **The `.wnd` is read** at 0xA57760 into a wind object (checked):
   - +0x10/+0x14 = `WndGustMinStrength` 0.05 / `WndGustMaxStrength` 0.25 (0x5BDE60);
