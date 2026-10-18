@@ -69,3 +69,110 @@ For the Fade: R' = 0.8741R + 0.1657G − 0.0198B − 0.01; G' = 0.0060R + 0.9664
 - An effect runs (`FrameBufferEffect` slot 1, 0x004600B0) when enabled and its `minlod` (+0x84) ≤ the detail setting [0x00BF22C8] (inferred). `da_fade`'s minlod is 1, so it is off at the lowest.
 - The `.arl`'s floats are clamped to the file's `range` (0x0045DDE0; BlurStrength −20..20) and copied in by 0x0045F490.
 - The engine's own values (0x0045DF70, updated at the frame's start by 0x0045EEE0): back-buffer width and height, `effect_time` (+dt, reset at stop) and the focal plane. `ApplicationTime` (usage 0x29) and `ColorCurveTexture` (0x32) come from the table at 0x00509870; `g_fApplicationTime`'s source wasn't traced (inferred: the application's clock in seconds).
+
+## The back buffer's alpha in vanilla, as the bloom reads it
+
+Read 2026-10-18 by lib-agent-2 in the GOG exe and vanilla files. [checked] = read in a listing, a state file or the exe. [inferred] = not read directly.
+
+Sources: per-shader outputs from `C:\project\DAOElgaraShaders\build\scratch\materials\outputs.txt`, with the tails spot-checked in `listings\*.psh.asm`. States are vanilla `sta\*.sta.xml`, tabulated by `%TEMP%\lib-agent-2-bba-states.py`. Pass to state comes from `matmap.txt`. Post-process shaders are in `%TEMP%\lib-agent-2-fx\asm\`.
+
+**Caution:** `%TEMP%\lib-agent-2-fx\ffx\da_bloom.ffx.xml` and `da_hsvmatrix.ffx.xml` are DAOElgaraShaders' overrides, not vanilla. `DaoAlphaIsShare` and the `DaoSmaa`/`DaoOcclusion` passes are Elgara's. The vanilla `da_bloom.ffx.xml` in `postprocesseffects.erf` (read through ghilana, source core, 4746 bytes) has no DaoAlphaIsShare. `da_copybackbuffer.ffx.xml` exists only in core, so it is vanilla.
+
+The sources were checked against vanilla's `postprocesseffects.erf`, not the installed DAOElgaraShaders overrides, which replace `da_bloom.ffx.xml`, `da_hsvmatrix.ffx.xml` and the illuminationmask, illuminationmaskmult and hslmatrix shaders. The vanilla passes described here are unchanged, `da_fade` and `da_copybackbuffer` are identical, and the listings are vanilla's (compiler 9.19.949.2111).
+
+### The bloom's use of alpha (correction to the brief)
+
+- **IlluminationMaskMult.psh** [checked]: `oC0 = c.rgba * k`, with `k = (dot(c.rgb, (.2125,.7154,.0721)) + fBrightness) * (1 + fContrast)`.
+  - There is no saturate in the shader. The 8-bit LightMask target (A8R8G8B8) clamps the result.
+  - So `mask.rgb = c.rgb*k` does NOT depend on alpha. Only `mask.a = saturate(a*k)` does.
+  - State is PPQuadStateNoBlend: no blend, point sampling.
+- **TwoPassBlurBloom5/7** [checked]: `r1.x = centre.a - 0.2*sum.a`, then `oC0 = r1.x >= 0 ? centre : sum/5`.
+  - Alpha chooses per texel whether the blur keeps the centre tap or takes the 5-tap mean. This happens in both blur passes.
+- **BloomBlend.psh** with BloomBlend.sta [checked]:
+  - Shader: `oC0 = (m.rgb, m.a*fGlowIntensity)`.
+  - State: SRCALPHA/ONE and no separate alpha blend.
+  - Result: `back.rgb += m.rgb * m.a * G` and `back.a += (m.a*G)^2`.
+- **So the glow is about `c.rgb * k * saturate(a*k) * G` (before the blur).** Alpha is the blend factor, and the clamp hides alpha below 1 wherever `a*k >= 1`.
+  - At the default B = C = 0.5, k runs from 0.75 to 2.25.
+  - Example: a pixel of luma 0.5 has k = 1.5, so any alpha of 0.67 or more gives the same glow as 1.
+
+### 1. What the scene leaves in alpha
+
+**Back buffer** [checked]:
+- Its format defaults to A8R8G8B8. `D3DGraphicsDriverManager` vtable 0xb2db7c, slot 11 = 0x865420, builds the 0x48-byte creation parameters.
+- Adapter format at +8 defaults to 0x15. BackBufferFormat at +0x18 defaults to the adapter format unless the caller supplies one.
+- A caller-given format was not traced [inferred, not seen]. DAOElgaraShaders found a forced alpha survives in the scene's target (NOTES.md:218-219).
+
+**Clear** [checked]:
+- The render view's constructor (0x45a9f0) sets clear flags 3 (TARGET | ZBUFFER) and colour (0,0,0,1) at +0x50..+0x5c.
+- 0x4598a0 issues it: SetClearColor at driver slot 12 (0x868490, floats ×255 to ARGB), then Clear at slot 11 (0x8685f0).
+- Three explicit overrides exist:
+  - 0x7bba7b sets (0,0,0,1).
+  - 0x7c0391 (near GUI::GUIPaperdoll) sets (0,0,0,0).
+  - 0x7f4189 sets (0,0,0,0).
+- That the main game view keeps the default (0,0,0,1) is [inferred].
+
+**Alpha write mask** [checked]:
+- DefaultState.sta has COLORWRITEMASK 15 and SEPARATEALPHABLENDENABLE FALSE. The exe loads it as the material system's default: string at 0xc3102c, used at 0x4fcb1b and 0x4fc7ac.
+- No scene state masks alpha off. Only these set COLORWRITEMASK to something other than 15:
+  - 0: occlusion queries, contribution tests, HairAlphaPass1 (depth only).
+  - 3: PSSMStatic (shadow map).
+  - 8: PunchThroughMask (alpha only).
+- Whether the engine re-applies DefaultState under each pass's state, or leaves the last value standing, is [not traced].
+
+**Separate alpha blend** [checked]:
+- Only DistortionMask.sta, WeaponTrail.sta and PPQuadState.sta enable it.
+- DistortionMask and WeaponTrail draw into the DistortionMask target, not the back buffer (`da_distortion` binds DistortionMask at StaticGeomEnd). WeaponTrail drawing there is [inferred].
+- PPQuadState is used only by the unused `GenerateLightMask` and by `dof` passes.
+- So **every blended scene pass blends alpha with its colour factors**:
+  - SRCALPHA/INVSRCALPHA: `a' = a_s^2 + a_d*(1-a_s)`. Over a_d = 1 this is `1 - a_s + a_s^2`, between 0.75 (at a_s = 0.5) and 1.
+  - SRCALPHA/ONE (additive): `a' = a_s^2 + a_d`. It stays 1 over a solid.
+
+**Fog** [checked]: never touches alpha. Every lit shader ends `oC0.xyz = lerp(fogColour, colour, fog)` and writes oC0.w separately.
+
+**Per material (oC0.w, then state):**
+
+| Surface | oC0.w | State | Alpha left in the back buffer |
+|---|---|---|---|
+| Terrain1/2/3 | literal 1 (`c32.z`) | DATerrain: no blend | 1 [checked] |
+| Level and room meshes: Static1, _fast, _relief, Static2, Static3, BakedLowLOD, Vista3 | `mml_fOpacityMultiplier` | DAMshOpqe*: no blend | the opacity multiplier, normally 1 [value inferred] |
+| Characters: Ch1/Ch2 (non-`alph`), Face0/2, Weapon1/2, Prop1/2, Cloth1 | `mml_fOpacityMultiplier` (Cloth1/Prop2: × texture alpha) | Character, Face, Weapon, Prop: no blend | the opacity multiplier, normally 1 [value inferred]; Cloth1 and Prop2 carry their texture alpha |
+| Eye0 | vertex colour alpha `v0.w` | Character | v0.w, presumably 1 [inferred] |
+| Cut-outs: Static1_Punch, Prop1_Punch | `decal.a * opacity`, texkill below 0.3 | DAMshPnch*: no blend, alpha test > 127 | **the texture alpha, 0.5 to 1** [checked] |
+| SpeedTree leaf cards, fronds, billboards | `tex.a * g_fAlphaMultiplier` (billboards: `* v0.z`) | SPT_*: no blend, test > 90 or > 84 | **the texture alpha, at least about 0.35** [checked] |
+| SpeedTree branches | `max(r0.x, g_fAlphaMultiplier)` | no blend | 1 or more, clamped [inferred] |
+| Character cut-outs and blends: Ch*Alph* | `tex.a * opacity` | Character_alpha / CharacterAddvPT2S: SRC/INVSRC, test ≥ 128 | about 0.75 to 1 over a solid [checked] |
+| Character cut-outs: CharacterPT | `tex.a * opacity` | no blend, test ≥ 128 | 0.5 to 1 |
+| Hair, LOD1 (HairAlpha passes) | `hairTex * v0.w` | pass 2: no blend, CWM 15; passes 3-4: SRC/INVSRC | the hair's alpha, then blended [checked] |
+| Hair, LOD2 (Hair2 @ Character.sta) | same | no blend | the hair's alpha, written raw [checked] |
+| Sky | `mov oC0.w, c10` = `mml_fOpacityMultiplier` | Sky.sta: no blend, CWM 15 | the multiplier, 1 per the brief. The area's "atmosphere alpha" is the fog lerp `c9.x` on rgb, not oC0.w [checked] |
+| Clouds | `cloud * opacity` | SRC/INVSRC | `1 - a + a^2` over the sky |
+| Water0, WaterFlowing0 | computed `mad` / `max` | Water: SRC/INVSRC | `1 - a + a^2`, from 0.75 to 1 |
+| VFX0, alt, atm, dba | `tex.a * vertex alpha` | DAEmtNorm*: SRC/INVSRC | 0.75 to 1 over a solid |
+| VFX0 under DAMshOpqe1S | same | no blend | **the raw particle alpha** (rare) |
+| VFX0_Addv (additive) | `min(a, max(rgb))` | DAEmtAddv*: SRCALPHA/ONE | stays 1 over a solid; raised where below 1 |
+| Static1_Alpha, PropAlpha1 | `tex.a * opacity` | DAMshNorm1S: SRC/INVSRC | `1 - a + a^2` |
+| PunchThroughMask.psh | `saturate(tex.r + c0.x)` | ONE/ZERO, CWM 8 (alpha only) | writes alpha outright [checked]. Which target it draws to is [not traced] |
+
+There is **no glow or bloom mask written into alpha.** No vanilla scene shader writes an emissive term into oC0.w; the `em` character variants write `mml_fOpacityMultiplier` like the rest. The second target's alpha (oC1.w, a literal 1) is the distance target and is not the back buffer.
+
+### 2. da_copybackbuffer
+
+- It is a plain copy [checked]. Layer 1, at StaticGeomEnd and at EndFrame: `copy BACKBUFFER to BackBufferCopy filter NONE`.
+- `FBICopyBackbufferToTarget` (vtable 0xae77ac, slot 1 = 0x45d7b0) calls `D3DGraphicsDriver` slot 51 (0x869900):
+  - `GetBackBuffer(0, 0, MONO)`, then
+  - `IDirect3DDevice9::StretchRect(backbuffer, NULL, target, NULL, D3DTEXF_NONE)`.
+- No shader and no state. Both surfaces are A8R8G8B8, so alpha copies through unchanged. With MSAA on, StretchRect resolves, so alpha is averaged at edges.
+- Between the scene and the bloom, two things rewrite the back buffer, both carrying or blending alpha:
+  - `da_distortion` (layer 3) writes the copy's RGBA back with no blend (Distortion.psh `oC0 = texld(BBC)`; PPQuadNoBlendMirror).
+  - `da_dof` (layer 5), when active, composes with SRC/INVSRC (ComposeDoF.sta), giving `1 - a + a^2`. When DOF runs (conversations, cinematics) is [inferred].
+
+### 3. A typical frame, as the bloom's first pass reads it
+
+- **Opaque level geometry, terrain, characters, faces, weapons:** 1. At 1 the glow is `c*k*saturate(k)*G`.
+- **Sky:** `mml_fOpacityMultiplier`, 1 per the brief (the sky shader writes it straight, with no blend). Under clouds, 0.75 to 1.
+- **Foliage, fences, cut-out props, hair, LOD2 hair:** their texture alpha, about 0.35 to 1 for trees, 0.5 to 1 for punch-through. This lowers their bloom only where `a*k < 1`, mostly dim texels.
+- **Under alpha-blended effects (water, particles, glass, character alpha cards):** `1 - a + a^2`, from 0.75 to 1, never lower over a solid.
+- **Under additive effects (spells, fire, glows):** stays 1 (an additive pass only raises alpha).
+- **Pixels nothing draws:** 1, from the (0,0,0,1) clear (the main view's clear is [inferred]); their rgb is 0, so no glow.
+- **A peer port that keeps alpha at 1 everywhere** matches vanilla on solids, sky and additive effects. It differs only on cut-outs and hair (vanilla weaker where `a*k < 1`) and slightly under blended effects. It must keep the blur's `centre.a >= mean.a` selection to match vanilla's bloom shape.

@@ -83,7 +83,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 
 - `ABILITY_CAST_START` (32), from sub-action 8 (`0x007A7440`, read): creator and object 0 the caster, object 2 the command's target, int 0 the ability, plus the fields `0x006A0DA0` adds; run on the caster with the script named `ability_core` (`0x006985F0`, the script given by name, not the ability's `SpellScript`). Before it, sub-action 8 fails the command with −8 when the ability's type is disabled (`0x00A64740` flags) and with −1 when a `Range` 0 ability's target is out of striking reach. After it, with a `CastAnim` it queues sub-action 37 to play it (int 0 the clip, flag 3); with none, and the command's flag 1, it raises `ABILITY_CAST_IMPACT` at once (queued, or for an ability of type 4, item, through the object's slot 200).
 - `ABILITY_CAST_IMPACT` (31) from the cast animation's impact (`0x006AF430`, read): queued to the caster (`AddEventDeltaTime`, no delay), the event's target field the target, object 0 the caster, object 2 the target, int 0 and int 1 from the cast record (`0x006A0180`, its +0 and +8), int 2 a counter of impacts, int 3 whether the animation event's name has "Left" (the off hand), vector 0 the target point; script `ability_core`.
-- `ABILITY_CAST_IMPACT` (31) from a projectile's arrival (`0x007E71C0`, read): queued to the projectile's owner, object 0 the owner (projectile +0x4C4), object 1 −1, int 0 and int 1 from the cast record, vector 0 the projectile's position, vector 1 its heading (inferred), object 2 the target or objects 2 and up those hit; script `ability_core`. (A weapon's projectile instead gives `ATTACK_IMPACT` (29), `0x007E87C0`, `dev/COMBAT.md`.)
+- `ABILITY_CAST_IMPACT` (31) from a projectile's arrival (`0x007E71C0`, read): queued to the projectile's event target (+0x4C4), or its owner (+0x4BC) when that is −1; object 0 is the event target (+0x4C4), −1 for an ability's projectile, whose path sets only the owner (+0x4BC at 0x006B70C5) and the target (+0x4C0 at 0x006B7203) (corrected 2026-10-18 by lib-agent-2; the impact 0x007E71C0 writes object 0 from +0x4C4 at 0x007E7230); object 1 −1, int 0 and int 1 from the cast record, vector 0 the projectile's position, vector 1 its heading (inferred), object 2 the target or objects 2 and up those hit; script `ability_core`. (A weapon's projectile instead gives `ATTACK_IMPACT` (29), `0x007E87C0`, `dev/COMBAT.md`.)
 - `EVENT_TYPE_ABILITY_PROJECTILE_LAUNCHED` (93; not in `script.ldf`, `ability_core`'s `case 93`), from the creature's vtable index 55 (`0x006AFA40`, read; not slot 56, `0x006AFA50`: corrected 2026-10-18, lib-agent-2, from the vtable bytes): run on the caster with `ability_core`, object 0 the caster, int 0 the ability, vector 0 a point (the projectile's target, inferred); raised when the current command has a projectile in flight (`GetProjectileById`).
 
 ### Projectiles
@@ -103,3 +103,53 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - So a modal ability is "active" exactly while its upkeep effect's handlers say so; the engine reads no effect for it.
 
 Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
+
+## Passives: where their modifiers live, and when they come and go
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, a call scanner over `.text`, `tools\gda.py`, and ghilana's merged tables, for DAOParagonEngine. Not seen in play. "(checked)" means read in the disassembly or the table; "(inferred)" means not. Builds on `dev/ITEMS.md` (item stats, `SetItemMaterialType`), `dev/PROPERTIES.md` (property slots), `dev/COMBAT.md` (0x0071EAC0, ability add), and `dev/script_commands/stats.md` (254, 333).
+
+### Where a passive's modifiers live (checked)
+- An ability's passive is `ABI_base.Passive_ID` (hash 0xC4EE8EE0) → table **117 `passive_abilities`** (`ID, Prop1, Modifier1, Prop2, Modifier2, Prop3, Modifier3, Conditional`; 99 rows, 97 ABI rows have a Passive_ID).
+- All of it is native: **0x0071B600** `CCCreatureStats::ApplyPassive(ability, condition, bApply)` (ID 16516, `ret 0xC`):
+  - factor = 1 if `Conditional == 0`; else 1 if the `condition` argument is a single bit present in `Conditional` (switch at 0x0071B6C1 over condition−1, bytes 0x0071B960: 1→bit 1, 2→bit 2, 4→bit 4, 8→bit 8, 16→bit 0x10; any other value, 0xFF included → 0).
+  - `bApply == 0` multiplies the factor by −1.0 (double at 0x00AF0E48).
+  - for i = 1..3 (`Prop%d`/`Modifier%d`, 0x00B17620/0x00B17608): if `Prop_i != 0`, `0x0071B2D0(Prop_i, factor × Modifier_i, 1)`: **adds to the property's MODIFIER** (+0x54, keeping the current, PROPERTIES.md). On apply, if Prop is 7 (Health) and the creature was at full health (current, truncated, == the old max), the current is raised by the same amount so it stays full (0x0071B87D..0x0071B8C3).
+- No script applies passive property modifiers (grep of the toolset scripts: none). The scripts only add extras on top by `HasAbility` (e.g. `ability_h.nss:1342`, Dual-Weapon Expert's bleed on hit).
+
+### Who calls ApplyPassive (all 8 calls found by scanning `.text`, checked)
+- **Add** 0x0071EAC0 (AddAbility 253 and template lists, COMBAT.md): `ApplyPassive(ability, stats+0x1B8, 1)` at 0x0071EC8C, only if the ability is new and creature+0xC58 is 0.
+- **Remove** 0x0071EF00 (RemoveAbility 254 passes `(ability, type, 0, 3)`): unless the 4th argument is 2, `ApplyPassive(ability, stats+0x1B8, 0)` at 0x0071EF84, right after 0x0071A450 and before the vector erase.
+- **Condition change** 0x0071B970 (ID 16517): `c = 0x0071A0C0()`; if `c != stats+0x1B8`, for every ability in the four vectors (+0x150 talents, +0x160 spells, +0x170 skills, +0x180 item abilities): `ApplyPassive(a, old, 0)` then `ApplyPassive(a, c, 1)`; then `stats+0x1B8 = c`. Unconditional passives net to zero; conditional ones come off and go on with the weapon style. Its only callers: the creature's item-equipped handler 0x006C16E0 (call 0x006C18A8) and item-unequipped handler 0x006C19F0 (0x006C1AD5).
+- **Save** 0x0071BA40 (ID 16518, from 0x006B256D): before writing the properties (0x00797000), `ApplyPassive(a, stats+0x1B8, 0)` + `ApplyPassive(a, 0xFF, 1)` for all (leaves only the unconditional passives in the modifiers), then after, `ApplyPassive(a, 0xFF, 0)` + `ApplyPassive(a, stats+0x1B8, 1)` (restores). So a save holds unconditional passives inside the saved modifiers and conditional ones not (checked in outline; the load side not read: inferred that +0xC58 marks a creature being restored, so AddAbility does not apply passives twice).
+
+### (a) RemoveAbility removes the passive's modifiers: yes (checked)
+For a talent/spell/skill it subtracts each `Modifier_i` from `Prop_i`'s modifier, with the same condition the add used (stats+0x1B8), so a conditional passive that is currently active is subtracted and an inactive one is not. An item ability (`AbilityType` 4) is refused by the handler and keeps its passive. Not on removal: the health top-up (only on apply); lowering a depletable's modifier re-clamps its current (PROPERTIES.md).
+
+### (b) Conditional passives 5200-5202: the engine, on equip/unequip (checked)
+| passive_abilities ID | ABI_base row (Label, GUIType 9) | Props | Conditional |
+|---|---|---|---|
+| 5200 | 8 DUAL_WEAPON_FINESSE "Dual-Weapon Finesse" | 9 Attack +5, 10 Defense +5 | 8 |
+| 5201 | 5 DUAL_WEAPON_EXPERT "Dual-Weapon Expert" | 21 Melee_Crit_Modifier +2.5 | 8 |
+| 5202 | 3036 DUAL_WEAPON_MASTER "Dual-Weapon Mastery" | 41 Fatique (fatigue) −2.5 | 8 |
+
+These are the only rows with `Conditional ≠ 0` in the core table (ghilana; four add-in `passive_abilities_*` files are enciphered and unread). ABI_base's own `Conditions/Condition_Mode/Condition_Group` are 0 on these rows: the condition is `passive_abilities.Conditional`.
+
+The condition 0x0071A0C0 (ID 16490), from the creature's two hands (0x006A2B40) and `bitm_base.Type` (item+0x6E0, hash 0x12A02374; ITEM_TYPE_* in `2da_constants_h.nss:440-446`):
+| main hand | off hand | condition |
+|---|---|---|
+| Type 6 ranged or 5 staff/wand | any | 16 (0x10) |
+| Type 2 melee, `EquippableSlots` == 1 (main hand only: two-handed, inferred) | none | 4 |
+| Type 2 melee, otherwise | none | 1 |
+| Type 2 melee | Type 3 shield | 2 |
+| Type 2 melee | Type 2 melee | **8 (dual weapons)** |
+| anything else (unarmed, melee + other) | | 0xFF (no conditional passive) |
+
+So the dual-weapon passives apply natively when both hands hold melee weapons, and are re-evaluated **only when an item is equipped or unequipped** (0x0071B970's two callers); no per-frame update and no script event. A weapon-set switch goes through the same equip/unequip handlers (inferred). Gaining the talent while already dual-wielding applies it at once (AddAbility passes stats+0x1B8). The initial value of stats+0x1B8 was not read.
+
+### (c) ClearCreatureProperties keeps passives (checked)
+Passives are **modifiers** (+0x54), never bases. ClearCreatureProperties (333, 0x00795C10) sets only each property's base (and a depletable's current) to max(Min, 0) and does not touch modifiers, so every applied passive (and every equipped item's stats, also modifiers) survives it; the creature's totals after it are max(Min,0) + engine link + the kept modifiers.
+
+### Not read
+
+- creature+0xC58's meaning (inferred: restoring from a save) and the load path of passives; stats+0x1B8's initial value.
+- Whether the four enciphered add-in `passive_abilities_*` files add rows (the running game reads them; Eluvian can).

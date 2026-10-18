@@ -83,6 +83,43 @@ Shared facts, all checked:
 - **Does:** pops the command, the float, then nIndex. It sets `floats[nIndex]` on the copy and **pushes that copy back** as the result, then frees its own. So unlike `SetCommandInt` it works, through the return value: `wrappers_h.nss` does `cCommand = SetCommandFloat(cCommand, fTimeout, 5)`. (checked)
 - **Edge cases:** a null command pushes a null command. An index at or past the size grows the float array to index+1. A negative index makes the resize argument 0 (inferred: the floats are cleared), and the write goes to a dummy global. (checked up to the resize call 0x00534B10, whose meaning is inferred)
 
+### CommandMoveToLocation (559): bDeactivateAtEnd
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+
+#### The constructor (0x0066F080)
+- Pops the location, then bRunToLocation, then **bDeactivateAtEnd only if paramCount > 2** (`cmp [ebp+0xC], 2`, 0x0066F104); otherwise it stays 0. (checked)
+- Builds a command of **type 20** (`push 0x14; call Command::SetType`, 0x0066F1D7) with a `CDataArrays`: flag 1 = bRun, **flag 10 = bDeactivateAtEnd** (`SetFlag` 0x00A5B890 with 1 and 0xA), vector 0 = the location's position, vector 1 = its orientation (+0x10..+0x18). No ints. (checked)
+- So the flag is not a field of the command record: it is flag 10 of its parameters. The run-time state is the creature's byte **+0x421**, below.
+
+#### The start (table +0x54 entry 20 = 0x00745630; the tables are filled at 0x00747480)
+- The object's slot +0x10 (cast slot 4, `AsCCCreature`): a **non-creature gets no sub-action and completes with success; flag 10 is never read for it**. (checked)
+- For a creature it adds, in order: sub-action **36** (wait, duration = params int 0, which this constructor never sets, so 0), **14** (the move, with a copy of the params and int 2 = the movement mode from 0x00745250), **42** (turn to vector 1, the location's orientation). (checked)
+- Then **if flag 10 is set: creature byte +0x421 = 1** (0x00745770–0x00745780). (checked)
+- +0x421 is the "deactivation pending" byte of `dev/PARTY.md` (SetObjectActive with an animation sets it too). The active test 0x00699FA0 (called on obj+0x70: `[+0x255]` = obj+0x2C5 set and `[+0x3B1]` = obj+0x421 clear) therefore answers **inactive from the moment the move starts**: `GetObjectActive` is FALSE and the tag searches that filter on activity (`dev/PARTY.md`, the filter 0x0067FEC0) treat the walker as inactive during the walk. (checked for the write and the test; the script-visible consequence inferred)
+
+#### The end (table +0x58 entry 20 = 0x00746D60; MoveToMultiLocations' end 0x00746DC0 chains to it)
+End handlers are `(object, command)` on the commands system, which holds the result at +0x50 and an "immediate" flag at +0x4C, written by slot 3 (0x00742190, `__thiscall (object, command, result, immediate)`). (checked)
+1. If the object is a creature and the result is not 1: stop it (0x006A2A20). (checked)
+2. **Read the byte +0x421 into bl** (0x00746D87) — before anything else changes it. (checked)
+3. The shared end 0x00746900 (the shared facts above): clears the current command slot, stores the previous command, and **sends COMMAND_COMPLETE** (0x00743DD0) if the command's +8 is set. (checked)
+4. **If bl was set: main-vtable slot +0x140(0)**, `SetActive(false)` (CCCreature 0x006B5D90). (checked)
+
+So:
+- **Path:** slot +0x140(0) directly, not `SetObjectActive`'s animated path and no delay. `SetActive(false)` (CCObject 0x00698CD0; `dev/PARTY.md`): clears +0x2C5 and +0x421, leaves the world, and calls `ClearAllCommands(1, 1)`, which **clears the rest of the queue**. A creature in the active party (`IsFollower`, 0x00631830) is **not** deactivated: CCCreature's SetActive(false) only clears +0x421 for it (0x006B5D9C–0x006B5DC6). (checked; the effects of 0x00698CD0 are PARTY.md's reading)
+- **Not only on success.** +0x421 is read whatever the result: arrival (1), a sub-action failure (path failed, any value other than 0/1 from sub-action 14), or a clear (-2 from `RemoveCommand`, or any `ClearCurrentCommand`) all deactivate. A failure also stops the creature first (step 1). (checked)
+- **Order against COMMAND_COMPLETE:** the event is built before the deactivation; whether it is *handled* before depends on the "immediate" argument of `ClearCurrentCommand` (0x0073C730, `__thiscall (result, immediate, …)`, forwarded through 0x0064A510 to slot 3):
+  - **Arrival and sub-action failure:** `StepCommands` calls `ClearCurrentCommand(result, 1, 1, 0)` (0x0073D36F and 0x0073D42D), so immediate = 1 and 0x00743DD0 runs the event **at once on the object's event script** (`RunEventScript` 0x00698960), inside the end, **before** SetActive(false). The handler sees the creature still in its area, with +0x421 = 1 (so already "inactive" to `GetObjectActive`), and any command it queues is then cleared by the deactivation's `ClearAllCommands`. (checked)
+  - **A clear** (`RemoveCommand` calls `ClearCurrentCommand(-2, 0, 1, 0)`): immediate = 0, so the event is **queued** with `AIMaster::AddEventDeltaTime(0, 0, self, self, 10, ev)` (0x00743F2C) and the deactivation happens **before** it is delivered, on a later AI update, to an inactive creature. Whether delivery to an inactive creature runs its script: not read. (checked apart from that)
+  - The event: type 0x24 at +0x20, creator = the mover; object 0 the mover, object 1 the command's object 0 (-1 here); int 0 the command type (20), int 1 the result. (checked)
+- **A stale +0x421 also triggers it:** a MoveToLocation (or MoveToMultiLocations) without the flag, ending while +0x421 is 1 from an animated `SetObjectActive(FALSE)` still pending, deactivates the creature at its end through the same slot. (checked from the code; not seen)
+
+#### What `utility_h`'s UT_ExitDestroy expects (read in `_Core Includes/utility_h.nss` 1120–1146)
+- It finds the exit waypoint (`GENERIC_EXIT` by default) near oTarg, clears `RUBBER_HOME_ENABLED`, `SetObjectInteractive(oTarg, FALSE)`, optionally queues `CommandWait(random 0–1.5 s)`, then `WR_AddCommand(oTarg, CommandMoveToLocation(lExit, bRun, TRUE), FALSE, TRUE)`: queued at the back, **static**. (read)
+- It builds an `EVENT_TYPE_SET_OBJECT_ACTIVE` (1014) event with int 0 FALSE and **never sends it** (dead code), and **never calls DestroyObject**: despite the name, the creature is only walked out and **deactivated by the engine at the move's end**, through flag 10. Being static, soft clears keep the command. It expects deactivation on arrival; the engine also deactivates on a failed path or a clear, and not at all for a creature in the active party or a non-creature. (checked against the engine paths above)
+
+Not read: whether an event queued to an inactive creature (the cleared move's COMMAND_COMPLETE) is delivered and runs its script; what sub-action 14 returns on a failed path (any non-0/1 value deactivates all the same); `ClearAllCommands`' treatment of the queued commands it removes (events or silent).
+
 ### CommandMoveToMultiLocations (644)
 - **Handler:** 0x00673280 (not shared). It calls `StackPopArray`, `ScriptArray::Size` and `CDataArrays::SetVector/SetInteger/SetFlag`.
 - **Does:** pops the array, bRun, nStartingWP, then bLoop. It builds type **22** (script.ldf's RECOVER number) with these parameters (checked):
