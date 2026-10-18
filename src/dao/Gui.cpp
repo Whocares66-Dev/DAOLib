@@ -1209,19 +1209,53 @@ void OnAnyExternalInterface(ExternalInterfaceHandler observer)
 // GUIPopupLayer: DialogBoxText, NumButtons, and for each button a Label0 to Label3 and a Callback0
 // to Callback3, the message the game is sent when it is pressed, as text
 // ("CClientExoApp.GUIDialogResult 1 0"); also an input box, a checkbox and a picker, not read
-// here. The GUI system keeps whether a box is up at +0x1FA: set when it shows one (0x0060BA90,
-// which then has the movie show it, PopupLayer.ShowDialogBoxFromGame) and cleared by
-// DialogBoxClosedMessage. Seen in play, 2026-10-01, through the Eluvian server: after the
-// scripts' ShowPopup(379897, 1) it gave the text "Shield Pummel", the string's own and not its
-// number, and two buttons, Yes with the callback "GUIPopupLayer.ScriptDialogResult 1 1 -1" and No
-// with "... 1 2 -1"; nothing before the box was up. A script's box holds nothing: loads, orders
-// and a fight went on under it.
+// here. Seen in play, 2026-10-01, through the Eluvian server: after the scripts' ShowPopup(379897,
+// 1) it gave the text "Shield Pummel", the string's own and not its number, and two buttons, Yes
+// with the callback "GUIPopupLayer.ScriptDialogResult 1 1 -1" and No with "... 1 2 -1"; nothing
+// before the box was up. A script's box holds nothing: loads, orders and a fight went on under it.
+//
+// Whether a box is up is the popup movie's own: read 2026-10-18 (DAOLib #173, a subagent of
+// lib-agent's, in the exe and popuplayer.gfx's ActionScript, patch003's copy). Until then this
+// read the GUI system's +0x1FA, which only the game's own boxes set (0x0060BA80, after
+// 0x00606BD0) and DialogBoxClosedMessage clears: a box a movie shows itself
+// (Popups.ShowDialogBox, the character creation screen's among them, which writes GUIPopupLayer
+// and sends GUI.ShowDialogBox, whose handler 0x0060BB60 only has the popup movie show it) left
+// it 0, and eluvian-agent saw such a box up while this answered nothing. Both kinds go through
+// PopupLayer.ShowDialogBox, which refuses while _global.PopupLayer.ms_mcPopup is set and sets it
+// to the box's clip; a button's action, and HideAllPopups, set it null, remove the clip and pop
+// the "GUIPopup" context. So that one variable says a box is up, of either kind and the item
+// split's, and goes back to null however the box closes. A clip reads back as its path; the
+// box's is "_level0.null", attachMovie having named it so.
+//
+// Seen in play 2026-10-18 by eluvian-agent (GOG, its instance eluvian-test, Eluvian built
+// against this change): the character creation screen's own box (its background's text, one
+// Close button sending "GUI.InvokeCallback CharGen _root.DialogBoxCallback0") read as soon as the
+// screen opened, ms_mcPopup "_level0.null"; pressed, the box gone, ms_mcPopup null and the screen
+// usable. Then a script's ShowPopup(379897, 1) on the same screen, and twice more in the
+// Fade: each read, pressed No, closed, the script given its EVENT_TYPE_POPUP_RESULT (1, 2) once a
+// press, the mode explore, gui, explore; no crash. The game holds a script's box asked for in a
+// conversation until it ends, and shows no second box over one that is up.
+namespace
+{
+
+std::optional<Movie> PopupMovie()
+{
+    return ScreenMovie(L"PopupLayer");
+}
+
+bool BoxUp(const Movie &popups)
+{
+    const auto clip = popups.Get("_global.PopupLayer.ms_mcPopup");
+    return clip && clip->type != Value::Type::Undefined && clip->type != Value::Type::Null;
+}
+
+} // namespace
+
 std::optional<Popup> CurrentPopup()
 {
-    constexpr std::size_t kBoxUp = 0x1FA; // in the GUI system
     constexpr int kMostButtons = 4;
-    const void *gui = GuiSystem();
-    if (gui == nullptr || TryRead<std::uint8_t>(reinterpret_cast<std::uintptr_t>(gui) + kBoxUp).value_or(0) == 0)
+    const auto popups = PopupMovie();
+    if (!popups || !BoxUp(*popups))
     {
         return std::nullopt;
     }
@@ -1237,24 +1271,31 @@ std::optional<Popup> CurrentPopup()
     return box;
 }
 
-// The button's callback goes as the movie sends it when the button is clicked (dao/Messages.h,
-// SendText), and then, as the movie tells it once the box has gone, DialogBoxClosedMessage. Read
-// 2026-10-01; what the movie itself does at a click is ActionScript and not read. Seen in play
-// the same day, through the Eluvian server: with a script's Yes and No box up, pressing No
-// answered true, CurrentPopup was nothing at once, and the game's own screenshot showed the box
-// gone and the interface back. Whether the script heard the answer (EVENT_TYPE_POPUP_RESULT) is
-// not yet seen.
+// A button's action in the movie (ButtonInit's OnButtonAction, read 2026-10-18 as above) sets
+// ms_mcPopup null, hides the box (the clip removed, the background hidden, the "GUIPopup"
+// context popped) and then sends the button's callback text. HideAllPopups does the first part
+// for whatever box is up, so it and the callback are the click, for either kind of box. The
+// game's own result handlers (CClientExoApp.GUIDialogResult's, 0x005DAA8E; GUIPopupLayer's
+// ScriptDialogResult, 0x007098C0) send DialogBoxClosedMessage themselves, and a movie's box's
+// callback (GUI.InvokeCallback, 0x0060ED40, the screen's own ActionScript run) needs none. Until
+// 2026-10-18 this sent DialogBoxClosedMessage and hid the PopupLayer screen itself: the first
+// twice for a game's box, and for a movie's box it left the clip up and ms_mcPopup set, the
+// layer then refusing every later box. The 2026-10-01 play check (a script's Yes and No box, No
+// pressed: the box gone, the interface back) was of that older form.
 bool PressPopupButton(std::size_t index)
 {
     const auto box = CurrentPopup();
-    void *gui = GuiSystem();
-    if (!box || gui == nullptr || index >= box->buttons.size() || !messages::SendText(box->buttons[index].callback))
+    auto popups = PopupMovie();
+    if (!box || !popups || index >= box->buttons.size())
     {
         return false;
     }
-    messages::Send(gui, messages::Make<messages::DialogBoxClosedMessage>());
-    HideScreen(L"PopupLayer");
-    return true;
+    const std::wstring callback = box->buttons[index].callback;
+    if (!popups->Invoke("_global.PopupLayer.HideAllPopups"))
+    {
+        return false;
+    }
+    return messages::SendText(callback);
 }
 
 } // namespace dao::gui
