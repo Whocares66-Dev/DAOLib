@@ -163,6 +163,7 @@ add_library(
     src/dao/core/FunctionTable.cpp
     src/dao/core/GdaFile.cpp
     src/dao/core/Grid.cpp
+    src/dao/core/HeadPreset.cpp
     src/dao/core/Gff3.cpp
     src/dao/core/Gff3Write.cpp
     src/dao/core/Gff4.cpp
@@ -179,6 +180,7 @@ add_library(
     src/dao/core/MaterialDefinition.cpp
     src/dao/core/MaterialObject.cpp
     src/dao/core/Morph.cpp
+    src/dao/core/MorphConfig.cpp
     src/dao/core/Ncs.cpp
     src/dao/core/OptionsMovie.cpp
     src/dao/core/Pe.cpp

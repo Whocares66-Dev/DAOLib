@@ -100,6 +100,8 @@ LDF = "src/dao/core/Ldf.cpp"
 NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
 CHARACTER = "src/dao/core/Character.cpp"
+HEADPRESET = "src/dao/core/HeadPreset.cpp"
+MORPHCONFIG = "src/dao/core/MorphConfig.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
@@ -1219,6 +1221,30 @@ MUTANTS: list[Mutant] = [
         PICTURE,
         "(at > -0.5 && at <= 0.5)",
         "(at > -0.5 && at < 0.5)",
+    ),
+    Mutant(
+        "preset-target-difference: a target moves a vertex by its difference from the base, weighed",
+        HEADPRESET,
+        "places[i].at(k) += weight * (to->at(k) - from->at(k));",
+        "places[i].at(k) += weight * to->at(k);",
+    ),
+    Mutant(
+        "preset-seam-nearest: of a seam's vertices sharing a coordinate, the nearest is matched",
+        HEADPRESET,
+        "            if (distance < bestDistance)",
+        "            if (distance > bestDistance)",
+    ),
+    Mutant(
+        "preset-value-component: a material value's index is its vector's (index / 4) and element",
+        HEADPRESET,
+        ".at(at / 4).at(at % 4) = value.value;",
+        ".at(0).at(at % 4) = value.value;",
+    ),
+    Mutant(
+        "morphconfig-hair-cut: a hair is offered once per digit of its cut, with that digit",
+        MORPHCONFIG,
+        "choices.push_back({.name = hair.name, .cut = digit - '0'});",
+        "choices.push_back({.name = hair.name, .cut = 0});",
     ),
 ]
 
