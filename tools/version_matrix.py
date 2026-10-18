@@ -230,10 +230,15 @@ def try_variant(install, name, load_save):
     loader_log = LOGS / "loader.log"
     tb_log = LOGS / "turnbased.log"
     env = {**os.environ, **install.env}
+    # Shown but not activated: the window in front stays in front (DAOLib #198).
+    behind = subprocess.STARTUPINFO()
+    behind.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    behind.wShowWindow = 4  # SW_SHOWNOACTIVATE
     subprocess.Popen(
         [str(install.exe)],
         cwd=str(install.bin),
         env=env,
+        startupinfo=behind,
         creationflags=0x00000008,  # DETACHED_PROCESS
     )
 

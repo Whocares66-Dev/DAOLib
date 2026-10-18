@@ -257,12 +257,46 @@ function Build-Row([hashtable] $Base, [string] $Key, [int] $Index, [string] $Lay
     }
 }
 
+# CreateProcess with the window shown and not activated (SW_SHOWNOACTIVATE), so a game that starts
+# does not take the keys from the window in front; Start-Process has no such style, and a
+# minimised fullscreen game stops drawing (DAOLib #198). The environment is the script's own.
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class NoActivateStart {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO {
+        public int cb; public string lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessW(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, int flags,
+        IntPtr env, string dir, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    public static int Start(string exe, string dir) {
+        STARTUPINFO si = new STARTUPINFO();
+        si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+        si.dwFlags = 1; // STARTF_USESHOWWINDOW
+        si.wShowWindow = 4; // SW_SHOWNOACTIVATE
+        PROCESS_INFORMATION pi;
+        if (!CreateProcessW(exe, "\"" + exe + "\"", IntPtr.Zero, IntPtr.Zero, false, 0, IntPtr.Zero, dir, ref si, out pi))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+        return pi.dwProcessId;
+    }
+}
+'@
+
 function Open-Row($Row) {
     if ($Row.Layer) { New-ItemProperty -Path $layersKey -Name $Row.Exe -Value "~ $($Row.Layer)" -PropertyType String -Force | Out-Null }
     $Row.Began = Get-Date
     $env:DAOLIB_INSTANCE = $Row.Instance
     if ($Row.Steam) { $env:SteamAppId = $steamAppId; $env:SteamGameId = $steamAppId }
-    try { [void] $script:Pids.Add((Start-Process -FilePath $Row.Exe -WorkingDirectory $Row.Folder -PassThru).Id) }
+    try { [void] $script:Pids.Add([NoActivateStart]::Start($Row.Exe, $Row.Folder)) }
     finally { Remove-Item Env:DAOLIB_INSTANCE, Env:SteamAppId, Env:SteamGameId -ErrorAction SilentlyContinue }
 }
 

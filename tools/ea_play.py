@@ -325,7 +325,11 @@ def log_directory():
 
 
 def play(exe, loader, watch, seconds, started):
-    first = subprocess.Popen([exe], cwd=ea_dump.INSTALL)
+    # Shown but not activated: the window in front stays in front (DAOLib #198).
+    behind = subprocess.STARTUPINFO()
+    behind.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    behind.wShowWindow = 4  # SW_SHOWNOACTIVATE
+    first = subprocess.Popen([exe], cwd=ea_dump.INSTALL, startupinfo=behind)
     print(f"started {exe}, pid {first.pid}; it hands off to the EA app")
     deadline = time.monotonic() + WAIT_SECONDS
     while True:

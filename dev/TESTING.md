@@ -47,6 +47,8 @@ It does not play: a start to the main menu is what every setting shares. What a 
 - **Steam:** the exe, with `SteamAppId=47810` and `SteamGameId=47810` in its environment and Steam running. Without them the stub hands off to Steam, which opens the launcher's window and waits for Play.
 - **EA:** the exe, which hands off to the EA app, which starts the game under the folder `HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age`'s `Path` names. On this machine that is Steam's (Steam's installer writes the key), so `-SwitchPath` sets it to EA's folder for the runs and puts it back; that needs an elevated shell, and is done with the user's leave (2026-10-12).
 
+The matrix, `version_matrix.py` and `ea_play.py` start the game shown but not activated (`SW_SHOWNOACTIVATE`), so it opens behind the front window and takes no keys from it; it is not minimised, which would stop a fullscreen game drawing (DAOLib #198).
+
 All three run as the game as ever: the shared profile, `Documents\BioWare\Dragon Age`, and its `daolib\loader.log`.
 
 ## Which exes the loader finds a file for (`tools\version_matrix.py`, 2026-10-13, DAOLib #110)
