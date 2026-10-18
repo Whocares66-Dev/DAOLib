@@ -64,7 +64,7 @@ oC1 = (0.34464, 0.99609375, 0.996084, 1);                                  // fa
 - `sky.psh` takes its sun from `g_vLightParams[2]`, not the block.
 - The fog vectors:
   - F0 = (`fogRed`, `fogGreen`, `fogBlue`, (t·(I − k·I) + k·I)²), with I = `fogIntensity` and k = block +0x24;
-  - F1 = (1 − `fogCap`, `atmosphereAlpha`, `fogZenith` in radians, block +0x18).
+  - F1 = (1 − `fogCap` (block +0x10), `atmosphereAlpha` (+0x4C), `fogZenith` (+0x14, in degrees) × π/180 (`0x0055c459`: the double 0.017453279 at `0x00af14c0`), block +0x18 (set by no command)). Corrected 2026-10-18, at elgara-agent's question.
   - The shader reads F0.rgb, F1.x and F1.z.
 - Clouds (another shader):
   - cloud[0] = (`cloudDensity`, `cloudSharpness`, `cloudDepth`, `cloudRangeMultiplier1`);
