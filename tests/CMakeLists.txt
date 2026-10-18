@@ -44,6 +44,7 @@ add_executable(
     test_objects.cpp
     test_path.cpp
     test_picture.cpp
+    test_plot.cpp
     test_range.cpp
     test_relocate.cpp
     test_savemeta.cpp

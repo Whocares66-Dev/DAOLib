@@ -182,6 +182,7 @@ add_library(
     src/dao/core/OptionsMovie.cpp
     src/dao/core/Pe.cpp
     src/dao/core/Picture.cpp
+    src/dao/core/Plot.cpp
     src/dao/core/RayCast.cpp
     src/dao/core/Rtti.cpp
     src/dao/core/SaveMeta.cpp

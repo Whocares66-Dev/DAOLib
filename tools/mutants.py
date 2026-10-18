@@ -94,6 +94,7 @@ class Mutant:
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
+PLOT = "src/dao/core/Plot.cpp"
 LDF = "src/dao/core/Ldf.cpp"
 NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
@@ -569,6 +570,18 @@ MUTANTS: list[Mutant] = [
         GFF4,
         "if (!element || element->type != static_cast<std::uint16_t>(type) || (element->flags & (kList | kStruct)) != 0)",
         "if (!element || (element->flags & (kList | kStruct)) != 0)",
+    ),
+    Mutant(
+        "plot-defined-from-128: a flag of 128 and up is defined, by its number alone",
+        PLOT.replace("Plot.cpp", "Plot.h"),
+        "inline constexpr std::int32_t kFirstDefined = 128;",
+        "inline constexpr std::int32_t kFirstDefined = 256;",
+    ),
+    Mutant(
+        "plot-stored-word: a stored flag's bit is in the word of its number over 32",
+        PLOT,
+        "stored[static_cast<std::size_t>(id / kBitsAWord)]",
+        "stored[0]",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
