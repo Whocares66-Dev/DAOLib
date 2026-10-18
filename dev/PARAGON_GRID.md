@@ -19,8 +19,8 @@ A note from `C:\project\DAOParagonEngine` (paragon-agent, 2026-10-17), for DAOLi
 | 3094 | AreaGridAbstractSectorSize | int | 8 in lak303d, 11 in den000d |
 | 3095 | AreaGridAbstractSectors | SECT list | per sector: AreaGridRoomNumberOfLinks, AreaGridLinks (an offset into the memory below) |
 | 3096 | AreaGridAbstractMemory | uint8 list | the abstraction's graph, 4,252 bytes in lak303d; not read yet |
-| 3114 | AreaGridRoomID | int list | a cell's room id (lak303d: 5, 15, 0, 1; -1 outside every room) |
-| (Link) | AreaGridLink | uint8 list | one a cell, 255 everywhere in lak303d |
+| 3114 | AreaGridSoundData | int8 list | not a room id (xoreos's name for it, AreaGridRoomID, misled this row): a cell's sound data, given to a creature on it at +0xB6C, probably the floor's sound material (inferred); lak302d: 5 almost everywhere, 15, 1, 0; -1 at the edges. A creature's room is the .rml room id of the static floor under it (dev/COLLISION.md, section 3; corrected 2026-10-18, DAOLib #187) |
+| 3117 | AreaGridLightSubsetData8 | uint8 list | one a cell, 255 for none, else an index into the layout's `LvlLightSubsetList` (3800): a per-cell sun and light occlusion (xoreos's `AreaGridLink` misled this row; lak303d: all 255; 62 of 213 grids hold indices; DAOLib #187) |
 | | AreaGridLinkID, AreaGridLinkRoomID | | empty and 0.25 in lak303d |
 | | EnvStatPhys / EnvStatPhysData | uint8 list | a PhysX (NovodeX) cooked stream, "NXUSTREAM" after 8 bytes: the level's static collision, 403,551 bytes in lak303d |
 

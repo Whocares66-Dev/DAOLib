@@ -4,6 +4,14 @@
 // in 0x00C1D08C) answers a string reference with its text through GetString, __thiscall
 // (strref, std::wstring &out, flag), `ret 0xC`, choosing the male or female form by its +0x1C.
 // tools/tlk.py reads the same tables from the files. Not yet seen in play.
+//
+// That 1 is the female form is confirmed, read 2026-10-18 by lib-agent-2 (DAOLib #187).
+// SetPartyLeader's backend (0x00636180) calls the talk table's gender setter 0x004E5CF0 with 1
+// when the new leader's appearance +0x50 is 2, GENDER_FEMALE as GetCreatureGender (263) returns
+// it (0x0065A444-0x0065A44A), and with 0 otherwise (0x006361B1-0x006361D5); the setter reloads
+// the tables (0x004E4B10). GetTlkTableString (14) keeps a gender of 0 or 1 and makes anything
+// else 0 (0x00654BED-0x00654C17), so a script passing GENDER_MALE (1) gets the female form, a
+// vanilla quirk; no shipped script passes a gender.
 #include "dao/Tlk.h"
 
 #include "dao/Addresses.h"

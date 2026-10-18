@@ -46,7 +46,7 @@ std::uint32_t Shorts(Builder &b, const std::vector<std::int16_t> &values)
 // second of 1. The first block's one entrance is at cell (1, 0) with an edge to the second block's
 // entrance, at cell (2, 0), whose edge leads back; the second level's entrance is at 8 sixteenths
 // of its 4-cell block across, cell (2, 0). The cells: 10, 1, 1 with a counter in its high bits, 9,
-// 10, 10; heights 0, 16, -8, 0, 0, 0; rooms -1, 0, 0, 1, -1, -1.
+// 10, 10; heights 0, 16, -8, 0, 0, 0; sound data -1, 0, 0, 1, -1, -1.
 std::vector<std::byte> LayoutFile()
 {
     Builder b = Start("ARL ", {{"AREA", 96, {{3020, 1, gff4::kStruct, 0}}},
@@ -104,7 +104,7 @@ std::vector<std::byte> FromDisk(const std::filesystem::path &path)
 
 } // namespace
 
-TEST_CASE("a walk grid has its cells' kinds, heights and rooms", "[grid]")
+TEST_CASE("a walk grid has its cells' kinds, heights and sound data", "[grid]")
 {
     const std::vector<std::byte> bytes = LayoutFile();
     const std::optional<gff4::File> file = gff4::File::Parse(bytes);
@@ -124,7 +124,7 @@ TEST_CASE("a walk grid has its cells' kinds, heights and rooms", "[grid]")
     CHECK(grid->Height(0, 1) == Approx(1.0F));
     CHECK(grid->Height(0, 2) == Approx(-0.5F));
     CHECK(!grid->Height(0, 3).has_value());
-    CHECK(grid->rooms == std::vector<std::int8_t>{-1, 0, 0, 1, -1, -1});
+    CHECK(grid->sounds == std::vector<std::int8_t>{-1, 0, 0, 1, -1, -1});
 }
 
 TEST_CASE("a walk grid's coarse levels have their entrances where the exe puts them, and their edges", "[grid]")
@@ -191,7 +191,9 @@ void Tally(const navigation::Grid &grid, Counts &counts)
     const auto cells = static_cast<std::size_t>(grid.columns) * static_cast<std::size_t>(grid.rows);
     CHECK(grid.cells.size() == cells);
     CHECK(grid.heights.size() == cells);
-    CHECK(grid.rooms.size() == cells);
+    CHECK(grid.sounds.size() == cells);
+    // Seven grids hold no AreaGridLightSubsetData8 at all (rmtst, combat2, brc201d among them).
+    CHECK((grid.lightSubsets.empty() || grid.lightSubsets.size() == cells));
     REQUIRE(!grid.abstraction.empty());
     counts.twoLevels += grid.abstraction.size() == 2 ? 1 : 0;
     for (const std::vector<navigation::Entrance> &block : grid.abstraction[0].blocks)

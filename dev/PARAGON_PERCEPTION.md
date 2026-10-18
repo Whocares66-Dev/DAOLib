@@ -4,9 +4,9 @@ Paragon (paragon-agent, 2026-10-18) has the scripts' side of perception through 
 
 ## 1. Core: a room's number and its connectivity (`level::RoomOf`)
 
-- The room's own number, the one `EnvRoomVisibilityList` (3047) and the walk grid's per-cell rooms use (CRoom +0x14 and its bit +0x278 in the reading): where it is in the .rml or the .arl.
+- The room's own number, the one `EnvRoomVisibilityList` (3047) uses (CRoom +0x14 and its bit +0x278 in the reading): where it is in the .rml or the .arl.
 - `EnvRoomConnectivityList` (3099, CRoom +0xD0): the rooms each room connects to, as `Room::connects` beside `Room::sees`.
-- Whether the walk grid's per-cell room (`navigation::Grid`'s rooms, -1 for none) is that same number, so a creature's room (+0x41C) can be taken from the cell it stands on.
+- Whether the walk grid's per-cell room is that same number, so a creature's room (+0x41C) can be taken from the cell it stands on. Answered 2026-10-18 (lib-agent-2, dev/COLLISION.md section 3, DAOLib #187): no. Field 3114 is `AreaGridSoundData`, now `navigation::Grid::sounds`, and a creature's room comes from a ray down onto the static geometry.
 
 ## 2. Core: a placeable's rooms (`area::AreaOf`)
 

@@ -127,10 +127,10 @@ Read 2026-10-18 by lib-agent-2 (with a subagent) in the GOG exe (`tools\daoexe.p
   - For each neighbour it asks `0x00685100` for the doors between the two rooms and `0x0074BCC0` whether each is passable.
   - The visibility list is not used by that walk.
 - **Example, lak302d_1101.rml:** visibility [1103, 1325], connectivity [1103]. `lak302d_1103`: visibility and connectivity both [1101, 1325, 1113].
-- **The grid's per-cell byte (field 3114) is DA's `AreaGridSoundData`.** xoreos calls it `AreaGridRoomID`, and so does core's Grid.h.
+- **The grid's per-cell byte (field 3114) is DA's `AreaGridSoundData`.** xoreos calls it `AreaGridRoomID`, as core's Grid.h did until DAOLib #187, which renamed its list `Grid::sounds`.
   - In DA's own label set, 3110–3120 are `AreaGridArea`, `AreaGridSoundData` (3114), `AreaGridAbstractionSNumReg`, `AreaGridAbstractionSaddr`, `AreaGridLightSubsetData8` (3117), `AreaGridLightSubsetData16` (3118), `LightCanBeOccluded` and `AreaGridCellPadding` (3120). Grid.h already takes 3120's DA name.
-  - The loader `0x00A48940` → `0x00A49470` keeps 3114 at grid+0x44. `0x00A49290` reads a cell's byte, and `0x00A46870` returns it with 3117's coarse value.
-  - The byte goes to **creature+0xB6C** (`0x006AA5EB`, `0x006B608F`). The coarse value goes to creature+0x798 (`0x006B60E7`).
+  - The loader `0x00A48940` → `0x00A49470` keeps 3114 at grid+0x44. `0x00A49290` reads a cell's byte, and `0x00A46870` returns it with 3117's light-subset index (`AreaGridLightSubsetData8`, one u8 a cell into the layout's `LvlLightSubsetList`, 255 for none).
+  - The byte goes to **creature+0xB6C** (`0x006AA5EB`, `0x006B608F`). The light-subset index goes to creature+0xB68, through `0x0069E550` to the creature's visual; creature+0x798 (`0x006B60E7`) is a flag set at `0x006B5FFB`, not a value from the grid (corrected 2026-10-18 by lib-agent-2).
 - **In lak302d the byte is no room index:**
   - −1 on 36,288 cells; 5 on 21,021 (14,360 walkable); 15 on 512; 1 on 260; 0 on 131.
   - Every creature, door and trigger position in the `.are` that was tried reads 5, whatever its room (1101, 1103, 1325, 1291).

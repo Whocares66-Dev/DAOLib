@@ -192,6 +192,7 @@ label,name
 3111,AreaGridAreaID
 3112,AreaGridRooms
 3113,AreaGridRoom
+# 3114 is DA:O's AreaGridSoundData (above), a cell's sound data and not a room (dev/COLLISION.md section 3); the name below is xoreos's, and field_names keeps the last
 3114,AreaGridRoomID
 3115,AreaGridRoomNumberOfLinks
 3116,AreaGridLinks

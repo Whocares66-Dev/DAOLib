@@ -1,5 +1,5 @@
 // A level's walk grid out of the game's files, over bytes (DAOLib #156): the
-// cells the pathfinder walks, their heights and rooms, and the hierarchical
+// cells the pathfinder walks, their heights and sound data, and the hierarchical
 // A*'s coarse levels over them, for a reimplementation that walks and finds
 // paths as the game does (DAOParagonEngine).
 //
@@ -26,8 +26,31 @@
 //     cellSize + 0.5, truncated and a negative index taken as 0 (0x00A49410
 //     for the row from y, 0x00A49440 for the column from x). The loader also
 //     raises a cell size under 0.01 m to 0.01; no file has one.
-//   AreaGridRoomID: a signed byte a cell, its room's place in the level's
-//     room list, -1 outside every room.
+//   AreaGridSoundData (3114; xoreos names it AreaGridRoomID): a signed byte
+//     a cell, which the engine keeps at the grid's +0x44 and gives a creature
+//     on the cell at its +0xB6C (0x006AA5EB, 0x006B608F). 5 almost everywhere
+//     and -1 at the edges, matching the static actors' fourth field (0 to 15).
+//     The sound player (0x006B6290) takes its low nibble as the footstep
+//     surface's row, against apr_base's Sound_Footstep_Type, and its high
+//     nibble as a vegetation rustle (dev/AUDIO.md). It is not a room: a creature's room
+//     is the .rml room id of the static floor a ray down from it meets
+//     (dev/COLLISION.md, section 3; read 2026-10-18 by lib-agent-2).
+//   AreaGridLightSubsetData8 (3117; xoreos names it AreaGridLink): a byte a
+//     cell, 255 for none, otherwise an index into the layout's
+//     LvlLightSubsetList (3800): a per-cell sun and light occlusion (read
+//     2026-10-18 by lib-agent-2). The loader (0x00A48900) keeps it at the
+//     grid's +0x48; 0x00A49010 answers a cell's, turning 0xFF into -1; the
+//     position query 0x00A46870 gives it to a creature, which hands it to its
+//     visual (0x0069E550) and keeps it at +0xB68, and to a placeable's visual.
+//     The renderer reads the subset (0x004622C0) and sets the object's light
+//     factor, 1.0 for a subset whose first entry is -1 and 0.1 otherwise
+//     (0x00462470). 143 of the 213 grids are all 255; 62 hold the indices 0 to
+//     N - 1 for their layout's N subsets; seven of the install's grids (rmtst,
+//     combat2, brc201d and others) have no such field, and read empty. The engine allows the list to be
+//     coarser than the grid by a power of two (0x00A48FB0) and drops it where
+//     it fits no power; every file has one a cell. AreaGridLightSubsetData16
+//     (3118), its 16-bit form, is read only where 3117 is missing, and is
+//     null in every file, so it is not read here.
 //   AreaGridAbstractSectors and AreaGridAbstractMemory: the coarse levels,
 //     built at 0x00A4A690 (loader 0x00A4A9F0). The grid is cut into blocks of
 //     AreaGridAbstractSectorSize cells a side, ceil(columns / size) by
@@ -107,10 +130,10 @@ struct Grid
     float padding = 0;   // a cell's point from its corner, across and up
     Point base{};        // cell (0, 0)'s corner in the level's space; its z is not the floor's
     Point normal{};
-    std::vector<std::uint8_t> cells;   // a byte a cell, row by row
-    std::vector<std::int16_t> heights; // a height a cell, in kHeightUnit
-    std::vector<std::int8_t> rooms;    // a room a cell, -1 for none
-    std::vector<std::uint8_t> links;   // AreaGridLink, a byte a cell: 255 in every file
+    std::vector<std::uint8_t> cells;        // a byte a cell, row by row
+    std::vector<std::int16_t> heights;      // a height a cell, in kHeightUnit
+    std::vector<std::int8_t> sounds;        // AreaGridSoundData, a byte a cell: -1 at the edges
+    std::vector<std::uint8_t> lightSubsets; // AreaGridLightSubsetData8, a byte a cell: 255 for none
     std::int32_t sectorSize = 0;
     std::vector<Level> abstraction;      // the first level, and the second where the file has one
     std::vector<std::uint8_t> collision; // EnvStatPhysData as written: a cooked PhysX stream

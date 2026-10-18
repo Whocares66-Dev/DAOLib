@@ -27,11 +27,11 @@ constexpr std::uint32_t kHeights = 3093;
 constexpr std::uint32_t kSectorSize = 3094;
 constexpr std::uint32_t kSectors = 3095;
 constexpr std::uint32_t kMemory = 3096;
-constexpr std::uint32_t kRooms = 3114;
+constexpr std::uint32_t kSoundData = 3114;
 constexpr std::uint32_t kPadding = 3120;
 constexpr std::uint32_t kSectorEntrances = 3115;
 constexpr std::uint32_t kSectorOffset = 3116;
-constexpr std::uint32_t kLinks = 3117;
+constexpr std::uint32_t kLightSubsets = 3117;
 constexpr std::uint32_t kCollision = 3744;
 constexpr std::uint32_t kCollisionData = 3745;
 
@@ -279,8 +279,8 @@ Grid GridOf(const gff4::Struct &area)
     grid.normal = PointOf(area.Floats(kNormal));
     grid.cells = ListOf<std::uint8_t>(area, kCells, gff4::Type::U8);
     grid.heights = ListOf<std::int16_t>(area, kHeights, gff4::Type::S16);
-    grid.rooms = ListOf<std::int8_t>(area, kRooms, gff4::Type::S8);
-    grid.links = ListOf<std::uint8_t>(area, kLinks, gff4::Type::U8);
+    grid.sounds = ListOf<std::int8_t>(area, kSoundData, gff4::Type::S8);
+    grid.lightSubsets = ListOf<std::uint8_t>(area, kLightSubsets, gff4::Type::U8);
     grid.sectorSize = area.Get<std::int32_t>(kSectorSize).value_or(0);
     const std::vector<std::uint8_t> memory = ListOf<std::uint8_t>(area, kMemory, gff4::Type::U8);
     grid.abstraction = AbstractionOf(grid, SectorsOf(area), memory);

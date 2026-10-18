@@ -25,7 +25,7 @@
 // empty, 0 by 0 cells of 0.5 m. Cells are 1 (130,735), 7 (1,597) or 8
 // (126,753); 7 only in state 0 of 28 of the 29 six-state files, the doors'
 // Closed_Unlocked, which a locked door's state 1 has as 8s. Rooms are all 0,
-// links 255. The largest is plc_destcavewall_0_3.pwk's, 208 by 136.
+// light subsets 255. The largest is plc_destcavewall_0_3.pwk's, 208 by 136.
 //
 // The stamp is 0x00A46CC0 (its one caller 0x0074DBA0, with the patch of the
 // state, the placeable's position at +0x120 and facing at +0x130). For each
