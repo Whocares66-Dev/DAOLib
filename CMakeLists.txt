@@ -152,6 +152,7 @@ add_library(
     src/dao/core/Character.cpp
     src/dao/core/Clip.cpp
     src/dao/core/Conversation.cpp
+    src/dao/core/Cutscene.cpp
     src/dao/core/DaZip.cpp
     src/dao/core/Dds.cpp
     src/dao/core/DdsWrite.cpp

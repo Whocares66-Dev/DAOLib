@@ -95,6 +95,7 @@ GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
+CUTSCENE = "src/dao/core/Cutscene.cpp"
 LDF = "src/dao/core/Ldf.cpp"
 NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
@@ -582,6 +583,18 @@ MUTANTS: list[Mutant] = [
         PLOT,
         "stored[static_cast<std::size_t>(id / kBitsAWord)]",
         "stored[0]",
+    ),
+    Mutant(
+        "cutscene-end-script: the end script is CutsceneEndScript's, not the blend tree's",
+        CUTSCENE,
+        "constexpr std::uint32_t kEndScript = 5001;",
+        "constexpr std::uint32_t kEndScript = 5007;",
+    ),
+    Mutant(
+        "cutscene-transition-controls: a transition's second control is its own field",
+        CUTSCENE,
+        ".control2 = VertexOf(transition.Child(kTransitionControl2))",
+        ".control2 = VertexOf(transition.Child(kTransitionControl1))",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
