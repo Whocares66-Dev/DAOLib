@@ -104,6 +104,11 @@ std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) cons
         out.cutscene = cut->String(kLineCutResRef).value_or(L"");
         out.cutsceneInLine = cut->Label() == "CUT";
     }
+    for (const gff4::Struct &entry : line.Structs(kLineActive))
+    {
+        out.switches.push_back({entry.String(kSwitchTag).value_or(L""),
+                                static_cast<LineSwitch::Switch>(entry.Get<std::int32_t>(kSwitchValue).value_or(0))});
+    }
     return out;
 }
 

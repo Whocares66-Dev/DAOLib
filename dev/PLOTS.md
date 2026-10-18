@@ -45,3 +45,62 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine #22 (Mouse's `MOUSE_JOI
 Not read: the gates at 0x006976B0's start (object +0x2C5, 0x00695300), what the update's gate is, and the manager's other callers (0x005FEFD1, 0x005FFB79, 0x006BB0F1, 0x0069A1AF, 0x006B6E7A, 0x00694693, 0x006C5E9A, 0x007F1EB3; likely clears on death or area change). The manager's queue (+0x38) re-creates conversations at a line, probably from a save's `SavegameAmbientDialog*` fields (16530–16534).
 
 The line's flag is `ConversationLine::ambient` in `dao/core/Conversation.h` (DAOLib #174).
+
+### A conversation line's visibility, speaker and skip: read 2026-10-18
+
+Read in the GOG exe, saves and the game's conversations by lib-agent-2 (with subagents) for DAOParagonEngine's Harrowing. Not seen in play. The key claims below were checked in the disassembly.
+
+### Once per game: the line's string id, in the party, saved
+
+- **What is recorded.** A line whose `ConversationLineVisibility` (12206) is 2 is recorded when played (0x007F1700). The record is its text's talk-table string id: 0x007EF520 reads `ConversationLineText` (12201) into a LocString with the strref at +4 (0x007F178C). There is no line index or conversation in it.
+- **Where it is kept.** In the party (`[app+0xD0]+0x58`) at +0x2F0, a vector of u32, appended if missing.
+- **The save.** It is saved and loaded as **16503 `SavegamePartySeenLines`**, a list of UINT32 (writer 0x006346A8, reader 0x00637F80). Real saves hold talk-table ids of spoken lines; empty-text lines are recorded too, by their own strref.
+- **A consequence** (inferred): two lines that share a strref share the record.
+- **Once per conversation** (Visibility 1) is kept on the Conversation object at +0x60: a vector of line **indices**, written by 0x007F1640, tested at 0x007F05FD, and freed when the conversation ends. So it lasts one run of the conversation.
+
+### An inactive speaker never speaks: the owner does, unless the line activates it
+
+- **The tag lookup** 0x006973B0 (`__thiscall` (tag, includeInactive, maxDist, found*), `ret 0x10`):
+  - It searches only the owner's area's objects, keeping one with the tag that is active, or any if `includeInactive` is set.
+  - Active means 0x00699FA0: +0x2C5 set and +0x421 (being turned off) clear.
+  - It returns the nearest, or -1.
+- **The speaker and listener** (`LineSpeaker` 0x007F0210, `LineListener` 0x007F02F0) pass `includeInactive` 0 (0x007F0289). So a tag naming an inactive creature resolves to -1, and the speaker becomes the conversation's owner. `OWNER`, `PLAYER` and `HENCH` have no active filter.
+- **The line's own switches are applied first.** `ConversationLineActive` (12500) is a list of (tag 12102, value 12103). 0x007F0620(line, phase) resolves each tag **including inactive** objects, and switches it with the object's slot 0x140 (as `SetObjectActive` does; no animation, no effect):
+  - Phase 0, from `PlayLine` at 0x007F1FC1, before the speaker is resolved at 0x007F1FE1: 1 activates, 3 deactivates.
+  - Phase 1, from `Advance` (0x007F1939), after the line: 2 activates, 4 deactivates.
+  - So a line can turn its own speaker on before it speaks.
+- **Mouse** (`bhm600_mouse_new.dlg`):
+  - The first talk (start line 97, the rat) ends line 102 with the rat switched off (value 4). Player line 232's action sets `MOUSE_TURNS_HUMAN` (34), whose plot case (`bhm600pt_harrowing.nss`:117–127) turns the rat off and the human on before line 103, the human's first.
+  - Lines 1, 2 and 32–34 switch the human on (value 1) at their start.
+  - The shouts 27–31 (ambient, the human as speaker) have no switch, and the human is off then (`bhm600pt_harrowing.nss`:134–135). So the rat, the owner, speaks them (inferred, from the above).
+  - `bhm600cr_mouse.nss`:35–44 moves the human to the speaking creature's spot on DIALOGUE but doesn't activate him.
+
+### The skip: no text and no cut is passed over
+
+`PlayLine` (0x007F1EF0) passes over a non-ambient NPC line when `Skip || (text empty && no Cut)`. An ambient line is passed over on empty text alone.
+- 0x007EFC70 is `ConversationLineSkip` (12214) ≠ 0 (checked).
+- 0x007EFC30 is whether `ConversationLineCut` (12211) holds a cutscene.
+- Text empty means the resolved talk-table string's length is 0.
+- Voice-over and the speaker play no part.
+
+A passed-over line:
+- is not shown: the dialogue mode (0x0068E250) and the ambient manager are not called;
+- still has its visibility recorded, becomes the current line (+0x38), and runs its action (0x007F0560: the script and plot flag);
+- then **offers the replies at once** (0x007F1A40), with no wait.
+
+The conversation's +0x90 counts the lines passed in a row.
+
+`OfferReplies` keeps the available replies with text. The first available reply with empty text is held back as a "continue":
+- If no reply has text and the NPC line was passed over, it **Advances through that empty reply at once** (0x007F1E78), so the next NPC line plays with nothing shown.
+- If the NPC line has text, the empty reply is offered as the continue.
+
+A conversation's first line (+0x3C = -1) that passes the test goes the same way.
+
+**The data** (every `.dlg` in `designerdialogs.erf`):
+- 7,806 of 50,472 NPC lines have empty text, each with a real strref; 778 of them are non-ambient starting lines. `alistair_main.dlg` line 0 (OWNER, strref 234570 = "", one child, an empty reply) is the routing pattern.
+- Skip is set on 271 NPC lines, almost all with text and a Cut.
+- `Dialogue.cpp`'s empty "[OWNER]" line seen at Highever is likely this pass-through as the hooks see it.
+
+Not read: whether a Skip line's Cut plays elsewhere, and where `OfferReplies` is called after a shown line ends.
+
+A line's switches are `ConversationLine::switches` in `dao/core/Conversation.h` (DAOLib #178).

@@ -11,12 +11,16 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using dao::core::ConversationFile;
 using dao::core::ConversationLine;
+using dao::core::LineSwitch;
 namespace gff4 = dao::core::gff4;
 
 using dao::test::Builder;
@@ -28,7 +32,7 @@ namespace
 // (tools/gff4.py --templates on one): a CONV top struct, NTRY and RPLY
 // lines in a generic list of references, a PLOT condition in place, a
 // line's cutscene in a generic field by reference: a CUTR naming a .cut, or
-// a CUT held whole.
+// a CUT held whole; the objects a line switches, a list of IMAP in place.
 
 struct FieldSpec
 {
@@ -41,22 +45,24 @@ struct FieldSpec
 constexpr std::uint16_t kPlotTemplate = 3;
 constexpr std::uint16_t kCutReferenceTemplate = 4;
 constexpr std::uint16_t kCutTemplate = 5;
+constexpr std::uint16_t kSwitchTemplate = 6;
 
 const std::vector<FieldSpec> kLineFields = {
-    {12201, 17, 0, 0x00},                        // text
-    {12202, 14, 0, 0x08},                        // speaker
-    {12203, 14, 0, 0x0C},                        // listener
-    {12205, 5, 0, 0x14},                         // icon
-    {12208, kPlotTemplate, gff4::kStruct, 0x24}, // condition, in place
-    {12400, 4, gff4::kList, 0x54},               // children
-    {12215, 0, 0, 0x62},                         // fast path
-    {12206, 5, 0, 0x18},                         // visibility
-    {12207, 0, 0, 0x1C},                         // ambient
-    {12214, 0, 0, 0x1D},                         // skip
-    {12216, 0, 0, 0x1E},                         // no voice-over in the game
-    {12217, 0, 0, 0x1F},                         // revert the animation
-    {12213, 4, 0, 0x20},                         // animation
-    {12211, 0xFFFF, gff4::kReference, 0x58},     // cutscene, generic
+    {12201, 17, 0, 0x00},                                        // text
+    {12202, 14, 0, 0x08},                                        // speaker
+    {12203, 14, 0, 0x0C},                                        // listener
+    {12205, 5, 0, 0x14},                                         // icon
+    {12208, kPlotTemplate, gff4::kStruct, 0x24},                 // condition, in place
+    {12400, 4, gff4::kList, 0x54},                               // children
+    {12215, 0, 0, 0x62},                                         // fast path
+    {12206, 5, 0, 0x18},                                         // visibility
+    {12207, 0, 0, 0x1C},                                         // ambient
+    {12214, 0, 0, 0x1D},                                         // skip
+    {12216, 0, 0, 0x1E},                                         // no voice-over in the game
+    {12217, 0, 0, 0x1F},                                         // revert the animation
+    {12213, 4, 0, 0x20},                                         // animation
+    {12211, 0xFFFF, gff4::kReference, 0x58},                     // cutscene, generic
+    {12500, kSwitchTemplate, gff4::kList | gff4::kStruct, 0x64}, // objects switched
 };
 
 enum class Cut
@@ -85,6 +91,7 @@ struct LineSpec
     bool revert = false;
     std::uint32_t animation = 0xFFFFFFFF;
     Cut cut = Cut::None;
+    std::vector<std::pair<std::u16string, std::int32_t>> switches;
 };
 
 // A line's cutscene, appended to the data: a CUTR naming a .cut, or a CUT
@@ -139,6 +146,19 @@ void WriteLine(Builder &b, std::size_t at, const LineSpec &l)
     b.U8(at + 0x1F, l.revert ? 0xFF : 0);
     b.U32(at + 0x20, l.animation);
     WriteCut(b, at, l.cut);
+    // A list in place: a count, then the IMAP structs, each a tag's offset and a value.
+    const std::size_t list = b.bytes.size();
+    b.U32(list, static_cast<std::uint32_t>(l.switches.size()));
+    for (std::size_t i = 0; i < l.switches.size(); ++i)
+    {
+        b.U32(list + 4 + (8 * i), 0);
+        b.U32(list + 8 + (8 * i), static_cast<std::uint32_t>(l.switches[i].second));
+    }
+    for (std::size_t i = 0; i < l.switches.size(); ++i)
+    {
+        b.U32(list + 4 + (8 * i), b.String(l.switches[i].first));
+    }
+    b.U32(at + 0x64, static_cast<std::uint32_t>(list - b.data));
 }
 
 std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, const std::vector<bool> &replies)
@@ -152,9 +172,10 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
         {{12303, 14, 0, 0x00}, {12304, 5, 0, 0x04}, {12300, 14, 0, 0x08}, {12301, 5, 0, 0x0C}, {12302, 0, 0, 0x10}},
         {{12210, 14, 0, 0x00}},
         {{5000, 8, 0, 0x00}, {5001, 14, 0, 0x04}},
+        {{12102, 14, 0, 0x00}, {12103, 5, 0, 0x04}},
     };
-    const char *labels[] = {"CONV", "NTRY", "RPLY", "PLOT", "CUTR", "CUT "};
-    const std::uint32_t sizes[] = {0x20, 0x68, 0x68, 0x14, 0x04, 0x08};
+    const char *labels[] = {"CONV", "NTRY", "RPLY", "PLOT", "CUTR", "CUT ", "IMAP"};
+    const std::uint32_t sizes[] = {0x20, 0x68, 0x68, 0x14, 0x04, 0x08, 0x08};
     b.U32(20, static_cast<std::uint32_t>(templates.size()));
     std::size_t fields = 28 + (16 * templates.size());
     for (std::size_t i = 0; i < templates.size(); ++i)
@@ -219,7 +240,8 @@ std::vector<std::byte> TwoLines()
              true,
              false,
              820,
-             Cut::Named},
+             Cut::Named,
+             {{u"bhm600cr_mouse_human", 1}, {u"PLAYER", 0}}},
             {5678,
              u"PLAYER",
              u"OWNER",
@@ -236,7 +258,8 @@ std::vector<std::byte> TwoLines()
              false,
              true,
              0xFFFFFFFF,
-             Cut::Held},
+             Cut::Held,
+             {}},
         },
         {false, true});
 }
@@ -273,6 +296,11 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(npc->cutscene == L"390762");
     CHECK_FALSE(npc->cutsceneInLine);
     CHECK_FALSE(conversation->LineCutscene(0));
+    REQUIRE(npc->switches.size() == 2);
+    CHECK(npc->switches[0].tag == L"bhm600cr_mouse_human");
+    CHECK(npc->switches[0].value == LineSwitch::Switch::ActivateAtStart);
+    CHECK(npc->switches[1].tag == L"PLAYER");
+    CHECK(npc->switches[1].value == LineSwitch::Switch::None);
 
     const auto reply = conversation->Line(1);
     REQUIRE(reply);
@@ -291,6 +319,7 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(reply->animation == 0xFFFFFFFF);
     CHECK(reply->cutscene.empty());
     CHECK(reply->cutsceneInLine);
+    CHECK(reply->switches.empty());
     const auto held = conversation->LineCutscene(1);
     REQUIRE(held);
     CHECK(held->runTime == 8.5F);
@@ -329,6 +358,8 @@ struct LineCounts
     std::size_t animation = 0;
     std::size_t named = 0;
     std::size_t held = 0;
+    std::size_t switched = 0;                     // lines whose list of switches is not empty
+    std::map<std::int32_t, std::size_t> switches; // entries by their value
 };
 
 void Count(const ConversationFile &conversation, LineCounts &counts)
@@ -348,7 +379,25 @@ void Count(const ConversationFile &conversation, LineCounts &counts)
         counts.animation += line->animation != 0xFFFFFFFF ? 1 : 0;
         counts.named += line->cutscene.empty() ? 0 : 1;
         counts.held += line->cutsceneInLine ? 1 : 0;
+        counts.switched += line->switches.empty() ? 0 : 1;
+        for (const LineSwitch &entry : line->switches)
+        {
+            ++counts.switches[static_cast<std::int32_t>(entry.value)];
+        }
     }
+}
+
+// How a line switches the object of `tag`; nothing if it names no such object.
+std::optional<LineSwitch::Switch> SwitchOf(const ConversationLine &line, std::wstring_view tag)
+{
+    for (const LineSwitch &entry : line.switches)
+    {
+        if (entry.tag == tag)
+        {
+            return entry.value;
+        }
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -376,6 +425,19 @@ TEST_CASE("the game's conversations in game/conversations, when there, each line
             {
                 CHECK(conversation->Line(i)->ambient == (i >= 27 && i <= 31));
             }
+            // Mouse's human shape activated as lines 1, 2 and 32 to 34 start, and left on the others.
+            for (const std::uint32_t i : {0U, 1U, 2U, 3U, 31U, 32U, 33U, 34U, 35U})
+            {
+                const auto line = conversation->Line(i);
+                REQUIRE(line);
+                const bool on = i == 1 || i == 2 || (i >= 32 && i <= 34);
+                const auto mouse = SwitchOf(*line, L"bhm600cr_mouse_human");
+                CHECK(mouse.has_value() == (i != 31));
+                if (mouse)
+                {
+                    CHECK(*mouse == (on ? LineSwitch::Switch::ActivateAtStart : LineSwitch::Switch::None));
+                }
+            }
         }
         if (entry.path().filename() == "alistair_main.dlg")
         {
@@ -402,6 +464,14 @@ TEST_CASE("the game's conversations in game/conversations, when there, each line
     CHECK(counts.animation == 350);
     CHECK(counts.named == 2766);
     CHECK(counts.held == 32288);
+    // The objects switched (DAOLib #178).
+    CHECK(counts.switched == 36639);
+    CHECK(counts.switches.size() == 5);
+    CHECK(counts.switches[0] == 239436);
+    CHECK(counts.switches[1] == 263);
+    CHECK(counts.switches[2] == 12);
+    CHECK(counts.switches[3] == 17);
+    CHECK(counts.switches[4] == 420);
 }
 
 TEST_CASE("a file that is not a conversation is refused, and a broken one reads as nothing")

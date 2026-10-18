@@ -662,6 +662,12 @@ MUTANTS: list[Mutant] = [
         "out.ambient = line.Get<std::uint8_t>(kLineSkip)",
     ),
     Mutant(
+        "conversation-switch-value: a line's switch is read from its value, not its tag",
+        CONVERSATION,
+        "entry.Get<std::int32_t>(kSwitchValue)",
+        "entry.Get<std::int32_t>(kSwitchTag)",
+    ),
+    Mutant(
         "talktable-version: a Huffman-coded V0.5 table is refused",
         TALKTABLE,
         'file->TypeVersion() != "V0.2"',

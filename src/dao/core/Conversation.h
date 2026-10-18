@@ -33,6 +33,20 @@
 // line, of the .cut file's fields and templates (dao/core/Cutscene.h; run
 // times 0 to 23 seconds). bhm600_mouse_new.dlg's lines 27 to 31 are
 // ambient, two of them its starts.
+//
+// A line's objects switched, read 2026-10-18 over 1,721 conversations
+// (DAOLib #178): ConversationLineActive (12500) is a list in place of IMAP
+// structs (8 bytes: ConversationKeyTag, 12102, a string; ConversationValueTag,
+// 12103, S32), on the NTRY and RPLY templates at 0x58. The list is filled on
+// 36,639 lines in 698 files, 240,148 entries: 239,436 of them 0, 263 1, 12 2,
+// 17 3 and 420 4, the switching ones on 400 lines in 123 files; 36,250
+// entries have an empty tag, 43 of them not 0. The key is an object's tag;
+// the value, as lib-agent-2 read the engine (2026-10-18), activates it (1)
+// or deactivates it (3) at the line's start, or does each after the line
+// (2, 4), and the start's switches are applied before the line's speaker is
+// resolved. bhm600_mouse_new.dlg activates bhm600cr_mouse_human, Mouse's
+// human shape, on lines 1, 2 and 32 to 34 (the tag has a 0 on the others),
+// and its line 102 deactivates bhm600cr_mouse after the line.
 #pragma once
 
 #include "dao/core/Cutscene.h"
@@ -65,6 +79,23 @@ struct PlotCheck
     }
 };
 
+// An object a line activates or deactivates (ConversationLine::switches).
+struct LineSwitch
+{
+    // When the object is switched, and which way; the file's number.
+    enum class Switch : std::int32_t
+    {
+        None = 0,              // left as it is
+        ActivateAtStart = 1,   // activated as the line starts
+        ActivateAfter = 2,     // activated once the line has played
+        DeactivateAtStart = 3, // deactivated as the line starts
+        DeactivateAfter = 4,   // deactivated once the line has played
+    };
+
+    std::wstring tag; // the object's tag; may be empty
+    Switch value = Switch::None;
+};
+
 struct ConversationLine
 {
     enum class Kind
@@ -91,6 +122,7 @@ struct ConversationLine
     std::uint32_t animation = 0xFFFFFFFF; // a row of the Animations table played with the line; 0xFFFFFFFF for none
     std::wstring cutscene;                // the cutscene (.cut) the line plays, by name; empty for none
     bool cutsceneInLine = false;          // the line holds its own cutscene: ConversationFile::LineCutscene
+    std::vector<LineSwitch> switches;     // objects activated or deactivated with the line, in the file's order
 };
 
 class ConversationFile
@@ -135,6 +167,9 @@ class ConversationFile
     static constexpr std::uint32_t kScript = 12303;
     static constexpr std::uint32_t kScriptParameter = 12304;
     static constexpr std::uint32_t kLineChildren = 12400;
+    static constexpr std::uint32_t kLineActive = 12500;
+    static constexpr std::uint32_t kSwitchTag = 12102;
+    static constexpr std::uint32_t kSwitchValue = 12103;
 
   private:
     explicit ConversationFile(gff4::File file);
