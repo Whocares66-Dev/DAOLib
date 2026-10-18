@@ -24,11 +24,11 @@ void ToggleGamePause(int bPause = TRUE) = 188;
 
 | script.ldf, 2026-09-29 | |
 |---|---|
-| Declarations | 672 |
-| Same name as the registration, same number | 583 |
+| Declarations | 674 (672 until 2026-10-17, when the pattern learned an array written with a space, `object []`: `GetCreaturesInAOE` 337 and `GetAbilitiesDueToAOEs` 389, DAOLib #167) |
+| Same name as the registration, same number | 585 |
 | Another name, same number (`GetDistanceBetween` = `COMMAND_GETDISTANCEBETWEENOBJECTS`) | 86 |
 | Declared, not registered in this exe | 3 (`SetDead` 729, `GetPlayerMapPatch` 651, `GetPlayerMapPin` 654) |
-| Registered, not declared | 158, most of them the 135 with no implementation |
+| Registered, not declared | 156, most of them the 135 with no implementation |
 
 So a registration number is a script function number. The table is verified against a second, independent source, not only read off the code. `cscript.ldf` beside it declares a second interface of 160 functions for the client and console scripts (`ConsoleCommand`, `ShutDown`, ...). Their registration is a different shape, not yet read.
 

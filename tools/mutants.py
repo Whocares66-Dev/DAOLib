@@ -94,6 +94,7 @@ class Mutant:
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
+LDF = "src/dao/core/Ldf.cpp"
 NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
 CHARACTER = "src/dao/core/Character.cpp"
@@ -556,6 +557,12 @@ MUTANTS: list[Mutant] = [
         NCS,
         "i.second = Signed(*keep, 2);",
         "i.second = static_cast<std::int32_t>(*keep);",
+    ),
+    Mutant(
+        "ldf-vector-default-whole: a vector default's commas split no parameter",
+        LDF,
+        "else if (text[i] == separator && !quoted && depth == 0)",
+        "else if (text[i] == separator && !quoted)",
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",

@@ -1045,6 +1045,9 @@ inline constexpr ::dao::core::ScriptParam IsInAOE[] = {
     {"oCreature", ScriptType::Object, DefaultKind::None, 0, 0.0f, L""},
     {"oAOE", ScriptType::Object, DefaultKind::None, 0, 0.0f, L""},
 };
+inline constexpr ::dao::core::ScriptParam GetCreaturesInAOE[] = {
+    {"oAOE", ScriptType::Object, DefaultKind::None, 0, 0.0f, L""},
+};
 inline constexpr ::dao::core::ScriptParam DEBUG_SendRawInputEvent[] = {
     {"nFrameNumber", ScriptType::Int, DefaultKind::None, 0, 0.0f, L""},
     {"sRawEventName", ScriptType::String, DefaultKind::None, 0, 0.0f, L""},
@@ -1222,6 +1225,9 @@ inline constexpr ::dao::core::ScriptParam ScaleEquippedItems[] = {
     {"nTargetLevel", ScriptType::Int, DefaultKind::None, 0, 0.0f, L""},
 };
 inline constexpr ::dao::core::ScriptParam IsMoving[] = {
+    {"oCreature", ScriptType::Object, DefaultKind::None, 0, 0.0f, L""},
+};
+inline constexpr ::dao::core::ScriptParam GetAbilitiesDueToAOEs[] = {
     {"oCreature", ScriptType::Object, DefaultKind::None, 0, 0.0f, L""},
 };
 inline constexpr ::dao::core::ScriptParam SetCanChangeEquipment[] = {
@@ -2780,6 +2786,7 @@ inline constexpr ::dao::core::ScriptCommandInfo kCommands[] = {
     {"GetAOEFlags", 334, ::dao::core::ScriptType::Int, params::GetAOEFlags, "int GetAOEFlags(object oAOE)"},
     {"SetAOEFlags", 335, ::dao::core::ScriptType::Void, params::SetAOEFlags, "void SetAOEFlags(object oAOE, int nFlags)"},
     {"IsInAOE", 336, ::dao::core::ScriptType::Int, params::IsInAOE, "int IsInAOE(object oCreature, object oAOE)"},
+    {"GetCreaturesInAOE", 337, ::dao::core::ScriptType::Array, params::GetCreaturesInAOE, "object [] GetCreaturesInAOE(object oAOE)"},
     {"DEBUG_SendRawInputEvent", 338, ::dao::core::ScriptType::Void, params::DEBUG_SendRawInputEvent, "void DEBUG_SendRawInputEvent(int nFrameNumber, string sRawEventName)"},
     {"DEBUG_SetCursorPosition", 339, ::dao::core::ScriptType::Void, params::DEBUG_SetCursorPosition, "void DEBUG_SetCursorPosition(int x, int y)"},
     {"LoadItemsFromTemplate", 340, ::dao::core::ScriptType::Void, params::LoadItemsFromTemplate, "void LoadItemsFromTemplate(object oCreature, string sTemplate, int bReplaceInventory = FALSE)"},
@@ -2831,6 +2838,7 @@ inline constexpr ::dao::core::ScriptCommandInfo kCommands[] = {
     {"ScaleEquippedItems", 386, ::dao::core::ScriptType::Void, params::ScaleEquippedItems, "void ScaleEquippedItems(object oCreature, int nTargetLevel)"},
     {"ClosePrimaryWorldMap", 387, ::dao::core::ScriptType::Void, {}, "void ClosePrimaryWorldMap()"},
     {"IsMoving", 388, ::dao::core::ScriptType::Int, params::IsMoving, "int IsMoving(object oCreature)"},
+    {"GetAbilitiesDueToAOEs", 389, ::dao::core::ScriptType::Array, params::GetAbilitiesDueToAOEs, "int [] GetAbilitiesDueToAOEs(object oCreature)"},
     {"PreloadCharGen", 390, ::dao::core::ScriptType::Void, {}, "void PreloadCharGen()"},
     {"SetCanChangeEquipment", 391, ::dao::core::ScriptType::Void, params::SetCanChangeEquipment, "void SetCanChangeEquipment(object oCreature, int bCanChange)"},
     {"EquipItem", 392, ::dao::core::ScriptType::Int, params::EquipItem, "int EquipItem(object oObject, object oItem, int nEquipSlot = INVENTORY_SLOT_INVALID, int nWeaponSet = INVALID_WEAPON_SET)"},

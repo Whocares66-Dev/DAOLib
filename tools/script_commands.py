@@ -87,7 +87,7 @@ GAME = os.environ.get(
 
 # A declaration in script.ldf: `void ToggleGamePause(int bPause = TRUE) = 188;`.
 DECLARATION = re.compile(
-    r"^[ \t]*(\w+(?:\[\])?)[ \t]+(\w+)[ \t]*\(([^;{]*?)\)[ \t]*=[ \t]*(\d+)[ \t]*;",
+    r"^[ \t]*(\w+(?:[ \t]*\[\])?)[ \t]+(\w+)[ \t]*\(([^;{]*?)\)[ \t]*=[ \t]*(\d+)[ \t]*;",
     re.M | re.S,
 )
 

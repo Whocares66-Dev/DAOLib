@@ -171,6 +171,7 @@ add_library(
     src/dao/core/Level.cpp
     src/dao/core/Model.cpp
     src/dao/core/ModelWrite.cpp
+    src/dao/core/Ldf.cpp
     src/dao/core/LightProbes.cpp
     src/dao/core/M2da.cpp
     src/dao/core/MaterialDefinition.cpp

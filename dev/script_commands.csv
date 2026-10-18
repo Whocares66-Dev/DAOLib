@@ -320,7 +320,7 @@ id,name,function_va,registered_at_va,script_name,signature
 334,COMMAND_GETAOEFLAGS,0x00668a20,0x006768e5,GetAOEFlags,int GetAOEFlags(object oAOE)
 335,COMMAND_SETAOEFLAGS,0x0066be50,0x006768fb,SetAOEFlags,"void SetAOEFlags(object oAOE, int nFlags)"
 336,COMMAND_ISINAOE,0x0066e040,0x00676911,IsInAOE,"int IsInAOE(object oCreature, object oAOE)"
-337,COMMAND_GETCREATURESINAOE,0x00672cc0,0x00676927,,
+337,COMMAND_GETCREATURESINAOE,0x00672cc0,0x00676927,GetCreaturesInAOE,object [] GetCreaturesInAOE(object oAOE)
 338,COMMAND_DEBUGSENDRAWINPUTEVENT,0x00651ad0,0x0067947e,DEBUG_SendRawInputEvent,"void DEBUG_SendRawInputEvent(int nFrameNumber, string sRawEventName)"
 339,COMMAND_DEBUGSETCURSORPOSITION,0x00651b90,0x00679494,DEBUG_SetCursorPosition,"void DEBUG_SetCursorPosition(int x, int y)"
 340,COMMAND_LOADITEMSFROMTEMPLATE,0x0065d8a0,0x00676db4,LoadItemsFromTemplate,"void LoadItemsFromTemplate(object oCreature, string sTemplate, int bReplaceInventory = FALSE)"
@@ -372,7 +372,7 @@ id,name,function_va,registered_at_va,script_name,signature
 386,COMMAND_SCALEEQUIPPEDITEMS,0x006664d0,0x006761ad,ScaleEquippedItems,"void ScaleEquippedItems(object oCreature, int nTargetLevel)"
 387,COMMAND_CLOSEPRIMARYWORLDMAP,0x00664ff0,0x0067800b,ClosePrimaryWorldMap,void ClosePrimaryWorldMap()
 388,COMMAND_ISMOVING,0x00666550,0x006761c3,IsMoving,int IsMoving(object oCreature)
-389,COMMAND_GETABILITIESDUETOAOES,0x006734b0,0x0067693d,,
+389,COMMAND_GETABILITIESDUETOAOES,0x006734b0,0x0067693d,GetAbilitiesDueToAOEs,int [] GetAbilitiesDueToAOEs(object oCreature)
 390,COMMAND_PRELOADCHARGEN,0x00651770,0x00678fc4,PreloadCharGen,void PreloadCharGen()
 391,COMMAND_SETCANCHANGEEQUIPMENT,0x00665c80,0x0067740a,SetCanChangeEquipment,"void SetCanChangeEquipment(object oCreature, int bCanChange)"
 392,COMMAND_EQUIPITEM,0x0065cda0,0x006773c8,EquipItem,"int EquipItem(object oObject, object oItem, int nEquipSlot = INVENTORY_SLOT_INVALID, int nWeaponSet = INVALID_WEAPON_SET)"

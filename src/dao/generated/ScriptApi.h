@@ -129,6 +129,7 @@ inline constexpr int FireHomingProjectile = 370;
 inline constexpr int FireProjectile = 193;
 inline constexpr int FloatToInt = 49;
 inline constexpr int FloatToString = 52;
+inline constexpr int GetAbilitiesDueToAOEs = 389;
 inline constexpr int GetAbilityCount = 615;
 inline constexpr int GetAchievementCountByID = 618;
 inline constexpr int GetActiveWeaponSet = 167;
@@ -173,6 +174,7 @@ inline constexpr int GetCreatureProperty = 738;
 inline constexpr int GetCreaturePropertyType = 739;
 inline constexpr int GetCreatureRacialType = 269;
 inline constexpr int GetCreatureRank = 183;
+inline constexpr int GetCreaturesInAOE = 337;
 inline constexpr int GetCreaturesInMeleeRing = 205;
 inline constexpr int GetCreatureStamina = 238;
 inline constexpr int GetCreatureTreasureCategory = 315;
@@ -2328,6 +2330,12 @@ inline std::int32_t IsInAOE(::dao::ObjectId oCreature, ::dao::ObjectId oAOE)
     return Invoke<std::int32_t>(336, oCreature, oAOE).value_or(0);
 }
 
+// object [] GetCreaturesInAOE(object oAOE) = 337;
+inline ::dao::script::Array GetCreaturesInAOE(::dao::ObjectId oAOE)
+{
+    return Invoke<::dao::script::Array>(337, oAOE).value_or(::dao::script::Array{});
+}
+
 // void DEBUG_SendRawInputEvent(int nFrameNumber, string sRawEventName) = 338;
 inline void DEBUG_SendRawInputEvent(std::int32_t nFrameNumber, std::wstring_view sRawEventName)
 {
@@ -2632,6 +2640,12 @@ inline void ClosePrimaryWorldMap()
 inline std::int32_t IsMoving(::dao::ObjectId oCreature)
 {
     return Invoke<std::int32_t>(388, oCreature).value_or(0);
+}
+
+// int [] GetAbilitiesDueToAOEs(object oCreature) = 389;
+inline ::dao::script::Array GetAbilitiesDueToAOEs(::dao::ObjectId oCreature)
+{
+    return Invoke<::dao::script::Array>(389, oCreature).value_or(::dao::script::Array{});
 }
 
 // void PreloadCharGen() = 390;
