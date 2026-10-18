@@ -23,6 +23,8 @@ The answer is `GetRunScriptReturnValue` not 0, a script that returns nothing (-1
 
 A line's check is `0x007f0d30`, its action `0x007f0560`.
 
+How long a line without a cut shows is `dev/AUDIO.md`'s ("A conversation line without a cut", lib-agent-2): a voiced line's timer is its voice's length less 0.3 s, and a line without voice waits for a click.
+
 - `PlotCheck.test` is a bool byte: 255 or 1 for set, 0 for clear. For an action it is the value written.
 - A script condition or action (`0x007f0420`, `0x007eedc0`) runs on the conversation's owner, its parameter kept at the client app's +0x210, where `GetConversationEntryParameter` (command 443) reads it. A condition passes on an int result that is not 0.
 

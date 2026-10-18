@@ -16,9 +16,24 @@
 // release build, a cache of the system's warm. Since DAOLib #144 (2026-10-16,
 // the game running beside it): 2.0 to 2.3 s, and 1.1 to 1.4 s with the
 // archives' directories kept (Options::cache), now that a path's place in its
-// base is lexical and opens no file. FMOD's audio (.fsb, .fev, some
-// 18,000 files) is left out, and an add-in's manifest.xml, which describes it
-// and is no resource.
+// base is lexical and opens no file. An add-in's manifest.xml is left out,
+// which describes it and is no resource.
+//
+// FMOD's audio (DAOLib #191, 2026-10-18): 9,052 banks (.fsb) and 9,020
+// projects (.fev), every one a loose file in an audio\sound\ or
+// audio\vo\<language>\ folder, so indexed as any loose file, at its folder's
+// priority above (AUDIO_VO 100006, AUDIO_SOUND 100008, the campaign's 50006
+// and 50007, a package's +7 and +8, an add-in's -2 and -1), another
+// language's voice marked so. The game hands FMOD its own file system
+// (System::setFileSystem, called at 0x005C59E4): the open callback
+// (0x005C1070) asks the resource manager for the name (0x004C5950, which
+// walks its sources in their order for the first that has it) and opens the
+// file found through its alias (0x004CA780). So a bank is the resource
+// manager's, in the order every other file is: read in the exe, not seen in
+// play; that FMOD passes a bank's name alone, as a .fev names its banks, is
+// inferred. They cost the index little: 18,072 copies more of 539,436, in
+// folders the walk lists already for the files beside them; their paths in
+// loose_ are about a megabyte. So no lazy form.
 //
 // Written for Eluvian's ghilana 2026-10-12 and moved here (DAOLib #106).
 //
@@ -259,7 +274,7 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
             pending_.push_back(std::move(pending));
             continue;
         }
-        if (extension == "fsb" || extension == "fev" || name == "manifest.xml")
+        if (name == "manifest.xml")
         {
             continue;
         }
@@ -509,6 +524,16 @@ std::optional<std::uint32_t> Index::SourceOf(std::string_view id) const
 const std::string &Index::Where(const Copy &copy) const
 {
     return copy.archive == kLoose ? loose_[copy.entry] : archives_[copy.archive].path;
+}
+
+std::optional<fs::path> Index::FileOf(const Copy &copy) const
+{
+    if (copy.archive != kLoose)
+    {
+        return std::nullopt;
+    }
+    const std::string &relative = loose_[copy.entry];
+    return Folder(sources_[copy.source].base) / fs::path(std::u8string(relative.begin(), relative.end()));
 }
 
 bool Index::Readable(const Copy &copy) const

@@ -65,6 +65,8 @@ One source's order was seen in play, not read in the code (2026-10-13): test cop
 
 Talk tables: the game asks for one by a name it makes of the table's, the language's and `.tlk` (`core_en-us.tlk`; `_f.tlk` for the female player's), so a talk table of another language is never the game's; `install::Index` marks it `Unused::Language`.
 
+FMOD's banks and projects (`.fsb`, `.fev`) are opened through the resource manager too, by the order above: FMOD is given the game's own file system, whose open asks the resource manager for the name (read in the exe 2026-10-18, not seen in play; `dev/AUDIO.md`).
+
 ## Seen in play
 
 GOG's game from `game\gogrun`, `examples/resources` with a `where.txt`, 2026-10-12. Text files of one name were put in several places, each holding the name of its place, and the game read each from the place the rules say:

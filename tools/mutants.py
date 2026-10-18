@@ -143,6 +143,7 @@ ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
 ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
+FSB = "src/dao/core/Fsb.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -262,11 +263,25 @@ MUTANTS: list[Mutant] = [
         "if (versions.size() < 2 || partsOf.size() < 2)",
         "if (versions.size() < 2)",
     ),
+    # FMOD's audio (#191): its banks and projects are resources, at the audio folders'
+    # priorities, another language's voice not the game's.
     Mutant(
-        "install-no-audio: FMOD's audio is no resource",
+        "install-audio: FMOD's banks and projects are resources",
         INSTALL,
-        'if (extension == "fsb" || extension == "fev" || name == "manifest.xml")',
         'if (name == "manifest.xml")',
+        'if (name == "manifest.xml" || extension == "fsb" || extension == "fev")',
+    ),
+    Mutant(
+        "install-campaign-voice-language: the campaign's voice of another language is not the game's",
+        INSTALL,
+        "return {50006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};",
+        "return {50006};",
+    ),
+    Mutant(
+        "install-addin-sound: an add-in's sound is at its base less one",
+        INSTALL,
+        "return {base - 1};",
+        "return {base};",
     ),
     Mutant(
         "install-override-apart: the core's override folder is a source of its own",
@@ -1430,6 +1445,62 @@ MUTANTS: list[Mutant] = [
         COLLISION,
         "Walk(child, own ? *own : name, type, out);",
         "Walk(child, name, type, out);",
+    ),
+    # FMOD's banks (#191): each sample's bytes where they are, its header's own size, its
+    # sync points bounded, and IMA ADPCM as FMOD lays it out.
+    Mutant(
+        "fsb-data-after-padding: the data starts after the samples' padded headers",
+        FSB,
+        "std::uint64_t at = kHeaderSize + std::uint64_t{h.headersSize};",
+        "std::uint64_t at = kHeaderSize + (std::uint64_t{h.samples} * kSampleHeaderSize);",
+    ),
+    Mutant(
+        "fsb-header-size: the next sample's header is past this one's sync points",
+        FSB,
+        "        place += size;",
+        "        place += kSampleHeaderSize;",
+    ),
+    Mutant(
+        "fsb-sample-in-file: a sample whose data runs past the file's end is a damaged bank",
+        FSB,
+        "if (!sample || at > fileSize || fileSize - at < sample->size)",
+        "if (!sample || at > fileSize)",
+    ),
+    Mutant(
+        "fsb-sync-bound: a sync point count past the header is a damaged bank",
+        FSB,
+        "if (count > (extra.size() - kSyncHeader) / 4)",
+        "if (false)",
+    ),
+    Mutant(
+        "fsb-name-whole: a name of all 30 bytes is read whole",
+        FSB,
+        "std::find(name, name + kNameSize, '\\0')",
+        "std::find(name, name + kNameSize - 1, '\\0')",
+    ),
+    Mutant(
+        "ima-header-first: a block's header is its first frame, then the nibbles",
+        FSB,
+        "const std::size_t n = f - 1;",
+        "const std::size_t n = f;",
+    ),
+    Mutant(
+        "ima-low-nibble-first: of a byte's two nibbles the low is played first",
+        FSB,
+        "(inWord % 2) == 0 ? byte & 0xF : byte >> 4",
+        "(inWord % 2) == 0 ? byte >> 4 : byte & 0xF",
+    ),
+    Mutant(
+        "ima-stereo-words: a stereo block's channels take turns by words of 4 bytes",
+        FSB,
+        "(((word * channels) + c) * 4)",
+        "(((c * 8) + word) * 4)",
+    ),
+    Mutant(
+        "ima-clip: a sample clips to 16 bits",
+        FSB,
+        "sample = std::clamp((nibble & 8) != 0 ? sample - delta : sample + delta, -32768, 32767);",
+        "sample = (nibble & 8) != 0 ? sample - delta : sample + delta;",
     ),
 ]
 

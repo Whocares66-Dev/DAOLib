@@ -210,6 +210,9 @@ class Index
     std::optional<std::uint32_t> SourceOf(std::string_view id) const;
     // Returns where a copy is: its archive's path, or its own file's, relative to its base folder.
     const std::string &Where(const Copy &copy) const;
+    // Returns a loose copy's file, its whole path: for a reader that takes a path, as
+    // fsb::Bank::Open a bank of hundreds of megabytes. Nothing for a copy in an archive.
+    std::optional<std::filesystem::path> FileOf(const Copy &copy) const;
     // Sorts copies, of any resources, into the order the game looks in its sources: those it has
     // first, then by priority, kind (a folder, a RIM, an ERF) and name, the later first. What Find
     // gives one resource's copies in; the order of files of different names the game lists, as a

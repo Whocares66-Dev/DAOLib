@@ -162,6 +162,7 @@ add_library(
     src/dao/core/ErfWrite.cpp
     src/dao/core/Exceptions.cpp
     src/dao/core/Fingerprint.cpp
+    src/dao/core/Fsb.cpp
     src/dao/core/FunctionTable.cpp
     src/dao/core/GdaFile.cpp
     src/dao/core/Grid.cpp

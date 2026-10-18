@@ -86,8 +86,8 @@ TEST_CASE("an install's sources, each with its archives and loose files", "[inst
     const auto *core = Named(*index, "core");
     REQUIRE(core != nullptr);
     CHECK(core->archives == 1); // broken.erf is no archive
-    CHECK(core->loose == 1);    // the talk table; neither the .fsb nor the override folder's
-    CHECK(core->files == 3);
+    CHECK(core->loose == 2);    // the talk table and the .fsb, not the override folder's
+    CHECK(core->files == 4);
     CHECK(index->Measured().unopened == 1);
     const auto *addin = Named(*index, "addin:dao_prc_cp_1");
     REQUIRE(addin != nullptr);
@@ -441,6 +441,47 @@ TEST_CASE("a level's own files, another language's and another quality's are kep
     CHECK(Text(german->Read(german->Find("v.txt")->front())) == "de");
 }
 
+TEST_CASE("FMOD's banks and projects by the audio folders' priorities and the language", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/audio/sound/gui.fsb", files::FromText("core sound"));
+    root.Write(L"game/packages/core/audio/sound/gui.fev", files::FromText("core project"));
+    root.Write(L"game/packages/core/audio/vo/en-us/vo/line.fsb", files::FromText("core voice"));
+    root.Write(L"game/modules/single player/audio/sound/gui.fsb", files::FromText("campaign sound"));
+    root.Write(L"game/modules/single player/audio/vo/en-us/vo/line.fsb", files::FromText("campaign en"));
+    root.Write(L"game/modules/single player/audio/vo/de-de/vo/line.fsb", files::FromText("campaign de"));
+    root.Write(L"game/Addins/mod/core/audio/sound/gui.fsb", files::FromText("add-in sound"));
+    root.Write(L"game/Addins/mod/core/audio/vo/en-us/vo/line.fsb", files::FromText("add-in voice"));
+    root.Write(L"documents/Settings/AddIns.xml",
+               files::FromText(R"(<AddInsList><AddInItem UID="mod" Priority="1" Enabled="1"/></AddInsList>)"));
+    const auto index = install::Index::Build(root.path / L"game", root.path / L"documents");
+    const auto read = [&index](std::string_view name) {
+        std::vector<std::pair<std::string, std::int32_t>> out;
+        for (const auto &copy : *index->Find(name))
+        {
+            out.emplace_back(copy.unused == install::Unused::No ? Text(index->Read(copy)) : "unused", copy.priority);
+        }
+        return out;
+    };
+    // An add-in's sound at its base -1 (19000 in the game's folder), its voice -2.
+    using Taken = std::vector<std::pair<std::string, std::int32_t>>;
+    CHECK(read("GUI.fsb") == Taken{{"add-in sound", 18999}, {"campaign sound", 50007}, {"core sound", 100008}});
+    CHECK(read("line.fsb") ==
+          Taken{{"add-in voice", 18998}, {"campaign en", 50006}, {"core voice", 100006}, {"unused", 50006}});
+    CHECK(index->Find("line.fsb")->back().unused == install::Unused::Language);
+    CHECK(read("gui.fev") == Taken{{"core project", 100008}});
+    // A bank is opened by its path, not read whole.
+    const auto file = index->FileOf(index->Find("gui.fev")->front());
+    REQUIRE(file);
+    CHECK(*file == root.path / L"game/packages/core/audio/sound/gui.fev");
+    files::TempFolder archived;
+    archived.Write(L"game/packages/core/data/a.erf", files::Erf({{"x.gda", files::FromText("x")}}));
+    const auto inArchive = install::Index::Build(archived.path / L"game", {});
+    CHECK_FALSE(inArchive->FileOf(inArchive->Find("x.gda")->front()));
+    const auto german = install::Index::Build(root.path / L"game", root.path / L"documents", {.language = "de-de"});
+    CHECK(Text(german->Read(german->Find("line.fsb")->front())) == "campaign de");
+}
+
 TEST_CASE("a talk table of another language is not the game's", "[install]")
 {
     files::TempFolder root;
@@ -669,6 +710,17 @@ TEST_CASE("on the GOG install, the copy the index puts first is the one the game
     REQUIRE(base != nullptr);
     CHECK(index->Where(base->front()) == "packages/core/patch/patch003.erf");
     CHECK(base->front().priority == 100000);
+    // FMOD's files, by the resource manager's order (DAOLib #191): read in the exe, not seen.
+    const auto *gui = index->Find("gui.fsb");
+    REQUIRE(gui != nullptr);
+    CHECK(index->Where(gui->front()) == "packages/core/audio/sound/gui.fsb");
+    CHECK(gui->front().priority == 100008);
+    const auto *jowan = index->Find("bhm100_jowan.fsb");
+    REQUIRE(jowan != nullptr);
+    REQUIRE(jowan->size() == 5);
+    CHECK(index->Where(jowan->front()) == "modules/single player/audio/vo/en-us/vo/bhm100_jowan.fsb");
+    CHECK(jowan->front().priority == 50006);
+    CHECK(std::ranges::count(*jowan, install::Unused::Language, &install::Copy::unused) == 4);
 }
 
 // The GOG install's archives kept and read again from a cache, with the times each took. Hidden
