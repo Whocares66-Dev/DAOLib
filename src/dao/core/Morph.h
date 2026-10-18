@@ -9,7 +9,11 @@
 // mesh node's (FaceM1, EyesM1, LashesM1) MeshStreamVertexData, four floats a
 // vertex, as many as its chunk has and in its order: the morph puts each
 // vertex of the part's chunk at its place, by index (DAOLib #119's notes).
-// The nodes' texture, colour and number parameters are not read.
+// A mesh node's MorphTextureParam, MorphVector4fParam and MorphFloatParam are
+// its material's parameters by name, in place of the .mao's: in
+// hm_genfl_alistair.mor, FaceM1's diffuse, normal and age maps and its
+// mml_vTintMaskColours, ten Vector4s laid out as a .tnt's are
+// (DAOLib #158).
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -23,12 +27,36 @@
 namespace dao::core::morph
 {
 
+// A texture a mesh node's material takes in place of its own, by the parameter's name.
+struct TextureParameter
+{
+    std::wstring name;    // "mml_tDiffuse"
+    std::wstring texture; // "uh_hed_masa_0d", with no extension
+};
+
+// Values a mesh node's material takes in place of its own: "mml_vTintMaskColours", ten of them.
+struct VectorParameter
+{
+    std::wstring name;
+    std::vector<std::array<float, 4>> values;
+};
+
+struct FloatParameter
+{
+    std::wstring name;
+    float value = 0;
+};
+
 struct Node
 {
     std::wstring name; // a face bone's, or a mesh node's of a part
     Point position{};  // a face bone's offset
     // A mesh node's vertices placed again, in its chunk's order, each x, y, z, w; empty for a bone.
     std::vector<std::array<float, 4>> places;
+    // A mesh node's material parameters, in file order; none for a bone.
+    std::vector<TextureParameter> textures;
+    std::vector<VectorParameter> vectors;
+    std::vector<FloatParameter> floats;
 };
 
 struct Morph

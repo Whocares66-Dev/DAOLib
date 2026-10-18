@@ -302,6 +302,9 @@ std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) 
     case Type::F32:
         size = 4;
         break;
+    case Type::Vector4:
+        size = 16;
+        break;
     default:
         return {};
     }

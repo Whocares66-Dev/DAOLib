@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -89,7 +90,8 @@ TEST_CASE("a file that is no morph is not read as one", "[morph]")
     CHECK_FALSE(morph::MorphOf(*file));
 }
 
-TEST_CASE("the chamberlain's morph in game/models, when there, names its parts' mesh nodes", "[morph]")
+TEST_CASE("the chamberlain's morph in game/models, when there, names its parts' mesh nodes and their materials' values",
+          "[morph]")
 {
     const std::filesystem::path path =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "models" / "hm_arl210cr_chamberlain.mor";
@@ -114,6 +116,21 @@ TEST_CASE("the chamberlain's morph in game/models, when there, names its parts' 
         if (node.name == L"FaceM1")
         {
             CHECK(node.places.size() == 2282); // HM_UHM_BAS_FaceM1's vertices
+            // Its material's textures and values in place of the .mao's (DAOLib #158).
+            REQUIRE(node.textures.size() == 4);
+            CHECK(node.textures[0].name == L"mml_tDiffuse");
+            CHECK(node.textures[0].texture == L"uh_hed_olda_0d");
+            REQUIRE(node.vectors.size() == 5);
+            CHECK(node.vectors[1].name == L"mml_vTintMaskColours");
+            REQUIRE(node.vectors[1].values.size() == 10);
+            CHECK(node.vectors[1].values[1][3] == Approx(1.464F));
+            CHECK(node.vectors[0].values[0] == std::array<float, 4>{0.08F, 0.04F, 0.05F, 1.0F}); // g_vFacialHairColour
+        }
+        if (node.name == L"LashesM1")
+        {
+            REQUIRE(node.vectors.size() == 1);
+            CHECK(node.vectors[0].values.size() == 8);
+            CHECK(node.textures.empty());
         }
         meshes += node.places.empty() ? 0 : 1;
     }

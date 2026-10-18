@@ -123,7 +123,7 @@ class Struct
     // Matrix, and the same for a generic field holding one of those. None for
     // a field of another type.
     std::vector<float> Floats(std::uint32_t label) const;
-    // The elements of a list of U8, S8, U16, S16, U32, S32 or F32 as the file has them,
+    // The elements of a list of U8, S8, U16, S16, U32, S32, F32 or Vector4 as the file has them,
     // little-endian and one after another: a mesh's vertices and indices
     // are lists of bytes and of 16-bit numbers a megabyte long. Empty for a
     // field that is no such list or runs out of the file.
