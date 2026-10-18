@@ -96,3 +96,24 @@ The engine turns the weapon no further. AttachWeaponToNode (`0x00a66b70`) calls 
 At rest nothing moves the lips off the head model's rest, seen in play 2026-10-17. turn-based-agent ran a read-only reader in its game, GOG, Witch Hunt, the Dragonbone Wastes: `ObjectNodeBone`s found by their vftables (0x00AFE40C), named from their blueprint (+0x174, whose name is a std::wstring at +0xC0), and sampled 30 times over 3 s, unpaused and paused. The reader was lib-agent-2's scratch script, not in the repo. Finn, a human male at idle, is one model: its +0x20 matrix is at his position, and it has 21 face bones. On every lip, jaw, mouth, cheek and Sneer bone, +0xE0 is the rest rotation, +0x120 is zero, FaceFX's +0xF0 and +0x130 are identity and zero, and none of them changed. Only Head turned, 8.7°, by the look overlay. So FaceFX's graph adds nothing at idle. The face bones' rest (+0x100) is the head model's: within 0-6 mm of `hm_hed_dcpa_0.mmh`, his morph, but up to 34 mm from the same bones in `hm_arm_nuda_0.mmh` (jawBone 33.7 mm, mouthBase 30.9, headBase 27.6, cheeks 23.8, outerUpperLip 23.0). The body model's copy of the face bones is not the one the head is posed by.
 
 `default.hm_exp.ani` (`global.rim`) is the rest at 0 s and four expressions after. It is `humanoid.anb`'s node `portrait_exp_m` (`portrait_exp_f` is `default.hf_exp.ani`), played by the party portraits. Their models sit at the world's origin, and in the same read they held upperLip and LipCorner turned 30-36°, with offsets of 2-9 mm.
+
+## Skin on a body part: the tint mask's alpha (read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe and vanilla's files (shaders through `fxc /dumpbin`) by lib-agent-2 (with subagents), for DAOParagonEngine's side-by-side of the Harrowing's Fade. Not seen in play. The key claims were checked again in the listings, the files or the disassembly.
+
+- **The material.** A robe with bare hands (`hm_rob_appa_0.mmh`, `RobeM1`, `pm_rob_appa.mao`) is `Character.mat`'s `ArmourSkinTint` (`Ch1ArmTnt.psh`) with `mml_tTintMask`. The mask's **R, G and B are the three armour tints, and A is the skin**: the hands are about 0.77 alpha with no colour. Robes without skin use `NoTint`.
+- **`mml_vTintMaskColours`**, 10 float4s in the shader's order: [0] diffuse opacity per channel, [1] specular opacity, [2]/[3] R's diffuse/specular, [4]/[5] G's, [6]/[7] B's, [8]/[9] A's (the skin). It is set by name on each node's material (slot 41, 0x00A604A0; the name at 0x00B107A4, pushed at 0x00A6057E).
+- **The shader** (`Ch1ArmTnt`, c12..c20 = C[0..8]):
+  ```
+  o = mask * C[0]
+  base   = diffuse.rgb * lerp(1, C[8].rgb, o.a)            // the skin multiplies
+  tint   = C[2]*o.r + C[4]*o.g + C[6]*o.b
+  albedo = lerp(base, tint, o.r + o.g + o.b)
+  s = mask.rgb * C[1].rgb; spec = lerp(specMask, C[3]*s.r + C[5]*s.g + C[7]*s.b, s.r + s.g + s.b)
+  ```
+  `LerpedTint` (`Ch1.psh`) treats A as the others (a dp4: the skin replaces); `MultiplyTint` (`Ch1MulTnt`) multiplies the skin the same way.
+- **A `.tnt`** (GFF4, fields 14000–14009, `TintFile::Load` 0x00749600): diffuse and specular opacity, and DiffuseA/R/G/B, SpecularA/R/G/B. A skin `.tnt` (e.g. `t1_skn_001`) fills the A slot only.
+- **Where it comes from.**
+  - The builder (0x006BFCD0, from 0x006C0DE0) makes `body_tints` (88), then `skin_tints` (85)'s A slot on top, from the appearance's fields. Every part's record gets the item's own tint (`materialtypes` 89, then `tint_override` 87), then the skin's A-slot values copied in (0x007494D0 → 0x007488F0).
+  - With a head morph (0x006BD700, after), the morph's skin `.tnt` (its first tint) goes into the lips, eyes and hair, and into the chest's, gloves' and boots' materials' A slots (0x006B7400 → 0x006AB2A0; for the chest, `ArmorM1`, `RobeM1` or `ClothesM1`).
+  - So the player and named characters' hands take the morph's skin; a creature with no morph takes `skin_tints`' row.

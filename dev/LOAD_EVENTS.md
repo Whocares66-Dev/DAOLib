@@ -24,7 +24,7 @@ Before them, at step 3, `EVENT_TYPE_AREALOAD_SPECIAL` (40, or 41 from a save) is
 
 ## An object placed
 
-`EVENT_TYPE_SPAWN` (3) goes to each creature, placeable and trigger once, the first time it is placed in an area, and only if its script takes event 3: a creature from its add-to-area (vtable +0xF8, index 62; `0x006b6bc0`, its flag at +0xC54), a placeable (`0x00750b10`, flag +0x6D0) and a trigger (`0x0079b6b0`, flag +0x500) the same way. An object restored from a save has the flag set, so a save's load sends none (corrected 2026-10-18 by lib-agent-2; below).
+`EVENT_TYPE_SPAWN` (3) goes to each creature, placeable and trigger once, the first time it is placed in an area, and only if event 3 is not in its disabled set (+0x28C, which only `EnablevEvent` changes and no shipped script calls; corrected 2026-10-18 by lib-agent-2, "The event queue's gate and delivery" below): a creature from its add-to-area (vtable +0xF8, index 62; `0x006b6bc0`, its flag at +0xC54), a placeable (`0x00750b10`, flag +0x6D0) and a trigger (`0x0079b6b0`, flag +0x500) the same way. An object restored from a save has the flag set, so a save's load sends none (corrected 2026-10-18 by lib-agent-2; below).
 
 ## AREALOAD_SPECIAL and the other load events
 
@@ -79,9 +79,9 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 Items, waypoints, stores and sounds get none.
 
 **How it is sent.**
-- It is sent only if the flag is 0 and the object's script takes event 3 (0x00698490(3)). The flag is then set to 1 either way.
+- It is sent only if the flag is 0 and event 3 is not in the object's disabled set, +0x28C (0x00698490(3); only `EnablevEvent` changes the set and no shipped script calls it, so in practice it passes; corrected 2026-10-18 by lib-agent-2, below). The flag is then set to 1 either way.
 - A creature also skips it when added to the area it is already in.
-- It is **queued** (`AIMaster::AddEventDeltaTime(…, 10, ev)`), creator and target the object itself, with no ints.
+- It is **queued** (`AIMaster::AddEventDeltaTime(0, 0, …, 10, ev)`: no delay; the 10 is the handler id for a script event, not a delay; corrected 2026-10-18 by lib-agent-2), creator and target the object itself, with no ints.
 
 **`CreateObject`** (0x00669550 → 0x00687830 → 0x006861F0), in order:
 1. The object is constructed, with the flag 0.
@@ -134,3 +134,27 @@ The scripts only call `DoAreaTransition` (`UT_DoAreaTransition`, `utility_h.nss`
 **Walking follow** uses another table (0x00C0D240: (∓1.5, -1), (0, -2.5), (∓1.5, -4), (∓3, -2), (∓1, -3), (∓3.5, -1)). `GetFollowerWouldBeLocation` answers from it, turned by the leader's movement.
 
 Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
+
+## The event queue's gate and delivery (read 2026-10-18 by lib-agent-2)
+
+Read in the GOG exe and the scripts by lib-agent-2 (with a subagent) for paragon-agent-2's Circle basement. Not seen in play. Checked in the disassembly where an address is given.
+
+### The gate is a disabled set, not the script
+
+- **0x00698490(type)** looks the type up in the object's set at +0x28C (0x005FE960) and answers true when it is **not** there (0x006984D5–0x006984D9).
+  - The set is saved as `EnabledEvents` (0x006980ED is the script override's save).
+  - Only `EnablevEvent` (command 123, 0x00658CC0; `void EnablevEvent(object, int bEnable, int nEventType)`) changes it (0x00698C00, a set insert or erase), and no shipped script calls it.
+  - So in practice every event passes.
+- **Corrected the same day:** the notes that read this gate as "the object's script takes event N" (an object placed and SPAWN above, `dev/ITEMS.md`'s INVENTORY_ADDED and EQUIP, `dev/COMBAT.md`'s perception, `dev/PLACEABLES.md`'s use).
+
+### AddEventDeltaTime's arguments
+
+- `AIMaster::AddEventDeltaTime(days, ms, caller, target, id, event)` (0x0064ACE0): the 10 (0xA) that every script event passes is the **handler id** for a script event (NWN's `EVENT_SIGNAL_EVENT`), not a delay or a priority. The delay is (days, ms), 0 and 0 at add-to-area (0x006B6C77–0x006B6C7F).
+- With no delay it goes to AddEventNow (0x0064A630), which inserts before the first node due strictly later, so events due together are delivered first in, first out.
+- **Corrected the same day:** SPAWN above and `dev/PLACEABLES.md`'s use, which wrote the 10 as if it were a delay. `dev/COMBAT.md`'s perception has the arguments right.
+
+### Delivery and its script
+
+- The queue is drained only in `AIMaster::UpdateState` (0x0064AE30, from `AIMaster::Update` 0x0064AF00), called by the per-frame AI update (0x0064B047), the loading states and a few others; never by a script command. So nothing queued while a script runs is delivered before the script returns.
+- A non-immediate `SignalEvent` (0x00657E40) queues the same way (0x00657EDE); only an immediate one is delivered at once (`DeliverNow`, 0x00657EFC).
+- **The script run is the object's at delivery.** `RunEventScript` (0x00698960) uses the event's own script (+0x2C) only when the event's +0x40 is set; otherwise it reads the object's +0x26C (0x006989F0), which `SetEventScript` (0x00658AA0) writes. +0x288 marks the script as overridden for the save.

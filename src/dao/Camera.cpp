@@ -519,8 +519,12 @@ std::optional<float> g_gameClose;
 // radius each frame is zoom x close + (1 - zoom) x far, the two from globals the
 // explore controller's update copies into the orbit every frame. So a larger close
 // distance pulls the camera back at the same zoom, and the zoom's view flag and the
-// tactical view are left alone. Nothing stops the camera at a wall or the ground (the
-// orbit tests no collision). The game's own is kept at the first change.
+// tactical view are left alone. The orbit behaviour alone tests no collision, but in the
+// close view the scene camera's manager (0x006C4C60) runs a pull-in after it (mode 1 ->
+// 0x006C3710 at 0x006C4E1A: a 0.25 m sphere cast from the pivot, mask 0x1024), a
+// release (0x006C35A0) and a near-camera fade (0x006C4130), so a wall or the ground
+// pulls the camera in (corrected 2026-10-18, lib-agent-2; dev/CAMERA.md). The game's
+// own is kept at the first change.
 void SetCloseDistance(std::optional<float> metres)
 {
     auto *close = At<float>(addr::kCameraControllerExplore_CloseDistance);

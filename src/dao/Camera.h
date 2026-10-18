@@ -15,7 +15,9 @@
 //       dao::camera::EaseYaw(*behind, 0.6f);               // close view: come round behind it
 //   dao::camera::EaseZoom(0.7f, 0.8f);                     // pull back a little
 
-// Notes on the camera, read 2026-09-30. The game mode controller's +0x60 is a
+// Notes on the camera, read 2026-09-30. dev/CAMERA.md has the explore camera as
+// the engine runs it (read 2026-10-18): the zooms, distance, pitch, controls, the
+// reset on a load and the close view's pull-in. The game mode controller's +0x60 is a
 // CameraControllerExplore (vftable 0x00B1D954, built by 0x0076F890), whose
 // base is CameraControllerBase (0x00B2456C, constructor 0x007EE9B0). The
 // base keeps the scene's camera it drives at +0x04 and the id of the
@@ -152,7 +154,7 @@ class SceneCamera
     // Tilts the camera immediately. The tilt holds until the player tilts the camera.
     // @param radians the angle from straight above; smaller values look down more steeply
     //
-    // In the close view (Zoom above 0.5), the game clamps the tilt to between 30 and 150
+    // In the close view (Zoom 0.75 and above), the game clamps the tilt to between 30 and 150
     // degrees every frame. Read the player's pitch first and restore it afterwards. Call
     // on the game thread. Not yet tested in the game.
     void SetPitch(float radians)
@@ -160,8 +162,13 @@ class SceneCamera
         using Fn = void(__fastcall *)(SceneCamera *, int, float);
         reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetPitch))(this, 0, radians);
     }
+    // Notes on Zoom: the controller's view flag, +0x90, is set while its Zoom() = 2s - 1
+    // is below 0.5 (0x0076FBF4, 0x0076FC92-0x0076FCAD), so on this 0..1 scale the
+    // tactical view is below 0.75, not 0.5 (corrected 2026-10-18 by lib-agent-2;
+    // dev/CAMERA.md).
+
     // Returns the zoom: 1 is close behind the creature, 0 is the tactical view high above.
-    // Below 0.5 the camera is in the tactical view.
+    // Below 0.75 the camera is in the tactical view.
     float Zoom() const
     {
         return Read<float>(kZoom);
@@ -260,8 +267,8 @@ class CameraController
     // (each notch times +0x4C, 0.4, added through 0x007EDBD0). The controller's update
     // (0x007EEB70) maps it to the scene camera's 0..1 (0x007EE770) and hands it to
     // SceneCamera::SetZoom (0x006C2BF0), toward which the scene camera eases its own
-    // zoom (at most 2 a second, quicker as it goes), and below 0.5 there it is the
-    // tactical view.
+    // zoom (at most 2 a second, quicker as it goes), and below 0.75 there it is the
+    // tactical view (0.5 on the controller's -1..1; corrected 2026-10-18, lib-agent-2).
 
     // Returns the zoom the player has set with the mouse wheel, from ZoomLeast (-1, the
     // tactical view) to ZoomMost (1, close in). The scene camera eases toward it.
@@ -381,8 +388,8 @@ void EaseYaw(float radians, float seconds);
 // creature) to 0 (the tactical view high above); clamped to 0..1
 // @param seconds how long the zoom takes to all but arrive
 //
-// Below 0.5 the game switches to the tactical view, where the camera does not follow a change
-// of target, so stay at 0.5 or above to remain in the close view. Does nothing if there is no
+// Below 0.75 the game switches to the tactical view, where the camera does not follow a change
+// of target, so stay at 0.75 or above to remain in the close view. Does nothing if there is no
 // camera (see Current).
 void EaseZoom(float zoom, float seconds);
 // Returns true if the player has zoomed since the last EaseZoom, either during it or after it
@@ -443,8 +450,8 @@ void OnMoveEnded(std::function<void(Move move, MoveEnd why)> callback);
 // view, which helps frame a creature too big for the default.
 // @param metres the distance, or nullopt to restore the game's own
 //
-// Nothing stops the camera at a wall or the ground, so keep the distance modest in tight
-// spaces. Call on the game thread.
+// In the close view the game pulls the camera in toward its pivot when a wall or the ground
+// is in the way. Call on the game thread.
 void SetCloseDistance(std::optional<float> metres);
 // Returns the camera's distance from its pivot at full zoom, in metres, or 0 if the running
 // build of the game does not support it.

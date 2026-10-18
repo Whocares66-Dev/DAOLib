@@ -105,6 +105,18 @@ Not read: where `OfferReplies` is called after a shown line ends. A Skip line's 
 
 A line's switches are `ConversationLine::switches` in `dao/core/Conversation.h` (DAOLib #178).
 
+### The replies' order: a fast-path reply first (read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe and the game's files by lib-agent-2 (with subagents) for DAOParagonEngine. Not seen in play. The key claims were checked again in the disassembly.
+
+- `OfferReplies` (0x007F1A40) keeps the NPC line's children in `ConversationLineChildrenList` order: only `RPLY` lines (0x007F1BA9), available (0x007F0D30), with text. The empty "continue" is offered only when no reply has text.
+- **`GameModeDialog::ShowResponses`** (0x00690B70, `__thiscall (list, flag)`, `ret 8`; the flag the NPC line's `NoVOIngame`):
+  - It adds the first reply whose `ConversationLineFastPath` (12215) is set (0x00690C9D) first, and rotates it to index 0 of its kept list (+0x1A8; 0x00690D35–0x00690DE8).
+  - Then it adds the rest in order. That index is the one the reply's selection uses.
+- `conversation.gfx` (`Conversation.UpdateResponses`) doesn't sort, and shows at most 6.
+- So `bhm400_greagoir.dlg` line 3 (children 11, 14, 15, all `Icon` 0; only 15 fast-path) shows 15, 11, 14.
+- 2,287 lines have FastPath, all replies; 277 NPC lines have two or more fast-path children, and only the first available one moves (inferred from the code).
+
 ## A line's cut, as the engine plays it (read 2026-10-18 by lib-agent-2)
 
 `ConversationLineCut` (12211) is a generic (type 0xFFFF, flags 0x2000) at the line's +0x4C, null as `FFFFFFFF FFFFFFFF`. Otherwise it holds a struct told apart by its template's fourcc: a `CUTR` (12210 `ConversationLineCutResRef`, a `.cut` by name) or a `CUT ` (a whole cutscene held in the line). Core's `Conversation` already reads both (`ConversationLine::cutscene`, `cutsceneInLine`, `ConversationFile::LineCutscene`). It doesn't read two fields the engine passes to the cut: 12100 `ConversationStageName` (string, +0x5C) and 12104 `ConversationStageAtCurrentLocation` (U8, +0x64).

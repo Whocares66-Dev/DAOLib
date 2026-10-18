@@ -53,3 +53,13 @@ The party (`[app+0xD0]+0x58`) has:
 - 0x006377E0 refuses to take out the sole active member (unforced), and then nothing else happens. 0x0063B8B0 refuses when the pool has one member or fewer, or for the hero (+0x7D4 = 1); the creature then has left +0x234 but keeps its entry.
 - **`RemoveFromParty` (397, 0x0065E5C0) is `SetFollowerState(creature, 0)`** (0x0065E5FF–0x0065E602, checked): the creature leaves the pool and `GetFollowerState` (399, 0x00632810) answers 0, INVALID, for a missing entry. `AddToParty` (396, 0x0065E560) is `SetFollowerState(creature, 1)`, its second object ignored.
 - **The scripts never call 396–398**: `script.ldf` comments them out as "DEPRECATED, use SetFollowerState()". A follower leaves the party as AVAILABLE (`UT_FireFollower`, `utility_h.nss`:861), and INVALID only when it leaves the pool too.
+
+## CreateObject then a hire, in one script
+
+Read 2026-10-18 by lib-agent-2 (with a subagent) for paragon-agent-2's Circle basement, not seen in play. The queue's order and the script run at delivery are `dev/LOAD_EVENTS.md`'s "The event queue's gate and delivery".
+
+`zz_bhm000pt_debug.nss`:116–125 makes Jowan and Lily with `CreateObject` and hires each at once (`UT_HireFollower` → `WR_SetFollowerState` → `SetEventScript(player_core)`, `wrappers_h.nss`:353; `PARTY_MEMBER_HIRED` signalled, :376).
+- The queue then holds SPAWN, then HIRED, both for player_core.
+- player_core's SPAWN (`player_core.nss`:498–507) calls `AS_InitCreature(self)` with level −1, and `AS_AddClassLevels` returns at once (`sys_autoscale_h.nss`:266), so no class is set.
+- The template's `PropertyList` (class 2) isn't read by the exe (`dev/PROPERTIES.md`). So HIRED's auto-level finds no class (`sys_autolevelup_h.nss`:66, "Player character has no class…").
+- Vanilla's debug path is broken the same way. The real path (`bhm000pt_tranquility.nss`:157–165) hires the Jowan placed in the tower, whose creature_core SPAWN ran at the area's load.

@@ -1620,8 +1620,12 @@ DAO_ADDRESS(kSceneCamera_SetYaw, 15000)
 // float far, float pitch, const Vector4 *), `ret 0x14`) from the explore
 // controller's +0x1C, +0x0C and +0x20 (ApplyOrbit, ID 18490), which its
 // Update loads first from two globals: g_closeDistance, 3.0, and
-// g_farDistance, 20.0. Nothing else writes the globals. The orbit tests no
-// collision. The names are ours.
+// g_farDistance, 20.0. Nothing else writes the globals. The orbit
+// behaviour alone tests no collision; in the close view the scene camera's
+// manager (0x006C4C60) runs a pull-in after it (mode 1 -> 0x006C3710 at
+// 0x006C4E1A: a 0.25 m sphere cast from the pivot, mask 0x1024), a release
+// (0x006C35A0) and a near-camera fade (0x006C4130) (corrected 2026-10-18,
+// lib-agent-2; dev/CAMERA.md). The names are ours.
 DAO_DATA(kCameraControllerExplore_CloseDistance, 98108)
 DAO_DATA(kCameraControllerExplore_FarDistance, 98107)
 

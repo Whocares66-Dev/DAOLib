@@ -16,8 +16,41 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 ### Range, line of sight
 
 - Newcomers (`0x006B8540`): the area's spatial query (`0x00686F70` on area+0x278) with a sphere about the perceiver's position (+0x120) of the perceiver's perception range, the float at +0x68 of the attribute at +0x7C4 (read; where it comes from: "The perception range and its pace" below). For the party's controlled creature (the id at +0x1E8 of `0x005D57C0()`'s object) with the party's range at party+0x42C above 0, the query uses that party range and a creature counts as in range when its 3D distance squared is within the creature's own range squared. Read.
-- Line of sight, for hostile candidates only: if the two stand in different rooms (+0x150) that `0x00687EC0` does not connect, or `CCArea::LineOfSight` from eye to eye (each position with z + 1.8) fails, the candidate is not seen. Read. Non-hostile candidates in range are perceived with no line-of-sight check. Read.
+- Line of sight, for hostile candidates only: if the two stand in different rooms (+0x150) that `0x00687EC0` does not connect, or the raycast `0x0067C530` (ID 13636, unnamed; not `CCArea::LineOfSight` 0x0067C3F0, corrected 2026-10-18 by lib-agent-2) from eye to eye (each position with z + 1.8) fails, the candidate is not seen. Read; "Perception through doors" below. Non-hostile candidates in range are perceived with no line-of-sight check. Read.
 - Staying perceived (`0x006A8D60`, called with its second argument 1): lost when the other is gone, in another area (+0x254 differs), fails `0x00A285D0` on its +0x41C, answers its slot 0x1D0 (dead, inferred), or its +0x70 interface's slot 0x6C is not 1 (inactive or hidden, inferred); or when the perceiver answers slot 0x1D0; or when the distance (`0x0067A000` between the positions, 3D inferred) is 60.0 m or more. With argument 1 the range is a fixed 60 m and no line of sight is tested, so a creature once perceived stays perceived out to 60 m whatever the perception range (read). A flag from `0x006A44D0` (inferred: stealth) also ends it, and the update then calls `0x006A3690(id, 1)`.
+
+### Perception through doors: a hostile behind a closed door is not perceived (read 2026-10-18 by lib-agent-2)
+
+Read 2026-10-18 in the GOG exe and the game's files by lib-agent-2 (with subagents) for DAOParagonEngine. Not seen in play. The key claims were checked again in the disassembly.
+
+**The candidates** (0x006B8540 → the area's query 0x00686F70 → 0x00685B50), for hostiles and others alike, need all of:
+- a room (+0x41C); a perceiver with none perceives nothing (0x006B8A11);
+- a room whose bit (room +0x278) is in the perceiver room's 128-bit visible mask (+0x288, tested by 0x0067A3C0). The mask is built once (0x00A28FC0) from the room itself and its `EnvRoomVisibilityList` (.rml field 3047, CRoom +0xB0). A room numbered 128 or more has an empty mask;
+- a 3D distance within the range: `ranges.gda` `PrimaryRange` by `PerceptionClass`, usually 30 m. For the controlled creature, the party's range for the query, then its own.
+
+**A hostile** (0x006B8880–0x006B88F7, checked) is then tested twice. Non-hostiles get neither test.
+1. If the rooms' numbers differ (perceiver room +0x14 against the other's +0x150), the room walk 0x00687EC0 must connect them (0x006B88C8).
+2. Always, in the same room too: **0x0067C530** (0x006B88DF), a PhysX raycast from eye to eye (each position + 1.8 m, 0x00B004D8) with mask 0x24 (0x0067C5C7), clear only if it hits nothing.
+   - Group 0x4 (doors, crates, statues: placeables with collision) and 0x20 (the ground) block; creatures (0x10) don't.
+   - **This is not `CCArea::LineOfSight`** (0x0067C3F0), which lets only placeables of base type 1 (door) or 8 block (0x0067A670). 0x0067C530 is the address library's ID 13636, unnamed.
+
+A failure skips the candidate, except in a stealth-detection case. Once perceived, a creature stays perceived out to 60 m with neither test (0x006A8D60), so a door closed afterwards changes nothing.
+
+**The room walk** (0x00687EC0, `__thiscall (CRoom *origin, int targetRoom)`, `ret 8`):
+- The target is found by number over the layout (0x0067B430).
+- If the target has no connectivity list (`EnvRoomConnectivityList`, .rml field 3099, CRoom +0xD0), the answer is whether the origin can see it (CRoom slot 0x54, 0x005D22E0: the same room, or in the visibility list).
+- Otherwise a depth-first walk (0x00686A70) with the visited list at area +0x470:
+  - each room passed through must be in the origin's visibility list;
+  - a step between two rooms is taken when no door is registered for the pair (the map at area +0x634, keyed by (min, max) room, 0x00685100), or when any door registered for it doesn't block.
+- **A door blocks** (0x0074BCC0, checked) when it is active (+0x2C5 = 1), has a state controller (+0x654), and its state's (+0x658) `BlockVis` ≠ 0. It is read live: nothing is cached. The area's +0x608 flag only re-runs `CCArea::RoomsSeen` (0x006886F0), the rooms drawn and fogged.
+- **A door is registered** (0x0068C190, from the area's add 0x00750B10) when one of its states has `BlockVis`, its RoomIDs (+0x6A8, +0x6AC) are not both -1, and they differ. A door with two equal RoomIDs is never registered. A door with one -1 is registered under a pair the walk never asks for. Either blocks perception only through the raycast.
+
+**A door's collision follows its state** (`SetPlaceableState` → 0x0074E850 → 0x0074D350, for base type 1, checked): a blocking state restores the physics groups mask kept at model-ready (+0x6D8); any other sets it to 1 (0x0074D398), out of mask 0x24. So an open door doesn't block sight and a closed one does (inferred: its kept mask has bit 0x4).
+
+**The Circle's basement** (`bhm700ar_tower_basement.are`):
+- `bhm700cr_sentinel.nss` wakes a sentinel only on `PERCEPTION_APPEAR` of the hero or a party member, on `DAMAGED` or on `DYING`.
+- Never registered, so blocking by the raycast alone: `bhm700ip_sidedoor` (1103/1103), `bhm700_ip_first_door` (1101/1101), two `genip_door_tev_lrg` (1113/1113).
+- Registered: `bhm700ip_seconddoor` (1325/1103, locked) and the `tev` doors 1113/1152, 1168/1152, 1174/1168, 1211/1174, 1291/1278, 1248/1211, 1221/1211, 1278/1248 (closed).
 
 ### Who
 
@@ -30,7 +63,7 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 
 - APPEAR (`0x006AFCF0`, `__thiscall (perceiver; other, int2, int3)`): type 25; target field (+0x28) the perceived; int 0 hostile (`IsObjectHostile`), int 1 the perceived's +0x7F0 (stealthed), int 2 and int 3 the arguments (int 2 = 1 from the pending list: "hostility changed"), object 0 the perceived. Queued to the perceiver: `AIMaster::AddEventDeltaTime(0, 0, perceiver, perceiver, 10, event)`, no delay. Read. rules_core reads int 0 nHostile, int 1 bStealthed, int 2 nHostilityChanged, object 0 oAppear.
 - DISAPPEAR (in `0x006B89B0`): type 26; target field the lost one; object 0 the lost one; flag 0 hostile; queued to the perceiver the same way. Read.
-- Neither is raised when the gate `0x00698490(type)` answers false (it looks the type up with `0x005FE960`, as the module's load does before queuing MODULE_LOAD; inferred: a disabled or already-pending event type), nor, unless `0x006A2CE0()` answers true, when either creature's +0xBD4 is 1. Read.
+- Neither is raised when the gate `0x00698490(type)` answers false (it looks the type up with `0x005FE960`, as the module's load does before queuing MODULE_LOAD: the type is in the object's disabled set, +0x28C, which only `EnablevEvent` changes and no shipped script calls; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`), nor, unless `0x006A2CE0()` answers true, when either creature's +0xBD4 is 1. Read.
 - The set changes in the same update as the event is queued: the insert just before APPEAR, the erase (and the melee rings' `0x007CBC50`) just after DISAPPEAR, so a script handling the event already sees the new list. Read.
 
 ### The perception range and its pace

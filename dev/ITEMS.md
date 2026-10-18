@@ -38,7 +38,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, with `default_hm_nob
   - Every item gets `bDroppable` at +0x4B0. Read.
 - While they're added, the global inventory flags `0x00C371B4` get 0x10, or 0x14 with `bSuppressNotification` (inferred: 0x4 suppresses the on-screen notice), and are put back after. `0x007634b0(list, inventory)` adds the items to the target's inventory. The answer is the first item's id. If the target's slot 0x24 answers (inferred: a placeable or container), it's set active. Read.
 - **`EVENT_TYPE_INVENTORY_ADDED` (6)** (`0x00763100`, from the inventory's add):
-  - It's not raised while the global flag 0x2 is set, when the owner's script doesn't take event 6 (`0x00698490(6)`), or when the item's +0x5D0 check answers (not understood). Read.
+  - It's not raised while the global flag 0x2 is set, when event 6 is in the owner's disabled set, +0x28C (`0x00698490(6)`; only `EnablevEvent` changes it and no shipped script calls it; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`), or when the item's +0x5D0 check answers (not understood). Read.
   - Creator and target: the inventory's owner. Object 0: the item.
   - With the global flag 0x400, int 0 is 1 and it's delivered at once (`DeliverNow`). Otherwise int 0 is 0 and it's queued with no delay. Read.
   - The `0x00763342` site nearby raises 7, `INVENTORY_REMOVED`, the same way (inferred from the type stored there).
@@ -64,7 +64,7 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - The item's +0x4A8 is set to the creature's id (its owner). Read.
 - **Stats:** unless the creature's +0xC58 is set, `0x0071B3C0(item, +1.0)` adds the item's stats to the creature's property modifiers: for each row of `itemstatdefines` (109) with a creature property, the stat named by its `Label` is read from `itemstats` (110) at the item's base item row and multiplied by the same stat of `materialrules` (159) at the item's material (`materialtypes`' `Material`, from the item's MaterialType +0x4FC; 1 when not above 0), times +1.0; `0x0071B2D0(property, value)` adds it. Then `0x00759A40(creature, item)` (inferred: the item's own properties). Unequipping calls the same with −1.0. Read in outline; which factor is the material's is inferred from the tables named.
 - The appearance's slot (`0x00748DA0(slot, item)`), heraldry for slots 0–2, the wield (`0x006A6640(slot)`), and the stats recomputed (`0x0071B970`). Read.
-- **`EVENT_TYPE_EQUIP` (11):** when the creature's script takes event 11 (`0x00698490`) and the item is not being destroyed, delivered at once (`AIMaster::DeliverNow`) to the creature (caller the item): creator the creature, object 0 the item, int 0 the slot, int 1 a bit of a global flag word (`DAT_00C371B4` bit 7; the equip sets 0x52 and 0x10 there, meaning not read). Read.
+- **`EVENT_TYPE_EQUIP` (11):** when event 11 is not in the creature's disabled set, +0x28C (`0x00698490`; only `EnablevEvent` changes it and no shipped script calls it; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`) and the item is not being destroyed, delivered at once (`AIMaster::DeliverNow`) to the creature (caller the item): creator the creature, object 0 the item, int 0 the slot, int 1 a bit of a global flag word (`DAT_00C371B4` bit 7; the equip sets 0x52 and 0x10 there, meaning not read). Read.
 - If the creature is the hero, the party's +0x4AA is set (inferred: the inventory screen to refresh). Read.
 
 ### Unequipping (`0x006C19F0`, the matching on-unequip)

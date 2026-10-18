@@ -41,7 +41,7 @@ Sub-action 21 does this in one tick, with no animation and no wait:
 3. A body bag (+0x600) with its creature (+0x664) still there has the creature's droppable items and money moved into it now (0x006B9620). This is before the action check, so it happens on any use.
 4. **nAction must be one of the two actions of the placeable's current state** (Action0 or Action1 of its state controller row, 0x0074C720). Otherwise it fails with -1 and no event is sent. DESTROY reads as none while +0x2C4 is set.
 5. It stores nAction at +0x68C, which is what `GetPlaceableAction` reads.
-6. **The event**, both cases queued to the placeable (`AIMaster::AddEventDeltaTime(…, 10, ev)`, so not run at once) and gated by the placeable's event filter (0x00698490):
+6. **The event**, both cases queued to the placeable (`AIMaster::AddEventDeltaTime(…, 10, ev)`, so not run at once; the 10 is the handler id for a script event, not a delay) and gated by the placeable's disabled set, +0x28C (0x00698490: it passes unless `EnablevEvent` took the type out, which no shipped script does; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`):
    - With `TrapFlag` (+0x628) = 1 and a creature user: EVENT_TYPE_TRAP_TRIGGERED (16) and no USE.
    - Otherwise **EVENT_TYPE_USE (14)**: creator the user, **int 0 = 1 if the user stands on the placeable's front side** (dot of user − placeable with its facing ≥ 0). No other ints or objects. **The action is not in the event**: the script reads it with `GetPlaceableAction`.
 7. The sub-action answers 1, and the command completes with COMMAND_SUCCESSFUL.
@@ -53,7 +53,7 @@ Sub-action 21 does this in one tick, with no animation and no wait:
 - then Action0, Success0, Success0a, Action1, Success1, Success1a;
 - and BlockVis.
 
-**`SetPlaceableState(o, s)`** (0x0074F9D0) plays the transition [old][new] through slot 0xB0 as `(anim, 1.0, -1.0, 1)`, with the idle [new][new] following. It then stores the state and swaps the walk-grid patch (below). A state with no actions makes the placeable inactive.
+**`SetPlaceableState(o, s)`** (0x0074F9D0) plays the transition [old][new] through slot 0xB0 as `(anim, 1.0, -1.0, 1)`, with the idle [new][new] following. It then stores the state and swaps the walk-grid patch (below). A state with no actions makes the placeable not interactive (0x0069BA70(0) at 0x0074FBA1, `SetObjectInteractive`'s native, writing +0x42C; not inactive, and it stays drawn: corrected 2026-10-18 by lib-agent-2, "Not interactive, removed when dead, hidden" below).
 
 **`SetPlaceableActionResult(o, nAction, bSuccess, bVariation)`** (0x0074FC10):
 - on success, sets the row's SuccessN, or SuccessNa with bVariation, through `SetPlaceableState`;
@@ -113,12 +113,12 @@ The door's closed patches are 7 (unlocked) and 8 (locked); open is a turned stri
 - **Close** sends `PerformUseObject <char> <container> 2`: a USE_OBJECT command with CLOSE. A container in Closed_Unlocked doesn't offer CLOSE, so the command fails -1 at the action check and the container's script gets no USE. Only a container a script had put in Open would close, with 1028 `container_opentoclose`, then 1025.
   - The same use, before the check, moves a body bag's creature's items in again, if any are left.
 - **`Container.InventoryClosedMessage`** goes to the placeable (0x0074E8D0 → 0x0074E710). With +0x618 set and the inventory empty:
-  - it makes the placeable inactive;
+  - it makes the placeable not interactive (0x0069BA70(0), at 0x0074E76E; not inactive: corrected 2026-10-18 by lib-agent-2);
   - for a body bag, it handles the dead creature, and destroys a `plc_bagcoin03_0` bag;
   - with +0x614 set, it destroys the placeable.
 - **The body bag's items** come in at sub-action 21, so one event delay before the script's `OpenInventory` shows them.
 
-Not read: the sound columns' player, the event filter 0x00698490, where a click is refused on an unusable placeable, and whether `AddEventDeltaTime`'s 10 is milliseconds.
+Not read: the sound columns' player and where a click is refused on an unusable placeable. The event filter 0x00698490 is the object's disabled set, and `AddEventDeltaTime`'s 10 is the handler id, not milliseconds (read 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`).
 
 ## A placeable's animations, initial state and state tables: read 2026-10-18
 
@@ -167,7 +167,7 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
   2. The state is 0 until the instance gives one.
   3. The load step (slot 113, 0x007528D0) calls `SetPlaceableState(+0x658, 1)` (0x00752A88). When the model loads later, the model-ready callback makes the same call (0x00752076).
 - **The value** is the row of the type's `statecnt_*` table, the `PLC_STATE_*` constants in `2da_constants_h.nss`: for a door 0 Closed_Unlocked, 1 Closed_Locked, 2 Open, 3 Dead, 4 Open_2, 5 Dead_2.
-- **Flag 1** re-applies the state even when unchanged, plays no transition, and plays the idle [s][s] as `(anim, 1.0, -2.0, 1)`. It stamps the state's walk-grid patch, and makes the placeable inactive if the state has no actions.
+- **Flag 1** re-applies the state even when unchanged, plays no transition, and plays the idle [s][s] as `(anim, 1.0, -2.0, 1)`. It stamps the state's walk-grid patch, and makes the placeable not interactive if the state has no actions (not inactive: corrected 2026-10-18 by lib-agent-2).
 - **Out of range.** A state of -1 (0xFFFF) or out of range is stored as 0, and its animation lookup gives none.
 - **A save** keeps the state as `SavegameAreaPlaceableState` (16100, the u16 +0x658). It is restored into +0x658 (slot 34) and snapped the same way by the load step.
 - `0x0074FBC0`, the third flag-1 caller, is not a load: it re-snaps the state when a conversation or staged scene releases its actors (0x007F2800).
@@ -181,7 +181,7 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
   - The number of action groups is (BlockVis's column − (N + 2)) ÷ 3, at most 2.
   - `BlockVis` is the only column found by name (hash 0x86A27132). `ID`, `Label` and `StrRef` are not read. So the state columns must be exactly N, in row order.
 - **The cells.** Cell [row = from][column = to] is an `anim_placeables` id: [s][s] is the idle, the others transitions. A lookup with to = 0xFFFF means to = from.
-- **Actions.** An action of 0 is none, and a state with both 0 is made inactive (a door's Dead rows). A container's Dead row keeps OPEN_INVENTORY, so it stays lootable.
+- **Actions.** An action of 0 is none, and a state with both 0 is made not interactive (a door's Dead rows, which stay drawn; not inactive: corrected 2026-10-18 by lib-agent-2). A container's Dead row keeps OPEN_INVENTORY, so it stays lootable.
 - **Success and SuccessA.** `0x00A3BB10(state, action, variation)` gives Success for variation 0 and SuccessA otherwise, or 0xFFFF for an action the row doesn't have. A result of -1 means stay: `SetPlaceableActionResult` changes nothing for it. The variation is the use's int 0, the front side, which the scripts invert for OPEN (`dev/PLACEABLES.md`).
 - **BlockVis** (the door: 1 for the closed rows, 0 for Open, Open_2 and the Dead rows):
   - At the area's add (slot 63, 0x00750B10), a placeable with a blocking state and two different `RoomID`s is registered as a door between those rooms (0x0068C190).
@@ -204,3 +204,14 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
 - **The tooltip.** It shows Action0's name, or Action1's while the input `ShowSecondaryInteraction` (50) is held. The names are table 100's rows by action (0x0070CDA0).
 
 Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
+
+## Not interactive, removed when dead, hidden: read 2026-10-18 by lib-agent-2
+
+Read 2026-10-18 in the GOG exe, the game's files and the scripts by lib-agent-2 (with subagents) for DAOParagonEngine's side-by-side of the Harrowing's Fade. Not seen in play. The key claims were checked again in the disassembly or the files. The notes above that said "inactive" for a state with no actions and an emptied container were corrected the same day.
+
+- **`SetPlaceableState`** (0x0074F9D0), when both of the new state's actions are 0 (0x0074FB61–0x0074FB89), calls **0x0069BA70(0)** (0x0074FBA1). That is `SetObjectInteractive`'s native (command 676; the address library's 14239, renamed from `ForScript_SetObjectActive` in fe62e8f). It writes +0x42C, which `GetObjectInteractive` (677) reads. It neither calls SetActive (+0x140) nor touches the model's visibility. So **a door in its Dead row stays drawn**, as the broken door is in vanilla.
+- **`Container.InventoryClosedMessage`** (0x0074E76E) makes an emptied container not interactive the same way.
+- **A dead placeable is removed only by its type:** at 0x0074FAB2, with health (+0x66C) ≤ 0 and `placeable_types` `RemoveWhenDead` (hash 0x1DEAA1EA) set, it calls slot +0x198(0) (0x00696A60; inferred: destroy). The death handler 0x0074D200 does so after a fade, at 3000 ms. Every `StateCnt_Door` type has `RemoveWhenDead` 0.
+- **SetActive(false) does hide** (`CCObject` +0x13C, 0x0069A950, for creatures and placeables alike):
+  - **In explore or combat**, it sets the visibility target (+0x18D, 0x00695C00), and 0x00695A90 fades the alpha (+0x190) at 1/500 a millisecond (0x00B03AA8), so 0.5 s. At 0 it unregisters the object (0x00649C30) and calls slot +0x108 (inferred: out of the scene). The model's alpha is +0x198 × +0x190 (0x00695080).
+  - **In other modes** (loading, cutscene, dialogue) it hides at once (0x00695C20).
