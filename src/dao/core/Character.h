@@ -54,6 +54,9 @@ enum class Slot : std::int32_t
 // (a ring, a belt).
 std::optional<Slot> SlotOf(std::int32_t inventorySlot);
 
+// A head part's row that names no part.
+inline constexpr std::uint8_t kNoRow = 0xFF;
+
 // What a creature template (.utc) says of how the creature looks.
 struct Template
 {
@@ -68,6 +71,9 @@ struct Template
     std::int32_t bodyTintMask = 0;
     std::int32_t tattooTint = 0;
     std::int32_t tattoo = 0;
+    // Each head part's row of its worksheet (face, eyes, hair, beard, neck, lashes), as the
+    // template's PartList gives them; kNoRow for a part it does not name.
+    std::array<std::uint8_t, 6> headRows{kNoRow, kNoRow, kNoRow, kNoRow, kNoRow, kNoRow};
 
     struct Equipped
     {
@@ -131,6 +137,15 @@ struct Head
     bool hair = true; // false under any helmet
     bool beard = true;
     bool lashes = true;
+    // The face's, eyes', hair's and beard's models by the template's rows of apr_base's
+    // Head/Eyes/Hair/Beard_Worksheet; empty where the template gives no row. A head morph's own
+    // part names stand in their place for every part the morph lists, so these are a morph-less
+    // creature's head (default_hm_noble.utc's elf: em_uhm_basa, bald by em_har_blda). Whether
+    // each is drawn is face, hair and beard above; the eyes always are.
+    std::wstring faceModel;
+    std::wstring eyesModel;
+    std::wstring hairModel;
+    std::wstring beardModel;
 };
 
 struct Character

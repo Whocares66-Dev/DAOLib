@@ -6,10 +6,12 @@
 #include "dao/core/GdaHash.h"
 #include "dao/core/Gff3.h"
 #include "dao/core/M2da.h"
+#include "files_builder.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -67,9 +69,14 @@ GdaFile::Cell S(const wchar_t *text)
 struct Tables
 {
     std::map<std::int64_t, m2da::Merged> byId{
-        {2, Table({"ID", "ModelType", "ModelRace", "ModelName", "ModelGenderOverride", "WeaponOffset", "Neck_Model"},
-                  {{15, {I(15), S(L"P"), S(L"H"), S(L""), S(L""), F(0), S(L"HED_DCPa")}},
-                   {40, {I(40), S(L"S"), S(L"O"), S(L"c_ogre"), S(L""), F(0), S(L"")}}})},
+        {2, Table({"ID", "ModelType", "ModelRace", "ModelName", "ModelGenderOverride", "WeaponOffset", "Neck_Model",
+                   "Head_Worksheet", "Hair_Worksheet"},
+                  {{15, {I(15), S(L"P"), S(L"H"), S(L""), S(L""), F(0), S(L"HED_DCPa"), I(79), I(74)}},
+                   {40, {I(40), S(L"S"), S(L"O"), S(L"c_ogre"), S(L""), F(0), S(L""), I(0), I(0)}}})},
+        {74,
+         Table({"ID", "ModelType", "ModelSubType", "ModelVariation"}, {{1, {I(1), S(L"har"), S(L"bld"), S(L"a")}}})},
+        {79,
+         Table({"ID", "ModelType", "ModelSubType", "ModelVariation"}, {{2, {I(2), S(L"uhm"), S(L"bas"), S(L"b")}}})},
         {6, Table({"ID", "Variation_Worksheet", "WearR", "WearL", "WieldR", "WieldL", "WeaponOffset"},
                   {{2, {I(2), I(30), I(5), I(10), I(14), I(15), F(0)}},
                    {6, {I(6), I(39), I(0), I(8), I(0), I(16), F(0)}},
@@ -247,6 +254,45 @@ TEST_CASE("weapons hang sheathed and drawn from their base type's nodes, off the
     CHECK(bare->weapons[0].offset == Approx(0.02)); // no chest counts as 0.02
 }
 
+TEST_CASE("a head with no morph is its template's rows of the head worksheets", "[character]")
+{
+    const Tables tables;
+    auto bald = Human(1, {});
+    bald.headRows[0] = 2; // the face
+    bald.headRows[2] = 1; // the hair
+    const auto head = character::Resolve(bald, Items(), tables.Of());
+    REQUIRE(head);
+    CHECK(head->head.faceModel == L"hm_uhm_basb");
+    CHECK(head->head.hairModel == L"hm_har_blda");
+    CHECK(head->head.eyesModel.empty());  // apr_base names no eyes worksheet here
+    CHECK(head->head.beardModel.empty()); // and the template no beard row
+    bald.headRows[0] = 7;                 // a row the worksheet does not have
+    CHECK(character::Resolve(bald, Items(), tables.Of())->head.faceModel.empty());
+}
+
+TEST_CASE("a template's head rows are its PartList's, each by its element's struct id", "[character]")
+{
+    // default_hm_noble.utc's shape: Appearance Data a struct, its PartList elements in no order
+    // of their own, each its part by its struct id and its row by its PartVariation.
+    dao::test::files::Gff3 b("UTC");
+    const auto top = b.Struct(0xFFFFFFFF, {});
+    const auto hair = b.Struct(2, {{"PartVariation", 0, 3}});
+    const auto face = b.Struct(0, {{"PartVariation", 0, 1}});
+    const auto looks = b.Struct(1, {{"Appearance_Type", 4, 2},
+                                    {"Gender", 0, 1},
+                                    {"HeadMorph", 11, b.ResRef("")},
+                                    {"PartList", 15, b.List({hair, face})}});
+    b.Set(top, {{"Appearance Data", 14, looks}, {"Equip_ItemList", 15, b.List({})}});
+    const auto bytes = b.Done();
+    const auto file = dao::core::gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto creature = character::TemplateOf(*file);
+    REQUIRE(creature);
+    CHECK(creature->appearance == 2);
+    CHECK(creature->headRows == std::array<std::uint8_t, 6>{1, character::kNoRow, 3, character::kNoRow,
+                                                            character::kNoRow, character::kNoRow});
+}
+
 TEST_CASE("a creature not built from parts is its one model", "[character]")
 {
     const Tables tables;
@@ -350,4 +396,23 @@ TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent d
     CHECK(parts->weapons[1].drawn == L"Prop03"); // a kite shield is drawn onto the left forearm
     CHECK(parts->head.neck == L"hm_hed_dcpa");
     CHECK(parts->head.hair);
+    CHECK(parts->head.faceModel.empty()); // his PartList names no part: his morph is his head
+
+    // The elf noble's origin template has no morph: its PartList gives the face, eyes and hair row
+    // 1 each by their struct ids 0, 1 and 2, and no beard; elf_hair's row 1 is the bald model.
+    const auto nobleBytes = FileBytes(folder / "default_hm_noble.utc");
+    const auto nobleFile = dao::core::gff3::File::Parse(nobleBytes);
+    REQUIRE(nobleFile);
+    const auto noble = character::TemplateOf(*nobleFile);
+    REQUIRE(noble);
+    CHECK(noble->headMorph.empty());
+    CHECK(noble->headRows ==
+          std::array<std::uint8_t, 6>{1, 1, 1, character::kNoRow, character::kNoRow, character::kNoRow});
+    const auto elf = character::Resolve(*noble, itemOf, tableOf);
+    REQUIRE(elf);
+    CHECK(elf->prefix == L"em");
+    CHECK(elf->head.faceModel == L"em_uhm_basa");
+    CHECK(elf->head.hairModel == L"em_har_blda");
+    CHECK_FALSE(elf->head.eyesModel.empty());
+    CHECK(elf->head.beardModel.empty());
 }

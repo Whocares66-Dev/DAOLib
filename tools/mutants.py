@@ -533,6 +533,18 @@ MUTANTS: list[Mutant] = [
         "",
     ),
     Mutant(
+        "character-head-row-by-part: a head part's row is its PartList element's, by the element's struct id",
+        CHARACTER,
+        "creature.headRows[part] = static_cast<std::uint8_t>",
+        "creature.headRows[0] = static_cast<std::uint8_t>",
+    ),
+    Mutant(
+        "character-head-worksheet: a head part's worksheet is apr_base's column of that part",
+        CHARACTER,
+        'head.hairModel = partOf(2, "Hair_Worksheet");',
+        'head.hairModel = partOf(2, "Head_Worksheet");',
+    ),
+    Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
         GFF4,
         "        return std::wstring();\n    }\n    const std::size_t p = data_ + *offset;",

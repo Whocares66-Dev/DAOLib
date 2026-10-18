@@ -213,6 +213,21 @@ Head HeadOf(const Context &context, const Template &creature, const ItemOfName &
     {
         head.neck = Named(prefix, Lower(neck));
     }
+    // A head part's model by its row (0x0074AB40 for a head part, with no
+    // morph or past the morph's own names): its worksheet from apr_base
+    // (0x00748630), the row the template's PartList set (0x00747E90), named
+    // as a body part is (0x00749200); 0xFF none.
+    const auto partOf = [&](std::size_t part, std::string_view worksheet) {
+        const std::uint8_t row = creature.headRows[part];
+        const auto sheet = static_cast<std::int64_t>(Number(context.appearances, context.appearance, worksheet));
+        const m2da::Merged *table = row != kNoRow && sheet != 0 ? context.tableOf(sheet) : nullptr;
+        const auto name = NameOf(table, RowOf(table, row));
+        return name.empty() ? name : Named(prefix, name);
+    };
+    head.faceModel = partOf(0, "Head_Worksheet");
+    head.eyesModel = partOf(1, "Eyes_Worksheet");
+    head.hairModel = partOf(2, "Hair_Worksheet");
+    head.beardModel = partOf(3, "Beard_Worksheet");
     const auto helmet = EquippedIn(creature, itemOf, Slot::Helmet);
     if (!helmet)
     {
@@ -376,6 +391,18 @@ std::optional<Template> TemplateOf(const gff3::File &utc)
         .tattoo = Whole(*looks, "Tattoo"),
         .equipment = {},
     };
+    // The head's rows (0x00748AE0): PartList's elements, at most six, each
+    // its part by its struct id and its row by its PartVariation, into
+    // CAppearance+0x1A8 (0x00747EB0); a part none names stays 0xFF, as the
+    // constructor leaves it (lib-agent-2's reading, 2026-10-17).
+    for (const auto &entry : looks->List("PartList"))
+    {
+        const std::uint32_t part = entry.Id();
+        if (part < creature.headRows.size())
+        {
+            creature.headRows[part] = static_cast<std::uint8_t>(Whole(entry, "PartVariation"));
+        }
+    }
     for (const auto &entry : root->List("Equip_ItemList"))
     {
         creature.equipment.push_back({.inventorySlot = static_cast<std::int32_t>(entry.Id()),
