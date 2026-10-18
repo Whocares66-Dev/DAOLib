@@ -17,6 +17,10 @@ call  CVirtualMachineCommands::Register ; 0x0064DD40, table[id] = function
 Every live function of `script.ldf`, by its `@addtogroup`: what its handler does, the engine state it touches, and its edge cases, under the ldf's exact name. Read by lib-agent-2 from 2026-10-18 for DAOParagonEngine's baseline (its #27), one file per group; a function a subsystem note already covers points there.
 
 - [Party](script_commands/Party.md)
+- [Effect access](script_commands/effect_access.md)
+- [Spells and combat](script_commands/spells_combat.md)
+- [The threat system](script_commands/threatsystem.md)
+- [Reaction](script_commands/reaction.md)
 
 ## Cross-checked against script.ldf
 

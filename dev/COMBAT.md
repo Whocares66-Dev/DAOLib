@@ -240,7 +240,7 @@ The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`
 **DEATH (4) for an ordinary creature comes from the engine, after the death animation** (`0x007aac10`, a sub-action handler, read):
 - For an effect whose duration type is 6, it plays animation 3 (the death) on the creature (slot 0xB0, blended).
 - It waits on the sub-action's timer (`0x007a1ae0`). When that runs out, it builds a CScriptEvent of type 4 with creator the effect's creator (the killer) and runs it at once on the creature (`CCObject::RunEventScript`).
-- For a party member it then sets party state (`ForScript_SetPartyPlotFlag`, `0x00639db0`), sends a death telemetry record, and calls `0x0069edc0` unless `0x006a3a80` answers 2.
+- For a party member it then takes it out of the party's selection (`0x00639db0`, ID 12477: the selection vector +0x184 and a second vector, `vector::remove` `0x004E9640` at `0x00639E13`; corrected 2026-10-18 by lib-agent-2, not `SetPartyPlotFlag`'s), sends a death telemetry record, and calls `0x0069edc0` unless `0x006a3a80` answers 2.
 - `creature_core`'s DEATH then clears DYING and the perception list, and so on.
 - The sub-action (51) is the step of that `ExecuteEffect` command (read 2026-10-18).
 
