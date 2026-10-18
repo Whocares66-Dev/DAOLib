@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(DAOLib VERSION 0.4.0 LANGUAGES CXX)
+project(DAOLib VERSION 0.5.0 LANGUAGES CXX)
 
 # What goes into the game targets its architecture: DAOrigins.exe is a 32-bit
 # x86 executable, so the loader it imports and the plugins the loader loads

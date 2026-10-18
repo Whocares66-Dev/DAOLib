@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.5.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.5.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **One creature's animation held:** a mod pauses, slows and resumes one creature's animation apart from the game's speed, by the engine's own pause for it, and its attacks' hits wait with it (`dao/Animation.h`, #159). What the turn-based mod holds a grab with between the grabber's turns.
+- **A character as the engine assembles it, with no game running:** `daolib_core` resolves a creature's template and items into the models the game loads: its body's parts, the bare body where a slot is empty, the helmet and what it hides, and where each weapon hangs (#161). It reads a creature's animation trees and finds an animation's clip in them (#163), and an animation's channels and keys (#157).
+- **A level's files read whole:** an area's placed creatures, objects, triggers and variables (#160); a level's layout with its sun, sky and frame effects (#154); a room's lamps and light probes (#152); a level's walk grid (#156); and a material's definition (#153), a head morph's material values (#158) and a cube map's six faces (#162).
+- **For testers:** the play matrix blocks inbound connections for each of its copies of the game, so Windows Firewall stops asking (#151).
+
 ## 0.4.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.4.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.4.0). The loader and its contract with plugins are as in 0.3.0.
