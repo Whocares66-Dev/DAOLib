@@ -4,10 +4,14 @@
 // 0x00641370, stores GameModeController's four vtables) and keeps it at CClientExoApp+0x114. Its
 // current mode is the int at +0x78, which the probe has read in play since 2026-09-29
 // (dev/TURN_BASED.md); the modes themselves are objects in a table at +0x58, one per number, each
-// a GameMode class (GameModeExplore, GameModeDialog, ...). SetGameMode (0x006414A0) switches: it
-// asks the new mode's object (its vtable slot 10) whether to refuse, special-cases loading (9),
-// and goes on; the controller's handler for SetGameModeMessage calls it with the message's mode
-// and two zeros, and so does SetMode.
+// a GameMode class (GameModeExplore, GameModeDialog, ...). SetGameMode (0x006414A0) switches: the
+// new mode's vtable slot 10 (+0x28) says whether it is a base mode (explore, combat, dead, fly
+// camera, fixed), whose request goes into the one base slot, or one pushed on the stack above it,
+// every other; it special-cases loading (9) and goes on. The refusal is later, when the
+// controller takes the request (0x00640C60: the new mode's +0x24, then its slot 5, +0x14, as an
+// ambient line's start refuses dialogue mode). Corrected 2026-10-18 by lib-agent-2: slot 10 was
+// taken for the refusal. The controller's handler for SetGameModeMessage calls SetGameMode with
+// the message's mode and two zeros, and so does SetMode.
 //
 // Explore mode, read 2026-09-30. Combat mode derives from it (dao::TypeName and
 // tools\daoexe.py --bases GameModeCombat). The mode's update (vtable slot 8, 0x00712F90) re-picks
