@@ -1224,7 +1224,9 @@ DAO_ADDRESS(kSaveLoadProxy_ScreenshotPath, 15140)
 // areas, some each frame (0x006FABB0: 0 going, 1 done, else failed); 10 to
 // 14 as state 5's 10 to 14.
 //
-// State 6 follows each: 1 sets the game mode the loading began in; 4 sends
+// State 6 follows each: 1 asks for explore, SetGameMode(0, 1, 0) at 0x006C8F91,
+// whatever mode the loading began in (corrected 2026-10-18 by lib-agent-2;
+// a second load request of kind 4, 5 or 7 replaces a waiting one); 4 sends
 // the hero's area EVENT_TYPE_AREALOAD_PRELOADEXIT (38; 42 after a save's
 // load) and runs the event queue at once (AIMaster::Update), so the area's
 // own script runs inside the step; 6 runs AreaLayout::Update each frame and

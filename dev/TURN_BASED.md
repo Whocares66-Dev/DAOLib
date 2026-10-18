@@ -239,6 +239,8 @@ It is the only builder of event 60, so every real switch sends it, whoever asked
 
 `module_core.nss`:185–296 handles event 60: it returns early for a new GUI, FLYCAM, INVALID or PREGAME, and sets the party's combat state from new == COMBAT (:246).
 
+A cutscene and the mode controller (requests refused during a cutscene, Cutscene to Loading directly, a transition filed from a cutscene's end script) are in `dev/CUTSCENES.md`'s "A cutscene, the area transition after it" (read 2026-10-18 by lib-agent-2).
+
 ### What runs during a conversation
 
 **Dialogue mode doesn't pause.**

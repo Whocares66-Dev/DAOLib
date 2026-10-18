@@ -656,6 +656,30 @@ MUTANTS: list[Mutant] = [
         ".control2 = VertexOf(transition.Child(kTransitionControl1))",
     ),
     Mutant(
+        "cutscene-step-holds: a step transition holds the first vertex's value, not the next's",
+        CUTSCENE,
+        "    case TransitionType::Step:\n        return from.value;",
+        "    case TransitionType::Step:\n        return to.value;",
+    ),
+    Mutant(
+        "cutscene-gad-extended: a clip that has ended with ExtendGad leaves its last key",
+        CUTSCENE,
+        "if (ended && action.extendGad)",
+        "if (ended && !action.extendGad)",
+    ),
+    Mutant(
+        "cutscene-gad-live-turned: a live clip's travel is turned by the clips ended before it",
+        CUTSCENE,
+        "local = Add(local, Rotate(extended, travel.position));",
+        "local = Add(local, travel.position);",
+    ),
+    Mutant(
+        "cutscene-linear-fraction: a linear transition's fraction is of the segment's own length",
+        CUTSCENE,
+        "((time - from.time) / (to.time - from.time))",
+        "((time - from.time) / to.time)",
+    ),
+    Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
         GFF4,
         "        return std::wstring();\n    }\n    const std::size_t p = data_ + *offset;",

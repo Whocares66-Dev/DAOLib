@@ -7,6 +7,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -28,6 +30,15 @@ namespace
 {
 
 constexpr std::uint32_t kNone = 0xFFFFFFFF; // a string slot with no string
+
+// A list of floats at the data's end: its data offset.
+std::uint32_t FloatList(Builder &b, const std::vector<float> &values)
+{
+    const std::size_t at = b.bytes.size();
+    b.U32(at, static_cast<std::uint32_t>(values.size()));
+    Floats(b, at + 4, values);
+    return static_cast<std::uint32_t>(at - b.data);
+}
 
 // A cutscene laid out as bhmcs_intro.cut is (tools/gff4.py --templates), cut down: its header,
 // one actor, and in its generic queue an animation with one curve of one vertex and a
@@ -53,7 +64,7 @@ std::vector<std::byte> CutsceneFile()
                        {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
                        {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
                        {"AANI",
-                        36,
+                        48,
                         {{5300, 0, 0, 0},
                          {5301, 8, 0, 4},
                          {5302, 8, 0, 8},
@@ -62,7 +73,13 @@ std::vector<std::byte> CutsceneFile()
                          {5400, 14, 0, 20},
                          {5401, 14, 0, 24},
                          {5402, 8, 0, 28},
-                         {5403, 8, 0, 32}}},
+                         {5403, 8, 0, 32},
+                         {5405, 0, 0, 36},
+                         {5410, 0, 0, 37},
+                         {5411, 0, 0, 38},
+                         {5413, 0, 0, 39},
+                         {5408, 8, gff4::kList, 40},
+                         {5409, 8, gff4::kList, 44}}},
                        {"ASLN",
                         32,
                         {{22, 17, 0, 0},
@@ -106,7 +123,7 @@ std::vector<std::byte> CutsceneFile()
     Float(b, actor + 20, 1.5F);
     Floats(b, actor + 24, {1.0F, 2.0F, 3.0F});
 
-    const std::size_t animation = Struct(b, 36);
+    const std::size_t animation = Struct(b, 48);
     b.U8(animation, 4);
     Float(b, animation + 4, 2.0F);
     Float(b, animation + 8, 1e10F);
@@ -115,6 +132,10 @@ std::vector<std::byte> CutsceneFile()
     b.U32(animation + 24, b.String(u"bhmcs_intro.cub"));
     Float(b, animation + 28, 0.5F);
     Float(b, animation + 32, 0.25F);
+    b.U8(animation + 36, 255);
+    b.U8(animation + 38, 255);
+    b.U32(animation + 40, FloatList(b, {0.0F, 0.0F, 0.0F, 0.0F, 0.5F, 1.0F, 2.0F, 3.0F}));
+    b.U32(animation + 44, FloatList(b, {0.0F, 0.0F, 0.0F, 0.0F, 1.0F}));
     const std::size_t curves = b.bytes.size();
     b.U32(curves, 1);
     const std::size_t curve = Struct(b, 12);
@@ -192,6 +213,15 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of two templa
     CHECK(animation.blendTree == L"bhmcs_intro.cub");
     CHECK(animation.speed == 0.5F);
     CHECK(animation.startOffset == 0.25F);
+    CHECK(animation.playGad);
+    CHECK_FALSE(animation.blendGad);
+    CHECK(animation.extendGad);
+    CHECK_FALSE(animation.applyFutureGads);
+    REQUIRE(animation.gadPositions.size() == 2);
+    CHECK(animation.gadPositions[1].time == 0.5F);
+    CHECK(animation.gadPositions[1].position == cutscene::Vector3{1.0F, 2.0F, 3.0F});
+    REQUIRE(animation.gadOrientations.size() == 1);
+    CHECK(animation.gadOrientations[0].orientation == cutscene::Quaternion{0.0F, 0.0F, 0.0F, 1.0F});
     CHECK(animation.voBank.empty());
     CHECK(animation.actor == -1);
     CHECK_FALSE(animation.fog);
@@ -283,4 +313,308 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
     CHECK(vertices == 320650);
     CHECK(lines == 3555);
     CHECK(unlabelled == 0);
+}
+
+namespace
+{
+
+// A curve through (1, 10), (3, 20) and (5, 0), its two transitions of one type.
+cutscene::Curve ThreeVertices(cutscene::TransitionType type)
+{
+    const auto raw = static_cast<std::uint8_t>(type);
+    return {
+        .base = -1.0F,
+        .vertices = {{1.0F, 10.0F}, {3.0F, 20.0F}, {5.0F, 0.0F}},
+        .transitions = {{.type = raw, .control1 = {}, .control2 = {}}, {.type = raw, .control1 = {}, .control2 = {}}}};
+}
+
+// A track of three curves, each a constant.
+cutscene::Action Track(std::uint8_t type, float x, float y, float z)
+{
+    cutscene::Action track;
+    track.type = type;
+    track.stop = 1e10F;
+    for (const float value : {x, y, z})
+    {
+        track.curves.push_back({.base = value, .vertices = {}, .transitions = {}});
+    }
+    return track;
+}
+
+cutscene::Quaternion Product(const cutscene::Quaternion &a, const cutscene::Quaternion &b)
+{
+    return {(a[3] * b[0]) + (a[0] * b[3]) + (a[1] * b[2]) - (a[2] * b[1]),
+            (a[3] * b[1]) - (a[0] * b[2]) + (a[1] * b[3]) + (a[2] * b[0]),
+            (a[3] * b[2]) + (a[0] * b[1]) - (a[1] * b[0]) + (a[2] * b[3]),
+            (a[3] * b[3]) - (a[0] * b[0]) - (a[1] * b[1]) - (a[2] * b[2])};
+}
+
+// Where an orientation sends an axis, q v q*: an orientation is checked by that.
+cutscene::Vector3 Turned(const cutscene::Quaternion &q, const cutscene::Vector3 &v)
+{
+    const auto out = Product(Product(q, {v[0], v[1], v[2], 0.0F}), {-q[0], -q[1], -q[2], q[3]});
+    return {out[0], out[1], out[2]};
+}
+
+void CheckNear(const cutscene::Vector3 &got, const cutscene::Vector3 &want)
+{
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        CHECK(got.at(i) == Catch::Approx(want.at(i)).margin(1e-4));
+    }
+}
+
+} // namespace
+
+TEST_CASE("a curve is its base with no vertices, and its end values outside them", "[cutscene]")
+{
+    CHECK(cutscene::ValueAt({.base = 7.5F, .vertices = {}, .transitions = {}}, 3.0F) == 7.5F);
+    const auto curve = ThreeVertices(cutscene::TransitionType::Linear);
+    CHECK(cutscene::ValueAt(curve, 0.0F) == 10.0F);
+    CHECK(cutscene::ValueAt(curve, 1.0F) == 10.0F);
+    CHECK(cutscene::ValueAt(curve, 5.0F) == 0.0F);
+    CHECK(cutscene::ValueAt(curve, 9.0F) == 0.0F);
+}
+
+TEST_CASE("a curve within 1e-4 s of an inner vertex is that vertex's value", "[cutscene]")
+{
+    auto curve = ThreeVertices(cutscene::TransitionType::Linear);
+    curve.vertices[1].value = 100.0F; // a jump the line comes nowhere near so close to it
+    CHECK(cutscene::ValueAt(curve, 3.00005F) == 100.0F);
+    CHECK(cutscene::ValueAt(curve, 2.99995F) == 100.0F);
+    CHECK(cutscene::ValueAt(curve, 2.999F) < 100.0F);
+}
+
+TEST_CASE("a linear transition goes straight from one vertex's value to the next's", "[cutscene]")
+{
+    const auto curve = ThreeVertices(cutscene::TransitionType::Linear);
+    CHECK(cutscene::ValueAt(curve, 2.0F) == Catch::Approx(15.0F));
+    CHECK(cutscene::ValueAt(curve, 1.5F) == Catch::Approx(12.5F));
+    CHECK(cutscene::ValueAt(curve, 4.5F) == Catch::Approx(5.0F));
+}
+
+TEST_CASE("a step transition holds the first vertex's value to the next vertex", "[cutscene]")
+{
+    const auto curve = ThreeVertices(cutscene::TransitionType::Step);
+    CHECK(cutscene::ValueAt(curve, 1.5F) == 10.0F);
+    CHECK(cutscene::ValueAt(curve, 2.9F) == 10.0F);
+    CHECK(cutscene::ValueAt(curve, 4.0F) == 20.0F);
+}
+
+TEST_CASE("a Bezier transition's controls are absolute (time, value) points", "[cutscene]")
+{
+    auto curve = ThreeVertices(cutscene::TransitionType::Bezier);
+    // Controls symmetric about t = 2: the curve's parameter there is one half, and its value
+    // 10/8 + 3/8 30 + 3/8 30 + 20/8.
+    curve.transitions[0].control1 = {1.5F, 30.0F};
+    curve.transitions[0].control2 = {2.5F, 30.0F};
+    CHECK(cutscene::ValueAt(curve, 2.0F) == Catch::Approx(26.25F));
+    // Controls a third and two thirds of the way along the line: the curve is the line.
+    curve.transitions[1].control1 = {3.0F + (2.0F / 3.0F), 20.0F - (20.0F / 3.0F)};
+    curve.transitions[1].control2 = {3.0F + (4.0F / 3.0F), 20.0F - (40.0F / 3.0F)};
+    CHECK(cutscene::ValueAt(curve, 3.5F) == Catch::Approx(15.0F).margin(1e-3));
+    CHECK(cutscene::ValueAt(curve, 4.7F) == Catch::Approx(3.0F).margin(1e-3));
+}
+
+TEST_CASE("a transition of an unknown type is the curve's base", "[cutscene]")
+{
+    auto curve = ThreeVertices(cutscene::TransitionType::Linear);
+    curve.transitions[0].type = 3;
+    CHECK(cutscene::ValueAt(curve, 2.0F) == -1.0F);
+}
+
+TEST_CASE("the cutscene's clock shows the nearest of its frames", "[cutscene]")
+{
+    CHECK(cutscene::FrameTime(1.004F, 100) == Catch::Approx(1.0F));
+    CHECK(cutscene::FrameTime(1.006F, 100) == Catch::Approx(1.01F));
+    CHECK(cutscene::FrameTime(0.05F, 0) == Catch::Approx(2.0F / 30.0F)); // 1.5 frames of 30 round up
+}
+
+TEST_CASE("a position track is placed in its actor's origin, then in the stage", "[cutscene]")
+{
+    const float half = std::sqrt(0.5F);
+    cutscene::Actor actor;
+    actor.originPosition = {1.0F, 2.0F, 3.0F};
+    actor.originOrientation = {0.0F, 0.0F, half, half}; // a quarter turn about z
+    const auto track = Track(17, 1.0F, 0.0F, 0.0F);
+    CheckNear(cutscene::PositionAt(actor, track, 0.0F), {1.0F, 3.0F, 3.0F});
+    const cutscene::Stage stage{.position = {10.0F, 0.0F, 0.0F}, .orientation = {0.0F, 0.0F, 1.0F, 0.0F}};
+    CheckNear(cutscene::PositionAt(actor, track, 0.0F, stage), {9.0F, -3.0F, 3.0F});
+}
+
+TEST_CASE("an orientation track turns by yaw about z, then pitch about x, then roll about y", "[cutscene]")
+{
+    const float half = std::sqrt(0.5F);
+    const cutscene::Vector3 forward{0.0F, 1.0F, 0.0F};
+    const cutscene::Vector3 up{0.0F, 0.0F, 1.0F};
+    cutscene::Actor actor;
+    actor.originOrientation = {0.0F, 0.0F, 0.0F, 1.0F};
+    CheckNear(Turned(cutscene::OrientationAt(actor, Track(18, 90.0F, 0.0F, 0.0F), 0.0F), forward), {-1.0F, 0.0F, 0.0F});
+    CheckNear(Turned(cutscene::OrientationAt(actor, Track(18, 0.0F, 90.0F, 0.0F), 0.0F), forward), up);
+    CheckNear(Turned(cutscene::OrientationAt(actor, Track(18, 0.0F, 0.0F, 90.0F), 0.0F), up), {1.0F, 0.0F, 0.0F});
+    // Yaw, then pitch: up goes to +X. Pitch before yaw would send it to -Y.
+    CheckNear(Turned(cutscene::OrientationAt(actor, Track(18, 90.0F, 90.0F, 0.0F), 0.0F), up), {1.0F, 0.0F, 0.0F});
+    // The stage's turn and the origin's come before the track's: two quarter turns about z.
+    actor.originOrientation = {0.0F, 0.0F, half, half};
+    const cutscene::Stage stage{.position = {}, .orientation = {0.0F, 0.0F, half, half}};
+    CheckNear(Turned(cutscene::OrientationAt(actor, Track(18, 0.0F, 0.0F, 0.0F), 0.0F, stage), forward),
+              {0.0F, -1.0F, 0.0F});
+}
+
+TEST_CASE("the mage origin's cutscenes' tracks end at their actors' final places", "[cutscene][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cutscenes";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/cutscenes (ghilana's extract of *.cut writes them there)");
+    }
+    std::size_t placed = 0;
+    for (const char *name : {"jowan_attacks.cut", "bhm500cs_harrowing.cut", "bhmcs_intro.cut"})
+    {
+        const auto bytes = FromDisk(folder / name);
+        const auto file = gff4::File::Parse(bytes);
+        REQUIRE(file);
+        const auto read = cutscene::CutsceneOf(*file);
+        REQUIRE(read);
+        REQUIRE(read->stage.empty()); // no stage: a script's cutscene, in the world's frame
+        for (const auto &actor : read->actors)
+        {
+            const cutscene::Action *position = nullptr;
+            const cutscene::Action *orientation = nullptr;
+            for (const auto &action : actor.actions)
+            {
+                position = action.type == 17 ? &action : position;
+                orientation = action.type == 18 ? &action : orientation;
+            }
+            if (position == nullptr && orientation == nullptr)
+            {
+                continue;
+            }
+            INFO(name << " actor " << actor.id);
+            ++placed;
+            if (position != nullptr)
+            {
+                CheckNear(cutscene::PositionAt(actor, *position, read->runTime), actor.finalPosition);
+            }
+            if (orientation != nullptr)
+            {
+                const auto got = cutscene::OrientationAt(actor, *orientation, read->runTime);
+                const auto &want = actor.finalOrientation;
+                const float dot = (got[0] * want[0]) + (got[1] * want[1]) + (got[2] * want[2]) + (got[3] * want[3]);
+                CHECK(std::abs(dot) == Catch::Approx(1.0F).margin(1e-4)); // q and -q are one orientation
+            }
+        }
+    }
+    CHECK(placed == 57);
+}
+
+namespace
+{
+
+// A clip with travel: playing from start to stop, its keys a position (time, x, y, z) each.
+cutscene::Action Clip(float start, float stop, std::vector<cutscene::PositionKey> positions)
+{
+    cutscene::Action clip;
+    clip.kind = "AANI";
+    clip.type = 4;
+    clip.start = start;
+    clip.stop = stop;
+    clip.playGad = true;
+    clip.gadPositions = std::move(positions);
+    return clip;
+}
+
+// A quarter turn about z, as a quaternion.
+cutscene::Quaternion QuarterTurn()
+{
+    const float half = std::sqrt(0.5F);
+    return {0.0F, 0.0F, half, half};
+}
+
+} // namespace
+
+TEST_CASE("a clip's travel is its keys at the time since its start, held outside them", "[cutscene]")
+{
+    auto clip = Clip(2.0F, 4.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {1.0F, {2.0F, 0.0F, 0.0F}}, {2.0F, {2.0F, 4.0F, 0.0F}}});
+    clip.gadOrientations = {{0.0F, {0.0F, 0.0F, 0.0F, 1.0F}}, {2.0F, QuarterTurn()}};
+    CheckNear(cutscene::TravelAt(clip, 1.0F).position, {0.0F, 0.0F, 0.0F});
+    CheckNear(cutscene::TravelAt(clip, 3.0F).position, {2.0F, 0.0F, 0.0F});
+    CheckNear(cutscene::TravelAt(clip, 3.5F).position, {2.0F, 2.0F, 0.0F});
+    CheckNear(cutscene::TravelAt(clip, 9.0F).position, {2.0F, 4.0F, 0.0F});
+    // Half of a quarter turn, and all of it.
+    CheckNear(Turned(cutscene::TravelAt(clip, 3.0F).orientation, {0.0F, 1.0F, 0.0F}),
+              {-std::sqrt(0.5F), std::sqrt(0.5F), 0.0F});
+    CheckNear(Turned(cutscene::TravelAt(clip, 9.0F).orientation, {0.0F, 1.0F, 0.0F}), {-1.0F, 0.0F, 0.0F});
+    CheckNear(cutscene::TravelAt(cutscene::Action{}, 1.0F).position, {0.0F, 0.0F, 0.0F});
+}
+
+TEST_CASE("an actor is its tracks' place with its live clips' travel added", "[cutscene]")
+{
+    cutscene::Actor actor;
+    actor.originOrientation = {0.0F, 0.0F, 0.0F, 1.0F};
+    auto track = Track(17, 1.0F, 0.0F, 0.0F);
+    track.start = 0.0F;
+    actor.actions.push_back(track);
+    actor.actions.push_back(Clip(0.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {2.0F, {0.0F, 10.0F, 0.0F}}}));
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {1.0F, 5.0F, 0.0F});
+    CheckNear(cutscene::PlacementAt(actor, 3.0F).position, {1.0F, 0.0F, 0.0F}); // over: the track alone
+
+    actor.actions[1].extendGad = true;
+    CheckNear(cutscene::PlacementAt(actor, 3.0F).position, {1.0F, 10.0F, 0.0F}); // over: its last key stays
+
+    actor.actions[1].blendGad = true;
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {1.0F, 0.0F, 0.0F}); // blended: left out
+}
+
+TEST_CASE("a live clip's travel is turned by the clips that ended before it, and the stage turns all", "[cutscene]")
+{
+    cutscene::Actor actor;
+    actor.originOrientation = {0.0F, 0.0F, 0.0F, 1.0F};
+    auto first = Clip(0.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {2.0F, {0.0F, 10.0F, 0.0F}}});
+    first.extendGad = true;
+    first.gadOrientations = {{0.0F, {0.0F, 0.0F, 0.0F, 1.0F}}, {2.0F, QuarterTurn()}};
+    actor.actions.push_back(first);
+    actor.actions.push_back(Clip(2.0F, 4.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {1.0F, {0.0F, 2.0F, 0.0F}}}));
+    const auto placed = cutscene::PlacementAt(actor, 3.0F);
+    CheckNear(placed.position, {-2.0F, 10.0F, 0.0F}); // (0, 10) from the first, (0, 2) turned to (-2, 0)
+    CheckNear(Turned(placed.orientation, {0.0F, 1.0F, 0.0F}), {-1.0F, 0.0F, 0.0F});
+
+    const cutscene::Stage stage{.position = {5.0F, 0.0F, 0.0F}, .orientation = QuarterTurn()};
+    const auto staged = cutscene::PlacementAt(actor, 3.0F, stage);
+    CheckNear(staged.position, {-5.0F, -2.0F, 0.0F}); // (-2, 10) turned to (-10, -2), then moved by (5, 0)
+}
+
+TEST_CASE("jowan_attacks' clips carry their actors metres from FinalPos, which is the tracks' alone",
+          "[cutscene][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cutscenes";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/cutscenes (ghilana's extract of *.cut writes them there)");
+    }
+    const auto bytes = FromDisk(folder / "jowan_attacks.cut");
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    const auto read = cutscene::CutsceneOf(*file);
+    REQUIRE(read);
+    std::size_t carried = 0;
+    for (const auto &actor : read->actors)
+    {
+        bool gad = false;
+        for (const auto &action : actor.actions)
+        {
+            gad = gad || (action.playGad && !action.blendGad && !action.gadPositions.empty());
+        }
+        const auto placed = cutscene::PlacementAt(actor, read->runTime);
+        const double away =
+            std::hypot(placed.position[0] - actor.finalPosition[0], placed.position[1] - actor.finalPosition[1]);
+        INFO("actor " << actor.id);
+        if (!gad)
+        {
+            CHECK(away < 1e-3); // no travel: the tracks, which end at FinalPos
+        }
+        carried += away > 0.3 ? 1 : 0;
+    }
+    // 2026-10-18: five actors of jowan_attacks end 0.45 to 3 m from FinalPos (lib-agent-2: FinalPos excludes the GADs).
+    CHECK(carried == 5);
 }
