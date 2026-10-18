@@ -194,3 +194,99 @@ Seen in play 2026-10-10 (the turn-based mod's session, Awakening's Wending Wood 
 4. The engine side of a queued command: where the head of a creature's queue is started, and the event raised when it finishes.
 
 Each address found goes into `src/dao/Addresses.h` with the date and how it was found. Each layout learned goes into a class header under `src/dao/` like `ClientExoApp.h`.
+
+## Game modes, conversations and clears: read 2026-10-18
+
+Read in the GOG exe and the scripts by lib-agent-2 (with subagents) for DAOParagonEngine's Harrowing. Not seen in play. The key claims below were checked in the disassembly.
+
+### The game mode's change and EVENT_TYPE_GAMEMODE_CHANGE (60)
+
+**`SetGameMode` (0x006414A0; mode, force, data) only files a request.**
+- A mode whose slot 10 (+0x28) answers true goes into a single base slot (+0x8C), a later request overwriting a waiting one. These modes are Explore, Combat, Dead, FlyCam and Fixed.
+- Every other mode is pushed on a stack (+0x9C): GUI, Dialog, Cutscene, Loading, Movie, CharGen, PartyPicker and Pregame.
+- This corrects `src/dao/GameModes.cpp`'s comment that slot 10 is asked "whether to refuse".
+
+**The controller takes a request on its update (0x00640C60).** It takes one only while the current mode is a base mode, is finished (+0x2C), or can be interrupted (+0x30).
+- The stack is taken last in, first out; the base slot only when the stack is empty.
+- Dialog and Cutscene can't be interrupted, so requests wait until they end.
+- The new mode can refuse there (+0x24, then slot 5 +0x14; dialogue's ambient start is such a refusal).
+- **A request for the current mode with force 0 is dropped**: no switch, no event. The script's `SetGameMode` (530) passes force 0. Dialogue, cutscenes and explore after a load pass 1.
+
+**The switch (0x00641D30), in order:**
+1. The old mode's leave (slot 7).
+2. The mode numbers are stored: +0x78 the new, +0x88 the old.
+3. The new mode's enter (slot 6).
+4. **EVENT_TYPE_GAMEMODE_CHANGE (60)** goes to the module, if there is one, through `AIMaster::DeliverNow` (0x00641F72), so **run at once**:
+   - creator and object 0 are the module;
+   - **int 0 is the new mode, int 1 the old** (0x00641F3E, 0x00641F4E).
+
+It is the only builder of event 60, so every real switch sends it, whoever asked: the scripts, the engine's conversation and cutscene starts, a load, the death screen. An overlay is a full switch each way: Explore→GUI, then GUI→Explore. A base change asked for under an overlay shows up only as overlay→new base when the overlay ends.
+
+**Who asks for which mode:**
+- **The engine:**
+  - 4 at a conversation's start (0x00697765);
+  - 5 from the loading code (0x006C94F6);
+  - 0 with force 1 after a load (0x006C8F91);
+  - 8, Pregame, at start-up;
+  - 10, Movie, and 12, PartyPicker.
+- **The scripts' commands:**
+  - `SetGameMode` (530), any mode;
+  - `BeginSlideshow` 4, `LoadCutscene` 5, `ShowDeathScreen` 2, `StartCharGen` 11.
+- **Combat (1) and explore (0) are the scripts' alone:**
+  - `rules_core.nss`:1085–1113, a party member perceiving a hostile, sets GM_COMBAT;
+  - `module_core.nss`:310–356, `EVENT_TYPE_DELAYED_GM_CHANGE`, goes back to explore every 2 s until no hostile is perceived.
+  - Both go through `WR_SetGameMode` → SET_GAME_MODE (1021) → `module_core`:370 → the command.
+
+`module_core.nss`:185–296 handles event 60: it returns early for a new GUI, FLYCAM, INVALID or PREGAME, and sets the party's combat state from new == COMBAT (:246).
+
+### What runs during a conversation
+
+**Dialogue mode doesn't pause.**
+- Its enter (`GameModeDialog` slot 6, 0x0068FE40) keeps whether the game was paused, and unpauses (`SetPaused(0,0)`).
+- Its leave (0x006910D0) pauses again only if it was paused before.
+- It clears no commands, ends no combat and changes no hostility.
+
+**The world pass runs.** The controller's update (0x00641F90) runs the world pass (0x0064B010: `AIMaster::Update`, then every object's `Update`) when the mode's slot 18 (+0x48) answers true, and pause (app +0x100) isn't set. Dialog, Explore and Combat answer true; Cutscene answers false.
+
+**The conversation's participants are frozen.** In mode 4, `CCCreature::Update` (0x006BE4B0) returns at once for a creature in the conversation (0x006BE500–0x006BE51C, checked: 0x0068CC30 on the dialogue mode).
+- So their commands, effect ageing, regeneration and heartbeat don't run.
+- The participants are the conversation's owner and the player's character (0x007F19E0), or a staged cutscene's actors.
+
+**Everyone else goes on, without perception.** Commands (attacks, casts, projectiles), effect ageing (`AgeEffect`, no mode check), regeneration and events all run. Perception (0x006B89B0) is gated by the mode's slot 19 (+0x4C), which Dialog, Dead, Cutscene and GUI answer false, so no new APPEAR events come.
+
+**So a hostile outside the conversation keeps attacking the frozen hero, in vanilla as in Paragon.** Ambient barks stop (slot 21 +0x54 false in Dialog).
+
+**`BeginConversation` answers 1 when the request is queued, not when the conversation starts.** It checks only that the object exists and isn't dead. The 2026-09-30 sighting in a fight (1 answered, nothing started) wasn't found on this path; the likely cause is that no start line's condition passed, which plays as an empty ambient conversation and refuses the mode.
+
+### A soft ClearAllCommands mid-swing: the blow lands
+
+`ClearAllCommands(o, nHardClear)` (0x0065BDE0) calls `ClearAllCommands(nHardClear == 1, 0)` (0x0073C930), so only 1 is hard.
+- Queued commands that aren't static are always freed, with no COMMAND_COMPLETE.
+- The current command (`ClearCurrentCommand(-2, 0, hard, 0)`, 0x0073C730) is cleared if it isn't static and either the clear is hard or the running sub-action's byte +4 (not interruptible) is 0. Otherwise it is left alone completely: nothing is deferred.
+
+The melee attack (sub-action 50, 0x007A6150) adds the turn (39, +4 = 0), then **the swing, sub-action 1, with +4 = 1** (0x007A63E2, checked).
+- So a soft clear before the swing cancels the attack.
+- A soft clear during the swing does nothing: the animation, the impact (0x006A6230 → 0x006A6080 → ATTACK_IMPACT, which tests no command, only the hand record) and the rest go on, and the command ends with 1.
+- A hard clear ends it (-2). Every command's end (0x00746900) zeroes the hand records, so a later impact frame raises nothing.
+
+### `ResourceToString` keeps the extension
+
+The compiler keeps a resource constant whole: `bhm600pt_harrowing.ncs` holds `bhm600im_valor_sword.uti` as a 0x60 constant. `ResourceToString` (0x00655E90) copies the resource's text unchanged into a string, so `ResourceToTag`'s cut at "." holds. A resource that comes from an engine command holds what that command made; not checked.
+
+### Valor's damage: no factor missing (the scripts' numbers)
+
+- **Melee damage** (`combat_damage_h.nss` `Combat_Damage_GetAttackDamage`:245–379):
+  - weapon damage, plus Strength's bonus;
+  - the difficulty's bonus, for the player's rank only;
+  - critical ×1.5+;
+  - minus armour (70% fixed, 30% random, less AP);
+  - plus `PROPERTY_ATTRIBUTE_DAMAGE_BONUS`;
+  - × `autoscale.gda FDamageScale`[rank], **only when the damage is above `difficulty.gda DmgScalingThresh`** (Normal 7; :363);
+  - at least 1.
+- The engine has no damage factor of its own and no native rank or level scaling.
+- **Neither side regenerates health in combat** (`REGENERATION_HEALTH_COMBAT_DEFAULT` 0).
+- **Valor** (`bhm600cr_valor.utc`: Rank 1, Immortal, a warrior with an iron longsword and kite shield) has Rank 2 in the area's instance, which overrides the template (above).
+  - Autoscale makes him level 1 (area 62's MinLevel 1), STR 15, CON 14, **110 health**, attacking every 1.9 s.
+  - Against a level-1 mage in robes: about 5.9–8.8 a hit, about 72% to hit, about 2.8 health a second (inferred).
+- **The mage** has 85 health; Arcane Bolt is about 32 spirit damage on a 6 s cooldown. Valor surrenders below 2 health (`creature_core`:145–150), so a mage should win narrowly by the scripts (inferred).
+- **The fight is optional.** Valor's `GEN_WILL_MED` line (WIL ≥ 15) gives the reward with no fight. The "attack" line (VALOR_ATTACKS) heals him and clears the surrender while he stays Immortal, so it is unwinnable by design (inferred).
