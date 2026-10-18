@@ -44,3 +44,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and `script.ldf`, for
 ### Classes
 
 - `GameModeCutscene` (vftable `0x00B0E76C`), `GameModeCutsceneData` (`0x00B0E6BC`, holding the player), `GUI::GUICutscene`, and the actors' actions `EC::Cutscene::Actor::Action*` (PlayAnimation, MoveSpline, JumpToPlace, ChangeVisibility, DrawWeapon, CameraFOV, PlayMovie, Light*, FrameBufferEffect and kin, vftables `0x00B231C8`..`0x00B23630`). Read.
+
+### A conversation line's cut
+
+A line's cut plays in dialogue mode, not this one: built as `LoadCutscene`'s player is, no game mode asked for, the line's length its `CutsceneRunTime` less 0.3 s, and never for a Skip line. `dev/PLOTS.md` has it.

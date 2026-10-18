@@ -101,6 +101,22 @@ A conversation's first line (+0x3C = -1) that passes the test goes the same way.
 - Skip is set on 271 NPC lines, almost all with text and a Cut.
 - `Dialogue.cpp`'s empty "[OWNER]" line seen at Highever is likely this pass-through as the hooks see it.
 
-Not read: whether a Skip line's Cut plays elsewhere, and where `OfferReplies` is called after a shown line ends.
+Not read: where `OfferReplies` is called after a shown line ends. A Skip line's Cut never plays (below).
 
 A line's switches are `ConversationLine::switches` in `dao/core/Conversation.h` (DAOLib #178).
+
+## A line's cut, as the engine plays it (read 2026-10-18 by lib-agent-2)
+
+`ConversationLineCut` (12211) is a generic (type 0xFFFF, flags 0x2000) at the line's +0x4C, null as `FFFFFFFF FFFFFFFF`. Otherwise it holds a struct told apart by its template's fourcc: a `CUTR` (12210 `ConversationLineCutResRef`, a `.cut` by name) or a `CUT ` (a whole cutscene held in the line). Core's `Conversation` already reads both (`ConversationLine::cutscene`, `cutsceneInLine`, `ConversationFile::LineCutscene`). It doesn't read two fields the engine passes to the cut: 12100 `ConversationStageName` (string, +0x5C) and 12104 `ConversationStageAtCurrentLocation` (U8, +0x64).
+
+- **The test** 0x007EFC30 is the generic's being non-null (0x007EFC55, checked), whatever its kind. Only `PlayLine` and `OfferReplies` use it.
+- **A Skip line's cut never plays.** `PlayLine` passes over a line with Skip ≠ 0 at 0x007F20E5–0x007F20EC (checked) before the cut is looked at. In the campaign's 1,721 conversations, 365 lines with a cut have Skip set; no reply has a cut.
+- **The player** (`Conversation::MakeLineCutscene` 0x007F0960, from `GameModeDialog`'s ShowLine 0x0068E250 at 0x0068E53C) is built as `LoadCutscene`'s is: from `<name>.cut` for a `CUTR` (0x007E26E0), from the line's struct for a `CUT ` (0x007E2A70, named `StringID_<strref>.___`). Its actors' `CutsceneActorMappingTag`s (5216) resolve through the conversation's own tag resolver (0x007F2D80, as a speaker's: OWNER, PLAYER, a tag), and `HENCHMAN` takes the next henchman in turn (0x007E36F0–0x007E3847).
+- **ShowLine's cut branch** stops and deletes the previous line's player (dialog +0x208), keeps the new one there, attaches it as cutscene mode does (0x006C4AF0), sets the stage by 12100 (0x007D2AA0) and starts it (0x007CD0D0). With 12104 set, the stage is placed at the speaker (0x007CD040). It skips the facing (0x0069EAA0) and the dialogue camera (0x0068D4B0) a line without a cut gets.
+- **The mode stays dialogue (4)**: the branch asks for no game mode, and the cut's EndScript was not seen run on this path (not read further).
+- **The line's length:** the line timer (dialog +0x2C4) is `CutsceneRunTime` (5000) − 0.3 s (0x00C01810). It is 0.7 s when `CutscenePlayUntilVoCompletes` (5018) and the line's `NoVOIngame` (12216) are both set. The dialogue update (0x0068DDD0) advances the player (0x007E3D30) until it is finished: ended, or failed to load, and with PlayUntilVo no voice still playing (inferred). The replies are offered when the timer runs out or the cut finishes. An empty continue as the only reply is taken by itself once the cut has finished (0x0068DED1). Skipping the line sets the player's skip flag (+0x1B4).
+- **The voice** comes from the cut's own speak-line actions (`ASLN`, type 23: strref, lip-sync, VO bank; inferred, the action's code not read).
+
+### The Circle's blood-magic scene
+
+In `bhm100_cutscene_blood.dlg`, lines 0 and 1 have empty text and no cut (`jowan_attack` is their `ConversationStageName`), and lines 2–7 hold inline cuts with Skip 255. So in vanilla the whole conversation runs through with nothing shown, to reply 15's flag 27 `CUTSCENE_BLOOD_MAGIC_END` (inferred from the data and the code; not seen in play). The scene itself is `bhm100_jowan.dlg` line 23's `CUTR` `jowan_attacks` (51.8 s). Its reply 242 sets flag 26 `CUTSCENE_BLOOD_MAGIC`, whose case (`bhm000pt_tranquility.nss`:262) starts the blood conversation.
