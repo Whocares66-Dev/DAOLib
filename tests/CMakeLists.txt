@@ -13,6 +13,7 @@ add_executable(
     test_campaign.cpp
     test_character.cpp
     test_code.cpp
+    test_collision.cpp
     test_crashlog.cpp
     test_cutscene.cpp
     test_dazip.cpp

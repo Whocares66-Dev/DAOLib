@@ -151,6 +151,7 @@ add_library(
     src/dao/core/Campaign.cpp
     src/dao/core/Character.cpp
     src/dao/core/Clip.cpp
+    src/dao/core/Collision.cpp
     src/dao/core/Conversation.cpp
     src/dao/core/Cutscene.cpp
     src/dao/core/DaZip.cpp

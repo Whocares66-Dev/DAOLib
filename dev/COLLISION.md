@@ -2,6 +2,8 @@
 
 Read 2026-10-18 by lib-agent-2 (with a subagent) in the GOG exe (`tools\daoexe.py`, capstone scans) and vanilla's files (ghilana, `tools\gff4.py`), for DAOParagonEngine. Nothing was run in the game. **Checked** means seen in the code or the files. **Inferred** means a reading of purpose. Level used: the Circle tower basement `bhm700ar_tower_basement.are`, whose `Layout` is `lak302d` (12 rooms, `packages/core/env/lak302d.arl` and `.opf`), and `oth000d`.
 
+The reader is `dao/core/Collision.h` (#189): a level's `.opf` (its actors, shapes, meshes and records; of the `.arl`'s binary copy, the records alone) and a placeable's `.phy` shapes with the mask the engine builds from them. Only 132 of the 213 levels have an `.opf`: the add-ins' 55 levels and 26 of core's (brc201d, den000d, den200d, hrt000d, lak100n, orz100d, orz800d, ost100d among them) have only the `.arl`'s binary stream, which is not read yet. In outdoor levels the actor records' room ids are not `.rml` rooms: oth000d's are -1 and values like 0x10000, 0x10001 … 0x50004, inferred to be terrain chunks.
+
 
 ## 1. Static collision and the ray's filter
 

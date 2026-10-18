@@ -95,6 +95,8 @@ GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 LEVEL = "src/dao/core/Level.cpp"
 WALKPATCH = "src/dao/core/WalkPatch.cpp"
+COLLISION = "src/dao/core/Collision.cpp"
+COLLISION_H = "src/dao/core/Collision.h"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
 CUTSCENE = "src/dao/core/Cutscene.cpp"
@@ -1341,6 +1343,56 @@ MUTANTS: list[Mutant] = [
         CLIP,
         ".time = event.Get<double>(kEventTime).value_or(0.0),",
         ".time = event.Get<float>(kEventTime).value_or(0.0F),",
+    ),
+    # A level's static physics and a placeable's shapes (#189): the masks a ray tests, built as 0x00589DB0 builds
+    # them, each actor's room by its own record, and the .opf's poses by rows.
+    Mutant(
+        "collision-sight-mask: the eye-to-eye ray meets static geometry as well as placeables",
+        COLLISION_H,
+        "kSightMask = kPlaceables | kStaticGeometry;",
+        "kSightMask = kPlaceables;",
+    ),
+    Mutant(
+        "collision-not-fadeable: 0x2000 goes only on static geometry that is not fadeable",
+        COLLISION,
+        "if (!flag(kFadeable) && (mask & kStaticGeometry) != 0)",
+        "if (!flag(kFadeable))",
+    ),
+    Mutant(
+        "collision-any-bit: any flag sets 0x80000000",
+        COLLISION,
+        "        mask |= kAny;",
+        "        mask |= 0;",
+    ),
+    Mutant(
+        "collision-room-of-record: an actor's room is its own record's, not the first's",
+        COLLISION,
+        "actor.room = physics.actorRecords[static_cast<std::size_t>(actor.record)].room;",
+        "actor.room = physics.actorRecords[0].room;",
+    ),
+    Mutant(
+        "collision-shape-records: a shape's record follows its actor's in userProperties",
+        COLLISION,
+        "actor.shapes[s].record = indices[s + 1];",
+        "actor.shapes[s].record = indices[s];",
+    ),
+    Mutant(
+        "collision-pose-rows: a pose's numbers are its turn's rows",
+        COLLISION,
+        "(pose.rotation[(row * 3) + 1] * point[1])",
+        "(pose.rotation[row + 3] * point[1])",
+    ),
+    Mutant(
+        "collision-records-end: the records end the bytes exactly",
+        COLLISION,
+        "return at == bytes.size();",
+        "return at <= bytes.size();",
+    ),
+    Mutant(
+        "collision-shape-node: a .phy shape is under the nearest named node",
+        COLLISION,
+        "Walk(child, own ? *own : name, type, out);",
+        "Walk(child, name, type, out);",
     ),
 ]
 
