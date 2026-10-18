@@ -11,7 +11,7 @@
 //   <level>_<room>.rml, in <level>.rim: the room's place and turn, the rooms
 //     seen from it, and its models: each a place, a turn, a scale, the
 //     model's name, and for each lightmapped part of it the atlas it is in
-//     and an offset and scale into that atlas.
+//     and an offset and scale into that atlas; and its SpeedTree trees.
 //   <model>.mmh, in modelhierarchies.erf: a tree of nodes; a mesh node names
 //     the mesh's chunk it draws and a part id the room's list goes by, and
 //     has its translation and rotation as children.
@@ -260,12 +260,24 @@ struct Placed
     std::vector<LightmapPart> parts;
 };
 
+// A SpeedTree tree or grass placed in a room, in the room's space.
+struct PlacedTree
+{
+    Point at{};
+    Quaternion turn{0, 0, 0, 1};
+    float scale = 1;
+    std::int32_t tree = 0;        // its model: an index into the level layout's trees
+    std::array<float, 4> tint{};  // red, green, blue, alpha
+    std::int8_t drawDistance = 0; // the engine's step of how far it is drawn, 0 to 3; 0 where the file lacks it
+};
+
 struct Room
 {
     Point at{};
     Quaternion turn{0, 0, 0, 1};
     std::vector<std::uint32_t> sees; // the numbers of the rooms seen from it
     std::vector<Placed> models;
+    std::vector<PlacedTree> trees;
 };
 
 // Returns a room's definition (.rml), or nothing for a file that is not one.

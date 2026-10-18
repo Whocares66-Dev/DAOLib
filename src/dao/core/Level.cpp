@@ -26,6 +26,11 @@ constexpr std::uint32_t kModelScale = 3059;
 constexpr std::uint32_t kModelFile = 3063;
 constexpr std::uint32_t kProbeCube = 3104;
 constexpr std::uint32_t kLightmapPart = 3235;
+constexpr std::uint32_t kRoomTrees = 3354;
+constexpr std::uint32_t kTreeScale = 3356;
+constexpr std::uint32_t kTreeModel = 3357;
+constexpr std::uint32_t kTreeTint = 3375;
+constexpr std::uint32_t kTreeDrawDistance = 3379;
 constexpr std::uint32_t kLightmapAtlas = 3323;
 constexpr std::uint32_t kLightmapOffsetScale = 3324;
 constexpr std::uint32_t kModelLightmaps = 3326;
@@ -684,6 +689,25 @@ std::optional<Room> RoomOf(const gff4::File &definition)
             placed.parts.push_back(std::move(lightmap));
         }
         room.models.push_back(std::move(placed));
+    }
+    // A room's trees (DAOLib #182), read 2026-10-18 by lib-agent-2 in the exe: the room reader
+    // (0x00A28D50) keeps each as a 0x50-byte record; an instance (0x005CBF21) is placed at the
+    // room's place plus the room's turn of the tree's, turned about z alone, scaled uniformly and
+    // tinted; the draw distance indexes the factors {1, 1.5, 2, 0.001 or 0.004} (0x00BF73E0) on
+    // its level of detail's distances. Its types read 2026-10-18 in 6,738 of the game's .rml
+    // (tools/gff4.py --templates; the Fade's oth000d among them): Position a vector3,
+    // Orientation a quaternion, the scale a float, the model an int32, the tint a vector4,
+    // the draw distance an int8; 175,929 trees, every turn of length 1, scales 0.07 to 0.61,
+    // models 0 to 25, draw distances 0 to 3. 20 files (lak519d_0 among them) lack the draw
+    // distance.
+    for (const gff4::Struct &node : root->Structs(kRoomTrees))
+    {
+        room.trees.push_back({.at = PointOf(node.Floats(kPosition)),
+                              .turn = QuaternionOf(node.Floats(kOrientation)),
+                              .scale = node.Get<float>(kTreeScale).value_or(1.0F),
+                              .tree = node.Get<std::int32_t>(kTreeModel).value_or(0),
+                              .tint = Four(node.Floats(kTreeTint), {}),
+                              .drawDistance = node.Get<std::int8_t>(kTreeDrawDistance).value_or(0)});
     }
     return room;
 }

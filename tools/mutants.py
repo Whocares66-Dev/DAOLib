@@ -93,6 +93,7 @@ class Mutant:
 
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
+LEVEL = "src/dao/core/Level.cpp"
 WALKPATCH = "src/dao/core/WalkPatch.cpp"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
@@ -479,6 +480,13 @@ MUTANTS: list[Mutant] = [
         GRID,
         "    {0, -1},\n    {1, 0},\n    {0, 1},",
         "    {0, -1},\n    {0, 1},\n    {1, 0},",
+    ),
+    # A room's trees (#182): each names its model by its own field.
+    Mutant(
+        "level-tree-model: a room's tree's model is its controller id, not another field",
+        LEVEL,
+        ".tree = node.Get<std::int32_t>(kTreeModel).value_or(0),",
+        ".tree = node.Get<std::int32_t>(kTreeScale).value_or(0),",
     ),
     # A placeable's walk-grid patch stamped as 0x00A46CC0 does (#176): over a cell under 8 only, and turned from +y
     # to the facing, clockwise for +x.

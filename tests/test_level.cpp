@@ -326,6 +326,51 @@ std::vector<std::byte> RoomFile()
     return b.bytes;
 }
 
+// A room with no models and two trees laid out as the game's SPT structs: tree 3 at (1, 2, 3),
+// a quarter turn about z, scale 0.3, tinted (0.25, 0.5, 0.75, 1), drawn at step 2; and tree 0 at
+// (-4, 0, 0), unturned, scale 0.5, white, at step 1. Without `drawDistance` the template lacks
+// the field, as 20 of the game's files do.
+std::vector<std::byte> TreeRoomFile(bool drawDistance = true)
+{
+    std::vector<dao::test::FieldSpec> tree{
+        {4, 10, 0, 0}, {5, 13, 0, 16}, {3356, 8, 0, 52}, {3357, 5, 0, 48}, {3375, 12, 0, 32}};
+    if (drawDistance)
+    {
+        tree.push_back({3379, 1, 0, 56});
+    }
+    Builder b = Start("RML ", {{"ROOM",
+                                40,
+                                {{4, 10, 0, 0},
+                                 {5, 13, 0, 16},
+                                 {3050, 1, gff4::kList | gff4::kStruct, 32},
+                                 {3354, 2, gff4::kList | gff4::kStruct, 36}}},
+                               {"MDL ", 48, {{4, 10, 0, 0}}},
+                               {"SPT ", 64, tree}});
+    const std::size_t root = Struct(b, 40);
+    Floats(b, root + 16, {0, 0, 0, 1});
+    const std::size_t models = b.bytes.size();
+    b.U32(models, 0);
+    b.U32(root + 32, static_cast<std::uint32_t>(models - b.data));
+    const std::size_t trees = b.bytes.size();
+    b.U32(trees, 2);
+    b.U32(root + 36, static_cast<std::uint32_t>(trees - b.data));
+    const float half = 0.70710678F;
+    const std::size_t first = Struct(b, 64);
+    const std::size_t second = Struct(b, 64);
+    Floats(b, first, {1, 2, 3});
+    Floats(b, first + 16, {0, 0, half, half});
+    Floats(b, first + 32, {0.25F, 0.5F, 0.75F, 1});
+    b.U32(first + 48, 3);
+    Float(b, first + 52, 0.3F);
+    b.U8(first + 56, 2);
+    Floats(b, second, {-4, 0, 0});
+    Floats(b, second + 16, {0, 0, 0, 1});
+    Floats(b, second + 32, {1, 1, 1, 1});
+    Float(b, second + 52, 0.5F);
+    b.U8(second + 56, 1);
+    return b.bytes;
+}
+
 } // namespace
 
 TEST_CASE("a mesh's chunk is read: places, the lightmap's coordinates, the triangle", "[level]")
@@ -524,6 +569,7 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
     CHECK(room->models[0].scale == 2.0F);
     REQUIRE(room->models[0].parts.size() == 1);
     CHECK(room->models[0].parts[0].atlas == L"room.dds");
+    CHECK(room->trees.empty());
 
     const std::vector<level::MeshChunk> chunks = level::Meshes(*mesh);
     std::vector<level::LitTriangle> triangles;
@@ -551,6 +597,87 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
 
     // A file that is no room's definition gives none.
     CHECK_FALSE(level::RoomOf(*mesh).has_value());
+}
+
+TEST_CASE("a room's trees are read with their place, turn, scale, model, tint and draw distance", "[level]")
+{
+    const std::vector<std::byte> bytes = TreeRoomFile();
+    const std::optional<gff4::File> definition = gff4::File::Parse(bytes);
+    REQUIRE(definition.has_value());
+    const std::optional<level::Room> room = level::RoomOf(*definition);
+    REQUIRE(room.has_value());
+    CHECK(room->models.empty());
+    REQUIRE(room->trees.size() == 2);
+    const level::PlacedTree &first = room->trees[0];
+    CHECK(first.at == Point{1, 2, 3});
+    CHECK(first.turn[2] == Approx(0.70710678F));
+    CHECK(first.turn[3] == Approx(0.70710678F));
+    CHECK(first.scale == Approx(0.3F));
+    CHECK(first.tree == 3);
+    CHECK(first.tint == std::array<float, 4>{0.25F, 0.5F, 0.75F, 1});
+    CHECK(first.drawDistance == 2);
+    const level::PlacedTree &second = room->trees[1];
+    CHECK(second.at == Point{-4, 0, 0});
+    CHECK(second.tree == 0);
+    CHECK(second.scale == Approx(0.5F));
+    CHECK(second.drawDistance == 1);
+}
+
+TEST_CASE("a room's tree whose file has no draw distance is drawn at step 0", "[level]")
+{
+    const std::vector<std::byte> bytes = TreeRoomFile(false);
+    const std::optional<gff4::File> definition = gff4::File::Parse(bytes);
+    REQUIRE(definition.has_value());
+    const std::optional<level::Room> room = level::RoomOf(*definition);
+    REQUIRE(room.has_value());
+    REQUIRE(room->trees.size() == 2);
+    CHECK(room->trees[0].tree == 3);
+    CHECK(room->trees[0].drawDistance == 0);
+    CHECK(room->trees[1].drawDistance == 0);
+}
+
+TEST_CASE("the game's rooms in game/rooms, when there, read with every tree turned, scaled and drawn as the files say",
+          "[level]")
+{
+    const std::filesystem::path folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "rooms";
+    if (!std::filesystem::exists(folder))
+    {
+        SKIP("no game/rooms in this checkout (ghilana's extract of *.rml writes them)");
+    }
+    std::size_t rooms = 0;
+    std::size_t trees = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        if (entry.path().extension() != ".rml")
+        {
+            continue;
+        }
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        std::vector<std::byte> bytes(chars.size());
+        std::memcpy(bytes.data(), chars.data(), chars.size());
+        const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+        INFO(entry.path().filename().string());
+        REQUIRE(file.has_value());
+        const std::optional<level::Room> room = level::RoomOf(*file);
+        REQUIRE(room.has_value());
+        // As read in 6,738 of the game's rooms (dao/core/Level.cpp): turns of length 1, scales
+        // 0.07 to 0.61, models 0 to 25, draw distances 0 to 3.
+        for (const level::PlacedTree &tree : room->trees)
+        {
+            const auto [x, y, z, w] = tree.turn;
+            CHECK(((x * x) + (y * y) + (z * z) + (w * w)) == Approx(1.0F).margin(1e-3));
+            CHECK(tree.scale > 0.0F);
+            CHECK(tree.scale < 1.0F);
+            CHECK(tree.tree >= 0);
+            CHECK(tree.drawDistance >= 0);
+            CHECK(tree.drawDistance <= 3);
+        }
+        ++rooms;
+        trees += room->trees.size();
+    }
+    CHECK(rooms > 0);
+    CHECK(trees > 0);
 }
 
 TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp lit and every probe named", "[level]")
