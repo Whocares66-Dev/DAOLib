@@ -31,7 +31,7 @@ Read 2026-10-18 in the GOG exe and the game's files by lib-agent-2 (with subagen
 **A hostile** (0x006B8880–0x006B88F7, checked) is then tested twice. Non-hostiles get neither test.
 1. If the rooms' numbers differ (perceiver room +0x14 against the other's +0x150), the room walk 0x00687EC0 must connect them (0x006B88C8).
 2. Always, in the same room too: **0x0067C530** (0x006B88DF), a PhysX raycast from eye to eye (each position + 1.8 m, 0x00B004D8) with mask 0x24 (0x0067C5C7), clear only if it hits nothing.
-   - Group 0x4 (doors, crates, statues: placeables with collision) and 0x20 (the ground) block; creatures (0x10) don't.
+   - The mask is the ray's NxGroupsMask bits0 (the groups argument is 0xFFFFFFFF): a shape blocks when its bits0 has 0x4 (placeables with collision: doors, crates, statues) or 0x20 (StaticGeometry, all of a level's static shapes: walls, floors, props, tree trunks, terrain); creatures (0x10) don't. So trees and walls block sight. Corrected 2026-10-18 by lib-agent-2 (it said 0x20 was the ground); `dev/COLLISION.md`.
    - **This is not `CCArea::LineOfSight`** (0x0067C3F0), which lets only placeables of base type 1 (door) or 8 block (0x0067A670). 0x0067C530 is the address library's ID 13636, unnamed.
 
 A failure skips the candidate, except in a stealth-detection case. Once perceived, a creature stays perceived out to 60 m with neither test (0x006A8D60), so a door closed afterwards changes nothing.
