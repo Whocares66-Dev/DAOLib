@@ -40,9 +40,10 @@ blend: dst.rgb += mask.rgb * (mask.a * GlowIntensity)
 
 A copy to BBC follows each pass.
 ```
-// RadialBlur (checked in radialblur.vsh/.psh): the same length everywhere on screen
-n = normalize(uv - 0.5)                                // in uv, no aspect correction
-tap k = uv - k * n * BlurStrength * (1/W, 1/H), k = 0..6; weights 0.30, 0.25, 0.15, 0.12, 0.08, 0.06, 0.04
+// RadialBlur (checked in radialblur.vsh/.psh): not uniform, sharp at the centre, most blur in the corners
+n = normalize(uv - 0.5) per vertex, in the .vsh       // add, mul, add, rsq, mul; in uv, no aspect correction
+tap k = uv - k * n * BlurStrength * (1/W, 1/H), k = 0..6, computed per vertex and interpolated; weights 0.30, 0.25, 0.15, 0.12, 0.08, 0.06, 0.04
+// across the quad n runs from (±0.707, ±0.707) at the corners to 0 at the centre, so the step is (uv - 0.5)·√2·BlurStrength/(W, H)
 g = dot(blur, (0.30, 0.59, 0.11)); out = (lerp(g, blur, satMask.a), 1)
 // FadeDistortion, t = g_fApplicationTime, m = effectMask.a
 vY = frac(uv.y + 0.042 t); vX = frac(uv.x + 0.048 t)
@@ -50,7 +51,8 @@ dx = (0.003 cos(2π vY) + 0.002 sin(2π·40 vY)) * (1 - m)
 dy = (0.003 sin(2π vX) + 0.002 cos(2π·32 vX)) * (1 - m)
 out = (0.5 * tex(uv + (dx, dy)) + 0.5 * tex(uv), 1)
 ```
-- A positive BlurStrength steps toward the centre (5: taps out to 30 pixels); a negative one outward (lak511d: −3.5).
+- RadialBlur is not uniform. `radialblur.vsh` normalises (uv − 0.5) per vertex (add, mul, add, rsq, mul at its start) and computes the tap coordinates there, and they are interpolated across the full-screen quad. So the displacement runs from (±0.707, ±0.707) at the corners to 0 at the centre: the step is (uv − 0.5)·√2·BlurStrength/(W, H), the centre sharp and the corners blurred most (inferred: the post-process quad is its 4 corner vertices; the game's Fade matches it side by side, paragon-agent's 9ebe3c8; corrected 2026-10-18 by lib-agent-2, the listing checked).
+- A positive BlurStrength steps toward the centre (5: taps in the corners out to 30 pixels); a negative one outward (lak511d: −3.5).
 - `fadesaturatemask.dds`'s alpha falls from 255 within about 0.2 of the radius to 65 at 1.0 and about 36 in the corners, so **the edges are greyed**, not blurred more.
 - `fadeeffectmask.dds`'s alpha is 255 to about 0.4, 121 at 0.8, 0 in the corners, so the ripple and ghosting are at the edges.
 

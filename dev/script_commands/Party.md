@@ -94,7 +94,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 
 ### IsControlled (714)
 - **Handler:** 0x00660C90 → `ForScript_IsControlled` 0x006316D0 (checked).
-- **Does:** returns whether the id is in the party's controlled list +0x184 (`std::vector<unsigned>::Contains` 0x008663A0) (checked).
+- **Does:** returns whether the id is in the party's selection +0x184 (`std::vector<unsigned>::Contains` 0x008663A0) (checked). So `IsControlled` means "selected": with the whole party selected every member answers TRUE, not only `GetMainControlled`, the selection's first (corrected 2026-10-18 by lib-agent-2, `dev/PARTY.md`).
 - **State:** party+0x184, read (checked).
 - **Edge cases:** OBJECT_INVALID → FALSE without touching the party (checked). **The handler does not test the party for null**: with no party and a valid id it reads [0+0x184] and faults (checked; a game-less call only).
 

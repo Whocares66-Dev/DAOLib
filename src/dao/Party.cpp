@@ -4,9 +4,10 @@
 // (0x005D57C0); Party::Select (0x00639E50) adds a member to its selection,
 // a std::vector of ids at +0x184 (0x006368F0 adds one, and leaves a lone
 // selection of that same member alone), in the order selected. The
-// primary click's attack (0x00712830) orders the party's members from its
-// own list (0x006360C0, members filtered by a flag), which is not
-// necessarily this one.
+// primary click's attack (0x00712830) orders the members 0x006360C0
+// lists: this selection itself (its pointer mirror at +0x194), less the
+// members whose effect flags meet a mask (corrected 2026-10-18 by
+// lib-agent-2; not a list of the party's own, dev/PARTY.md).
 #include "dao/Party.h"
 
 #include "dao/ClientExoApp.h"

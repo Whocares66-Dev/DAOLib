@@ -6,8 +6,9 @@
 // the engine's heap, which the command then owns), queues the command
 // through CCObject::QueuePlayerCommand (QueueNewCommand with player issued
 // set, not static, override -1; dao/Addresses.h), and signals
-// EVENT_TYPE_ON_ORDER_RECEIVED (90) to the creature, which the scripts'
-// follower AI listens for:
+// EVENT_TYPE_ON_ORDER_RECEIVED (90) to the creature, which no script
+// handles (player_core.nss:873's case is commented out; corrected
+// 2026-10-18 by lib-agent-2, dev/PARTY.md):
 // - Attack (0x007F6410, __stdcall (creature, target)): Attack (1) at the
 //   front of the queue, the target its object 0.
 // - UseObject (0x007F6550, __stdcall (creature, object, action)): UseObject
