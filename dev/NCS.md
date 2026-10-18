@@ -81,9 +81,9 @@ Length is the whole instruction, opcode and type byte included. Handler addresse
 | 0x2D | NOP | 2 | | `0x00a307f5` | |
 | 0x2E | WAITFOR | 2 | | `0x00a319e6` | DA:O. Pops a float (seconds) and the state the `STORE_STATE` before it saved, and hands both to the implementer's slot 11. The server's implementer returns 0 there (`0x00a21f90`) and the state is freed; the client's (`CClientVirtualMachineCommands`, `0x006d3b70`) schedules it (`0x0064a230`, kind 0x1C). Twice in the files: `combateveryoneimmortal.ncs`, `CONST 30.0; STORE_STATE; WAITFOR; RETN` |
 | 0x2F | WAITUNTIL | 2 | | `0x00a31a63` | DA:O. Pops an int, adds the implementer's slot 13 (500 in both), pushes it, pops a saved state, asks slot 12 with both (client `0x006d3bd0`), then slot 16; pushes 0 or 1. Not in the files |
-| 0x30 | CPSPTOAL | 8 | i32 offset, u16 size | `0x00a30638` | DA:O. Pops an int index (the top cell must be an int); stores the value of the given size at the stack's top into element *index* of the array at SP + offset (`0x00a2ec20`) |
+| 0x30 | CPSPTOAL | 8 | i32 offset, u16 size | `0x00a30638` | DA:O. Pops an int index (the top cell must be an int); stores the value of the given size at the stack's top into element *index* of the array at SP + offset (`0x00a2ec20`); the offset is counted from SP before the index is popped, so it counts the index's cell (`ability_core.ncs` at 4614 to 4693 confirms it) |
 | 0x31 | CPBPTOAL | 8 | i32 offset, u16 size | `0x00a30638` | the same, the array at BP + offset. Not in the files |
-| 0x32 | CPALTOPSP | 8 | i32 offset, u16 size | `0x00a308a5` | DA:O. Pops an int index; pushes element *index* of the array at SP + offset (`0x00a2f840`) |
+| 0x32 | CPALTOPSP | 8 | i32 offset, u16 size | `0x00a308a5` | DA:O. Pops an int index; pushes element *index* of the array at SP + offset (`0x00a2f840`); the offset is counted from SP before the index is popped, so it counts the index's cell (`ability_core.ncs` at 4614 to 4693 confirms it) |
 | 0x33 | CPALTOPBP | 8 | i32 offset, u16 size | `0x00a308a5` | the same from BP. Not in the files |
 | 0x34 | STORE_FULL_STATE | 2 | | `0x00a317c2` | DA:O; the `STORE_STATEALL` handler. Not in the files |
 | 0x35 | ABORTSCRIPT | 2 | | `0x00a31bf3` | DA:O. Ends the run with success (0). Not in the files |
