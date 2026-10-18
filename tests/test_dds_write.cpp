@@ -185,3 +185,63 @@ TEST_CASE("a texture is not written whose sides are not powers of two or whose p
     short_.rgba.pop_back();
     CHECK(dds::Encode(short_, dds::Format::A8R8G8B8).empty());
 }
+
+TEST_CASE("a cube map's six faces in their order, each with its pictures down to a pixel", "[dds]")
+{
+    // Six faces of 4 x 4, each its own colour, laid one after another as a
+    // cube's are: each face Encode's picture and its halvings.
+    std::vector<std::byte> cube;
+    for (std::uint8_t face = 0; face < 6; ++face)
+    {
+        const auto file =
+            dds::Encode(Solid(4, 4, static_cast<std::uint8_t>(face * 40), 9, 0, 255), dds::Format::A8R8G8B8);
+        REQUIRE(file.size() == 128 + ((16 + 4 + 1) * 4));
+        cube.insert(cube.end(), face == 0 ? file.begin() : file.begin() + 128, file.end());
+    }
+    CHECK_FALSE(dds::DecodeCube(cube)); // not marked a cube
+    const std::uint32_t faces = 0xFE00;
+    std::memcpy(cube.data() + 112, &faces, sizeof faces);
+    const auto read = dds::DecodeCube(cube);
+    REQUIRE(read);
+    for (std::size_t face = 0; face < 6; ++face)
+    {
+        REQUIRE(read->faces[face].size() == 3);
+        CHECK(read->faces[face][0].width == 4);
+        CHECK(read->faces[face][2].width == 1);
+        CHECK(read->faces[face][0].rgba[0] == face * 40);
+        CHECK(read->faces[face][2].rgba[0] == face * 40);
+    }
+    cube.resize(cube.size() - 4); // the last face's last pixel cut: a pixel less a face
+    const auto shorter = dds::DecodeCube(cube);
+    REQUIRE(shorter);
+    CHECK(shorter->faces[5].size() == 2);
+    cube.resize(128 + (16 * 4 * 6) - 1);
+    CHECK_FALSE(dds::DecodeCube(cube));
+}
+
+TEST_CASE("the probe cubes in game/cubes, when there, are six faces of nine pictures", "[dds][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cubes";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/cubes (ghilana's extract of lak303d_probe_*.dds writes them there)");
+    }
+    std::size_t cubes = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        std::vector<std::byte> file(chars.size());
+        std::memcpy(file.data(), chars.data(), chars.size());
+        const auto cube = dds::DecodeCube(file);
+        REQUIRE(cube);
+        for (const auto &face : cube->faces)
+        {
+            REQUIRE(face.size() == 9);
+            CHECK(face[0].width == 256);
+            CHECK(face[8].width == 1);
+        }
+        ++cubes;
+    }
+    CHECK(cubes == 8);
+}

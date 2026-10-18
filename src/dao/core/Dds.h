@@ -21,6 +21,7 @@
 // and six made of them.
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -71,6 +72,22 @@ struct Description
     Shape shape = Shape::Flat;
     bool decodes = false; // whether Decode reads the file
 };
+
+// A cube map's faces, in the file's and Direct3D's order: +X, -X, +Y, -Y, +Z, -Z.
+struct Cube
+{
+    // Each face's pictures, the largest first, each half the one before a side, down to a pixel or
+    // as far as the file holds them.
+    std::array<std::vector<Image>, 6> faces;
+};
+
+// Returns every face of a cube map with each face's pictures.
+// @return nullopt for bytes that are not a cube map Decode's formats read, or too short for six
+// faces of its largest picture
+//
+// The game's character shaders sample a room's probe cube with a reflection in the level's own
+// axes, z up, so +Z is the ceiling.
+std::optional<Cube> DecodeCube(std::span<const std::byte> file);
 
 // Returns what a DDS file holds, without decoding its pixels.
 // @return nullopt for bytes that are not a DDS file, or whose header gives no size

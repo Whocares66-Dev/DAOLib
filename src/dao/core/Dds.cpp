@@ -293,6 +293,66 @@ std::optional<Image> Decode(std::span<const std::byte> file, std::uint32_t sideM
     return read ? std::optional<Image>(std::move(image)) : std::nullopt;
 }
 
+// A cube's faces follow one another, each its whole chain of pictures
+// (DDSCAPS2_CUBEMAP and its six faces, 0xFE00, in the game's probe cubes).
+// The chain's length is taken from the bytes, as a flat file's is: the
+// longest whose six copies the file holds. lak303d's probe cubes, 256 x 256
+// DXT1, hold nine pictures a face and nothing after (2026-10-17, DAOLib
+// #162). The lookup into them is the reflection in level space with no turn
+// (elgara-agent's reading of char1.vsh and ch1armtnt.psh, the same day).
+std::optional<Cube> DecodeCube(std::span<const std::byte> file)
+{
+    const std::optional<Header> header = HeaderOf(file);
+    if (!header || !header->Decodes() || (header->more & 0x200U) == 0)
+    {
+        return std::nullopt;
+    }
+    constexpr std::size_t kFaces = 6;
+    const std::size_t room = file.size() - kPixels;
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> sizes;
+    std::size_t chain = 0;
+    for (std::uint32_t width = header->width, height = header->height;;)
+    {
+        const std::size_t bytes = BytesOf(header->format, header->plainBytes, width, height);
+        if ((chain + bytes) * kFaces > room)
+        {
+            break;
+        }
+        chain += bytes;
+        sizes.emplace_back(width, height);
+        if (std::max(width, height) == 1)
+        {
+            break;
+        }
+        width = std::max(width / 2, 1U);
+        height = std::max(height / 2, 1U);
+    }
+    if (sizes.empty())
+    {
+        return std::nullopt;
+    }
+    Cube cube;
+    std::size_t at = kPixels;
+    for (auto &face : cube.faces)
+    {
+        for (const auto &[width, height] : sizes)
+        {
+            Image image{.width = width, .height = height, .rgba = {}};
+            image.rgba.resize(static_cast<std::size_t>(width) * height * 4);
+            const std::span<const std::byte> data = file.subspan(at);
+            const bool read = header->packed ? DecodeBlocks(data, header->format, image)
+                                             : DecodePlain(data, header->plainBytes, image);
+            if (!read)
+            {
+                return std::nullopt;
+            }
+            at += BytesOf(header->format, header->plainBytes, width, height);
+            face.push_back(std::move(image));
+        }
+    }
+    return cube;
+}
+
 std::optional<Description> Describe(std::span<const std::byte> file)
 {
     const std::optional<Header> header = HeaderOf(file);

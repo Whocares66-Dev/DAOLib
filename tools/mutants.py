@@ -520,6 +520,12 @@ MUTANTS: list[Mutant] = [
         '"WearR"',
     ),
     Mutant(
+        "dds-cube-six-chains: a cube's chain is the longest whose six copies the file holds",
+        DDS,
+        "if ((chain + bytes) * kFaces > room)",
+        "if ((chain + bytes) * (kFaces - 1) > room)",
+    ),
+    Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
         GFF4,
         "        return std::wstring();\n    }\n    const std::size_t p = data_ + *offset;",
