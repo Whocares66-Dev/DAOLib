@@ -160,7 +160,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" 
   - calls `SignalDamage(oDamager, oTarget)`, command 359 (`0x00662310`);
   - sends `EVENT_TYPE_DAMAGED` itself with `SendEventOnDamaged` (`events_h`: float 0 damage, int 0 damage type, int 1 ability, creator the attacker, through `SignalEvent`).
   Read in the scripts.
-- Death at 0 health is decided by the same script: when the hit is fatal and the target isn't plot or immortal, `KillCreature` (`effect_death_h`) builds `EffectDeath()` (type 7; int 0 force, int 1 the damage, creator the killer) and applies it with `EFFECT_DURATION_TYPE_DEATH`, or handles it inline.
+- Death at 0 health is decided by the same script: when the hit is fatal and the target isn't plot or immortal, `KillCreature` (`effect_death_h`) builds `EffectDeath()` (type 7; int 0 set to 1 whatever its argument, `effect_death_h.nss`:30, the damage in int 4, `ACH_EFFECT_DEATH_DAMAGE_INDEX`, by `KillCreature`; creator the killer) and applies it with `EFFECT_DURATION_TYPE_DEATH`, or handles it inline.
 - Type 7 is one of the engine's native types, so the engine's handler takes it (not read). The script side, `Effects_HandleApplyEffectDeath`, sends `EVENT_TYPE_DEATH` with `SendEventOnDeath(target, killer)`. Read in the scripts; how the native type-7 handler and the script handler share the work: "The death effect (type 7)" below.
 
 ### The death effect (type 7)
@@ -188,9 +188,9 @@ The apply path (`0x007a0e30`) takes the native handler only when the type is 1�
 **The type-7 apply handler raises APPLY_EFFECT itself** (`0x007a12e0`, read):
 
 1. It sets the effect's duration type (+0x28) to 6 (`EFFECT_DURATION_TYPE_DEATH`) and +0x38 to 999.
-2. It sets +0x34 to `0x005ca740(effect int 0, effect int 1 == 0, 0)` (inferred: the death animation, from the force flag and whether a damage figure is recorded). When int 1 is 0, it sets int 3 to 1.
+2. It sets +0x34 to `0x005ca740(effect int 0, effect int 1 == 0, 0)`: the death animation, the `React` column of `UnsyncDeathAnimations` (int 1 0) or `SyncDeathAnimations` at row int 0, 250 where there is none (read, corrected 2026-10-18). When int 1 is 0, it sets int 3 to 1.
 3. It calls `0x0079fe90`: APPLY_EFFECT (33), run at once on the target's own script. For a creature, `creature_core` → `rules_core` → `Effects_HandleApplyEffect` → `Effects_HandleApplyEffectDeath`. That is how the scripts' death handler runs.
-4. If the script left the effect valid (+0x48 is 0), it removes effects by three matches (`ForScript_RemoveEffect` with matcher `0x00695400` and 5, then `0x00670a80` with matchers `0x00651810`/4 and `0x006953e0`/0, and a holder walk `0x0079f5d0` with `0x007a0c50`), then adds the death effect to the target's list (the holder's slot 0x1C). It returns 0. If invalid, it returns 1 and nothing is added.
+4. If the script left the effect valid (+0x48 is 0), it removes effects by three matches (`ForScript_RemoveEffect` with matcher `0x00695400` and 5, then `0x00670a80` with matchers `0x00651810`/4 and `0x006953e0`/0, and a holder walk `0x0079f5d0` with `0x007a0c50`), then calls the holder's slot 0x1C (`0x006977c0`), which queues command 32, `ExecuteEffect` (`0x00695f20`), for the dying creature (corrected 2026-10-18: not the list's add; where the effect is put in the list is not read). It returns 0. If invalid, it returns 1 and nothing is added.
 
 The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`), then the same removals, then walks the holder re-applying through `0x007a0e30` (inferred: effects held back while dead are put back on resurrection).
 
@@ -209,7 +209,7 @@ The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`
 - It waits on the sub-action's timer (`0x007a1ae0`). When that runs out, it builds a CScriptEvent of type 4 with creator the effect's creator (the killer) and runs it at once on the creature (`CCObject::RunEventScript`).
 - For a party member it then sets party state (`ForScript_SetPartyPlotFlag`, `0x00639db0`), sends a death telemetry record, and calls `0x0069edc0` unless `0x006a3a80` answers 2.
 - `creature_core`'s DEATH then clears DYING and the perception list, and so on.
-- How this sub-action is queued for the dying creature is not read.
+- The sub-action (51) is the step of that `ExecuteEffect` command (read 2026-10-18).
 
 **The call before Prepare** in `ApplyEffectOnObject` (`0x0065ca20`), for type 7 on a creature: slot 0x168 (`0x006a3750`) answers true when the creature's +0x2C0 is set or its current command is type 38 (`COMMAND_TYPE_DEATHBLOW`). Slot 0x16C(0) (`0x006ad130`) then writes +0x2C0 = 0 and sets a creature property (index 7 of the +0x7C4 table) to 0.0, or to 1.0 for a non-zero argument. Read; what +0x2C0 is beyond "in a deathblow or synced state" is inferred.
 
@@ -220,3 +220,198 @@ The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`
 4. The engine: effects removed, the death effect added; health goes to 0 (inferred).
 5. The death animation; at its end, DEATH (4) run at once on the creature, creator the killer.
 6. `creature_core` DEATH.
+
+## Death, the body bag and a creature's load: read 2026-10-18
+
+Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights), with subagents. Not seen in play. The key claims below were checked in the disassembly.
+
+### Follower state
+
+- **Where it is kept.** A creature's follower state is not a field of the creature. It is a map keyed by object id in the script backend (`[[0x00C327EC]+0xD0]+0x58`, the map at +0x2A8).
+- **Reading it.** `GetFollowerState` (0x0065E670 → 0x00632810) answers the stored value, or 0 (`FOLLOWER_STATE_INVALID`) for an id not in the map.
+- **The constants** (`script.ldf`): INVALID 0, ACTIVE 1, AVAILABLE 2, UNAVAILABLE 3, SUSPENDED 5, LOADING 6, LOCKEDACTIVE 7.
+- **Setting it.** The setter is 0x0063B9A0 (the address library's `ScriptBackend::ForScript_ADDTOPARTY` is a wrong name). It switches on the state:
+  - 0 removes the id.
+  - 1 and 7 insert or overwrite it.
+  - 2, 3 and 5 are set only if 0x006377E0 passes.
+  - 4 and 6 do nothing.
+- **Who calls the setter:**
+  - `SetFollowerState` (0x0065E6E0).
+  - `AddToParty` (ACTIVE) and `RemoveFromParty` (INVALID).
+  - Hero creation (below).
+  - A save's load (`CCCreature` slot 34, 0x006BE980, the creature's field 16203).
+  - `CCCreature` slot 86 (0x006A8AC0), which sets ACTIVE again for a creature with the PC flag (+0x7D4) that is not a party member.
+- **The hero is ACTIVE from its creation, set by the engine.** 0x0069DF10, which the character creation screen calls to make the hero, tags the creature `player_core` when the party is empty and sets its state to 1 (0x0069E008–0x0069E015, checked). No script sets the hero's state at character creation or at the module's start. The scripts that name the hero set UNAVAILABLE and back to ACTIVE mid-game (`arl300pt_fade`, `denpt_main`, `denpt_captured`, `cli410ar_city_gates_defend`, `cli800ar_palace_district`).
+- **Companions read INVALID** until `AddToParty` or a hiring script runs (`utility_h` 851/882/888, `party_h` 296–348, through `WR_SetFollowerState`). `RewardXP` (`sys_rewards_h`:107), `sys_autoscale_h`:532 and `ai_main_h_2`:3204 skip INVALID.
+
+### The death command, its animation and the command queue
+
+**The death is a command** (corrects "The type-7 apply handler" above, its step 4):
+- The type-7 handler's last call, the effect holder's slot 0x1C (0x006977C0, from 0x007A13EC), adds no effect to a list.
+- It reads the effect's animation priority (0x00A65380: 999 for duration type 6, else +0x38).
+- If that is above 0 and the creature has no command 32 current or queued (0x0073C650(0x20)), it queues one (0x00695F20). Checked.
+  - The command is 32, `ExecuteEffect` in `commands.gda`, put at the front as static and not player-issued.
+  - Its ints are the death animation (effect +0x34) and the priority; its object is the killer.
+- ExecuteEffect's start (0x00742B70) adds sub-action 51. Sub-action 51 is the handler 0x007AAC10, the knockback's too.
+- Where the death effect is put in the creature's effect list was not read.
+
+**Queuing it clears the queue.** Command 32's override is 2 in `commands.gda`, so `QueueCommand` (0x0073CD10) calls `ClearAllCommands(1, 0)` (0x0073C930) first.
+- Queued commands that are not static are freed, with no End and no COMMAND_COMPLETE.
+- The current command, if not static, is cleared even mid-sub-action: `ClearCurrentCommand(-2, 0, 1, 0)` → `Commands::End(cmd, -2)`.
+- End's shared handler (0x00746900) **queues** COMMAND_COMPLETE (`AIMaster::AddEventDeltaTime`, not run at once). Its int 0 is the command's type and int 1 is -2 (`COMMAND_FAILED_COMMAND_CLEARED`).
+- An Attack's end handler (0x00746B30) also plays animation 1, Pause, first.
+- 0x007A12E0 and 0x007AAC10 clear nothing themselves.
+- ExecuteEffect is static, and its sub-action never finishes for a death, so the dead creature keeps it as its current command (inferred: until the effect goes).
+
+**The animation: Die, then Dead held.**
+- The death effect's +0x34 comes from 0x005CA740(int 0, int 1 == 0). It reads table 103 `UnsyncDeathAnimations` when int 1 is 0, else 102 `SyncDeathAnimations`. The row is int 0, the column `React`, and the fallback 250.
+- `EffectDeath()` sets int 0 to 1 whatever its argument (`effect_death_h.nss`:30), and `KillCreature` puts the damage in int 4 (`ACH_EFFECT_DEATH_DAMAGE_INDEX`). So an ordinary kill is Unsync row 1 (SIMPLE_DEATH_V2), animation 250.
+  - That corrects "int 0 force, int 1 the damage" above (the `KillCreature` line and the handler's step 2).
+  - For int 1 = 0 the handler sets int 3 of the effect's +0x54 array to 1, the unsync death.
+- In `anim_base`: 250 is Die (`die`, a one-shot, TransitionTo 3); 3 is Dead (`dieloop`, looping, TransitionTo 263, Die Get Up); 1 is Pause.
+- On sub-action 51's first tick, an unsync, non-looping death animation plays through slot 0xB0, `(250, 1.0, 2.5, loop 0)`.
+  - A creature whose appearance (+0x7B0's +0x58) is 0x4E29 gets blend -3.0 instead.
+  - A blend of -2.0 or below is a code: 20% (-2) or 5% (-3) of the clip's length (0x00694FE0).
+  - The timer is the Die clip's own length (`AnimationStepLength(250)`).
+  - If the creature's current animation already has the new one's State (already dead), it goes straight to the loop through TransitionTo (0x00696060).
+  - A sync death (int 3 = 0, a deathblow) runs 0x007A7290 instead; not read.
+- Every tick while the duration type is 6, Dead (3) is played again as `(3, 1.0, -2.0, loop 1)` if the current animation is a loop whose State isn't 1, or isn't 3 while creature byte +0x1AC is 0. Inferred: Die plays out, the animation's own TransitionTo moves it to 3, and these calls hold it there.
+- DEATH (4) is run once, when the timer runs out: the end of the Die clip.
+
+### The body bag
+
+**`SpawnBodyBag` (0x006A91E0) moves nothing: it makes or re-places the bag and links it.**
+- Without `bForce`, no bag is made:
+  - for a creature not dead (slot 0x1D0);
+  - for one with no loot and no bag yet (+0x790 = -1);
+  - for one from the area's pool of reused creatures (+0xB60 ≠ 0, inferred).
+- With `bForce`, all three are skipped. No bag at all for a creature with no area. There is no party-member test.
+- "Loot" (0x006A90D0) is money above 0, or a droppable item (0x006A4440: the item's +0x4B0, `IsItemDroppable`'s byte) equipped or in the backpack.
+- An existing bag (+0x790 ≠ -1) is found and placed again, not made again.
+- A new bag is placeable template `gen_ip_bodybag`, with the appearance's `CorpseModel` or `PLC_BonePile_01_0`.
+  - Links: creature +0x790 = the bag; the bag's +0x664 = the creature (`LootableObjectId`); the bag's +0x600 = 1 (`IsBodyBag`).
+  - It is placed at the creature's position and orientation, set plot (slot 0x164(1)) and active.
+- Slot 0x130 (0x0074CFC0) copies the creature's name to the bag; it moves no items.
+
+**The items move later, in 0x006B9620(bag).** It is called when the bag is used (0x007A7A0C, just before it opens) or when the corpse decays (0x006B994C):
+- Equipped items flagged +0x5D0 are destroyed.
+- Every droppable item, backpack first then equipped, is moved into the bag (0x00762C40: taken from the holder, added to the bag, not copied).
+- Money becomes a `gen_im_copper.uti` stack in the bag, and is taken off the creature (inferred, 0x007CA020).
+- Neither plot nor stealable flags are tested.
+
+**`0x006A3A80` is the appearance's `DecayBehaviour`** (`apr_base` column hash 0x98BFB469, checked).
+- Values: 3 for Rage Demon, Shade and Ash Wraith; 2 for Broodmother and High Dragon; 0 for the rest.
+- Behaviour 3 calls 0x0069F360(1000): the corpse fades about a second after the bag spawns.
+  - 0x0069F360 is the corpse's decay delay (the address library's `CCCreature::ForScript_SetItemDroppable` is a wrong name). `SetBodybagDecayDelay` calls it on the bag's creature.
+  - It sets +0xC8C = 1 and moves the dead-time counter +0xC88.
+- The decay (0x006BC670):
+  - +0xC88 counts the time since death against `[0x00C021C4]`, 60000 ms by default, set by `SetCreaturesGlobalMaxTimeBeforeDecay`.
+  - The fade starts at `[0x00C021C8]` left; at `[0x00C021CC]` left the loot moves and the creature decays (0x006B98E0).
+  - Too many corpses cut the delay to 0.
+- Whether a corpse may decay (0x006A3AD0) is decided in this order:
+  1. Yes if a delay was set.
+  2. No if a decay-blocking effect (type 4) is on it, or for a party member (inferred), or for the +0xBD4, +0xBD8 or +0xB60 cases.
+  3. Otherwise only behaviours 0 and 3 decay; 1 and 2 never do.
+- The death sub-action's `0x0069EDC0` unless DecayBehaviour is 2 (above, DEATH for a party member) is this.
+
+### A placed creature's load
+
+**Area load.** 0x00683820 walks the area's `CreatureList`. For each instance whose `Importance` passes, it makes the creature and calls 0x006ABDC0. That reads the instance's `TemplateResRef`, opens the `.utc` (slot 117, 0x006A27B0), and runs the creature's field reader, slot 23 (0x006C06F0), twice:
+- over the template, with flag 1;
+- then over the instance's struct, with flag 2 (0x006ABFBA–0x006ABFC3, checked).
+
+**The instance overrides any field it has.** Each field is read with the current value as its default, and the int reader (0x00A37050) takes a value only when the field exists with GFF type 5. So the instance's `Rank` replaces the template's as its `TeamId` does.
+- Rank: read at 0x006C088F, stored through the attribute at +0x4B0.
+- The other fields that can be overridden:
+  - the object's: position, orientation, `LocName`, `Tag`, `Active`, `EventScript`, `Plot`, `Immortal`, `GroupId`, `AILevel`, `InteractRadius`, `Conversation`, `TeamId`;
+  - the creature's: `Importance`, `Race`, `Package`, `PackageAI`, `Rank`, `TreasureCategory`, `Combatant`, `SoundSet`, `NoPermDeath`, `CharType`, `IsSelectable`, `IsPlotGiver`, `Trackable`, `WeaponsDrawn`, `StealthMode`, `StealthRadius`, equipment, `DialogResRef`;
+  - the stats' load, abilities and `PerceptionClass` among them.
+- The Harrowing's instances carry `TeamId`, `Rank`, `TreasureCategory`, `Trackable` and others as type 5.
+- Nothing at load derives a value from Rank. What reads it: `GetCreatureRank`, the client VM's copy, and the save. Scaling by rank is the scripts'.
+
+**The template's ability lists add each entry plainly.** 0x0071ECD0 reads one INT per entry (`SpellNumber`, `TalentNumber` or `SkillID`) and skips only -1 or a failed read. It then calls 0x0071EAC0(id, type, -1), the same function `AddAbility` (0x00669AB0) calls.
+- `AddAbility` checks the `ABI_base` row first and refuses AbilityType 4.
+- 0x0071EAC0 reads only `AbilityType`, `GUIType` and `Passive_ID`. There is no prerequisite, level or rank check.
+- It does, in order:
+  1. Returns if the creature has the ability already (except an item ability from an item).
+  2. Inserts the ability, and for a follower recomputes the party.
+  3. Loads the ability type's GUI blend tree.
+  4. Makes the cooldown record and the interface's `AbilityInstance`.
+  5. If new and creature +0xC58 is 0, applies the passive (`Passive_ID` → table 0x75's properties) and queues ABILITY_ACQUIRED (73) for item abilities only.
+
+### Non-humanoids' movement
+
+Non-humanoids use the same controller as humanoids, `MovementAnimController` (vftable 0x00B59AC0).
+- **The trees.** Its trees are the appearance's `MovementTree` and `CombatMoveTree` columns (hashes 0xEB48D02A, 0x75F492EC, checked). Each is an ordinary `.anb`, loaded with the other five trees into the creature's animation player (0x006BDC70 → 0x006A1470). For gender 2, a `_fem.anb` is used where one exists.
+- **No fallback.** Nothing substitutes `movement.anb`; an empty column leaves the switch doing nothing.
+- **No anim-table row for walking or running.** The controller sets weights on nodes by fixed names: `Motion`, `Transition`, `Walk`, `Run`, `WalkForward`, `WalkBackward`, `walkf`, `walkfl`, `walkfr`, `walkb`, `walkbl`, `walkbr`, `runf`, `runleanl`, `runleanr`. Transitions use anim rows, for example 84 `pauserunf`.
+
+| apr_base row | Creature | Explore / combat tree | Game Walk / Run / Cbt | Anim Walk / Run / CbtStrF / Cbt |
+|---|---|---|---|---|
+| 49 | wolf `c_wolfa` (also 53, 74, the mabari 34/35) | `C_DOGa_expmvt` / `C_DOGa_cbtmvt` | 1.54 / 6 / 4.66 | 1.2 / 3.75 / 3.15 / 2.8 |
+| 27 | rage demon | `C_RageDemon_expmvt` / `_cbtmvt` | 1.4 / 3.62 / 4.66 | 1.4 / 3.62 / 2 / 2.87 |
+| 9 | black bear (8, 68 great bear: `C_GRETBEARa_*`) | `C_BEARa_expmvt` / `_cbtmvt` | 1.3 / 6 / 4.66 | 1.3 / 3.62 / 2 / 2.87 |
+| 37, 41 | rats | `c_RODENTa_expmvt` / `_cbtmvt` | 3 / 3.5 / 3.5 | all 3.5 |
+| 15 | human | `movement` / `combat_movement` | 1.54 / 6 / 4.66 | 1.54 / 3.62 / 2 / 3.62 |
+
+- The wolf's explore tree: `walkf` `c_dog.wkf.ani`, `walkb` `c_dog.wkb.ani`, `runf` `c_dog.rnf.ani`, and the leans `c_dog.rn_lnl` and `c_dog.rn_lnr`. Its combat tree has the six `c_dog.cwk*` walks, and `runf` `c_dog.crnf.ani`.
+- Every leaf of the rat's tree is `c_rat.run.ani`.
+- The non-humanoid trees have no `Transition` clips.
+
+**Weights:**
+- Explore, not strafing (0x00A6B7A0):
+  - Backward: `walkb` 1.
+  - Forward: `walkf` and `runf` get 1 − |lean|, and the leans get the lean.
+  - Run weight r (0x00A69B50) is 0 backward, 1 with the combat tree on, otherwise speed ÷ Game_RunSpeed above Game_WalkSpeed, else 0. `Walk` gets 1 − r and `Run` gets r.
+- Combat, strafing (0x00A6B9B0):
+  - The forward weight is w = (90 − the angle between facing and moving) ÷ 90.
+  - `walkf` or `walkb` gets w; the side's `walkfl`/`walkfr` or `walkbl`/`walkbr` gets 1 − w.
+- Combat, not strafing: r is 1, so `runf` plays.
+
+**Playback rate** (0x00A6AA70):
+- Explore:
+  - below Game_WalkSpeed: speed ÷ Anim_WalkSpeed;
+  - above Game_RunSpeed: speed ÷ Anim_RunSpeed;
+  - between: the two blended linearly.
+- Combat: speed ÷ Anim_CbtStrFSpeed when strafing, speed ÷ Anim_CbtSpeed otherwise.
+
+### GM_DEAD
+
+**The scripts set it; the engine never decides the party is dead.**
+- `player_core.nss` (343–408), on a party member's DEATH:
+  - if `IsPartyDead()`, it sets the death hint and calls `WR_SetGameMode(GM_DEAD)`;
+  - that queues SET_GAME_MODE (1021) to the module, and `module_core`:370 calls `SetGameMode`.
+- Areas with `AREA_GAME_MODE_OVERRIDE` may turn it into something else (the Landsmeet's "captured").
+- The only engine caller with a literal 2 is the script command `ShowDeathScreen(bCaptured)` (771, 0x00660D60). It sets the party's `CapturedOnDeath` and calls `SetGameMode(2)`; no script calls it.
+
+**The mode.**
+- `GM_DEAD` = 2, class `GameModeDead` (constructor 0x0076E0A0): enter 0x0076E0F0, leave 0x0076E2D0, update 0x0076E000.
+- Its slot 10 answers true, so it replaces the current mode rather than stacking on it.
+- It has none of Explore's click and camera handlers.
+
+**Enter, in order:**
+1. Telemetry.
+2. Saving is turned off (`SaveLoadProxy` +0x58 = 0, through the base enter, because the mode's +0x68 is 1).
+3. The scene camera's motion is stopped (0x006C2890(0, 1), as at a cutscene's start).
+4. The save list is rebuilt.
+5. GUI scene 0x13, `GUIDeath`, is shown at once: the `DeathScreen` movie (`deathscreen.gfx`), with `GUIDeath.DeathHint` from `SetDeathHint`. This also signals GUI_OPENED.
+6. The input group `GameModeDead` is turned on. Its one message is `PopGUIScreenMessage`, which closes the topmost full-screen GUI (inferred: Escape).
+
+No delay is in the engine; any reveal is the movie's own.
+
+**The movie's buttons:**
+- **Load last save** sends `SaveLoad.ResumeGame`.
+- **Load game** opens `SaveLoad` on top, and the game stays in GM_DEAD.
+- **Quit** sends `ShutDownToStartMenuMessage`.
+- **Captured** (`Party.CapturedOnDeath`): its OK sends `DeathResurrectPartyMessage`.
+  - The mode's handler (0x0076E400) queues EVENT_TYPE_DEATH_RES_PARTY (61) to the module.
+  - `module_core` resurrects the party, then sets GM_EXPLORE half a second later.
+
+**Leave:** it hides scene 0x13, closes every full-screen GUI left open, and turns the input group off.
+
+**The world is not paused.**
+- No `SetPaused`.
+- `CCCreature::Update` asks the mode (slot +0x4C) only before perception, and Dead answers false (0x006BE79E). So perception stops, but commands, regeneration (the living only) and the rest of the update go on.
+- Effects keep ageing: no mode check was found (inferred).
+- Script timers run.
+- The sound category `audio_categories/ducking/OnDeath` plays while in the mode (0x005BD220).

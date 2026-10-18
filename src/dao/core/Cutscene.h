@@ -152,4 +152,8 @@ struct Cutscene
 // Returns a cutscene file's cutscene, or nothing for a file that is not one.
 std::optional<Cutscene> CutsceneOf(const gff4::File &file);
 
+// Returns the cutscene a CUT struct holds: a cutscene file's top struct, or
+// one a conversation's line holds in its own file (ConversationFile::Cutscene).
+Cutscene CutsceneOf(const gff4::Struct &root);
+
 } // namespace dao::core::cutscene

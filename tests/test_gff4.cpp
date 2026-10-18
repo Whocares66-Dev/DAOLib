@@ -2,11 +2,15 @@
 #include "dao/core/Gff4.h"
 #include "gff4_builder.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -22,7 +26,9 @@ namespace
 
 // A conversation file made by hand, as the game's are laid out
 // (tools/gff4.py --templates on one): a CONV top struct, NTRY and RPLY
-// lines in a generic list of references, a PLOT condition in place.
+// lines in a generic list of references, a PLOT condition in place, a
+// line's cutscene in a generic field by reference: a CUTR naming a .cut, or
+// a CUT held whole.
 
 struct FieldSpec
 {
@@ -33,6 +39,8 @@ struct FieldSpec
 };
 
 constexpr std::uint16_t kPlotTemplate = 3;
+constexpr std::uint16_t kCutReferenceTemplate = 4;
+constexpr std::uint16_t kCutTemplate = 5;
 
 const std::vector<FieldSpec> kLineFields = {
     {12201, 17, 0, 0x00},                        // text
@@ -42,6 +50,20 @@ const std::vector<FieldSpec> kLineFields = {
     {12208, kPlotTemplate, gff4::kStruct, 0x24}, // condition, in place
     {12400, 4, gff4::kList, 0x54},               // children
     {12215, 0, 0, 0x62},                         // fast path
+    {12206, 5, 0, 0x18},                         // visibility
+    {12207, 0, 0, 0x1C},                         // ambient
+    {12214, 0, 0, 0x1D},                         // skip
+    {12216, 0, 0, 0x1E},                         // no voice-over in the game
+    {12217, 0, 0, 0x1F},                         // revert the animation
+    {12213, 4, 0, 0x20},                         // animation
+    {12211, 0xFFFF, gff4::kReference, 0x58},     // cutscene, generic
+};
+
+enum class Cut
+{
+    None,
+    Named,
+    Held,
 };
 
 struct LineSpec
@@ -56,7 +78,68 @@ struct LineSpec
     std::int32_t parameter;
     std::vector<std::uint32_t> children;
     bool fastPath;
+    std::int32_t visibility = 0;
+    bool ambient = false;
+    bool skip = false;
+    bool noVo = false;
+    bool revert = false;
+    std::uint32_t animation = 0xFFFFFFFF;
+    Cut cut = Cut::None;
 };
+
+// A line's cutscene, appended to the data: a CUTR naming a .cut, or a CUT
+// held whole, with the generic field's element pointed at it.
+void WriteCut(Builder &b, std::size_t at, Cut kind)
+{
+    b.U32(at + 0x58, 0xFFFFFFFF);
+    b.U32(at + 0x5C, 0xFFFFFFFF);
+    if (kind == Cut::None)
+    {
+        return;
+    }
+    const std::uint16_t shape = kind == Cut::Named ? kCutReferenceTemplate : kCutTemplate;
+    const std::size_t cut = b.bytes.size();
+    if (kind == Cut::Named)
+    {
+        b.U32(cut, 0);
+        b.U32(cut, b.String(u"390762"));
+    }
+    else
+    {
+        const float runTime = 8.5F;
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &runTime, 4);
+        b.U32(cut, bits);
+        b.U32(cut + 4, 0);
+        b.U32(cut + 4, b.String(u"gen00cs_cutscene_end"));
+    }
+    b.U32(at + 0x58, shape | (std::uint32_t{gff4::kStruct} << 16));
+    b.U32(at + 0x5C, static_cast<std::uint32_t>(cut - b.data));
+}
+
+// A line's fields, in its struct at `at`.
+void WriteLine(Builder &b, std::size_t at, const LineSpec &l)
+{
+    b.U32(at, l.text);
+    b.U32(at + 4, 0);
+    b.U32(at + 0x08, b.String(l.speaker));
+    b.U32(at + 0x0C, b.String(l.listener));
+    b.U32(at + 0x14, static_cast<std::uint32_t>(l.icon));
+    b.U32(at + 0x24, b.String(l.script));
+    b.U32(at + 0x28, static_cast<std::uint32_t>(l.parameter));
+    b.U32(at + 0x2C, b.String(l.plot));
+    b.U32(at + 0x30, static_cast<std::uint32_t>(l.flag));
+    b.U8(at + 0x34, 0xFF);
+    b.U32(at + 0x54, b.Numbers(l.children));
+    b.U8(at + 0x62, l.fastPath ? 1 : 0);
+    b.U32(at + 0x18, static_cast<std::uint32_t>(l.visibility));
+    b.U8(at + 0x1C, l.ambient ? 0xFF : 0);
+    b.U8(at + 0x1D, l.skip ? 0xFF : 0);
+    b.U8(at + 0x1E, l.noVo ? 0xFF : 0);
+    b.U8(at + 0x1F, l.revert ? 0xFF : 0);
+    b.U32(at + 0x20, l.animation);
+    WriteCut(b, at, l.cut);
+}
 
 std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, const std::vector<bool> &replies)
 {
@@ -67,9 +150,11 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
         kLineFields,
         kLineFields,
         {{12303, 14, 0, 0x00}, {12304, 5, 0, 0x04}, {12300, 14, 0, 0x08}, {12301, 5, 0, 0x0C}, {12302, 0, 0, 0x10}},
+        {{12210, 14, 0, 0x00}},
+        {{5000, 8, 0, 0x00}, {5001, 14, 0, 0x04}},
     };
-    const char *labels[] = {"CONV", "NTRY", "RPLY", "PLOT"};
-    const std::uint32_t sizes[] = {0x20, 0x68, 0x68, 0x14};
+    const char *labels[] = {"CONV", "NTRY", "RPLY", "PLOT", "CUTR", "CUT "};
+    const std::uint32_t sizes[] = {0x20, 0x68, 0x68, 0x14, 0x04, 0x08};
     b.U32(20, static_cast<std::uint32_t>(templates.size()));
     std::size_t fields = 28 + (16 * templates.size());
     for (std::size_t i = 0; i < templates.size(); ++i)
@@ -96,20 +181,7 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
     b.U8(first + (0x68 * lines.size()) - 1, 0);
     for (std::size_t i = 0; i < lines.size(); ++i)
     {
-        const LineSpec &l = lines[i];
-        const std::size_t at = first + (0x68 * i);
-        b.U32(at, l.text);
-        b.U32(at + 4, 0);
-        b.U32(at + 0x08, b.String(l.speaker));
-        b.U32(at + 0x0C, b.String(l.listener));
-        b.U32(at + 0x14, static_cast<std::uint32_t>(l.icon));
-        b.U32(at + 0x24, b.String(l.script));
-        b.U32(at + 0x28, static_cast<std::uint32_t>(l.parameter));
-        b.U32(at + 0x2C, b.String(l.plot));
-        b.U32(at + 0x30, static_cast<std::uint32_t>(l.flag));
-        b.U8(at + 0x34, 0xFF);
-        b.U32(at + 0x54, b.Numbers(l.children));
-        b.U8(at + 0x62, l.fastPath ? 1 : 0);
+        WriteLine(b, first + (0x68 * i), lines[i]);
     }
     // The generic list: a count, then per line its template (flagged a
     // struct) and its offset.
@@ -131,8 +203,40 @@ std::vector<std::byte> TwoLines()
 {
     return MakeConversation(
         {
-            {1234, u"OWNER", u"PLAYER", 0, u"C8BD51CF", 7, u"", 0, {1}, false},
-            {5678, u"PLAYER", u"OWNER", 2, u"", -1, u"gen_cond", 3, {}, true},
+            {1234,
+             u"OWNER",
+             u"PLAYER",
+             0,
+             u"C8BD51CF",
+             7,
+             u"",
+             0,
+             {1},
+             false,
+             2,
+             true,
+             false,
+             true,
+             false,
+             820,
+             Cut::Named},
+            {5678,
+             u"PLAYER",
+             u"OWNER",
+             2,
+             u"",
+             -1,
+             u"gen_cond",
+             3,
+             {},
+             true,
+             1,
+             false,
+             true,
+             false,
+             true,
+             0xFFFFFFFF,
+             Cut::Held},
         },
         {false, true});
 }
@@ -160,6 +264,15 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK_FALSE(npc->condition.Empty());
     CHECK(npc->children == std::vector<std::uint32_t>{1});
     CHECK_FALSE(npc->fastPath);
+    CHECK(npc->visibility == 2);
+    CHECK(npc->ambient);
+    CHECK_FALSE(npc->skip);
+    CHECK(npc->noVoInGame);
+    CHECK_FALSE(npc->revertAnimation);
+    CHECK(npc->animation == 820);
+    CHECK(npc->cutscene == L"390762");
+    CHECK_FALSE(npc->cutsceneInLine);
+    CHECK_FALSE(conversation->LineCutscene(0));
 
     const auto reply = conversation->Line(1);
     REQUIRE(reply);
@@ -170,10 +283,125 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(reply->condition.parameter == 3);
     CHECK(reply->children.empty());
     CHECK(reply->fastPath);
+    CHECK(reply->visibility == 1);
+    CHECK_FALSE(reply->ambient);
+    CHECK(reply->skip);
+    CHECK_FALSE(reply->noVoInGame);
+    CHECK(reply->revertAnimation);
+    CHECK(reply->animation == 0xFFFFFFFF);
+    CHECK(reply->cutscene.empty());
+    CHECK(reply->cutsceneInLine);
+    const auto held = conversation->LineCutscene(1);
+    REQUIRE(held);
+    CHECK(held->runTime == 8.5F);
+    CHECK(held->endScript == L"gen00cs_cutscene_end");
+    CHECK_FALSE(conversation->LineCutscene(2));
     // The action field is not in this file: an empty check, not a failure.
     CHECK(reply->action.Empty());
 
     CHECK_FALSE(conversation->Line(2));
+}
+
+namespace
+{
+
+std::vector<std::byte> FromDisk(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    std::vector<std::byte> out(chars.size());
+    std::memcpy(out.data(), chars.data(), chars.size());
+    return out;
+}
+
+// What the game's conversations' lines are, counted over a folder of them.
+struct LineCounts
+{
+    std::size_t files = 0;
+    std::size_t lines = 0;
+    std::size_t ambient = 0;
+    std::size_t skip = 0;
+    std::size_t fastPath = 0;
+    std::size_t noVo = 0;
+    std::size_t revert = 0;
+    std::size_t icon = 0;
+    std::size_t visibility = 0;
+    std::size_t animation = 0;
+    std::size_t named = 0;
+    std::size_t held = 0;
+};
+
+void Count(const ConversationFile &conversation, LineCounts &counts)
+{
+    for (std::uint32_t i = 0; i < conversation.LineCount(); ++i)
+    {
+        const auto line = conversation.Line(i);
+        REQUIRE(line);
+        ++counts.lines;
+        counts.ambient += line->ambient ? 1 : 0;
+        counts.skip += line->skip ? 1 : 0;
+        counts.fastPath += line->fastPath ? 1 : 0;
+        counts.noVo += line->noVoInGame ? 1 : 0;
+        counts.revert += line->revertAnimation ? 1 : 0;
+        counts.icon += line->icon != 0 ? 1 : 0;
+        counts.visibility += line->visibility != 0 ? 1 : 0;
+        counts.animation += line->animation != 0xFFFFFFFF ? 1 : 0;
+        counts.named += line->cutscene.empty() ? 0 : 1;
+        counts.held += line->cutsceneInLine ? 1 : 0;
+    }
+}
+
+} // namespace
+
+TEST_CASE("the game's conversations in game/conversations, when there, each line read with its switches",
+          "[conversation][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "conversations";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/conversations (ghilana's extract of *.dlg writes them there)");
+    }
+    LineCounts counts;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        const auto bytes = FromDisk(entry.path());
+        const auto conversation = ConversationFile::Parse(bytes);
+        REQUIRE(conversation);
+        ++counts.files;
+        Count(*conversation, counts);
+        if (entry.path().filename() == "bhm600_mouse_new.dlg")
+        {
+            // Mouse's barks in the Fade: lines 27 to 31, two of them starts.
+            for (std::uint32_t i = 26; i <= 32; ++i)
+            {
+                CHECK(conversation->Line(i)->ambient == (i >= 27 && i <= 31));
+            }
+        }
+        if (entry.path().filename() == "alistair_main.dlg")
+        {
+            // Reading all 32,288 held cutscenes takes a debug build a minute and a half; one will do.
+            CHECK(conversation->Line(3)->cutscene == L"311426");
+            const auto held = conversation->LineCutscene(1);
+            REQUIRE(held);
+            CHECK(held->runTime == Catch::Approx(8.0952F));
+            CHECK(held->blendTree == L"alistair_main.dlb");
+            CHECK(held->stage == L"3p_200_alistair.stg");
+            CHECK_FALSE(held->actors.empty());
+        }
+    }
+    // 2026-10-18: the 1,721 ghilana writes, as tools/gff4.py counts them (DAOLib #174).
+    CHECK(counts.files == 1721);
+    CHECK(counts.lines == 123686);
+    CHECK(counts.ambient == 33764);
+    CHECK(counts.skip == 388);
+    CHECK(counts.fastPath == 2287);
+    CHECK(counts.noVo == 1629);
+    CHECK(counts.revert == 279);
+    CHECK(counts.icon == 1395);
+    CHECK(counts.visibility == 4000);
+    CHECK(counts.animation == 350);
+    CHECK(counts.named == 2766);
+    CHECK(counts.held == 32288);
 }
 
 TEST_CASE("a file that is not a conversation is refused, and a broken one reads as nothing")

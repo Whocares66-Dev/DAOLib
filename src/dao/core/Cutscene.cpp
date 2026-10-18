@@ -240,6 +240,30 @@ Actor ActorOf(const gff4::Struct &in)
 
 } // namespace
 
+Cutscene CutsceneOf(const gff4::Struct &root)
+{
+    Cutscene cutscene{
+        .area = root.String(kArea).value_or(L""),
+        .runTime = root.Get<float>(kRunTime).value_or(0.0F),
+        .endScript = root.String(kEndScript).value_or(L""),
+        .blendTree = root.String(kBlendTree).value_or(L""),
+        .fps = root.Get<std::uint32_t>(kFps).value_or(0),
+        .stage = root.String(kStage).value_or(L""),
+        .playUntilVoCompletes = root.Get<std::uint8_t>(kPlayUntilVoCompletes).value_or(0),
+        .areaRequired = root.Get<std::uint8_t>(kAreaRequired).value_or(0),
+        .henchmanTag = root.String(kHenchmanTag).value_or(L""),
+        .resources = root.Strings(kResources),
+        .actors = {},
+    };
+    const std::vector<gff4::Struct> actors = root.Structs(kActors);
+    cutscene.actors.reserve(actors.size());
+    for (const gff4::Struct &actor : actors)
+    {
+        cutscene.actors.push_back(ActorOf(actor));
+    }
+    return cutscene;
+}
+
 std::optional<Cutscene> CutsceneOf(const gff4::File &file)
 {
     const std::optional<gff4::Struct> root = file.Root();
@@ -247,26 +271,7 @@ std::optional<Cutscene> CutsceneOf(const gff4::File &file)
     {
         return std::nullopt;
     }
-    Cutscene cutscene{
-        .area = root->String(kArea).value_or(L""),
-        .runTime = root->Get<float>(kRunTime).value_or(0.0F),
-        .endScript = root->String(kEndScript).value_or(L""),
-        .blendTree = root->String(kBlendTree).value_or(L""),
-        .fps = root->Get<std::uint32_t>(kFps).value_or(0),
-        .stage = root->String(kStage).value_or(L""),
-        .playUntilVoCompletes = root->Get<std::uint8_t>(kPlayUntilVoCompletes).value_or(0),
-        .areaRequired = root->Get<std::uint8_t>(kAreaRequired).value_or(0),
-        .henchmanTag = root->String(kHenchmanTag).value_or(L""),
-        .resources = root->Strings(kResources),
-        .actors = {},
-    };
-    const std::vector<gff4::Struct> actors = root->Structs(kActors);
-    cutscene.actors.reserve(actors.size());
-    for (const gff4::Struct &actor : actors)
-    {
-        cutscene.actors.push_back(ActorOf(actor));
-    }
-    return cutscene;
+    return CutsceneOf(*root);
 }
 
 } // namespace dao::core::cutscene

@@ -33,25 +33,44 @@ std::optional<ConversationFile> ConversationFile::Parse(std::span<const std::byt
     return ConversationFile(std::move(*file));
 }
 
-std::vector<gff4::Struct> ConversationFile::Lines() const
+ConversationFile::ConversationFile(gff4::File file) : file_(std::move(file))
 {
+    // Line() walking the whole list for each line made reading a
+    // conversation of thousands of lines quadratic: a minute over the
+    // game's 1,721 in a debug build (2026-10-18).
     const auto root = file_.Root();
-    return root ? root->Structs(kLineList) : std::vector<gff4::Struct>();
+    if (!root)
+    {
+        return;
+    }
+    for (const gff4::Struct &line : root->Structs(kLineList))
+    {
+        lines_.emplace_back(line.Index(), line.Offset());
+    }
 }
 
 std::size_t ConversationFile::LineCount() const
 {
-    return Lines().size();
+    return lines_.size();
+}
+
+std::optional<gff4::Struct> ConversationFile::LineStruct(std::uint32_t index) const
+{
+    if (index >= lines_.size())
+    {
+        return std::nullopt;
+    }
+    return gff4::Struct(file_, lines_[index].first, lines_[index].second);
 }
 
 std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) const
 {
-    const auto lines = Lines();
-    if (index >= lines.size())
+    const auto found = LineStruct(index);
+    if (!found)
     {
         return std::nullopt;
     }
-    const gff4::Struct &line = lines[index];
+    const gff4::Struct &line = *found;
     ConversationLine out;
     out.index = index;
     if (line.Label() == "RPLY")
@@ -74,7 +93,29 @@ std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) cons
     out.children = line.Numbers(kLineChildren);
     out.fastPath = line.Get<std::uint8_t>(kLineFastPath).value_or(0) != 0;
     out.skip = line.Get<std::uint8_t>(kLineSkip).value_or(0) != 0;
+    out.visibility = line.Get<std::int32_t>(kLineVisibility).value_or(0);
+    out.ambient = line.Get<std::uint8_t>(kLineAmbient).value_or(0) != 0;
+    out.noVoInGame = line.Get<std::uint8_t>(kLineNoVoInGame).value_or(0) != 0;
+    out.revertAnimation = line.Get<std::uint8_t>(kLineRevertAnimation).value_or(0) != 0;
+    out.animation = line.Get<std::uint32_t>(kLineAnimation).value_or(0xFFFFFFFF);
+    // The generic field holds a CUTR, a cutscene by name, or a CUT, one of its own.
+    if (const auto cut = line.Child(kLineCut))
+    {
+        out.cutscene = cut->String(kLineCutResRef).value_or(L"");
+        out.cutsceneInLine = cut->Label() == "CUT";
+    }
     return out;
+}
+
+std::optional<cutscene::Cutscene> ConversationFile::LineCutscene(std::uint32_t index) const
+{
+    const auto line = LineStruct(index);
+    const auto cut = line ? line->Child(kLineCut) : std::nullopt;
+    if (!cut || cut->Label() != "CUT")
+    {
+        return std::nullopt;
+    }
+    return cutscene::CutsceneOf(*cut);
 }
 
 std::vector<std::uint32_t> ConversationFile::Starts() const

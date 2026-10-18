@@ -15,8 +15,27 @@
 // the first whose condition holds (0x007F1100). The engine reads the same
 // fields by the same labels (0x007F1A40 walks 12400 and tests each child's
 // template for "RPLY").
+//
+// A line's switches and what it plays, read 2026-10-18 over the 1,721
+// conversations ghilana writes out of the single-player campaign's copies
+// (123,686 lines, 63,133 NTRY and 60,553 RPLY; every line has every field;
+// DAOLib #174): ConversationLineAmbient (12207, U8) is 255 on 33,764 lines
+// in 1,279 files and 0 on the rest; Skip (12214, U8) 255 on 388; FastPath
+// (12215, U8) 1 on 2,287; NoVOIngame (12216, U8) 255 on 1,629; RevertAnim
+// (12217, U8) 255 on 279; Icon (12205, S32) other than 0 on 1,395;
+// Visibility (12206, S32) 1 on 1,213 and 2 on 2,787; Animation (12213, U32)
+// a row of the Animations table (anim_*.gda: 820 "Talk Sad", 824
+// "Headshake") on 350, 0xFFFFFFFF on the rest. ConversationLineCut (12211)
+// is a generic field by reference: empty on 88,632 lines, a CUTR on 2,766,
+// whose ConversationLineCutResRef (12210) names a .cut resource (1,505 of
+// them the line's string reference, "390762"; the rest that and a word,
+// "95427_give_amulet"), and on 32,288 a CUT, a whole cutscene held in the
+// line, of the .cut file's fields and templates (dao/core/Cutscene.h; run
+// times 0 to 23 seconds). bhm600_mouse_new.dlg's lines 27 to 31 are
+// ambient, two of them its starts.
 #pragma once
 
+#include "dao/core/Cutscene.h"
 #include "dao/core/Gff4.h"
 
 #include <cstddef>
@@ -24,6 +43,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace dao::core
@@ -59,11 +79,18 @@ struct ConversationLine
     std::wstring speaker;            // a tag, or OWNER or PLAYER
     std::wstring listener;           // the same
     std::int32_t icon = 0;           // the reply's icon: persuade, intimidate, ...
+    std::int32_t visibility = 0;     // 0, 1 or 2 as the file has it; what it changes is unread
     PlotCheck condition;             // offered only if this holds
     PlotCheck action;                // done when the line is spoken
     std::vector<std::uint32_t> children;
-    bool fastPath = false; // the engine offers a fast-path reply first (0x00690B70)
-    bool skip = false;
+    bool fastPath = false;        // the engine offers a fast-path reply first (0x00690B70)
+    bool skip = false;            // passed over when played (inferred from the name)
+    bool ambient = false;         // spoken in the world, as a bark, not in dialogue mode (inferred from the name)
+    bool noVoInGame = false;      // played without its voice-over in the game (inferred from the name)
+    bool revertAnimation = false; // the speaker's animation undone when the line ends (inferred from the name)
+    std::uint32_t animation = 0xFFFFFFFF; // a row of the Animations table played with the line; 0xFFFFFFFF for none
+    std::wstring cutscene;                // the cutscene (.cut) the line plays, by name; empty for none
+    bool cutsceneInLine = false;          // the line holds its own cutscene: ConversationFile::LineCutscene
 };
 
 class ConversationFile
@@ -78,6 +105,9 @@ class ConversationFile
     // The lines the conversation may open with, first to last.
     std::vector<std::uint32_t> Starts() const;
     std::wstring VoiceBank() const;
+    // Returns the cutscene a line holds in the file (ConversationLine::cutsceneInLine).
+    // @return the cutscene, or nothing for a line past the last, or one that holds none
+    std::optional<cutscene::Cutscene> LineCutscene(std::uint32_t index) const;
 
     // The field labels read, xoreos's names for them.
     static constexpr std::uint32_t kStartingList = 12000;
@@ -88,10 +118,17 @@ class ConversationFile
     static constexpr std::uint32_t kLineSpeaker = 12202;
     static constexpr std::uint32_t kLineListener = 12203;
     static constexpr std::uint32_t kLineIcon = 12205;
+    static constexpr std::uint32_t kLineVisibility = 12206;
+    static constexpr std::uint32_t kLineAmbient = 12207;
     static constexpr std::uint32_t kLineCondition = 12208;
     static constexpr std::uint32_t kLineAction = 12209;
+    static constexpr std::uint32_t kLineCutResRef = 12210;
+    static constexpr std::uint32_t kLineCut = 12211;
+    static constexpr std::uint32_t kLineAnimation = 12213;
     static constexpr std::uint32_t kLineSkip = 12214;
     static constexpr std::uint32_t kLineFastPath = 12215;
+    static constexpr std::uint32_t kLineNoVoInGame = 12216;
+    static constexpr std::uint32_t kLineRevertAnimation = 12217;
     static constexpr std::uint32_t kPlotGuid = 12300;
     static constexpr std::uint32_t kPlotFlag = 12301;
     static constexpr std::uint32_t kPlotTest = 12302;
@@ -100,12 +137,13 @@ class ConversationFile
     static constexpr std::uint32_t kLineChildren = 12400;
 
   private:
-    explicit ConversationFile(gff4::File file) : file_(std::move(file))
-    {
-    }
-    std::vector<gff4::Struct> Lines() const;
+    explicit ConversationFile(gff4::File file);
+    std::optional<gff4::Struct> LineStruct(std::uint32_t index) const;
 
     gff4::File file_;
+    // Each line's template and offset, found once: a Struct points at the
+    // file, which moves with this object, so the lines are made again from these.
+    std::vector<std::pair<std::size_t, std::size_t>> lines_;
 };
 
 } // namespace dao::core

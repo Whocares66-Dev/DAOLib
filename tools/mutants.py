@@ -625,8 +625,14 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "conversation-index-bounded: a line past the list gives nothing",
         CONVERSATION,
-        "if (index >= lines.size())",
-        "if (index > lines.size())",
+        "if (index >= lines_.size())",
+        "if (index > lines_.size())",
+    ),
+    Mutant(
+        "conversation-ambient-field: a line is ambient by its own field, not by skip's",
+        CONVERSATION,
+        "out.ambient = line.Get<std::uint8_t>(kLineAmbient)",
+        "out.ambient = line.Get<std::uint8_t>(kLineSkip)",
     ),
     Mutant(
         "talktable-version: a Huffman-coded V0.5 table is refused",
