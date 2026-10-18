@@ -28,6 +28,7 @@
 #include "ColourCurve.h"
 #include "Conjure.h"
 #include "Events.h"
+#include "Hold.h"
 #include "Hud.h"
 #include "Loading.h"
 #include "Movies.h"
@@ -230,7 +231,12 @@ std::atomic<std::uint32_t> g_impactEvents{0};
 
 char __fastcall AnimationEvent(void *creature, int edx, const std::uint32_t *event, char second)
 {
-    if (dao::TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(event)) == 1U)
+    const auto type = dao::TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(event));
+    if (type)
+    {
+        probe::OnAnimationEvent(creature, *type);
+    }
+    if (type == 1U)
     {
         const std::uint32_t n = ++g_impactEvents;
         if (n <= 3)
@@ -470,6 +476,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     probe::AttachColourCurveWatch();
     probe::AttachEventWatch();
     probe::AttachConjureWatch();
+    probe::AttachHoldWatch();
     probe::AttachMovieWatch();
     probe::AttachHudWatch();
     probe::AttachReadWatch();

@@ -72,7 +72,7 @@ struct Tables
                    {40, {I(40), S(L"S"), S(L"O"), S(L"c_ogre"), S(L""), F(0), S(L"")}}})},
         {6, Table({"ID", "Variation_Worksheet", "WearR", "WearL", "WieldR", "WieldL", "WeaponOffset"},
                   {{2, {I(2), I(30), I(5), I(10), I(14), I(15), F(0)}},
-                   {6, {I(6), I(39), I(5), I(10), I(14), I(15), F(0)}},
+                   {6, {I(6), I(39), I(0), I(8), I(0), I(16), F(0)}},
                    {10, {I(10), I(27), I(0), I(0), I(0), I(0), F(0.03)}},
                    {22, {I(22), I(26), I(0), I(0), I(0), I(0), F(0.05)}},
                    {24, {I(24), I(14), I(0), I(0), I(0), I(0), F(0)}},
@@ -101,9 +101,11 @@ struct Tables
                                                                        {1, {I(1), S(L"glv"), S(L"nud"), S(L"a")}},
                                                                        {2, {I(2), S(L"boo"), S(L"nud"), S(L"a")}}})},
         {91, Table({"ID", "AttachNode", "WeaponOffset"}, {{5, {I(5), S(L"Prop10"), I(1)}},
+                                                          {8, {I(8), S(L"Prop11"), I(1)}},
                                                           {10, {I(10), S(L"Prop07"), I(1)}},
                                                           {14, {I(14), S(L"Prop01"), I(0)}},
-                                                          {15, {I(15), S(L"Prop02"), I(0)}}})},
+                                                          {15, {I(15), S(L"Prop02"), I(0)}},
+                                                          {16, {I(16), S(L"Prop03"), I(0)}}})},
         {92, Table({"ID", "Gender"}, {{1, {I(1), S(L"m")}}, {2, {I(2), S(L"f")}}})},
     };
 
@@ -238,8 +240,8 @@ TEST_CASE("weapons hang sheathed and drawn from their base type's nodes, off the
     const auto &shield = armed->weapons[1];
     CHECK(shield.slot == character::Slot::Offhand);
     CHECK(shield.model == L"w_shd_kita");
-    CHECK(shield.sheathed == L"Prop07");
-    CHECK(shield.drawn == L"Prop02");
+    CHECK(shield.sheathed == L"Prop11"); // the kite shield's WearL 8, the mid right back
+    CHECK(shield.drawn == L"Prop03");    // its WieldL 16, the left forearm
     const auto bare = character::Resolve(Human(1, {{0, "sword"}}), Items(), tables.Of());
     REQUIRE(bare);
     CHECK(bare->weapons[0].offset == Approx(0.02)); // no chest counts as 0.02
@@ -344,6 +346,7 @@ TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent d
     CHECK(parts->weapons[0].model == L"w_lsw_ls03a");
     CHECK(parts->weapons[0].sheathed == L"Prop10");
     CHECK(parts->weapons[0].drawn == L"Prop01");
+    CHECK(parts->weapons[1].sheathed == L"Prop11");
     CHECK(parts->weapons[1].drawn == L"Prop03"); // a kite shield is drawn onto the left forearm
     CHECK(parts->head.neck == L"hm_hed_dcpa");
     CHECK(parts->head.hair);

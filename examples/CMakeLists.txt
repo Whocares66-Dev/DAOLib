@@ -46,6 +46,8 @@ dao_apply_warnings(example_journal)
 
 add_daolib_plugin(example_animation SOURCES animation/Animation.cpp)
 dao_apply_warnings(example_animation)
+add_daolib_plugin(example_hold SOURCES hold/Hold.cpp)
+dao_apply_warnings(example_hold)
 
 add_daolib_plugin(example_options SOURCES options/Options.cpp)
 dao_apply_warnings(example_options)

@@ -250,4 +250,116 @@ Ability OfAbility(ObjectId creature, std::int32_t ability)
                    .castEnd = end && *end > 1 ? LengthOf(creature, end) : std::nullopt};
 }
 
+// One object's animation held and sped, read 2026-10-17 in GOG's exe and
+// seen in play the same day (DAOLib #159, for DAOTurnBased's issue 119, an
+// ogre's grab held between turns; the probe's Hold.cpp).
+//
+// A graphics object (GraphicsStructures::Object) has its animation's speed
+// as a double at +0x2E8, 1 from its constructor; Animation::AnimationTask
+// (0x008154D0) multiplies each frame's time by it before it advances the
+// object's clips. Its setter is the object's slot 36 (0x0054F830), __thiscall
+// (double), `ret 8`. The engine's model over it keeps the same speed as a
+// float at +0xEC, and its pause (0x00A5D820, __thiscall (bool)) sets both to
+// 0 or 1. The model reaches the graphics object through its +0x18, then
+// +4, whose slot 19 (no arguments) answers it. An object's
+// interface at +0x70 gives its model from its slot 24 and pauses it from its
+// slot 19 (CCObject's 0x00695380); CCCreature's slot 19 (0x0069F590) also
+// pauses (0x006C9E60) or resumes (0x006CAB00) its controller at +0x768.
+// Called through the vtables, so no address is needed.
+//
+// Seen in play (turn-based-agent's runs, GOG, Witch Hunt, an ogre grabbing
+// Lyna): the paused ogre raised no animation event for 8 s and landed no
+// punch, its spent grab step (51, 2100 of 2100 ms) unmoved; the victim was
+// not paused with it, her model's own, until she was paused too, and both
+// resumed in one frame went on in step with no snap. A stun or a death on a
+// paused ogre started its command, whose step's time ran (37, 3707 ms;
+// 51, 5400 ms), and showed nothing until the resume. In the turn-based
+// mod's fights the same evening an ogre's grab, the pair paused at the end
+// of the ogre's turns and resumed at its next, ran its whole 12.1 s over
+// three turns; Stonefist on the paused ogre ended its grab command without
+// starting another (the knockdown did not take), so OnEnd, not OnStart, is
+// what let the pair go. SetRate seen in play by examples/hold (a 40 s
+// fight: 11 attacks slowed to 0.25 and back, 8 pauses each resumed, no
+// warning).
+namespace
+{
+
+constexpr std::size_t kInterface = 0x70;
+constexpr std::size_t kPauseSlot = 19;
+constexpr std::size_t kModelSlot = 24;
+constexpr std::size_t kModelRate = 0xEC;
+constexpr std::size_t kModelGraphics = 0x18;
+constexpr std::size_t kGraphicsOwner = 4;
+constexpr std::size_t kGraphicsSlot = 19;
+constexpr std::size_t kSetRateSlot = 36;
+
+void **VtableOf(void *self)
+{
+    return *static_cast<void ***>(self);
+}
+
+void *InterfaceOf(CCCreature *creature)
+{
+    return reinterpret_cast<char *>(creature) + kInterface;
+}
+
+std::uintptr_t ModelOf(CCCreature *creature)
+{
+    using Fn = void *(__fastcall *)(void *self, int edx);
+    void *self = InterfaceOf(creature);
+    return reinterpret_cast<std::uintptr_t>(reinterpret_cast<Fn>(VtableOf(self)[kModelSlot])(self, 0));
+}
+
+} // namespace
+
+bool Pause(ObjectId creature, bool paused)
+{
+    CCCreature *object = CreatureOf(creature);
+    if (object == nullptr)
+    {
+        return false;
+    }
+    using Fn = void(__fastcall *)(void *self, int edx, bool paused);
+    void *self = InterfaceOf(object);
+    reinterpret_cast<Fn>(VtableOf(self)[kPauseSlot])(self, 0, paused);
+    return true;
+}
+
+bool SetRate(ObjectId creature, float rate)
+{
+    CCCreature *object = CreatureOf(creature);
+    const std::uintptr_t model = object != nullptr ? ModelOf(object) : 0;
+    if (model == 0)
+    {
+        return false;
+    }
+    // As the model's pause does: the graphics object's speed by its setter,
+    // and the model's own copy.
+    const auto graphics = TryRead<std::uintptr_t>(model + kModelGraphics);
+    const auto owner = graphics && *graphics != 0 ? TryRead<std::uintptr_t>(*graphics + kGraphicsOwner) : std::nullopt;
+    if (owner && *owner != 0)
+    {
+        using GetFn = void *(__fastcall *)(void *self, int edx);
+        using SetFn = void(__fastcall *)(void *self, int edx, double rate);
+        void *from = reinterpret_cast<void *>(*owner);
+        if (void *target = reinterpret_cast<GetFn>(VtableOf(from)[kGraphicsSlot])(from, 0))
+        {
+            reinterpret_cast<SetFn>(VtableOf(target)[kSetRateSlot])(target, 0, rate);
+        }
+    }
+    *reinterpret_cast<float *>(model + kModelRate) = rate;
+    return true;
+}
+
+std::optional<float> Rate(ObjectId creature)
+{
+    CCCreature *object = CreatureOf(creature);
+    const std::uintptr_t model = object != nullptr ? ModelOf(object) : 0;
+    if (model == 0)
+    {
+        return std::nullopt;
+    }
+    return TryRead<float>(model + kModelRate);
+}
+
 } // namespace dao::animation

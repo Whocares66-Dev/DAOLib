@@ -102,4 +102,29 @@ struct Ability
 // spider's Overwhelm, has none here, though its script may still play something.
 Ability OfAbility(ObjectId creature, std::int32_t ability);
 
+// Pauses or resumes one creature's animation, apart from the game's speed, by the engine's own
+// pause for it: its clips stand where they are and raise no events until it is resumed, and go on
+// from there.
+// @return false if the creature is not loaded
+//
+// Call it on the game thread. It holds the animation alone: commands, effects and damage go on,
+// and a command started while paused (a stun, a death) runs its steps' time but shows nothing
+// until the resume, so resume a creature when its command ends or it starts another
+// (dao/CommandEvents.h, OnEnd and OnStart): a blow can end a command without starting one. Two
+// creatures in a synced animation, a grabber and the one it holds, are each their
+// own and are paused and resumed together.
+bool Pause(ObjectId creature, bool paused);
+
+// Sets the speed of one creature's animation, 1 for normal and 0 for paused; a low speed such as
+// 0.1 keeps it moving slowly.
+// @return false if the creature is not loaded
+//
+// Call it on the game thread. Unlike Pause it leaves the creature's movement alone, and a clip
+// still raises its events when its time comes.
+bool SetRate(ObjectId creature, float rate);
+
+// Returns the speed of one creature's animation, as Pause and SetRate leave it.
+// @return nullopt if the creature is not loaded
+std::optional<float> Rate(ObjectId creature);
+
 } // namespace dao::animation
