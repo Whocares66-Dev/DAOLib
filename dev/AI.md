@@ -19,3 +19,14 @@ What does not read the bit, from the source:
 - **A creature's own script** that handles an event before passing it to `rules_core`.
 
 Two things that are not this switch. `AI_LIGHT_ACTIVE` selects `AI_DetermineCombatRound_Light` (`ai_main_h_2.nss`:403, 767), a cheaper AI that still picks a target and attacks; the off bit is tested before it. `SetAILevel` (command 222) writes `CCObject` +0x2B4 and `GetAILevel` reads +0x2B0, and what the engine does with the level has not been read; the scripts set it only around resurrection (`rules_core.nss`:1197, `effect_resurrection_h.nss`:40) and in one plot script.
+
+## The ambient behaviour's heartbeat (read 2026-10-17)
+
+`EVENT_TYPE_AMBIENT_CONTINUE` (1026) is the engine's, read by lib-agent-2 for DAOParagonEngine. `CCCreature::Update` raises it, the event made at `0x006be68e`:
+
+- for every creature that is not a follower whose `AMBIENT_SYSTEM_STATE` has 0x01 and not 0x40;
+- while a party exists;
+- every 3,000 ms of the creature's own accumulator (+0xC84);
+- when a party member is within 50 m across the ground (`0x00630120`: the party's members in order, the distance squared in x and y under 2,500).
+
+It runs the creature's script at once (`RunEventScript`), with the creature as creator and target and that party member as object 0. At the end of a conversation or a staged scene (`0x007f2800` → `0x007f26f0`) it is delivered at once with the creature itself as object 0; a creature without ENABLED is put back on pause instead. The engine never reads ALWAYSON (0x10): only the script does, to skip its combat and 30 s timer checks. Whether the creature's command queue is empty is the script's check, not the engine's.
