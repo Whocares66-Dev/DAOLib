@@ -29,6 +29,15 @@ Several commands can lead to one function (IntToString and IntToChar share
 one); it is named after the first and the CSV lists all. A function reached
 two ways keeps the first way's name, in the order above.
 
+These names are guesses, and the address library's table
+(extern/DAOAddressLibrary/data/addresses.csv) is the authority on names: a
+function whose GOG address has a named row there takes that name in the
+`name` column of either CSV, and the guess stands only where the table has
+none (#180). So a CSV regenerated after the library has named a function
+says what the library says, and tools/names.py's `--give` proposes no guess
+over it. The `ghidra_name` column is the name Ghidra's function list
+(game/ghidra/functions.tsv) has for the function, whatever the source.
+
 Writes dev/object_lookups.csv and dev/script_backends.csv; tools/names.py
 names them in Ghidra. Needs game/DAOrigins.exe and Ghidra's function list,
 game/ghidra/functions.tsv (dev/PROBE.md says how to export it).
@@ -330,6 +339,25 @@ def analyse():
     return functions, lookups, backends
 
 
+def library_names():
+    """{GOG address: name} for the address library's named rows; an address
+    two IDs share with two names is left out, the library's to settle."""
+    _, db = address_ids.database()
+    key = address_ids.listing(db)
+    out = {}
+    for va, ids in db.by_address(key).items():
+        names = {db.rows[i].name for i in ids if db.rows[i].name}
+        if len(names) == 1:
+            out[va] = names.pop()
+    return out
+
+
+def chosen_name(va, library, guess):
+    """The library's name for the function at va if it has one, else the
+    guess (empty for a candidate this tool leaves unnamed)."""
+    return library.get(va) or guess
+
+
 def backend_name(how, cls, ghidra, first):
     """Ghidra's class namespace when class recovery gave one, else the
     lookup's class for a virtual call, else ScriptBackend."""
@@ -343,6 +371,7 @@ def backend_name(how, cls, ghidra, first):
 
 def main(argv):
     functions, lookups, backends = analyse()
+    library = library_names()
     lookup_rows = []
     for fn, (cls, slot) in sorted(lookups.items()):
         # CCCreature -> Creature, CProjectile -> Projectile, CGameObject -> GameObject.
@@ -350,7 +379,7 @@ def main(argv):
         lookup_rows.append(
             (
                 f"{fn:#010x}",
-                f"CClientExoApp::Get{noun}ById",
+                chosen_name(fn, library, f"CClientExoApp::Get{noun}ById"),
                 cls,
                 f"{slot:#x}" if slot is not None else "",
             )
@@ -358,7 +387,8 @@ def main(argv):
     backend_rows = []
     for fn, (how, cls, cmds, named) in sorted(backends.items()):
         _, ghidra = functions.containing(fn)
-        name = backend_name(how, cls, ghidra, cmds[0]) if named else ""
+        guess = backend_name(how, cls, ghidra, cmds[0]) if named else ""
+        name = chosen_name(fn, library, guess)
         backend_rows.append((f"{fn:#010x}", name, how, cls, ghidra, " | ".join(cmds)))
     if "--print" in argv:
         for row in lookup_rows:

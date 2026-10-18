@@ -36,6 +36,11 @@ earlier winning an address two of them name:
   a script command does its work with, as <Class>::ForScript_<Command>,
   ScriptBackend where no class is known. Only the rows it names.
 
+Those two of script_backends.py's write the table's own name where it has
+one and their guess only where it has none (#180), so `--give` finds the
+table's name already there and proposes a guess only for what it has not
+named.
+
 `--give` never changes a name the table has: run it after one of those
 tables has grown. It writes the names into this checkout's copy of the
 table and prints a line for each; the table has its own keeper (CLAUDE.md),

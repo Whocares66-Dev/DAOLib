@@ -11,7 +11,12 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from script_backends import as_slot, method_calls, sole_callee  # noqa: E402
+from script_backends import (  # noqa: E402
+    as_slot,
+    chosen_name,
+    method_calls,
+    sole_callee,
+)
 
 LOOKUP = 0x005D58C0
 
@@ -131,6 +136,30 @@ class SoleCallee(unittest.TestCase):
     def test_repeated_calls_to_one_function_are_one(self):
         callers = collections.Counter({0x111: 1})
         self.assertEqual(sole_callee([0x111, 0x111], set(), callers), 0x111)
+
+
+class ChosenName(unittest.TestCase):
+    LIBRARY = {0x006C1400: "CCCreature::SetAppearance"}
+
+    def test_the_librarys_name_wins_over_the_guess(self):
+        self.assertEqual(
+            chosen_name(
+                0x006C1400, self.LIBRARY, "CCCreature::ForScript_SetItemHeraldry"
+            ),
+            "CCCreature::SetAppearance",
+        )
+
+    def test_the_guess_stands_where_the_library_has_no_name(self):
+        self.assertEqual(
+            chosen_name(0x006B6120, self.LIBRARY, "CCCreature::ForScript_SetClassRank"),
+            "CCCreature::ForScript_SetClassRank",
+        )
+
+    def test_an_unnamed_candidate_takes_the_librarys_name_or_stays_unnamed(self):
+        self.assertEqual(
+            chosen_name(0x006C1400, self.LIBRARY, ""), "CCCreature::SetAppearance"
+        )
+        self.assertEqual(chosen_name(0x006B7690, self.LIBRARY, ""), "")
 
 
 if __name__ == "__main__":
