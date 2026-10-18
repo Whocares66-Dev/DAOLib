@@ -8,14 +8,14 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 
 ### When
 
-- `CCCreature::Update` calls the perception update `0x006B89B0` (`__thiscall`, the perceiver) when the creature's +0xBD4 is 0 and the manager at `*(client app+0x114)+0x74` answers true through its slot 0x4C. Read; what that slot paces (every frame or a throttle) is not read.
+- `CCCreature::Update` calls the perception update `0x006B89B0` (`__thiscall`, the perceiver) when the creature's +0xBD4 is 0 and the manager at `*(client app+0x114)+0x74` answers true through its slot 0x4C. Read; what that slot paces: "The perception range and its pace" below.
 - The update does nothing for a creature whose slot 0x1D0 answers non-zero (inferred: dead), or which has no area or no area+0x41C.
 - A countdown at +0xC38 is lowered by the frame's milliseconds (`[+0x2B8]+8`); at or below 0 the byte +0xC3C is set ("a fresh look"). `0x006A3690` sets the countdown again when a hostile is noticed (a value from `0x00A2CD70(0xB, 1.51)`, read as a game rule, inferred), and the update sets it to 0 when nothing changed. Read.
 - In order, each update: (1) raises APPEAR for each id in a pending list at +0xC28 (`0x006AFCF0(other, 1, 0)`), then empties it; (2) checks every id in the perceived set and raises DISAPPEAR for each lost one; (3) unless slot 0x1D0 answers, looks for newcomers (`0x006B8540`). Read. What fills the pending list is not read; the APPEAR it raises has int 2 = 1, which rules_core reads as "already perceived but hostility changed" (inferred: the hostility changes).
 
 ### Range, line of sight
 
-- Newcomers (`0x006B8540`): the area's spatial query (`0x00686F70` on area+0x278) with a sphere about the perceiver's position (+0x120) of the perceiver's perception range, the float at +0x68 of the attribute at +0x7C4 (read; where that value comes from, the .utc's PerceptionClass or a table, not read). For the party's controlled creature (the id at +0x1E8 of `0x005D57C0()`'s object) with the party's range at party+0x42C above 0, the query uses that party range and a creature counts as in range when its 3D distance squared is within the creature's own range squared. Read.
+- Newcomers (`0x006B8540`): the area's spatial query (`0x00686F70` on area+0x278) with a sphere about the perceiver's position (+0x120) of the perceiver's perception range, the float at +0x68 of the attribute at +0x7C4 (read; where it comes from: "The perception range and its pace" below). For the party's controlled creature (the id at +0x1E8 of `0x005D57C0()`'s object) with the party's range at party+0x42C above 0, the query uses that party range and a creature counts as in range when its 3D distance squared is within the creature's own range squared. Read.
 - Line of sight, for hostile candidates only: if the two stand in different rooms (+0x150) that `0x00687EC0` does not connect, or `CCArea::LineOfSight` from eye to eye (each position with z + 1.8) fails, the candidate is not seen. Read. Non-hostile candidates in range are perceived with no line-of-sight check. Read.
 - Staying perceived (`0x006A8D60`, called with its second argument 1): lost when the other is gone, in another area (+0x254 differs), fails `0x00A285D0` on its +0x41C, answers its slot 0x1D0 (dead, inferred), or its +0x70 interface's slot 0x6C is not 1 (inactive or hidden, inferred); or when the perceiver answers slot 0x1D0; or when the distance (`0x0067A000` between the positions, 3D inferred) is 60.0 m or more. With argument 1 the range is a fixed 60 m and no line of sight is tested, so a creature once perceived stays perceived out to 60 m whatever the perception range (read). A flag from `0x006A44D0` (inferred: stealth) also ends it, and the update then calls `0x006A3690(id, 1)`.
 
@@ -32,6 +32,16 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - DISAPPEAR (in `0x006B89B0`): type 26; target field the lost one; object 0 the lost one; flag 0 hostile; queued to the perceiver the same way. Read.
 - Neither is raised when the gate `0x00698490(type)` answers false (it looks the type up with `0x005FE960`, as the module's load does before queuing MODULE_LOAD; inferred: a disabled or already-pending event type), nor, unless `0x006A2CE0()` answers true, when either creature's +0xBD4 is 1. Read.
 - The set changes in the same update as the event is queued: the insert just before APPEAR, the erase (and the melee rings' `0x007CBC50`) just after DISAPPEAR, so a script handling the event already sees the new list. Read.
+
+### The perception range and its pace
+
+Read 2026-10-18 in the GOG exe and the game's files (ghilana) by lib-agent-2 (a subagent), answering what the section above left open.
+
+- The range is the creature's `PerceptionClass` row of `ranges.gda` (table 134), column `PrimaryRange`, in metres. The creature's load (`0x0071F5CC`–`0x0071F60D`, in the object at creature+0x7C4) reads the template's or save's byte `PerceptionClass` into +0x64, then `GdaTables` table 0x86 (134), row = that class, column `PrimaryRange` (hash `0x45BD822C`) into the float +0x68. Read. Nothing else writes it: no script command sets a perception range or class (`dev/script_commands.csv` has only `TriggerPerception` 166 and `ClearPerceptionList` 446), and the other readers of `PrimaryRange` are weapon and spell ranges. Read.
+- `ranges.gda`'s perception rows (RangeType 1): 8 `PercepRngShrt` 10 m, 9 `PercepRngMed` 30 m, 10 `PercepRngLng` 40 m, 11 `PercepRngDefault` 30 m, 12 `PercepRngPlayer` 35 m, 13 `PercepRngMonster` 30 m, 14 `PercepRngCrowd` 5 m, 15 `PercepRngLargeCreature` 40 m. `SecondaryRange` (10 to 30) is not read for perception here.
+- The usual value: of the 2,486 `.utc` the game takes (ghilana; 112 in enciphered add-ins not searched), 2,266 have `PerceptionClass` 9, so 30 m; 81 have 10 (40 m), 66 have 8 (10 m), 38 have 14 (5 m, crowds), 21 have 12 (35 m, the player's and the default heroes', `default_hm_noble` among them), 6 have 11, 5 have 15, 2 have 13. So a humanoid NPC sees 30 m, the player 35 m.
+- The pace: the manager `CCCreature::Update` asks is the current game mode. `*(client app+0x114)` is the game mode controller (`dao/GameModes.h`) and its +0x74 is the current mode's object, set from the modes table at +0x58 when the mode changes (`0x00641E7B`; +0x78 is the mode's number). Its slot 0x4C answers true (`0x004137C0`, `mov al, 1`) only for `GameModeExplore` and `GameModeCombat`; every other mode (dialog, cutscene, GUI, loading, dead, chargen, movie, party picker, fly cam, fixed, pregame) answers false (`0x005C5E80`). Read.
+- So the perception update runs on every creature update while the game is in explore or combat mode, and not at all in a conversation, a cutscene or a menu. Nothing in the call throttles it; how often `CCCreature::Update` itself runs (each frame for each creature, inferred) is the only pace. Read for the gate; the per-frame cadence is inferred.
 
 ## The attack command
 
@@ -151,4 +161,62 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" 
   - sends `EVENT_TYPE_DAMAGED` itself with `SendEventOnDamaged` (`events_h`: float 0 damage, int 0 damage type, int 1 ability, creator the attacker, through `SignalEvent`).
   Read in the scripts.
 - Death at 0 health is decided by the same script: when the hit is fatal and the target isn't plot or immortal, `KillCreature` (`effect_death_h`) builds `EffectDeath()` (type 7; int 0 force, int 1 the damage, creator the killer) and applies it with `EFFECT_DURATION_TYPE_DEATH`, or handles it inline.
-- Type 7 is one of the engine's native types, so the engine's handler takes it (not read). The script side, `Effects_HandleApplyEffectDeath`, sends `EVENT_TYPE_DEATH` with `SendEventOnDeath(target, killer)`. Read in the scripts; how the native type-7 handler and the script handler share the work is not read.
+- Type 7 is one of the engine's native types, so the engine's handler takes it (not read). The script side, `Effects_HandleApplyEffectDeath`, sends `EVENT_TYPE_DEATH` with `SendEventOnDeath(target, killer)`. Read in the scripts; how the native type-7 handler and the script handler share the work: "The death effect (type 7)" below.
+
+### The death effect (type 7)
+
+Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2 (a subagent), for paragon-agent-2. "Read" means seen in the code; "inferred" is marked.
+
+**The native handler tables.** `0x007a1840` (the effects manager's setup; the manager is `*(client app+0x1AC)+0x68`) fills two tables of 12 entries: `[manager+0]` for applying and `[manager+4]` for removing, indexed by effect type. Read:
+
+| Type | Name (script.ldf) | Apply | Remove |
+|---|---|---|---|
+| 1 | | `0x00a21f90` (returns 0) | `0x007421d0` |
+| 2 | | `0x007a01a0` | `0x007a0200` |
+| 3 | | none | none |
+| 4 | `EFFECT_TYPE_VISUAL_EFFECT` | `0x007a00a0` | `0x007a0150` |
+| 5 | `AOE` | `0x007a0230` | `0x007a0520` |
+| 6 | `CAMERA_SHAKE` | `0x0079f300` | `0x007421d0` |
+| 7 | `DEATH` | `0x007a12e0` | `0x007a1410` |
+| 8 | `PARALYZE` | `0x007a05b0` | `0x007a05f0` |
+| 9 | `MOVEMENT_RATE` | `0x007a0610` | `0x007a0690` |
+| 10 | `ALPHA` | `0x007a06f0` | `0x0079fa30` |
+| 11 | `MOVEMENT_RATE_DEBUFF` | `0x007a0610` | `0x007a0690` |
+
+The apply path (`0x007a0e30`) takes the native handler only when the type is 1–11 and its entry isn't null, and the target's slot 0x6C allows it; every other effect, a type-3 one included, goes to `0x0079fe90`, which raises `EVENT_TYPE_APPLY_EFFECT` (33) on the target's script. Read.
+
+**The type-7 apply handler raises APPLY_EFFECT itself** (`0x007a12e0`, read):
+
+1. It sets the effect's duration type (+0x28) to 6 (`EFFECT_DURATION_TYPE_DEATH`) and +0x38 to 999.
+2. It sets +0x34 to `0x005ca740(effect int 0, effect int 1 == 0, 0)` (inferred: the death animation, from the force flag and whether a damage figure is recorded). When int 1 is 0, it sets int 3 to 1.
+3. It calls `0x0079fe90`: APPLY_EFFECT (33), run at once on the target's own script. For a creature, `creature_core` → `rules_core` → `Effects_HandleApplyEffect` → `Effects_HandleApplyEffectDeath`. That is how the scripts' death handler runs.
+4. If the script left the effect valid (+0x48 is 0), it removes effects by three matches (`ForScript_RemoveEffect` with matcher `0x00695400` and 5, then `0x00670a80` with matchers `0x00651810`/4 and `0x006953e0`/0, and a holder walk `0x0079f5d0` with `0x007a0c50`), then adds the death effect to the target's list (the holder's slot 0x1C). It returns 0. If invalid, it returns 1 and nothing is added.
+
+The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`), then the same removals, then walks the holder re-applying through `0x007a0e30` (inferred: effects held back while dead are put back on resurrection).
+
+**What the scripts do in APPLY_EFFECT** (`effect_death_h.nss`, read):
+- For a placeable: send DEATH (`SendEventOnDeath`), then `SetPlaceableHealth(0)`.
+- For a creature:
+  - nothing if it already has a death effect;
+  - for a ghost: DYING, a visual effect, then DEATH;
+  - otherwise: set `CREATURE_RULES_FLAG_DYING`, `Effects_RemoveAllEffects`, achievements and stats, mana and stamina to 0, the slayer's mana back, then `SendEventDying` (EVENT_TYPE_DYING, the scripts' 1023, object 0 the killer, by `SignalEvent`, so queued). It does not send DEATH for an ordinary creature.
+  - `creature_core`'s DYING gives the party XP and treasure and plays the dying sound.
+
+**Health and IsDead.** `IsDead` is the creature's slot 0x1D0 (`0x006a3660`): true when the creature has no stats object, or when its current health (slot 0x120) is 0 or less. There's no separate flag (read; the scripts say so too). `effect_damage_h` does not set health on a fatal blow; it calls `KillCreature`, "the health will be lowered when the target dies (applies the death effect)". So the health drop to 0 comes when the death effect is added to the list (inferred: through the effect's property change; not read).
+
+**DEATH (4) for an ordinary creature comes from the engine, after the death animation** (`0x007aac10`, a sub-action handler, read):
+- For an effect whose duration type is 6, it plays animation 3 (the death) on the creature (slot 0xB0, blended).
+- It waits on the sub-action's timer (`0x007a1ae0`). When that runs out, it builds a CScriptEvent of type 4 with creator the effect's creator (the killer) and runs it at once on the creature (`CCObject::RunEventScript`).
+- For a party member it then sets party state (`ForScript_SetPartyPlotFlag`, `0x00639db0`), sends a death telemetry record, and calls `0x0069edc0` unless `0x006a3a80` answers 2.
+- `creature_core`'s DEATH then clears DYING and the perception list, and so on.
+- How this sub-action is queued for the dying creature is not read.
+
+**The call before Prepare** in `ApplyEffectOnObject` (`0x0065ca20`), for type 7 on a creature: slot 0x168 (`0x006a3750`) answers true when the creature's +0x2C0 is set or its current command is type 38 (`COMMAND_TYPE_DEATHBLOW`). Slot 0x16C(0) (`0x006ad130`) then writes +0x2C0 = 0 and sets a creature property (index 7 of the +0x7C4 table) to 0.0, or to 1.0 for a non-zero argument. Read; what +0x2C0 is beyond "in a deathblow or synced state" is inferred.
+
+**So, for an ordinary creature killed in combat:**
+1. `effect_damage_h`: fatal → `KillCreature` → `ApplyEffectOnObject(EFFECT_DURATION_TYPE_DEATH, EffectDeath())`.
+2. The engine: clear the deathblow state (slots 0x168/0x16C), `Prepare`, type-7 handler.
+3. APPLY_EFFECT on the creature's script at once: DYING flag, effects removed, mana 0, DYING queued.
+4. The engine: effects removed, the death effect added; health goes to 0 (inferred).
+5. The death animation; at its end, DEATH (4) run at once on the creature, creator the killer.
+6. `creature_core` DEATH.
