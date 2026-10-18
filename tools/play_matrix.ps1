@@ -114,6 +114,18 @@ $pathKey = 'HKLM:\SOFTWARE\WOW6432Node\BioWare\Dragon Age'
 $documents = [Environment]::GetFolderPath('MyDocuments')
 $instances = Join-Path $env:LOCALAPPDATA 'DAOLib\instances'
 
+# The processes this script started, and the games it found of its rows (a start that hands off
+# is another process): the cleanup waits for these alone, since other agents' games run at the
+# same time (DAOLib #183).
+$script:Pids = [Collections.Generic.HashSet[int]]::new()
+
+function Wait-OwnGame {
+    $until = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $until -and @($script:Pids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }).Count -gt 0) {
+        Start-Sleep -Milliseconds 500
+    }
+}
+
 # Folders under build\matrix hold junctions into the game's installs. A recursive delete
 # follows a junction and empties what it points at, so each one goes first, as a link, and the
 # rest only once none is left.
@@ -125,7 +137,15 @@ function Clear-Stage {
     if (@(Get-ChildItem $stage -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue).Count -gt 0) {
         throw "A junction is still under $stage; delete it by hand before anything else"
     }
-    Remove-Item -Recurse -Force $stage
+    # The games' files let go within seconds of the process ending, so a refusal is tried again.
+    Wait-OwnGame
+    for ($try = 1; ; $try++) {
+        try { Remove-Item -Recurse -Force $stage -ErrorAction Stop; return }
+        catch {
+            if ($try -ge 10) { throw }
+            Start-Sleep -Seconds 2
+        }
+    }
 }
 
 function Get-Run([string] $Exe) {
@@ -242,7 +262,7 @@ function Open-Row($Row) {
     $Row.Began = Get-Date
     $env:DAOLIB_INSTANCE = $Row.Instance
     if ($Row.Steam) { $env:SteamAppId = $steamAppId; $env:SteamGameId = $steamAppId }
-    try { Start-Process -FilePath $Row.Exe -WorkingDirectory $Row.Folder }
+    try { [void] $script:Pids.Add((Start-Process -FilePath $Row.Exe -WorkingDirectory $Row.Folder -PassThru).Id) }
     finally { Remove-Item Env:DAOLIB_INSTANCE, Env:SteamAppId, Env:SteamGameId -ErrorAction SilentlyContinue }
 }
 
@@ -253,7 +273,9 @@ function Close-Row($Row) {
 
 # The run that stays: Steam's and EA's first may be a hand-off that exits.
 function Find-Run($Row) {
-    Get-Run $Row.Exe | Where-Object { ((Get-Date) - $_.CreationDate).TotalSeconds -ge 12 } | Select-Object -First 1
+    $found = Get-Run $Row.Exe | Where-Object { ((Get-Date) - $_.CreationDate).TotalSeconds -ge 12 } | Select-Object -First 1
+    if ($found) { [void] $script:Pids.Add([int] $found.ProcessId) }
+    return $found
 }
 
 # What is wrong with a row whose game has been up its time: none if it passes.
