@@ -45,6 +45,13 @@
 // 0.075 s give or take 0.025. 26 probes' irradiance is all 0 in the file
 // (brc201d's seven, orz703d's eleven, lak519d's one, and test levels':
 // combat2, rmtst01, rmtst03).
+//
+// A room's _lc.mmh (1,448 of them, beside its _ll.mmh) has the same shape and
+// LayoutOf reads it the same way: a "GOB" with point lights (3,766) and in a
+// few a probe (15), no ambient light. Its lamps are all static and affect
+// domain 1, not 2 (amn100d_0_1_0_lc.mmh's light20: radius 8). Read
+// 2026-10-17 over all of them; which domain lights what is not read in the
+// exe.
 #pragma once
 
 #include "dao/core/Gff4.h"
