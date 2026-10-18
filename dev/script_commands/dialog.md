@@ -17,3 +17,27 @@ Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.
 ## Not read
 - Who writes `CVirtualMachineCommands+4` (it is a 0x10-byte object, ctor at 0x005DBE0C, which leaves +4 to someone else); the "server implementer" reading is inferred.
 - Which script command sets a conversation at run time (writing +0x3D8 other than the load and the copy), and whether placeables and triggers load `DialogResRef` through the same field.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+### BeginConversation (440)
+- **Handler:** 0x0065D9A0 (own handler); target's `FUN_006976B0` (a CCObject method; the library's name `CCObject::BeginConversation`), conversation built by 0x0068CEE0 (checked).
+- **Described in:** `dev/PLOTS.md` ("Ambient is the starting line's flag alone"), `dev/TURN_BASED.md` (answers 1 when queued).
+- **Does:** pops initiator, target and the dialog resource (name cut at the first '.', so `x.dlg` and `x` are the same), looks up the target and asks it to begin the conversation; pushes the result 0 or 1 (checked).
+- **Edge cases:** an initiator equal to the target (including both OBJECT_INVALID, or the argument left out) is replaced with the player's object, `*(party object+0xD0)+0x5C`, or -1 if none (checked via 0x005D5CA0). The target must exist (`GetObjectById`), pass a virtual test on its +0x70 sub-object (slot 0x6C returning true; not read what it asks) and not be dead (`CCObject::IsDead` 0x00695300), else 0 is pushed and nothing happens (checked). Failed pops return -639, failed push -638 (checked). A wrong-type target is not tested by type, only by those two checks (checked). The empty-resource case uses the target's own conversation (inferred from `UT_Talk`'s use).
+
+### DialogIsAmbient (344)
+- **Handler:** 0x0065DC00 (own handler, 0x0067 7824).
+- **Described in:** `dev/PLOTS.md` ("How it plays": the client app's +0x214 is 1 in an ambient line's script).
+- **Does:** pushes 1 if the byte at `CClientExoApp+0x214` is nonzero, else 0 (checked).
+- **Edge cases:** no arguments, no pops; only a failed push returns -638 (checked). The flag is the app's, not a conversation's: outside any conversation it holds whatever the last line left (inferred; who clears it not read).
+
+### BeginSlideshow (632)
+- **Handler:** 0x0065DC30 (own handler); builds the conversation with 0x0068CEE0(-1, -1, name, force=1) and asks the game mode controller (`app+0x114`) for mode 4 (`0x006414A0`, dialogue) (checked).
+- **Described in:** `dev/PLOTS.md` ("Ambient is the starting line's flag alone": it sets the force byte, so a slideshow enters dialogue mode even from an ambient line); `dev/TURN_BASED.md` (mode list: 4).
+- **Does:** pops the resource, cuts its name at the first '.', builds a conversation with no participants and starts dialogue mode on it (checked).
+- **Edge cases:** failed pop returns -639 (checked); a void command, so it pushes nothing and always returns 0 otherwise. If the conversation cannot be built (0x0068CEE0 returns null, e.g. the resource is missing) it does nothing and does not fail the script (checked).
+
+## Not read
+- The slot 0x6C test `BeginConversation` makes on the target's +0x70 sub-object.
+- `FUN_006976B0`'s body past what `dev/PLOTS.md` records.

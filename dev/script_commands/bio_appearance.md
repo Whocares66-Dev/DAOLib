@@ -66,3 +66,39 @@ Shared facts (checked unless marked):
 - The global at 0x00C32938 (inferred: options) and 0x006B1BC0 (gore on the model).
 - What the stats keep from the race's `Name` in 0x00719EB0.
 - `SetCreatureGender` (264, 0x0065A470), not this group: it builds an appearance copy with the new gender and calls 0x006C1400 the same way.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+### SetCreatureGender (264)
+- **Handler:** 0x0065A470 (not shared); `GetGameObjectById` 0x005D5840, virtual +0x10 (as creature).
+- **Described in:** `dev/CHARGEN.md` (the creation screen's events: SELECT_GENDER), `dev/script_commands/bio_appearance.md` (mentioned under the appearance commands as building a copy and calling 0x006C1400).
+- **Does:** if the creature's gender (0x006A3650, a byte) differs from nGender, makes a copy (0x1F0 bytes) of the creature's appearance (+0x7B0), sets the gender in it (0x00747B50), reloads the models (0x006C1400) and stores the gender (0x006A68C0).
+- **Edge cases:** an invalid or non-creature object does nothing, returns 0 (checked). The same gender does nothing (checked). The copy source +0x7B0 is read without a null test (inferred risk for a creature with no appearance). nGender is compared after widening the stored byte, so a value past 255 never equals and is stored as given (inferred). Failed pop is -639 (checked).
+
+### GetName (275)
+- **Handler:** 0x0066BBA0 (not shared); builds a wide string for the answer.
+- **Described in:** `dev/PROBE.md` and `dev/LIBRARY.md` (shadowed in play; the answer came through the pop and push unchanged); `dev/script_commands/bio_appearance.md` (SetLocName).
+- **Does:** `GetObjectById`: an object's name is the text of its attribute at +0xD4 (0x004D1EB0). Otherwise the id is tried as an area (`GetAreaById`, name at +0x158), then as the module (`GetModuleById`, name from 0x0051B370).
+- **Edge cases:** an id that is none of those pushes an empty string and does not fail (checked, the string starts empty). Failed pop is -639, failed push -638 (checked). The name is the one set by `SetName`/`SetLocName`, not the tag.
+
+### SetName (276)
+- **Handler:** 0x0066BA00 (not shared); pops object then string, `GetObjectById`.
+- **Described in:** `dev/CHARGEN.md` (SELECT_NAME), `dev/script_commands/bio_appearance.md` (under `SetLocName`: it writes the text field of the +0xD4 attribute, 0x004D1BB0).
+- **Does:** writes the text into the object's attribute at +0xD4, then calls the object's virtual +0x24 (a name-changed notification, inferred).
+- **Edge cases:** an invalid object does nothing, returns 0 (checked). If the object's tag (+0xB8) equals `gen00fl_dog` (string at 0x00B05EF8), the party object's name field (+0x48C, via 0x005D57C0) is set too, so the dog's rename survives in the party (checked; that +0xB8 is the tag is inferred). Applies to objects only, not areas or the module (checked: no other branch).
+
+### SetItemHeraldry (172)
+- **Handler:** 0x0065D7D0 (not shared); `GetItemById` 0x005D5870.
+- **Described in:** `dev/ITEMS.md` ("A creature's template items": "`SetItemHeraldry` refreshes the appearance").
+- **Does:** stores the low byte of nHeraldry at item +0x46C, then, if the wearer (item +0x448) is a creature with an appearance (+0x7B0), maps the item's slot to an appearance slot (0x007480D0) and re-applies the heraldry to the model (0x00747D90) and reloads (0x006C1400).
+- **Edge cases:** an invalid or non-item object does nothing, returns 0 (checked). The value is truncated to a byte (checked, `mov byte`). An unworn item only has the byte stored (checked). Failed pop is -639.
+
+### LoadItemsFromTemplate (340)
+- **Handler:** 0x0065D8A0 (not shared); pops object, string (0xA2F4C0), then int; `GetCreatureById`, then `ForScript_LoadItemsFromTemplate` 0x006C1E30(creature, &name, bReplaceInventory != 0).
+- **Described in:** `dev/ITEMS.md` ("A creature's template items: `LoadItemsFromTemplate` (340)").
+- **Does:** loads the template's equipment into the creature; the backpack is loaded and replaced only with bReplaceInventory.
+- **Edge cases:** an invalid or non-creature object does nothing, returns 0 and the string is freed (checked). A failed pop of any of the three returns -639 and frees the string (checked). The bool is `!= 0` (checked). The template name is not checked here; a missing template is 0x006C1E30's matter (not read).
+
+## Not read
+
+- 0x006C1E30's handling of a missing template; 0x006C1400 and 0x00747D90 in full.

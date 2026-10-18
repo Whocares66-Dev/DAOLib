@@ -82,3 +82,35 @@ Shared facts (checked unless marked):
 - The placeable constructor's defaults for +0x638 and the other fields when a template lacks them (only that the load keeps the earlier value).
 - The save path's own reads of these fields (only the label ids found in `dev/gff4_fields.csv`).
 - Who else reads the creature class list +0x544 (level-up, the character sheet), and the SmartData attribute setter's observers.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Shared facts (checked): the VM is `[0xC1D080]`, the app `[0xC327EC]`. Object pop is 0xA2F6D0, int pop 0xA2F3C0; a failed pop returns -639 (0xFFFFFD81). `GetPlaceableById` is 0x005D5B40, `GetCreatureById` 0x005D58C0. A push failure returns -638.
+
+### SetPlaceableState (287)
+- **Handler:** 0x0065EE60 (not shared); `GetPlaceableById`, then `CCPlaceable::SetState` 0x0074F9D0(nState, 0).
+- **Described in:** `dev/PLACEABLES.md` ("The use, the animation and EVENT_TYPE_USE").
+- **Does:** plays the [old][new] transition and the new idle, stores the state and swaps the walk-grid patch. The second argument to 0x0074F9D0 is always 0 from the script.
+- **Edge cases:** an invalid or non-placeable object does nothing and returns 0, no failure (checked). nState is passed unchecked at the command (inferred: a state past the table's columns is the state function's problem). A failed pop of either argument returns -639 (checked).
+
+### SetPlaceableActionResult (151)
+- **Handler:** 0x0065EEC0 (not shared); `GetPlaceableById`, then 0x0074FC10(nAction, bSuccess, bVariation).
+- **Described in:** `dev/PLACEABLES.md` ("The use, the animation and EVENT_TYPE_USE").
+- **Does:** on success sets the state row's SuccessN (SuccessNa with bVariation) through `SetPlaceableState`; it always clears +0x68C.
+- **Edge cases:** pops object, nAction, bSuccess and bVariation; all four are popped even when the script left bVariation at its default FALSE (the VM pushes defaults), so a short stack is -639 (checked). bSuccess and bVariation are reduced to bools (`!= 0`); nAction passes as given (checked). An invalid or non-placeable object does nothing and returns 0 (checked).
+
+### GetPlaceableAction (152)
+- **Handler:** 0x0065EF60 (not shared); `GetPlaceableById`, reads the **word** at +0x68C.
+- **Described in:** `dev/PLACEABLES.md` ("The use, the animation and EVENT_TYPE_USE", step 5).
+- **Does:** pushes the action stored by the last use (sub-action 21); `SetPlaceableActionResult` clears it.
+- **Edge cases:** an invalid or non-placeable object pushes 0, not an error (checked). The value is zero-extended from 16 bits (`movzx word`), so it never reads negative (checked). The next handler 0x0065EFC0 is the same shape over the byte at +0x638.
+
+### GetCreatureTreasureCategory (315)
+- **Handler:** 0x0065F430 (not shared); `GetCreatureById`, reads the int at +0xBD0 (`CCCreature`).
+- **Described in:** `dev/SCRIPT_COMMANDS.md` (the `CCCreature` field table), `dev/script_commands/placeables.md` (under `GetPlaceableTreasureCategory`, 817).
+- **Does:** pushes the creature template's `TreasureCategory`; the placeable's own is `GetPlaceableTreasureCategory` (+0x6C0).
+- **Edge cases:** an invalid or non-creature object pushes 0 (checked). The pop failing is -639; the push failing is -638 (checked).
+
+## Not read
+
+- What state values each placeable type's `statecnt_*` table accepts; `SetPlaceableState` does not validate nState at the command (inferred, state function not re-read).

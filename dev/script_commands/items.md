@@ -68,3 +68,15 @@ Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x4000
 - The money attribute's setter (a clamp there); `0x00629690`, the party's money notice.
 - `0x0062EE50` (what the follower map's slot and set words are exactly); the iteration order of `0x007613A0` (first match).
 - The default backpack size (set from a template or the party at start).
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+### SetItemMaterialType (137)
+- **Handler:** 0x00669F90 (not shared); `GetItemById` 0x005D5870, then item `SetMaterialType` 0x00756540(item, nMaterialType).
+- **Described in:** `dev/ITEMS.md` ("What SetItemMaterialType changes").
+- **Does:** takes the item's stats off the wearer, sets MaterialType (item +0x4FC), puts them back, refreshes the model, trims runes and recomputes value.
+- **Edge cases:** an invalid or non-item object does nothing and returns 0 (checked). **The command does nothing at all if any slot of the item's rune vector (+0x4BC) holds a value other than -1, that is, if a rune is set in it**: the handler walks the vector and returns before calling 0x00756540 (checked, 0x0066A013-0x0066A048). The ITEMS.md note's "runes past the count are destroyed" step is therefore reached only for an item with no runes in it (the vector holds empty slots). nMaterialType is not range-checked here (inferred). A failed pop returns -639 (checked).
+
+## Not read
+
+- The rune vector's element meaning past "-1 is empty" (taken from the compare against the sentinel at 0x00C313C0).

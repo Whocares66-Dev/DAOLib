@@ -18,11 +18,13 @@ Every live function of `script.ldf`, by its `@addtogroup`: what its handler does
 
 - [Abilities](script_commands/abilities.md)
 - [Action system](script_commands/actionsys.md)
+- [Area](script_commands/area.md)
 - [Areas of effect](script_commands/aoe.md)
 - [Arrays and the world map](script_commands/arrays.md)
 - [Biography and appearance](script_commands/bio_appearance.md)
 - [Commands](script_commands/commands.md)
 - [Conversions](script_commands/conversions.md)
+- [Cutscenes](script_commands/cutscene.md)
 - [Dialog](script_commands/dialog.md)
 - [Effect access](script_commands/effect_access.md)
 - [Events](script_commands/events.md)

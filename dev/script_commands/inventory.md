@@ -308,3 +308,90 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - `0x0071EF00` (an item ability linked on SetQuickslot) and whether the bar map's find inserts.
 - Clearing of the general scoreboard; the champion/tournament arrays' construction.
 - `0x005D5CC0`, the object the training event is sent to.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Shared facts (checked): the VM stack object is `[0xC1D080]`; `0x00A2F6D0` pops an object id, `0x00A2F3C0` an int, `0x00A2D980` pushes an object, `0x00A2D650` pushes an int. A failed pop returns −639 (`0xFFFFFD81`); the int push returns 0, or −638 when the push fails (`neg/sbb/and 0x27E` then `+0xFFFFFD82`). `0x005D58C0` is GetCreatureById, `0x005D5BE0` GetObjectById, `[0xC327EC]` the client app.
+
+### GetItemInEquipSlot (401)
+- **Handler:** 0x00669C70 (sole).
+- **Described in:** `dev/ITEMS.md` (the item commands list): pops, the BITE rule for slot 0, the destroyed-item check.
+- **Does:** answers the item id in (slot, weapon set) of the creature's equipment (+0xBE0), pushed as an object.
+- **Edge cases:** the slot is popped first, then the creature; the weapon set is popped only when the argument count is 3 or more, else −1 (checked). A failed pop of slot or creature fails the script (−639). A creature that is not found, is not a creature (type check against byte `0xB59409`, then the object's virtual at +0x10 gives the creature), has an empty equipment, or an empty slot gives the value read from `0xB5940C` (OBJECT_INVALID) and the script goes on (checked). A destroyed item (`+0x5D0` test, `0x00838210`) is also OBJECT_INVALID (checked). The item id is read at item+4 (checked).
+
+### AddCreatureMoney (406)
+- **Handler:** 0x0066AB30 (sole; command name COMMAND_ADDGOLD).
+- **Described in:** `dev/PLACEABLES.md` (the container's OPEN_INVENTORY step) only mentions it, for a body bag with only copper.
+- **Does:** adds nCoppers to the creature's money; the script's `bNotify` is popped and used to show the gain.
+- **Edge cases:** the pops are coppers (int), creature (object), then bNotify (int, defaults seeded as 0 and 1 on the handler's frame); a failed pop is −639 (checked). A creature not found (`GetCreatureById` null) does nothing and returns 0 (checked). The amount is added through the creature's money object at +0xBF0 and the notify path goes through the client app's message object only when both coppers and the creature id are non-zero (checked as control flow; the exact money function not followed, inferred). The command pushes nothing, so the script sees no value.
+
+### OpenInventory (410)
+- **Handler:** 0x0065FA40 (sole; GUI::ShowContainerGUIMessage via `0x0064DC00`).
+- **Described in:** `dev/PLACEABLES.md` (a container opened): USE with action 11, then OPENED, then `OpenInventory(self, user)`.
+- **Does:** posts the container panel for oObject, opened by oPlayer, to the GUI.
+- **Edge cases:** pops the object, then the player, then bCanAddItems only if the argument count is above 2, else it stays 0 (checked). Either object not found (`GetObjectById`, `GetCreatureById`), no client app GUI object (`app+0xD0` null), or object virtuals at +0x34 and +0x24 failing: nothing is shown, returns 0 with no script failure (checked). The result of the +0x24 virtual sets the object's flag at +0x618 to `bCanAddItems == 0` (checked, meaning of the flag inferred: the panel is read-only). Pushes nothing.
+
+### SwitchWeaponSet (273)
+- **Handler:** 0x0065CCC0 (sole), calls `CCCreature::ForScript_SwitchWeaponSet` 0x006A8FA0.
+- **Described in:** `dev/ITEMS.md` (weapon-set switch): the old set's items out, the new set's in via `0x006BC7F0`.
+- **Does:** changes the creature's active weapon set.
+- **Edge cases:** pops the object, then the set (checked; the set always comes off the stack, so the default INVALID_WEAPON_SET (−1) is pushed by the compiled script). A creature not found does nothing and returns 0, no failure (checked). A failed pop is −639. The set is passed unchecked, its range is left to `0x006A8FA0` (not read). Pushes nothing.
+
+### EquipItem (392)
+- **Handler:** 0x0065CDA0 (shared with UnequipItem 393; EquipItem is the case with command number 0x188 on the stack, the else side is 393).
+- **Described in:** `dev/ITEMS.md` (the item commands list): calls `CCCreature::Equip(item, slot, set)`.
+- **Does:** equips oItem on oObject into nEquipSlot and weapon set; pushes 1 on success, 0 otherwise.
+- **Edge cases:** pops the creature and the item, then slot and set together through `0x00651150` (both ints must pop, else −639; the defaults 255 and −1 are the compiled script's; checked). The creature is looked up with GetCreatureById and the item with `0x005D5870` (an item lookup, so a non-item id also fails); either null leaves the result 0 and the script goes on (checked). The result is the byte `0x006BC7F0` returns (checked). An int push failure is −638.
+
+### UnequipItem (393)
+- **Handler:** 0x0065CDA0 (shared with EquipItem 392, the other side of the compare with 0x188).
+- **Described in:** `dev/ITEMS.md` (the item commands list): calls `CCCreature::Unequip(item)`.
+- **Does:** takes oItem off oObject; pushes 1 on success, 0 otherwise.
+- **Edge cases:** pops only the creature and the item (checked). Creature or item not found: result 0, no script failure. The result is `*0x006B7690(creature, item)` as a byte, and a temporary freed after with `0x007616C0` (checked, the temporary's meaning inferred: the equipment-slot result). Whether the item is actually in the creature's equipment is left to `0x006B7690` (not read).
+
+## Not read
+- The money function behind AddCreatureMoney (`0x00629690`, `0x007C9FE0`) and the exact notify.
+- The range check on SwitchWeaponSet's set inside `0x006A8FA0`.
+- What `0x006BC7F0` and `0x006B7690` refuse (slot rules, two-handed, class limits).
+
+
+Shared: every handler pops with the VM stack helpers 0xA2F6D0 (object) and 0xA2F3C0 (int); a failed pop returns -639 (0xFFFFFD81) (checked). All six return 0 on every other path, so a bad object is a silent no-op, not a script failure (checked).
+
+### MoveAllItems (350)
+- **Handler:** 0x00666020 (own), `ScriptBackend::ForScript_MoveAllItems` 0x00763570.
+- **Described in:** `dev/PLACEABLES.md` (a container's loot: OPEN_INVENTORY), one line: `_autoloot` containers get `MoveAllItems` instead of the loot screen.
+- **Does:** pops oSource then oTarget, resolves each with `GetObjectById` 0x005D5C20, and calls `ForScript_MoveAllItems` on the target object with the source's id; a temporary list is destroyed after (0x007616C0). Checked.
+- **Edge cases:** either id unresolved (OBJECT_INVALID or no such object) -> nothing moves, returns 0, no failure (checked). It uses `GetObjectById`, not `GetCreatureById`, so any object type resolves here (a container, a creature, a placeable); what a non-inventory object does is in the backend (not read). Argument order: source is popped first (checked).
+
+### SignalDamage (359)
+- **Handler:** 0x00662310 (own).
+- **Described in:** `dev/COMBAT.md` (Damage and death): `Effects_ApplyInstantEffectDamage` calls `SignalDamage(oDamager, oTarget)` after setting health.
+- **Does:** both ids resolved with `GetCreatureById` 0x005D58C0, then gated; if the gates pass it calls 0x00523880 on the source and 0x0063FB80 on the result. That call is inferred to be the damage notification to the target's AI (perception/threat), not read further.
+- **Edge cases:** either not a creature (invalid, or another object type) -> returns 0, nothing happens (checked). Gates, all checked as code, meaning inferred: the byte at +0xC of the fields at +0x4F8 (target) and +0x4E8 (source) must both be non-zero; `0x007C4D20(target,0,0,0)` must be true and the same call on the source must be false. Otherwise a silent no-op. Never fails the script apart from a failed pop (-639).
+
+### StartCharGen (746)
+- **Handler:** 0x0066B0E0 (own).
+- **Described in:** `dev/CHARGEN.md` (The creature): mode 0 opens creation (GUI screen 1, game mode 0xB), mode 1 the level-up screen (0x2E) or `AutoLevelUpMessage`.
+- **Does:** pops oCreature (object), nMode and bImportEnabled (two ints), resolves the creature with `GetCreatureById`, then branches on mode; see the note for the rest.
+- **Edge cases:** the pops are all required here (no argument-count test), though script.ldf gives nMode and nImportEnabled defaults; the compiler fills them in (checked, no count read). Unresolved creature -> returns 0 and opens nothing (checked). With nMode 0 only, three flags must be clear first or the handler returns 0 without opening the screen: byte +0x250 and byte +0x251 of the object `0x00402CA0` returns, and the bool at +0x5F4 of the object at `[0xC32938]` (checked as code; meaning not read, inferred to be "already in creation / a screen is up"). nMode 1 has no such gate. nMode values other than 0 and 1 are not distinguished in the part read (not read).
+
+### PreloadCharGen (390)
+- **Handler:** 0x00651770 (own), `ScriptBackend::ForScript_PreloadCharGen` 0x007C0480.
+- **Described in:** `dev/CHARGEN.md` (The creature): "only calls `ForScript_PreloadCharGen`; not read further". `sp_module_start.nss` calls it at the module's start.
+- **Does:** calls the backend, then returns 0 (checked). It pops nothing (the stub is `call 0x7C0480; xor eax,eax; ret 8`).
+- **Edge cases:** no arguments, no failure path, no object (checked). What the backend preloads is not read.
+
+### SetCanLevelUp (760)
+- **Handler:** 0x00662EA0 (own), `CCCreature::UpdateCanLevelUp` 0x006ACA10.
+- **Described in:** `dev/CHARGEN.md` (CHARGEN_AUTOLEVEL: `AL_DoAutoLevelUp`, the tactics count, `SetCanLevelUp`) and `dev/script_commands/inventory.md` (GetCanLevelUp, which reads the flag it writes).
+- **Does:** pops the creature, and bCanLevelUp only if the argument count is 2 or more; then resolves the creature with `GetCreatureById` and calls `UpdateCanLevelUp` on it. Checked.
+- **Edge cases:** the bool is popped but, as read, not passed to `UpdateCanLevelUp` (the call takes no argument; the flag is recomputed by the engine from the creature's state) - so the script's value is discarded (checked as code; the effect on the flag +0xB84 not re-read). Without the argument the pop is skipped and the default is not used either. Unresolved creature -> no-op, returns 0 (checked).
+
+### ShowPopup (323)
+- **Handler:** 0x00663810 (own).
+- **Described in:** no master note describes the command; `dev/LIBRARY.md` and `dev/GUI.md` cover the popup layer (scene `PopupLayer`, `dao::gui::CurrentPopup`).
+- **Does:** pops nMessageStrRef (int), nPopupType (int), oOwner (object), then bShowInputField and nDefaultInputStrRef only if the argument count is at least 4 and 5. If the type is non-zero, gets the GUI object `0xCF` from the data tree, sets tokens on it (the strref, the type, the input field as a bool, the default strref, and others by hash: 0x335F4422, 0x187217E1, 0x016926A0, 0x4E28B067), and if all took, copies four strings (loop to 4) and asks the GUI system (client app +0x158) to open it via 0x00606BD0. Checked as code; the tokens' meaning is inferred.
+- **Edge cases:** nPopupType 0 -> nothing is shown, returns 0 (checked). GUI object 0xCF missing -> no popup, returns 0. Missing optional arguments default to 0 (checked), as the ldf says. oOwner is popped but its use was not followed (not read).
+
+## Not read
+The backends of MoveAllItems and PreloadCharGen; what the gates in SignalDamage (+0x4F8/+0x4E8, 0x007C4D20) and StartCharGen (+0x250/+0x251, +0x5F4) are named; the string-copy loop and tokens of ShowPopup; whether `UpdateCanLevelUp` reads its argument from the VM stack.

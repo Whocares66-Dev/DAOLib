@@ -67,3 +67,34 @@ Shared facts (checked):
 - What 0x00698490(3) asks before the SPAWN event, and what the list at +0xB9C holds.
 - `CCObject::SetOrientation`'s slot +0x80 (0x006955C0 for objects, 0x006A0190 for creatures), so whether a creature's model turns at once.
 - `GetLocation` (457), `GetPositionFromLocation` (459), `IsLocationSafe`, `GetSafeLocation`: not in this group's list.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+Shared facts as in that file: a location is 0x30 bytes (position +0x00, orientation +0x10, area id +0x20), popped as a deep copy (0x00A2F650) and freed after; failed pops return -639, failed pushes -638.
+
+### IsLocationSafe (456)
+- **Handler:** 0x0065AF40 (own handler); `CCArea::IsLocationSafe` 0x0073DE70 (checked).
+- **Described in:** `dev/LOAD_EVENTS.md` / `dev/TODO.md` name the area-level checks only; the command is not described elsewhere.
+- **Does:** takes the area by the location's area id (`GetAreaById` 0x005D5960), and asks it whether the location's position is safe (walkable and free; tested with a radius from the float at 0x00AE7104 and the area's grid from `app+0x118`, inferred), pushing 1 or 0 (checked).
+- **Edge cases:** if the area id matches no area (including the default -1 of an unset location) it pushes 0 without failing (checked). Nothing else on the location is validated. A null location pops fine but then faults on dereference (as in the group notes).
+
+### GetSafeLocation (659)
+- **Handler:** 0x0065B0D0 (own handler); `CCArea::GetSafeLocation` 0x0073E370 (checked).
+- **Described in:** `dev/LOAD_EVENTS.md` (walks square rings outward by half a grid cell; the party's spot snapped within 20.0 m) and `dev/PARTY.md`.
+- **Does:** searches the location's area for a safe spot near the location's position with a radius of 20.0 (0x00AE72FC) and a second float of 0, reachable, on the ground (arguments 1, 1, 0 pushed), writes the found position into the copy and pushes the copy (checked).
+- **Edge cases:** if no spot is found (the call returns 0) the position keeps its input values, since the copy is only overwritten on success: the location comes back unchanged (checked). If the area id matches no area the search is skipped and the copy comes back unchanged too (checked). Orientation and area id are never changed (checked: only the position is written by the search's out argument; the copy path above 0x0065B205 is a 16-byte restore of the position block).
+
+### GetLocation (457)
+- **Handler:** 0x0065B2A0 (own handler) (checked).
+- **Described in:** `dev/LIBRARY.md` and `dev/PROBE.md` (the probe shadows it and finds the answer agrees with the library's own read); the object-to-location copy is not described elsewhere.
+- **Does:** pops an object id, allocates a location (constructor 0x007ABD00: zero vectors, area -1) and, if the object exists, copies its position block (+0x120, 16 bytes), orientation block (+0x130) and area id (+0x254), then pushes it (checked).
+- **Edge cases:** any object type works (it uses `GetObjectById` 0x005D5BE0, not the creature lookup). An invalid or unknown id gives the default location, position (0,0,0), area -1, with no failure (checked). Failed pop -639, failed push -638 (checked).
+
+### GetPositionFromLocation (459)
+- **Handler:** 0x0065B4D0 (own handler) (checked).
+- **Described in:** `dev/LIBRARY.md` and `dev/PROBE.md` (checked in play 2026-09-30 through `Invoke`); no group note.
+- **Does:** pops a location, copies its x, y, z into a 16-byte vector and pushes it with `StackPushVector` 0x00A2D6D0 (checked).
+- **Edge cases:** no area or validity check: an unset location gives (0,0,0), the position it was constructed with (checked). Failed pop -639, failed push -638 (checked). A null location (array element past the end) is dereferenced unchecked (inferred from the group notes).
+
+## Not read
+- `CCArea::IsLocationSafe` 0x0073DE70's tests and `GetSafeLocation`'s flags beyond `dev/LOAD_EVENTS.md`.

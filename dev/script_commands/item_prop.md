@@ -389,3 +389,27 @@ Shared facts (checked unless marked):
 - What `SaveLoadProxy` does with save kind 3.
 - The writer of creature+0xB20 (`IsMoving`); who calls the roam check `0x006A2D30`.
 - `0x006A2B80`, the map's other test beside `ShowAsAllyOnMap`'s bool; the item code that honours +0x640.
+
+## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
+
+### IsItemDroppable (295)
+- **Handler:** 0x00668A20, the large getter handler shared by many commands (switch on the command number, which is its second parameter); case 295 (0x127) is the jump table's default, 0x00668BF7 (checked: byte table at 0x668CFC, index 0x87 is entry 4 = 0x668BF7).
+- **Described in:** `dev/COMBAT.md` (the loot paragraph: "the item's +0x4B0, `IsItemDroppable`'s byte").
+- **Does:** `GetObjectById`; if the object answers as an item (virtual +0x14), pushes `byte [item + 0x4B0] != 0`.
+- **Edge cases:** an invalid object pushes 0 (checked). An object that is not an item falls through to the other kinds' cases and, for 295, none match, so it pushes 0 (checked). The handler pops only the object for this command (extra pops happen only for the numbers that take more arguments). The same slot with +0x4B1 is another command (case 0x281).
+
+### GetFollowerWouldBeLocation (728)
+- **Handler:** 0x00666650 (not shared). It gets the party object (`[CClientExoApp+0xD0]+0x58`, 0x005D57C0) and calls 0x00632BB0(followerId, &position), which fills in the leader id (`app+0xD0` +0x5C, 0x005D5CA0) and calls 0x00632640, which calls 0x00760810 with arrival = 0.
+- **Described in:** `dev/PARTY.md` (the follow formation, "`GetFollowerWouldBeLocation` ... is the walking answer"), `dev/LOAD_EVENTS.md` ("Walking follow").
+- **Does:** builds a new script location (0x30 bytes). If 0x00632BB0 succeeds, it holds the position, the area id (leader creature +0x254) and the orientation (leader +0x130); pushed as engine structure type 1.
+- **Edge cases:** if the follower is the leader (`0x00632640` compares the two ids first), or it fails, the location is the default one, a zero position, and no error (checked: 0x006326AA returns false). The orientation and area are copied from the leader creature (`GetCreatureById` of the leader id, 0x005D5CC0) with no null test, so with no leader this would read a null (inferred, not exercised). The location is freed after the push; a push failure returns -638 (checked). A failed pop returns -639 (checked).
+
+### GetCreatureBodyBag (827)
+- **Handler:** 0x0065F3D0 (not shared); `GetCreatureById`, reads the dword at +0x790, pushes it as an object (0xA2D980).
+- **Described in:** `dev/COMBAT.md` ("The body bag": creature +0x790 = the bag), `dev/SCRIPT_COMMANDS.md` (the `CCCreature` field table).
+- **Does:** returns the creature's body bag placeable, linked by `SpawnBodyBag`.
+- **Edge cases:** an invalid or non-creature object pushes OBJECT_INVALID, -1 (checked, esi starts at -1). A creature that has no bag (never died) holds the field's own value, not necessarily -1 (inferred from the field; not read in play). Push failure is -638 (checked).
+
+## Not read
+
+- The loot-system callers of +0x4B0; which engine paths set a body bag's link before death.
