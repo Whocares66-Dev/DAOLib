@@ -94,6 +94,7 @@ class Mutant:
 GFF4 = "src/dao/core/Gff4.cpp"
 GRID = "src/dao/core/Grid.cpp"
 AREA = "src/dao/core/Area.cpp"
+CHARACTER = "src/dao/core/Character.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
@@ -499,6 +500,24 @@ MUTANTS: list[Mutant] = [
         AREA,
         "            variable.value = *real;\n",
         "",
+    ),
+    Mutant(
+        "character-clothing-alone: Clothing draws the chest alone, no gloves or boots",
+        CHARACTER,
+        "(chestBase == kClothing && slot != Slot::Chest) ||",
+        "(chestBase == kClothing && slot == Slot::Boots) ||",
+    ),
+    Mutant(
+        "character-no-chest-offset: no chest counts as a WeaponOffset of 0.02",
+        CHARACTER,
+        "                    : kNoChestOffset;",
+        "                    : 0.0F;",
+    ),
+    Mutant(
+        "character-sheathed-left: the off hand sheathes to WearL, not WearR",
+        CHARACTER,
+        'right ? "WearR" : "WearL"',
+        '"WearR"',
     ),
     Mutant(
         "gff4-null-string-empty: a string slot of 0xFFFFFFFF is an empty string, not a failure",
