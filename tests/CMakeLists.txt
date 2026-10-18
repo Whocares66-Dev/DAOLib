@@ -17,6 +17,7 @@ add_executable(
     test_cutscene.cpp
     test_dazip.cpp
     test_dds_write.cpp
+    test_effect.cpp
     test_erf.cpp
     test_gdafile.cpp
     test_gff3.cpp

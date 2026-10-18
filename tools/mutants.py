@@ -104,6 +104,7 @@ CHARACTER = "src/dao/core/Character.cpp"
 HEADPRESET = "src/dao/core/HeadPreset.cpp"
 MORPHCONFIG = "src/dao/core/MorphConfig.cpp"
 CLIP = "src/dao/core/Clip.cpp"
+EFFECT = "src/dao/core/Effect.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -440,14 +441,14 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "gff4-scalar-type-checked: a field of another type is not read as this one",
         GFF4,
-        "if (field == nullptr || field->type != static_cast<std::uint16_t>(type) || (field->flags & (kList | kStruct)) != 0)",
-        "if (field == nullptr || field->type < static_cast<std::uint16_t>(type) || (field->flags & (kList | kStruct)) != 0)",
+        "    if (field->type != static_cast<std::uint16_t>(type))\n",
+        "    if (field->type < static_cast<std::uint16_t>(type))\n",
     ),
     Mutant(
         "gff4-list-not-scalar: a list field is not read as a number",
         GFF4,
-        "if (field == nullptr || field->type != static_cast<std::uint16_t>(type) || (field->flags & (kList | kStruct)) != 0)",
-        "if (field == nullptr || field->type != static_cast<std::uint16_t>(type) || (field->flags & kStruct) != 0)",
+        "    if (field == nullptr || (field->flags & (kList | kStruct)) != 0)\n    {\n        return std::nullopt;\n    }\n    // A generic field",
+        "    if (field == nullptr || (field->flags & kStruct) != 0)\n    {\n        return std::nullopt;\n    }\n    // A generic field",
     ),
     Mutant(
         "gff4-reference-followed: a reference field's value is read where its offset points",
@@ -1296,6 +1297,42 @@ MUTANTS: list[Mutant] = [
         MORPHCONFIG,
         "choices.push_back({.name = hair.name, .cut = digit - '0'});",
         "choices.push_back({.name = hair.name, .cut = 0});",
+    ),
+    Mutant(
+        "m2da-taken-row: a table's lookup answers the row the game takes, not a dropped one of its ID",
+        M2DA,
+        "return row.taken && row.id == id; });",
+        "return row.id == id; });",
+    ),
+    Mutant(
+        "effect-volume-stride: a mesh spawn volume's points are 16 bytes apart, the fourth float junk",
+        EFFECT,
+        "        for (std::size_t at = 0; at + 16 <= bytes.size(); at += 16)\n",
+        "        for (std::size_t at = 0; at + 12 <= bytes.size(); at += 12)\n",
+    ),
+    Mutant(
+        "gff4-vector3-list: a list of Vector3 is read, each in 16 bytes",
+        GFF4,
+        "    case Type::Vector3:\n    case Type::Vector4:\n",
+        "    case Type::Vector4:\n",
+    ),
+    Mutant(
+        "effect-drives-parameter: a channel's parameter is its export's tag variable type",
+        EFFECT,
+        ".parameter = static_cast<Parameter>(exported.variableType)};",
+        ".parameter = static_cast<Parameter>(exported.controllerType)};",
+    ),
+    Mutant(
+        "effect-crust-hook: a crust hook keeps its id, the place on the creature it is",
+        EFFECT,
+        "        item.crustHook = U8(from, kCrustHookId);\n",
+        "",
+    ),
+    Mutant(
+        "clip-event-time: an event's time is a double, in seconds",
+        CLIP,
+        ".time = event.Get<double>(kEventTime).value_or(0.0),",
+        ".time = event.Get<float>(kEventTime).value_or(0.0F),",
     ),
 ]
 

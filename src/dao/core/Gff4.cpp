@@ -322,6 +322,10 @@ std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) 
     case Type::F32:
         size = 4;
         break;
+    // A Vector3's element in a list takes 16 bytes, its fourth float junk: an effect's mesh spawn
+    // volume's points (the 20 "data" structs' Vector3fList), whose last element is a point only
+    // at that stride, read 2026-10-18 (DAOLib #181).
+    case Type::Vector3:
     case Type::Vector4:
         size = 16;
         break;

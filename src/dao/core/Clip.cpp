@@ -27,6 +27,11 @@ constexpr std::uint32_t kKeyData1 = 4037;
 constexpr std::uint32_t kKeyData2 = 4038;
 constexpr std::uint32_t kKeyData3 = 4039;
 constexpr std::uint32_t kIgnoreScale = 4040;
+constexpr std::uint32_t kEventTime = 4016;
+constexpr std::uint32_t kEventId = 4017;
+constexpr std::uint32_t kEventTarget = 4018;
+constexpr std::uint32_t kEventText = 4019;
+constexpr std::uint32_t kEventList = 4020;
 
 constexpr float kTimeSteps = 65535.0F;
 
@@ -152,6 +157,24 @@ std::optional<Clip> ClipOf(const gff4::File &animation)
         clip.channels.push_back(ChannelOf(node, clip.length));
     }
     return clip;
+}
+
+std::optional<std::vector<Event>> EventsOf(const gff4::File &events)
+{
+    const std::optional<gff4::Struct> root = events.Root();
+    if (events.Type() != "EVT" || !root)
+    {
+        return std::nullopt;
+    }
+    std::vector<Event> out;
+    for (const gff4::Struct &event : root->Structs(kEventList))
+    {
+        out.push_back({.time = event.Get<double>(kEventTime).value_or(0.0),
+                       .id = event.Get<std::uint32_t>(kEventId).value_or(0),
+                       .target = event.Get<std::uint32_t>(kEventTarget).value_or(0),
+                       .text = event.String(kEventText).value_or(L"")});
+    }
+    return out;
 }
 
 } // namespace dao::core::clip

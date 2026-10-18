@@ -86,4 +86,11 @@ struct Merged
 // takes, sorted by install::Index::SortFiles (their sources' order, then by name); none may be null
 Merged Merge(std::span<const GdaFile *const> parts);
 
+// Returns the row the game takes for an ID, or null for an ID no row has.
+const Row *Taken(const Merged &table, std::int64_t id);
+
+// Returns a row's cell of a column, by the column's name in any case; null where the table has no
+// such column.
+const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_view column);
+
 } // namespace dao::core::m2da

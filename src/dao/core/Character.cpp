@@ -1,7 +1,5 @@
 #include "dao/core/Character.h"
 
-#include "dao/core/GdaHash.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
@@ -37,38 +35,19 @@ constexpr float kNoOffset = 1e-6F;
 
 const m2da::Row *RowOf(const m2da::Merged *table, std::int64_t id)
 {
-    if (table == nullptr)
-    {
-        return nullptr;
-    }
-    const auto found =
-        std::ranges::find_if(table->rows, [&](const m2da::Row &row) { return row.taken && row.id == id; });
-    return found != table->rows.end() ? &*found : nullptr;
-}
-
-const GdaFile::Cell *CellOf(const m2da::Merged &table, const m2da::Row &row, std::string_view column)
-{
-    const std::uint32_t hash = GdaColumnHash(column);
-    for (std::size_t i = 0; i < table.columns.size() && i < row.cells.size(); ++i)
-    {
-        if (table.columns[i].hash == hash)
-        {
-            return &row.cells[i];
-        }
-    }
-    return nullptr;
+    return table != nullptr ? m2da::Taken(*table, id) : nullptr;
 }
 
 std::wstring Text(const m2da::Merged *table, const m2da::Row *row, std::string_view column)
 {
-    const GdaFile::Cell *cell = table != nullptr && row != nullptr ? CellOf(*table, *row, column) : nullptr;
+    const GdaFile::Cell *cell = table != nullptr && row != nullptr ? m2da::CellOf(*table, *row, column) : nullptr;
     const auto *text = cell != nullptr ? std::get_if<std::wstring>(cell) : nullptr;
     return text != nullptr ? *text : std::wstring();
 }
 
 double Number(const m2da::Merged *table, const m2da::Row *row, std::string_view column)
 {
-    const GdaFile::Cell *cell = table != nullptr && row != nullptr ? CellOf(*table, *row, column) : nullptr;
+    const GdaFile::Cell *cell = table != nullptr && row != nullptr ? m2da::CellOf(*table, *row, column) : nullptr;
     if (cell == nullptr)
     {
         return 0;

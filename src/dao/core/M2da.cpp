@@ -45,6 +45,8 @@
 // of _y, _e and _s, written in that order, _e. Each time the first by name.
 #include "dao/core/M2da.h"
 
+#include "dao/core/GdaHash.h"
+
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -279,6 +281,25 @@ Merged Merge(std::span<const GdaFile *const> parts)
     }
     merged.rows = std::move(kept);
     return merged;
+}
+
+const Row *Taken(const Merged &table, std::int64_t id)
+{
+    const auto found = std::ranges::find_if(table.rows, [&](const Row &row) { return row.taken && row.id == id; });
+    return found != table.rows.end() ? &*found : nullptr;
+}
+
+const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_view column)
+{
+    const std::uint32_t hash = GdaColumnHash(column);
+    for (std::size_t i = 0; i < table.columns.size() && i < row.cells.size(); ++i)
+    {
+        if (table.columns[i].hash == hash)
+        {
+            return &row.cells[i];
+        }
+    }
+    return nullptr;
 }
 
 } // namespace dao::core::m2da

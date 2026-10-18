@@ -1,7 +1,5 @@
 #include "dao/core/Anb.h"
 
-#include "dao/core/GdaHash.h"
-
 #include <algorithm>
 #include <cwctype>
 #include <ranges>
@@ -28,26 +26,6 @@ constexpr int kMostReplacements = 16;
 bool SameName(std::wstring_view a, std::wstring_view b)
 {
     return std::ranges::equal(a, b, [](wchar_t x, wchar_t y) { return std::towlower(x) == std::towlower(y); });
-}
-
-const GdaFile::Cell *CellOf(const m2da::Merged &table, const m2da::Row &row, std::string_view column)
-{
-    const std::uint32_t hash = GdaColumnHash(column);
-    for (std::size_t i = 0; i < table.columns.size() && i < row.cells.size(); ++i)
-    {
-        if (table.columns[i].hash == hash)
-        {
-            return &row.cells[i];
-        }
-    }
-    return nullptr;
-}
-
-const m2da::Row *RowOf(const m2da::Merged &table, std::int64_t id)
-{
-    const auto found =
-        std::ranges::find_if(table.rows, [&](const m2da::Row &row) { return row.taken && row.id == id; });
-    return found != table.rows.end() ? &*found : nullptr;
 }
 
 } // namespace
@@ -100,12 +78,12 @@ std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animatio
     std::int64_t id = animation;
     for (int hop = 0; hop < kMostReplacements; ++hop)
     {
-        const m2da::Row *row = RowOf(animations, id);
+        const m2da::Row *row = m2da::Taken(animations, id);
         if (row == nullptr)
         {
             return std::nullopt;
         }
-        const GdaFile::Cell *name = CellOf(animations, *row, "AnimName");
+        const GdaFile::Cell *name = m2da::CellOf(animations, *row, "AnimName");
         if (const auto *text = name != nullptr ? std::get_if<std::wstring>(name) : nullptr; text != nullptr)
         {
             for (std::size_t i = 0; i < trees.size(); ++i)
@@ -120,7 +98,7 @@ std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animatio
         {
             return std::nullopt;
         }
-        const GdaFile::Cell *next = CellOf(animations, *row, "Replacement");
+        const GdaFile::Cell *next = m2da::CellOf(animations, *row, "Replacement");
         const auto *replacement = next != nullptr ? std::get_if<std::int64_t>(next) : nullptr;
         if (replacement == nullptr || *replacement == 0 || *replacement == id)
         {

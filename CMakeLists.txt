@@ -156,6 +156,7 @@ add_library(
     src/dao/core/DaZip.cpp
     src/dao/core/Dds.cpp
     src/dao/core/DdsWrite.cpp
+    src/dao/core/Effect.cpp
     src/dao/core/Erf.cpp
     src/dao/core/ErfWrite.cpp
     src/dao/core/Exceptions.cpp

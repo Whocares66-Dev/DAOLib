@@ -36,6 +36,13 @@
 // own rotations to the third decimal (the root, GOD and the eyes' base are
 // turned). Every channel's last key is at 65535, the clip's end.
 //
+// A clip's events are a file of their own beside it, <clip>.evt, GFF4 "EVT
+// V1.0": a list (4020) of events, each its time in seconds as a double
+// (4016), an id (4017), a target (4018) and a string (4019). Read 2026-10-18
+// over the 1,070 effects' event files (DAOLib #181, dev/EFFECTS.md): no
+// event is past its clip's length, and every one is id 16, target 1, its
+// string an emitter of the effect's model.
+//
 // A translation key is an offset added to the node's rest translation, not a
 // place: the engine's node adds rest, animation and FaceFX translations
 // (0x0055E9D0, dev/CHARACTERS.md), and a rotation key replaces the rest
@@ -104,5 +111,18 @@ struct Clip
 // Returns a clip, or nothing for a file that is not one. A channel of a target not above keeps
 // its name and has no keys.
 std::optional<Clip> ClipOf(const gff4::File &animation);
+
+// An event a clip raises as it plays, from the clip's <name>.evt beside it.
+struct Event
+{
+    double time = 0;          // seconds into the clip
+    std::uint32_t id = 0;     // 16 in every effect's event
+    std::uint32_t target = 0; // 1 in every effect's event
+    std::wstring text;        // what it names: an effect's emitter
+};
+
+// Returns a clip's events (an "EVT" file) in the file's order, or nothing for a file that is not
+// one.
+std::optional<std::vector<Event>> EventsOf(const gff4::File &events);
 
 } // namespace dao::core::clip
