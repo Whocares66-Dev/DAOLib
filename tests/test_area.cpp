@@ -97,11 +97,15 @@ dao::test::files::Bytes TowerArea()
                                      {"ReverbPreset", kString, b.ExoString("Quarry")},
                                      {"Geometry", kList, b.List({corner})},
                                      {"SoundList", kList, b.List({regionSound})}});
-    const auto script = b.Struct(1, {{"Tag", kString, b.ExoString("bhm100tr_enter")},
-                                     {"Type", kInt, 5},
-                                     {"ScriptResRefID", kResRef, b.ResRef("bhm100tr_enter")},
-                                     {"EnterState", kInt, 1},
-                                     {"ExitStateDelay", kInt, 250}});
+    // A music region as every one is written: an empty script beside the music's states.
+    const auto music = b.Struct(1, {{"Tag", kString, b.ExoString("bhm100tr_music")},
+                                    {"Type", kInt, 5},
+                                    {"ScriptResRefID", kResRef, b.ResRef("")},
+                                    {"ScriptDelay", kInt, 0},
+                                    {"EnterState", kInt, 2},
+                                    {"EnterStateDelay", kInt, 3000},
+                                    {"ExitState", kInt, 1},
+                                    {"ExitStateDelay", kInt, 0}});
     const auto waypoint = b.Struct(5, {{"Tag", kString, b.ExoString("mn_tower_exit")},
                                        {"HasMapNote", kByte, 1},
                                        {"MapNote", kLocString, b.LocString(377012)},
@@ -128,7 +132,7 @@ dao::test::files::Bytes TowerArea()
                 {"CreatureList", kList, b.List({creature})},
                 {"ItemList", kList, b.List({})},
                 {"PlaceableList", kList, b.List({placeable})},
-                {"TriggerList", kList, b.List({sounds, script})},
+                {"TriggerList", kList, b.List({sounds, music})},
                 {"StoreList", kList, b.List({})},
                 {"StageList", kList, b.List({stage})},
                 {"WaypointList", kList, b.List({waypoint})},
@@ -212,12 +216,14 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
     REQUIRE(wind.sounds.size() == 1);
     CHECK(wind.sounds[0].volume == -4.0F);
     CHECK(wind.sounds[0].occludable);
-    const auto &enter = read->triggers[1];
-    CHECK(enter.type == 5);
-    CHECK(enter.script == "bhm100tr_enter");
-    CHECK(enter.enterState == 1);
-    CHECK(enter.exitStateDelay == 250);
-    CHECK_FALSE(enter.priority);
+    const auto &music = read->triggers[1];
+    CHECK(music.type == 5);
+    CHECK(music.script.empty());
+    CHECK(music.enterState == 2);
+    CHECK(music.enterStateDelay == 3000);
+    CHECK(music.exitState == 1);
+    CHECK(music.exitStateDelay == 0);
+    CHECK_FALSE(music.priority);
 
     REQUIRE(read->waypoints.size() == 1);
     CHECK(read->waypoints[0].hasMapNote);
@@ -231,6 +237,28 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
     CHECK(read->sounds[0].sound == "global_amb_glo/amb_ext_crow_sgl");
     CHECK(read->sounds[0].maxDistanceMult == 1.5F);
     CHECK(read->sounds[0].priority == 225);
+}
+
+// The Circle's basement's second door between rooms 1325 and 1103, as bhm700ar_tower_basement.are
+// has it, and a placeable whose instance has no RoomIDs.
+TEST_CASE("a placeable's rooms are its RoomIDs, and -1 where it has none", "[area]")
+{
+    Builder b("ARE");
+    const auto top = b.Struct(0xFFFFFFFF, {});
+    const auto door = b.Struct(
+        9, {{"Tag", kString, b.ExoString("bhm700ip_seconddoor")}, {"RoomID1", kInt, 1325}, {"RoomID2", kInt, 1103}});
+    const auto bare = b.Struct(9, {{"Tag", kString, b.ExoString("genip_chest")}});
+    b.Set(top, {{"PlaceableList", kList, b.List({door, bare})}});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto read = area::AreaOf(*file);
+    REQUIRE(read);
+    REQUIRE(read->placeables.size() == 2);
+    CHECK(read->placeables[0].roomId1 == 1325);
+    CHECK(read->placeables[0].roomId2 == 1103);
+    CHECK(read->placeables[1].roomId1 == -1);
+    CHECK(read->placeables[1].roomId2 == -1);
 }
 
 TEST_CASE("a GFF3 file of another type is no area", "[area]")
@@ -253,6 +281,8 @@ TEST_CASE("the game's areas in game/areas, when there, read whole with an AREA_I
     std::size_t areas = 0;
     std::size_t creatures = 0;
     std::size_t corners = 0;
+    std::size_t placeables = 0;
+    std::size_t doors = 0;
     for (const auto &entry : std::filesystem::recursive_directory_iterator(folder))
     {
         if (entry.path().extension() != ".are")
@@ -272,9 +302,18 @@ TEST_CASE("the game's areas in game/areas, when there, read whole with an AREA_I
         {
             corners += trigger.geometry.size();
         }
+        for (const auto &placeable : read->placeables)
+        {
+            ++placeables;
+            const bool between = placeable.roomId1 != placeable.roomId2;
+            doors += between && placeable.roomId1 != -1 && placeable.roomId2 != -1 ? 1 : 0;
+        }
     }
     // As the survey counted them, 2026-10-17: 297 areas, 8,416 creatures, 38,273 corners.
     CHECK(areas == 297);
     CHECK(creatures == 8416);
     CHECK(corners == 38273);
+    // And 2026-10-18 (#186): 7,190 placeables, 815 of them between two rooms.
+    CHECK(placeables == 7190);
+    CHECK(doors == 815);
 }

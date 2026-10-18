@@ -22,6 +22,7 @@ constexpr std::uint32_t kPosition = 4;
 constexpr std::uint32_t kOrientation = 5;
 constexpr std::uint32_t kRoomSees = 3047;
 constexpr std::uint32_t kRoomModels = 3050;
+constexpr std::uint32_t kRoomConnects = 3099;
 constexpr std::uint32_t kModelScale = 3059;
 constexpr std::uint32_t kModelFile = 3063;
 constexpr std::uint32_t kProbeCube = 3104;
@@ -659,6 +660,18 @@ std::optional<LevelLayout> LevelLayoutOf(const gff4::File &layout)
     return out;
 }
 
+// A room's number and connections (DAOLib #186), read 2026-10-18 in the game's files (ghilana's
+// extract of every .rml, 9,553 by name; tools/gff4.py): no .rml has EnvRoomID (3031) or another
+// number of its own. The layout's room list (.arl, 3016) gives it, the same number the file's
+// name ends in (lak302d_1325) and, for a terrain level's chunk, column << 16 | row (oth000d_2_0
+// is 131072). EnvRoomVisibilityList (3047) and EnvRoomConnectivityList (3099) are both int32
+// lists of those numbers. 987 rooms connect, to 1 to 35 rooms each (2,340 in all), none to
+// itself; 30 (shl100d's among them) connect to a room they do not see. The Circle's basement,
+// lak302d, connects every room; the Fade, oth000d, none. The engine keeps the list at CRoom
+// +0xD0 and walks it room to room for perception (dev/COMBAT.md, "Perception through doors").
+// A creature's room (+0x41C, its number +0x150) is the room of the static geometry a ray down
+// from it hits, from the .arl's EnvStatPhys (3744, 3745), whose actors carry these numbers; the
+// walk grid's cells do not (lib-agent-2's reading, dev/COLLISION.md, section 3).
 std::optional<Room> RoomOf(const gff4::File &definition)
 {
     const std::optional<gff4::Struct> root = definition.Root();
@@ -670,6 +683,7 @@ std::optional<Room> RoomOf(const gff4::File &definition)
     room.at = PointOf(root->Floats(kPosition));
     room.turn = QuaternionOf(root->Floats(kOrientation));
     room.sees = root->Numbers(kRoomSees);
+    room.connects = root->Numbers(kRoomConnects);
     for (const gff4::Struct &model : root->Structs(kRoomModels))
     {
         Placed placed;

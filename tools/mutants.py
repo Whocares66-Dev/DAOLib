@@ -490,6 +490,13 @@ MUTANTS: list[Mutant] = [
         ".tree = node.Get<std::int32_t>(kTreeModel).value_or(0),",
         ".tree = node.Get<std::int32_t>(kTreeScale).value_or(0),",
     ),
+    # A room's connections (#186): their own list, not the visibility list beside it.
+    Mutant(
+        "level-room-connects: a room's connections are EnvRoomConnectivityList, not the rooms it sees",
+        LEVEL,
+        "room.connects = root->Numbers(kRoomConnects);",
+        "room.connects = root->Numbers(kRoomSees);",
+    ),
     # A placeable's walk-grid patch stamped as 0x00A46CC0 does (#176): over a cell under 8 only, and turned from +y
     # to the facing, clockwise for +x.
     Mutant(
@@ -527,6 +534,12 @@ MUTANTS: list[Mutant] = [
         AREA,
         'Number(in, "WOrientation", 1.0F)',
         'Number(in, "WOrientation", 0.0F)',
+    ),
+    Mutant(
+        "area-room-none: a placeable with no RoomID1 is in no room, -1, as the engine constructs it",
+        AREA,
+        'Number<std::int32_t>(in, "RoomID1", -1)',
+        'Number<std::int32_t>(in, "RoomID1", 0)',
     ),
     Mutant(
         "area-variable-float: a variable whose Value is a Float is a float, not dropped",

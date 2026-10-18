@@ -72,7 +72,7 @@ std::vector<Variable> Variables(const gff3::Struct &in)
     return variables;
 }
 
-// Regions of sounds and of scripts have no WOrientation (2026-10-17), nor
+// Triggers of Types 4 and 5 have no WOrientation (2026-10-17), nor
 // Active or Importance: a missing part is the unturned, active object's.
 Placed PlacedOf(const gff3::Struct &in)
 {
@@ -102,6 +102,12 @@ Creature CreatureOf(const gff3::Struct &in)
     };
 }
 
+// A placeable's rooms (DAOLib #186), read 2026-10-18: RoomID1 and RoomID2 are Ints in all
+// 7,190 placeables of the 297 areas, and in no .utp. The engine's reader (0x007509CD) keeps them
+// at +0x6A8 and +0x6AC, -1 where neither has one (0x0074EEFD). 5,764 name one room twice, 815
+// two different rooms (the doors registered between them, 0x0068C190), 474 one room and -1, 137
+// -1 twice. Their numbers are the layout's rooms' (dao/core/Level.h, LevelRoom::id): the Circle's
+// basement's bhm700ip_seconddoor stands between 1325 and 1103.
 Placeable PlaceableOf(const gff3::Struct &in)
 {
     return {
@@ -114,8 +120,8 @@ Placeable PlaceableOf(const gff3::Struct &in)
         .trapDetection = Number<std::int32_t>(in, "TrapDetection", 0),
         .trapDisarm = Number<std::int32_t>(in, "TrapDisarm", 0),
         .useable = Flag(in, "Useable", true),
-        .roomId1 = Number<std::int32_t>(in, "RoomID1", 0),
-        .roomId2 = Number<std::int32_t>(in, "RoomID2", 0),
+        .roomId1 = Number<std::int32_t>(in, "RoomID1", -1),
+        .roomId2 = Number<std::int32_t>(in, "RoomID2", -1),
         .initialState = Number<std::int32_t>(in, "InitialState", 0),
     };
 }
@@ -138,6 +144,12 @@ Sound SoundOf(const gff3::Struct &in)
     };
 }
 
+// A trigger's Type (DAOLib #186), read 2026-10-18 by lib-agent-2 in the exe: 3 is a
+// CCTriggerAudioReverb, 4 a CCTriggerAudioVolume (a reverb region owning sounds), 5 a
+// CCTriggerAudioMusicVolume, which sets music_state to EnterState or ExitState after its delay,
+// for the controlled creature alone; Priority is never read. In the 297 areas' 283 of Type 5,
+// every one has ScriptResRefID (empty) and ScriptDelay (0) beside EnterState and ExitState (1 to
+// 10) and their delays (EnterStateDelay 0, 2,000, 3,000 or 10,000; ExitStateDelay 0), all Ints.
 Trigger TriggerOf(const gff3::Struct &in)
 {
     Trigger trigger{

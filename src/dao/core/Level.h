@@ -171,9 +171,9 @@ Layout LayoutOf(const gff4::File &layout);
 // A room of a level, as its layout lists it.
 struct LevelRoom
 {
-    std::int32_t id = 0;
-    std::wstring file; // its definition's name, with no extension: lak303d_3672
-    Point lower{};     // its bounds' corners, in the level's space
+    std::int32_t id = 0; // its number, as rooms' lists and placeables' RoomIDs name it
+    std::wstring file;   // its definition's name, with no extension: lak303d_3672
+    Point lower{};       // its bounds' corners, in the level's space
     Point upper{};
 };
 
@@ -271,11 +271,14 @@ struct PlacedTree
     std::int8_t drawDistance = 0; // the engine's step of how far it is drawn, 0 to 3; 0 where the file lacks it
 };
 
+// A room's definition. Its own number is not in the file: the level's layout gives it
+// (LevelRoom::id), and the numbers here are those.
 struct Room
 {
     Point at{};
     Quaternion turn{0, 0, 0, 1};
-    std::vector<std::uint32_t> sees; // the numbers of the rooms seen from it
+    std::vector<std::uint32_t> sees;     // the numbers of the rooms seen from it
+    std::vector<std::uint32_t> connects; // the numbers of the rooms it opens onto; empty in most levels
     std::vector<Placed> models;
     std::vector<PlacedTree> trees;
 };

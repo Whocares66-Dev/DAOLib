@@ -11,8 +11,9 @@
 // 297 the game takes (DAOLib #160): every one has the same top fields and
 // the seven lists here; the item list is empty in all of them. A trigger is
 // one of four shapes, by its Type: none, a trigger placed from a template
-// (1,738); 3, a reverb region (437); 4, a region of sounds (1,772); 5, a
-// region running a script as it is entered and left (283). A variable's
+// (1,738); 3, a reverb region (437); 4, a reverb region with sounds of its
+// own (1,772); 5, a music region, setting the music's state as the
+// controlled creature enters and leaves it (283). A variable's
 // Type is 1 for an int (its Value an Int), 2 for a float, 3 for a string,
 // and 12 for a string too (21, in triggers).
 #pragma once
@@ -75,12 +76,12 @@ struct Placeable
     std::int32_t trapDetection = 0;
     std::int32_t trapDisarm = 0;
     bool useable = true;
-    std::int32_t roomId1 = 0; // the rooms it is in
-    std::int32_t roomId2 = 0;
+    std::int32_t roomId1 = -1; // the rooms it stands between, by the layout's numbers; -1 for none
+    std::int32_t roomId2 = -1; // a door's other side; roomId1 again for one in a room
     std::int32_t initialState = 0;
 };
 
-// A sound placed in an area, or in a region of sounds.
+// A sound placed in an area, or in a trigger of Type 4.
 struct Sound
 {
     Placed placed;
@@ -100,16 +101,16 @@ struct Sound
 struct Trigger
 {
     Placed placed;
-    std::optional<std::int32_t> type;     // 3 reverb, 4 sounds, 5 script; none for one placed from a template
+    std::optional<std::int32_t> type;     // 3 reverb, 4 reverb and sounds, 5 music; none for one placed from a template
     std::vector<Point> geometry;          // its outline's corners, from its place, not turned
-    std::string reverbPreset;             // a reverb or sounds region's
-    std::optional<std::int32_t> priority; // a reverb region's
-    std::vector<Sound> sounds;            // a sounds region's
-    std::string script;                   // a script region's ScriptResRefID
-    std::int32_t scriptDelay = 0;
-    std::int32_t enterState = 0;
-    std::int32_t enterStateDelay = 0;
-    std::int32_t exitState = 0;
+    std::string reverbPreset;             // a reverb region's, types 3 and 4
+    std::optional<std::int32_t> priority; // a type 3's; the engine never reads it
+    std::vector<Sound> sounds;            // a type 4's
+    std::string script;                   // a music region's ScriptResRefID, empty in every one
+    std::int32_t scriptDelay = 0;         // a music region's, 0 in every one
+    std::int32_t enterState = 0;          // the music's state set as the region is entered
+    std::int32_t enterStateDelay = 0;     // milliseconds
+    std::int32_t exitState = 0;           // and as it is left
     std::int32_t exitStateDelay = 0;
 };
 
