@@ -1,4 +1,4 @@
-# The walk grid's tests: paths, a blocked start or goal, spawning
+# The walk grid's tests: paths, a blocked start or goal, spawning; the ground's height
 
 What the engine does with the walk grid's cell kinds at each test (the end test, the straight walk, the coarse and fine searches), what `RequestPath` does with a start or goal on a blocked cell, and whether a creature put on a blocked spot is moved. Companion to `dev/PARAGON_GRID.md` (the grid's file and what a cell holds) and `dev/PLACEABLES.md` (a door's patch of it).
 
@@ -223,3 +223,164 @@ The extra call `0x0067CFA0(this, pos, candidate, mc, 1)` (flag 1 -> mask 0x20111
 - Where the stacked wolves' point comes from (not in the .are's creature list; scripts of pre200tr_wolf_fight use no CreateObject/SetPosition); whether the engine's pathfinder accepts a blocked start.
 - The `[ebp+0x1C]` snap flag is passed but the found-exit snaps regardless (read); whether the early ground snap at the top is the only effect of the flag.
 - The GFF3 .are's other lists (placeables, stages) were not checked for the stack.
+
+## Ground z at load: what z a placed creature or placeable gets (lib-agent-2, 2026-10-19, GOG exe, addresses GOG's)
+
+### Short answers
+
+1. **A creature placed in an area's .are keeps the .are's z exactly (checked in disassembly).** The Position (XPosition/YPosition/ZPosition) is read verbatim by the common object loader `0x00698ED0` (called through vtable +0x88: CCCreature `0x006BE980`, CCPlaceable `0x0074FE30`; both end in the same loader) and stored at +0x120 by `0x00695540`, which calls SetPosition on an object that has no physics body yet. The area's creature list step `0x0067F420` then calls AddToArea (vtable +0xF8, `0x006B6BC0`) with that +0x120. AddToArea ends in SetPosition `0x006B5EF0`, which in game mode 9 (Loading) skips the snap `0x006B1790` and sets the physics body to (x, y, z + [obj+0x784]). No GroundHeight and no GetSafeLocation. Confirms PATHFINDING.md:153.
+2. **A creature restored from a save is the same (checked for the loader, inferred for the mode).** LOAD_EVENTS.md:103 says a saved object is restored through vtable +0x88; that is the same `0x006BE980` -> `0x00698ED0` that reads the saved Position verbatim, and the area's list step `0x0067F420` adds it the same way (the creature loader `0x00683820` puts both kinds on the +0x250 list). So the saved z is kept as is. That the mode is 9 for a save's area adds is inferred from the loading mode's state machine running them (LOAD_EVENTS.md:97).
+3. **The party's arrival is the one load-time snap (checked, PATHFINDING.md:162, LOAD_EVENTS.md:125).** `0x006C73C0` -> GetSafeLocation `0x0073E370` (20.0 m, reachable, snapToGround=1). Its z part: at the top `p.z = GroundHeight(p)` (0x73D520 -> 0x685430); at the found exit `*out.z = GroundHeight(c)` always (PATHFINDING.md:193). Then AddToArea in Loading mode, no further snap. If the search fails the spot (with its unsnapped z) is kept.
+4. **Placeables are never snapped at load (checked).** Their SetPosition (vtable +0x7C = `0x0074BB70`) is the base one (`0x00697AE0` + `0x00695D70`), without any ground call; their AddToArea `0x00750B10` has none either. A placeable placed from the .are stands at the .are's z.
+5. **At CreateObject the factory snaps placeables too, not only creatures (checked).** The factory `0x006861F0(type, area, pos)` takes type 6 (creature, object 0xD20) or 0xA (placeable, object 0x6F0, init `0x0074BB30`); both branches reach the same tail `0x00686301`, which takes x and y of the given location, calls `0x00685430` (GroundHeight) for z, and calls AddToArea(area, &pos, 0). Other types are not made here. So a script `CreateObject` of a placeable gets z = ground at (x, y) (from z+3.0 down 100 m; the input z if the ray hits nothing).
+6. **Other GroundHeight callers (found by scanning E8 calls, not read):** `0x0068581C`, `0x0069551A` (CCObject lazy cache below), `0x006A5E5D`, `0x006A7786`, `0x006A77D1` (creature code), `0x00752803` (a placeable function reached from `0x006B9954`, the code after a creature's `0x006B98E0`-area routine: it copies the creature's transform to a placeable and puts it on the ground; inferred to be the death/corpse placeable), `0x0073D529`, `0x0073E31D/E348/E3BD/E766/E794/E7C2/E896/EA57` (GetSafeLocation family), `0x007A595D`, `0x007A5E62`, `0x007A9A6C`.
+7. **The designers' z already sits on the ground (checked with the files).** Ostagar's camp (`pre100ar_kings_camp.are`, Layout `ost000t`, `ost000t.opf`'s 54,674 terrain-mesh triangles): of 96 placed creatures, 79 are within 5 cm of the mesh below them, and of the 83 within 25 cm, 71 are within 1 cm (7 are 1-5 cm below the surface, 2 are 5-10 cm below, 2 are 10-25 cm above). The 13 beyond 25 cm are on non-mesh shapes (box/capsule bridges and tower floors: z up to 61 m "above" the mesh underneath), which my mesh-only test cannot see. Placeables: 25 of 44 within 5 cm, 38 of 44 within 25 cm; the rest on gates, bridges, floors. Slopes are mild here (steepest creature 0.34 m of rise per metre, its z 17.5 cm above the mesh; most are below 0.16). So the port should keep the .are's z for a placed object and not re-snap it; if it must snap, do it against the physics mesh (a ray), not the walk grid's heights.
+
+### A hint for the port about slopes while moving (new, inferred)
+
+`CCObject` `0x006954C0` is a lazy ground cache: if byte +0x1C4 is 0 it sets the normal at +0x1B0 to (0,0,1) and +0x1C0 = z, and if the object has an area (vtable +0xA0) it calls GroundHeight(area, &pos(+0x120), 0, &normal(+0x1B0)) and stores the ray's height into +0x1C0, then sets +0x1C4 = 1. `0x00695540` (set position) clears +0x1C4 to 0, so the cache is recomputed after every position change. The creature's per-frame update (code at `0x006A3470-0x006A35BB`, argument dt) calls `0x006954C0` twice and reads +0x1C0 as the creature's height. So the engine puts a moving creature's z on the physics mesh (a ray), with the surface normal kept at +0x1B0 (probably what TerrainFollowPitch/Roll in ANIMATION.md:557/606 consume; not read). A walk grid's sixteenth-of-a-metre heights are not what the engine uses for z.
+
+### Pseudo-code a port can copy
+
+```
+// area load, for each creature and placeable of the .are (or of the save)
+obj.pos = file.Position            // verbatim, z included
+obj.AddToArea(area, obj.pos)       // game mode Loading: no snap, no safe-location search
+                                   // physics body z = pos.z + body offset (+0x784 for a creature)
+
+// script CreateObject (creature or placeable)
+pos.z = GroundHeight(area, pos.x, pos.y, pos.z)   // ray down from z+3.0, 100 m long; pos.z if no hit
+obj.AddToArea(area, pos)           // not Loading: a creature may then be moved by 0x006B1790 if it overlaps static physics
+
+// party arrival: GetSafeLocation(spot, 20 m, reachable, snapToGround) as PATHFINDING.md:164-198
+
+// each frame, a moving creature: z = GroundHeight(area, pos) (cached, invalidated by any position change)
+```
+
+### Evidence (all GOG)
+
+- Position fields: strings "XPosition" 0xB0DB9C, "YPosition" 0xB0DB90, "ZPosition" 0xB0DB84. The generic object read `0x0069AAD0` (reads X/Y/Z through `0x00A370C0`, calls `0x00695540`; reached by vtable data, scanned) stores the values untouched. `0x00698ED0` reads the vector (field id 4, default the object's own +0x120) through `0x005FF7A0` and calls `0x00695540` at `0x00698F38`; the orientation follows (field 5). CCCreature's main vtable `0x00B10484`: +0x7C `0x006B5EF0`, +0x88 `0x006BE980`, +0xA0 `0x00695CD0`, +0xF8 `0x006B6BC0`. CCPlaceable's `0x00B1C084`: +0x7C `0x0074BB70`, +0x88 `0x0074FE30`, +0xF8 `0x00750B10`.
+- The loaders: placeables `0x00683380` fills the list at area+0x240, creatures `0x00683820` (new object 0xD20, constructor `0x006B9ED0`, load `0x006ABDC0`) the list at area+0x250; `0x0067F420` walks the +0x240 list first, then the +0x250 list, each: a readiness call, then `[obj vtable +0xF8](area, &obj+0x120, 0)` (disassembly at `0x0067F49B..0x0067F4AD` and `0x0067F552..0x0067F570`).
+- `0x006B5EF0`: gate `mov eax,[0xC327EC]; mov edx,[eax+0x114]; cmp [edx+0x78],9; je skip` at `0x006B5F67-0x006B5F7A`; else `call 0x6B1790`. The skip path writes (x, y, z + [esi+0x784]) to the physics body (vtable +0x1C) at `0x006B5F87-0x006B5FB7`.
+- Factory `0x006861F0`: `cmp eax,6` / `cmp eax,0xA` at `0x00686224-0x0068622C`; common tail `0x00686301`; GroundHeight call `0x0068633D`; AddToArea via `[vtable+0xF8]` at `0x00686370`.
+- Ground cache `0x006954C0`, set-position `0x00695540` (clears `[esi+0x1C4]` at `0x006955A0`), snap `0x006B1790` reads `[esi+0x1C0]` at `0x006B17D1`.
+- Data check: scratch `%TEMP%\lib-agent-2-groundload-cmp.py` (a GFF3 reader for the .are, the .opf's XML triangle meshes placed by actor and shape poses, a downward ray from z+3.0 over all mesh shapes; the highest hit below z+3.0). Files extracted by ghilana: `pre100ar_kings_camp.are` (patch003.erf), `ost000t.opf`. The Wilds (`ost100d`) has no `.opf` (COLLISION.md:5), so it could not be compared; Ostagar's camp was used.
+
+### Not read
+
+- That the game mode is exactly 9 during the object adds of a save's area (relied on LOAD_EVENTS.md's order).
+- What `0x00685430`'s third argument (the normal out) and its fourth/"nothing hit" path do beyond what PATHFINDING.md says; what consumes the normal at +0x1B0 (TerrainFollow*).
+- The creature per-frame update around `0x006A3470` beyond its use of `0x006954C0`/+0x1C0; whether the final z of a moving creature is that cache or the physics body.
+- The other GroundHeight callers listed in point 6 (what they are); `0x0069AAD0`'s caller (only reached through data tables).
+- The 13 creatures and 6 placeables on non-mesh shapes (boxes, capsules): not compared; the Wilds; an area with steep stairs (Ostagar's camp has only mild slopes).
+
+## How a walking creature gets its z, and the body tilt (read 2026-10-19, GOG exe, read-only) (lib-agent-2)
+
+"checked" = read in disassembly or data. "inferred" = from control flow or a constant's meaning, not a name.
+
+### Short answers
+
+1. **A moving creature's z is not the walk grid's, and not a per-step GroundHeight ray. It is a PhysX character controller.** Every creature has a capsule controller (`Physics::PhysicsControllerCapsule`, vtable 0x00B2766C, over `NxController`) at `creature+0x770`, made by `CCCreature::CreatePhysicsController` 0x006B1ED0 (checked). Each frame the creature update (0x006BB910 region, call at 0x006BBA39) calls **0x006B6880(dt, targetPos)**, which moves the capsule by `(target.xy - pos.xy, z = -9.81)` through `NxController::move` with mask 0x2011134, then **0x006B2220 reads the capsule back into the creature**: `z = capsuleCenterZ - centerOffset`. The z is set exactly (no lerp, no smoothing) (checked).
+2. The -9.81 is a displacement per move, not a velocity times dt: it is "fall up to 9.81 m this frame". The capsule lands on whatever floor its sweep meets within 9.81 m below, and climbs up steps of up to **0.5 m** (the controller's stepOffset), slope limit **cos 60 degrees** (inferred, see below), skin width 0.1. So feet follow stairs and slopes exactly each frame, because the contact is the capsule's, not a sampled height. A port that sets z from a 0.5 m cell's height will always differ from this.
+3. **GroundHeight (0x00685430) is not the walking z.** It is used for spawn (CreateObject), GetSafeLocation, the snap 0x006B1790, a cached ground height and normal at the creature (`creature+0x1C0` z, `+0x1B0` vec4 normal, refreshed by 0x006954C0), and the root-motion (gob clip) / script-moved path, where z is taken from that cached ground height (0x006A3487 region). It is a physics ray: origin (x, y, z+3.0), straight down, **unlimited length** (FLT_MAX), group mask 0x2000000 (Walkable); if that misses, a second ray from z+100 collects all hits and takes the hit nearest in z to the input z (inferred from the loop, checked shape). The input z is returned if nothing is hit (cited, PATHFINDING.md:154).
+4. **The walk grid's cell height is not read by any of this** (checked: 0x006B6880 and 0x006B2220 never touch the grid). It only supplies z for GetSafeLocation's candidate cells (0x0073DE20 -> 0x00A473A0, cited PATHFINDING.md:171-200), and even there the result is re-snapped by GroundHeight. Whether the grid interpolates between cells: not read, and it does not matter for walking.
+5. **No foot IK.** `IKDNode` (vtable 0x00B0D9B4, 2 slots: destructor + one) is not inverse kinematics: its constructors/destructors sit in area code (0x0067A5C0, 0x0067B830, 0x0067E3F0, the CCArea region) and it is a two-pointer container (fields +4/+8 or +0xC/+0x10 zeroed). Refutes the "probably the physics" guess in ANIMATION.md:606 (checked: the code, inferred: what the name stands for). Confirms "no foot IK" (no per-foot ray or bone solve found in the movement or animation code I read; not an exhaustive scan of every animation system).
+6. **Body tilt exists, for quadrupeds, and it is not a controller thing.** `TerrainFollowPitch/Roll/Precision` (apr_base row +0xA8/+0xAC/+0xB0) are consumed by a per-frame creature routine **0x006A7AE0** (from the creature update at 0x006BD566) which calls **0x006A7520** to compute a target pitch and roll from the ground, clamps them to +-TerrainFollowPitch and +-TerrainFollowRoll, and slews the model toward them (checked structure; formulas inferred). A biped's pitch limit is 0, so its target is 0 (inferred from the clamp; it never tilts).
+
+### Pseudo-code a port can copy
+
+#### Per-frame z (0x006B6880 + 0x006B2220), checked
+
+```
+// creature has a capsule: radius cr, cylinder height ch, centre offset co  (below)
+step(creature, target /* new x,y,(z unchanged) from the movement controller or root motion */, dt):
+    if capsule.collisionEnabled == false:  creature.SetPosition(target)          // 0x006B68BD: no ground follow
+    saved = capsule.position                                                    // GetDebugPosition 0x00838380 (centre)
+    disp  = (target.x - creature.x, target.y - creature.y, -9.81)               // NOT times dt
+    n     = groundNormalAt(creature)                                            // 0x006954C0 -> GroundHeight's 3rd out
+    if n.z <= cos(60deg) + 1e-6:                                                // steeper than 60 deg: slide
+        slide = min(slide + dt*5.0, 20.0); if slide > 0.01: disp.xy += downhill(n) * slide * dt   // inferred direction
+    else:
+        slide *= clamp(1 - 3*dt, 0.1, 0.9)                                      // decays
+    flags = capsule.move(disp, mask=0x2011134, minDist=0.001, sharpness=1.0)    // NxController::move, slot +0x10
+    if flags & UP:                                                              // head hit while stepping up
+        capsule.setPosition(saved); capsule.stepOffset = 0.0
+        capsule.move(disp, mask=0x2011134, 0.001, 1.0); capsule.stepOffset = 0.5
+    p = capsule.position; p.z -= co                                             // 0x006B2220
+    if creature.capsuleHeight != -1: p.z += (creature.capsuleHeight - capsule.height) * 0.5
+    if capsule.collidingDown:  if p != creature.pos: creature.SetPosition(p)    // exact
+    else:                      creature.SetPosition(p.x, p.y, creature.z)       // airborne: z kept, then snap 0x006B1790(0)
+```
+
+The mask 0x2011134 = Walkable 0x2000000 | TerrainWall 0x10000 | tree 0x1000 | Water 0x100 | StaticGeometry 0x20 | 0x10 (creatures' own bit, so creatures block each other) | Placeables 0x4 (bit names from COLLISION.md:62-84, checked). Creature capsules sit in shape group 4, groupsMask 0x10 (cited COLLISION.md:85).
+
+#### The capsule's size (0x006B1ED0, values checked, flow inferred), all in metres
+
+```
+h = min(Height of the creature (virtual 0x1B0), 1.7)             // 0x0069EE10; default 1.7
+r = movementController.personalSpace ([[creature+0x7B0]+0x60])
+if bigKind(creature) /*0x006A2CE0*/: h = max(h, 1.426); r = max(r, 0.35)
+cr = max(0.6 * r, 0.1)                       // capsule radius,  stored creature+0x77C
+ch = max(h - 2*cr - 0.2, cr + 0.1)           // cylinder height, stored creature+0x780
+co = cr + ch/2 + 0.1                         // centre above the feet, stored creature+0x784
+controller desc: up axis Z (2), slopeLimit = cos(pi/3)+1e-6 (0x008E6020 not decoded; cos assumed, 0.5), skinWidth 0.1, stepOffset 0.5
+```
+
+The 0.1 is the gap under the capsule: feet z = centre - co.
+
+#### GroundHeight 0x00685430(this = area, pos, byte* hitOut, vec4* normalOut) -> z, checked
+
+```
+ray1: origin (x, y, z+3.0), dir (0,0,-1), length FLT_MAX, groups all, mask M
+      M = 0x24 (Placeables|StaticGeometry) and the hit must not carry flag 0x01000000 (Nonwalkable)   if area+0x658->+0x7C == 1 (0x0067B4D0)
+      M = 0x2000000 (Walkable)                                                                         otherwise
+if hit: z = hit.z; *hitOut = 1; *normalOut = hit.normal; return z
+else:   ray2 from z+100 down with all hits; take the hit with the smallest |hit.z - z| whose flag 0x01000000 is clear (65505 start of the min); if none, return z
+```
+
+(The 0x0067B4D0 flag's meaning is not read; mask choice checked, who sets it not.)
+
+#### Body tilt (0x006A7AE0 -> 0x006A7520), structure checked, maths inferred
+
+```
+// needs: game mode not 4 or 5 (0x005D5E70), creature.dirty (+0xB40, set by 0x0069EE60 on a position change; +0xB41 = "apply at once")
+row = apr_base[creature.appearanceRow]                 // cache 0x00C0CB78; row id = word at [creature+0x7B0]+0x58
+P, R, prec = row.TerrainFollowPitch, row.TerrainFollowRoll, row.TerrainFollowPrecision   // row +0xA8/+0xAC/+0xB0
+if modelKind(creature)==1 (0x005CA710 GDA lookup, column 0xE991BD51): P = max(P, 60), R = ..., prec = 1   // a size class that always uses two probes (inferred)
+prec == 0:  one sample. n = ground normal at the creature (0x006954C0); target pitch/roll = the angles of n in the creature's heading frame
+prec == 1:  two samples. GroundHeight at two points along the heading, +-(virtual 0x9C, a body length) from the centre,
+            (calls at 0x006A7786 and 0x006A77D1; if either misses the ray, the tilt is left as it was);
+            pitch from their height difference, roll from the normal (inferred)
+pitch_t = clamp(pitch, -P, P);  roll_t = clamp(roll, -R, R)         // 0x006A78F4-0x006A79B0; stored creature+0xB30 / +0xB34
+w_pitch = 180 + 540*min(|pitch_t - cur|/180, 1)  deg/s ; same for roll (+0xB38 / +0xB3C)   // 0x006A7A3D..: 180*(1-d)+720*d, inferred
+rate = {mode(+0xB20)==2: 0.2, ==1: 0.8, ==0 and a root-motion clip (AnimBase+0xC0): 0.1, else 1.0}   // 0x006A7AF7-0x006A7B20
+each frame: cur = the model's current pitch/roll (0x00A5CD00); move cur toward target by w * rate * dt, not past it; write back with 0x00A5CCC0
+```
+
+A port that wants the wolf to lean: P = TerrainFollowPitch, R = TerrainFollowRoll from apr_base (the columns are in the GDA), sample the ground at the body's front and back, clamp, slew. For humanoids both are 0, so there is no tilt: the capsule alone gives their feet's height.
+
+### Evidence
+
+- Capsule use: `0x006B6880` reads `creature+0x770`; `[ctrl]+0x18` = "collision enabled" (byte +0xF, 0x00837D20); +0x10 = Move 0x00838240 (`NxController::move`, stores the sides/up/down flags at +0xD/+0xE/+0xC, 0x008382D4-0x008382EB); +0x20 = position getter 0x00838380; +0x1C = SetPosition 0x00838310; +0x24 = SetStepOffset 0x00837DD0; +0x38/+0x3C/+0x40 = colliding down/sides/up (0x00838210/20/30). Names from the address library's Physics rows (22675-22706). Displacement z literal -9.81 at 0x00B0F274, mask 0x2011134 at 0x006B6A4B/0x006B6A84, 0.001 at 0x00B0F278, 1.0, stepOffset 0.5 at 0x00B0F28C (0x006B6B05).
+- Slide: 20.0 at 0x00AE72FC, 0.01 at 0x00AF7498, 5.0 at 0x00B02CD0, 3.0 at 0x00AF0C38, clamp 0.9/0.1 at 0x00B0E1F8/0x00AF91D0/0x00AE7D70.
+- Sync: 0x006B2220 (z minus +0x784, plus (+0x780 - height)*0.5 at 0x006B2290-0x006B229E, 0.5 at 0x00AE70F8); airborne branch builds (ctrl.x, ctrl.y, creature+0x128) at 0x006B22B3-0x006B22D6 then 0x006B1790(0); grounded branch compares with 0x004D4EF0 and calls SetPosition(p, 0).
+- Capsule dims: 0x006B1FD2-0x006B20C3; constants 1.426 (0x00B0FEE0), 0.35 (0x00B0FED8), 0.6 (0x00B0F500), 0.1 (0x00AE7D70/0x00B0F290), 0.2 (0x00AF7608), 1.7 (0x00B0F310). Desc fields 0x006B20DC-0x006B212A (Z up = 2, +0x24 slope, +0x28 0.1, +0x2C 0.5). Radius/height applied by SetRadius/SetHeight slots +0x64..+0x70 in 0x006B1908-0x006B1974; the dimension of the intended values is in +0x77C/+0x780.
+- GroundHeight: origin z+3.0 (double 0x00AF0C38), -1.0 at 0x00AE2E00, FLT_MAX 0x00AF0D18 in the scene wrapper 0x0082E620 (`raycastClosestShape` call at 0x0082E71D: shapesType 3, maxDist FLT_MAX, groupsMask from the 5th argument), 100.0 at 0x00AED110 for ray 2; scene vtable 0x00B272D4 slot +0x1C = RaycastClosestRay 0x0082E620, +0x20 = RaycastAllRay 0x0082E830.
+- Tilt: loader of the apr_base row 0x00748370 (hash columns 0xD11FCE15 / 0x9B8A2CBE / 0xB6D228CD = TerrainFollowPitch / Roll / Precision, computed with tools/gda.py's column_hash; no other code holds those hashes). Consumer: 0x006A7570 reads row+0xA8/+0xAC/+0xB0 into locals, 0x006A79BB/0x006A79C1 store the clamped result at creature+0xB30/+0xB34, 0x006A7A74 and 0x006A7AC5 the rates at +0xB38/+0xB3C, 0x006A7ACB clears +0xB40. Tick 0x006A7AE0 (reads +0xB30/+0xB34, applies via 0x00A5CCC0). Constants 60.0 (0x00C021D8), 720.0 (0x00C021DC), 180.0 (0x00C021E0 and 0x00AF7ED8), rates 0.2/0.8/0.1 (0x00C021E4/E8/EC).
+- IKDNode: refs 0x0067A5CA, 0x0067B842, 0x0067E402 are its destructors in CCArea's address range (0x0067A5C0 etc.).
+- Prior notes used: PATHFINDING.md:61-63 and 150-225 (CreateObject, GetSafeLocation, 0x006B1790/0x006B1600, mask 0x2011134), COLLISION.md:62-85 (group bits, creatures in group 4), ANIMATION.md:562-565 (MovementController, 0x006BB910 region, 0x006B6880 named "position integrated"), :606 (corrected here), :1063. The sibling projects hold nothing on creature z or tilt: DAOTurnBased only reads TerrainFollowPitch from the appearance table as "body kind" (Bar.cpp:723, Portraits.cpp:154); Eluvian and the address library have the Physics rows and no notes.
+
+### What this means for the port
+
+- A walking/standing/pushed creature's z should come from a **capsule-versus-static-shapes sweep** (radius max(0.6 r, 0.1), centre offset co, step 0.5, fall up to 9.81 per frame, mask above) or, if the port has the level's physics shapes (core's `Collision`), from a downward ray with the same mask at the creature's xy. Sampling the 0.5 m grid's height will clip on stairs and slopes; the grid is only a path/occupancy structure.
+- For a stationary creature the engine still runs the same move every frame it is updated (the displacement is nonzero in z), so a pushed or knocked-back creature settles onto the floor in one frame rather than falling.
+- For tilt: only creatures with TerrainFollowPitch > 0 (quadrupeds: wolves, dogs, spiders and the like per DAOTurnBased's use of the column) need it; clamp to the row's two limits and slew at 180 to 720 deg/s.
+
+### Not read
+
+- The sign and direction of the slide (downhill vector) and whether `0x008E6020` is cos or tan (assumed cos 60 degrees by the use as a normal.z threshold).
+- The exact tilt mathematics (the quaternion/euler helpers 0x004EE200/0x004EE310/0x004EE370/0x004EE420/0x004EDF80/0x004CB640 not decoded): target pitch/roll from a normal in the heading frame versus from two probes is read from the control flow only; the front/back probe distance (virtual 0x9C) and the second probe pair at 0x006A77E3-0x006A7845 not decoded.
+- What sets creature+0xB20 (tilt rate mode), the dirty flag's setters beyond 0x0069EE60, and the meaning of 0x005CA710's column 0xE991BD51 and of 0x006A2CE0 (the "big kind" flag, 0x00631830 == 1).
+- The no-controller path of 0x006B6880 (0x006B6B1D: a sweep 0x00685920 then SetPosition) and the global switch at 0x00C353B5.
+- The walk grid's height channel (interpolation between cells, 0x00A473A0): not read, not needed.
+- A live check: nothing was run in the game; "z set exactly each frame" is the code's behaviour, not an observation. Where the animation layer might offset the model relative to the creature's position (root offset, scale) was not read.
