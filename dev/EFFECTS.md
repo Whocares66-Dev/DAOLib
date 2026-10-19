@@ -1070,6 +1070,14 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
   - Dynamic group +0, from the tables at 0x00AE7FC8/0x00AE7FD4: light 0 at **[9] position+radius and [11] colour**, light 1 at **[10] and [12]**.
   - Static group +0x10, from 0x00AE7FB0/0x00AE7FBC: [0]/[1], [5]/[6], [7]/[8].
   - [2]/[3] are the sun and [4] the ambient (DAOLib `Lights.h`: zero, plus each chosen ambient light).
+  - **The sun, [2] and [3]** (read 2026-10-19, lib-agent-2, for paragon-agent's #78) [C]:
+    - It is the area's, not a figure's own: nothing in it is per figure or relative to the camera. `LightManager::Update` (vtable slot 3, 0x00462800) calls `GetSun` (0x004625D0) once per scene and keeps the direction at manager +0xF0, the sun's colour at +0x100 and the figures' colour at +0x110. `ChooseForMoving` is handed +0xF0 and +0x110, `ChooseForLevel` +0xF0 and +0x100 (call sites 0x00465570, 0x00465563). Both go through 0x00462470 to 0x0046BB80, which stores the direction at state +0x60 ([2]) and the colour at +0x70 ([3]). `Fill` never writes them.
+    - `GetSun` switches on the layout's +0x7C, which the layout's load (0x005D1290) sets from `EnvAreaChunkIsChunk` (3122):
+      - **1, a terrain level:** the direction is the .arl's `EnvAreaSunlightDirection` (3150, layout +0xE0) as stored, w 1.0: the way the light travels, world space, z up, not turned or negated. Figures and level meshes alike read `-c2` as the way to the light (ch1.psh:196-198, static1.psh:196-198 and 271). The colour is `EnvAreaSunlightColorChar` (3149, +0xC4) for figures, a copy of `SunlightColor` where the file lacks it, and `EnvAreaSunlightColor` (3152, +0xB4) for level meshes.
+      - **2, a room level:** no sun. Both colours are a static (0,0,0,1) (0x00456320), whatever the .arl holds; the direction comes from the manager's +0xC0. 133 of the game's 213 .arl are room levels, the character creation stage oth999d among them; it is lit by its `_lc.mmh`'s three domain-1 lamps, the key `char_002` (`dev/CHARGEN.md`).
+      - **Anything else, or no layout** (inferred for the paperdoll and portrait scenes): the black static at 0x004626E3 for the direction and both colours.
+    - On a terrain level the figures' colour is faded per figure (0x00462470): to 0.1 where the layout's `EnvAreaSunlightCanBeOccludedChar` (3148, +0xF0) is set and the figure is in a room whose list passes a test not read, else to 1.0, at 4 a second (0x00BF29AC) or at once. Read as the sun dimmed indoors. The fade scales rgb, not w.
+    - `EnvAreaSunlightRotation` (3163), `Enabled` (3151), `ColorMult` (3153) and `ForceCharacterLighting` (3142) are pushed nowhere in `.text`, so inferred never read.
   - Unused slots are zeroed.
   - Each light is written as:
     ```
