@@ -117,3 +117,26 @@ Read 2026-10-18 in the GOG exe and vanilla's files (shaders through `fxc /dumpbi
   - The builder (0x006BFCD0, from 0x006C0DE0) makes `body_tints` (88), then `skin_tints` (85)'s A slot on top, from the appearance's fields. Every part's record gets the item's own tint (`materialtypes` 89, then `tint_override` 87), then the skin's A-slot values copied in (0x007494D0 → 0x007488F0).
   - With a head morph (0x006BD700, after), the morph's skin `.tnt` (its first tint) goes into the lips, eyes and hair, and into the chest's, gloves' and boots' materials' A slots (0x006B7400 → 0x006AB2A0; for the chest, `ArmorM1`, `RobeM1` or `ClothesM1`).
   - So the player and named characters' hands take the morph's skin; a creature with no morph takes `skin_tints`' row.
+
+## Neck_Model for a morphed head (read 2026-10-18 by lib-agent-2)
+
+### Short answer
+Read in the exe: nothing in the head's assembly consults the morph's parts list for the neck. `CAppearance::HeadModels` (0x0074B010, ID 17834) takes the neck from apr_base `Neck_Model` (column hash 0xdc9c928d, checked with gda.column_hash) and puts it in slot 4 of the model-name list, with no morph test. So an empty MorphParts[4] does not mean "no neck loaded". CHARACTERS.md's "always drawn" is right as to loading and attaching, but I did not trace the draw itself. I found no flag, cut-away or material that hides it for a morph. The peer's screenshot evidence is not explained by anything I read in the exe, so look elsewhere (below).
+
+### Evidence
+- Checked: the caller `BuildAppearanceModel` (0x006C0DE0, ID 14965) switches on `0x007490D0` (appearance kind). Kinds 4 (0x6C10E5) and 8 (0x6C11BD) call HeadModels(list, 1, 1) at 0x6C10F0 and 0x6C11C8, with the third argument (flag) set. With the flag set, HeadModels resizes the list to 6 (0x74B068, `0x616f20(6)`) and writes the neck with `vector<wstring>::at(4)` (0x74B250, `0x4560f0`). Part indices are 0 Face, 1 Eyes, 2 Hair, 3 Beard, 4 Neck, 5 Lashes.
+- Checked: the neck block (0x74B0A4 to 0x74B273) is skipped only if the Neck_Model string is empty (`jbe 0x74b2ae` at 0x74B0DA). HeadModels has no call to `0x74A7C0` (the morph-handle getter, this+0x1E4, loaded from the name at this+0x1C8). Its only caller is inside `0x74AB40`.
+- Checked: `0x74AB40` (part name builder) is the only place that reads the morph's parts list. In mode 1 (morph) it takes MorphParts[idx] if idx is below the list's count (list at morph +0x90, 0x1C-byte strings), else falls back to the worksheet. HeadModels calls it for eyes, face, hair, beard and lashes. It is never called for the neck. The `.mor` list is a replacement for the worksheet choice of those five parts only.
+- Checked: after the model is built, `0x006BFCD0` (called from 0x6C1282 and 0x6C0546) tests `0x74A7C0(this,1)` for a morph resource. With one, it calls `0x6BD700` (the morph path). Without one, it sets the parts' values by hand in-line. `0x6BD700` applies tints (12 strings at morph +0xA0) and then visits parts 0, 1, 2, 3, 5, 4 by name (`0x748160`, which copies the node name from the table at 0xC36DE0, 28 bytes per name). It finishes with `0x6B7400` using the NeckM1 slot's value. `0x6B7400` loops `0x6A1090` over three nodes (the chest-node trio) and sets parameter 0xC3549C on them. This looks like copying the neck's tint onto the chest. It does not remove a mesh (read only roughly; not traced to the end).
+- Checked in data: `hm_pcc_b01.mor` (face.erf) has MorphNodes BeardM1-3, HairM1-3, EyesM1, FaceM1 and LashesM1. There is no NeckM1 node. So the morph cannot move or hide the neck's vertices. MorphParts is a string list that ghilana does not read yet. The CHARGEN note says slot 4 is empty in `.mop` and `.mor`.
+
+### Where else to look (inferred)
+- The neck may be drawn and covered. The face and hair meshes hide the cap, and `Face.mat` has a tint mask. The peer's screenshot may differ because of tint or age-blend params applied to FaceM1 only (the morph sets `mml_vTintMaskColours` on FaceM1 but not NeckM1) or because of the camera.
+- The peer's engine may be skipping the neck because it treats the missing MorphParts[4] as a rule. The exe has no such rule that I could find.
+
+### Not read
+- `0x006A1180`, the loader of the list: I did not confirm it loads every non-empty slot, slot 4 included. I assumed it does. It does not appear to filter by slot.
+- Whether `MMHMeshDefaultHidden` is honoured differently on a morphed head's model (this was the 0x5950FA check; not re-traced).
+- The AnimBase `+0x18` method (0xA5D070) beyond its first lines: it seems to be a per-node parameter setter by dotted name.
+- The MorphParts list of a player `.mor`. The reader returns it as unread. I did not decode it by hand, so slot 4's emptiness is taken from CHARGEN.md, not re-read.
+- Not seen in play.

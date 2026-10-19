@@ -700,8 +700,8 @@ Other overlay trees (apr_base column values): `bowoverlay`, `cbowoverlay`, `staf
 
 - The tree pool is flat: each creature's trees (model, combat, movement, overlay, override) are loaded the same way by 0x006A1470 (flag 0xF, or 0x1F with the last argument 1 for the Override column) into one object's node list; nothing in the loader treats the overlay tree differently.
 - Per frame, `GraphicsStructures::Object` vtable slot 49 (0x0054D4B0; the vtable at 0x00AF85DC) walks the active clip entries (0x34-byte records in the tree: weight float at +0xC, clip id word at +0x2C, parent node index at +0x18, active byte +0x32) through 0x008149D0. For each active entry with weight > 0 (weight is the product up the parent chain, checked 0x00814C2E..0x00814CB4):
-  - if the clip's +0x2D (additive) is set: entry (scale vec3, weight, clip id) goes to the additive list at object+0x218 (0x00814B00-0x00814B6A);
-  - else if +0x2C (override) is set: to the override list at +0x228 (0x00814B84-0x00814BEE);
+  - if the clip's +0x2D (additive) is set: entry (scale vec3, weight, clip id) goes to the additive list at object+0x228 (0x00814B00-0x00814B6A; corrected 2026-10-18 by lib-agent-2, the two lists were swapped);
+  - else if +0x2C (override) is set: to the override list at +0x218 (0x00814B84-0x00814BEE);
   - else it is a normal clip of the blend group, and per group the weights are divided by their sum (0x0054D6C1..0x0054D70E: `w[+0x24] /= total`) so normal weights sum to 1.
   - `AnimationIgnoreScale` (+0x2F = 1) makes the entry's scale (1,1,1) instead of the tree's.
 - Never read: the sampler that consumes the three lists. So "additive = delta rotation applied on top, scaled by weight" and "override = replace the keyed bones' base pose, weighted" are inferred from the data: additive look clips have key 0 and the centre key equal to identity and are 181 keys of linear rotation about one axis; override clips key only the bones they replace and their first/last keys are poses, not deltas. Keys are in the usual Clip.h encodings (target 4 = 64-bit, 2 = 32-bit smallest-three).
@@ -1021,3 +1021,146 @@ Durations, using `dev/ANIMATION.md`'s PlayAnimation timings (length of the clip,
 - Whether the VM really rounds every float operation to float32 (I assumed yes in 3.4).
 - Playing the idle path in the game (no play check; the countdown and its table values are read, not seen).
 - A table dump of rows 0-131 beyond the ones listed (the table is `table 170` in ghilana; three add-ins' rows are enciphered).
+
+## The face: additive clips and the eyes (read 2026-10-18 by lib-agent-2)
+
+### Additive and override clips: the engine's maths, and the mh_o.* clips (lib-agent-2, prefix faceadd, 2026-10-18)
+
+GOG exe `game\DAOrigins.exe` (base 0x400000), no Ghidra, no game. "checked" = read in disassembly or data; "inferred" = from what the code/data implies. Scratch: `%TEMP%\lib-agent-2-faceadd-*`.
+
+#### Short answer
+
+1. **An additive clip's rotation is a delta, applied as `delta * base` (Hamilton product, delta on the left = in the parent's frame, the same side as FaceFX's +0xF0), and the delta is `slerp(identity, key, weight)`.** Identity is the neutral key. Nothing is added to the weight-blended pose otherwise. Order per bone: (1) the OVERRIDE clips' weighted spherical mean, with total weight Wo; (2) base = `slerp(normalBlend, overrideResult, Wo)` (override replaces by Wo, the normal blend keeps 1-Wo; Wo >= 1: override alone; Wo <= 0: normal alone); (3) every ADDITIVE entry in list order: `Q = slerp(I, q, w) * Q`; (4) the result is the node's animated rotation +0xE0, and the node then composes `local = FaceFX(+0xF0) * Q(+0xE0)`. Translation: additive is `v += w * key` (an offset; the node adds rest + animation + FaceFX). So the look-at (additive clips) and FaceFX both sit after the whole base+override pose.
+2. **The earlier note's list mapping was swapped** (dev/ANIMATION.md and lib-agent-2-anim-layers.md say additive = object+0x218, override = +0x228). Read here: clips with `+0x2D` (AnimationIsAdditive 4011) go to the list at **+0x228**, clips with `+0x2C` (AnimationIsOverride 4012) to **+0x218**. Checked in 0x008149D0 and the sampler (below).
+3. **mh_o.\*: all the look and eye-motion clips are additive (4011 = 1): eyehigh, eyelow, eyemid, eyejitter, eyelids, headhigh, headlow, headmid. `arms` and `rct_odmg_v1` are override (4012 = 1). Priority 4013 is 0 in all ten.** A delta's identity is stored as the identity quaternion (0,0,0,1), NOT the bone's rest rotation: the keys at neutral are exactly (0,0,0,1) while the head model's rest rotations are far from it (eyes (0.5,-0.5,-0.5,0.5); eyelids (0.707,0,0,0.707)). Blended as an absolute pose, an identity key puts the eye bone at identity, a 120 degree turn from its rest, which is the white eyes; the eyelid bones at identity are a 90 degree turn from rest.
+
+#### 1. The sampler (checked)
+
+##### Where the lists are consumed
+
+- `GraphicsStructures::Object` vtable slot 49 `0x0054D4B0` clears three vectors (normal +0x208, override +0x218, additive +0x228) and calls `0x008149D0` once per clip tree; it pushes (a1 = +0x208, a2 = +0x218, a3 = +0x228, a4 = +0x290 the scale). In `0x008149D0` an entry with `ModelAnimation+0x2D` set is written through `[ebp+0x10]` = a3 = +0x228 (0x00814B00..0x00814B6A), one with `+0x2C` through `[ebp+0xC]` = a2 = +0x218 (0x00814B84..0x00814BEE). Entries are 0x14 bytes (scale vec3, weight float at +0xC, track base word at +0x10, word at +0x12), and only entries with weight > 0 are added. The normal list has 0x30-byte nodes (blend-tree nodes; weight at +0x24, children), and per group the weights are divided by their sum (0x0054D6C1..0x0054D70E).
+- Slot 51 `0x00549E30` (the pose build, after the lists are made) loops the model's channel entries (0x30 bytes at object+0x1D8; the dword at +0x28 is the channel type, a jump table at 0x0054A18C) and calls one evaluator per type with (normalList, nNormal, +0x218 list, count, +0x228 list, count, track table, ..., bone index): type 0 scalar `0x00544F30`, type 1 vec3 `0x00544E20`, type 2 **rotation** `0x00545020`, type 3 vec4 (colour) `0x00545170`. Each writes its result through the entry's pointer at +0x10. A channel is evaluated only if some loaded clip keys the bone (`0x00544270` scans the track table: any non-null track for the bone).
+- Defaults: `0x008112E0` = (0,0,0,1) for rotations, `0x00811270` = (0,0,0) for vec3, `0x008112A0` = (0,0,0,0) for the vec4.
+
+##### Rotation, step by step (`0x00545020`)
+
+1. `0x00544510`: override accumulation. Start at identity with W = 0; for each override entry with weight w > 0 whose track exists: sample the key (below), then `0x00811130(acc, q, &W, w)`: `W' = W + w`, `acc = slerp(acc, q, w / W')` through `0x004CBC10` / `0x004CBAA0`. A running weighted spherical mean. Returns W = Wo.
+2. If Wo >= 1 the result is the override mean. Else `0x00544700` blends the normal tree (the same running slerp, tree weights already normalised) into Qn; if Wo <= 0 the result is Qn; otherwise `0x00811130(Qn, Qo, &(1-Wo), Wo)` = `slerp(Qn, Qo, Wo)`.
+3. `0x00544620`: for each additive entry (weight > 0, track present, in list order): sample q with `0x008118D0`, then `0x008111E0(Q, q, w)`: `delta = slerp(identity, q, w)` (`0x004CBC10` puts identity in the output and calls `0x004CBAA0`), then `Q = 0x004CB640(delta, Q)` = **delta * Q**.
+4. Store Q at the entry's +0x10 pointer. 0x004CBAA0 is a true slerp: dot of the two, sign flip if negative (shortest path), `acos`/`sin` weights (0x004CB930, 0x004CB3E0), a linear fallback near dot 1 (threshold double at 0x00AE09B0); `rsqrtss` inside. The outputs are unit (slerp of unit quaternions; products of unit quaternions), and no renormalise is found in the path, none is needed.
+- `0x004CB640(out, a, b)` is the Hamilton product a*b (x = ax*bw + bx*aw + ay*bz - az*by ...). The node (0x0055E9D0) calls it as `local = +0xF0 (FaceFX) * +0xE0 (animation)` and builds the matrix with `0x004D3D00`. So FaceFX and each additive delta act on the same side (outermost) of the animated rotation; the order among several additive entries is list order (they do not commute).
+- A key is sampled by `0x00818490` (finds the two keys around the 16-bit time, factor f) and `0x008118D0` / `0x00811B20` lerp the two 4-vectors componentwise with (1-f, f). Quaternions are lerped, not slerped, between keys, and not renormalised in the sampler; the keys are 1/30 s apart so the error is tiny. The caller's time is the clip's playback time (for look clips the controller sets it with SetTime).
+
+##### Translation and others
+
+- vec3 (`0x00544E20`): override accumulation `0x00543FC0` (weighted mean, returns Wo), normal tree `0x00544140`, mix with `0x00811030` (`result = normal*(1-Wo)/... + override*Wo`, a weighted mean), then additive `0x00544090`: **`v += w * key`** (`0x008110F0`). Starting default zero. The key is an offset added to the node's rest (dev/CHARACTERS.md).
+- scalar (`0x00544F30`): the same shape with floats (`0x00544370` additive).
+- vec4 (`0x00545170`): per-component linear weighted mean for override/normal, and additive `Q += w * q` (`0x00810FE0`); that is the colour channel type, not rotation. (I first took this one for the rotation; the default (0,0,0,0) at 0x008112A0 and the Hamilton product in 0x008111E0 settled it.)
+- Scale: `AnimationIgnoreScale` (+0x2F) only sets the entry's scale vec3 to (1,1,1) in `0x008149D0`; the scale arrives in the list entries' first three floats (a4 = object+0x290). How the scale multiplies a key was not read.
+
+##### Where FaceFX and the look-at fit
+
+- FaceFX writes the node's +0xF0 (rotation) and +0x130 (translation); the animation writes +0xE0 and +0x120; rest is +0x100. Node: translation = rest + animation + FaceFX (added), rotation = +0xF0 * +0xE0 (checked, 0x0055E9D0 and dev/CHARACTERS.md). FaceFX is therefore applied after the base, override and additive result.
+- The look-at is not a separate mechanism: it plays the overlay tree's additive clips (headlow/mid/high etc.) with weights and a scrubbed time (dev/ANIMATION.md), so it is entry (3) above, `delta*base` per look clip.
+
+#### 2. The mh_o.* clips (checked: `tools\gff4.py` dumps of the clips ghilana serves, same bytes in global.rim and anims.erf)
+
+| clip | length s | 4011 additive | 4012 override | 4013 prio | channels (keys) |
+|---|---|---|---|---|---|
+| mh_o.eyehigh | 6.0333 | 1 | 0 | 0 | eye_left_rotation (182), eye_right_rotation (182) |
+| mh_o.eyemid | 6.0333 | 1 | 0 | 0 | eye_left_rotation (182), eye_right_rotation (181) |
+| mh_o.eyelow | 6.0333 | 1 | 0 | 0 | eye_left_rotation (182), eye_right_rotation (182) |
+| mh_o.eyejitter | 9.9667 | 1 | 0 | 0 | eye_left_rotation (31), eye_right_rotation (56) |
+| mh_o.eyelids | 19.9667 | 1 | 0 | 0 | eyeblink_left_rotation (216), eyeblink_left_translation (37), eyeblink_right_rotation (229), eyeblink_right_translation (37), lowlid_left_rotation (216), lowlid_right_rotation (229) |
+| mh_o.headhigh | 6.0 | 1 | 0 | 0 | head_rotation (181), neck_rotation (181), neck1_rotation (179) |
+| mh_o.headmid | 6.0 | 1 | 0 | 0 | head_rotation (181), neck_rotation (177), neck1_rotation (166) |
+| mh_o.headlow | 6.0 | 1 | 0 | 0 | head_rotation (181), neck_rotation (181), neck1_rotation (172) |
+| mh_o.arms | 0.1333 | 0 | 1 | 0 | leftshoulder_rotation (2), rightshoulder_rotation (2) |
+| mh_o.rct_odmg_v1 | 1.30 | 0 | 1 | 0 | 45 channels: brow_left/right, cheek_left, chest1, chest2, eyeblink_left/right (rot + trans), eyelookbackat, head, headbase, inner/outer lips, jawbone, lipcorner, lowlid, mouthbase, neck, neck1, sneer, undereye, and more (rotations, some translations) |
+
+Eyelid translation keys are offsets (zero outside the 6 blinks, peak y about -0.0016).
+
+##### What a delta's identity looks like (checked)
+
+Keys read with the lib-agent-2 clip decoder (`lib-agent-2-animlayer-q.py`; Clip.h's decoding), against the rest rotations in `hm_hed_dcpa_0.mmh` (Gff4 dump, MMHRotation, the copy the game takes):
+
+| bone | additive clip's key at neutral (x,y,z,w) | head model rest rotation (x,y,z,w) |
+|---|---|---|
+| eye_Left / eye_Right | (0,0,0,1) at t=0 and at the end of every eye clip; eyemid at 3.03 s is (0,0,0.0033,1) | (0.5,-0.5,-0.5,0.5), a 120 degree turn |
+| eyeBlink_Left/Right, lowLid_Left/Right | (0,0,0,1) at t=0, mid-clip (between blinks) and at the end | (0.7070,0,0,0.7072), a 90 degree turn |
+| Head | (0,0,0,1) at t=0 and at 3.0 s of headmid (the centre of the yaw sweep); (0.2284,0.0256,-0.0064,0.9732) at 6.0 s | (0,0,0.106,0.994) |
+| Neck / Neck1 | (0,0,0,1) at t=0, about identity at 3 s | Neck (-0.704,-0.063,-0.063,0.704); Neck1 (0,0,0.083,0.997) |
+
+So: a delta at rest is the identity quaternion, never the rest rotation. If the engine used these keys as absolute poses (override-style), every keyed eye bone would go to identity (120 degrees from rest) and the lids 90 degrees from rest: the white eyes. The override clips are the opposite: `mh_o.arms` keys are absolute poses (leftshoulder (0.1736,0.3705,0.0134,0.9123) against rest (-0.114,0.478,-0.025,0.871); rightshoulder (-0.1755,-0.3579,0.009,0.9171) against (0.114,-0.478,-0.025,0.871)), flat for 0.13 s.
+
+For a port: `Q = base`; for each additive clip (weight > 0) in order, `Q = slerp(identity, key, weight) * Q`. For a weight of exactly 1 that is `key * Q`. With slerp(identity, q, w) you may use the shortest-path sign flip as the engine does.
+
+#### Not read
+
+- The normal-tree blend `0x00544700` / `0x00544140` internals beyond "the same running slerp / weighted mean" (read by the call shape, not instruction by instruction), and the initial value when no normal clip is active for a bone (`0x00544AB0` starts from the entry's own first 16 bytes, which I did not trace to the rest rotation).
+- The binding that sets each entry's +0x10 pointer (vfunc +0x68 called from 0x0054D380): the node field it points at is taken from dev/CHARACTERS.md (+0xE0 rotation, +0x120 translation), not read at the bind.
+- Scale's combination, and `AnimationIgnoreScale` beyond setting (1,1,1).
+- The order of the entries inside the additive list (the tree's walk order, 0x008149D0 per clip tree); only that it is list order and the products do not commute.
+- Other additive clips in the game (mh_c.b_look*, bw_look*, etc.) were not re-dumped here; the engine path is the same for every clip with 4011 = 1.
+- Who plays `mh_o.eyelids` and `mh_o.eyejitter` (still not found in a tree or table).
+- Not run in the game: no emulation of the sampler against a pose.
+
+### What turns eye_Left / eye_Right
+
+#### Short answer
+
+1. **No aim constraint.** Nothing in the exe points `eye_Left` / `eye_Right` at the `*Lookat` nodes or at a world target. The head model's `eyeLookAtBase / eyeLookAt / eye_LeftLookat / eye_RightLookat` nodes are not children of the head (they hang off `GOD`, beside `Root`) and the exe has no string for any of them (checked, see 1). They are a leftover of the authoring rig; the engine never reads them (inferred from absence of any reference).
+2. **In normal play the eyes are turned only by the additive look clips**: the Eyes `PartLookAtController` plays `lookeyescenter/up/down` (`mh_o.eyemid/eyehigh/eyelow.ani`), yaw as clip time, pitch as weights. The eyes get the same world-target quaternion as the head and body (not reduced by the head's turn), clamped by themselves to **+-20 deg yaw, +-10 deg pitch**, at **360 deg/s** flat (times the 0.75..1 / 0.4..0.6 multiplier).
+3. **FaceFX can also turn the eyes** (the actor has `default_eye_Left/Right` bones with Eye Yaw / Eye Pitch / Gaze nodes), but only while a face animation (spoken line, gesture) plays; at idle it adds nothing. Its rotation is composed with the look clips' (see 4).
+4. **`eyejitter` and `eyelids` are not played by the engine at all in play.** They occur only as animation actions authored into cutscenes / conversations (`CutsceneActionAnimAnimationName` = `mh_o.eyejitter__0`, `mh_o.eyelids__0`). No automatic blink and no automatic jitter exist in the exe (not found; see Not read).
+
+#### 1. The nodes (checked, data)
+
+`hm_hed_dcpa_0.mmh` (extracted through ghilana, dumped with `tools/gff4.py --dump`; indent = depth, so parents are known). Chain: `GOB > GOD > Root > ... > Neck > Neck1 > Head > headBase > { underEye_*, eyeBlink_Left/Right, lowLid_Left/Right, eye_Right, eye_Left }`, plus `Head > eyeLookBackAt`.
+
+- `eye_Left` / `eye_Right`: children of `headBase`; rest translation (+-0.03224, -0.03615, 0.02897), rest rotation (0.5, -0.5, -0.5, 0.5) (x,y,z,w). Same position as `eyeBlink_*` and `lowLid_*` (siblings).
+- `eyeLookAtBase` (translation (0, -0.736, 1.738), rotation z -90 deg), `eyeLookAt` (child, rotation 180 deg about y), `eye_RightLookat` (+-0.03224 on y) and `eye_LeftLookat`: a separate subtree under `GOD`, a sibling of `Root`, `RightSpawn`, `LeftSpawn`. It is the classic 3ds Max look-at target rig, with channels (`eyelookat_rotation` ...) exported but no consumer.
+- `eyeLookBackAt`: child of `Head` at (0.070, -0.082, 0). It is keyed by the `bdmg` flinch clip (45 channels, includes `eyelookbackat`); nothing else found.
+- Exe strings (checked, whole-file scans ASCII and UTF-16): "eyeLookAt", "Lookat", "eyeLookBackAt", "eyelook" and "eyejitter" are **absent**. Only `lookat` hits are `COMMAND_SETLOOKATENABLED`, `D3DXMatrixLookAtLH`, RTTI `PartLookAtController`. The only eye bone names in the exe are the wide strings at 0x00B0F468 `RightEye`, 0x00B0F47C `LeftEye`, 0x00B0F48C `eye_Right`, 0x00B0F4A0 `eye_Left` (plus `Head` 0x00B0F45C, `head` 0x00B0F450).
+- Their one user (checked, disassembly): `CCCreature` function **0x006A1BF0** (ID 14446; called from 0x0068D58D; dev/CUTSCENES.md already calls it `eyesLocal`). It looks up the bone `eye_Left` and `eye_Right` (the pointers come from the creature's model, vtable +0x4C then +0x10 by name), falls back to `LeftEye`/`RightEye`, then to `Head`; with both eye bones it returns the sum of their positions times the double at 0x00AE70F8 (0.5 inferred), i.e. the midpoint. **It reads positions only and writes no rotation.** The sibling at 0x006A1A30 (ID 14444) returns the head height from the `head` bone. These give the look-at its eye position.
+
+#### 2. What writes the eyes' rotation in play (checked unless noted)
+
+The Eyes controller (`PartLookAtController` vtable 0x00B0F388, at look-at object +0x10; dev/ANIMATION.md "Blending", `lib-agent-2-anim-layers.md` section 3 has the whole account). New here, from the order of the update:
+
+- **Order per frame** (`0x006CA990`, called with dt): `0x006CA250` recomputes the target quaternion (+0x15C) if dirty; then `0x006CA150` runs the controller update `0x007F53E0(dt, +0x15C)` for **Body (+0x98) first, then Head (+0x54), then Eyes (+0x10)**. All three get the **same** target quaternion (the direction to the target relative to the creature's facing, each yaw and pitch clamped to +-90 deg), and each limits it itself (Eyes' settings +0x1C/+0x20 = MaxAllowedYaw 20 deg, MaxAllowedPitch 10 deg, blended by how much of the rotation is about the vertical axis; head 45/10, body 45/30). The eyes do not subtract what the head has already turned, so with a target 30 deg away the head turns 30 and the eyes add 20 on top (inferred from the call arguments: no head quaternion is passed to the Eyes call).
+- **Speed:** Eyes `look_at` row 0: MinSpeed = MaxSpeed = 360 deg/s (flat), SlowAngle 10, FastAngle 25 (irrelevant when min = max), times the turn multiplier 0.75..1.0 on acquiring a target and 0.4..0.6 on losing it. A step above pi/2 or reaching the target snaps (0x007F53E0).
+- **Output:** the controller converts the limited quaternion to yaw and pitch, each clamped to the table's +-45 deg animation range (rows: Min/MaxAnimationYaw -45/45, Pitch -45/45), then every frame calls the host's `SetWeight` (0xA5C840) and `SetTime` (0xA5C980) on rows 12/13/14 (`lookeyescenter/up/down`): time = (yaw+45)/90 * (len - 1/30) + 1/30, up weight = pitch/45 (positive), down weight = pitch/-45, centre = 1 - that. With the clamp at 20/10 deg the eyes in play use only the clip time range 0.28..0.72 of the sweep and pitch weights up to 0.22. Clips mh_o.eyemid/eyehigh/eyelow.ani: additive, 6.0333 s, keys on `eye_left` and `eye_right` rotation only (182 keys).
+- **Clip angle per second of time** is not recomputed here; the 45 deg end-to-end sweep of the head clips is checked (anim-layers section 3), the eye clips' sweep is inferred to match the table's +-45.
+- **Only the table's rows and the clip drive the eye rotation in play**: there is no other write to the eye bone (the only code that names the bones is 0x006A1BF0, which only reads).
+- The look-at is off (and the controllers eased to identity, 0x006CA150's disabled branch) when `SetLookAtEnabled(false)`, global byte 0x00C03944 is 0, the creature is the player-controlled leader (no target is chosen, so eyes rest centred), or the part has no clips.
+
+#### 3. eyejitter and eyelids: who plays them (checked in data, absence in exe inferred)
+
+- `mh_o.eyejitter.ani` (9.9667 s, additive, eye_left 31 keys / eye_right 56 keys) and `mh_o.eyelids.ani` (19.9667 s, additive, blinks) are named in **no .anb, no table, no script and no exe string**.
+- They do appear in **cutscene/conversation data**: e.g. `str510_morrigan.dlg` (in `packages/core/patch/patch004.erf`) holds actions of type 4 (play animation, category 20) with `CutsceneActionAnimAnimationName = 'mh_o.eyejitter__0'` and `'mh_o.eyelids__0'`, `CutsceneActionAnimBlendtreeName = 'str510_morrigan.dlb'`, start time slightly negative (-0.09, -0.27, -0.59 s: the clip is already running when the scene starts), stop time 1e10 (never), weight curve base value 100, and a **per-actor speed that differs** (1.078, 1.312, 0.866 ...), so the loops drift apart between actors. dev/CUTSCENES.md already says additive/override clips such as `mh_o.eyelids` are not counted in the pose weights or removed when out of time (0x007D62A3).
+- So: blink and jitter exist in cutscenes only, played as ordinary authored clips at speed about 0.87..1.31 times, looped (a clip past its length wraps, inferred). **Outside cutscenes vanilla creatures do not blink and do not jitter** (no code path found). If the peer engine blinks or jitters in free play, that is its own addition. The blink data if wanted: 6 blinks per 19.97 s, closed about 0.1 s of each 0.17 s (anim-layers section 4).
+- Scan of the GOG install's `packages` and `modules` (checked): the UTF-16 names `mh_o.eyejitter__0` and `mh_o.eyelids__0` occur 2,283 and 2,279 times in 139 files (patch004.erf, and the module area `.rim` files such as al_arl01al_redcliffe_villag 54 each), always as a pair, never as plain ASCII; they are cutscene/dialogue action data (the `__0` suffix is the toolset's), one pair per actor per scene. (I did not unpack the rims, so the per-resource type is read only for `str510_morrigan.dlg`.)
+
+#### 4. FaceFX and the eyes (checked in data; mechanism from dev/CHARACTERS.md)
+
+- `humanmale.fxa` (and the other race/gender actors in `face.erf`) has bones `default_eye_Left`, `default_eye_Right`, `default_eyeBlink_Left/Right`, `default_lowLid_*`, `default_underEye_*`, `default_brow_*`, `default_Head`, `default_headBase`, `default_Neck`, `default_Neck1`; face-graph nodes `eye_Left_RX+/-`, `RY+/-`, `RZ+/-` (and Right), `Eye Yaw`, `Eye Pitch`, `Gaze Eye Yaw/Pitch`, `Eye_Yaw`, `Eye_Pitch`, gestures `E_GESTURE_EyesLeft/Right/Up/Down/CloseEyes`, `B_EyesWide`, `B_EyeSquint`, `Blink`, `blinker`, `blinkLeft/Right`, `lowLid*Up/Down`, `eyeLidLeft/Right_RY-`. So a `.fxe` face animation (the spoken lines, `<strref>_m.fxe`) **can** turn the eyes and blink and move the lids while it plays.
+- Mechanism (dev/CHARACTERS.md, checked there): `FacialAnimation::FacialAnimationPlayer` (0x0084f550) hands each `ObjectNodeBone` the actor's output minus the reference pose: rotation into +0xF0 (the turn from reference to current), position into +0x130 ((current - reference)/100, y/z swapped); `ObjectNode` local matrix (0x0055e9d0): **rotation = FaceFX(+0xF0) composed with the animated rotation (+0xE0)**; translation = rest + animation + FaceFX. The look clips are inside +0xE0 (animated), so FaceFX is applied as an extra turn in the node's frame on top of look-at; neither replaces the other. At idle FaceFX's +0xF0 is identity (seen in play 2026-10-17).
+- Order summary for one frame (inferred from those pieces): animation (movement + normal clips, then additive look/jitter/eyelid clips, then override clips) accumulates into +0xE0/+0x120; the FaceFX graph sets +0xF0/+0x130; the node's matrix is built from both.
+
+#### 5. Judging the peer engine's choices
+
+- Eyes turned only by the look clips, no aim constraint to the `*Lookat` nodes: **confirmed**.
+- Eyes limited to 20 deg yaw / 10 deg pitch, 360 deg/s: confirmed (table 229 row 0 plus 0x007F53E0).
+- An eye blink in free play, or eye jitter, would not be vanilla: not found in the exe or any tree; only cutscene data plays them.
+- If the peer engine moves the eyes by the head-relative angle, vanilla does not: all three parts take the same target quaternion relative to the creature's facing.
+
+#### Not read
+
+- The sampler that applies the additive list (so "additive = delta added to the pose, scaled by weight" is inferred) and whether eyes' clips at weight 0 for the up/down rows are skipped.
+- The eye clips' exact angle per second (inferred equal to the +-45 of the table; the head clips were checked).
+- Whether the node-name lookup by hash exists anywhere that would reach `eyeLookAt` (no string, so no lookup by name; a hashed lookup was not searched).
+- Which resource types in the rims carry the pair beyond the one dlg read; whether any non-cutscene (ambient) play of them exists.
+- What the FaceFX graph outputs for `blinker` in free play (idle FaceFX adds nothing, seen 2026-10-17; the `.fxa` graph's idle contents not decoded).
+- The consumer of `eyeLookBackAt` (keyed by `bdmg`, no code reference found).
+- `MIN/MAX_DELAY_BEFORE_PLAYER_LOOKAT` use (unchanged from anim-layers).
