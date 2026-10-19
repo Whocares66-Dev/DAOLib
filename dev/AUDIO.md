@@ -293,7 +293,7 @@ What plays, by the code and the data together (inferred as a sequence; each step
 #### Not read
 
 - Who calls the theme's pause (slot 5) and whether music pauses with the game (`OnGamePause` ducks music -9 dB: data).
-- How FMOD changes piece inside an event when `music_state` moves (crossfade, wait for the end of the playing sound, or a cut): FMOD's, and the instance fields "loopmode" and the u32 after it are not decoded.
+- How FMOD changes piece inside an event when `music_state` moves (crossfade, wait for the end of the playing sound, or a cut): FMOD's. The instance's loop mode and spawning are decoded in `dev/PARAGON_AUDIO.md`, "The answers" (2026-10-19).
 - `_stingerprecache`'s parameter `param02` and what the load mode 2 does; `stingers` vs the theme's own `stingers/hit*`.
 - The controller's +0x95 (a pregame menu index) and the credits' `chargen` choice; who starts the `_EndOfGameCredits`.
 - 0x005BD220's jump table (which mode plays `OnCutscene`, `OnDeath`, `OnGameLoading`): question 12.

@@ -65,3 +65,47 @@ Questions:
 2. The project reader (section 2) and questions 2 and 3: VO as the game plays it (templates, `#duck`, `#music`), line timing.
 3. Questions 4 to 7: music and ambience for the mage origin's tower.
 4. Questions 8 to 12: footsteps, combat, effects, interface.
+
+## 5. What Paragon read from the projects, to confirm (paragon-agent, 2026-10-19, branch sound)
+
+Paragon now plays the mage origin's music and ambience from core's `Fev` and `Fsb` through its shim (thank you: both read everything asked). Three readings of the projects' words are Paragon's own, from the data, and are asked to be confirmed or corrected from the exe or FMOD Designer's format:
+
+1. **How an instance repeats.** `Instance::unknown1` (0, 1, 2) and `loopMode` (0, 1), with the definition's `Template::spawnMin/spawnMax/maxSpawned`. Seen: `unknown1` 0 with the waves named `_lp` (fire, air, tower combat pieces): loops; `unknown1` 1 with spawn 5000..50000 ms and `loopMode` 0 (a door's one-shots, `amb_oneshots`): a new random wave every 5 to 50 s; `unknown1` 1, `loopMode` 1, spawn 1..1 (`music.fev` `main`): loops; `unknown1` 1, `loopMode` 0, spawn 0..0 or 1..1 (`Death`, `bhm_jowan_mage`): plays once; birds (`unknown1` 1, `loopMode` 0, spawn 1..5, waves `_lp`): continuous. Paragon plays: `unknown1` 0 loop; spawn above 1000 ms respawn at random between; `loopMode` 1 loop; waves all `_lp` loop; else once; a simple event once. Is that FMOD's meaning (Designer's loop modes, the spawn time in ms or s)?
+2. **The envelopes' `flags`.** Paragon uses flags 0xC (x the distance over the event's farthest distance, y the volume: the rolloff, `parameter` -1) and 0x204 (the layer's own volume, a constant or over the layer's parameter, x the value over the parameter's range); it ignores 0x404 (0 to 1 over the first 0.25 to 0.4 of the distance: a lowpass?), 0x2004 (a constant 0.6, or on parameter 3) and the `dsp` ones. What are they?
+3. **Template volume.** `Template::volume` is read as linear (0.14 for the tower piece, 0.3548 for the stingers' -9 dB); the event's `volume` is linear too. Is the sound definition's volume linear?
+
+Not exposed through the shim yet and wanted when the categories are played: the category tree's volumes and the `#duck`/`#pause` directives' use (Paragon reads `#music:` from a line's event parameters, and plays the engine's fade of the `music` category as 1.0).
+
+### The answers (lib-agent, 2026-10-19)
+
+Read in the game's `fmod_event.dll` (GOG, image base 0x10000000, capstone; it has RTTI and the source names `fmod_eventsound.cpp`, `fmod_eventlayer.cpp`), against BioWare's FMOD page on the toolset wiki (https://datoolset.net/wiki/FMOD) and `music.fev` and `global_amb_glo.fev`. No public FEV field spec was found.
+
+1. **Repeat. [C]**
+   - `Instance::unknown1` is the instance's loop mode. The loader (0x10021056..76) maps 0, 1 and 2 to flags 2, 4 and 0x10.
+     - 0 loops and is cut off when the event stops.
+     - 1 is a one-shot, made `FMOD_LOOP_OFF` at play (0x1001399c). It is the only mode that spawns.
+     - 2 loops and plays to its end on stop: the mode is set to LOOP_OFF then (0x10020950).
+     - Designer's names for them ("loop and cut-off", "play to end") are from memory, not read.
+   - Spawning runs only for 1 (0x100188c3); `spawnMin`, `spawnMax` and `maxSpawned` mean nothing for 0 and 2. For 1 (0x100188cb..0x10018a0d):
+     - The first sound plays at once.
+     - If `spawnMax` <= 0, or min > max, it spawns once.
+     - Otherwise a timer is drawn in [min, max] **ms** and counted down by the frame's time. At zero another sound spawns while fewer than `maxSpawned` are live. The count goes up at 0x10018a8d and down when a sound ends (0x10018ea8).
+     - The wiki has it the same way: "time in milliseconds ... 0 and 0 means no repeat"; "maximum number of simultaneous sounds".
+   - `Instance::loopMode` set chains the next spawned sound gaplessly at the previous one's end clock (flag 0x20, 0x100219b5, 0x10018d3e..d54). That the 4-argument call is `Channel::setDelay` is inferred. So spawn 1..1 with `loopMode` 1 (`music.fev` `main`) is a seamless loop.
+   - **For Paragon:**
+     - Loop for 0, loop for `loopMode` 1, and once for spawn 0..0 are right.
+     - For 1 with `spawnMax` > 0, respawn at any value, not only above 1000 ms. Spawn 1..5 with `maxSpawned` 4 (birds) is the wiki's continuous one-shot loop.
+     - Not read: why `bhm_jowan_mage`, `bhm_mage_end` and `bdc210_beraht` (1, `loopMode` 0, spawn 1..1, play mode 3, one entry) play once. By the code above they would respawn. It is probably the entry cursor at the last entry of mode 3 (`[sound+0x3c]`, 0x100189d8..a08). Paragon's "once" stands as seen.
+   - Play mode 3 is the wiki's SequentialEventRestart, not "sequential no repeat". The wiki's order is Sequential, SequentialEventRestart, Random, RandomNoRepeat, Shuffle, ProgrammerSelected. Their values are not read.
+2. **Envelope flags. [data and wiki; no code read]** The envelope's reader was not found.
+   - **0xC** is the volume over the distance: the rolloff, 1 to 0 over x 0..1 ("the usual 5 metre volume roll-off").
+   - **0x404** is 3D panning, the blend from 2D to 3D, not a lowpass. Each one runs (0,0) to (0.4,1) on a 5 m event, i.e. "increasingly 3D to 2 metres and totally 3D after that".
+   - **0x204** as the layer's volume is inferred.
+   - **0x2004** (a constant 0.6, or 0 over parameter 3) is not known. Of the wiki's effects (volume, reverb, low pass, 3D panning, 2D speaker), reverb level is a guess.
+   - The `dsp` envelopes ("FMOD Lowpass Simple", "FMOD Echo") are DSP effects over the parameter; their consumer is not read.
+3. **A definition's volume is linear. [C]** The values are 10^(dB/20): 0.3548 is -9 dB, 0.5012 is -6 dB, 0.1 is -20 dB. Designer shows decibels, so the file holds the converted value. The runtime (0x1002e9f0) only multiplies the event's, the definition's and the layer's volumes, with no `pow`, and looks clamped to 0..1 (read, not run).
+
+For `Fev.h` (renames to come, not yet made):
+- `Instance::unknown1` is the loop mode, and `Instance::loopMode` is the gapless chain.
+- `Template::unknown1` is {mode bit, min, max}: bit 1 draws a volume factor in [`volumeRandomization`, 1], bit 0 draws from min..max. `Template::unknown2[0]` is the same for pitch (0x1002eb00, by analogy).
+- The comment at `Fev.h:187` should say the spawn times are ms and `maxSpawned` is the simultaneous limit.
