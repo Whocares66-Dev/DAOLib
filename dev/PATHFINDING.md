@@ -375,10 +375,10 @@ Other consumers of +0x7C besides 0x0067B4D0 (no xref scan of `[reg+0x7c]` outsid
 // needs: game mode not 4 or 5 (0x005D5E70), creature.dirty (+0xB40, set by 0x0069EE60 on a position change; +0xB41 = "apply at once")
 row = apr_base[creature.appearanceRow]                 // cache 0x00C0CB78; row id = word at [creature+0x7B0]+0x58
 P, R, prec = row.TerrainFollowPitch, row.TerrainFollowRoll, row.TerrainFollowPrecision   // row +0xA8/+0xAC/+0xB0
-if modelKind(creature)==1 (0x005CA710 GDA lookup, column 0xE991BD51): P = max(P, 60), R = ..., prec = 1   // a size class that always uses two probes (inferred)
+if modelKind(creature)==1 (0x005CA710 GDA lookup, column 0xE991BD51): P = max(P, 60), R = ..., prec = 1   // corrected 2026-10-19: not a model kind but the current animation row's State column = 1 (deaths and sleeps), below
 prec == 0:  one sample. n = ground normal at the creature (0x006954C0); target pitch/roll = the angles of n in the creature's heading frame
 prec == 1:  two samples. GroundHeight at two points along the heading, +-(virtual 0x9C, a body length) from the centre,
-            (calls at 0x006A7786 and 0x006A77D1; if either misses the ray, the tilt is left as it was);
+            (calls at 0x006A7786 and 0x006A77D1; a miss gives 0 for pitch and roll, not the old tilt: corrected 2026-10-19, below);
             pitch from their height difference, roll from the normal (inferred)
 pitch_t = clamp(pitch, -P, P);  roll_t = clamp(roll, -R, R)         // 0x006A78F4-0x006A79B0; stored creature+0xB30 / +0xB34
 w_pitch = 180 + 540*min(|pitch_t - cur|/180, 1)  deg/s ; same for roll (+0xB38 / +0xB3C)   // 0x006A7A3D..: 180*(1-d)+720*d, inferred
@@ -387,6 +387,173 @@ each frame: cur = the model's current pitch/roll (0x00A5CD00); move cur toward t
 ```
 
 A port that wants the wolf to lean: P = TerrainFollowPitch, R = TerrainFollowRoll from apr_base (the columns are in the GDA), sample the ground at the body's front and back, clamp, slew. For humanoids both are 0, so there is no tilt: the capsule alone gives their feet's height.
+
+
+##### Quadruped body tilt: the maths, instruction by instruction (read 2026-10-19, GOG exe, read-only) (lib-agent-2)
+
+"checked" = read in disassembly or data (GOG exe, base 0x400000). "inferred" = reasoned from checked code, named.
+Builds on lib-agent-2-ground-walk.md (now in master's dev/PATHFINDING.md around :360-400, the tilt section) and corrects it where marked CORRECTION. Prior notes: PATHFINDING.md (GroundHeight 0x00685430, mask switch on EnvAreaChunkIsChunk), AUDIO.md:1006 (AnimBase position setters 0x00A5CD50 / 0x00A5CDF0 and orientation 0x00A5CCC0), ANIMATION.md:455 / :1386 (column 0xE991BD51 = the animation table's `State`). The sibling projects hold nothing on the maths.
+
+###### Short answers
+
+1. **The target pitch and roll come from the ground NORMAL, never from a height difference.** For each sample: q = ShortestArc(Z=(0,0,1) -> n) * Rz(heading); pitch = elevation angle of the rotated forward axis (+Y), roll = the twist about that axis left after peeling the yaw and pitch off the left (decomposition q = Rz(yaw)·Rx(pitch)·Ry(roll)). Degrees throughout. **Positive pitch = nose up** (forward axis z > 0; so a rise ahead, normal leaning back, gives positive). **Positive roll = right-hand rotation about the forward axis = right side DOWN** (right axis z < 0; ground lower on the right gives positive). (checked: every helper below.)
+2. **Precision 0** (TerrainFollowPrecision == 0): one sample, the normal cached at the creature (0x006954C0: GroundHeight at the creature's own position, normal out; (0,0,1) if no hit/no area). **Precision 1**: two samples, GroundHeight called at `pos + (0,0,H) + fwd*L` and `pos + (0,0,H) - fwd*L`, with `L` = the creature's personal space radius (virtual 0x9C -> [[creature+0x7B0]+0x60]) and `H` = its height (virtual 0x1B0(0) -> [[creature+0x7B0]+0x64]); each gives its own normal; pitch and roll are computed per normal exactly as above and then **averaged (x0.5)**. The returned heights are thrown away (`fstp st(0)` after both calls). If either ray misses (hit flag 0) both targets are 0. **Any other precision value: targets 0** (checked: 0x006A7650 `test eax,eax`, 0x006A76C1 `cmp eax,1; jne`, 0x006A78F4). **CORRECTION** of my earlier "pitch from the probes' height difference ... left as it was": it is the two normals averaged, and a miss sets 0.
+3. **Clamp**: degrees, pitch to [-P, P], roll to [-R, R], P and R the table's TerrainFollowPitch/Roll. **CORRECTION**: the "60 / precision forced to 1" case is NOT a size class. It is when the creature's *current animation row's `State` column (0xE991BD51) == 1* (0x006956B0 returns AnimBase+0x13C, the current animation id; 0x005CA710 looks it up in the animation table: State). State 1 rows are the death/dying/dieloop/sleep animations (ghilana, Animations table, 62 rows: dieLoop_v2, dieloop, die, die_v2, db_c_*_die_v1, sleep, ...). So a **dead or sleeping creature gets P = max(P,60), R = max(R,60) and two probes**, which lays a corpse onto slopes even for a biped (checked code; the meaning from the table rows, inferred as "corpses lie on the ground").
+4. **What is turned: the model's orientation only.** The tick builds `Rz(curYaw)·Rx(pitch)·Ry(roll)` and hands it to `AnimBase::SetOrientation` 0x00A5CCC0 (creature+0x154), which calls vtable slot +0x1C of the node at `[[AnimBase+0x18]+4]` and the sound emitter's orientation (+0x1B0). The creature object's own facing (+0x130), its position (+0x120) and its physics capsule are untouched (checked: 0x006A7520 and 0x006A7AE0 write only creature+0xB30/+0xB34/+0xB38/+0xB3C/+0xB40 and that call). So **visual only; the capsule stays upright**. The pivot is the model's origin: the position is set separately (AnimBase position setters, AUDIO.md:1006) to the creature's position, i.e. the feet; no translation is applied to compensate. Which scene node slot +0x1C belongs to (root or a "GOB" node): not read.
+5. **Slew** (0x006A7AE0, arg dt in seconds, float): per axis, `cur += sign(target-cur) * min(w * k * dt, |target-cur|)`, with a snap to target when `|target-cur| < 1e-6` or when the "apply at once" flag (+0xB41) is set. `w` (deg/s) is fixed when the target is last computed: `w = 180*(1-t) + 720*t`, `t = min(|target - cur|/180, 1)`, computed per axis with the distance at that moment. `k`: 1.0; mode (+0xB20)==2: 0.2; ==1: 0.8; ==0 and 0x00695670 true (an object of the root-motion/animation holder with +0xC0 != 0): 0.1. (checked, below.)
+
+###### Pseudo-code a port can copy
+
+```
+// Conventions: z up, model forward = +Y, right = +X. quaternion (x,y,z,w). Angles in degrees outside quats.
+// All constants checked in the exe unless noted.
+
+quat qAxisAngle(axis, rad)    = (axis*sin(rad/2), cos(rad/2))                  // 0x004CBC40, half = rad*0.5 (0x00AE70F8 = 0.5)
+quat qmul(a,b)                = Hamilton a*b                                    // 0x004CB640 (x = a.x b.w + b.x a.w + a.y b.z - a.z b.y ...)
+vec3 qForward(q)              = (2(xy - wz), 1 - 2(x²+z²), 2(yz + wx))          // 0x004CBD30 (rotated +Y)
+vec3 qRight(q)                = (1 - 2(y²+z²), 2(xy + wz), 2(xz - wy))          // 0x004CBCE0 (rotated +X)
+float yawOf(q)   = deg(atan2(-qForward(q).x, qForward(q).y))                    // 0x004EE310 (computes atan2(-2(xy-wz)... ) x 57.29582595825195 at 0x00AF0E50)
+float pitchOf(q) = deg(atan2(f.z, sqrt(f.x² + f.y²))), f = qForward(q)           // 0x004EE370
+float rollOf(q, after yaw and pitch peeled)                                      // 0x004EE420:
+    q1 = qAxisAngle(Z, rad(-yawOf(q))) * q                                       //   left-multiply: removes the yaw
+    q2 = qAxisAngle(X, rad(-pitchOf(q1))) * q1                                   //   removes the pitch
+    return deg(atan2(-qRight(q2).z, qRight(q2).x))                               //   what is left is a twist about Y
+quat eulerToQuat(yaw, pitch, roll) = qAxisAngle(Z,rad(yaw)) * qAxisAngle(X,rad(pitch)) * qAxisAngle(Y,rad(roll))   // 0x004EE200 (product order read at 0x004EE2E5-0x004EE2F9)
+quat shortestArc(A,B) = normalise both; d = A.B; c = A x B; s = sqrt(2(1+d)); (c/s, s/2)   // 0x004EDF80 (OGRE getRotationTo; normalise 0x004EDE50 -> (1,0,0) for a zero vector)
+                                                                                 // identity/opposite special cases at 0x004EE071-0x004EE0F3: irrelevant for ground normals
+float heading(fwd)  = deg(atan2(-fwd.x, fwd.y))                                  // 0x004EE570, creature+0x130 is fwd (unit, xy plane)
+
+// per sample (normal n):
+sample(n, qYaw):  q = qmul(shortestArc((0,0,1), n), qYaw);  return (pitchOf(q), rollOf(q))
+
+// target (0x006A7520). Runs only when creature.dirty (+0xB40) is set, game mode not 4 or 5 (0x005D5E70), an area exists; clears dirty at the end.
+row = apr_base[ word at [[creature+0x7B0]+0x58] ]   // cache 0x00C0CB78; P,R,prec = +0xA8,+0xAC,+0xB0 (TerrainFollowPitch/Roll/Precision, in degrees, integer precision)
+if animationRow(creature.currentAnim).State == 1:  P = max(P,60); R = max(R,60); prec = 1       // 0x006A75A5-0x006A75D3, 60.0 at 0x00C021D8
+qYaw = qAxisAngle((0,0,1), rad(heading(creature.fwd)))                            // 0x006A7621-0x006A7647, deg->rad 0.017453279346227646 at 0x00AF14C0
+pitch = 0; roll = 0
+if prec == 0:
+    n = groundNormalCache(creature)               // 0x006954C0: GroundHeight(area, &creature.pos, null, &normal), normal (0,0,1) if no hit; cache valid flag +0x1C4
+    (pitch, roll) = sample(n, qYaw)
+elif prec == 1:
+    L = creature.personalSpace;  H = creature.height
+    p1 = creature.pos + creature.fwd*L + (0,0,H);  p2 = creature.pos - creature.fwd*L + (0,0,H)
+    n1 = (0,0,1); n2 = (0,0,1)
+    if !GroundHeight(area, p1, &hit1, &n1) or !hit1: pitch = roll = 0 (goto clamp)  // 0x006A7786 / 0x006A778D
+    if !GroundHeight(area, p2, &hit2, &n2) or !hit2: pitch = roll = 0 (goto clamp)  // 0x006A77D1 / 0x006A77D8
+    (pa, ra) = sample(n1, qYaw);  (pb, rb) = sample(n2, qYaw)
+    pitch = (pa + pb)*0.5;  roll = (ra + rb)*0.5                                   // 0x006A7899 fadd, 0x006A78CF * 0.5 (0x00AE70F8)
+pitchT = clamp(pitch, -P, P);  rollT = clamp(roll, -R, R)                          // 0x006A78F4-0x006A79B0
+creature.targetPitch = pitchT (+0xB30);  creature.targetRoll = rollT (+0xB34)      // 0x006A79BB / 0x006A79C1
+if !creature.applyAtOnce (+0xB41):                                                 // 0x006A79B2 / 0x006A79C7
+    q = AnimBase.GetOrientation();  cp = pitchOf(q);  cr = rollOf(q)                // 0x00A5CD00, current values read from the model itself
+    t = min(|pitchT - cp| / 180, 1);  creature.wPitch (+0xB38) = 180*(1-t) + 720*t  // 0x006A7A35-0x006A7A74, 180 at 0x00AF7ED8 / 0x00C021E0, 720 at 0x00C021DC
+    t = min(|rollT  - cr| / 180, 1);  creature.wRoll  (+0xB3C) = 180*(1-t) + 720*t  // 0x006A7A7A-0x006A7AC5
+creature.dirty = 0                                                                 // 0x006A7ACB
+
+// slew (0x006A7AE0, called each creature update, 0x006BD566; dt seconds)
+tilt_target(creature)                                                              // the above
+k = 1.0;  mode = creature[+0xB20]
+if mode == 2: k = 0.2;  elif mode == 1: k = 0.8;  elif mode == 0 and hasRootMotionHolder(creature) /*0x00695670*/: k = 0.1   // 0x00C021E4/E8/EC
+q = AnimBase.GetOrientation();  yaw = yawOf(q);  cp = pitchOf(q);  cr = rollOf(q)
+newP = step(cp, creature.targetPitch, creature.wPitch)
+newR = step(cr, creature.targetRoll,  creature.wRoll)
+step(cur, tgt, w):  d = |tgt - cur|
+                    if d < 1e-6 (0x00B0F2A4) or creature.applyAtOnce: return tgt
+                    return cur + sign(tgt - cur) * min(w * k * dt, d)
+if newP == cp and newR == cr: return                                               // 0x006A7CBE-0x006A7CE8
+AnimBase.SetOrientation( eulerToQuat(yaw, newP, newR) )                            // 0x006A7CED-0x006A7D17 -> 0x004EE200 then 0x00A5CCC0
+```
+
+Note the yaw: the slew keeps the model's own current yaw (read back from its orientation); only pitch and roll are replaced.
+Note the first-order picture for a hand check: with a unit normal n and heading unit vector f (xy), pitch ≈ -(n·f) rad and roll ≈ +(n·r) rad (r = right), small angles, signs as in answer 1 (inferred from the exact quaternion maths, not a separate read).
+
+###### Evidence (addresses)
+
+- 0x006A7520 (target): entry guards 0x006A7537-0x006A754E (`call 0x5D5E70` game mode, `cmp eax,5/4`, dirty byte +0xB40); row 0x006A755B-0x006A758E (`[creature+0x7B0]+0x58` word, cache 0x00C0CB78 via 0x004E1140; +0xA8/+0xAC/+0xB0 into locals); State test 0x006A7592-0x006A75D3 (0x006956B0 -> AnimBase+0x13C; 0x005CA710 -> GDA lookup col 0xE991BD51 on table 0xC1D090; `cmp eax,1`; max with 60.0 for both limits; precision := 1); area = virtual +0xA0 (0x00695CD0) at 0x006A75DB, none -> out; H = virtual +0x1B0 (0x006A1A30) with arg 0 -> [[creature+0x7B0]+0x64]; heading 0x006A761C (`call 0x4EE570` on creature+0x130) then `* 0.017453279346227646`, quaternion about 0x0057C4F0's (0,0,1) via 0x004CBC40 into the local at [esp+0x88]; prec 0 path 0x006A7654-0x006A76BC (0x006954C0 refresh, 0x004EDF80(out,(0,0,1),creature+0x1B0), 0x004CB640(out, qGround, qYaw), 0x004EE370 pitch, 0x004EE420 roll); prec 1 path 0x006A76CA-0x006A78ED (virtual +0x9C twice = [[creature+0x7B0]+0x60], 0x008D8B00 = vec*scalar, positions via `addps` with creature+0x120, the (0,0,H,?) vector at [S0+0x20], `call 0x685430` twice, hit flag at [S0+0x17]); average 0x006A7899-0x006A78E9; clamp 0x006A78F4-0x006A79B0; stores 0x006A79BB / 0x006A79C1; weights 0x006A7A35-0x006A7AC5; dirty clear 0x006A7ACB.
+- 0x006A7AE0 (tick): 0x006A7AE6 calls the target routine first; k selection 0x006A7AED-0x006A7B26; model orientation 0x006A7B2A-0x006A7B7F (`creature+0x154`, 0x00A5CD00 reads it through `[[AnimBase+0x18]+4]` vtable +0x38; 0x004EE310 yaw, 0x004EE370 pitch, 0x004EE420 roll); pitch step 0x006A7B86-0x006A7C1E (epsilon 1e-6 at 0x00B0F2A4, `[esi+0xB38]*k*dt`, clamped to |delta|, sign by compare with target, +cur; `[esi+0xB41]` short-circuit); roll step 0x006A7C22-0x006A7CBA with +0xB3C and +0xB34; unchanged test 0x006A7CBE-0x006A7CE8; write 0x006A7CED-0x006A7D17.
+- Helpers (all read in full): 0x004CBC40 (axis-angle -> quat, args: axis ptr, radians; ecx = out; half angle via 0.5 at 0x00AE70F8; fsincos), 0x004CB640 (Hamilton product), 0x004CBD30 / 0x004CBCE0 (rotated Y / X axes; constant 2.0 at 0x00AE7108), 0x004EE310 (atan2(-2(xy-wz)... sign: constant -2.0 at 0x00AF2660, so atan2(2(wz-xy), 1-2(x²+z²)) = atan2(-fwd.x, fwd.y)), 0x004EE370 (elevation), 0x004EE420 (peel yaw by left-multiplying a Z quat of -yaw, peel pitch by an X quat of -pitch, roll = atan2(-right.z, right.x) via the second 0x004CBCE0), 0x004EE200 (three quats from axes 0xC30260 = (0,1,0) roll, 0xC1E870 = (1,0,0) pitch, 0xC1EED0 = (0,0,1) yaw; angles are args 4, 3, 2; product (Z·X)·Y), 0x004EE570 (atan2(-x, y) of a vec), 0x004EDF80 + 0x004EDE50 (shortest arc with normalise), 0x008D8B00 (vec * scalar), 0x0057C4F0 (returns the static (0,0,1) at 0x00C1EED0). `fpatan` wrapper 0x008E893A. Degrees from radians: 57.29582595825195 at 0x00AF0E50.
+- Constants: 60.0 0x00C021D8; 720.0 0x00C021DC; 180.0 0x00C021E0 (float) and 0x00AF7ED8 (double); 0.2/0.8/0.1 at 0x00C021E4/E8/EC; 1e-6 at 0x00B0F2A4 and 0x00AE09B0; deg->rad 0.017453279346227646 at 0x00AF14C0; read with the camconst tool.
+- GroundHeight (cited, not redone): PATHFINDING.md ground section; it writes the normal only on a hit, so the (0,0,1) initialiser stays on a miss and the probe code tests the hit flag instead.
+
+###### Checked / inferred
+
+- Checked: every helper's maths; the prec 0 / 1 / other branches; the averaging; the clamp; the two weights; the slew; the Euler product order of 0x004EE200; the write to AnimBase orientation only; the two probe positions (pos +- fwd*personalSpace, raised by height); State==1 rule (the code path; the rows are from ghilana).
+- Inferred: that the table's Pitch/Roll limits are degrees (compared with degree results and a 60.0 literal; the table's values were not looked up here); the sign statements in answer 1 (derived from the exact formulas above, not seen on screen); that 0x004EDF80's cross product has the standard sign (the special-case branches and w = s/2, c/s were read; the cross lines at 0x004EE142-0x004EE16E look standard); the small-angle first-order approximation.
+
+###### Not read
+
+- Which scene node slot +0x1C of `[[AnimBase+0x18]+4]` is (root of the model or another), and whether its parent adds a transform.
+- Who sets the dirty flag (+0xB40, beyond 0x0069EE60 from the earlier note), "apply at once" (+0xB41) and the tilt mode (+0xB20); the creature update's frequency (the tick is called at 0x006BD566; dt there was not read, assumed seconds).
+- The special branches of 0x004EDF80 for d near +-1 (0x004EE071-0x004EE0F3, uses 0x004D4EB0) and the exact cross-product lines.
+- The actual TerrainFollowPitch/Roll values per appearance row (the table was not read in this pass; DAOTurnBased only uses Pitch as a "body kind").
+- Whether the corpse (State 1) case matters for a port that has no death-animation rows; the dead creature's GroundHeight mask (the area flag at 0x0067B4D0) was not revisited.
+- Nothing was run in the game.
+
+##### The tilt's three inputs: probe distance, the "modelKind" test, the rate mode (read 2026-10-19, GOG exe, read-only) (lib-agent-2)
+
+"checked" = read in disassembly or data. "inferred" = from control flow or a constant's meaning. Extends `%TEMP%\lib-agent-2-ground-walk.md` (tilt section, 0x006A7AE0 -> 0x006A7520). Prefix tiltb. Prior notes: dev/TURN_BASED.md:136 (PerSpace), dev/ANIMATION.md:472, :1140, :1386 and dev/script_commands/objects.md:154 (State column 0xE991BD51), dev/AUDIO.md:1263 and :1281 (+0xB20 as the movement state), dev/PATHFINDING.md:116 (soft stamps on +0xB20 in {1,2}), dev/PARTY.md:229/:233. The sibling projects hold nothing on the tilt itself.
+
+###### Short answers
+
+1. **Probe distance = the creature's own PersonalSpace, apr_base `PerSpace`.** The virtual at +0x9C is called on the creature itself (`this`, esi), CCCreature vtable 0x00B10484 slot 39 = 0x006A21A0 = `CCCreature::PersonalSpace` (ID 14451): `[creature+0x7B0] ? [[creature+0x7B0]+0x60] : 0.0`, the size record's PerSpace (checked, 0x006A21A0, 0x006B1FD6 reads the same field). It is read once per creature from apr_base's `PerSpace` column (dev/TURN_BASED.md:136; not re-read by me). Not a bounding box, not a constant. The two probe points are `pos + facing * PS` and `pos - facing * PS` (checked structure: `0x008D8B00` is vec*scalar, out = v * s; facing is the unit vector at creature+0x130, position creature+0x120). **Wolf: PerSpace 0.45 m, so probes at +-0.45 m, a 0.9 m baseline** (apr_base row "Wolf", ghilana: PerSpace 0.45, Height 1.29, TerrainFollowPitch 16, TerrainFollowRoll 4, Precision 1, ModelType W). Same 0.45 for Mabari/party dog/Wolf, Blight; Witherfang 0.60; Bear, Black 1.0; Great Bear 1.1; Bronto 1.5; Drake 1.4; Deer 0.6; Cat 0.24.
+2. **"modelKind" is not a model or appearance field. It is the `State` column of the creature's current animation row**, and `== 1` means a dying / dead / downed animation. `0x006956B0` returns the animation set's current animation id (`[[creature+0x154]+0x13C]`), and `0x005CA710(id)` looks column `State` (hash 0xE991BD51) up in the animations table (table 0, anim_*.gda; the key 0 is the table, `[0x00C1D090]`, `0x00A2CCC0`), returning -1 if missing. State 1 rows (62 in the tables ghilana reads): every `die`/`dieloop` clip (die, die_v2, die_v3, dieloop, dieLoop_v2/v3, the db_* death-blow families, db_c_all_pos_die_1..5, sleep, ambdyingonfloor, ambwoundedfloor) and the talent "Charge Reaction"/"Overwhelm Reaction" enter+loop clips. So: **while a creature lies in a death/knocked-down loop, its limits become `Pitch = max(Pitch, 60)`, `Roll = max(Roll, 60)` and Precision = 1 (two probes)**, so a corpse lies along the slope with up to 60 degrees of tilt (and a biped's 0 limit becomes 60). Corrects `ground-walk.md`'s "a size class" guess.
+3. **The rate mode +0xB20 is the MovementController's state, mirrored by address, not copied.** The `MovementController` is embedded in the creature at **creature+0xA30** (`lea ecx,[esi+0xA30]` at 0x006A2A31, 0x00745EBC, 0x007A93CA, 0x00763818), and its state dword is at controller+0xF0 = **creature+0xB20**. There is no store to creature+0xB20 anywhere: a whole-.text byte scan for `20 0B 00 00` finds 23 hits, all reads, and one setter writes the state: **`MovementController::SetState` 0x00A63800** (`if new != [+0xF0]: [+0xF0]=new; [anim ctrl +0x13C]=new via 0x00A69C90; then per state`), plus two resets to 0 (the constructor 0x00A60B50 at 0x00A60BF6, a reset 0x00A632D0 at 0x00A633AF). States: **0 idle, 1 walk, 2 run, 3 stopping, 4 turning in place** (checked from writers; walk/run naming inferred from AUDIO.md:1281 where 2 raises "walk/run" and 1/4 lowers it). Rates (floats checked): **mode 2 -> 0.2, mode 1 -> 0.8, mode 0 with a root-motion clip -> 0.1 (0x00C021EC), else (0 without, 3, 4) -> 1.0** (0x006A7AF7-0x006A7B26; the rate multiplies the slew speed, so a running creature tilts at a fifth of the idle rate). Writers listed below.
+
+###### Pseudo-code a port can copy
+
+```
+// probes (two-sample case, Precision == 1)
+PS      = apr_base[row].PerSpace                    // CCCreature::PersonalSpace 0x006A21A0; row = word at [[creature+0x7B0]+0x58]
+front   = (pos.xy + facing.xy * PS)  with z from pos   // GroundHeight(area, point) 0x00685430 each; if either misses (hit flag 0) the tilt is left as it was
+rear    = (pos.xy - facing.xy * PS)
+// limits
+P, R, prec = row.TerrainFollowPitch, row.TerrainFollowRoll, row.TerrainFollowPrecision
+if AnimState(currentAnimId(creature)) == 1:        // dying/dead/downed clip: anim table's State column
+    P = max(P, 60); R = max(R, 60); prec = 1
+// rate
+switch movementState (creature+0xB20):
+    2: rate = 0.2;  1: rate = 0.8
+    0: rate = rootMotionClipPlaying ? 0.1 : 1.0     // 0x00695670: [[this+0x70]->vfunc 0x60]() has +0xC0 != 0
+    default (3, 4): rate = 1.0
+```
+
+###### Movement state: every writer (0x00A63800's callers, checked by a scan of `e8/e9 rel32`, argument read at the call)
+
+State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's jump table: 0 -> 0x00A6383F also calls 0x00742D30 and zeroes [+0xE0]/[+0xE4]; 1 and 4 -> 0x00A63878 clears [+0xF6]; 2 -> 0x00A63883 sets [+0xF6] = 1; 3 -> 0x00A63865 zeroes [+0xE4]).
+
+| Writer (call site) | Function | Sets | Meaning |
+|---|---|---|---|
+| 0x00A639CF / 0x00A639DC | `SetMoving(bool run)` 0x00A639C0 (ID 33603) | 2 if run, else 1 | start a walk / run |
+| 0x007A8E7E | sub-action 16 (drive) 0x007A8C20 (ID 19880), after `0xA638B0` (desired facing) | 1 or 2 by its `run` byte | a driven move |
+| 0x007A93D0 | the move update 0x007A9130 (ID 19882), used by the melee and range approach and walk-to | 1 or 2: run = (sub-action bool 1 set, or creature+0xC60's first dword nonzero) and creature byte +0xB25 == 0 and `0xA62E00(2.0)` true (the path is long: 5+ legs, or farther than 2.0 m; inferred from its head) | a creature walks to a goal and runs when far |
+| 0x00A6398D | `SetDesiredFacing` 0x00A638B0 (ID 33602), its end | 4 | turn in place (when not already moving and no root-motion clip, `cmp [[ctrl+0x70]+0x10]+0xC0`) |
+| 0x00A63AD7 | stop request 0x00A63AC0 (ID 33605): called from 0x006A944E (0x006A9430, ID 14630), 0x00746A1D (0x00746900, the shared command end), 0x007A5403 (TurnToward 0x007A51F0) | state 1 or 2 -> **3**; state 4 -> **0** | a command ends or a turn finishes: stop |
+| 0x00763829 | 0x00763810 (ID 18211) | 3 if the state is not 0 or 3 | stop now |
+| 0x00A643E6, 0x00A644BC | the controller step 0x00A64350 (ID 33615) | 3 | arrival (remaining distance under a limit) / path ended |
+| 0x00A64593, 0x00A645FD | the controller step 0x00A644E0 (ID 33616) | 0 | the stopping state (3) finished, or nothing to follow |
+| 0x00A63AFE | `Cancel/Reset` 0x00A63AF0 (ID 33606) | 0 | hard stop (cancels the animation controller too); callers 0x006917AA (0x006913E0, ID 13952, creature setup on load; also 0x0069158C sets 0 there), 0x00692A47 (0x00692980), 0x006B3636 (0x006B3620, a CCCreature virtual, base +0x70 slot), 0x006C74C9 (0x006C73C0), 0x007F25B6 (0x007F2460) and 0x007F2AA4 (0x007F2800, the end of a conversation or a staged scene), 0x00A63D28 |
+| 0x006A2A37 | creature function 0x006A2A20 (ID 14464): `Movement()->0xA62F30()` then | 0 | movement cleared |
+| 0x00745EC4 | the melee attack's set-up 0x00745E10 (ID 17720) | 0 | an attack stops the walk |
+| 0x00746E52 | 0x00746E10 (ID 17733), after SetDesiredFacing | 0 | a facing command (turn, then idle) |
+| 0x00A60BF6, 0x00A633AF | constructor 0x00A60B50; reset 0x00A632D0 | 0 | initial / reset |
+
+Consumers that treat the value: stamps ("soft" for 1 and 2, dev/PATHFINDING.md:116), the walk/run ramp for footsteps (0x006AD8F0, AUDIO.md:1281), the follow rule (PARTY.md:229/:233: the leader standing is 0 or 4), the equip overlay when moving (ANIMATION.md:49), and the tilt's rate.
+
+###### Evidence
+
+- Tilt routine: 0x006A7520 reads the row via `0x004E1140(cache 0x00C0CB78, word [[creature+0x7B0]+0x58])` and +0xA8/+0xAC/+0xB0 into stack slots (0x006A7570-0x006A758E); then `0x006956B0` and `0x005CA710` (0x006A7592-0x006A759D); `cmp eax,1` -> `P = max(P, 60.0)` (0x00C021D8), `R = max(R, 60.0)`, prec slot = 1 (0x006A75A5-0x006A75DB; the fcom/test ah,5 and ah,0x41 branches read as max). Precision 0 -> one sample (normal, 0x006A7654-0x006A76BC); Precision 1 -> the `[vtbl+0x9C]` call at 0x006A76CC (`mov edx,[eax+0x9C]; call edx` on `ecx=esi`), repeated at 0x006A76FC and 0x006A771E, each followed by `0x008D8B00`, an addps with the position at creature+0x120, and `0x00685430` at 0x006A7786 and 0x006A77D1.
+- Slot 39: the vtable read from the exe: CCCreature vtable 0x00B10484, entry 39 = 0x006A21A0, ID 14451 `CCCreature::PersonalSpace`; body `mov eax,[ecx+0x7B0]; test; fld [eax+0x60]; ret / fldz`.
+- State column: 0x005CA710 pushes 0xE991BD51 and the id into `0x00A2CCC0([0x00C1D090], 0, id, hash, &out)`; the hash is "State" (tools/gda.py column_hash; ANIMATION.md:455 and :1140 name it). ghilana `table anim where State=1` returns the 62 rows (die, dieloop, db_*_die/dieloop, pos_die_1..5, sleep, ambdyingonfloor, ambwoundedfloor, the two talent reaction pairs); the rows carry no Label in the base files.
+- Embedded controller: `lea ecx,[esi+0xA30]` before `0xA63800` (0x006A2A31, 0x00745EBC, 0x007A93CA), `lea ecx,[ecx+0xA30]` at 0x00763818 right after reading `[creature+0xB20]`; SetState compares and stores `[ctrl+0xF0]` (0x00A63807, 0x00A63817). 0xA30 + 0xF0 = 0xB20. A direct scan of stores to `[reg+0xF0]` in 0x00A60000-0x00A70000 shows only 0x00A60BF6, 0x00A633AF, 0x00A63817 (writes), the rest are other fields.
+- Tilt rate: 0x006A7AED loads `[esi+0xB20]`; `cmp 2` -> `[0x00C021E4]` = 0.2; `cmp 1` -> `[0x00C021E8]` = 0.8; 0 -> `0x00695670` and, if true, `[0x00C021EC]` = 0.1; the default is `fld1` (1.0) (floats read from the exe).
+
+###### Not read
+
+- The maths between the probes and the pitch (0x004EE2xx helpers) is the other reader's.
+- What the target pitch does while a State-1 clip plays beyond the new 60/60 limits (the same routine, so the normal-from-two-probes values clamp to 60), and whether a dead creature's dirty flag (+0xB40) is set often enough for the tilt to run (it needs +0xB40; the animation wrapper sets it when the State changes to or from 1: ANIMATION.md:472).
+- The exact meaning of `0xA62E00(2.0)` and of creature bytes +0xB24/+0xB25 (read only at the call sites above); the walk/run names of states 1 and 2 rest on the run flag's route and the audio ramp, not on a label.
+- The anim-table rows 2, 3, 250, 254, 268-283 (State 1 by ANIMATION.md:1386) beyond ghilana's read of the core files; the add-in files with enciphered archives (anim_str, anim_gib, ...) may add rows.
+- No game was run; nothing observed live.
 
 ### Evidence
 
