@@ -152,7 +152,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 
 1. **Placed creatures from the .are are NOT moved by a safe-location search while the area loads.** They are added by the area's list step 0x0067F420, which calls the creature's AddToArea (CCCreature vtable +0xF8 = 0x006B6BC0) with the creature's own stored position (+0x120). AddToArea ends by calling SetPosition (vtable +0x7C = 0x006B5EF0, args (pos, 1)). SetPosition only runs the snap (0x006B1790) when the game mode is not Loading: it reads `[0xC327EC]+0x114` -> `+0x78` and skips the snap if it equals 9 (GameModes.h: Loading = 9), setting the physics body straight to the position. Area load runs in mode Loading, so placed creatures stand exactly where the .are puts them (checked in disassembly; "the mode is Loading during the area's object adds" is inferred from LOAD_EVENTS.md's order).
 2. **CreateObject (0x00669550) does not call GetSafeLocation.** It makes the object through 0x00687830 -> factory 0x006861F0, which takes only x,y of the location, replaces z by the ground height from 0x00685430 (a physics ray down from z+3.0 over 100 m; the input z if nothing is hit), then calls AddToArea(area, &pos, 0). That AddToArea ends in SetPosition as above, now in a non-Loading mode, so the snap in 0x006B1790 is reachable (checked).
-3. **That snap is gated by a physics test, not by the walk grid.** 0x006B1790(arg 0) first calls 0x006B1600: a query on the area's physics world (`[area+0x62C]`, vtable slot 0x34, mask 0x2011134) at the creature's position, with a box/capsule from the body's size. Only if it answers true does it search: `GetSafeLocation(pos, 10.0, the creature's movement controller, reachable=0, out, snapToGround=1, creatureCheck=0, minRadius=0)`. If the creature is moving (controller 0xA630E0 true) it uses NearestFree (0x0073E7F0) instead. If nothing is found it keeps the position. The test's meaning (true = overlaps static physics) is inferred from the control flow (`test al; je skip`), not from a name. A cell the walk grid calls blocked but with no physics overlap is therefore NOT a trigger.
+3. **That snap is gated by a physics test, not by the walk grid.** 0x006B1790(arg 0) first calls 0x006B1600: a query on the area's physics world (`[area+0x62C]`, vtable slot 0x34, mask 0x2011134) at the creature's position, with a box/capsule from the body's size. Only if it answers true does it search: `GetSafeLocation(pos, 10.0, the creature's movement controller, reachable=0, out, snapToGround=1, creatureCheck=0, minRadius=0)`. If the creature is moving (controller 0xA630E0 true) it uses NearestFree (0x0073E7F0) instead. If nothing is found it keeps the position. The test's meaning (true = overlaps static physics) is inferred from the control flow (`test al; je skip`), not from a name. A cell the walk grid calls blocked but with no physics overlap is therefore NOT a trigger. (Corrected 2026-10-19 by lib-agent-2: the test gates only that extra safe-spot search. Its false branch jumps to the final controller setPosition at the ground's z, 0x006B1979–0x006B1997, so outside mode 9 the z snap always runs, for a move over 0.05 m: "What z a creature ends at" below.)
 4. **GetSafeLocation's walkable test is the grid's IsFree with the creature's half personal space, plus a short ray.** The grid is consulted by cell kind only (kind >= 8 or == 7 blocks; 5 and 6 do not), so a creature standing on another's stamp is not blocked. No height-difference test in it. "Reachable" = a physics ray from the ORIGINAL position to the candidate is clear, not a path search.
 5. **Stacked creatures are not pushed apart anywhere in this path.** A creature's stamp (PlaceObstacle) skips cells already kind 6 or >= 7, so stacking just re-stamps nothing; nothing separates them. I found no separation step.
 6. **Wolves at (927.14, 977.53, -1.81): not a placed spot in pre200ar_korcari_wilds.are.** None of its 98 creatures is within 15 m of it (placed wolves are at e.g. (912.5,966.8,-0.89), (945.0,978.9,-0.19), (904.9,979.1,-0.46), (924.5,955.7,-1.59), (905.3,958.2,-1.53); the single float scan of the file finds no 927.14 or 977.53 pair). So the stack is not the placed point; it is where something led them (a path end or script jump), and the engine never separates stacked creatures.
@@ -580,3 +580,208 @@ Consumers that treat the value: stamps ("soft" for 1 and 2, dev/PATHFINDING.md:1
 - The no-controller path of 0x006B6880 (0x006B6B1D: a sweep 0x00685920 then SetPosition) and the global switch at 0x00C353B5.
 - The walk grid's height channel (interpolation between cells, 0x00A473A0): not read, not needed.
 - A live check: nothing was run in the game; "z set exactly each frame" is the code's behaviour, not an observation. Where the animation layer might offset the model relative to the creature's position (root offset, scale) was not read.
+
+## What z a creature ends at after a run-time jump / SetPosition / teleport (jumpz; lib-agent-2, 2026-10-19, GOG exe, addresses GOG's, read-only)
+
+"checked" = read in disassembly or data this session. "inferred" = from control flow or a constant. "cited" = master's notes, file:line. Scratch: `%TEMP%\lib-agent-2-jumpz-calls.py` (scans E8/E9 rel32 callers).
+
+### Short answers
+
+1. **Vanilla never trusts a script's z at run time.** Every run-time move of a creature (SetPosition, CommandJumpToObject/Location, the party arrival) ends in `GroundHeight` 0x00685430 for the final z, in the safe-location paths *and* in the unsafe SetPosition path (through the physics snap). A z of 0 or 1 where the terrain is at 2.3..15.8 m is repaired. (checked)
+2. **GroundHeight does recover a z below the ground.** Ray 1 starts at z+3.0 and runs down, unlimited length (the length argument is -1.0 at 0x00685513, `0xAE2E00`; "unlimited" inferred, PATHFINDING.md:154 says 100 m, :333 FLT_MAX). If the terrain is more than 3 m above the input z, ray 1 misses (or hits the terrain from below if the mesh is two-sided: not read, same answer). It then **falls through to ray 2 from z+100.0 (qword 0xAED110 = 100.0) down, all hits, mask 0x24, takes the hit whose |hit.z - z| is smallest (start value 65505.0 at 0xB07ECC), flag 0x01000000 clear**, so a creature at z=0 under terrain at 15.8 gets 15.8, and under terrain at 2.3 it gets 2.3 from ray 1. If both rays find nothing, the input z comes back. (checked: 0x00685547-0x006855B5 ray 1, 0x006855B5-0x0068571B ray 2, 0x0068571D hit exit, 0x00685770 miss exit.) Only a point with no terrain/placeable/static shape in 100 m above it keeps its bad z.
+3. **No kill plane, no "fell through the world" check, no ray from +1000 found.** No string of that kind in the exe (`--strings fell|falling|KillZ|void` empty); GroundHeight's start heights are z+3.0 and z+100.0 only; GetSafeLocation uses GroundHeight and the grid's cell height, nothing else. (strings checked; "no other recovery anywhere" not exhaustive, see Not read.)
+4. **Most plausible cause of Ostagar's followers at z 0..1 in a port:** a location with z = 0 (or an unset local float: `Rubber_GetHome` builds `Location(area, Vector(fX,fY,fZ), f)` from `GetLocalFloat`s that read 0.0 when `Rubber_SetHome` was never called, `sys_rubberband_h.nss:55-59`; or any script `Location(area, Vector(x,y,0), f)`; or a waypoint authored at z 0) handed to a port that keeps the given z. Vanilla's jump / safe SetPosition / arrival replace that z with GroundHeight(x,y) and would recover them. Vanilla keeps a raw z only in the cases listed under "When the raw z survives" below.
+
+### Per path
+
+#### A. `SetPosition(oCreature, vPos, bSafePosition)` = ScriptCommand::SETPOSITION 0x006554B0 (checked)
+
+Only creatures (`[obj+0x14] == 6`) take the safe path; any other object (placeable, trigger, sound, etc.) always takes the plain path (0x0065568F).
+
+```
+SETPOSITION(obj, pos, bSafe):
+  if !bSafe or obj.type != creature:
+      obj.SetPositionBase(pos, force=0)                    // 0x00695540 at 0x00655698, the plain path (see D)
+      return 0
+  mc = creature.controller                                  // 0x006A2570
+  if creature is in the party but not the controlled one (0x0069F140 true, 0x006A7D30 false)
+     and |pos - controlled.pos| < 0.01 [0xAF7498]:
+        0x006AA440(creature, controlled, &pos)              // party formation spot, see LOAD_EVENTS.md:128-133
+  // the safe search; arguments read at 0x0065560D-0x00655634
+  if GetSafeLocation(area, pos, maxRadius = 5.0 [0xAE7308], mc, reachable = 1, &out,
+                     snapToGround = 1, creatureCheck = 1, minRadius = 0) != 1:
+        return 0                                            // NOT MOVED. No fallback to the raw pos (0x00655639 jne 0x0065569D)
+  (clear the creature's command/animation state: 0x007A0DC0, 0x007C1690, 0x007C1EA0, 0x00A65CF0)
+  creature.SetPositionBase(out, force=0)                    // 0x00695540 at 0x0065567F; out.z = GroundHeight (below)
+```
+
+GetSafeLocation 0x0073E370 (cited exactly in PATHFINDING.md:164-198, re-read for z only):
+
+- With snapToGround the **first thing** is `p.z = GroundHeight(p)` (0x0073D520 -> 0x00685430), so the centre test and its ray are done at the ground, not at the script's z. (cited :170, :193)
+- The **ring candidates** (half a cell step, up to maxRadius) take their z **from the walk grid's cell height** (`test(c): c.z = grid height at (c.x,c.y)`, 0x0073DE20 -> 0x00A473A0, cited :171-200), so a ring candidate does not depend on the bad input z at all.
+- On success **`out.z = GroundHeight(c)` always**, even for snapToGround=0 (cited :193, read at 0x0073E75B). So `out` has a ground z.
+- On failure it returns 0 and the creature stays where it was (SETPOSITION), or the caller keeps its spot (arrival).
+- `IsLocationSafe` uses the grid's `IsFree` (kind only, no height), a physics ray 0x0067CFA0 and, for creatureCheck=1, a creature-overlap box test 0x0073D780 (cited :200-205). None of them looks at the input z except the ray, which runs at the ground z after the snap.
+
+#### B. `CommandJumpToObject` / `CommandJumpToLocation` (queued commands; execution 0x007A3D?? / 0x007A4100) (checked)
+
+The script commands 0x0066FEF0 / 0x00670010 only build a command (JUMP_TO_LOCATION = type 10, PARTY.md:325): a location is stored as the command's three vectors (position copied verbatim, `0x00670093-0x0067010E`). The raw script z is in the command until it runs. The executors (callers of 0x006AA440 at 0x007A3E1C and 0x007A426A; the location executor starts at 0x007A4100, ret 8):
+
+```
+JumpToLocation.execute(creature, cmd):                      // 0x007A4100
+  pos, facing, area = cmd.location
+  fail (-1) if no creature / dead / area null
+  creature.vtable[0xB0](..)                                  // clears whatever it was doing
+  creature.controller.ownerArea = area
+  if party member but not the controlled one and |pos - controlled.pos| < 0.01: 0x006AA440 (formation spot)
+  if GetSafeLocation(area, pos, maxRadius = 20.0 [0xAE72FC], mc, reachable = 1, &out, snap = 1,
+                     creatureCheck = 1, 0) != 1:
+        controller reset (0x00A62F30); return -1             // command FAILS, creature unmoved
+  (same state clear as A)
+  if creature.area == area:  creature.SetPositionBase(out, 0)           // 0x00695540 at 0x007A42FE
+  else:                      LiftObstacle; creature.AddToArea(area, out, 0)   // vtable +0xF8 at 0x007A4337
+  place obstacle (0x006B3070), set facing (0x00694CE0)
+  return 1
+JumpToObject.execute (function containing 0x007A3E1C...0x007A3F3B):
+  pos = target object's position (+0x120 of the target, or a formation spot when the target is the controlled creature);
+  same GetSafeLocation call but maxRadius = 5.0 [0xAE7308] (push at 0x007A3F29), reachable 1, snap 1, creatureCheck 1;
+  fail -> -1 (0x007A3EEF);  ok -> SetPositionBase(out, 0) (0x007A3F80) when same area, else the cross-area branch.
+```
+
+So the jump's final z is **GroundHeight(candidate)** and, unlike the plain SetPosition, a jump with no safe spot within 20 m (5 m for JumpToObject) fails and leaves the creature where it was. (checked, the radii by their `fld` loads)
+
+`UT_LocalJump` (utility_h.nss:1148-1245) uses `SetPosition(oTarg, GetPosition(oDest), TRUE)` when nJumpImmediately (the default), `WR_AddCommand(CommandJumpToObject(oDest))` otherwise; `bJumpParty` does it for every party member. So the common script "teleport to a waypoint" is **path A (5 m) or JumpToObject (5 m)**, z from the waypoint's GetPosition.
+
+#### C. `SetLocation` / `SETLOCATION*` (0x0065B3B0 etc.)
+
+These (SETLOCATION, SETLOCATIONPOSITION, SETLOCATIONFACING...) are the setters of a `location` value (the script type), not a move of any object. Nothing in them calls GroundHeight or touches a creature; a location carries z exactly as the script put it, and the consumers above decide. (inferred from the names and from that none of them is in the callers of 0x00695540 or 0x006B1790, whose caller lists I scanned: 0x00695540 is called from 0x006327EC, 0x0065567F, 0x00655698, 0x0065B47E ... and 0x0065B47E is in the GETSAFELOCATION command, not SETLOCATION; the SETLOCATION bodies were not disassembled.)
+
+#### D. The plain move: `CCObject::SetPosition` 0x00695540 (pos, force) -> vtable +0x7C (creature: 0x006B5EF0) (checked)
+
+```
+CCObject::SetPositionBase(pos, force):                      // 0x00695540
+  if !force and pos == this.pos (0x004D4EF0): return
+  old = this.pos; this.pos(+0x120) = pos         // the SCRIPT'S z is stored here, raw
+  this.groundCacheValid(+0x1C4) = 0               // the cached ground height/normal is stale
+  this.vtable[+0x7C](&old, 0)                     // CCCreature::SetPosition 0x006B5EF0
+
+CCCreature::SetPosition(old, force):                         // 0x006B5EF0 (cited PATHFINDING.md:153, :241)
+  if has capsule (+0x770) and !disabled (+0x420) and !inSnap (+0x774):
+      capsulePos = capsule.GetPosition(); capsulePos.z -= +0x784 (centre offset)
+      if distance(this.pos, capsulePos) > 0.05 [0xAF70B0]  or force:        // 0x006B5F51
+          if game mode != Loading (9):  Snap(arg 0)                         // 0x006B1790
+          else:                         capsule.SetPosition(x, y, this.z + +0x784)   // raw z!  0x006B5F87
+  base set: orientation/room/obstacle bookkeeping (0x00697AE0, 0x00695D70, stamp 0x006A3BC0)
+
+Snap(0)  // 0x006B1790
+  g = GroundHeight via the cache: 0x006954C0 recomputes (+0x1C4 was cleared) -> +0x1C0 = GroundHeight(area, this.pos, 0, &normal)
+  p = (this.x, this.y, g)                                    // 0x006B17C8-0x006B17D7: local z = +0x1C0
+  if Overlap(p) (0x006B1600: physics query [area+0x62C]->vtable+0x34, mask 0x2011134, box from the body size):
+        found = GetSafeLocation(p, 10.0 [0xB0F298], mc, reachable=0, &p, snap=1, creatureCheck=0, 0)    // moving creature: NearestFree 0x0073E7F0
+        if found: this.SetPositionBase(p, 0) with +0x774 set (recursion guard)
+  capsule.SetPosition(p.x, p.y, p.z + +0x784)                // 0x006B1979-0x006B1997: ALWAYS, with the ground z
+```
+
+So after the plain SetPosition the physics capsule stands at **GroundHeight(x,y)**, whatever z the script gave, when the game is not in mode 9 and the capsule is more than 0.05 m from the new spot; the overlap test (0x006B1600) only decides whether a safe-spot search also runs, it does **not** gate the z snap (corrects my wording in PATHFINDING.md:156, which says the snap "is gated by the physics test": the *search* is gated, the final capsule placement at ground z is not, 0x006B1979 is reached from both branches). The creature object's own `+0x120` z keeps the script's raw z until the per-frame read-back: `0x006B2220` (from 0x006B6880 at 0x006B6B10) sets `this.z = capsuleCentreZ - +0x784` via 0x00695540 (checked 0x006B2220-0x006B230A), after which `this.z` is the ground's. If the capsule's flag at vtable +0x38 is false it instead keeps x,y from the capsule and its own z and calls Snap(0) again (0x006B22B3-0x006B22DF).
+
+#### E. Area transition arrival (cited)
+
+PATHFINDING.md:160-162 and LOAD_EVENTS.md:100-130: 0x006C73C0 -> `GetSafeLocation(spot, 20.0, mc, reachable=1, out, snap=1, creatureCheck=1, 0)` at 0x006C7664; success: z = GroundHeight; **failure: the spot is kept with its raw z**, then `AddToArea(area, spot, 0)` in Loading mode, where `SetPosition` does not snap (path D, mode 9). The spot is the waypoint's position plus a formation offset in x,y (z is the waypoint's).
+
+### When the raw z survives (vanilla)
+
+1. **Game mode 9 (Loading), plain move or arrival with no safe spot:** `0x006B5F76` skips the snap and the capsule is put at raw z + offset. A physics body under the terrain with a -9.81 downward move per frame (0x006B6880) finds no floor to land on (it only sweeps the shapes below it) and keeps falling; there is no catch (answer 3). Not seen; inferred.
+2. **A creature with no capsule** (`+0x770 == 0`, not yet added): `0x006B5F06 je 0x006B5FB9` skips everything; `+0x120` stays raw until AddToArea creates the capsule. Placed-in-the-.are creatures are in this class and keep the .are's z by design (PATHFINDING.md:227-237).
+3. **Plain SetPosition by less than 0.05 m** (the distance test): nothing changes, whatever the z.
+4. **No collision under/over the point in 100 m:** GroundHeight returns the input z.
+5. **Non-creature objects** (placeables etc.) via SetPosition: only `0x00695540` -> their own vtable +0x7C (0x0074BB70, no ground call, PATHFINDING.md:233): raw z kept.
+
+### What to copy
+
+```
+// script SetPosition(obj, pos, safe)
+if obj is creature and safe:
+    out = GetSafeLocation(pos, 5.0, reachable, snapToGround, creatureCheck)   // z of out = GroundHeight(out.xy, from z+3 else z+100)
+    if !out: return                          // the creature stays; do NOT place at the raw pos
+    place(creature, out)
+else:
+    place(obj, pos)                          // creature: capsule z = GroundHeight(pos.xy) when mode != Loading and moved > 0.05 m
+// CommandJumpTo*: same GetSafeLocation (20.0 for a location, 5.0 for an object), fail = command failed, creature unmoved
+// GroundHeight(x, y, z): hit = ray(x,y,z+3) down, unlimited; if none: hits = all(ray(x,y,z+100) down), choose min |hit.z - z|; none: z
+```
+
+For the port's bug: take z = GroundHeight(x, y, inputZ) with that two-ray rule in whatever replaces SetPosition / the jump / the arrival, and treat a z of exactly 0 (an unset local float) as possible input; do not use the walk grid's cell height for the final z (its only use is a ring candidate's seed inside GetSafeLocation, which the exe then re-snaps).
+
+### Not read
+
+- The two-sidedness of PhysX triangle-mesh raycasts (whether ray 1 from below the terrain hits the terrain's underside): it does not change the answer.
+- Ray 2's exact direction/length arguments (call at 0x006855F7 `[vt+0x20](list, start, dir, mask 0x24, 0, 0)`), taken from the shape of the loop; ray 1's length -1.0 meaning unlimited (inferred).
+- The bodies of SETLOCATION*/SETLOCATIONAREA (0x0065B3B0, 0x0065B580, 0x00651000): assumed to edit a location value only.
+- 0x006AA440's formation spot z, and which command class holds the JumpToObject executor (its entry is before 0x007A3DC0; the callers' tail was read, not its head and the cross-area branch at 0x007A3FB0-0x007A4100).
+- Whether any script or the AI keeps a "fell off the world" watchdog in the .nss files for Ostagar (not grepped beyond SetPosition/CommandJumpTo*/Location(...Vector(...))); no engine-side one was found by strings.
+- Whether Ostagar's followers were put at z 0..1 by Loading-mode placement (case 1 above) rather than by a script jump: nothing in the scripts for ost000a was found that builds a z=0 location; the Rubber_* home locals are the only z=0 builder found, and no Ostagar script uses them.
+- The per-frame call conditions of 0x006B6880 for an idle creature (callers 0x006BBA39, 0x006BBC93 only checked as call sites).
+
+## A creature that starts under the level's mesh: what the capsule controller and the snap do (read 2026-10-19, GOG exe, read-only; prefix ctlunder)
+
+"checked" = read in disassembly. "inferred" = from control flow. Builds on master's dev/PATHFINDING.md walk section (the pseudo-code of 0x006B6880 / 0x006B2220, lines ~285-330) and :150-165 (the snap 0x006B1790, GroundHeight); only what is new is marked NEW.
+
+### Short answers
+
+1. **No depenetration, no ground search when the capsule is built or placed.** Creation (`CCCreature::CreatePhysicsController` 0x006B1ED0, tail 0x006B2156-0x006B21FD) and the physics-body setter (0x006B5EF0) do exactly one of two things (checked):
+   - game mode is Loading (`[0xC327EC]+0x114 -> +0x78 == 9`): `controller.setPosition(x, y, z + creature+0x784)` (vtable slot +0x1C), the .are's z verbatim. Nothing else. A creature put at z 0..1 under a surface at 2.3 is built there.
+   - any other mode: the snap `0x006B1790(1)`, which replaces z by `GroundHeight` and (flag 1 = skip the overlap test) always runs the safe-location search (below). NEW: at creation the flag is 1 (push 1 at 0x006B21BE), at SetPosition after a spawn it is 0.
+   PhysX 2.8's NxController has no recovery of its own that the exe uses; there is no overlap-and-push-out call anywhere in these routines (checked: the only overlap query is 0x006B1600, used by the snap).
+2. **The first move from under the terrain is recovered by the SNAP, not by the controller (NEW, checked flow).** Per frame (only while the creature is moving, see 3) 0x006B6880 moves the capsule by (dx, dy, -9.81), mask 0x2011134. Then 0x006B2220 reads it back:
+   - controller reports "colliding down" (slot +0x38): creature z = capsule centre z - 0x784. Exact.
+   - NOT colliding down (nothing within 9.81 m below, which is the under-the-terrain case if nothing lies lower): creature z is KEPT (x, y from the controller, z = old `creature+0x128`, 0x006B22B3-0x006B22D6) and then **`0x006B1790(0)`** runs. It sets z = `GroundHeight(creature x, y, z)` (0x006954C0 cache, invalidated by the SetPosition just made) and tests `0x006B1600` = `PhysicsScene::OverlapCapsule` (scene vtable 0x00B272D4 slot +0x34 = 0x0082EC20, address library ID 22526; checked) of the capsule centred at (x, y, groundZ + co) with mask 0x2011134:
+     - no overlap: `controller.setPosition(x, y, groundZ + co)` (0x006B1979-0x006B1997). The creature itself is updated by the next frame's sync (which lands on the floor: colliding down, z exact).
+     - overlap: `NearestFree` 0x0073E7F0 if the movement controller is active (0x00A630E0), else `GetSafeLocation` 0x0073E370 (10.0 m, snap to ground, reachable 0), the creature MOVED there with SetPosition (flag +0x774 = 1 around it), capsule size re-applied, then controller set to that spot's ground. If the search finds nothing the creature stays.
+   So the engine's answer to "creature under the mesh": the next move frame lifts it to **GroundHeight(x, y, z)**, i.e. a surface found from z+3.0 downward (any Walkable-mask hit below z+3 in the column, nearest to the ray's start going down) and, if that ray hits nothing (every surface is more than 3 m above), the second ray's hit nearest in z to the input z (PATHFINDING.md:285 / GroundHeight pseudo-code). For z 0..1 and surfaces at 2.3 and 15.8: ray 1 starts at z+3 = 3..4, above the 2.3 surface, so it hits 2.3 first; the 15.8 surface is never chosen unless 2.3 is absent in that column.
+3. **The controller moves only while the movement controller is active, not for an idle creature (NEW, checked).** Both calls of 0x006B6880 are inside the creature's per-frame update (0x006BB890, vtable slot; the second, 0x006BBC93, in the adjacent virtual 0x006BBB70). In 0x006BB890 the call at 0x006BBA39 sits behind `0x00A630E0(MovementController at creature+0xA30)` (0x006BB911: false jumps to 0x006BBB55, past the move) and then `0xA644E0` (the controller's update) true and `0x00695670` false. 0x00A630E0 = `[ctl+0x75] ? ([ctl+0x76] | (anim ctl at +0x70 && [+0x74] ? [anim+0x70] : 0)) : 0` (the bytes are unnamed; "active" is inferred from its use in 0x006B1790 as "the creature is moving"). So an idle creature gets no gravity move: it does not fall, and does not rise either. It stays under the mesh until something moves it. NOT read: the callers of 0x006BBB70 (it is a vtable entry; it takes dt, a target and an out vector, and calls 0x006B6880 with the target), so a script- or knockback-driven move may also pass.
+4. **No kill plane, lowest-z clamp or stuck detector in the path (checked absence in 0x006B6880, 0x006B2220, 0x006B1790, 0x006B1600).** No string "fell"/"stuck"/"falling" in the exe. `0xA62E00(2.0)` (the stuck-looking call in PATHFINDING.md:528) is the walk-or-run predicate (path of 5+ legs, or longer than 2.0 m), not a stuck check (checked head). If the capsule falls (colliding down never true because nothing is below), the engine keeps z and snaps to GroundHeight each frame instead of letting z drop; z does not decrease frame by frame. If the column has NO Walkable surface at all, GroundHeight returns the input z and the creature stays where it is.
+5. **One-sided meshes: not decided (PhysX is in `nxcharacter.dll`/`PhysXLoader`, a separate DLL; not read).** The exe imports `NxCreateControllerManager`/`NxReleaseControllerManager` (NxCharacter.dll), `NxCookTriangleMesh`/`NxInitCooking` (NxCooking.dll), PhysXLoader (3 functions). The exe cooks the level's meshes from the .opf data (NxTriangleMeshDesc, 40 bytes, "the same in every one seen", COLLISION.md:171); the flags of the desc were not decoded here (NX_MF_FLIPNORMALS / double-sided are not known). What the exe does show: it handles a controller hit UP (slot +0x40, 0x006B6A98-0x006B6B0C): restore the saved position, step offset 0, move again, step offset 0.5. That is for a head hit on a ceiling during a step-up; it does not repair a capsule under a surface.
+
+### Pseudo-code (what a port should do for a creature that may be under the surface)
+
+```
+// each frame the creature is moving (movement controller active)
+move capsule by (dx, dy, -9.81), mask 0x2011134, step 0.5
+if colliding down:   creature.z = capsule.centre.z - co                     // as PATHFINDING.md:300
+else:                creature.xy = capsule.xy; creature.z unchanged
+                     g = GroundHeight(creature.xy, creature.z)               // ray from z+3 down, else nearest-in-z of all hits from z+100
+                     if !OverlapCapsule(xy, g + co, mask 0x2011134):
+                         capsule.setPosition(xy, g + co)                     // creature is lifted on the next frame's sync
+                     else:
+                         p = movingNow ? NearestFree(...) : GetSafeLocation(creature.pos, 10.0 m, snapToGround, reachable 0)
+                         if p: creature.SetPosition(p)                       // then capsule to p's ground
+// spawn in a non-Loading mode: z = GroundHeight(x, y, z) in the factory (0x006861F0), then the same snap with flag 1 (safe-location search always)
+// spawn/load in Loading mode: z verbatim, no snap, no depenetration
+```
+
+For the Ostagar case: a port that wants the engine's result puts a creature at z 0..1 under surfaces at 2.3 and 15.8 onto **2.3** (the nearest surface above whose ray starts at z+3), by the GroundHeight ray (mask Walkable 0x2000000, or 0x24 with the Nonwalkable flag test where area+0x658->+0x7C == 1), not onto the 15.8 surface and not by falling. The engine does this at a spawn (non-Loading) at once and for a moving creature on its first move frame; an idle one it leaves wherever it is (the .are's z in Loading mode).
+
+### Evidence (GOG addresses)
+
+- 0x006B6880: gate `[esi+0x770]` null or `[0xC353B5]` set -> no-controller path 0x006B6B1D; `[ctl+0x18](1)` false (collision off) -> `SetPosition(target, 0)` 0x006B68BD. Displacement (target.xy - pos.xy, 0) at 0x006B68CA-0x006B68DE, then z = -9.81 (0x00B0F274) at 0x006B6A3B-0x006B6A47; mask 0x2011134 at 0x006B6A4B and 0x006B6A84 (move = slot +0x10, min dist 0.001 = 0x00B0F278, sharpness 1.0); `[ctl+0x40]` (up) at 0x006B6A98 -> restore via slot +0x1C, step offset 0 (slot +0x24), second move 0x006B6AF5, step offset 0.5 (0x00B0F28C); then 0x006B2220.
+- Slope branch uses `0x008E6020(pi/3 = 1.0471976)` + 1e-6 (0x00AE09B0) against the ground normal z from 0x006954C0 (cos 60 deg; the call is read, "cos" inferred).
+- 0x006B2220: skipped if `[esi+0x420] != 0` (unnamed flag) or no controller; centre z - `[+0x784]`; `(+0x780 - ctl.height)*0.5` when `[+0x780] != -1`; `ctl slot +0x38` (colliding down) false -> 0x006B22B3 branch (SetPosition(x, y, creature+0x128), then 0x006B1790(0) at 0x006B22DF).
+- 0x006B1790(flag): reads creature +0x120/+0x124/+0x128, 0x006954C0, z = `[esi+0x1C0]` (0x006B17C8-0x006B17D7); flag 0 -> 0x006B1600 (call 0x006B17E4; false -> 0x006B1979); area `[vtable+0xA0]`; moving test 0x00A630E0 at 0x006B1838-0x006B1840 -> `NearestFree` 0x0073E7F0 (call 0x006B18A9, ecx = area) else `GetSafeLocation` 0x0073E370 with radius 10.0 (0x00B0F298) (call 0x006B18DE); success -> `SetPosition(out, 0)` 0x006B18FD with `[esi+0x774]` = 1 around it; sizes re-read from the controller 0x006B1902-0x006B1977; final `controller.setPosition(x, y, [esp+0x18] + [esi+0x784])` 0x006B1979-0x006B1997.
+- 0x006B1600: area `[+0x62C]` physics world (0x00537D60(0)), `ctl slot +0x64` (radius) and `+0x6C` (height) read, centre = given pos (or the controller's position) with z + `[+0x784]` (0x006B16D4-0x006B16EA), height * 0.5 (0x00AE70F8) added/subtracted, mask 0x2011134 at 0x006B1725, `scene vtable +0x34` = 0x0082EC20 (`Physics::PhysicsScene::OverlapCapsule`, ID 22526) at 0x006B174D. Its result is the bool the snap tests; true = overlap is the reading that fits (it also fits the name).
+- Creation 0x006B1ED0: desc up axis 2, slope/skin/step values at 0x006B20DC-0x006B212A (1e-6 at 0x00B0F2A4 added to the slope), `scene vtable +0xC` (CreateController, 0x00821B40) at 0x006B214A-0x006B2156 -> `creature+0x770`; then controller settings (slots +0x4C/+0x50/+0x54/+0x58/+0x5C: collision on, user data = creature, groups 4, 4, mask 0x10); then `[0xC327EC]+0x114 -> +0x78 == 9` ? direct setPosition(x, y, z + 0x784) at 0x006B21C9-0x006B21FD : `0x006B1790(1)` at 0x006B21C2. Callers of 0x006B1ED0 (scanned E8 calls): 0x0066C06D, 0x006B36BB, 0x006B5ECD (from 0x006B5E90, the physics on/off toggle: creates it when switched on), 0x006B6DC4, 0x006B754C, 0x006BC034, 0x007F2B00. Callers of 0x006B1790: 0x006B21C2, 0x006B22DF, 0x006B5F80 (SetPosition 0x006B5EF0, not Loading), 0x006BA882.
+- Move gate: 0x006BB890 (`push ebp` at 0x006BB890; vtable data at file 0x710594, next slot 0x006BB BB70 at file 0x7105A0); 0x006BB911 `call 0xA630E0` / `je 0x6BBB55`; call 0x006BBA39.
+- Cache: 0x006954C0 computes GroundHeight only when byte +0x1C4 is 0 and sets it; 0x00695540 (SetPosition) clears it (PATHFINDING.md:266).
+- Imports (`daoexe.py --imports`): NxCharacter.dll {NxCreateControllerManager, NxReleaseControllerManager}; NxCooking.dll {NxCookClothMesh, NxCookConvexMesh, NxCookTriangleMesh, NxInitCooking, NxCloseCooking}; PhysXLoader.dll (3).
+- A scratch scanner for E8/E9 callers: %TEMP%\lib-agent-2-ctlunder-calls.py.
+
+### Prior notes used
+
+PATHFINDING.md:150-165 (placed creatures keep the .are's z in Loading mode; CreateObject's GroundHeight; the snap and its overlap gate), :231-262 (ground z at load, the lazy cache), :285-330 (the controller's per-frame move and sync), :528 (0xA62E00), COLLISION.md:62-85 (mask bits), :171 (triangle mesh records). Sibling repos: nothing on a creature under the mesh (DAOTurnBased/Eluvian have no notes on it; not re-searched beyond the library's table: the physics rows 22675-22706 and 22526 exist, 0x006B1600/0x006B1790/0x006B6880 are unnamed).
+
+### Not read
+
+- PhysX 2.8's own behaviour (nxcharacter.dll / PhysXLoader): whether a controller that starts penetrating a mesh recovers, whether triangle meshes are one- or two-sided for the controller's sweeps and for scene raycasts, and whether the move reports "colliding down" when it lands on a mesh's back face. Without it the case "capsule under a surface with another shape lower down" is open: the capsule may land on that shape (colliding down, z exact there) and the snap would not run.
+- The cooked meshes' NxTriangleMeshDesc flags (FLIPNORMALS, hardware); the exe's cooking call sites were not read.
+- The callers of the vtable entry 0x006BBB70 (the second route into 0x006B6880), and the bytes +0x75/+0x76/+0x420 of the movement controller / creature (unnamed).
+- GetSafeLocation's candidate order past PATHFINDING.md's reading; the tail of 0x006B1790 when the search succeeds (which z the controller gets: read as the new spot's ground, 0x006B1979 uses `[esp+0x18]`, not checked to be overwritten by the search).
+- Nothing was run in the game; the Ostagar z of 2.3 / 15.8 is the paragon-agent's figure, not re-measured.
