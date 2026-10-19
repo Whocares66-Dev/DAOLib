@@ -158,7 +158,16 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
   - Each frame in state 3 the behaviour (`0x006C27B0`) writes them straight into the scene camera, unsmoothed.
   - The setters `0x006C45F0`, `0x006C4EC0` and `0x006C4B20` only save and restore at the mode's entry and exit.
 - **A camera target** (5209): at category 50 the camera is re-aimed at that actor each step, yaw and pitch, its roll kept.
-- **`JumpToCamera`** (type 24, `0x007DF2F0`): a `.stg` camera by tag (FOV 11003, LookingFrom 11006, LookingAt 11007–11009), placed by the stage's transform, its FOV through the same divide.
+- **`JumpToCamera`** (type 24, `0x007DF2F0`): a `.stg` camera by tag (FOV 11003, LookingFrom 11006, LookingAt 11007–11009), placed by the stage's transform, its FOV through the same divide. **It is not aimed at LookingAt** (read 2026-10-19 by lib-agent-2, for DAOParagonEngine #29; checked unless said):
+  - At its first execution only (the action's +0x46), `0x007DEAF0` reads the camera through `0x007D1EA0` and places it: position = R(stage q) × position + stage p, orientation = stage q × orientation (the stage's +0xB0 and +0xA0). `0x007D1EA0` is the only code that reads the five fields 11003 and 11006–11009. A camera that is not found changes nothing.
+  - Every execution then copies the stored position, orientation and FOV to the active camera, so nothing tracks.
+  - LookingAt then adjusts that pose once, by `LookingAtType`:
+    - **0:** nothing. The toolset baked the aim into the stored orientation: every camera of `2p_200_cullen.stg` has a primary, type 0 included.
+    - **1 and 3** (`0x007DE060`): the camera's z is raised by the mean, over the primary and each secondary that has a cutscene actor, of the place's ground delta. The ground delta (`0x007DC890`) is the place's stage-placed z snapped to the walk mesh, minus its unsnapped z, or 0 with no mesh. Type 1 also adds each actor's height minus 1.75 (`0x007CE5E0`, 1.75 by default; reading the value as the actor's height is inferred). So type 3 makes up for uneven ground, and type 1 for that and for actors taller or shorter than 1.75 m.
+    - **2** (`0x007DE220`): re-pitches the camera, not its yaw, and moves its height, from LookingFrom to the primary. It uses both places' ground deltas, the actors' heights over 1.75, and an atan2 of the vertical difference over the horizontal distance. The exact formula was not reduced.
+    - Any other value: nothing.
+  - **The secondary is a list of tags in one string,** split at the delimiters at `0x00AF0CA4` (space, backslash and colon first; the rest not read). The files read had it empty. Type 2 ignores it.
+  - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is, and the camera found as a placed object (+0x45, `0x007D1E10`).
 - **Shake** (type 20) multiplies an Euler noise onto the camera (not read in detail).
 - **Depth of field** is the `FrameBufferEffect` (type 19) `da_dof`, not a camera property.
 
