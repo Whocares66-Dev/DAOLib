@@ -108,6 +108,7 @@ HEADPRESET = "src/dao/core/HeadPreset.cpp"
 MORPHCONFIG = "src/dao/core/MorphConfig.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 EFFECT = "src/dao/core/Effect.cpp"
+FEV = "src/dao/core/Fev.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -1501,6 +1502,54 @@ MUTANTS: list[Mutant] = [
         FSB,
         "sample = std::clamp((nibble & 8) != 0 ? sample - delta : sample + delta, -32768, 32767);",
         "sample = (nibble & 8) != 0 ? sample - delta : sample + delta;",
+    ),
+    Mutant(
+        "fev-sample-index: a wave's sample index is the number the file has, the sample in its bank",
+        FEV,
+        "entry.sampleIndex = in.U32();",
+        "entry.sampleIndex = in.U32() + 1;",
+    ),
+    Mutant(
+        "fev-wave-bank: a wave names its file first and its bank second",
+        FEV,
+        "entry.file = in.String();\n        entry.bank = in.String();",
+        "entry.bank = in.String();\n        entry.file = in.String();",
+    ),
+    Mutant(
+        "fev-directive-trimmed: a directive's fields are trimmed of the spaces some names have",
+        FEV,
+        "directive.fields.emplace_back(Trim(rest.substr(0, comma)));",
+        "directive.fields.emplace_back(rest.substr(0, comma));",
+    ),
+    Mutant(
+        "fev-property-float: a float user property is a float, not an integer's bits",
+        FEV,
+        "property.real = in.F32();",
+        "property.real = static_cast<float>(in.I32());",
+    ),
+    Mutant(
+        "fev-layer-order: a layer has its priority before its controlling parameter",
+        FEV,
+        "layer.priority = in.Read<std::int16_t>();\n    layer.parameter = in.Read<std::int16_t>();",
+        "layer.parameter = in.Read<std::int16_t>();\n    layer.priority = in.Read<std::int16_t>();",
+    ),
+    Mutant(
+        "fev-category-unknown: a category has two unknown words before its children",
+        FEV,
+        "    category.unknown = in.Array<std::uint32_t, 2>();\n",
+        "",
+    ),
+    Mutant(
+        "fev-cut-short: a project cut short anywhere is none",
+        FEV,
+        "    if (!in.Ok())\n    {\n        return std::nullopt;\n    }\n    project.trailer",
+        "    project.trailer",
+    ),
+    Mutant(
+        "fev-reverb-low-frequency: a reverb's low frequency room level is the integer before its reference",
+        FEV,
+        "r.roomLF = in.I32();",
+        "r.roomLF = in.I32() + 1;",
     ),
 ]
 

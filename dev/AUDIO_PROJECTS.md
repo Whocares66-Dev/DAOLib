@@ -1,0 +1,20 @@
+# Audio projects: the .fev reader
+
+To be folded into the "files" part of `dev/AUDIO.md` (on branch gh-191-audio-banks) as its "Projects" section when that reaches master.
+
+## Projects (.fev, FEV1; DAOLib #192)
+
+A project is an FMOD Designer 4.x event project, FEV1 version 0x003A0000. `src/dao/core/Fev.h` reads it into a plain description (`dao::core::fev::ProjectOf`), the layout in its head comment, worked out from the bytes by lib-agent-2 on 2026-10-18 (xoreos' `fmodeventfile.cpp` has the header, banks, categories, groups and an event's fixed properties right, and stops at layers). All 9,020 of the install's projects read to their end that way. What is in the description:
+
+- **The banks** the project plays from: name (the `.fsb` without its extension) and flags (0x80 stream from disk, 0x200 load into memory).
+- **The category tree**, a root `master` and its children, each with a linear volume and a pitch. `audio_categories.fev` holds the game's (20 children of `master`, all at 1.0 but `VOambient_ss` at 0.708); `music.fev` has its own `master`/`music`/`stinger`, merged by name inside FMOD (inferred).
+- **Event groups** and events: a path is the project's name, the groups' names and the event's, `bhm100_jowan/VO/36641_m` (`Project::Events()`, `FindEvent`). A group has user properties. An event is complex (type 8: layers, parameters, user properties) or simple (type 16: one instance, no parameters nor properties). Its fixed properties are volume, pitch and their randomization, 3-D distances and cone, eight speaker levels, reverb levels, fades, spawn intensity; the category it is mixed under is its last field.
+- **Layers** of a complex event: sound-definition instances laid along a controlling parameter (an instance's start and length are fractions of the parameter's range), and the layer's **envelopes**, curves over a parameter that drive a DSP effect (`FMOD Lowpass Simple`, `FMOD Echo`) or are unnamed.
+- **Parameters**, by name. The names that start with `#` are the game's orders and not user properties: `#duck:<category>,<attack>,<hold>,<release>,<dB>`, `#pause:<category>` and `#music:<track>[,n[,ms]]`; `fev::DirectiveOf` splits one into its kind and trimmed fields. In the 9,020 projects: 7,880 `#duck`, 35 `#pause`, 964 `#music`. `music_state` is a plain parameter. The user property `all_lines_list` of a VO template event lists its lines' names.
+- **Sound definitions**: a name, a template (a play mode, `5` programmer selected in VO), and entries, each a wave (file, **bank name and the sample's index in that bank's `.fsb`**, length in ms), an oscillator or a silence, each with a weight. In a VO project the line `L` of a template `T` is entry `all_lines_list(T).index(L)` of `T`'s definition, and the entry's index is the sample in the `.fsb`.
+- **Reverb presets** (`master_reverb.fev` alone, 38: `Padded cell` to `DA_parking_lot`, the last twelve are the game's own, "DA custom" and "DA_parking_lot"): xoreos' layout, a name and fourteen values (room, room HF, rolloff, decay time, decay HF ratio, reflections, reflect delay, reverb, reverb delay, diffusion, density, HF reference, room LF, LF reference) and 76 bytes xoreos skips, kept raw. Every other project has a count of 0.
+- **The trailer** after the reverbs: 8 bytes, `08000000 "comp"`, in every project.
+
+Not understood, and kept as the file has it (`unknown*` members): two words after the version (20040 and 24224 in `music.fev`, 20 and 20 in `audio_categories`, 0 and 0 in `music_cutscene`), a category's two words, a bank's second word (1, 2 or 4), an event's words at +16 (41 mostly) and +24 (10000), most of an instance's and an envelope's words, a parameter's last two words, the reverb's 76 bytes, and a template's six words.
+
+Tests: `tests/test_fev.cpp` over a project built there, and, with copies of a VO project, `music.fev`, `music_cutscene.fev`, `audio_categories.fev`, `glo_gui.fev` and `master_reverb.fev` in the ignored `game/audio/`, over the game's own (782 events and 268 sound definitions in `music.fev`, the ducking events' `#duck` and `#pause` orders, the 38 presets).

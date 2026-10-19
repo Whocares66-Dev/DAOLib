@@ -161,6 +161,7 @@ add_library(
     src/dao/core/Erf.cpp
     src/dao/core/ErfWrite.cpp
     src/dao/core/Exceptions.cpp
+    src/dao/core/Fev.cpp
     src/dao/core/Fingerprint.cpp
     src/dao/core/Fsb.cpp
     src/dao/core/FunctionTable.cpp
