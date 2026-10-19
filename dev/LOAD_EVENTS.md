@@ -181,3 +181,33 @@ Read in the GOG exe for paragon-agent's saves work (DAOParagonEngine #20). Check
   - A perception set (+0xC18) keeps a gone creature's id until the perceiver's next perception update. That update looks every id up (0x006A8D60, `dev/COMBAT.md`) and raises DISAPPEAR to the perceiver.
   - A melee ring's claim is released by its attacker at the command's shared end (0x00746A65 to 0x006A3610 to 0x007CC060). A destroyed attacker's commands are hard-cleared (0x0073C930). That this runs the shared end and so releases the claim is inferred.
 - **Not read:** the loading mode's world-update gate (slot 18); the object event handler's use of the creator id; the restore of placeables' and triggers' ids (0x00683380); the unidentified calls in the creature's destructor; what `GetEventCreator` (0x006582A0) does after 0x006582F6.
+
+## The loading mode's screen (read 2026-10-19 by lib-agent-2)
+
+Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address is given, else inferred. The screen ids were never logged in play, so which screen a player sees is from the code.
+
+### A request's kind, and the screen
+
+- **The kinds are the loading mode's states too.** Slot 14 (0x006C63F0, the choice in `dev/GUI.md`) runs with the request's kind on entry (slot 5, 0x006C6D90) and again each time a state hands over to the next.
+- **Who asks for which kind** (the constructors' callers, `GameModeLoadingData`, vtable 0x00B1082C):
+  - 7: `DoAreaTransition` (0x00600B90 in `CCModule::ForScript_DoAreaTransition`), and character creation's end (`CharGenEndMessage`, 0x007FCB1D).
+  - 5: a `CommandJumpToObject` whose target is in another area (0x007A4078).
+  - 3: saving (0x005D803E).
+  - 2 or 8: the module load 0x005D95C0, `bool ? 2 : 8` (0x005DA1B6–0x005DA1BF); the bool is also the loading state's +0x68. 2 is a saved game (from `SaveLoadProxy::LoadGameMessage` and others). 8 is a new game or a module (the GUI's `LoadModule`, `LoadModuleSkipUnauthorizedMessage`, the startup bypass).
+  - 4 and 6: no request is made of either. Slot 5 refuses 6.
+- **A door's transition** (kind 7):
+  1. The request's own call shows nothing, unless the world map is up (WorldMap 0x10, 0x006C6060).
+  2. State 7 (0x006C7380 to 0x006C7080) finds the area and calls slot 14 with **5** if it is in the area list in memory (LightLoading 0x21, `load_light`) or **4** if not (Loading 0x0E, `load_town`), each with the same world-map exception (the pushes at 0x006C72AE, 0x006C72FA, 0x006C7300, 0x006C7318 and 0x006C732C). A failure calls slot 14 with 1 (nothing) or the load-failure routine.
+  3. State 6 (0x006C8EF0) calls slot 14 with 6, the fade (0x006C60F0), which shows nothing new: the screen of step 2 stays until the mode's leave (0x006C5A00) hides it.
+- At 0x006C7F98 a LightLoading still shown when a game or save load follows becomes Loading. When that happens is not read.
+- **The load-failure routine** (0x006C5A60, its error code the argument) sets the state's error, calls slot 14 with 0, and goes to the pregame mode (8) with a message: back to the main menu.
+- **A custom loading image is not in 1.05.** CustomLoading's scene (`GUICustomLoading`, 0x00728BC0) has a `LoadingImage` token and no movie in the install, and `SetLoadImage` (361, 0x0064E450) is a stub.
+
+### The hint
+
+- **Set by `SetLoadHint` alone** (0x00660EE0): it reads the row's `StrRef` (column hash 0x406341BE) of the table it is given (206 by default) and stores the string's text, not the strref, in scene 14's +0xC0 (`ScriptBackend::ForScript_SetLoadHint`, 0x00652730), shown or not. `GUILoading` (0x007289F0) names it `GUILoading.LoadingText`.
+- **Only `load_town` shows it** (`LoadScreen.as:30`, observer 1500): when the text is not empty and has no "?" (a missing string), fading in to 71% over 1.5 s. `load_light` and `load_fade` have no hint, so a transition within the area list in memory shows none even when a script set one. Nothing in the movie picks a hint.
+- **The scripts pick it:** `UT_DoAreaTransition` (`utility_h.nss`, about lines 1051 to 1095) calls `SetLoadHint` before each `DoAreaTransition`:
+  - with the module's `AREA_LOAD_HINT` set: that row of `loadhints` (206), and the local is reset;
+  - otherwise a random row by the hero's level: up to 3, table 284 (`vlowlevelloadhints`); 4 to 7, 277 (`lowlevelloadhints`); 8 to 12, 275 (named `HighLeveLoadHints`); 13 on, 276 (named `MidLeveLoadHints`). The script's comments have the last two the other way round.
+- **Not read:** the hint on a new game's or a save's load (whether a stale one shows); how markup such as `<LeftClickDefaultCapped/>` in a hint becomes text; `SendEventTransitionToWorldMap`'s engine side; whether the world map scene's +0xBC is set on a normal world-map trip; the kind-3 early-out in slot 5 (0x006C6DC2–0x006C6DFE).
