@@ -100,6 +100,8 @@ COLLISION_H = "src/dao/core/Collision.h"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
 CUTSCENE = "src/dao/core/Cutscene.cpp"
+WIND = "src/dao/core/Wind.cpp"
+STAGE = "src/dao/core/Stage.cpp"
 LDF = "src/dao/core/Ldf.cpp"
 NCS = "src/dao/core/Ncs.cpp"
 ANB = "src/dao/core/Anb.cpp"
@@ -1563,6 +1565,66 @@ MUTANTS: list[Mutant] = [
         FEV,
         "r.roomLF = in.I32();",
         "r.roomLF = in.I32() + 1;",
+    ),
+    Mutant(
+        "wind-strength: a wind's strength is WndStrength, not the radius falloff",
+        WIND,
+        "constexpr std::uint32_t kStrength = 22003;",
+        "constexpr std::uint32_t kStrength = 22005;",
+    ),
+    Mutant(
+        "wind-gust-frequency: the gust frequency is the level's 3730, not its strength",
+        WIND,
+        "constexpr std::uint32_t kGustFrequency = 3730;",
+        "constexpr std::uint32_t kGustFrequency = 3713;",
+    ),
+    Mutant(
+        "wind-gust-duration: the gusts' longest duration is its own field",
+        WIND,
+        ".gustMaxDuration = One(root, kGustMaxDuration),",
+        ".gustMaxDuration = One(root, kGustMinDuration),",
+    ),
+    Mutant(
+        "wind-leaf-rocking: leaf rocking is not the rustling",
+        WIND,
+        ".treeLeafRocking = Several<4>(root, kTreeLeafRocking),",
+        ".treeLeafRocking = Several<4>(root, kTreeLeafRustling),",
+    ),
+    Mutant(
+        "stage-camera-fov: a camera's field of view is StageCameraFOV",
+        STAGE,
+        "constexpr std::uint32_t kCameraFov = 11003;",
+        "constexpr std::uint32_t kCameraFov = 11004;",
+    ),
+    Mutant(
+        "stage-looking-at: a camera looks at its primary place before its secondary",
+        STAGE,
+        "constexpr std::uint32_t kLookingAtPrimary = 11007;",
+        "constexpr std::uint32_t kLookingAtPrimary = 11008;",
+    ),
+    Mutant(
+        "stage-looking-from: a camera's looking-from is its own field",
+        STAGE,
+        "constexpr std::uint32_t kLookingFrom = 11006;",
+        "constexpr std::uint32_t kLookingFrom = 11007;",
+    ),
+    Mutant(
+        "stage-places-in-shot: a camera lists the places in its shot",
+        STAGE,
+        ".placesInShot = in.Strings(kPlacesInShot),",
+        ".placesInShot = {},",
+    ),
+    Mutant(
+        "stage-place-found: a place is found by its tag",
+        STAGE,
+        "if (place.tag == tag)",
+        "if (place.tag != tag)",
+    ),
+    Mutant(
+        "stage-camera-found: a camera is found by its tag",
+        STAGE,
+        "if (camera.tag == tag)",
+        "if (camera.tag != tag)",
     ),
 ]
 

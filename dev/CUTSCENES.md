@@ -347,3 +347,5 @@ Read in the GOG exe (daoexe.py disassembly) and the game's files (ghilana) by li
 - What the party's `+0x1F8` is (the dialogue camera's B when the owner is the controlled creature), and whether `ShowLine` runs for the player's own chosen reply lines.
 - The `BlendGad` blend (`0x007D8240`), what `ApplyFutureGads` changes, what fills player `+0x210`, and the engine's blend of two GAD orientation keys.
 - The engine's GFx scale mode for the game's movies, and what a negative letterbox height draws.
+
+Core reads the `.stg` as `dao/core/Stage.h` (`stage::StageOf`: the places, and the cameras with FOV 11003, LookingFrom 11006 and LookingAt 11007 to 11009; `FindPlace` and `FindCamera` by tag, for `JumpToPlace` and `JumpToCamera`; DAOLib #196), and `cutscene::Stage` is the transform they are placed by.

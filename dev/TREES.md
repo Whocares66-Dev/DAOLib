@@ -319,3 +319,5 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
   - matrix row = `4·fmod(idx + g_fWindMatrixOffset, 6)` (c60.w = 6). `g_fWindMatrixOffset` is the instance's `rand() % 100`, so each instance uses the same 6 matrices, rotated;
   - position = `lerp(p, M[idx0]·p, weight0)`, then `lerp(that, M[idx1]·that, weight1)`, with (idx0, weight0, idx1, weight1) from the wind float4 (sections 1–2);
   - a leaf card's rock and rustle = `g_vLeafAngleScalars.xy × g_vLeafAngles[leaf angle index].xy`.
+
+Core reads the `.wnd` as `dao/core/Wind.h` (`wind::WindOf`: every field of the file, 115 of the game's read 2026-10-18, with only the strength, direction and gusts marked as the ones that reach the engine's wind; DAOLib #196).
