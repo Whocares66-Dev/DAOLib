@@ -425,8 +425,11 @@ DAO_ADDRESS(kMovementController_Step, 33560)
 // value at +0x10).
 //
 // The grid the searches run on, read 2026-10-01. A cell has a kind
-// (0x00A49070): under 5 walkable, 5 and 6 a creature's stamp, 7 and up not
-// walkable; and counts of what crowds it (0x00A49160, 0x00A49240). A
+// (0x00A49070). IsFree (0x00A46FC0): kinds 8 and up, and kind 7, block, and
+// stamps never do. The coarse search passes kinds 0 to 8, the fine search
+// steps into a cell of kind under 8, and stamps 5 and 6 matter only to
+// movers of the same class (+0xC90) (corrected 2026-10-18 by lib-agent-2;
+// dev/PATHFINDING.md); and counts of what crowds it (0x00A49160, 0x00A49240). A
 // creature's obstacle (0x00A469C0, stamped by PlaceObstacle and taken out
 // by LiftObstacle from a record of the cells it changed) makes the cells
 // under it kind 6 and adds to the count of those within a metre round it.

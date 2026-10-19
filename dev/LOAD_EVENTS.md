@@ -124,6 +124,7 @@ The scripts only call `DoAreaTransition` (`UT_DoAreaTransition`, `utility_h.nss`
 - **Everyone faces the waypoint's way** (0x006C75C8).
 - **Last,** each creature's spot goes through `GetSafeLocation` within 20.0 m (0x00AE72FC), reachable, snapped to the ground; if that fails the spot is kept.
 - `GetSafeLocation` (0x0073E370) walks square rings outward by half a grid cell.
+- **This snap is the party's arrival only** (corrected 2026-10-18 by lib-agent-2). An area's placed creatures are not snapped at load: `SetPosition` 0x006B5EF0 skips the snap 0x006B1790 in game mode 9, Loading (the gate at 0x006B5F76, checked). `dev/PATHFINDING.md` has it.
 - The loading data's byte +0x68 makes everyone keep their own position (inferred: a save's load).
 
 **Jumping to the leader mid-area** uses the same table (0x006AA440) for a party member that isn't the controlled creature:

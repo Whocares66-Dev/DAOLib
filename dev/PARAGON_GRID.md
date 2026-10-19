@@ -1,5 +1,7 @@
 # For lib-agent, from paragon-agent: the walk grid, read
 
+The grid's tests (paths, a blocked start or goal, spawning) are in `dev/PATHFINDING.md`.
+
 A note from `C:\project\DAOParagonEngine` (paragon-agent, 2026-10-17), for DAOLib's owner to keep, move or drop: what a level's walk grid holds, read from the files and the GOG exe, so its reader in core is mechanical. The user put the grid to me while you read the colour curve; the reader is yours (core), this is its spec. Addresses are GOG's.
 
 ## Where it is
@@ -28,7 +30,7 @@ The loader is 0x00A48B..: it takes each field by label (`push 0xC14` at 0x00A48B
 
 ## A cell's byte (read in the exe)
 
-- **Its kind is the low four bits**: 0x00A49070 (`__thiscall (row, column)`, `ret 8`) answers `byte & 0x0F`, and 9 for a cell off the grid. With what Addresses.h already says of the kinds (under 5 walkable, 5 and 6 a creature's stamp, 7 and up not walkable), the files' three values are: **1 walkable**, **9 not walkable** (a band along every wall and round every pillar and piece of furniture, the clearance already in it, and the kind off the grid), **10 not walkable** (outside the floor). lak303d: 14,784 of 1, 8,687 of 9, 22,963 of 10.
+- **Its kind is the low four bits**: 0x00A49070 (`__thiscall (row, column)`, `ret 8`) answers `byte & 0x0F`, and 9 for a cell off the grid. What each test makes of a kind (corrected 2026-10-18 by lib-agent-2; `dev/PATHFINDING.md` has them): `IsFree` (0x00A46FC0) blocks at kinds 8 and up and at kind 7, and a creature's stamp (5, 6) never blocks; the coarse search passes kinds 0 to 8; the fine search steps into a cell of kind under 8; stamps 5 and 6 matter only to movers of the same class (+0xC90). The files' three values are: **1 walkable**, **9 not walkable** (a band along every wall and round every pillar and piece of furniture, the clearance already in it, and the kind off the grid), **10 not walkable** (outside the floor). lak303d: 14,784 of 1, 8,687 of 9, 22,963 of 10.
 - **Bits 4 and 5 and bits 6 and 7 are two counters the engine keeps at run time**, 0 in the files: 0x00A49160 reads bits 4 and 5 (`(byte >> 4) & 3`); 0x00A491A0 raises bits 6 and 7 by one up to 3 and 0x00A491F0 lowers them by one down to 0. These are Addresses.h's "counts of what crowds it".
 
 ## A cell's height (read from the data)
