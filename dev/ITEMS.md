@@ -49,8 +49,8 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, with `default_hm_nob
 
 #### Short answers
 
-1. **Take All.** The panel sends `SelectedChar.AcquireAllItems <Container.ID>` (checked, Container.as TakeAllItems). The text becomes an `AcquireAllItemsMessage` (8 bytes: vtable 0xB1E3F4, object id at +4, made at 0x0077C9D0, name wide string at 0xB1F2D8; checked) and goes to the selected creature, `CCCreature::HandleMessage` 0x006A1FD0 (checked). The handler does no filtering. It calls `ForScript_MoveAllItems` 0x00763570 on the creature's ItemPossessor (creature+0x440) with the container id. That function finds the container's object (0x005D5C20, id to object, vcall +0x34, then +0x18 gives its item location, an `Inventory`), copies **every item of the container's list, in list order** (index 0..n-1, snapshotted into a vector first), and moves each one separately into the creature's own location (the `Backpack*` at creature+0xBFC, see below). No droppable, stolen or plot test is made at this level (checked: the loop 0x00762E90 pushes each item unconditionally; the only per-item tests are CanRemove/CanAdd below). Which items are in a body bag was decided earlier by the use (PLACEABLES.md). Money is an ordinary item (base item row 17, `bitm` Label "Money - Copper", StackSize 1,000,000, Type 1; checked via ghilana), so it is moved like the others; it is not a separate "container copper" number at this layer.
-2. **Full pack.** The destination is a `Backpack` (vtable 0xB26464, a `ListItemLocation`); its `CanAdd` is vtable slot 12, 0x007CA890. Capacity is the **number of entries (stacks count as one)** against an attribute at Backpack+0x28, which the base constructor `ListItemLocation` 0x007CAAE0 sets to **0x60 = 96** (checked; whether the party's Backpack is later given another value was not found). The movie reads `Party.BackpackSize` (attribute +0x18) and `Party.BackpackMaxSize` (+0x28) (strings 0xB060E0 / 0xB060C0, used at 0x0063AEA8 / 0x0063AF2B; checked). When it is reached mid-take: items that cannot fit are **skipped, the rest are still tried** (a stackable item that merges into an existing stack still fits). Nothing is removed from the container for a skipped item. If any item failed, the handler tells the GUI `Inventory.FlashFullOverlay` ("inventory" movie; strings 0xB0F4C8/0xB0F4B4; checked). The panel's own logic (checked): after sending, `full = BackpackSize >= BackpackMaxSize` and `containerNotEmpty = count(Container.Inventory) != 0`; if (containerNotEmpty and full) it calls `Inventory.FlashFullOverlay()` (plays ST_INVENTORY_FULL, overlay for 1.5 s) and **stays open**; otherwise `Close()`.
+1. **Take All.** The panel sends `SelectedChar.AcquireAllItems <Container.ID>` (checked, Container.as TakeAllItems). The text becomes an `AcquireAllItemsMessage` (8 bytes: vtable 0xB1E3F4, object id at +4, made at 0x0077C9D0, name wide string at 0xB1F2D8; checked) and goes to the selected creature, `CCCreature::HandleMessage` 0x006A1FD0 (checked). The handler does no filtering. It calls `ForScript_MoveAllItems` 0x00763570 on the creature's ItemPossessor (creature+0x440) with the container id. That function finds the container's object (0x005D5C20, id to object, vcall +0x34, then +0x18 gives its item location, an `Inventory`), copies **every item of the container's list, in list order** (index 0..n-1, snapshotted into a vector first), and moves each one separately into the creature's own location (the `Backpack*` at creature+0xBF0, see below; corrected 2026-10-19 by lib-agent-2: the ItemPossessor slot 0x006BA800 is `add ecx, 0x7B0` on the +0x440 subobject, so +0xBF0, not +0xBFC). No droppable, stolen or plot test is made at this level (checked: the loop 0x00762E90 pushes each item unconditionally; the only per-item tests are CanRemove/CanAdd below). Which items are in a body bag was decided earlier by the use (PLACEABLES.md). Money is an ordinary item (base item row 17, `bitm` Label "Money - Copper", StackSize 1,000,000, Type 1; checked via ghilana), so it is moved like the others; it is not a separate "container copper" number at this layer.
+2. **Full pack.** The destination is a `Backpack` (vtable 0xB26464, a `ListItemLocation`); its `CanAdd` is vtable slot 12, 0x007CA890. Capacity is the **number of entries (stacks count as one)** against an attribute at Backpack+0x28 (global flag 0x10 lets an item past `Backpack::CanAdd`; the generic CanAdd/CanRemove wrappers 0x007611A0 / 0x007611E0 bypass on 0x100 instead, read 2026-10-19 by lib-agent-2), which the base constructor `ListItemLocation` 0x007CAAE0 sets to **0x60 = 96** (checked; whether the party's Backpack is later given another value was not found). The movie reads `Party.BackpackSize` (attribute +0x18) and `Party.BackpackMaxSize` (+0x28) (strings 0xB060E0 / 0xB060C0, used at 0x0063AEA8 / 0x0063AF2B; checked). When it is reached mid-take: items that cannot fit are **skipped, the rest are still tried** (a stackable item that merges into an existing stack still fits). Nothing is removed from the container for a skipped item. If any item failed, the handler tells the GUI `Inventory.FlashFullOverlay` ("inventory" movie; strings 0xB0F4C8/0xB0F4B4; checked). The panel's own logic (checked): after sending, `full = BackpackSize >= BackpackMaxSize` and `containerNotEmpty = count(Container.Inventory) != 0`; if (containerNotEmpty and full) it calls `Inventory.FlashFullOverlay()` (plays ST_INVENTORY_FULL, overlay for 1.5 s) and **stays open**; otherwise `Close()`.
 3. **Single item.** The loot list's double click, the TakeItem action and the radial menu send `GUI.SelectedChar.AcquireItem <item id>` (checked, ContainerItemList.as lines 92, 101; RadialMenu.as 245). That is taken by `CCCreature::HandleMessage(AcquireItemMessage)` 0x006A70E0 and moves the item **into the selected creature's pack**. The reverse, dropping a pack item onto the container list or radial menu entry, sends `Container.AcquireItem <item id>` (ContainerItemList.as 68/82/..., PlayerItemList.as 182) and is `CCPlaceable::HandleMessage(AcquireItemMessage)` 0x0074FCC0: it moves the item **into the placeable's own inventory**. Same message class (0xB1E3C4), the two handlers differ by receiver (checked). Which receiver the text reaches is decided by the text's prefix, resolved to an object by `Messages::FromCallbackText` 0x00524BE0 (data tree path, then vcall +0x4C; inferred, not followed).
 
 #### Pseudo-code
@@ -68,7 +68,7 @@ HandleAcquireAll(creature, msg):
 MoveAllItems(me, containerId):                             // 0x00763570
     cont = GetObjectById(containerId)                      // 0x005D5C20; null -> src = null
     src  = cont ? cont.ItemLocation() : null               // vcall +0x18 of its ItemPossessor part
-    dst  = me.ItemLocation()                               // vcall +0x18 = *(creature + 0xBFC), the Backpack
+    dst  = me.ItemLocation()                               // vcall +0x18 = *(creature + 0xBF0), the Backpack
     if !src || !dst: return {allMoved=true, moved=[]}      // (initialised "ok")
     list = []
     for it in src (iterator: valid/current/next):  list.push(it)   // 0x00762E90, all items, no filter
@@ -119,9 +119,9 @@ HandleAcquireItem(creature, msg):
 
 #### Evidence
 
-- Checked in disassembly: 0x006A1FD0 (flags |= 0x424 at 0x006A2018, call 0x00763570 at 0x006A2045 with ecx=this+0x440 and the id at msg+4, failure branch strings 0xB0F4C8 `Inventory.FlashFullOverlay` and 0xB0F4B4 `inventory`, sent with 0x004D20C0); 0x00763570; 0x00762E90; 0x00762D60 (per-item 0x00762C40, `ok=0` on a failed item, loop continues); 0x00762C40; 0x00762990 (CanRemove, CanAdd, then remove and add); 0x00762010; 0x007633F0; 0x006A70E0 (sound "Click", rollback 0x00762FB0); 0x0074FCC0 (same shape); Backpack vtable 0xB26464 and `CanAdd` 0x007CA890; `ListItemLocation` ctor 0x007CAAE0 (+0x18 = 0, +0x28 = 0x60, +0x38 = 0); ItemPossessor slot at creature+0x440 is 0x006BA800, which returns `*(creature+0xBFC)`.
+- Checked in disassembly: 0x006A1FD0 (flags |= 0x424 at 0x006A2018, call 0x00763570 at 0x006A2045 with ecx=this+0x440 and the id at msg+4, failure branch strings 0xB0F4C8 `Inventory.FlashFullOverlay` and 0xB0F4B4 `inventory`, sent with 0x004D20C0); 0x00763570; 0x00762E90; 0x00762D60 (per-item 0x00762C40, `ok=0` on a failed item, loop continues); 0x00762C40; 0x00762990 (CanRemove, CanAdd, then remove and add); 0x00762010; 0x007633F0; 0x006A70E0 (sound "Click", rollback 0x00762FB0); 0x0074FCC0 (same shape); Backpack vtable 0xB26464 and `CanAdd` 0x007CA890; `ListItemLocation` ctor 0x007CAAE0 (+0x18 = 0, +0x28 = 0x60, +0x38 = 0); ItemPossessor slot at creature+0x440 is 0x006BA800, which returns `*(creature+0xBF0)`.
 - Checked in the movie AS (`%TEMP%\lib-agent-2-guicmd-x\allgfx\as_inventory\scripts\__Packages`): Container.as `TakeAllItems`, `Close`; ContainerItemList.as; PlayerItemList.as; Inventory.as `FlashFullOverlay`.
-- Inferred: that `*(creature+0xBFC)` is one Backpack shared by all party members (the GUI reads the party's size from one object, `Party.BackpackSize`); that the 0x20 bit of the flags (in 0x424) means nothing here; the routing from `SelectedChar.` / `GUI.SelectedChar.` to the creature; the container's own item location is `Inventory` (vtable 0xB1B974), whose CanAdd/CanRemove 0x0073F600/0x0073F640 let anything with `item+0x2C4` set, or base item 0x11 (17, copper) through (checked in code; meaning of +0x2C4 inferred as a plot/undroppable flag).
+- Checked since ("The party's shared inventory" below; `dev/script_commands/inventory.md`): `*(creature+0xBF0)` is one Inventory shared by all the pool's members. Inferred: that the 0x20 bit of the flags (in 0x424) means nothing here; the routing from `SelectedChar.` / `GUI.SelectedChar.` to the creature; the container's own item location is `Inventory` (vtable 0xB1B974), whose CanAdd/CanRemove 0x0073F600/0x0073F640 let anything with `item+0x2C4` set, or base item 0x11 (17, copper) through (checked in code; meaning of +0x2C4 inferred as a plot/undroppable flag).
 - Events: each move raises INVENTORY_REMOVED (7) on the old holder and INVENTORY_ADDED (6) on the new (ITEMS.md; 0x00763100); the module's item-acquired script (sp_module_item_acq) is not read here.
 
 #### Not read
@@ -207,6 +207,117 @@ A single-item take (`AcquireItemMessage` 0x006A70E0) is the same Remove then Add
 - The trace from 0x00762990 to the owner callbacks, the "pack full" path of AcquireAllItems, and the single-item take's flags.
 - Whether the movie closes the panel after Take All on its own (GUI.md says so; the AS was not re-read here).
 - Which 0x00631xxx function holds the second add path (0x006313A0) and what calls it.
+
+## The party's shared inventory (lib-agent-2, for DAOParagonEngine)
+
+### The party's shared Inventory: who gets INVENTORY_ADDED / REMOVED, leaving the pool, the join's move (pinva, 2026-10-19)
+
+GOG exe, read in disassembly (`tools/daoexe.py`), plus ghilana and the toolset scripts. "checked" = read in disassembly/data; "inferred" = marked. Prior notes used: dev/ITEMS.md:145 and :200-207 (the wrappers, "the call from 0x00762990 down to the owner callbacks was not traced"), dev/script_commands/inventory.md:11 ("leaving the pool: not found"), :78, :98, dev/PARTY.md:402 (0x005D5CA0 = the controlled creature, `[[app+0xD0]+0x5C]`).
+
+#### Short answers
+
+1. **A take into a pool member's (= the party's) Inventory raises ADDED on TWO objects, in this order: the party object (`CCParty`, id `[party+4]`), then the MAIN CONTROLLED creature (`0x005D5CA0`, CCPlayer+0x5C), NOT the creature that took the item.** (checked) Same for REMOVED (0x00763240): the party, then the controlled creature. So Take All by a selected follower who is not the controlled creature still fires the event at the controlled one. The chain is Inventory::Add -> Backpack::Add 0x00762240 -> object `[backpack+4]` (= the owner id the Inventory was built with = the PARTY's id) -> its ItemPossessor slot 0x1C = `CCParty` 0x006313A0. The ItemPossessor `ecx` of 0x00763100 is not the Inventory: slot 0x14 of the **possessor** (party: 0x00639DA0 = `[party+4]`; creature: 0x007EBCF0 = `[creature+4]`) returns the owner id, which is `[ev+0x24]` and the event's target/creator.
+   - 1020 (CAMPAIGN_ITEM_ACQUIRED) therefore comes from whoever is the controlled creature **if it runs player_core**. player_core is the EventScript of the hero template (`default_player.utc` and the other `default_*.utc` origin templates have `EventScript` = `player_core`, ghilana: 14 templates, Tag `player`) and of every follower while in the active party (`wrappers_h.nss`:343-353, `WR_SetFollowerSubState` ACTIVE/LOCKEDACTIVE: `SetEventScript(oCreature, RESOURCE_SCRIPT_PLAYER_CORE)`; leaving sets `creature_core`, :414). The controlled creature is always a party member in practice (hero or active follower), so it runs player_core and 1020 fires, once per ADDED, with `GetEventCreator` = the controlled creature. The party object's own ADDED goes to the party (no script known; inferred nothing handles it).
+   - The creature-own callback `CCCreature` 0x006A2EE0 / 0x006A2FA0 is NOT used for pool members: the shared Inventory's owner is the party, so the owner lookup returns the party's possessor. 0x006A2EE0 is used only by a creature's own (non-shared) Inventory, i.e. a creature outside the pool.
+2. **Leaving the pool: a NEW EMPTY Inventory is created for the creature; the party's is untouched.** SetFollowerState state 0 -> `0x0063B8B0(id, force)`: erases the map entry (0x0063A1D0), then `0x006A29A0(creature)`: `new Inventory(owner = creature id, 9, 0xC)` (0x007405E0) and sets `creature+0xBF0` to it (attribute setter 0x004A97D0 just stores the pointer, deletes nothing). Items are NOT given back: they stay in the party backpack. A creature destroyed while in the pool: its destructor 0x006BAFE0 first calls party 0x006377E0(id,1) and `0x0063B8B0(id, 1)` (0x006BB120/0x006BB131, forced, skips the "last member" refusal), so it too gets a fresh Inventory, then 0x006BB26B deletes the object at +0xBF0 (the fresh one). The shared Inventory is never deleted by a creature. (checked)
+3. **The join's move merges stacks, respects the 96 limit, and raises no events.** (checked) 0x006A8C10 sets global flag 0x2 only (`or eax,2` at 0x006A8C67, restored at 0x006A8CE2), NOT 0x10 and not 0x100, then `0x00762E90(&r, oldInventory, partyInventory)`. With flag 0x2 set, 0x00763100/0x00763240 return at once: **no ADDED/REMOVED for the join's items** (the owner callbacks still run: the item's `+0x440` owner is set). Bypass flags are not set, so CanAdd/CanRemove apply: items that do not fit stay in the old Inventory and are not moved (see Not read for what the delete then does).
+
+#### Pseudo-code
+
+```
+// Backpack::Add 0x00762240 (after merge or placing; both paths end here)
+item.location(+0x4E8) = backpack
+backpack.vslot[0x54]()                      // dirty/notify
+owner = GetObjectById(backpack.ownerId /*+4*/)   // 0x005D5C20, returns the ItemPossessor via vslot 0x34
+owner.possessor.vslot[0x1C](item)           // OnItemAdded; REMOVE: Backpack::Remove 0x007619E0 -> vslot 0x20 (0x00761AF0-0x00761AFE)
+
+// party possessor (CCParty+0x70) OnItemAdded 0x006313A0
+SetItemOwner(item, party.id); Raise(ADDED, target = party.id)        // 0x00763390 -> 0x00763100
+if (!(G.flags & 2)) Raise(ADDED, target = GetMainControlled().id)    // 0x006313E1-0x00631415, the controlled creature's possessor
+if (!(G.flags & 4)) party.NewItemNotice(item)  // 0x00629620
+if (!(G.flags & 0x40)) party.+0x620 attribute.set(1)
+// REMOVED 0x00631470: SetItemOwner(item,-1); Raise(REMOVED, party); Raise(REMOVED, controlled) (0x763240 does its own flag-2 gate)
+
+// creature's own possessor (not in pool / own Inventory) 0x006A2EE0
+if (party && party.members.contains(creature.id)) { SetItemOwner(item, creature.id); Raise(ADDED, creature) }
+else { G.flags |= 2; SetItemOwner(item, creature.id) /*no event*/; restore }
+
+// Leaving the pool 0x0063B8B0 (SetFollowerState 0, and creature destructor with force)
+members.erase(id); creature.+0xBF0 = new Inventory(owner=creature.id, 9, 12)   // empty; party backpack unchanged
+
+// Join 0x006A8C10 (creature joins the pool)
+G.flags |= 2; MoveAll(old -> partyInventory)  // 0x00762E90: list old items, then per item 0x00762C40 (flag 8, slot 0x00761340) -> 0x00762990
+partyMoney += oldMoney; creature.+0xBF0 = partyInventory; delete old; G.flags = saved
+```
+
+#### Evidence
+
+- Possessor vtables (RTTI scan, `tools/daoexe.py` vtables): ItemPossessor 0x00B1C258 (slot 5 = purecall 0x008E17D6, slots 7/8 = 0x00763390/0x007633C0); `CCParty` at +0x70: 0x00B05DBC (slots 5 = 0x00639DA0 `add ecx,-0x6C; jmp 0x53CC40` = party id at +4, 7 = 0x006313A0, 8 = 0x00631470); `CCCreature` at +0x440: 0x00B10334 (5 = 0x007EBCF0 `add ecx,-0x43C` = creature id, 6 = 0x006BA800, 7 = 0x006A2EE0, 8 = 0x006A2FA0); `CCPlaceable` at +0x440: 0x00B1BF30 (7 = 0x0074BE00, 8 = 0x0074FC60). Party object's primary vslot 13 (0x34) = 0x00639D40 `lea eax,[ecx+0x70]`; creature's = 0x00750EC0 `lea eax,[ecx+0x440]`. 0x005D5C20 = id -> object -> vslot 0x34 (the possessor).
+- Correction to dev/ITEMS.md:122: ItemPossessor slot 6 for a creature (0x006BA800) is `add ecx,0x7B0` on the possessor (= creature+0x440) so it returns the Inventory attribute at **creature+0xBF0**, not +0xBFC.
+- Party ctor 0x0063A3C0: `[esi+0x20C] = 0x007405E0(new 0x50 bytes, ownerId = [esi+4] via 0x53CC40, 9, 0xC)` (0x0063A98D-0x0063A9AC). 0x007405E0 sets vtable 0xB1B974 and builds sub-locations; the Backpack is `0x0080D220(owner, 9, 0xC)` -> `0x007CAAE0(owner)` -> `0x00761170`, which stores `[loc+4] = owner` (0x0076117C). Backpack max (+0x28) = 0x60 (0x007CAB47).
+- 0x00762240 tail 0x00762558-0x00762598: `[item+0x4E8] = this`, vslot 0x54, `GetObjectById([this+4])`, vslot 0x1C(item). Stack merge branch 0x0076232B-0x00762365 (0x00755CB0/0x00755D10 can-merge, then destroys the moved item with vslot 0x198(0)); skipped if global flag 1 is set (0x007622E4 `and al,1`, 0x00762316).
+- 0x00740950 (Inventory::Add) routes before the Backpack: items with `+0x2C4` -> sub-location +0x18; base-item type word `+0x464` == 0x11 (money) and inventory owner == `[app->party]+4` -> amount `[item+0x5F0]` added to the money location (+0x28, 0x007C9FE0) and the item deleted (so party money never takes a slot); `+0x4EC` == 0x6C -> 0x007408B0; else Backpack at +8. CanAdd on the Inventory 0x0073F600 is true for `+0x2C4` items and money, else Backpack::CanAdd.
+- Backpack::CanAdd 0x007CA890: flag **0x10** (`test [0xC371B4],0x10`) returns true; else true if size < max (+0x28) (max -1 = unlimited), or the item is stackable (0x00753C60) and an existing stack found (0x00761260 -> vslot 0x48) accepts it (0x00755CB0). The generic wrappers 0x007611A0 (CanAdd) / 0x007611E0 (CanRemove) skip the check when flag **0x100** is set, else call location vslot 0x30/0x34.
+- 0x00762990: item's location (`+0x4E8`) == dst -> a slot move; otherwise `CanRemove(old)` and `CanAdd(dst, slot)`, then `0x00762100` (Remove, `-1` = whole stack) and `0x00762010` (Add); either check failing falls to 0x00762B30 and nothing moves. 0x00762C40 sets flag 0x8 and picks the slot with 0x00761340. 0x00762D60 loops 0x00762C40 over the list and ANDs the result into `*out` (0x00762E29).
+- 0x006A8C10: 0x006A8C49 `lea ebp,[ecx+0xBF0]`; flag 2 at 0x006A8C67-0x006A8C6E; 0x00762E90 at 0x006A8C85; money 0x006A8C8D-0x006A8CB3 (`old+0x28 -> +0x90` into `party+0x28`'s money via 0x007C9FE0); setter vslot 0x54 at 0x006A8CC1; old deleted `vslot 0 (1)` at 0x006A8CC9-0x006A8CCF; flags restored 0x006A8CE2.
+- Whole-.text scan for `[reg+0xBF0]` (disp32 `F0 0B 00 00`): 36 hits, no direct store; all uses are `lea ecx,[reg+0xBF0]`. The only calls of the attribute setter (vslot 0x54 -> 0x004A97D0) on it in CCCreature: 0x006A29A0 (new Inventory; only caller 0x0063B950 in 0x0063B8B0), 0x006B4070 (the creature's initialisation, 0x006B449D: new Inventory; only caller 0x006BA75B in 0x006B9ED0), 0x006A8C10 (the join), and the destructor 0x006BAFE0 (0x006BB26B: delete + set null). Hit at 0x004F11C0 is an unrelated stack constant.
+- 0x00763100 gates: flag 0x2, `0x00698490(obj, 6)` (the owner's disabled-event set), item `+0x5D0`; `[ev+0x20]=6`, `[ev+0x24]=owner`; delivered to the owner (queued or at once with 0x400). 0x006313E1-0x00631415: if flag 2 clear, `0x005D5CA0` (controlled id, or -1) -> `0x005D58C0` (creature by id) -> `lea ecx,[creature+0x440]; call 0x00763100(item)`.
+- 0x006A2EE0: `0x006A2CC0` = `[[app+0xD0]+0x58]` (party); `0x00631830(party, creature id)` tests the party's map `+0x234`; in the pool: 0x00763390 (event); outside: flag 2 around 0x00763390 (owner set, no event).
+- Scripts: `player_core.nss`:268-300 (`HandleEvent_InventoryEvent`: `GetEventCreator` = oOwner, item = object 0, ADDED -> `SendEventCampaignItemAcquired` if `ITEM_SEND_ACQUIRED_EVENT`), `wrappers_h.nss`:343-353 and :414 (event script per follower state), `cam000ar_all_camps.nss`:118 and `cli400ar_city_gates.nss`:72 (scripts setting player_core on party members).
+
+#### Not read
+
+- What deleting the old Inventory (0x006A8CC9) does to items that did not fit and stayed in it (the Backpack destructor 0x0080D200 and the ItemLocation's list ownership were not read). With a full party backpack a joining member's leftover items may be destroyed.
+- Whether anything handles the ADDED/REMOVED delivered to the party object itself (the party's script, if any; 0x00698490's disabled set for it).
+- The Remove path's body beyond the vslot 0x20 call (0x007619E0 read only for the callback and the 0x54 notify), and the exact REMOVED flag-0 values for the party raise.
+- Who calls 0x006B9ED0 / 0x006B4070's init for a loaded save (the save path restoring a pool member's +0xBF0 pointer to the party's: join on load via 0x0063A020 is inferred from dev/LOAD_EVENTS.md/PARTY.md, not re-read).
+- The case where a non-pool creature (outside the pool, own Inventory) is the target: only the callback 0x006A2EE0 was read (no event raised if the creature is not in the party's map).
+
+### A template's Gold (pinvb) (2026-10-19)
+
+#### Answers
+
+1. **LoadItemsFromTemplate does not read Gold, and neither does any other engine path.** The creature-from-template loader and the item-list loader (`0x006bcc30`, below) never touch money. The label "Gold" has no string of its own in the exe and nothing refers to its tail-merged copy (checked). Every call of the money add (`0x007C9FE0`) and subtract (`0x007CA020`) is listed below, and none is a template or creature load. So `Gold = 75` in default_player.utc is dead data: the engine ignores it.
+2. **There is no other place where it reaches money.** The hero's creation (`0x0069D910` / `0x0069D790`) makes no money call. The pool join moves the hero's own purse, which is 0, into the party's. Chargen's scripts never touch money.
+3. **A new game's starting money is 0 copper from the engine and chargen's scripts.** Whatever the party has at the first controllable frame comes from the module or prologue scripts, or from treasure. The port should start at 0 and not 75. The 75 on default_player.utc is unused; copying it would be a deviation from vanilla.
+   - I did not find a vanilla record of the money seen at a new game. The peer's "0 gold" is consistent with the code.
+   - Not played: I did not read the first prologue module's scripts for a grant. That is the only place a non-zero start could come from (see Not read).
+
+#### Order a port can copy
+
+```
+hero = create_creature(from "default_player.utc")   // 0x0069D910; Gold field ignored; purse = 0
+hero.purse = 0                                        // own Inventory (+0xBF0), money location empty
+join_pool(hero)                                       // SetFollowerState(hero,1) 0x0069E015 -> 0x0063A020 -> 0x006A8C10
+    party.money += hero.purse        // 0x007C9FE0 at 0x006A8CB3, ADD
+    hero.inventory = party.inventory
+chargen script: Chargen_InitInventory(hero, class, idx)
+    if IsPartyMember: Chargen_ClearInventory (destroys items; no money call)
+    LoadItemsFromTemplate(hero, <starting equipment or default_<class>.utc>, TRUE)
+        // destroys equipped items and the backpack list; loads Equip_ItemList and ItemList; money untouched
+=> party money 0
+```
+
+LoadItemsFromTemplate with bReplaceInventory: money is neither reset nor changed. It destroys the items of the `Equipment` list and the backpack `ListItemLocation`, and the money location (Inventory+0x28) is a different location (dev/script_commands/inventory.md:12). An `ItemList` entry that is the copper base item (17) would be added to the money location by the Inventory add (`0x00740a3d` -> `0x007C9FE0`), but default_player.utc's `ItemList` is empty (checked) and default_warrior.utc's `ItemList` is `[]` too.
+
+#### Evidence
+
+- default_player.utc (ghilana, `packages/core/data/chargen.rim`): `Gold` = 75, `ItemList` = [], `Equip_ItemList` = [gen_im_cth_com_a01]. GFF3 label `Gold`, an int field. default_warrior.utc: `Gold` = 0. (checked)
+- Creature template field reads, the exe's own list: the object part at `0x0069ad60..` reads TemplateResRef, Conversation, InteractRadius, AILevel, TeamId, GroupId, GroupForceHsti, GroupOverridden, LastHostileActor, Immortal, Plot, IsDestroyable, EventScript(s); the creature part at `0x006c0850..` reads TreasureCategory (-> creature+0xBD0), CharType, NoPermDeath and the rest. Neither reads "Gold". (checked)
+- The label's text: the only `Gold\0` in the exe is the tail of `StoreGold` at 0xb244c4 (its tail would be 0xb244c9). A scan of all E8/E9/68 operands in .text for 0xb244c9 finds nothing. StoreGold is a store field, unrelated. (checked)
+- Every caller of `0x007C9FE0` (money add), found by scanning E8/E9 operands in .text: `0x0066aacd`, `0x0066abbc` (the AddGold / SetCreatureMoney family of script commands, by the command table; inferred from addresses 0x0066aa..), `0x006a8cb3` (the pool join, dev/script_commands/inventory.md:11), `0x00740a3d` (Inventory add of a copper item), `0x007ec444` (a store sale: reads creature+0xBF0, money location +0x28). Of `0x007CA020` (subtract): `0x0066aab0`, `0x006b98af`, `0x007403bb`, `0x007ed0ae`. None is a load from a template. (checked as call sites; the callers' functions beyond 0x006a8cb3 / 0x007ec444 not read in full)
+- "Money" (0xb06a00) is referenced at `0x00644827` and `0x007b9642`; the first is a save-side writer that pairs it with "CurrentHealth", i.e. the save, not the template. (checked for 0x00644827; 0x007b9642 not read)
+- Scripts: `Chargen_InitInventory` (`sys_chargen_h.nss:423`) calls `LoadItemsFromTemplate(oCreature, sTemplate, TRUE)` and `_AddAbility` only; `Chargen_ClearInventory` destroys items. No `AddCreatureMoney` / `SetCreatureMoney` / `GetCreatureMoney` occurs in `sys_chargen*.nss`. The only `AddCreatureMoney` callers in the scripts are `placeable_h.nss:446`, `sys_rewards_h.nss:336,502`, `sys_treasure_h.nss:329,411,478`. (checked)
+- Hero creation path: dev/PARTY.md:572 (0x0069DF10 -> 0x0069D910 -> `SetFollowerState(hero,1)` at 0x0069E015); `0x0069D790`'s calls (disassembled: 0x413660, 0xa388f0, 0xa361b0, 0x6abdc0, 0x4c.... string helpers, 0x53cc40) include no money add. (checked)
+- Money layout and join: dev/script_commands/inventory.md:11-13, :39-47, :322-326; items.md:11-13.
+- Other records: DAOEluvianMCP dev/TESTING.md:366 shows `Party.Money.Total` 78 at a store after play, not a start value. DAOTurnBased has nothing on starting money (grep of dev/ finds only the poultice-cost remark in REBALANCE.md:165).
+
+#### Not read
+
+- The prologue modules' scripts (origin starts, Ostagar) for a grant of starting money or a SetCreatureMoney through a different command. Only the 0 from the engine and chargen is established.
+- The functions around `0x0066aacd` / `0x0066abbc` beyond identifying them as the gold script commands; `0x007b9642`.
+- Whether a save of the freshly created hero stores "Money" as 0 or 75: the save writer at `0x00644800` reads the live purse, not a template (inferred).
+- A real new game's money seen in play; no record found.
 
 ## Equipping
 
