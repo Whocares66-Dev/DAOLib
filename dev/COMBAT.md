@@ -372,6 +372,105 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   4. Makes the cooldown record and the interface's `AbilityInstance`.
   5. If new and creature +0xC58 is 0, applies the passive (`Passive_ID` → table 0x75's properties) and queues ABILITY_ACQUIRED (73) for item abilities only.
 
+### CREATURE_SPAWN_DEAD and PHYSICS_DISABLED in the engine (lib-agent-2, 2026-10-19, GOG exe, read-only)
+
+#### Short answers
+1. **The two strings are not static initialisers of globals. They are entries 4 and 11 of the engine's table of well-known script-variable names** (registered at 0x004E85D8-0x004E8700; entry = {category 0, id}). The variable key `{0, id}` is what the engine builds on the stack and hands to `ScriptBackend::ForScript_GetLocalInt` (0x00702E90, creature table at creature+0x2E0). Ids (checked, from the pushes): 1 AMBIENT_SYSTEM_STATE, 2 AREA_ID, 3 AMBIENT_ANIM_PATTERN, **4 CREATURE_SPAWN_DEAD**, 5 AREA_PARTY_CAMP, 6 RUBBER_HOME_ENABLED, 7-9 RUBBER_HOME_LOCATION_X/Y/Z, 10 ITEM_CRUST, **11 (0xB) PHYSICS_DISABLED**, 12 PLC_AT_DEST_AREA_TAG, 13 ITEM_RUNE_ENABLED, 14 PROJECTILE_OVERRIDE, 15 RUNSCRIPT_VAR.
+2. **Value 1 = the creature dies at spawn by the engine setting its current health to 0.** Value 2 = a permanent EFFECT_TYPE_SIMULATE_DEATH (1045) effect, health untouched (a "fake death", removed when it starts a fight). The reader is the function at **0x006BF710**, called after the creature's field reader (slot 23, 0x006C06F0) has read the instance (second pass, flag 2: 0x006C0BA8-0x006C0BAA `cmp [flag],2; call 0x6BF710`) and again at the end of a conversation/staged-scene release (0x007F2800, call at 0x007F2B12, after the physics controller is rebuilt).
+3. **PHYSICS_DISABLED non-zero: the capsule controller (PhysX character controller, creature+0x770) is not built** (0x006B1ED0 returns early, 0x006B1F67-0x006B1F6E). A dead creature (health <= 0) never gets one either, except DecayBehaviour 2 (dragons), and neither does a creature with a SimulateDeath effect. So for a spawn-dead corpse, PHYSICS_DISABLED is redundant.
+4. **The pose: not found.** Nothing in 0x006BF710 plays an animation. The engine's own death animation is the death effect's sub-action 51 (dev/COMBAT.md:296-311), which a spawn-dead creature does not go through. Port recommendation (inferred): put the creature straight into anim_base **3 `Dead` (AnimName `dieloop`, Type 1 looping, State 1, TransitionTo 263)**, held; use row 2 `Dead_v2` (`dieLoop_v2`) only if you want variety. A killed creature plays 250 `die` (State 1, TransitionTo 3) first; spawn-dead needs no die clip.
+
+#### 1. 0x006BF710 (checked in disassembly)
+Entry: `ecx` = creature. Saves bytes +0x2C5 and +0x421, sets +0x2C5 = 1 and +0x421 = 0 for the duration, restores them at the end (0x006BF86F-0x006BF881). Reads local int key `{0,4}` from creature+0x2E0 (0x006BF775-0x006BF77D; GetLocalInt returns 0 if absent). Returns `value != 0` in al.
+
+```
+v = GetLocalInt(creature, CREATURE_SPAWN_DEAD)       // key {0,4}
+switch v:
+  case 1:                                            // 0x006BF81A
+     creature->vslot_0x124(0, 1)                     // 0x006A7DD0: CCCreatureStats::SetCurrent(property 7 = current health, 0.0), flag 1 -> 0x0071B320 -> 0x00719A00 -> health-change handler 0x006BC4B0
+  case 2:                                            // 0x006BF799-0x006BF818
+     if (!HasSimulateDeath(creature, flagOnly=1)) {  // 0x0079FD80(1): any effect of type 0x415 not removed whose flag[4]==1
+        e = new CGameEffect(type 0x415 = 1045 EFFECT_TYPE_SIMULATE_DEATH)   // 0x00A652A0
+        e.creator = creature id (iface slot 0x20)
+        e.durationType = 3                           // [e+0x28] = 3, EFFECT_DURATION_TYPE_PERMANENT
+        e.flag[4] = 1                                // 0x00A5B890(4,1): marks "spawned dead"
+        effects->Apply(e)                            // 0x007A1A20
+        creature.iface(+0x70)->slot_0x78()           // 0x006B3620: drop the walk-grid obstacle (unless DecayBehaviour 2), stop look-at, reset movement controller, re-place
+     }
+  case -1:                                           // 0x006BF82B: wake: remove every SimulateDeath effect (predicate type==0x415), 0x007A0C90
+  default (0, >=3): nothing
+```
+Health-change handler 0x006BC4B0(creature, oldHealth, flag), reached from SetCurrent of property 7 (0x00719A25-0x00719A32). Old > 0 and new <= 0 (6BC4EC): with flag set and not immortal, iface slot 0x50 (0x007A1A40, effects removed); 0x006B8D20; clears; vslot 0x1B8(0); iface slot 0x78 (0x006B3620) unless a SimulateDeath effect exists. Old <= 0 and new > 0 (6BC586, revive): 0x0073C930, +0xC88 (dead timer) = 0, rebuild model placement, **SetLocalInt(CREATURE_SPAWN_DEAD = 0) if it was 1** (0x006BC603-0x006BC631), iface slot 0x7C (0x006B3690: obstacle back, physics controller rebuilt) unless a SimulateDeath effect exists. So a revive clears the flag.
+
+IsDead is vslot 0x1D0 (0x006A3660): health <= 0 (dev/COMBAT.md:238). Value 1 creatures are therefore ordinary dead creatures to every later check.
+
+##### Other readers of key {0,4} (checked)
+- 0x006A3AD0 (0x006A3B4F): corpse decay is refused when the var > 0 (the fade/body-bag decay never runs on a spawn-dead corpse). Rest of the function: dev/COMBAT.md:340.
+- 0x0073F0E0 (0x0073F1CD): a search over area objects skips creatures with the var > 0 (what the function is for: not read).
+- Scripts: creature_core.nss:346 codex credit only when var == 0 and SPAWN_HOSTILE_LYING_ON_GROUND == 0; :381 value 1 on EVENT_TYPE_SPAWN sets a random gore level (SetCreatureGoreLevel(RandomFloat())) and ends (no other spawn work: no crust, no AI start); ability_summon_h.nss:95 (Animate Dead ignores value 1); utility_h.nss:1503 on combat start, value 2 -> var = 0 and RemoveEffectsByParameters(EFFECT_TYPE_SIMULATE_DEATH). effects_h.nss:541/918: the script's apply/remove of type 1045 just returns TRUE (all behaviour is engine). Used with 1 by bhn200/pre100/ran401 scripts; ran401ar_highway_zevran1.nss:41-43 sets 0 and applies EffectResurrection.
+- Death event: no death animation sub-action runs, so no DEATH (4) event and no body bag are produced by the spawn (inferred: the sub-action 51 path, COMBAT.md:240, is the only DEATH source and is not entered; not run in play).
+
+#### 2. PHYSICS_DISABLED (key {0,0xB}), checked
+0x006B1ED0 (build the capsule, called from the activation path, from 0x006B36BB/0x007F2B00 with (-1.0f, -1.0f)): returns without building when any of: iface slot 0x6C false (inactive); **GetLocalInt({0,0xB}) != 0** (0x006B1F67-0x006B1F6E); creature is dead and DecayBehaviour != 2 (0x006B1F31-0x006B1F78); 0x0079FD80(0) true (has a SimulateDeath effect); no model (vslot 0xA0 null or its slot 8 null). Otherwise destroys any old controller (0x0069EDC0) and makes a PhysicsControllerCapsule (PATHFINDING.md:283-330). The script command that writes the same key is in dev/script_commands/effect_access.md:232. No capsule means no PhysX contact and no ground following by the controller; the creature stays where it was placed (z from the placement, see PATHFINDING.md:277 ff).
+
+#### 3. Creature loaded from a save (checked structure, not played)
+0x006BE980 (save reader, slot 34) has no call to 0x006BF710 and never reads key {0,4}. After the load it only does (0x006BEBA3-0x006BEBCF): if 0x0079F4A0(0) (a death-duration-6 effect is pending) and health > 0, `SetCurrent(health = 0, flag 1)`. A spawn-dead creature in a save is therefore restored by its saved stats (health 0), saved effects (SimulateDeath for value 2) and saved variable table. The var is written to a save only if `changed` was set (dev/script_commands/vars.md:34), and the template-loaded record has changed = 0, so a never-touched CREATURE_SPAWN_DEAD = 1 is re-read from the template when the area is built again. Whether a placed creature is rebuilt from its template on a save load, and what pose the save restores, is not read.
+
+#### Table rows (ghilana, anim_base.gda, checked)
+| ID | Brow | AnimName | Type | TransitionTo | Priority | State |
+|---|---|---|---|---|---|---|
+| 250 | Die | die | 0 one-shot | 3 | 4 | 1 |
+| 254 | Die v2 | die_v2 | 0 | 2 | 4 | 1 |
+| 3 | Dead | dieloop | 1 loop | 263 | 3 | 1 |
+| 2 | Dead_v2 | dieLoop_v2 | 1 loop | 938 | 3 | 1 |
+| 263 | Die Get Up (Resurrect) | diegetup | 0 | 1 | 0 | 0 |
+| 1 | Pause | pause | 1 | 1 | 0 | 0 |
+(State 1 also gives the 60/60 degree body tilt, PATHFINDING.md:372-400.) Template pre200cr_dead_1.utc (ghilana): Appearance_Type 15, HeadMorph hm_pre200_dead1.mor, PropertyList has Index 7 (health) with no Base (so no value read here; I cannot say what the stats load makes of it), plus SPAWN_HOSTILE_LYING_ON_GROUND = 0 among the VarTable.
+
+#### Not read
+- **Which code puts a spawn-dead (value 1) creature into the Dead pose**, or whether a posed clip is needed at all (e.g. the animation player starting in Dead for health <= 0, 0x006BDC70/0x006A1470). Leads: 0x006964D0(bool) (plays the current death effect's animation id, effect+0x34, through vslot 0xB0 with (id, 1.0, 0xAE2E00, 1) then 0x006956D0, else Pause if the bool is set; it runs after 0x006BF710 only in the conversation-release path 0x007F2B17-0x007F2B22); 0x006A26D0 (called right after 0x006BF710 in the field reader: plays the animation of table 0xAA row = var {0,3} when AMBIENT_SYSTEM_STATE bits 1 and 2 are set; the pre200cr_dead templates were not checked for those vars).
+- What effect flag[4] means beyond marking the spawn-dead SimulateDeath (only 0x0079F2E0 reads it).
+- 0x0079F4A0 semantics beyond "death-duration (6) effect pending, not removed".
+- The sub-action/animation of a SimulateDeath effect applied by a script (no shipped script applies it).
+- Play: nothing was seen in the game.
+
+### What poses a creature placed dead (CREATURE_SPAWN_DEAD = 1) (lib-agent-2, 2026-10-19, GOG exe, read-only)
+
+Builds on %TEMP%\lib-agent-2-spawndead.md (6BF710 etc.) and master dev/COMBAT.md:199-311 (death effect, ExecuteEffect, sub-action 51). New here: everything under "New".
+
+#### Short answers
+1. (a) **6BC4B0 plays nothing itself, and no dead state is read by the animation system. It makes the engine's ordinary death.** On health old>0 -> new<=0 with its flag set (6BF710 passes flag 1) and the creature not immortal (vslot 0x168 false), it calls iface slot 0x50 = **0x007A1A40** (checked). That builds a type-7 effect (`0xA652A0(7)`), creator = the creature (iface slot 0x20 -> 0xA65250 sets +0x40), `+0x28 = 6` (EFFECT_DURATION_TYPE_DEATH), `SetInt(0, 1)` (0xA5B710), and adds it with 0x007A1A20 -> 0x007A1920 -> 0x007A0E30. For a type-7 effect with no death effect yet present (0x007A1920 searches first, 0x007A1983-0x007A19A3) that reaches the native death handler **0x007A12E0** (sets effect +0x34 = `0x005CA740(1, ...)` = 250, runs APPLY_EFFECT in the scripts, queues command 32 ExecuteEffect, COMBAT.md:208-215/:279-287). ExecuteEffect's sub-action 51 (0x007AAC10) plays the pose. So a spawn-dead creature is a creature killed with no killer. 6BF710 forces `+0x2C5 = 1` (active) and `+0x421 = 0` for exactly this call: 0x007A0E30 only takes the native handler when the target's slot 0x6C (= +0x2C5 set, +0x421 clear, PARTY.md:8) says it is active, and the command queue runs only for an active creature (0x0073D34D tests +0x2C5). That is the answer to "why does 6BF710 touch those bytes" (checked for the flags and tests; inferred for the reason).
+2. (b) **There is no "initial pose" chooser that tests IsDead.** The model is loaded earlier than 6BF710 (0x006BDC70, called at 0x006C056F in the field reader, 6BF710 at 0x006C0BAA). The animation set's constructor (0x00A60B80, 0x00A60C66-0x00A60C76) starts with +0x13C = 0, **+0x140 = 1 (Pause)**. 0x006BDC70 replays AnimBase+0x140 instantly (0x006BE284 `0x695700` -> vslot 0xB0 (anim, 1.0, -1.0, 1)), i.e. Pause, and uses IsDead (0x006BE22E, vslot 0x1D0) only to pick the **face** state (dead 0x006CAB40, alive 0x006CAB00 on the object 0x0069E9D0 returns), not the body. Its last step `0x006964D0(0)` (0x006BE2F4) plays the creature's death effect's animation instantly if one exists (none yet at model load for a first spawn) and does nothing otherwise. The ambient idle chooser 0x006A26D0 (right after 6BF710) only sets AnimBase+0x140 (`0x006956D0`) from table 0xAA row = AMBIENT_ANIM_PATTERN when AMBIENT_SYSTEM_STATE has bits 1 and 2; it plays nothing, and a spawn-dead creature has no such vars (not checked in the templates).
+3. (c) **The pose is the death animation sub-action's, from the first tick of ExecuteEffect, after the area is running.** On its first tick the creature's current animation is Pause (State 0), so it starts the **Die clip (250 `die`, TransitionTo 3) from frame 0**, not `dieloop` from frame 0 and not an instant skip; the Dead loop (3 `dieloop`) is played from the tick after, held each tick (`(3, 1.0, -2.0, loop 1)`, 0x007AB368-0x007AB3B8). It is not entered at the clip's end by any instant jump. Only if AnimBase+0x140 already has State 1 (a death/sleep row) does the first tick use 3 directly (0x007AB08C-0x007AB09F: `if State(0x695700()) == 1 then anim = 3`). Caveat: the first-tick branch that sets the Die timer vs one that sets timer 0 (below) was not settled, and nothing was seen in play.
+
+#### Port pseudo-code (inferred from the above)
+```
+at spawn with CREATURE_SPAWN_DEAD == 1 (after the model is loaded, once the creature may run commands):
+   set health 0                       // engine does the rest; or, if the port has no effect system:
+   face = dead                        // 0x6CAB40 (closed eyes/face state), body below
+   if the port wants vanilla timing: play(250 die, rate 1.0, blend 2.5 (0.4 s), non-looping) from clip time 0 on the first command tick,
+                                     then 3 dieloop (TransitionTo of 250) held every tick as (3, 1.0, blend -2.0 = 20% of its length, loop)
+   if the port wants "already lying" : play(3 dieloop, 1.0, blend -1.0 instant, loop)   // the engine's own already-dead path: State==1 -> anim 3
+```
+Neither skips the die clip in vanilla; "already lying" is a port choice (the engine does it only for a creature whose current animation already has State 1). No DEATH script event ordering concern: the sub-action's timer runs DEATH (4) with the effect's creator at the end of the clip (COMBAT.md:243).
+
+#### Evidence (checked = read in disassembly)
+- 6BC4B0 (0x006BC4B0): health compare 0x006BC4B0-0x006BC4EC; flag `cmp byte [esp+0x14],0` 0x006BC4EC, IsImmortal vslot 0x168 0x006BC4FB-0x006BC507, `iface slot 0x50` call 0x006BC50C-0x006BC512, then 0x006B8D20 (clears +0xC18/+0xC28), party 0x00838210/0x00631F30, vslot 0x1B8(0) = 0x006A1B80 (gore/crust level, not animation), then slot 0x78 = 0x006B3620 (checked: face dead, controller reset, re-place; no play call).
+- 0x007A1A40 (checked, 0x007A1A63-0x007A1ABC): new 0x7C-byte effect, `push 7; call 0xA652A0`, `[eff+0x28] = 6`, `SetInt(0,1)` (`push 1; push 0; call 0xA5B710`), `call 0x7A1A20`.
+- 0x007A1920 (checked): duration type 6 -> searches existing death effects (0x00A64950); none -> `call 0x7A0E30`.
+- 0x006964D0 callers (checked): 0x006BE2F4 (end of 0x006BDC70 model reload, arg 0), 0x007F2B22 (conversation release, arg 0... after 6BF710), 0x0070D50F (arg 1; a reset/place routine), 0x00697904. Body: effect = `0x79F240` (iface slot 1 = 0x69A0D0 returns [iface+0xE8] = the creature's death effect, then +0x34); chain TransitionTo (0x5CA6B0, hash 0xFFC372E7) up to 5 times until `0x695390` (tree has the node) is true; play (id, 1.0, -1.0 (0xAE2E00), 1) via vslot 0xB0 and `0x6956D0(id)` (AnimBase+0x140 = id). With no effect: if arg set, plays 1 Pause instantly and sets +0x140 = 1.
+- AnimBase ctor 0xA60B80: +0x13C = ebx(0), +0x140 = 1, +0x144 = 0 (0x00A60C66-0x00A60C76). 0x695700 = `AnimBase(creature+0x154)->+0x140`; 0x6956B0 = +0x13C (current id).
+- Floats: 0xAE2E00 = -1.0, 0xAFF63C = -2.0, 0xB03B08 = 2.5, 0xAE7130 = 3.0, 0xAF553C = -3.0 (read from the file).
+- Plays of anim 3 by immediate in the whole exe: only 0x007AB370 and 0x007AB3A0 (both in 0x007AAC10), plus the generic 0x7AB08C->3 substitution. A scan of every `call [reg+0xB0]` with `push 3` or `push 250` within 20 bytes found only 0x7AB370, 0x7AB3A0, 0x81CFF0, 0x81D618 (the last two not read). Of the 40 IsDead (vslot 0x1D0) call sites none of the ones checked (0x6A52C0, 0x6A8D60, 0x6AB100, 0x6AD200, 0x6AE780, 0x6B89B0, 0x6BA840, 0x6BB890, 0x6CAD80, 0x70EAA0) calls a play: so no other code poses a dead creature. 0x6AB6E0 (idle tick) runs only when the current animation is 1.
+- Script side: creature_core.nss:376-392: "Creatures spawning with 0 health will die instantly. This is handled in engine, the script here just ensures some gore" (then returns).
+- First tick of 0x007AAC10 (checked as far as): anim from effect +0x34 (0xA53690) at 0x007AACD8; if effect int 0 is 0 the anim is replaced by `0x696060(0x695700())`; sets params (creator, priority, flags); 0x007AB06C-0x007AB09F: current anim State==1 -> 3; then 0x007AB193 `0x695390(anim)`: true -> 0x007AB2D9 plays (anim, 1.0, -2.0, 1) and sets the sub-action's +0x14 (timer) = 0; false -> either sync death 0x7A7290, or timer = now + `0x6957A0(anim)` (clip length) and play (anim, 1.0, 2.5, 0) (0x007AB1D4-0x007AB24C, blend -3.0 for appearance 0x4E29). COMBAT.md:310 describes the second form as what a kill plays. Per tick for type 6 (0x007AB313-0x007AB41F): if health > 0 set it 0 (0x007AB32D), play 3 as above, effect/sub-action flags, then `0x7A1AE0` remaining time; at <= 0 (and not held by flag 1) run DEATH.
+
+#### Not read
+- **Which branch a humanoid's first tick takes at 0x007AB198** (valid-node path 0x7AB2D9 with timer 0, or the timed path 0x7AB1D4 with the clip's length). The humanoid.anb has `die` and `dieloop` nodes (ghilana, checked), which suggests the first, but the 1.5-2.5 s DEATH delay seen in play (LIBRARY.md:238) fits the second; one of my readings of the stack slot [esp+0x1c] or of 0x695390 is wrong and I did not settle it. Either way the animation played first is 250 `die` for a creature in Pause, and 3 thereafter.
+- Whether the Die clip is visibly played on the loading screen's last frames or after the screen goes (when the first ExecuteEffect tick runs after the area load): needs a play check (Eluvian: load an area with a CREATURE_SPAWN_DEAD creature, read the creature's animation id each frame).
+- 0x7A0E30's slot-0x6C gate was taken from COMBAT.md:165, not re-read; 0x81CFF0/0x81D618; whether the pre100/bhn200/ran401 templates set AMBIENT_SYSTEM_STATE/AMBIENT_ANIM_PATTERN.
+- Save load: a saved dead creature has its effect list and ExecuteEffect state from the save (0x6BE980 does not call 6BF710); not read what pose results.
+
 ### Non-humanoids' movement
 
 Non-humanoids use the same controller as humanoids, `MovementAnimController` (vftable 0x00B59AC0).
