@@ -160,3 +160,24 @@ Read in the GOG exe and the scripts by lib-agent-2 (with a subagent) for paragon
 - A non-immediate `SignalEvent` (0x00657E40) queues the same way (0x00657EDE); only an immediate one is delivered at once (`DeliverNow`, 0x00657EFC).
 - **First, the engine's own events go to their script.** `RunEventScript` looks the event type up in `engineevents.gda` (table 114, `0x006989BD`) and takes its Script column (hash 0xF333FE09, `0x006989D4`), which sends events 33–36 and 65 to `rules_core` whatever script the object has (checked the table and column; the list of events read by lib-agent-2's subagent, 2026-10-18).
 - **The script run is the object's at delivery.** Otherwise `RunEventScript` (0x00698960) uses the event's own script (+0x2C) only when the event's +0x40 is set; otherwise it reads the object's +0x26C (0x006989F0), which `SetEventScript` (0x00658AA0) writes. +0x288 marks the script as overridden for the save.
+
+### Events for objects of an area left (read 2026-10-19 by lib-agent-2)
+
+Read in the GOG exe for paragon-agent's saves work (DAOParagonEngine #20). Checked where an address is given, else inferred. Not seen in play.
+
+- **One queue, untouched by a swap.** The queue is one global list, `AIMaster` at the application's +0x1AC.
+  - `AIMaster::ClearEvents` (0x0064AC80) has one caller, the module's unload (0x005D6A50, from the load-game and quit paths: 0x006C5B2D, 0x006C78CB, 0x005D722F, 0x0064CB9F). None of these is the area transition.
+  - `DeleteEventData` (0x0064A520) is called only by `ProcessEvent` and `ClearEvents`. No function removes an object's events.
+  - The creature's destructor (0x006BAFE0) takes the creature out of the AI update lists only (0x0064B240).
+  - The area's save (0x00683C80) writes no events.
+- **Delivery finds the target by id each time.** `ProcessEvent` (0x0064A8C0) looks the target id up (0x005D5840 at 0x0064A90C). A target that is not found has the event's data freed and nothing else: no log, no re-queue (0x0064A913 to 0x0064A9B5). The creator id is passed along as a number and never looked up, so delivery depends on the target alone.
+- **So an event pending when the party leaves:**
+  - Events already due when the swap starts are delivered first: state 4's first step runs `AIMaster::Update(0)` (0x006C8B06) before anything is saved. It is budgeted to about a second (`[0x00C01384]`), so a long backlog can remain.
+  - Later ones stay queued on the global clock. One that comes due while its target is gone is dropped. One that comes due after the area is back reaches the rebuilt object, which has the same id: the creature loader (0x00683820) builds each creature with its saved `ObjectID` (field 0x17) unless one with that id exists already (0x005D58C0).
+  - A backlog is next drained at state 6's steps 4, 5 and 8 (0x006C9122, 0x006C9170, 0x006C9333). Inferred: nothing drains it between, because of the callers of `Update`. 0x007182B8, 0x007193D0 and 0x007FCD26 are not identified.
+- **Saved with the game, not the area.** The game save writes the whole queue as `SavegameEventQueue` (16630), one entry per event with creator, target and data. 0x0064A9D0 writes it (called at 0x006C6943) and 0x0064AAD0 reads it (0x006C820E). Which of the two is which is inferred from their shapes and callers. An entry whose data fails to rebuild (0x0079C0C0) is freed.
+  - A creature's own pending commands are in its object save (`SavegameCurrentActionQueue`, 16740), apart from the queue. Their restore is not read.
+- **Other objects' lists keep the ids.**
+  - A perception set (+0xC18) keeps a gone creature's id until the perceiver's next perception update. That update looks every id up (0x006A8D60, `dev/COMBAT.md`) and raises DISAPPEAR to the perceiver.
+  - A melee ring's claim is released by its attacker at the command's shared end (0x00746A65 to 0x006A3610 to 0x007CC060). A destroyed attacker's commands are hard-cleared (0x0073C930). That this runs the shared end and so releases the claim is inferred.
+- **Not read:** the loading mode's world-update gate (slot 18); the object event handler's use of the creator id; the restore of placeables' and triggers' ids (0x00683380); the unidentified calls in the creature's destructor; what `GetEventCreator` (0x006582A0) does after 0x006582F6.
