@@ -72,7 +72,7 @@ function_va,name,how,class,ghidra_name,commands
 0x00655170,ScriptBackend::SetFacing,sole,,ScriptBackend::ForScript_SetFacingPosition,SetFacingPosition | SetFacingObject
 0x0066c770,ScriptBackend::ForScript_GetCreaturePropertyType,sole,,ScriptBackend::ForScript_GetCreaturePropertyType,GetCreaturePropertyType
 0x0066cf60,ScriptBackend::GetCreatureProperty,sole,,ScriptBackend::ForScript_GetCreatureAttribute,GetCreatureAttribute | GetCreatureProperty
-0x00670ba0,ScriptBackend::ForScript_ClearThreatTable,sole,,ScriptBackend::ForScript_ClearThreatTable,ClearThreatTable
+0x00670ba0,ThreatTable::Resize,sole,,ScriptBackend::ForScript_ClearThreatTable,ClearThreatTable
 0x006741e0,ScriptBackend::MakeEffectFilter,sole,,ScriptBackend::ForScript_RemoveEffect,RemoveEffect | RemoveAllItemVisualEffects
 0x006849c0,ScriptBackend::GetNearestObjects,sole,,ScriptBackend::ForScript_UT_GetNearestObjectByTag,UT_GetNearestObjectByTag
 0x00684dd0,CCArea::GetNearestObjectsToLocation,direct,CGameObject,CGameObject::ForScript_GetNearestObjectByHostility,GetNearestObjectByHostility | GetNearestObject | GetNearestObjectToLocation | GetNearestObjectByTag | GetNearestObjectByGroup
@@ -223,14 +223,14 @@ function_va,name,how,class,ghidra_name,commands
 0x007e5e60,,direct,CCAreaOfEffectObject,FUN_007e5e60,GetCreaturesInAOE | GetObjectsInArea
 0x008663a0,std::vector<unsigned int>::Contains,sole,,ScriptBackend::ForScript_IsInTrigger,IsInTrigger | IsModalAbilityActive
 0x008e33e0,_CIlog,sole,,ScriptBackend::ForScript_log,log
-0x008e5ed0,ScriptBackend::ForScript_acos,sole,,ScriptBackend::ForScript_acos,acos
-0x008e6020,ScriptBackend::ForScript_cos,sole,,ScriptBackend::ForScript_cos,cos
+0x008e5ed0,_CIacos,sole,,ScriptBackend::ForScript_acos,acos
+0x008e6020,_CIcos,sole,,ScriptBackend::ForScript_cos,cos
 0x008e6240,_CIsqrt,sole,,ScriptBackend::ForScript_sqrt,sqrt | GetVectorMagnitude | GetDistanceBetweenLocations
-0x008e6340,ScriptBackend::ForScript_tan,sole,,ScriptBackend::ForScript_tan,tan
-0x008e8990,ScriptBackend::ForScript_sin,sole,,ScriptBackend::ForScript_sin,sin
-0x008e8ac0,ScriptBackend::ForScript_asin,sole,,ScriptBackend::ForScript_asin,asin
-0x008e8c50,ScriptBackend::ForScript_pow,sole,,ScriptBackend::ForScript_pow,pow
-0x008e9fd0,ScriptBackend::ForScript_atan,sole,,ScriptBackend::ForScript_atan,atan
+0x008e6340,_CItan,sole,,ScriptBackend::ForScript_tan,tan
+0x008e8990,_CIsin,sole,,ScriptBackend::ForScript_sin,sin
+0x008e8ac0,_CIasin,sole,,ScriptBackend::ForScript_asin,asin
+0x008e8c50,_CIpow,sole,,ScriptBackend::ForScript_pow,pow
+0x008e9fd0,_CIatan,sole,,ScriptBackend::ForScript_atan,atan
 0x00a29f60,ScriptBackend::ForScript_HasConversation,sole,,ScriptBackend::ForScript_HasConversation,HasConversation
 0x00a2d230,ScriptBackend::ForScript_DebugSpawnScriptDebugger,sole,,ScriptBackend::ForScript_DebugSpawnScriptDebugger,DebugSpawnScriptDebugger
 0x00a2fd10,CVirtualMachine::StackPopCommand,sole,,ScriptBackend::ForScript_ASSIGNFUNCTION,ASSIGNFUNCTION | COMMANDDOFUNCTION

@@ -1696,7 +1696,7 @@ DAO_ADDRESS(kCCCreature_HeadTransform, 14447)
 // equip calls for what it displaces. The names are ours.
 DAO_ADDRESS(kCCCreature_Equip, 14937)
 DAO_ADDRESS(kCCCreature_Unequip, 14877)
-DAO_ADDRESS(kEclipseGFxImageLoader_LoadImage, 6704)
+DAO_ADDRESS(kScaleformManager_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
 // engine's CTlkTable in this global; GetString, __thiscall (strref,
