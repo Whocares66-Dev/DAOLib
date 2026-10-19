@@ -54,6 +54,21 @@ The party (`[app+0xD0]+0x58`) has:
 - **`RemoveFromParty` (397, 0x0065E5C0) is `SetFollowerState(creature, 0)`** (0x0065E5FF–0x0065E602, checked): the creature leaves the pool and `GetFollowerState` (399, 0x00632810) answers 0, INVALID, for a missing entry. `AddToParty` (396, 0x0065E560) is `SetFollowerState(creature, 1)`, its second object ignored.
 - **The scripts never call 396–398**: `script.ldf` comments them out as "DEPRECATED, use SetFollowerState()". A follower leaves the party as AVAILABLE (`UT_FireFollower`, `utility_h.nss`:861), and INVALID only when it leaves the pool too.
 
+### A member's group: GROUP_PC on joining, kept on leaving (read 2026-10-18 by lib-agent-2)
+
+Read in the GOG exe on 2026-10-18 for paragon-agent-2 (Paragon #68). Everything here is checked in the disassembly.
+
+- **CCParty+0x1E4 is the group a joining member gets, and it is always 0 (GROUP_PC).** The CCParty constructor 0x0063A3C0 (vftable 0x00B05E84) zeroes ebx at 0x0063A407 and stores it at 0x0063A904. A scan of the whole .text for writes to `[reg+0x1E4]` finds 20, and this is the only one in the party code (0x00628000–0x00640000). The other 19 are in other classes: CClientExoApp's constructor, NxSceneDesc::load and others. Nothing loads the field from a save and no script command sets it.
+- **Joining (SetFollowerState 0x0063B9A0, states 1 and 7):** 0x0063A020 runs, then 0x00637560. If the creature is not already in the party's list at +0x234 or +0x260, 0x00637560 does two things. It copies CCParty+0x1E0 into creature+0xBDC; the constructor sets +0x1E0 at 0x0063A966. Then it calls the creature's vtable +0x170 with CCParty+0x1E4, at 0x006375D2.
+- **What vtable +0x170 is:** on CCCreature, slot 92 of vftable 0x00B10484 is 0x006B8450. It writes creature+0x3C0 (GetGroupId), and when the value changes it calls 0x006B8250. The script command SETGROUPID 0x0065BB00 calls the same slot. The group therefore changes only through that command and party joining.
+- **Leaving (states 0, 2, 3 and 5):** these go through 0x006377E0, the removal from the party. It sets creature+0xBDC to −1 at 0x006378A1 and never calls vtable +0x170 or writes +0x3C0. Neither do 0x0063A020 or 0x0063B8B0, so the group stays 0 until a script sets it.
+- **Inferred:**
+  - That a script restores a member's group after leaving: the leave path doesn't, so any restore would have to be scripted.
+  - That 0x006B8250 re-sorts the creature's group lists: not read.
+- **Not read:**
+  - What +0x1E0 and creature+0xBDC mean. The constructor's +0x1E0 comes from a stack slot, [esp+0x80] at 0x0063A94C.
+  - The callees 0x006368F0, 0x00635B40, 0x00631F30 and 0x00695220 on the leave path, beyond the direct calls listed above.
+
 ## CreateObject then a hire, in one script
 
 Read 2026-10-18 by lib-agent-2 (with a subagent) for paragon-agent-2's Circle basement, not seen in play. The queue's order and the script run at delivery are `dev/LOAD_EVENTS.md`'s "The event queue's gate and delivery".
