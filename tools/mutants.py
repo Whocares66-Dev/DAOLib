@@ -1462,6 +1462,56 @@ MUTANTS: list[Mutant] = [
         "Walk(child, own ? *own : name, type, out);",
         "Walk(child, name, type, out);",
     ),
+    # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
+    # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
+    Mutant(
+        "collision-binary-pose-rows: a binary pose is each row of the turn then that row's translation",
+        COLLISION,
+        "pose.translation[row] = Take<float>();",
+        "pose.translation[2 - row] = Take<float>();",
+    ),
+    Mutant(
+        "collision-binary-string-nul: a string's characters are followed by a NUL the length leaves out",
+        COLLISION,
+        "Skip(std::size_t{length} + 1);",
+        "Skip(std::size_t{length});",
+    ),
+    Mutant(
+        "collision-binary-actor-skip: an actor's quaternion, density and flags come before its group",
+        COLLISION,
+        "c.Skip(16 + 4 + 4); // a quaternion",
+        "c.Skip(16 + 4); // a quaternion",
+    ),
+    Mutant(
+        "collision-binary-shape-skip: a shape's quaternion and flags come before its group",
+        COLLISION,
+        "c.Skip(16 + 4); // a quaternion",
+        "c.Skip(16); // a quaternion",
+    ),
+    Mutant(
+        "collision-binary-sdk-281: the later SDK numbers its capsule after its sphere",
+        COLLISION,
+        ".sphere = 35, .capsule = 36, .mesh = 39, .actor = 42}",
+        ".sphere = 35, .capsule = 35, .mesh = 39, .actor = 42}",
+    ),
+    Mutant(
+        "collision-binary-index-width: a mesh with NX_MF_16_BIT_INDICES has 16-bit indices",
+        COLLISION,
+        "(flags & kMeshFlag16Bit) != 0 ? 2 : 4;",
+        "(flags & kMeshFlag16Bit) != 0 ? 4 : 4;",
+    ),
+    Mutant(
+        "collision-binary-mesh-by-name: a mesh shape's meshData names the mesh it uses",
+        COLLISION,
+        "const auto found = meshIds_.find(c.String());",
+        "const auto found = meshIds_.find(std::string{});",
+    ),
+    Mutant(
+        "collision-binary-whole: a stream that fails anywhere, or holds no block, gives no shapes",
+        COLLISION,
+        "return !top.empty() && !failed_;",
+        "return true;",
+    ),
     # FMOD's banks (#191): each sample's bytes where they are, its header's own size, its
     # sync points bounded, and IMA ADPCM as FMOD lays it out.
     Mutant(

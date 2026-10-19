@@ -28,7 +28,9 @@
 #include "dao/core/Bytes.h"
 #include "dao/core/XmlTags.h"
 
+#include <algorithm>
 #include <charconv>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <string_view>
@@ -133,6 +135,13 @@ template <class T> T AttributeNumber(std::string_view tag, std::string_view name
 {
     const std::optional<std::string> text = xml::Attribute(tag, name);
     return text ? NumberOf<T>(*text).value_or(otherwise) : otherwise;
+}
+
+// An actor's userProperties, "a,b,c": its record's index, then each of its shapes'.
+std::vector<std::int32_t> RecordIndices(std::string text)
+{
+    std::ranges::replace(text, ',', ' ');
+    return NumbersOf<std::int32_t>(text);
 }
 
 // A pose's twelve numbers: the turn's rows, then the translation. Fewer leave it as it was.
@@ -302,7 +311,7 @@ class Reader
         actor.id = xml::Attribute(tag, "id").value_or("");
         actor.name = xml::Attribute(tag, "name").value_or("");
         actor.hasBody = xml::Attribute(tag, "hasBody").value_or("") == "true";
-        records_.push_back(NumbersOf<std::int32_t>(Commas(xml::Attribute(tag, "userProperties").value_or(""))));
+        records_.push_back(RecordIndices(xml::Attribute(tag, "userProperties").value_or("")));
         actor_ = &actor;
         shape_ = nullptr;
     }
@@ -358,15 +367,6 @@ class Reader
         }
     }
 
-    static std::string Commas(std::string text)
-    {
-        for (char &c : text)
-        {
-            c = c == ',' ? ' ' : c;
-        }
-        return text;
-    }
-
     std::string_view text_;
     StaticPhysics &out_;
     std::vector<std::string_view> open_;
@@ -399,6 +399,399 @@ void Link(StaticPhysics &physics, const std::vector<std::vector<std::int32_t>> &
             actor.shapes[s].record = indices[s + 1];
         }
     }
+}
+
+// --- the .arl's binary stream
+//
+// NXU's binary form (DAOLib #197), as the files hold it, read 2026-10-19 against the XML of all 132 levels that have
+// both (dev/COLLISION.md). The stream is "NXUSTREAM", two zero bytes, the SDK's version and NXU's (u32 each), then
+// blocks. A block is a 16-byte head, 0x00ABCDEF, its type, its length from the head's start to its end, and
+// 0x01234567, then its own fields, then the blocks it holds. A string is a u32 length, and for a length over 0 that
+// many characters and a NUL. The types are the NXU classes' numbers, which move with the SDK's version.
+
+constexpr std::uint32_t kBlockMagic = 0x00ABCDEF;
+constexpr std::uint32_t kBlockEnd = 0x01234567;
+constexpr std::size_t kBlockHead = 16;
+constexpr std::size_t kStreamHead = 19;
+constexpr std::size_t kMaxDepth = 8;
+constexpr std::uint32_t kMeshFlag16Bit = 2; // NX_MF_16_BIT_INDICES
+
+// The block types of the classes this reads.
+struct BlockTypes
+{
+    std::uint32_t sdk = 0;
+    std::uint32_t shapeDesc = 0;
+    std::uint32_t box = 0;
+    std::uint32_t sphere = 0;
+    std::uint32_t capsule = 0;
+    std::uint32_t mesh = 0;
+    std::uint32_t actor = 0;
+    // The same in every version seen.
+    std::uint32_t simpleMesh = 7;
+    std::uint32_t meshDesc = 9;
+    std::uint32_t groupsMask = 17;
+};
+
+// SDK 272 (0x110) is the 132 levels with an .opf; 281 (0x119) is 18 of the 26 core levels without one.
+constexpr BlockTypes kTypes[] = {
+    {.sdk = 272, .shapeDesc = 31, .box = 32, .sphere = 34, .capsule = 35, .mesh = 38, .actor = 41},
+    {.sdk = 281, .shapeDesc = 32, .box = 33, .sphere = 35, .capsule = 36, .mesh = 39, .actor = 42},
+};
+
+struct Block
+{
+    std::uint32_t type = 0;
+    std::size_t body = 0; // after the head
+    std::size_t end = 0;
+};
+
+// Reads fields in turn, and fails once at the first that runs past its end.
+class Cursor
+{
+  public:
+    Cursor(std::span<const std::byte> bytes, std::size_t at, std::size_t end) : bytes_(bytes.first(end)), at_(at)
+    {
+    }
+
+    template <class T> T Take()
+    {
+        const std::optional<T> value = ReadAt<T>(bytes_, at_);
+        if (!value)
+        {
+            failed_ = true;
+            return T{};
+        }
+        at_ += sizeof(T);
+        return *value;
+    }
+
+    void Skip(std::size_t count)
+    {
+        if (count > bytes_.size() - std::min(at_, bytes_.size()))
+        {
+            failed_ = true;
+            return;
+        }
+        at_ += count;
+    }
+
+    std::string String()
+    {
+        const auto length = Take<std::uint32_t>();
+        if (failed_ || length == 0)
+        {
+            return {};
+        }
+        const std::size_t from = at_;
+        Skip(std::size_t{length} + 1);
+        return failed_ ? std::string{} : std::string(reinterpret_cast<const char *>(bytes_.data()) + from, length);
+    }
+
+    // A pose as the stream has it: the turn's three rows, each followed by its translation's number.
+    Pose PoseOf()
+    {
+        Pose pose;
+        for (std::size_t row = 0; row < 3; ++row)
+        {
+            for (std::size_t column = 0; column < 3; ++column)
+            {
+                pose.rotation[(row * 3) + column] = Take<float>();
+            }
+            pose.translation[row] = Take<float>();
+        }
+        return pose;
+    }
+
+    bool Failed() const
+    {
+        return failed_;
+    }
+
+  private:
+    std::span<const std::byte> bytes_;
+    std::size_t at_;
+    bool failed_ = false;
+};
+
+class BinaryReader
+{
+  public:
+    BinaryReader(std::span<const std::byte> stream, StaticPhysics &out) : stream_(stream), out_(out)
+    {
+    }
+
+    // Returns false for a stream it cannot read whole.
+    bool Run()
+    {
+        if (stream_.size() < kStreamHead || std::memcmp(stream_.data(), "NXUSTREAM", 9) != 0)
+        {
+            return false;
+        }
+        const std::uint32_t sdk = ReadAt<std::uint32_t>(stream_, 11).value_or(0);
+        const auto *const found = std::ranges::find(kTypes, sdk, &BlockTypes::sdk);
+        if (found == std::end(kTypes))
+        {
+            return false;
+        }
+        types_ = *found;
+        const std::vector<Block> top = Children(kStreamHead, stream_.size());
+        for (const Block &block : top)
+        {
+            Visit(block, 0);
+        }
+        return !top.empty() && !failed_;
+    }
+
+    // Each actor's userProperties: its record's index, then its shapes'.
+    const std::vector<std::vector<std::int32_t>> &Records() const
+    {
+        return records_;
+    }
+
+  private:
+    // The blocks in a body, found by their heads: the fields before the first, and between blocks, are skipped. A
+    // head whose length does not fit the body is a stream cut short or damaged, which fails the read.
+    std::vector<Block> Children(std::size_t from, std::size_t end)
+    {
+        std::vector<Block> blocks;
+        const auto *bytes = reinterpret_cast<const std::uint8_t *>(stream_.data());
+        for (std::size_t at = from; at + kBlockHead <= end;)
+        {
+            const std::uint8_t *hit = std::find(bytes + at, bytes + end - kBlockHead + 1, std::uint8_t{0xEF});
+            at = static_cast<std::size_t>(hit - bytes);
+            if (at + kBlockHead > end || !IsHead(at))
+            {
+                ++at;
+                continue;
+            }
+            const std::uint32_t length = ReadAt<std::uint32_t>(stream_, at + 8).value_or(0);
+            if (length < kBlockHead || length > end - at)
+            {
+                failed_ = true;
+                return blocks;
+            }
+            blocks.push_back(Block{.type = ReadAt<std::uint32_t>(stream_, at + 4).value_or(0),
+                                   .body = at + kBlockHead,
+                                   .end = at + length});
+            at += length;
+        }
+        return blocks;
+    }
+
+    // Returns whether the bytes at `at` begin and end a block's head as every head does.
+    bool IsHead(std::size_t at) const
+    {
+        return ReadAt<std::uint32_t>(stream_, at) == kBlockMagic &&
+               ReadAt<std::uint32_t>(stream_, at + 12) == kBlockEnd;
+    }
+
+    Cursor Body(const Block &block) const
+    {
+        return {stream_, block.body, block.end};
+    }
+
+    // Finds the actors and meshes under the blocks that hold them: the collection and its scene.
+    void Visit(const Block &block, std::size_t depth)
+    {
+        if (block.type == types_.meshDesc)
+        {
+            ReadMesh(block);
+        }
+        else if (block.type == types_.actor)
+        {
+            ReadActor(block);
+        }
+        else if (depth < kMaxDepth)
+        {
+            for (const Block &child : Children(block.body, block.end))
+            {
+                Visit(child, depth + 1);
+            }
+        }
+    }
+
+    void ReadMesh(const Block &block)
+    {
+        Cursor head = Body(block);
+        TriangleMesh &mesh = out_.meshes.emplace_back();
+        mesh.id = head.String();
+        meshIds_[mesh.id] = static_cast<std::int32_t>(out_.meshes.size() - 1);
+        failed_ |= head.Failed();
+        for (const Block &child : Children(block.body, block.end))
+        {
+            if (child.type == types_.simpleMesh)
+            {
+                failed_ |= !ReadPointsAndTriangles(child, mesh);
+            }
+        }
+    }
+
+    // An NxSimpleTriangleMesh: the points, the triangles' indices, and the flags that say how wide they are.
+    bool ReadPointsAndTriangles(const Block &block, TriangleMesh &mesh) const
+    {
+        Cursor c = Body(block);
+        const std::size_t size = block.end - block.body;
+        const auto pointCount = c.Take<std::uint32_t>();
+        if (c.Failed() || size < 12 || pointCount > (size - 12) / sizeof(Point))
+        {
+            return false;
+        }
+        for (std::uint32_t i = 0; i < pointCount; ++i)
+        {
+            Point point;
+            point[0] = c.Take<float>();
+            point[1] = c.Take<float>();
+            point[2] = c.Take<float>();
+            mesh.points.push_back(point);
+        }
+        const auto triangleCount = c.Take<std::uint32_t>();
+        const std::uint32_t flags = ReadAt<std::uint32_t>(stream_, block.end - 4).value_or(0);
+        const std::size_t width = (flags & kMeshFlag16Bit) != 0 ? 2 : 4;
+        const std::size_t expected =
+            12 + (std::size_t{pointCount} * sizeof(Point)) + (std::size_t{triangleCount} * 3 * width);
+        if (c.Failed() || size != expected)
+        {
+            return false;
+        }
+        for (std::uint32_t i = 0; i < triangleCount; ++i)
+        {
+            std::array<std::uint32_t, 3> triangle{};
+            for (std::uint32_t &index : triangle)
+            {
+                index = width == 2 ? c.Take<std::uint16_t>() : c.Take<std::uint32_t>();
+            }
+            mesh.triangles.push_back(triangle);
+        }
+        return !c.Failed();
+    }
+
+    // An NxActorDesc: its fields, then its shapes in order.
+    void ReadActor(const Block &block)
+    {
+        Cursor c = Body(block);
+        Actor &actor = out_.actors.emplace_back();
+        actor.id = c.String();
+        records_.push_back(RecordIndices(c.String()));
+        actor.hasBody = c.Take<std::uint32_t>() != 0;
+        actor.name = c.String();
+        actor.globalPose = c.PoseOf();
+        c.Skip(16 + 4 + 4); // a quaternion (0, 0, 0, 1) in every actor, the density, the flags
+        actor.group = c.Take<std::uint32_t>();
+        failed_ |= c.Failed();
+        for (const Block &child : Children(block.body, block.end))
+        {
+            if (const std::optional<Kind> kind = KindOfBlock(child.type))
+            {
+                actor.shapes.push_back(ReadShape(child, *kind));
+            }
+            else
+            {
+                failed_ = true;
+            }
+        }
+    }
+
+    std::optional<Kind> KindOfBlock(std::uint32_t type) const
+    {
+        if (type == types_.box)
+        {
+            return Kind::Box;
+        }
+        if (type == types_.sphere)
+        {
+            return Kind::Sphere;
+        }
+        if (type == types_.capsule)
+        {
+            return Kind::Capsule;
+        }
+        if (type == types_.mesh)
+        {
+            return Kind::Mesh;
+        }
+        return std::nullopt;
+    }
+
+    // A shape block: its own size or mesh, then the NxShapeDesc block it holds.
+    StaticShape ReadShape(const Block &block, Kind kind)
+    {
+        StaticShape shape;
+        shape.kind = kind;
+        Cursor c = Body(block);
+        switch (kind)
+        {
+        case Kind::Box:
+            shape.dimensions = {c.Take<float>(), c.Take<float>(), c.Take<float>()};
+            break;
+        case Kind::Sphere:
+            shape.radius = c.Take<float>();
+            break;
+        case Kind::Capsule:
+            shape.radius = c.Take<float>();
+            shape.height = c.Take<float>();
+            break;
+        default: {
+            const auto found = meshIds_.find(c.String());
+            shape.mesh = found == meshIds_.end() ? -1 : found->second;
+            break;
+        }
+        }
+        failed_ |= c.Failed();
+        for (const Block &child : Children(block.body, block.end))
+        {
+            if (child.type == types_.shapeDesc)
+            {
+                ReadShapeDesc(child, shape);
+            }
+        }
+        return shape;
+    }
+
+    void ReadShapeDesc(const Block &block, StaticShape &shape)
+    {
+        Cursor c = Body(block);
+        c.String(); // userProperties
+        shape.name = c.String();
+        shape.localPose = c.PoseOf();
+        c.Skip(16 + 4); // a quaternion (0, 0, 0, 1) in every shape, the shape flags
+        shape.group = c.Take<std::uint32_t>();
+        failed_ |= c.Failed();
+        for (const Block &child : Children(block.body, block.end))
+        {
+            if (child.type == types_.groupsMask)
+            {
+                Cursor mask = Body(child);
+                for (std::uint32_t &bits : shape.groupsMask)
+                {
+                    bits = mask.Take<std::uint32_t>();
+                }
+                failed_ |= mask.Failed();
+            }
+        }
+    }
+
+    std::span<const std::byte> stream_;
+    StaticPhysics &out_;
+    BlockTypes types_;
+    bool failed_ = false;
+    std::map<std::string, std::int32_t, std::less<>> meshIds_;
+    std::vector<std::vector<std::int32_t>> records_;
+};
+
+// Reads the actors and meshes of a binary stream into out, which keeps its records and nothing of the stream's if
+// the stream is not one this reads.
+void ReadBinary(std::span<const std::byte> stream, StaticPhysics &out)
+{
+    StaticPhysics read;
+    BinaryReader reader(stream, read);
+    if (!reader.Run())
+    {
+        return;
+    }
+    out.meshes = std::move(read.meshes);
+    out.actors = std::move(read.actors);
+    out.binary = true;
+    Link(out, reader.Records());
 }
 
 // The records after the stream; false if they do not end the bytes exactly.
@@ -531,6 +924,10 @@ std::optional<StaticPhysics> StaticPhysicsOf(std::span<const std::byte> bytes)
         Reader reader(stream, out);
         reader.Run();
         Link(out, reader.Records());
+    }
+    else
+    {
+        ReadBinary(bytes.subspan(8, *length), out);
     }
     return out;
 }

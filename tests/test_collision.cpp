@@ -4,20 +4,26 @@
 #include "dao/core/Collision.h"
 #include "dao/core/Gff4.h"
 #include "dao/core/Grid.h"
+#include "dao/core/Install.h"
 #include "gff4_builder.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -256,6 +262,7 @@ TEST_CASE("a binary stream gives the records alone, and bytes framed otherwise n
     const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(binary);
     REQUIRE(physics.has_value());
     CHECK_FALSE(physics->xml);
+    CHECK_FALSE(physics->binary);
     CHECK(physics->actors.empty());
     REQUIRE(physics->actorRecords.size() == 1);
     CHECK(physics->actorRecords[0].room == 1325);
@@ -618,5 +625,621 @@ TEST_CASE("the game's .phy in game/collision, when there, the door's, crate's an
         CHECK(masks[0x81002020] == 3429);
         CHECK(masks[0x80010000] == 2116);
         CHECK(masks[0x81000004] == 656);
+    }
+}
+
+namespace
+{
+
+// What differs between two reads of one level's static physics, by the field, with the first place of each.
+class Differences
+{
+  public:
+    void Note(const std::string &field, const std::string &where)
+    {
+        for (Entry &entry : entries_)
+        {
+            if (entry.field == field)
+            {
+                ++entry.count;
+                return;
+            }
+        }
+        entries_.push_back({field, 1, where});
+    }
+
+    // Notes the field where the two are not equal.
+    template <class T> void Equal(const char *field, const T &a, const T &b, const std::string &where)
+    {
+        if (!(a == b))
+        {
+            Note(field, where);
+        }
+    }
+
+    // Notes the field where two lists of numbers differ other than as the .opf's text would: it writes a float with
+    // nine decimals (0.00000182 for 1.82e-6, and trailing zeros left off), so a is the XML's number and b is the
+    // binary's, which printed that way and read again must give a. A number exactly between two nine-decimal ones
+    // (-0.0087890625) is rounded away from zero there, where printf rounds it to even, so both are tried. One that is
+    // not b itself is counted in rounded().
+    template <class T> void Near(const char *field, const T &a, const T &b, const std::string &where)
+    {
+        for (std::size_t i = 0; i < a.size() && i < b.size(); ++i)
+        {
+            const auto value = static_cast<double>(b[i]);
+            const double away = std::nextafter(value, value < 0 ? -HUGE_VAL : HUGE_VAL);
+            if (a[i] != b[i] && a[i] != Printed(value) && a[i] != Printed(away))
+            {
+                Note(field, where + " " + std::to_string(a[i]) + " against " + std::to_string(b[i]));
+                return;
+            }
+            rounded_ += a[i] == b[i] ? 0 : 1;
+        }
+    }
+
+    std::size_t rounded() const
+    {
+        return rounded_;
+    }
+
+    std::size_t Total() const
+    {
+        std::size_t total = 0;
+        for (const Entry &entry : entries_)
+        {
+            total += entry.count;
+        }
+        return total;
+    }
+
+    std::string Summary() const
+    {
+        std::string text;
+        for (const Entry &entry : entries_)
+        {
+            text += entry.field + " x" + std::to_string(entry.count) + " (first " + entry.first + ") ";
+        }
+        return text;
+    }
+
+  private:
+    // A number written with nine decimals and read again as a float.
+    static float Printed(double value)
+    {
+        std::array<char, 400> text{};
+        std::snprintf(text.data(), text.size(), "%.9f", value);
+        return std::strtof(text.data(), nullptr);
+    }
+
+    struct Entry
+    {
+        std::string field;
+        std::size_t count;
+        std::string first;
+    };
+
+    std::size_t rounded_ = 0;
+    std::vector<Entry> entries_;
+};
+
+void CompareShapes(const collision::Actor &a, const collision::Actor &b, Differences &out)
+{
+    if (a.shapes.size() != b.shapes.size())
+    {
+        out.Note("shape count", a.id);
+        return;
+    }
+    for (std::size_t i = 0; i < a.shapes.size(); ++i)
+    {
+        const collision::StaticShape &x = a.shapes[i];
+        const collision::StaticShape &y = b.shapes[i];
+        const std::string where = a.id + "/" + std::to_string(i);
+        out.Equal("shape name", x.name, y.name, where);
+        out.Equal("shape kind", x.kind, y.kind, where);
+        out.Near("shape dimensions", x.dimensions, y.dimensions, where);
+        out.Near("shape radius", std::array{x.radius}, std::array{y.radius}, where);
+        out.Near("shape height", std::array{x.height}, std::array{y.height}, where);
+        out.Equal("shape mesh", x.mesh, y.mesh, where);
+        out.Near("shape pose turn", x.localPose.rotation, y.localPose.rotation, where);
+        out.Near("shape pose place", x.localPose.translation, y.localPose.translation, where);
+        out.Equal("shape group", x.group, y.group, where);
+        out.Equal("shape mask", x.groupsMask, y.groupsMask, where);
+        out.Equal("shape record", x.record, y.record, where);
+    }
+}
+
+Differences Compare(const collision::StaticPhysics &xml, const collision::StaticPhysics &binary)
+{
+    Differences out;
+    out.Equal("mesh count", xml.meshes.size(), binary.meshes.size(), "");
+    for (std::size_t i = 0; i < xml.meshes.size() && i < binary.meshes.size(); ++i)
+    {
+        const std::string &where = xml.meshes[i].id;
+        out.Equal("mesh id", xml.meshes[i].id, binary.meshes[i].id, where);
+        for (std::size_t p = 0; p < xml.meshes[i].points.size() && p < binary.meshes[i].points.size(); ++p)
+        {
+            out.Near("mesh points", xml.meshes[i].points[p], binary.meshes[i].points[p], where);
+        }
+        out.Equal("mesh point count", xml.meshes[i].points.size(), binary.meshes[i].points.size(), where);
+        out.Equal("mesh triangles", xml.meshes[i].triangles, binary.meshes[i].triangles, where);
+    }
+    out.Equal("actor count", xml.actors.size(), binary.actors.size(), "");
+    for (std::size_t i = 0; i < xml.actors.size() && i < binary.actors.size(); ++i)
+    {
+        const collision::Actor &x = xml.actors[i];
+        const collision::Actor &y = binary.actors[i];
+        out.Equal("actor id", x.id, y.id, x.id);
+        out.Equal("actor name", x.name, y.name, x.id);
+        out.Equal("actor hasBody", x.hasBody, y.hasBody, x.id);
+        out.Near("actor pose turn", x.globalPose.rotation, y.globalPose.rotation, x.id);
+        out.Near("actor pose place", x.globalPose.translation, y.globalPose.translation, x.id);
+        out.Equal("actor group", x.group, y.group, x.id);
+        out.Equal("actor record", x.record, y.record, x.id);
+        out.Equal("actor room", x.room, y.room, x.id);
+        CompareShapes(x, y, out);
+    }
+    out.Equal("actor records", xml.actorRecords.size(), binary.actorRecords.size(), "");
+    out.Equal("shape records", xml.shapeRecords.size(), binary.shapeRecords.size(), "");
+    return out;
+}
+
+// A level's static physics from its .arl's EnvStatPhysData.
+std::optional<collision::StaticPhysics> ArlPhysics(const std::vector<std::byte> &arlBytes)
+{
+    const std::optional<gff4::File> arl = gff4::File::Parse(arlBytes);
+    const std::optional<dao::core::navigation::Grid> grid = arl ? dao::core::navigation::GridOf(*arl) : std::nullopt;
+    if (!grid || grid->collision.empty())
+    {
+        return std::nullopt;
+    }
+    return collision::StaticPhysicsOf(std::as_bytes(std::span(grid->collision)));
+}
+
+} // namespace
+
+// Every level of the GOG install the index can read, its .arl's binary stream against its .opf's XML where it has
+// both (DAOLib #197). Hidden, as it reads the install: dao_core_tests "[collision-real]".
+TEST_CASE("on the GOG install, the .arl's binary stream reads as the .opf's XML does", "[.][collision-real]")
+{
+    const std::filesystem::path game = L"C:/Program Files (x86)/GOG Galaxy/Games/Dragon Age Origins";
+    if (!std::filesystem::exists(game / L"bin_ship"))
+    {
+        SKIP("no GOG install here");
+    }
+    const auto index = dao::core::install::Index::Build(game, {});
+    std::size_t levels = 0;
+    std::size_t compared = 0;
+    std::size_t same = 0;
+    std::size_t withShapes = 0;
+    std::size_t unreadable = 0;
+    std::size_t noStream = 0;
+    std::size_t actors = 0;
+    std::size_t shapes = 0;
+    std::size_t triangles = 0;
+    std::size_t roundedNumbers = 0;
+    for (const auto &[name, copies] : index->Resources())
+    {
+        if (!name.ends_with(".arl"))
+        {
+            continue;
+        }
+        if (copies.empty() || !index->Readable(copies.front()))
+        {
+            ++unreadable;
+            continue;
+        }
+        INFO(name);
+        const std::optional<std::vector<std::byte>> arlBytes = index->Read(copies.front());
+        REQUIRE(arlBytes.has_value());
+        const std::optional<collision::StaticPhysics> binary = ArlPhysics(*arlBytes);
+        if (!binary)
+        {
+            ++noStream;
+            continue;
+        }
+        ++levels;
+        CHECK(binary->binary);
+        std::size_t shapeCount = 0;
+        for (const collision::Actor &actor : binary->actors)
+        {
+            shapeCount += actor.shapes.size();
+            for (const collision::StaticShape &shape : actor.shapes)
+            {
+                CHECK(shape.record >= 0);
+            }
+        }
+        // The stream's counts against the records after it, which the engine points userData at.
+        CHECK(binary->actors.size() == binary->actorRecords.size());
+        CHECK(shapeCount == binary->shapeRecords.size());
+        actors += binary->actors.size();
+        shapes += shapeCount;
+        withShapes += shapeCount > 0 ? 1 : 0;
+        for (const collision::TriangleMesh &mesh : binary->meshes)
+        {
+            triangles += mesh.triangles.size();
+        }
+        const auto *opf = index->Find(name.substr(0, name.size() - 4) + ".opf");
+        if (opf == nullptr || !index->Readable(opf->front()))
+        {
+            continue;
+        }
+        const std::optional<std::vector<std::byte>> opfBytes = index->Read(opf->front());
+        REQUIRE(opfBytes.has_value());
+        const std::optional<collision::StaticPhysics> xml = collision::StaticPhysicsOf(*opfBytes);
+        REQUIRE(xml.has_value());
+        REQUIRE(xml->xml);
+        ++compared;
+        const Differences differences = Compare(*xml, *binary);
+        same += differences.Total() == 0 ? 1 : 0;
+        roundedNumbers += differences.rounded();
+        if (differences.Total() != 0)
+        {
+            WARN(name << ": " << differences.Summary());
+        }
+        CHECK(differences.Total() == 0);
+    }
+    WARN(levels << " levels with a stream, " << withShapes << " with shapes read, " << compared
+                << " compared with an .opf, " << same << " the same; " << unreadable << " .arl unreadable, " << noStream
+                << " without a stream; " << actors << " actors, " << shapes << " shapes, " << triangles
+                << " triangles; " << roundedNumbers << " groups of numbers differ only by the .opf's rounding");
+}
+
+namespace
+{
+
+using Bytes = std::vector<std::byte>;
+
+void Put(Bytes &out, std::uint32_t value)
+{
+    Word(out, value);
+}
+
+void Put(Bytes &out, float value)
+{
+    std::uint32_t word = 0;
+    std::memcpy(&word, &value, 4);
+    Word(out, word);
+}
+
+// A string as NXU's binary stream has it: its length, then for a length over 0 its characters and a NUL.
+void PutString(Bytes &out, std::string_view text)
+{
+    Put(out, static_cast<std::uint32_t>(text.size()));
+    if (!text.empty())
+    {
+        for (const char c : text)
+        {
+            out.push_back(static_cast<std::byte>(c));
+        }
+        out.push_back(std::byte{0});
+    }
+}
+
+// A pose as the stream has it: each row of the turn, then that row's translation.
+void PutPose(Bytes &out, const collision::Pose &pose)
+{
+    for (std::size_t row = 0; row < 3; ++row)
+    {
+        for (std::size_t column = 0; column < 3; ++column)
+        {
+            Put(out, pose.rotation[(row * 3) + column]);
+        }
+        Put(out, pose.translation[row]);
+    }
+}
+
+void Append(Bytes &out, const Bytes &more)
+{
+    out.insert(out.end(), more.begin(), more.end());
+}
+
+// A block: its head (0x00ABCDEF, the type, the length with the head, 0x01234567), its fields, the blocks it holds.
+Bytes BlockOf(std::uint32_t type, const Bytes &fields, const std::vector<Bytes> &children = {})
+{
+    Bytes body = fields;
+    for (const Bytes &child : children)
+    {
+        Append(body, child);
+    }
+    Bytes out;
+    Put(out, std::uint32_t{0x00ABCDEF});
+    Put(out, type);
+    Put(out, static_cast<std::uint32_t>(16 + body.size()));
+    Put(out, std::uint32_t{0x01234567});
+    Append(out, body);
+    return out;
+}
+
+// The block types of the classes the reader takes, which move with the SDK's version.
+struct Numbers
+{
+    std::uint32_t sdk;
+    std::uint32_t shapeDesc;
+    std::uint32_t box;
+    std::uint32_t sphere;
+    std::uint32_t capsule;
+    std::uint32_t mesh;
+    std::uint32_t actor;
+};
+constexpr Numbers kSdk272{272, 31, 32, 34, 35, 38, 41};
+constexpr Numbers kSdk281{281, 32, 33, 35, 36, 39, 42};
+
+// An NxShapeDesc as the stream has it: the fields before its groups mask, the mask in a block of its own.
+Bytes ShapeDescOf(const Numbers &n, std::string_view name, const collision::Pose &pose, std::uint32_t group,
+                  std::uint32_t bits0)
+{
+    Bytes fields;
+    PutString(fields, "");
+    PutString(fields, name);
+    PutPose(fields, pose);
+    for (const float x : {0.0F, 0.0F, 0.0F, 1.0F})
+    {
+        Put(fields, x);
+    }
+    Put(fields, std::uint32_t{8}); // the shape flags
+    Put(fields, group);
+    fields.resize(fields.size() + 16); // the material, the densities and the skin width
+    Bytes mask;
+    for (const std::uint32_t bits : {bits0, 0U, 0U, 0U})
+    {
+        Put(mask, bits);
+    }
+    return BlockOf(n.shapeDesc, fields, {BlockOf(17, mask)});
+}
+
+collision::Pose Turned(float x, float y, float z)
+{
+    collision::Pose pose;
+    pose.rotation = {0, 1, 0, -1, 0, 0, 0, 0, 1};
+    pose.translation = {x, y, z};
+    return pose;
+}
+
+// A mesh as the stream has it: a block with its name and a block of the points, the triangles and the flags.
+Bytes MeshOf(std::string_view id, bool indices16)
+{
+    Bytes head;
+    PutString(head, id);
+    head.resize(head.size() + 40); // the description's other fields
+    Bytes mesh;
+    Put(mesh, std::uint32_t{4});
+    for (const float x : {0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 1.0F})
+    {
+        Put(mesh, x);
+    }
+    Put(mesh, std::uint32_t{2});
+    for (const std::uint32_t index : {0U, 1U, 2U, 3U, 2U, 1U})
+    {
+        if (indices16)
+        {
+            mesh.push_back(static_cast<std::byte>(index));
+            mesh.push_back(std::byte{0});
+        }
+        else
+        {
+            Put(mesh, index);
+        }
+    }
+    Put(mesh, std::uint32_t{indices16 ? 2U : 0U});
+    return BlockOf(9, head, {BlockOf(7, mesh)});
+}
+
+// A level as lak302d's stream is laid out: a collection holding the SDK's description, the meshes and a scene of
+// actors; the first a wall of a box and a sphere turned about z, the second a prop of a capsule and a mesh.
+Bytes BinaryStream(const Numbers &n, bool indices16 = false, std::uint32_t boxBlockType = 0)
+{
+    Bytes wall;
+    PutString(wall, "Actor_0");
+    PutString(wall, "1,0,1");
+    Put(wall, std::uint32_t{0});
+    PutString(wall, "tvi_smwall_01_0.GOB");
+    PutPose(wall, Turned(12, -76, 0));
+    for (const float x : {0.0F, 0.0F, 0.0F, 1.0F})
+    {
+        Put(wall, x);
+    }
+    Put(wall, 10.0F);
+    Put(wall, std::uint32_t{0x40});
+    Put(wall, std::uint32_t{5});
+    wall.resize(wall.size() + 2);
+    Bytes box;
+    for (const float x : {4.0F, 0.5F, 2.75F})
+    {
+        Put(box, x);
+    }
+    Bytes sphere;
+    Put(sphere, 0.25F);
+    collision::Pose raised;
+    raised.translation = {0, 0, 2.5F};
+    const Bytes wallBlock = BlockOf(
+        n.actor, wall,
+        {BlockOf(boxBlockType != 0 ? boxBlockType : n.box, box, {ShapeDescOf(n, "ColNWBox", raised, 5, 0x81002020)}),
+         BlockOf(n.sphere, sphere, {ShapeDescOf(n, "Sphere", {}, 5, 0x80002020)})});
+
+    Bytes prop;
+    PutString(prop, "Actor_1");
+    PutString(prop, "0,2,3");
+    Put(prop, std::uint32_t{0});
+    PutString(prop, "prp_a.GOB");
+    PutPose(prop, {});
+    for (const float x : {0.0F, 0.0F, 0.0F, 1.0F})
+    {
+        Put(prop, x);
+    }
+    Put(prop, 10.0F);
+    Put(prop, std::uint32_t{0x40});
+    Put(prop, std::uint32_t{0});
+    prop.resize(prop.size() + 8);
+    Bytes capsule;
+    Put(capsule, 0.5F);
+    Put(capsule, 3.0F);
+    Put(capsule, std::uint32_t{0});
+    Bytes meshShape;
+    PutString(meshShape, "TriangleMesh_1");
+    meshShape.resize(meshShape.size() + 8);
+    const Bytes propBlock = BlockOf(n.actor, prop,
+                                    {BlockOf(n.capsule, capsule, {ShapeDescOf(n, "Capsule", {}, 5, 0x01001020)}),
+                                     BlockOf(n.mesh, meshShape, {ShapeDescOf(n, "Mesh", {}, 5, 0x80010000)})});
+
+    Bytes collectionFields;
+    PutString(collectionFields, "Physics");
+    Put(collectionFields, std::uint32_t{0});
+    Put(collectionFields, n.sdk);
+    Put(collectionFields, std::uint32_t{103});
+    Bytes description;
+    for (const std::uint32_t x : {65536U, 256U, 2048U})
+    {
+        Put(description, x);
+    }
+    Bytes sceneFields(44, std::byte{0});
+    const Bytes collection = BlockOf(n.sdk == 272 ? 99 : 106, collectionFields,
+                                     {BlockOf(n.sdk == 272 ? 98 : 105, description), MeshOf("TriangleMesh_0", false),
+                                      MeshOf("TriangleMesh_1", indices16),
+                                      BlockOf(n.sdk == 272 ? 95 : 102, sceneFields, {wallBlock, propBlock})});
+
+    Bytes stream;
+    for (const char c : std::string_view("NXUSTREAM\0\0", 11))
+    {
+        stream.push_back(static_cast<std::byte>(c));
+    }
+    Put(stream, n.sdk);
+    Put(stream, std::uint32_t{103});
+    Append(stream, BlockOf(0, {}, {collection}));
+    Append(stream, BlockOf(n.sdk == 272 ? 101 : 108, {}));
+    return stream;
+}
+
+Bytes BinaryLevel(const Bytes &stream)
+{
+    return Framed(std::string_view(reinterpret_cast<const char *>(stream.data()), stream.size()),
+                  {{-1, 0, 1103, 1}, {-1, 0, 1325, 3}}, {{0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}});
+}
+
+void CheckBinaryLevel(const collision::StaticPhysics &physics)
+{
+    CHECK_FALSE(physics.xml);
+    CHECK(physics.binary);
+    REQUIRE(physics.meshes.size() == 2);
+    CHECK(physics.meshes[1].id == "TriangleMesh_1");
+    CHECK(physics.meshes[0].points.size() == 4);
+    CHECK(physics.meshes[0].points[1] == Point{1, 0, 0});
+    REQUIRE(physics.meshes[0].triangles.size() == 2);
+    CHECK(physics.meshes[0].triangles[1] == std::array<std::uint32_t, 3>{3, 2, 1});
+    CHECK(physics.meshes[1].triangles == physics.meshes[0].triangles);
+
+    REQUIRE(physics.actors.size() == 2);
+    const collision::Actor &wall = physics.actors[0];
+    CHECK(wall.id == "Actor_0");
+    CHECK(wall.name == "tvi_smwall_01_0.GOB");
+    CHECK_FALSE(wall.hasBody);
+    CHECK(wall.group == 5);
+    CHECK(wall.globalPose.rotation == std::array<float, 9>{0, 1, 0, -1, 0, 0, 0, 0, 1});
+    CHECK(wall.globalPose.translation == Point{12, -76, 0});
+    CHECK(wall.record == 1);
+    CHECK(wall.room == 1325);
+    REQUIRE(wall.shapes.size() == 2);
+    CHECK(wall.shapes[0].kind == collision::Kind::Box);
+    CHECK(wall.shapes[0].name == "ColNWBox");
+    CHECK(wall.shapes[0].dimensions == Point{4, 0.5F, 2.75F});
+    CHECK(wall.shapes[0].localPose.translation == Point{0, 0, 2.5F});
+    CHECK(wall.shapes[0].group == 5);
+    CHECK(wall.shapes[0].groupsMask == std::array<std::uint32_t, 4>{0x81002020, 0, 0, 0});
+    CHECK(wall.shapes[0].record == 0);
+    CHECK(wall.shapes[1].kind == collision::Kind::Sphere);
+    CHECK(wall.shapes[1].radius == 0.25F);
+    CHECK(wall.shapes[1].groupsMask[0] == 0x80002020);
+    CHECK(wall.shapes[1].record == 1);
+
+    const collision::Actor &prop = physics.actors[1];
+    CHECK(prop.record == 0);
+    CHECK(prop.room == 1103);
+    CHECK(prop.group == 0);
+    REQUIRE(prop.shapes.size() == 2);
+    CHECK(prop.shapes[0].kind == collision::Kind::Capsule);
+    CHECK(prop.shapes[0].radius == 0.5F);
+    CHECK(prop.shapes[0].height == 3.0F);
+    CHECK(prop.shapes[0].groupsMask[0] == 0x01001020);
+    CHECK(prop.shapes[0].record == 2);
+    CHECK(prop.shapes[1].kind == collision::Kind::Mesh);
+    CHECK(prop.shapes[1].mesh == 1);
+    CHECK(prop.shapes[1].groupsMask[0] == 0x80010000);
+    CHECK(prop.shapes[1].record == 3);
+    CHECK(physics.actorRecords.size() == 2);
+    CHECK(physics.shapeRecords.size() == 4);
+}
+
+} // namespace
+
+TEST_CASE("a binary stream's meshes, actors, shapes, poses and masks are read as the XML's are", "[collision]")
+{
+    const Bytes bytes = BinaryLevel(BinaryStream(kSdk272));
+    const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(bytes);
+    REQUIRE(physics.has_value());
+    CheckBinaryLevel(*physics);
+}
+
+TEST_CASE("a binary stream of the later SDK has its shapes and actors under other block types", "[collision]")
+{
+    const Bytes bytes = BinaryLevel(BinaryStream(kSdk281));
+    const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(bytes);
+    REQUIRE(physics.has_value());
+    CheckBinaryLevel(*physics);
+}
+
+TEST_CASE("a mesh's indices are 16 bits wide when its flags say so", "[collision]")
+{
+    const Bytes bytes = BinaryLevel(BinaryStream(kSdk272, true));
+    const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(bytes);
+    REQUIRE(physics.has_value());
+    CheckBinaryLevel(*physics);
+}
+
+TEST_CASE("a binary stream it cannot read whole leaves the records and no shapes", "[collision]")
+{
+    SECTION("a version of the SDK it has no block types for")
+    {
+        Bytes stream = BinaryStream(kSdk272);
+        const std::uint32_t other = 300;
+        std::memcpy(stream.data() + 11, &other, 4);
+        const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(BinaryLevel(stream));
+        REQUIRE(physics.has_value());
+        CHECK_FALSE(physics->binary);
+        CHECK(physics->actors.empty());
+        CHECK(physics->meshes.empty());
+        CHECK(physics->actorRecords.size() == 2);
+    }
+    SECTION("a shape of a kind it does not read")
+    {
+        const std::optional<collision::StaticPhysics> physics =
+            collision::StaticPhysicsOf(BinaryLevel(BinaryStream(kSdk272, false, 37)));
+        REQUIRE(physics.has_value());
+        CHECK_FALSE(physics->binary);
+        CHECK(physics->actors.empty());
+        CHECK(physics->shapeRecords.size() == 4);
+    }
+    SECTION("a mesh whose points and triangles do not fill its block")
+    {
+        Bytes stream = BinaryStream(kSdk272);
+        // The first mesh's point count, 4 after its name block's head: raise it past what the block holds.
+        const std::array<std::uint8_t, 4> marker{0x04, 0, 0, 0};
+        const auto at =
+            std::search(stream.begin() + 100, stream.end(), reinterpret_cast<const std::byte *>(marker.data()),
+                        reinterpret_cast<const std::byte *>(marker.data()) + 4);
+        REQUIRE(at != stream.end());
+        *at = std::byte{0x40};
+        const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(BinaryLevel(stream));
+        REQUIRE(physics.has_value());
+        CHECK_FALSE(physics->binary);
+        CHECK(physics->meshes.empty());
+    }
+    SECTION("a stream cut short")
+    {
+        Bytes stream = BinaryStream(kSdk272);
+        stream.resize(stream.size() / 2);
+        const std::optional<collision::StaticPhysics> physics = collision::StaticPhysicsOf(BinaryLevel(stream));
+        REQUIRE(physics.has_value());
+        CHECK_FALSE(physics->binary);
+        CHECK(physics->actors.empty());
+        CHECK(physics->actorRecords.size() == 2);
     }
 }

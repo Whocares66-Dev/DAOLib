@@ -10,9 +10,10 @@
 // 16-byte actor records, a u32 count and as many 12-byte shape records. The
 // engine loads the same collection from the .arl's EnvStatPhys (3744)
 // EnvStatPhysData (3745), dao/core/Grid.h's Grid::collision, framed the same
-// way but with the stream in NXU's binary form, which this reads the records
-// of and not the stream. An actor's userProperties are "a,b,c...": its
-// record's index, then each of its shapes' in turn.
+// way but with the stream in NXU's binary form (DAOLib #197), which this reads
+// as it does the XML, into the same structures: 81 of the 213 levels have no
+// .opf, only that. An actor's userProperties are "a,b,c...": its record's
+// index, then each of its shapes' in turn.
 //
 // A placeable's shapes are in its model's <model>.phy, GFF4 "PHY " in
 // modelhierarchies.erf: a tree of nodes (MMHChildren) in which each "cobj"
@@ -142,7 +143,8 @@ struct ShapeRecord
 // A level's static physics.
 struct StaticPhysics
 {
-    bool xml = false; // the stream is XML, which the meshes and actors are read from; false for a binary stream
+    bool xml = false;    // the stream is XML, which the meshes and actors are read from
+    bool binary = false; // the stream is NXU's binary form, which they are read from; neither: the records alone
     std::vector<TriangleMesh> meshes;
     std::vector<Actor> actors;
     std::vector<ActorRecord> actorRecords;
@@ -150,7 +152,7 @@ struct StaticPhysics
 };
 
 // Returns a level's static physics from an .opf's bytes or EnvStatPhysData's; nothing if they are not so framed.
-// A binary stream gives the records alone.
+// A binary stream of a version this has no block numbers for, or that is damaged, gives the records alone.
 std::optional<StaticPhysics> StaticPhysicsOf(std::span<const std::byte> bytes);
 
 // One shape of a placeable's model.

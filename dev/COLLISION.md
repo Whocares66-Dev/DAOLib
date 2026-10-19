@@ -2,7 +2,7 @@
 
 Read 2026-10-18 by lib-agent-2 (with a subagent) in the GOG exe (`tools\daoexe.py`, capstone scans) and vanilla's files (ghilana, `tools\gff4.py`), for DAOParagonEngine. Nothing was run in the game. **Checked** means seen in the code or the files. **Inferred** means a reading of purpose. Level used: the Circle tower basement `bhm700ar_tower_basement.are`, whose `Layout` is `lak302d` (12 rooms, `packages/core/env/lak302d.arl` and `.opf`), and `oth000d`.
 
-The reader is `dao/core/Collision.h` (#189): a level's `.opf` (its actors, shapes, meshes and records; of the `.arl`'s binary copy, the records alone) and a placeable's `.phy` shapes with the mask the engine builds from them. Only 132 of the 213 levels have an `.opf`: the add-ins' 55 levels and 26 of core's (brc201d, den000d, den200d, hrt000d, lak100n, orz100d, orz800d, ost100d among them) have only the `.arl`'s binary stream, which is not read yet. In outdoor levels the actor records' room ids are not `.rml` rooms: oth000d's are -1 and values like 0x10000, 0x10001 … 0x50004, inferred to be terrain chunks.
+The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, from its `.opf` or from the `.arl`'s binary copy of it (its actors, shapes, meshes and records), and a placeable's `.phy` shapes with the mask the engine builds from them. Only 132 of the 213 levels have an `.opf`: the add-ins' 55 levels and 26 of core's (brc201d, den000d, den200d, hrt000d, lak100n, orz100d, orz800d, ost100d among them) have only the `.arl`. Of those 81, 73 have the binary stream, read since #197 (section 4), and 8 have none (brc201d, combat2, den510c, lak519d, orz703d, rmtst, rmtst01, rmtst03: no `EnvStatPhys` at all, or an empty one). In outdoor levels the actor records' room ids are not `.rml` rooms: oth000d's are -1 and values like 0x10000, 0x10001 … 0x50004, inferred to be terrain chunks.
 
 
 ## 1. Static collision and the ray's filter
@@ -34,7 +34,7 @@ The reader is `dao/core/Collision.h` (#189): a level's `.opf` (its actors, shape
   - u32 n, then n 16-byte actor records;
   - u32 m, then m 12-byte shape records.
 - For lak302d both copies have 964 actors, 1,278 shapes and identical actor records (checked). The masks were compared in the XML only.
-- No code reading `.opf` was found (no string), so it is inferred to be the toolset's export. **For the port, reading the `.opf` XML is equivalent and easier.**
+- No code reading `.opf` was found (no string), so it is inferred to be the toolset's export. Reading the `.opf` XML is equivalent where there is one; the binary stream (section 4) is the one every level with physics has.
 - **The load changes no mask** (checked). For each actor, `NXU_notifyActor` (`UserDataEncoder` slot 6, `0x0082A6F0`) does this:
   - It parses the actor's `userProperties` ("a,b,c…", `sscanf "%d"` with ","), sets actor→userData = &actorRecords[a], and gives each shape in turn shape→userData = &shapeRecords[next].
   - Then it calls `shape->setGroup(5)` (NxShape slot 2, `push 5`).
@@ -139,3 +139,51 @@ The reader is `dao/core/Collision.h` (#189): a level's `.opf` (its actors, shape
   - 15 is past the 12-room list.
   - Its values match the actor records' 4th field (0–15), inferred to be the floor's sound material.
 - **For the port:** take a creature's room by casting down from 2 m above its feet onto the static shapes (bits0 & 0x20) and reading the hit actor's room id from the `.opf`'s actor record. Test reachability by walking `EnvRoomConnectivityList` through passable doors keyed by the `.are`'s RoomID pairs.
+
+## 4. The `.arl`'s binary stream (#197)
+
+Read 2026-10-19 from the files, not the exe: the stream was laid against the `.opf`'s XML of all 132 levels that have both, and `dao/core/Collision.cpp`'s reader gives the same actors, shapes, poses, masks, meshes and records from either. **Checked** means that comparison (below). The exe's loader (`NXU::loadCollection`, `0x008B6110`, type 0) was not read through; it is the generic NxuStream2 reader, and the block numbers below are what the files say. No PhysX source was consulted.
+
+### The stream
+
+`EnvStatPhysData` is framed as an `.opf` is (u32 file length, u32 stream length, the stream, the actor records, the shape records). The stream is `"NXUSTREAM"`, two zero bytes, then the SDK's version and NXU's as u32 (272 and 103, as the XML's `sdkVersion` and `nxuVersion`: 272 is 0x110, and 281 is 0x119), then blocks (checked).
+
+A **block** is a 16-byte head, then its own fields, then the blocks it holds:
+
+| | |
+|---|---|
+| u32 | 0x00ABCDEF |
+| u32 | type |
+| u32 | length: from the head's first byte to the block's last, so the head's 16 bytes are in it and the next block's head starts at the end |
+| u32 | 0x01234567 |
+
+The blocks nest by their lengths. A block's fields are fixed-size or strings; a **string** is a u32 length, then for a length over 0 that many characters and a NUL (an empty string is the four bytes of 0). The reader finds a block's children by their heads after its own fields, so it need not know all of the fields. Everything is little-endian, and a pose is the XML's twelve numbers rearranged as three rows of four, each row of the turn then that row's translation (checked: an actor turned by pi about z, translation (12, -76, 0): -1, 1.82e-6, 0, 12 / -1.82e-6, -1, 0, -76 / 0, 0, 1, 0).
+
+### The blocks
+
+The type numbers are NXU's classes' and move with the SDK's version: the SDK 281 ones are the 272 ones plus one from the shape description on, and plus seven for the collection, its description, the scene and the end.
+
+| Block | SDK 272 | SDK 281 | Fields before its blocks |
+|---|---|---|---|
+| the stream | 0 | 0 | none; holds the collection |
+| collection | 99 | 106 | "Physics", u32 0, SDK version, NXU version; holds the description, the meshes, the scene |
+| SDK description | 98 | 105 | hwPageSize, hwPageMax, hwConvexMax |
+| triangle mesh | 9 | 9 | id string, 40 bytes (userProperties, the empty material indices, the convex edge threshold 0.001 and the rest of NxTriangleMeshDesc, the same in every one seen); holds a simple mesh |
+| simple mesh | 7 | 7 | u32 n, n points of three floats, u32 t, t triangles of three u32 (u16 when the u32 flags that end the block have bit 1, NX_MF_16_BIT_INDICES; no mesh seen has it), the flags |
+| scene | 95 | 102 | 44 bytes; holds the actors (and two groups masks of the scene) |
+| actor | 41 | 42 | id, userProperties (the XML's "a,b,c"), u32 hasBody, name, the pose, 16 bytes (0, 0, 0, 1 as floats), density (float), flags (u32), group (u32), 2 or 8 bytes; holds the shapes in order |
+| box | 32 | 33 | three floats, the half extents; holds a shape description |
+| sphere | 34 | 35 | radius; holds a shape description |
+| capsule | 35 | 36 | radius, height, u32 flags; holds a shape description |
+| triangle mesh shape | 38 | 39 | the mesh's id string (meshData), 8 bytes (mesh flags, paging mode); holds a shape description |
+| shape description | 31 | 32 | userProperties, name, the local pose, 16 bytes (0, 0, 0, 1), u32 shape flags, u32 group, 16 bytes (material, density, mass, skin width); holds the groups mask, and in SDK 281 ends with 4 more bytes |
+| groups mask | 17 | 17 | four u32, bits0 to bits3 |
+| the end | 101 | 108 | none |
+
+SDK 272 is the 132 levels with an `.opf`; SDK 281 is the 18 core levels without one that were looked at, a later PhysX 2.8. Box, sphere, capsule and mesh are all that were seen: no plane, convex or height field.
+
+### The comparison (checked, `dao_core_tests "[collision-real]"`, the GOG install, 2026-10-19)
+
+- All 205 levels with a stream (every `.arl` the index reads: core's 158 and the add-ins' 55, 8 of them with no physics) read to the end, with 113,613 actors, 175,019 shapes and 4,875,044 triangles. Each level's actors are as many as its actor records and its shapes as many as its shape records.
+- For the 132 with an `.opf`, the two readings are the same in every field: ids, names, kinds, sizes, poses, groups, masks, records, rooms and meshes (points and triangles). The one difference in kind is the XML's rounding: it writes a number with nine decimals (0.00000182 for 1.82e-6, and halves rounded away from zero), which loses the small turns (the floats of about 325,000 groups of numbers differ this way) and is the same as printing the binary's float that way and reading it back. The binary stream is the exact one.
+- 73 of the 81 levels without an `.opf` have shapes now; the other 8 have no physics.
