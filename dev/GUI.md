@@ -227,7 +227,7 @@ Notes (checked): the movie list in the install (68 .gfx) has no skills.gfx, cont
 - Meaning of scene `b` bit 2's call (0x00510CA0 -> 0x00522C30 with a wide string at 0xB05DAC) and record flag 0x01.
 - The cached-id list's contents, and what slot 12/24 data keys the by-name lookup (name -> id only seen as slot 12).
 - Which exact call sites show PopupLayer (0x1E: seen at 0x005DC158 in CClientExoApp code), Tooltips, ItemExamine, FadeToBlack and the Saving screen (0x0073721D / 0x007373F0), and `ShowDialogBoxMessage` (0x0060BB60); only the callers' addresses were listed: Show 0x24 at 0x0073721D, Close 0x24 at 0x007373F0, Show 0x21 at 0x005CA4FA, 0x007E3EC8, 0x007E44E6, Show 0x22 at 0x00765968, Show 0x1B at 0x0076C86B, Close 0x2D at 0x005D71B4.
-- ActionScript of the movies (not decompiled); whether `contextmenu`, `skills`, `mainui` exist in DLC archives.
+- Whether `contextmenu`, `skills`, `mainui` exist in DLC archives.
 - Scripts' exact use of every GUI command above (names from the command table only).
 
 ## Part (a): the 67 fscommands and 17 ExternalInterface calls (GOG exe, address library 9eae06b names)
@@ -449,11 +449,10 @@ Inventory, journal, character sheet, store, level-up, tactics and the options sc
 
 ### Not read
 
-- The observer's coalescing and the `updateDelay` float (the third triple element): stored by the observer constructor 0x00524A80; I assume it rate-limits notifications but did not read it.
+- `updateDelay` (the third triple element) throttles re-reading a changed value; it is not a resend interval (see the calls section). Its unit is not read.
 - The caller chain that makes the minimap update (`GUIMap` slot 5 and the second call site 0x00634187), so its rate is inferred.
 - Arguments of `Tooltips.StartDragging`, `Behaviour.DragAndDropable.StopExternalDrag`, `DebugOptions.*`, and the identity of the message `MovieRecord::Step` posts for `WaitingToBeStopped`.
 - The `ActionBarFloaty` per-frame argument construction (names from the strings, shapes from the ActionScript).
-- Other movies' ActionScript (inventory, journal, character record, store, map, loading, main menu): only token paths of the five HUD movies were enumerated. The Tooltips and PopupLayer movies were not decompiled.
 - Whether any per-frame engine Invoke exists beyond those listed (the scan finds literal-string call sites only; a path built at run time, e.g. `InvokeCallbackMessage`'s, is not enumerable statically).
 
 ## Fonts, images, localisation and input
@@ -517,7 +516,7 @@ Scratch: %TEMP%\lib-agent-2-guiext-* (x = extracted movies, all = all 68 .gfx, s
 - The language string's source for `fonts_<lang>.gfx` (how 0x004C35F0 gets it); which ids 1, 2 and 0x14/0x12 are in the loader state enum (Scaleform 3.0's numbering, which I did not check).
 - The exact GFxMouseEvent / GFxCharEvent layouts (type constants beyond the 2 seen), and the full body of 0x00514640 and 0x00512480.
 - What the 0x2c-byte state object (ctor 0x0090E5F0, state 1) is exactly; the state id 2 object (vtable 0xAF5358).
-- The texture manager's resolver (0x00846990 / 0x00845D80) and how the portrait render target gets its name registered there; the ".png"/".jpg" branch's purpose.
+- How the portrait render target gets its name registered in the texture manager; the ".png"/".jpg" branch's purpose.
 - Per-table icon columns (abi_base, itm) feeding movies; which movie uses "imgps://" (none found, so possibly only plugin or other-build movies).
 - Gamepad: any controller path outside the manager.
 - The designer-tag grammar `ReplaceDesignerTags` expands.
@@ -607,10 +606,10 @@ Not needed at all: DefineCompactedFont/FontTextureInfo, DefineSubImage tag, exte
 ### Not read
 
 - Whether `fonts_<language>.gfx` is loaded as a separate movie or through GFxFontLib alone, and the exact string pairing (only the strings were seen).
-- How the engine fills a 1001 image (the code behind `ScaleformManager::LoadImage` 0x00516A20 and the GFx image creator) and what `?Async=1` does; I read the AS side and the atlas files only.
+- How the engine fills a 1001 image (the code behind `ScaleformManager::LoadImage` 0x00516A20 and the GFx image creator); I read the AS side and the atlas files only.
 - The vtable slot names for 0x50/0x58/0x60 were taken from my memory of GFx 3.0's header, not from a vtable dump of GFxMovieRoot; the call sites, arguments and order are read.
-- The other 56 movies' ActionScript were not decompiled (their shared `__Packages` are the same exports; movie-specific scripts such as tactics, chargen morph UI, worldmap may use more Flash 8 APIs). Whole-exe scan for other SetViewScaleMode/SetViewAlignment callers; what the 0xBF6154 / 0xAF5438 constants in the resize routine are; whether the application object's slot at +0x184 is a GUI scale option.
-- Whether 3.0's `Mouse.LEFT+4` convention is a real GFx index scheme or a BioWare add-on (the lib only checks `Mouse.LEFT != undefined`).
+- Whole-exe scan for other SetViewScaleMode/SetViewAlignment callers; whether the application object's slot at +0x184 is a GUI scale option.
+- The engine sends a double click as a second down event with button + 4; whether the convention is GFx's own or BioWare's is not read (the lib only checks `Mouse.LEFT != undefined`).
 - No Ruffle run was done on any movie (nothing was played or rendered).
 
 
