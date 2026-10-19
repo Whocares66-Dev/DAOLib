@@ -180,11 +180,215 @@ Asked by the turn-based mod (DAOLib #50, #51, #52): where a ranged approach stop
 - **Two handlers.** Sub-action 4 (`0x007AA560`, ID 19889) approaches a place on the target's melee ring; sub-action 15 (`0x007AA200`, ID 19887) approaches to within a range. Both end their walk through the move update (`0x007A9130`), called with the flags 7.
 - **An ability's approach is chosen by its `Range` in `abi_base`, not by the weapon** (the UseAbility step, `0x00743F50`). `Range` 0 at another object queues sub-action 4 with what a melee attack gives it, so the same ring, claim and `COMMAND_FAILED_NO_SPACE_IN_MELEE_RING`. Any other `Range` queues sub-action 15 with that row's `PrimaryRange` in `ranges` (capped at 60 m), a least distance of 0, and the need of a line of sight only where the ability's `Projectile` is not 0. A point on the ground queues sub-action 14. Nothing is queued where the target is the user. By this, Dirty Fighting (`Range` 0) begins with a 4 where it must walk; the note above did not record its approach.
 - **After an ability's approach the ring is not asked again.** The use (sub-action 8, `0x007A7440`) tests `InStrikingReach` alone for a `Range` 0 ability at another creature, and fails the command with -1 where it does not hold. A plain attack's blow does ask again (above), so `dao::attack::ApproachOf(user, target, ability)` gives `findsRoom` where the ring has a place now and the user is in reach or the filled ring still has one.
+- **The place is chosen again on every update**, not kept by index: all the attacker's places are released, then the free place nearest its own bearing is claimed; the claim is released at the command's end (`0x00746A65` → `0x006A3610` → `0x007CC060`). Read 2026-10-18 by lib-agent-2, and the rings in full below.
 - **The ring is asked on every update of a melee approach at a creature**, claiming (`MeleeRingSpot`, the target's slot 38), and the walk is re-pathed when the place given has moved from the one pathed to: by any amount within 4 m of it, by more than 1.5 m further off (`0x007A50F0`; the floats at `0x00C0F6BC` and `0x00C0F6C0`). While the ring gives any place the approach walks to it, so an attacker can follow a moving place round a full ring for as long as it likes: there is no engine word for "no place to arrive at".
 - **A ranged approach's stop distance** is the range less the least distance at first, and is cut by 1 m on every update that finds the walker within it without a line of sight, where one is needed. Once a cut would bring it to both personal spaces the move update ends the walk as though it had arrived, and no shot follows. From inside the range the distance so falls to the walker's own within a second (`dao::attack::Walk` follows this an update's run at a time).
 - **What ends an approach otherwise.** -5, the ring gives no place on some update. -4, no path, or standing: an update shorter than 300 ms in which the walker moved under 2 cm adds the creature's own milliseconds to a counter (the sub-action's integer 1), and past 1,000 ms (`0x00C0F6C8`; doubled unless the creature's combat state is set and its byte at +0xCFC is too, not read further) the command fails. An update that moved 2 cm starts the counter again, and so does every new path, so a moving goal never trips it. -10, a timeout, only where the command carries one in its float 5: `WR_AddCommand` gives the AI's commands 10 s (`AI_COMMAND_TIMER`), 5 s or 1 s, and followers' none. It starts at the approach's first run (the creature's +0xCEC, in milliseconds) and counts down by the creature's own milliseconds (`0x006A2D10`). -7 the target gone, -8 disabled.
 
 Seen in play 2026-10-10 (the turn-based mod's session, Awakening's Wending Wood in real time): enemy archers' approaches ended `COMMAND_FAILED_TIMEOUT` after 9.99 and 10.01 s, and one after 0.99 s. Of 67 abilities used at another creature, every one seen approaching with `Range` 0 ran step 4, and four of those failed for want of room, two before any step; every one with another `Range` ran step 15. In a second run, a hurlock with six wolves round it, `dao::attack::ApproachOf(user, target, ability)` gave `findsRoom` false for 414 abilities and every one failed for room; of the 25 it gave true, 16 succeeded and 6 failed for room later in their walk.
+
+## The melee rings (read 2026-10-18 by lib-agent-2)
+
+### Melee ring: places and the spot choice (GOG exe, read 2026-10-18)
+
+Claims are checked (read in disassembly or data) unless marked inferred. Hex addresses are GOG VAs. Angles are degrees.
+
+#### Short answers
+
+1. A ring (0x007CB400) always has 40 places, whatever its radius or the attacker. The count is the one-entry table at 0xB230F8 (value 40; the index at ring+0x18 is forced to 0, and ring+0x18 is set to 0 at creation). Step = 360/40 = 9 degrees. Angles are world-fixed (no facing in them): place 0 starts at +Y (north) and they run clockwise seen from above (toward +X). A "place" is the arc between two consecutive points on a polyline of 40 points; place i spans 9i..9i+9 degrees from +Y, its middle at 9i+4.5. Point j is at centre + (sin(9j), cos(9j), 0) * R, with R = ring.+0x10 (already + 0.1, see below). The creature's facing only enters through the ring's centre offset and the disabled arc.
+2. MeleeRingSpot (0x006A8EE0) takes the target's rings, sorts them by (distance from attacker to the ring's centre minus its radius) ascending, and tries each in that order. The first ring where a run of free places is found wins. In the ring, the run is centred on the place where the attacker already is (its angle from the ring's centre), widening alternately -1, +1, -2, +2, ... until a place whose run fits is found. The run's width is odd, 1 + 2m, m counted from the attacker's width (PersonalSpace) as below. The returned point is on the ray from the ring's centre through the chosen place's middle, at radius (ring radius_without_0.1 + attacker PersonalSpace + attacker's ring-0 MeleeRingOffset), checked against the walk mesh. Nothing free in any ring: returns false (the -5 NO_SPACE path is the caller's).
+
+#### 1. Ring layout (object at creature+0xB44's vector; ring pointers 4 bytes each)
+
+Ring fields (read in 7CB400, 6AC2A0, 6A3060, 7CB240, 7CC2B0, 7CBCA0):
+
+| offset | meaning |
+|---|---|
+| +0x00 | centre, Vector4 (x,y,z,w); written by 6A3060 every Update |
+| +0x10 | radius. Creation: ring 0 = PersonalSpace (slot 39) + 1.2 (double at 0xAFEBC0), rings 1..9 = meleering Radius + 1.2; 7CB400 then adds 0.1 (double 0xAE7D70) in place, so the stored radius is space + 1.3 (after 7CACE0 first clamps it to at least 1e-6) |
+| +0x14 | step = 360/40 = 9.0 |
+| +0x18 | count index (0 -> table 0xB230F8 = 40) |
+| +0x1C, +0x20 | MeleeRingDisabledStart, MeleeRingDisabledEnd (column hashes 0x6B668B36, 0x126D9F8A), degrees relative to the creature's facing |
+| +0x24 | MeleeRingOffset (hash 0xED58B0C9), ring 0 only; centre = creature position (+0x120) + facing vector (+0x130..0x138) * this |
+| +0x28 | MeleeRingUpdateAlways (hash 0x7ACD13EE) |
+| +0x30 | claimants list (attacker ids) |
+| +0x40 | vector of 40 pointers to 16-byte points (offsets from the centre, world axes) |
+| +0x48 (count at +0x4C) | vector of 40 pointers to place entries |
+
+Points (7CB400): for j = 0..39, dir = rotate (0,1,0) about Z by -9j degrees (quaternion from Euler (a1=-9j about Z, 0, 0); 4EE200 takes three Euler angles, a1 about Z, a2 about X, a3 about Y), point_j = dir * R, z = 0. Handedness: rotation is by -9j and the index finder (7CAF60) uses the signed angle from +Y that is positive toward +X, so point_j = (R sin 9j, R cos 9j, 0) (inferred from the two being consistent: place 10 = east).
+
+Place entry (0x20 bytes, 7CB400 and 7CAED0):
+
+| offset | meaning |
+|---|---|
+| +0x00 | own index i |
+| +0x04 | next index (i+1, the last one's is 0): the place's end point |
+| +0x08 byte | disabled (set for places in the disabled arc by 7CB240, cleared by 7CB180) |
+| +0x09 byte | near-only (wall or steep slope; set by RefreshMeleeRing, cleared by 7CB1A0) |
+| +0x0C | id of the perceived body standing there (-1 none; 7CC870) |
+| +0x10 | float distance of that body (65505.0 when none) |
+| +0x14 | -1 or an id (set -1 by body marking; a guard-margin slot) |
+| +0x18 | the claim: attacker id (-1 free), written by 7CC2B0, cleared by 7CC000 |
+| +0x1C | -1 or an id; the margin slot 7CB870 fills (see claim) |
+
+Index of a position (7CAF60): d = pos - centre, normalised; angle = signed angle between d and (0,1,0) (4D4D10/4D4CC0, sign = sign of d.x), wrapped to [0,360) (4EDD70), index = floor(angle / 9) (7CAE30; floor). 7CAE80 is the ceil version. 7CAFF0 wraps an index: negative adds the count (single wrap, not a modulo).
+
+Pseudo-code:
+
+```
+RingMakePlaces(ring):          // 0x7CB400
+  ring.radius = max(ring.radius, 1e-6) + 0.1
+  count = 40 ; ring.step = 360/40
+  for j in 0..39: ring.points[j] = (sin(9j) , cos(9j), 0) * ring.radius
+  for i in 0..39: entry{ idx=i, next=(i+1)%40, disabled=0, nearOnly=0,
+                         id=-1, dist=65505.0, s14=-1, s18=-1, s1C=-1 }
+PlaceOf(ring, pos): a = signedAngleFromPlusY(pos - ring.centre) mod 360 ; return floor(a/9)
+Wrap(i): i<0 ? i+40 : i  (7CAFF0; indices stay within one turn in all callers)
+```
+
+#### 2. MeleeRingSpot
+
+`MeleeRingSpot(this=target, attackerId, out, unread, claim, unread)` (0x6A8EE0, ret 0x14):
+
+```
+att = lookup(attackerId); if null return false
+ring0a = att.rings.At(0); offA = ring0a[+0x24]              // attacker's own ring-0 MeleeRingOffset
+(if the attacker's obstacle byte is set, lift it: 0x6A2570 / 0xA627D0, restored afterwards via 0x6A3BC0)
+space = att.PersonalSpace()                                  // slot 39
+ok = target.rings.Choose(out, attackerId, att+0x254, att.pos(+0x120), space, offA, claim)   // 0x7CC5B0
+return ok
+```
+
+Choose (0x7CC5B0, this = target's rings):
+
+```
+if claim: Release(attackerId)                  // 0x7CC060: for every ring, 7CC000 below
+keys = for each ring i: (i, |att.pos - ring[i].centre| - ring[i].radius)   // 0x7CBCA0; centre includes z; radius includes the +0.1
+sort keys ascending by key (0x7CC0B0; insertion sort for <=32, stable; ties keep ring order)  // inferred stable
+for (i, _) in keys: if ring[i].Claim(out, attackerId, area=att+0x254, pos, space, offA, claim): return true
+return false
+```
+
+Which ring is used is therefore not decided by PersonalSpace: all of the target's rings (ring 0 = its own body at space+1.3, rings 1..9 = body parts such as a dragon's head, radius+1.3) are tried nearest-edge first. A humanoid has only ring 0 (apr_base PerSpace 0.35 for elf/dwarf: radius 0.35+1.2+0.1 = 1.65; MeleeRingOffset and disabled arc 0 for them; large creatures have MeleeRingOffset, e.g. 0.3/0.25; meleering1..9 rows have Radius, UpdateAlways, DisabledStart/End, e.g. Dragon High FR radius 0.3, disabled 180..270).
+
+Ring Claim (0x7CC2B0, this = ring; args out, id, area, pos, space w0, offA, claim):
+
+```
+if wrapSpan(ring.disabledStart, ring.disabledEnd) >= 360: return false    // 7CAD50: end-start, +360 if negative
+p   = (pos.x, pos.y, ring.centre.z)
+r0  = ring.radius - 0.1
+den = r0 + space + offA                       // the radius the attacker stands at
+w   = space * ring.radius / den               // the half-width test distance
+N   = WidthInPlaces(ring, w)                  // odd, 0x7CB9E0
+half= N - 1                                   // "[esp+0x10]" ; the run is c-half/2 .. c+half/2
+c0  = PlaceOf(ring, p)
+dist= |p - ring.centre|                       // z flattened
+nearOK = (den > dist)                         // attacker closer than the stand radius: near-only places allowed
+for n = 1 .. 40:                              // 0x7CC3B3 loop; offsets 0, -1, +1, -2, +2, ...
+    off = (n>>1) * (n odd ? ... )             // n=1:0, n=2:-1, n=3:+1, n=4:-2, n=5:+2 ...
+    c = Wrap(c0 + off)
+    if !Free(place[c], id, nearOK): continue
+    if !RunFree(c, half, id, nearOK): continue          // 0x7CB010: for k=1..half/2: place[c+k] and place[c-k] free
+    if StandPoint(out, c, id, dist, den, space, nearOK):  // 0x7CBA90, below
+        if claim: mark_claim(c, half); return true      // see below
+return false
+```
+
+Free(place, id, nearOK) (0x7CAED0): false if place.disabled(+8) != 0; false if place.nearOnly(+9) and not nearOK; then each of +0x0C (the perceived body), +0x14, +0x1C, +0x18 must be -1 or equal to id. So an attacker's own earlier claim (id in +0x18) never blocks it, and another's claim, a perceived creature's body, or a margin mark by another all do. Near-only places are allowed only while the attacker is within `den` of the centre.
+
+WidthInPlaces (0x7CB9E0): P0 = centre + dirToMiddleOf(place 0) * ring.radius (7CB6B0: middle of the place's two points, minus centre, normalised); m = 0; for k = 1.. while k < 40 and SegmentWithin(place k's two points, P0, w): m++ ; return 1 + 2m. SegmentWithin (0x7CB790) is true if either end point is within w of P0 (4EB240) or the segment passes within w (4EB070). With chord geometry the test for k is 2R sin((9k-4.5)/2 deg) <= w. Checked example for a 0.35 humanoid on a 0.35 humanoid: R = 1.65, den = 1.9, w = 0.35*1.65/1.9 = 0.304; k=1 gives 0.130 (inside), k=2 gives 0.388 (out): m = 1, N = 3 places. Only one side is tested (symmetry assumed).
+
+StandPoint (0x7CBA90): dir = 7CB6B0(place c) (unit vector from the centre to the middle of place c); P = centre + dir * den; z found by the walk mesh (0x7CB0E0: area+0x118 call 0xA473A0 fills z, then a slope/elevation test and the walk-grid line test 0xA46FC0 from the attacker, id/area given). If P passes, out = P (as Vector4, w from the stack, not meaningful). If it fails and nearOK: radius steps inward from den: step = (den - dist) * 0.1 clamped to at most 0.01 (constants 0xC111D4 = 0.1, 0xC111D8 = 0.01; the clamp direction read from the jp branch, inferred), P retried at radius den - step, den - 2 step ... down to dist (the attacker's current distance); the first that passes is out. Else fail and the outer loop tries the next centre place. The out point is thus the place's middle direction at the attacker-width standing radius, not the stored point and not offset along the attacker's radius beyond `space`.
+
+Claim marking (end of 0x7CC2B0, when claim and success): h = half>>1 (half = N-1, so h = m): for k = -h..h: place[Wrap(c+k)].+0x18 = id. Then 7CB870(c-h-1, c+h+1, id): from c-h-1 walking down and from c+h+1 walking up, `[0xC111CC]+1` = 2 places each (the dword at 0xC111CC is 1, loops run while counter <= 1), sets +0x1C = id where it is -1 (a guard margin of two places each side; the "+0x1C" slot). Then id is appended to ring+0x30 claimants (0x698C30). Note that claim only marks the ring that won.
+
+Release (0x7CC060 over all rings; 0x7CC000 per ring): every place with +0x18 == id gets -1; then 7CB1C0 (clears +0x1C == id marks, inferred from the name pattern, not read) and the id is removed from the claimants (0x745230). Choose with claim=1 releases first, so an attacker's own prior claim never blocks it and it re-picks fresh (placing it again nearest to its current angle, i.e. usually the same place).
+
+Disabled arc (0x7CB240, run by RefreshMeleeRing before): clears +8 on all places, then arc start = ring.+0x1C + creature facing angle (signed angle from +Y, same convention), places floor(wrap(start)/9) .. + ceil(span/9) get +8 = 1. Near-only +9 flags from walls and slopes are set in RefreshMeleeRing (not re-read here). Perceived bodies mark +0x0C/+0x10 (7CC870; not re-read here).
+
+#### Port summary
+
+```
+places: 40, 9 degrees each, place i spans [9i, 9i+9) clockwise from +Y (north), world-fixed.
+ring radius = space(target ring) + 1.3 ; stand radius = (space+1.2) + attackerSpace + attackerRing0Offset
+ring centre = target.pos + target.facing * target.ring0Offset   (ring 0)
+ring choice: sort target rings by |attPos - centre| - radius ; first ring with a fit wins
+run width: N = 1 + 2m ; m = number of places k=1.. with 2R sin((9k-4.5)/2) <= attackerSpace*R/stand
+order: attacker's own place c0 = floor(angle/9), then c0-1, c0+1, c0-2, c0+2 ...
+free: not disabled, near-only only when attacker within stand radius, no other id in the 4 slots
+claim: id into run, 2 guard places each side; release before re-claiming
+out: centre + unitdir(middle of place c) * stand radius, z from the ground, inward retry if blocked
+```
+
+#### Not read
+
+- 0x7CC870 and 0x7CB920 (body marking), RefreshMeleeRing's wall/slope marking, 0x7CB1C0's exact effect, 0x7CC0B0's sort in full (insertion-sort part read at 0x7CBEB0; ties' stability inferred), 0x7CB0E0's elevation threshold (double at 0xB03BF8) and 0xA46FC0 contents, the exact inward-retry loop condition in 0x7CBA90 (read roughly), whether a ring whose pointer is missing is skipped (the dummy at 0xC38E00 is used), the sign convention of 4EE200's Euler rotation (derived from consistency, not from running it), what the unread a3 and a5 of MeleeRingSpot are.
+
+### Melee ring: the centre, the disabled arc, and what moves when the target moves (lib-agent-2, 2026-10-18)
+
+GOG exe, base 0x400000. "checked" = read in disassembly or data; "inferred" = not. Not seen in play.
+
+#### Short answers
+
+**Q3, the centre (checked).** `0x006A3060` (`CCCreature`, __thiscall, arg ring index, `ret 4`) sets `ring.centre = anchor + ring.offset * facing`. The offset is a *distance along the creature's facing vector*, not a rotated 2-D offset:
+- anchor = the creature's position (+0x120..+0x128) for ring 0, and for rings 1..9 the position of a model node (a "crust" node, id = the meleeringN `CrustID`, ring +0x2C) if the model has it, else the creature's position.
+- ring +0x24 is `MeleeRingOffset` (apr_base), clamped to +-0.5 (`0x00C02204`), ring 0 only; rings 1..9 have +0x24 = 0 (never written, the vector is built zeroed; inferred). `facing` = creature +0x130..+0x138 (the unit facing vector, the one `TurnToward` and `SetOrientation` use). There is no AttackFL/FR/BL/BR in it.
+- `MeleeRingOffset` values: Dragon, Normal 0.3; Ogre A 0.25; golems 0.25; bears 0.5; werewolf/shriek/ash wraith 0.5; wolf, mabari 0.4; giant spider 0.22; deepstalker 0.46; Pride Demon -0.25 (behind); humans, elves, dwarves, hurlock, genlock 0; High Dragon, Archdemon 0.
+
+**Q3, the ring.** Ring radius R = `PersonalSpace` (ring 0) or `Radius` (meleeringN) + 1.2 + 0.1 (`0x007CB400` adds the 0.1 to what `0x006AC2A0` stored as PersonalSpace + 1.2). Every ring has **40 places**, 9 degrees apart (`table 0x00B230F8[0] = 40`, step = 360/40 stored at ring +0x14). Place vectors are built once, at ring creation, and are **not rotated with the facing**: local vector i = rotate (0,1,0) about z by `-9*i` degrees (`0x004EE200`, degrees times 0.0174533, a quaternion rotation), times R. Index i is a compass direction in world axes (CW from +Y if the rotation is the usual right-handed one: i=10 east, 20 south, 30 west).
+
+**Q3, `MeleeRingDisabledStart/End` (checked read, direction inferred).** Column hashes: Start `0x6B668B36`, End `0x126D9F8A`, Offset `0xED58B0C9`, UpdateAlways `0x7ACD13EE`, Radius `0xAE283C02`; read at `0x006AC2A0` (apr_base for ring 0, meleeringN for 1..9). They are **degrees of an arc of the ring's 40 places that have none**, **relative to the creature's facing**, in the same sense as the place indices (9 degrees an index). Stored at ring +0x1C and +0x20 by `0x00586420`. Every `RefreshMeleeRing` call recomputes them with the current facing (below): the arc is the only thing about a ring that turns with the creature.
+- The arc runs from Start to End: span = (End - Start) wrapped into [0,360) by `0x007CAD50`; start index = floor(wrap(Start + facingAngle) / 9) (`0x007CAD20` wraps by 360, `0x007CAE30` floors); count = ceil(span / 9) (`0x007CAE80`). The `count` places from there (index wrapped by `0x007CAFF0`, a modulo 40) get byte +8 = 1 ("disabled"; `0x007CB180` zeroes every +8 first, so the flag is rebuilt on each refresh).
+- Start 0 / End 0 means span 0, nothing disabled (the common case, nearly every creature). Start 0 / End 360 (High Dragon, Archdemon, Spirit Apparatus Head ring 0): all 40 places disabled, so those creatures use no ring-0 place: their places are on rings 1..4 instead. Broodmother: Start 75, End -67: span 218 degrees, a wide arc disabled (a creature's back). Rings 1..4 of High Dragon/Archdemon: FR (ring 1, CrustID 40, Radius 0.30) 180..270; FL (ring 2, CrustID 41, R 0.30) 90..180; BR (ring 3, CrustID 42, R 0.35) -90..0; BL (ring 4, CrustID 43, R 0.35) 0..90. Read as clockwise from the facing these are the quadrants toward the body, which fits (inferred).
+- Sign / zero of the angle: `RefreshMeleeRing` passes `0x004D4D10(facing, (0,1,0))` (degrees, `0x004D4CC0` signed by the cross product). By my reading of the sign test, facing east gives -90 and west +90 (north 0, south 180). With place i = rotation by -9i the indices would then run the opposite way to the arc for east/west facings. The dragon data (arcs toward the body only read right if the arc is clockwise from the facing) suggests the engine's two senses agree and I have one sign backwards. **A port should write the arc as: disabled places = those whose bearing from the ring's centre, measured the way place indices run, lies in [facingBearing + Start, facingBearing + End]**, and check the sign on one asymmetric creature (a dragon's FR ring) in play. For the symmetric arcs (Broodmother's 218-degree back arc, 0/0 for everyone else) the sign does not matter. Not checked in play.
+
+**Q3, the tables.** apr_base: `PerSpace`, `MeleeRingUpdateAlways` (u8; ring +0x28), `MeleeRingDisabledStart/End` (f32), `MeleeRingOffset` (f32; centre offset along facing, above). `AttackFL/FR/BR/BL` (centre angle), `...Width`, `...Ring` (0..4) and `AttackReach` are **not read by ring creation or the centre** (they are the attack-direction/reach data for the big monsters; their reader was not looked for). meleering1..9 (tables 125..133; the row ID = the creature's *apr_base row ID*, `[creature+0x7B0]+0x58`; ring N is made only if the row exists, and it stops at the first ring N without one): columns `ID`, `Label`, `CrustID` (the model node the ring is centred on, ring +0x2C), `Radius` (f32, the ring's radius before +1.2/+0.1), `MeleeRingUpdateAlways`, `MeleeRingDisabledStart`, `MeleeRingDisabledEnd`. Rows: meleering1: IDs 66 High Dragon FR, 81 Spirit Apparatus Head (CrustID 40, R 0.5, no arc), 82 Archdemon FR; meleering2: 66, 82 (FL, CrustID 41); meleering3: 66, 82 (BR, CrustID 42, R 0.35); meleering4: 66, 82 (BL, CrustID 43, R 0.35); meleering5..9 are empty. All rows have UpdateAlways 1 except 81. So only the High Dragon, the Archdemon (and the wounded one, which shares the row with 82) and the Spirit Apparatus Head have more than ring 0. A dragon (High) ring 0: PerSpace 3, UpdateAlways 1, Start 0 End 360, Offset 0. Ogre A: PerSpace 0.95, UpdateAlways 1, Offset 0.25, no arc. A human (any human/elf/dwarf): PerSpace 0.35, UpdateAlways 0, Offset 0, no arc, so R = 1.65 (0.35 + 1.2 + 0.1) and ring radius for an attacker standing at "1.9 m centre to centre" is inside... see the note on the claim below. Also: Dragon, Normal PerSpace 1.4 offset 0.3, no arc, no meleering row; Broodmother PerSpace 1.8, UpdateAlways 1, arc 75..-67.
+
+**Q4, what moves with the target (checked from the disassembly; callers of Update/RefreshMeleeRing from master's Addresses.h note).**
+1. **Every frame**: `RefreshMeleeRing(ringIndex)` (`0x006AC510`) recomputes **every ring's centre** (`0x006A3060` for each ring, only skipped when creature byte +0x1AC is nonzero; not further read) and, for the ring asked, recomputes the **disabled flags** with the current facing (`0x007CB240`). So a claimed place's world point follows the target's position and (through the offset along facing) its facing; the *place indices stay fixed in world directions* (not rotated by the target turning). A target that turns in place moves the centre only by Offset * (change of facing), and rotates only the disabled arc (it can switch places on or off); it does not carry the places round. A creature with Offset 0 and no arc (every humanoid) has a ring that does not react to its turning at all.
+2. **A place's world point** (`0x007CB620`, entry i): centre + (local[i] + local[next(i)]) / 2 (the midpoint of the two neighbouring ring points; `0x00A38A20` adds the centre, `0x004D47E0` divides by 2.0), at R*cos(4.5 deg) from the centre.
+3. **The claim is re-chosen on every call that sets claim** (checked). `ApproachMelee` (`0x007AA560`, at `0x007AA63x`) calls the target's slot 38 `MeleeRingSpot(attackerId, out, attackerPersonalSpace, claim = 1, 0)` on **every update** of the approach (it starts after finding the target, in the path-update part of the sub-action). With claim set, `0x007CC5B0` first calls `0x007CC060` which releases **every place this attacker holds on every ring** of the target, then picks again from scratch: rings sorted by `(distance from the attacker's position to the ring centre) - R` (`0x007CBCA0`, nearest first); in each ring (`0x007CC2B0`) the **first candidate is the place whose compass bearing from the ring centre is nearest to the attacker's own bearing** (`0x007CAF60`, bearing of the attacker minus the centre, then `0x007CB9E0` turns the wanted angle into an index), and then goes 0, -1, +1, -2, +2... places away (the loop at 0x007CC3B3 / 0x007CC446; corrected the same day); a candidate is taken if it is free (`0x007CAED0`: not disabled (+8), not near-only (+9) unless the attacker is inside the radius, and no other holder in +0xC/+0x14/+0x18/+0x1C) for the whole run of places the attacker's width covers (`0x007CB010`), and passes the fit test (`0x007CB0E0`: slope under 60 degrees, no unwalkable cell or other creature's stamp, `0x00A46FC0`). The claim writes the attacker's id into holder +0x18 of the run and adds the id to the ring's claimant list (+0x30/+0x38, `0x00698C30`). So it is **not a claim on a fixed place index**: the attacker re-asks and gets the free place nearest to *where it now stands*, so it stays on "its" place while it keeps its bearing and drifts to the next free place if the target or it moves round. With claim = 0 (`InMeleeReach`-style queries, `dao::attack::ApproachOf`) nothing is released or written.
+4. **The re-path rule** (`0x007A50F0`, 4 m / 1.5 m) compares the place just given with the one the walk was pathed to, so a place that moved because the target moved, or because the attacker was given a different place, re-paths; master's TURN_BASED.md line 183 is right and needs only one added fact (see "Correction").
+5. **When the attacker arrives and swings**: the approach handler ends at once when `InMeleeReach(attacker, place)` holds (it has just claimed the place in that same update), so no further `MeleeRingSpot` calls are made in the approach sub-action; the turn (39) and the swing (1) do not call it (the swing tests `InStrikingReach`, `0x006A3DC0`, on the attacker's own point and the target's slot-29 point). The attacker's claim is **not released on arrival**: it stays in holder +0x18 and in the claimant list through the swing, so the ring keeps being refreshed (claimants > 0), and the place stays held. If the target moves during the swing, nothing re-chooses it until another approach runs.
+6. **Release** (checked): the shared command end (`0x00746900`, which then queues COMMAND_COMPLETE) calls `0x006A3610(this = attacker, command target)` at `0x00746A65`: it looks the target object up and calls `0x007CC060` on the target's rings (`creature+0xB44`) with the attacker's id (`0x007CC000` per ring; `0x00745230` is the generic list-remove it ends in, which takes the id out of the ring's claimant list at +0x30). It runs for **every end of the command**, including a clear, a failure and a death of the attacker (the command is ended). A ring with no claimants and UpdateAlways 0 is **emptied** on its next refresh (`0x007CBDD0`; `MeleeRing::Clear`); with UpdateAlways 1 (ogres, dragons, Broodmother, tentacles) it stays active and filled with perceived bodies. I did not look for a release on the *target's* death or on the target changing (the command changes target only by ending).
+7. **Bodies**: for every creature the target perceives (its +0xC18 set, excluding itself) `0x007CC870` (called from the refresh) marks the places that creature's body covers with its id and distance, and resets holders +0x14/+0x18/+0x1C to -1 over them, which **clears any claim there**: a perceived creature standing on a claimed place pushes the claim off (the claimant's next approach update re-claims elsewhere). Also each refresh marks a place near-only (+9) when `0x00A471E0` (a wall test from the ring's point) or a slope over 60 degrees (`0x00B03BF8` = 60.0) cuts it off.
+
+#### Pseudo-code a port can follow
+
+```
+// constants
+PLACES = 40; STEP = 9.0 deg; EXTRA = 1.2 + 0.1;
+// ring creation (from the appearance row), once
+ring0.R = PersonalSpace + EXTRA; ring0.offset = clamp(MeleeRingOffset, -0.5, 0.5)
+ring0.start = DisabledStart; ring0.end = DisabledEnd; ring0.always = UpdateAlways
+for n in 1..9: if meleeringN has row appearanceId:
+    ringN.R = Radius + EXTRA; ringN.crustNode = CrustID; ringN.offset = 0
+    ringN.start/end/always from the row ; else stop
+local[i] = rotZ(-i*STEP) * (0, R, 0)            // i in 0..39, never changes
+
+// every frame, per creature C, per ring N
+anchor = C.pos;  if ringN.crustNode and C has node: anchor = world(node.origin)
+ring.centre = anchor + ring.offset * C.facingVector          // 3-D, facing is the unit vector
+ring.disabled[*] = 0
+span  = wrap360(ring.end - ring.start)
+first = floor(wrap360(ring.start + facingAngleDeg) / STEP)    // facingAngleDeg: sign to check
+for k in 0 .. ceil(span/STEP)-1: ring.disabled[(first+k) % 40] = 1
+if ring.claimants.empty() and not ring.always: ring.clear(); return
+mark near-only places (wall or slope > 60 deg); mark places under perceived creatures' bodies
+    and drop any claim there
+placePoint(i) = ring.centre + (local[i] + local[(i+1)%40]) / 2
+
+// attacker A approaches target T each update (ApproachMelee)
+T.releaseAll(A.id)                                    // claim = 1
+for ring in T.rings sorted by (|A.pos - ring.centre| - ring.R):
+    start = indexOfBearing(A.pos - ring.centre)       // nearest place to A's bearing
+    for k in 0,1,2...: cand = start + (k odd ? +(k+1)/2 : -(k/2))   // alternating
+        if free(cand over A's width in places) and fits(placePoint(cand)): claim(A.id); return placePoint(cand)
+return NO_PLACE (-5)
+if InMeleeReach(A, place): end approach; else walk to place (re-path 4 m / 1.5 m rule)
+
+// command end (any reason): T.releaseAll(A.id)
+```
 
 ## Next readings
 

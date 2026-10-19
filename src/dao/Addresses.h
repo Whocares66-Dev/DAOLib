@@ -1917,7 +1917,9 @@ DAO_ADDRESS(kCCCreature_InStrikingReach, 14500)
 // and is perceived. The rings are made from the appearance row (0x006AC2A0,
 // ID 14700): ring 0 from apr_base, rings 1 to 9 from meleering1 to 9 where
 // they have the row; each ring's radius at +0x10 its PersonalSpace (ring 0)
-// or Radius, plus 1.2, and its +0x28 the row's MeleeRingUpdateAlways, a
+// or Radius, plus 1.2, and 0x007CB400 adds 0.1 more (the double at 0xAE7D70), so a
+// ring's places stand at that plus 1.3 (corrected 2026-10-18 by lib-agent-2); its +0x28 the
+// row's MeleeRingUpdateAlways, a
 // ring always filled. Their places by 0x007CB400; the ring at an index,
 // made if absent, by MeleeRings::At (0x007CCC30, __thiscall (index) on
 // the creature's +0xB44, the vector of rings, `ret 4`). Corrected by the address
