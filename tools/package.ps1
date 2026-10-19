@@ -102,6 +102,11 @@ $title
 A plugin loader and library for Dragon Age: Origins (1.05, the GOG, Steam and EA builds).
 https://github.com/Whocares66-Dev/DAOLib (GPLv3)
 
+Requirements
+  The latest Microsoft Visual C++ Redistributable, the x86 one (vc_redist.x86.exe) even on
+  64-bit Windows: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+  Without it, or with an older one, the game does not start (error 0xc0000142).
+
 Installing
   Extract this archive into the game's install folder, the one that holds bin_ship.
   dinput8.dll goes beside DAOrigins.exe, and the address files into bin_ship\daolib\addresses.

@@ -8,6 +8,10 @@ permalink: /loader.html
 
 The loader is `dinput8.dll` in the game's `bin_ship` folder, with the address files in `bin_ship\daolib\addresses\`. It changes none of the game's files.
 
+## Requirements
+
+- The latest Microsoft Visual C++ Redistributable, the **x86** one (`vc_redist.x86.exe`) even on 64-bit Windows, from [Microsoft's download page](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Without it, or with an older one, the game does not start and Windows reports error 0xc0000142.
+
 ## How it loads the game
 
 1. Windows loads it in place of DirectInput's `dinput8.dll`, and it passes every DirectInput call on to the real one.

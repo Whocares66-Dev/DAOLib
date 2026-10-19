@@ -6,6 +6,10 @@ Native C++ plugins for **Dragon Age: Origins**: a loader that loads them when th
 
 It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each store's executable is different, and the [address library](https://github.com/Whocares66-Dev/DAOAddressLibrary) maps every function and global DAOLib uses in each of them, so one plugin runs in all three.
 
+## Requirements
+
+- The latest Microsoft Visual C++ Redistributable, the **x86** one (`vc_redist.x86.exe`) even on 64-bit Windows, from [Microsoft's download page](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Without it, or with an older one, the game does not start and Windows reports error 0xc0000142.
+
 ## Installing
 
 Players install the loader and the address files, nothing else. A [DAOLib release](https://github.com/Whocares66-Dev/DAOLib/releases) is a zip of `bin_ship\dinput8.dll` (the loader, with `dinput8.pdb`, which lets a crash log name DAOLib's own code) and `bin_ship\daolib\addresses\` (one address file per build of the game), extracted into the game's folder, as SKSE is. Plugins go beside them, each in a folder of its own: `bin_ship\daolib\plugins\<name>\`. `.\tools\package.ps1` makes the zip after a release build, and [CHANGELOG.md](CHANGELOG.md) says what each release brought.
