@@ -16,11 +16,112 @@ An object's active flag and the searches it limits, the party pool carried on an
 
 ## A search by tag finds inactive objects
 
-- **The filter** 0x0067FEC0 (8 arguments, `ret 0x20`) starts with `if (!IsActive && tag.size == 0) return 0` (0x0067FED0–0x0067FEE6, checked). Then it tests the type mask (bit type − 1), the tag's equality when one is given (obj +0xB8), the group (-1 any, obj +0x3C0), and three optional flags: a check against the source (inferred: hostility), not dead, perceived (source +0xC18).
+- **The filter** 0x0067FEC0 (8 arguments, `ret 0x20`) starts with `if (!IsActive && tag.size == 0) return 0` (0x0067FED0–0x0067FEE6, checked). Then it tests the type mask (bit type − 1), the tag's equality when one is given (obj +0xB8), the group (-1 any, obj +0x3C0), and three optional flags: hostility to the source (0x0064B900, the rule `IsObjectHostile` uses; checked 2026-10-18 by lib-agent-2, below), not dead, perceived (source +0xC18).
 - **The search** is 0x006849C0 (address library `ScriptBackend::GetNearestObjects`, from fe62e8f), over the area's list at +0x690. Its only filter calls are 0x00684B2D and 0x00684C4F.
 - **So** `GetNearestObjectByTag` (435) and `UT_GetNearestObjectByTag` (360, 0x0066DB20 → 0x0066DC0A) return an inactive object whose tag matches. `GetNearestObject` (433), `…ByGroup` (436), `…ByHostility` (127), and a tag of "", return active objects only.
 - 0x00671510 is one handler for 127, 433, 434, 435 and 436; only 435 reads a tag (0x0067163C).
 - Contrast: a conversation line's speaker and listener look up by tag through 0x006973B0 with inactive objects left out (`dev/PLOTS.md`).
+
+### GetNearestObject family: filters, hostility, order (GOG exe, read 2026-10-18 by lib-agent-2)
+
+Tags: [C] checked in disassembly or data, [I] inferred.
+
+#### Short answers
+
+1. **nCheckPerceived** [C] is only membership: the candidate's id is in the source creature's perceived set at source(as creature)+0xC18 (hash set of object ids, `0x008704D0(set, &id)` = find != end). No line of sight, no distance, no stealth flag in the test. (Stealth and sight are decided when the set is filled, `dev/COMBAT.md`: a stealthed hostile is not added; a hostile out of sight is not added; non-hostiles in range are.) The source is the first argument object (`oObject`), cast to its creature (slot 0x10); a non-creature source with the flag on dereferences null+0xC18 [I: crash, not seen]. `GetNearestObjectToLocation` (434) has no such parameter: its handler pops only location, type, count, and calls a different function (`0x00684DD0`) that has no flag, no source, no OBJECT_SELF use [C].
+2. **nCheckLiving** [C] = the candidate's vtable slot 0x120 (`this`-call, no args) returns a number > 0. For CCCreature slot 0x120 is `0x006AB4B0`: the current-health property (index 7 of the stats' property vector at +0x7C4 -> +0x190, the property's float value, rounded to int with `0x008E34F0`), 0 or less means dead. CCItem's slot 0x120 is `0x004E13D0` (returns -1), so non-creatures that do not override it count as not living [C for item, not read for placeable]. There is no separate dying/dead flag: health <= 0 is "dead" (`0x00695300` returns `slot0x120() <= 0`; the filter negates it).
+3. **Filters in order** (the filter is `0x0067FEC0`, 8 stack args: candidate, typeMask, tagString*, group, source, hostility, living, perceived; `ret 0x20`): candidate null -> reject; inactive and tag empty -> reject; type mask bit; tag equality; group; hostility; living; perceived. Then in the search itself: include-self, skip-duplicates, skip ids that resolve to no object. Only the source's own area (`source slot 0xA0` -> area object) is searched; no distance cap; no hidden, plot or party test [C].
+4. **Hostility (127)** [C]: yes the same rule as IsObjectHostile: the filter calls `0x0064B900(table=[app+0x1B0], candidateCreature, sourceCreature)` and `IsObjectHostile` `0x006A2B80` -> `0x0064BB40(ids)` -> the same `0x0064B900`. But the argument is only an on/off switch: **nonzero = keep hostile candidates only; 0 = no hostility test at all (everything)**. `GetNearestObjectByHostility(o, FALSE, ...)` therefore is NOT "non-hostile only"; it equals GetNearestObject. Both objects must be creatures or the candidate is rejected.
+5. **Order** [C]: ascending squared 3-D distance (dx^2+dy^2+dz^2, `0x008D8B60` is a 3-float dot product, positions at object+0x120), from the source's position (or the location's). Insert position = first stored distance strictly greater than the new one, so equal distances keep scan order. Scan order: self first (distance 0, only if nIncludeSelf and it passes the filter), then walks the area's x-sorted object list outward from the source's index in the order +1, -1, -2, +2, +3, -3, -4, +4 ... A side is dropped once the axis gap squared (dx^2) exceeds the current N-th best squared distance. Handler cuts to the first min(N, found); N <= 0 is made 1. The result is an array of object ids.
+
+#### Per command: what the handler 0x00671510 passes
+
+Handler pops (script args in declaration order; ids as objects): command numbers are 127=0x7F, 433=0x1B1, 434=0x1B2, 435=0x1B3, 436=0x1B4. Call: `0x006849C0(area, out, source, typeMask, count, tag, group, hostility, living, perceived, includeSelf)`, `ret 0x28`, `this` = source's area.
+
+| command | source | typeMask | tag | group | hostility | living | perceived | includeSelf | count |
+|---|---|---|---|---|---|---|---|---|---|
+| 127 ByHostility | oObject | nObjectType | "" | -1 (see note) | nHostility | nCheckLiving | nCheckPerceived | nIncludeSelf | nNumberOfObjects |
+| 433 Object | oObject | nObjectType | "" | -1 | 0 | arg | arg | arg | arg |
+| 435 ByTag | oObject | nObjectType | sTag | -1 | 0 | arg | arg | arg | arg |
+| 436 ByGroup | oObject | nObjectType | "" | nGroupId | 0 | arg | arg | arg | arg |
+| 434 ToLocation | none (location) | nObjectType | none | none | none | none | none | none | nNumberOfObjects |
+
+- Optional includeSelf pop: only if the handler's arg count (2nd stack arg) is > 5 for 433 and > 6 for the others, else 0. Living and perceived are popped unconditionally (pop failure returns error -0x27F/-0x27E). Defaults per script.ldf: type OBJECT_TYPE_ALL = 0xFFFFFFFF, count 1, living/perceived/self 0.
+- Note [C for the missing init, I for the intent]: the handler's stack slots for hostility (+0x3C) and group (+0x48) are never initialised for the commands that do not pop them (type slot is initialised to -1, object to -1, others to 0). The pushed value is whatever is in them; the intent is certainly hostility 0 and group -1 and the game behaves so, so a port should use those.
+- 434: area = `0x005D5840(location+0x20)` (the location's area id); `0x00684DD0(area, out, &pos(x,y,z from location+0..8), typeMask, count)`, `ret 0x10`. If the area is not found the array is empty.
+
+#### What _AI_GetEnemies passes (`toolset/extract/scripts/_Core Includes/ai_conditions_h.nss` line 2451) [C]
+
+`GetNearestObjectByHostility(OBJECT_SELF, TRUE, OBJECT_TYPE_CREATURE, AI_MAX_CREATURES_NEAREST /* = 5 */, TRUE /*living*/, TRUE /*perceived*/, FALSE /*not self*/)`. Then the script filters: followers only, enemies farther than AI_FOLLOWER_ENGAGE_DISTANCE_{LONG,CLOSE} from GetMainControlled() end the list (a `break`, the list is sorted by distance from OBJECT_SELF), and creatures with the ability active (use-ability) or with AI_MODIFIER_IGNORE are skipped. An override target (`_AI_GetTargetOverride`) returns a one-element array; a follower using an ability on its attack target within melee range returns that target.
+
+So: the 5 nearest hostile, living creatures that are in OBJECT_SELF's perceived set, nearest first.
+
+#### Pseudo-code a port can copy
+
+```
+// types: script mask. engine type byte T (1 = GUI ... 6 = creature ... 10 = placeable); bit = 1 << (T - 1); OBJECT_TYPE_CREATURE = 32 = bit of 6.
+bool Filter(cand, mask, tag, group, src, wantHostile, wantLiving, wantPerceived) {
+    if (!cand) return false;
+    if (!cand.IsActive() && tag.empty()) return false;          // so tag searches see inactive objects
+    if (!(mask & (1u << (cand.type - 1)))) return false;
+    if (!tag.empty() && cand.tag != tag) return false;          // exact string compare of cand+0xB8 (0x004C0A50, wide chars)
+    if (group != -1 && cand.group != group) return false;       // cand+0x3C0
+    bool ok = true;
+    if (wantHostile && src) {
+        auto c = cand.AsCreature(); auto s = src.AsCreature();
+        if (!c || !s || !app.hostilityTable) return false;
+        ok = IsObjectHostile(c, s);                              // 0x0064B900, same as 0x006A2B80
+        if (!ok) return false;
+    }
+    if (wantLiving) ok = !(cand.CurrentHealthRounded() <= 0);    // slot 0x120; non-creatures: -1 => false
+    if (ok && wantPerceived) ok = src.AsCreature().perceivedSet.contains(cand.id);   // +0xC18
+    return ok;
+}
+
+array GetNearest(src, mask, count, tag, group, wantHostile, living, perceived, includeSelf) {
+    area = src.GetArea(); if (!area || !src.AsObject()) return {};
+    res = [];                                                    // ids with squared distances, ascending
+    idx = indexOf(src.id in area.objectsSortedByX);              // if not found, empty
+    if (includeSelf && Filter(src, mask, tag, group, src, ...)) res.insert(src, 0.0);
+    for (k in 1, -1, -2, 2, 3, -3, -4, 4, ...) {                 // outward from idx, both sides until each is exhausted or pruned
+        cand = list[idx + k];                                    // object must resolve; ids already in res skipped
+        if (!Filter(cand, ...)) continue;
+        d2 = dot3(cand.pos - src.pos);                           // pos = +0x120 (x,y,z)
+        if (res.size() >= count && dx*dx > res[count-1].d2) { mark this side done; }  // x-sorted pruning, candidate is still inserted
+        res.insertBefore(first element with d2 > new, new);      // ties after existing
+    }
+    n = count <= 0 ? 1 : count;  return first min(n, res.size()) ids;
+}
+
+array GetNearestToLocation(loc, mask, count) {                   // 0x00684DD0
+    area = loc.area; if (!area) return {};
+    // same outward scan from the x-binary-search position (0x0067CD00)
+    // per candidate: id resolves, mask bit, nothing else (no active test, no tag, no living, no perceived)
+    // distance = dot3(cand.pos - loc.pos); same insertion and cut
+}
+```
+
+Since the pruning is exact, a port may simply filter every object of the area and sort ascending by squared 3-D distance with a stable sort in scan order, then cut to count; only the order among exactly equal distances differs (arbitrary in the engine).
+
+#### Evidence
+
+- Handler `0x00671510`: command switch `0x006715A2`-`0x00671677` (cmp 0x1B1, 0x1B3, 0x1B4, 0x7F, 0x1B2); object pop `0x00671615` -> `0x00A2F6D0`; tag pop `0x0067163C` -> `0x00A2F4C0`; group pop `0x00671656` -> `0x00A2F3C0` into [esp+0x48]; hostility pop `0x00671662`-`0x0067166D` into [esp+0x3C]; location pop `0x006715D5` -> `0x00A2F650`; type and count `0x00671677`-`0x006716AB` (count <= 0 -> 1 at `0x006716AD`); living/perceived/self pops `0x00671743`-`0x006717A4`; the 10-arg call `0x006717CD`-`0x00671800`; result trim `0x00671828`-`0x00671887`; ToLocation `0x006716E2`-`0x00671731`.
+- Search `0x006849C0` (address library ID 13767 `ScriptBackend::GetNearestObjects`): area list at area+0x690 (vector of ids at +0x694..+0x698); source index found by linear search `0x00684AA0`; include-self filter call `0x00684B2D`; scan loop `0x00684B78`; duplicate skip `0x00684C00` (`0x008663A0(out, &id)`); id -> object `0x00684C17` (`0x00A58190`); filter call `0x00684C4F`; distance `0x00684C5C`-`0x00684C7E` (`0x008D8B60` dot product of the position difference with itself); pruning `0x00684CA8`-`0x00684CF8`; insertion position loop `0x00684D09`-`0x00684D3F` (fcompp + `test ah,0x41`, stops at first stored > new); inserts `0x00684D47` (distances) and `0x00684D56` (ids); step sequence `0x00684D5F`-`0x00684DA5`.
+- `0x00684DD0`: sibling of 0x006849C0, not a wrapper: it takes (area, out, pos*, mask, count) and does the same outward scan from `0x0067CD00` (binary search over the x-sorted list by +0x120.x), with only the id-resolves and type-bit tests (`0x00684F5B`-`0x00684F7A`) and a 3-D squared distance (`0x00684F80`-`0x00684FB8`); `ret 0x10`.
+- Filter `0x0067FEC0`: IsActive `0x0067FED0`-`0x0067FEE6`; type `0x0067FEEC`-`0x0067FEFE`; tag `0x0067FF04`-`0x0067FF1F`; group `0x0067FF28`-`0x0067FF37`; hostility `0x0067FF39`-`0x0067FF95`; living `0x0067FF97`-`0x0067FFAB` (`0x00695300`: slot 0x120 <= 0); perceived `0x0067FFB2`-`0x0067FFE4`.
+- `0x0064B900`: groups at +0x3C0 ordered max/min; flags +0x3B8 and +0x3BC (override: if either creature has +0x3B8 == 1 and the groups differ, hostile iff either has +0x3BC == 1); otherwise the group table `0x0064B830(max)` row contains min (`0x0064B810` -> `0x0064B5B0` != -1). Same function behind `IsObjectHostile` (`0x0064BB40` converts ids to objects with `0x005D58C0`).
+- Vtable slots: CCCreature primary vtable `0x00B10484` (119 slots): +0x10 and +0x18 both `0x0079AF30` (the casts to creature and object, `generated/ObjectCasts.h` indices 4 and 6), +0x120 `0x006AB4B0`. CCItem vtable `0x00B1C61C`: +0x120 `0x004E13D0` (`or eax,-1; ret`).
+- Script side: `toolset/extract/ldf/cscript.ldf` lines 143-161 (OBJECT_TYPE_*, ALL = 4294967295), 1804 and 1818 (signatures); `ai_constants_h.nss:137` AI_MAX_CREATURES_NEAREST = 5.
+
+#### Not read
+
+- Whether the area's object list (+0x690) is kept sorted by x on every move or only at insertion (the search and the binary search assume it; `0x0067CD00` and the walk are read, the maintenance is not). If it were stale the engine's pruning could miss objects; a port that sorts everything cannot.
+- `0x004C0350` (the tag string compare's body): taken as exact, case-sensitive; not read to the end.
+- CCPlaceable, CCWayPoint slot 0x120 (only CCCreature and CCItem read), and what the creature slot returns with no stats object (`0x006AB516`/`0x006AB527` branches).
+- Slot 0xA0 on the source (the area) and slot 0x18 (cast to object) bodies beyond their vtable entries.
+- Why the handler's hostility/group slots are not initialised for the commands that do not pop them (above); the working game shows they behave as 0 and -1.
+- What `IsActive` (slot 0x6C of the sub-object at +0x70) does beyond `dev/PARTY.md`.
+- The perceived set's contents are as `dev/COMBAT.md` says (not re-read here); whether dead creatures are removed from it, and when.
 
 ## On an area transition the whole party pool goes, inactive
 
