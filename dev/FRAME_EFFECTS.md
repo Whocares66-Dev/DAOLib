@@ -176,3 +176,90 @@ There is **no glow or bloom mask written into alpha.** No vanilla scene shader w
 - **Under additive effects (spells, fire, glows):** stays 1 (an additive pass only raises alpha).
 - **Pixels nothing draws:** 1, from the (0,0,0,1) clear (the main view's clear is [inferred]); their rgb is 0, so no glow.
 - **A peer port that keeps alpha at 1 everywhere** matches vanilla on solids, sky and additive effects. It differs only on cut-outs and hair (vanilla weaker where `a*k < 1`) and slightly under blended effects. It must keep the blur's `centre.a >= mean.a` selection to match vanilla's bloom shape.
+
+## The blur behind full-screen GUI screens (guiblur; lib-agent-2, 2026-10-19)
+
+GOG exe, base 0x400000. [C] = checked (listing, files), [I] = inferred.
+
+### Short answers
+
+1. **It is a frame effect: `da_blurdesaturate`** (`postprocesseffects.erf`, layer 15, minlod 0). Its own header says: "blur and desaturate the 3D scene when the in game GUI panel is brought up (inventory, character, journal, etc)". Not da_dof, not the scene's `b` bit 2 [C]. No snapshot, no img:// texture, no world-rendering switch: the world keeps rendering and the effect reworks the live back buffer at the frame's end, before the Flash movies are drawn over it [C for the effect's passes; I for "before the movies" from FRAME_EFFECTS.md].
+2. **The lead was wrong: `b` bit 2 is a sound.** 0x00A55830 `b & 2` calls singleton getter 0x00510CA0 (global 0xC315EC, 0x58-byte object, vtable 0xAF6588 `GUI::GUIManager`), then 0x00522C30(2, L"Click"). That is the GUI sound row 2 "open book" (column "Click", string 0xB05DAC), already in dev/AUDIO.md:384 (caller 0x00A5589A). It plays a click and does nothing visual [C].
+3. **The switch is `b` bit 8** (the book frame), not bit 2. GUIScene Show 0x00A55830: `b & 8` calls `DragonAgeGUISystem` slot 25 (+0x64, 0x0060B1A0) with 1, then ShowScene(0x3B BookBack). Hide 0x00A55910: `b & 8` calls the same slot with 0. Slot 25 turns the effect on (arg 1: fade in) or starts its fade out (arg 0) [C]. Scenes with bit 8: Inventory (8, also the loot panel), CharacterRecord (0), Journal (9), Map (0xF), WorldMap (0x10), Tactics (0x17), Store (0x20), Crafting (0x26), LevelUp (0x2E), and the movieless Skills (0xD) and SpellsTalents (0xA) [C, table at GUI.md:120-182]. Not blurred: ItemUpgrade, CharGen, PartyPicker, Options, MainMenu, SaveLoad, Conversation (b = 0).
+
+### Numbers a port can copy [C unless marked]
+
+Parameters (`da_blurdesaturate.ffx.xml`, no engine or area override; the exe sets none of them): HBlurWidth 3, VBlurWidth 3 (range 0-50), Hue 1.0 (degrees: a 1 degree rotation, practically identity), Saturation 0.5, Brightness 1.0, Contrast 1.0, TimeToFade 0.25, FadeDirection 1 (default; the engine writes it), FadeOutStart 0.
+
+Targets (all A8R8G8B8, shared with bloom): BackBufferCopy (BBC) full size; LightMask and Downsampled16 half size (BACKBUFFER_WIDTH/2 x HEIGHT/2).
+
+Passes, in the stage `EndFrame`, effect layer 15 (after da_bloom/da_fade at 10, before da_hsvmatrix at 20; at medium or lower detail the SM2 material differs, see below):
+
+| # | Material semantic | Shaders | Reads -> writes | State |
+|---|---|---|---|---|
+| 1 | GaussianBlur `HBlur` | HorizontalBlur.vsh, TwoPassBlur.psh | BBC (full) -> LightMask (half) | no depth, no blend, linear, clamp (GaussianBlur.sta) |
+| 2 | GaussianBlur `VBlur` | VerticalBlur.vsh, TwoPassBlur.psh | LightMask -> Downsampled16 (half) | same |
+| 3 | HSLMatrix `HSLMatrixFade` | HSLMatrix.vsh, HSLMatrixFade.psh | Downsampled16 (s0) + BBC (s2) -> back buffer | HSVMatrixBlend.sta: no blend; s0 linear clamp |
+| 4 | copy | | back buffer -> BBC | |
+
+Kernel (TwoPassBlur.psh ps_2_0, identical in `data/shaders.erf` and `patch002.erf`; the vertex shaders compute the taps): 7 taps, weights **0.05, 0.10, 0.20, 0.30, 0.20, 0.10, 0.05** (sum 1; alpha forced to 1; rgb only).
+- Horizontal: `t = HBlurWidth / backbuffer_width` (UV units), taps at `u + k*t`, k = -3..3, same v. Vertical: `t = VBlurWidth / backbuffer_height`, taps at `v + k*t`.
+- So the step is **3 full-resolution pixels** per tap, 1.5 texels of the half-size target; the support is +-9 px; the 1-D standard deviation is sqrt(2.1)*3 = **4.35 full-resolution pixels** per axis. It is a fixed pixel size, not a fraction of the screen: it looks weaker at 4K than at 1080p [I for "looks"].
+- Pass 1 samples the full-size BBC with a bilinear fetch into the half-size target, so it also downsamples 2x.
+
+Pass 3 (HSLMatrixFade.psh ps_3_0 and HSLMatrix.vsh, vanilla copies of `shaders.erf`):
+```
+// per frame: Time = effect_time (seconds since the effect was enabled), Dir = FadeDirection, Start = FadeOutStart, TTF = TimeToFade (0.25)
+a = saturate(Time - Start)
+x = (1 - a) * TTF * Dir + Time * (1 - Dir)
+t = saturate(x / TTF)
+M = Hue(1 deg) * Sat(0.5) * (Brightness 1 * Contrast 1), offset 0.5*(1 - Contrast) = 0    // the matrix from HSLMatrix.vsh; formula in FRAME_EFFECTS.md "da_hsvmatrix"
+blurred = Downsampled16(uv)  (linear)         // upsampled from half size
+orig    = BBC(uv)
+rgb = orig + t * (M * blurred.rgb - orig)     // oC0.xyz; alpha = 1
+Sat(S)[i][j] = (1 - S)*w_j + S*delta_ij,  w = (0.2125, 0.7154, 0.0721)   // S = 0.5: halfway to grey
+```
+- Fade in (Dir 0): t = saturate(Time / 0.25), a quarter-second ramp.
+- Fade out (Dir 1): t = 1 - saturate(Time - Start), a ramp over **1.0 second**, not TTF, because the shader does not divide the `1 - a` term by anything but TTF*Dir/TTF = 1 [C in the listing]. Start is the effect's current Time when the fade-out is asked for.
+- The pixel shader does not read the colour curve (s1), so the area's colour grade does not enter here [C]. DAOElgaraShaders overrides `hslmatrixfade.psh.fxo` (1,484 bytes against vanilla's 704) and `hslmatrix.mat.xml`, so a player with it installed sees its version of pass 3; the numbers above are vanilla's.
+- At shader model 2 the material uses SM2_HSLMatrix.psh (no fade term, uses the colour curve) [C from the .mat.xml and listing]; ignore for a port.
+
+Result: the world at full resolution is replaced, within 0.25 s, by a 4.35 px (per axis) gaussian-ish blur, half-desaturated (saturation 0.5), brightness and contrast unchanged. Even over the whole screen, not radial [C].
+
+### Where it is turned on and off [C]
+
+The effect lives in a 0x20-byte plain struct at `CClientExoApp+0x154` (made at 0x005DBFC4-0x005DBFE2 by the ctor 0x0064C3F0; freed at 0x005D750A). Fields: +0x00 the `da_blurdesaturate` effect, +0x04 its `Time` value, +0x08 `FadeOutStart`, +0x0C `FadeDirection`, +0x10 state (0 in, 1 out, 2 off; starts 2), +0x14 the `da_colorfade` effect (a separate fade-to-colour), +0x18 its `Time`, +0x1C its fade value.
+- **0x0064C630** looks the effects up by name on first use (wide string 0xB06B7C `da_blurdesaturate`, 0xB06BF0 `da_colorfade`; value names `Time` 0xB06BE4, `FadeOutStart` 0xB06B60, `FadeDirection` 0xB06B44), disables the blur effect, and adds it to the effect manager (0x00457400 on 0x00C1EAC4). Called from 0x005DBFF1 at start-up.
+- **0x0064C420(mode)** is the state setter (ret 4): mode 0 = fade in: if state is not already 0, `SetEnabled(blur, true)` (0x0045FA10) and `FadeDirection = 0`; mode 1 = fade out: `FadeOutStart = current Time` and `FadeDirection = 1`, enabled stays; mode 2 = `SetEnabled(blur, false)`. The state is stored last.
+- **0x0060B1A0 = `DragonAgeGUISystem` slot 25** (vtable 0xB03504 + 0x64; the only direct caller is the vtable). With arg `on`: sets a flag object at GUISystem+0x268 (`slot 0x54(on)`); if `on` is 0 it also gets scene 0x3B and calls its +0xC0 member slot 0x54 with 0 (inferred: starts the book's outro); then tail-jumps to 0x0064C420 with mode `on ? 0 : 1` (0x0060B1E9-0x0060B1EF).
+- **On**: GUIScene Show 0x00A55830, 0x00A558D4-0x00A558FD (`b & 8`): slot 25(1), then ShowScene(0x3B).
+- **Fade out begins**: GUIScene Hide 0x00A55910, 0x00A55975-0x00A55987 (`b & 8`): slot 25(0).
+- **Off for good**: `GUIBookback` (BookBack, 0x3B) Hide, vtable 0xB17068 slot 6 = 0x00717090: base Hide 0xA55910, then `0x0064C420(2)` at 0x007170A5. BookBack's movie plays its `outro` label and at frame 51 sends `GUIBookback.HideBookBack` (as_bookback/scripts/frame_51/DoAction.as:2), which hides the scene [C for the message in the AS; I for the chain from the message to Hide]. So the blur ends when the book's outro ends, not when the panel closes; if the outro is longer than the 1 s fade-out, the effect is at t = 0 (visibly unblurred) before it is disabled.
+- A scan of the code for `mov reg,[reg+0x158]` followed by a call of slot 0x64 found only those two (Show and Hide); no other code triggers it [C for the scan, which covers this addressing form only].
+
+`da_dof` is not involved (it is the conversation/cutscene depth of field; no reference from this path).
+
+### Does a movie draw a snapshot? No [C]
+Grep of the decompiled movies under `%TEMP%\lib-agent-2-guicmd-x\allgfx\` for snapshot, backbuffer and blur finds nothing outside the shared `StickyButton.as` library text. `bookback.gfx` (`as_bookback`) is the book frame art (`BookBack.as` plays `intro`/`outro`; a token `GUIBookback.ShowBlack` shows an optional black full-screen `BlackBack` clip). The blurred world is the engine's, drawn into the back buffer before the movies.
+
+### For a port
+```
+on screen open (scene.b & 8):  blur.enabled = true; blur.time = 0; dir = 0
+on screen close (scene.b & 8): dir = 1; start = blur.time        // fade out over 1 s
+when the book (BookBack 0x3B) hides: blur.enabled = false
+each frame while enabled (after the world, before the UI):
+  blur.time += dt
+  H = blurH(backbuffer -> half-size, taps k*3px/W, w = [.05 .1 .2 .3 .2 .1 .05])
+  V = blurV(H, taps k*3px/H, same weights)
+  t = dir == 0 ? saturate(time/0.25) : 1 - saturate(time - start)
+  out = lerp(world, SatMatrix(0.5)*V, t)      // Hue 1 degree ignored
+```
+
+### Not read
+- `effect_time`'s exact behaviour past its declared range (0 6): whether it clamps at 6 s, which would hold `Time - Start` at 0 if a screen was open longer than 6 s (the fade-out would then not advance). The update is 0x0045EEE0 (not read through).
+- What the flag object at GUISystem+0x268 and the member at BookBack+0xC0 are (slot 0x54 targets).
+- The BookBack outro's length in seconds (frame labels and rate), so how long the blur lasts after a screen closes.
+- Who else enables `da_blurdesaturate` by script: the FB_SetEffectEnabled command can (the toolset scripts do not mention it), not searched in module scripts.
+- The sampler state of s2 (the original) in pass 3 (GaussianBlur/HSVMatrixBlend states set stages 0 and 1 only), so whether it is point or linear (same result at 1:1).
+- Whether the world's own rendering (shadows, particles) changes while a full-screen screen is up; the game is paused by `GameModeGUI` (GUI.md), so the picture is static apart from effects that run on real time.
+- Scratch: `%TEMP%\lib-agent-2-guiblur-x\` (twopassblur, horizontal/verticalblur, hslmatrix) and `-x2\` (hslmatrixfade, states), extracted with ghilana (`all_copies`), dumped with `fxc /dumpbin`.
