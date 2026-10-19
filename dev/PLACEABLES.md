@@ -116,6 +116,7 @@ The door's closed patches are 7 (unlocked) and 8 (locked); open is a turned stri
   - it makes the placeable not interactive (0x0069BA70(0), at 0x0074E76E; not inactive: corrected 2026-10-18 by lib-agent-2);
   - for a body bag, it handles the dead creature, and destroys a `plc_bagcoin03_0` bag;
   - with +0x614 set, it destroys the placeable.
+- **Every removal runs the same check**, not only the close: a take ends in 0x0074FC60, REMOVED (7) to the container, then 0x0074E710, so a bag emptied by Take All is not interactive at once. `dev/ITEMS.md`'s "Looting" has the takes and their events (read 2026-10-18 by lib-agent-2).
 - **The body bag's items** come in at sub-action 21, so one event delay before the script's `OpenInventory` shows them.
 
 Not read: the sound columns' player and where a click is refused on an unusable placeable. The event filter 0x00698490 is the object's disabled set, and `AddEventDeltaTime`'s 10 is the handler id, not milliseconds (read 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`).

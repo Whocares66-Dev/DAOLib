@@ -41,7 +41,172 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, with `default_hm_nob
   - It's not raised while the global flag 0x2 is set, when event 6 is in the owner's disabled set, +0x28C (`0x00698490(6)`; only `EnablevEvent` changes it and no shipped script calls it; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`), or when the item's +0x5D0 check answers (not understood). Read.
   - Creator and target: the inventory's owner. Object 0: the item.
   - With the global flag 0x400, int 0 is 1 and it's delivered at once (`DeliverNow`). Otherwise int 0 is 0 and it's queued with no delay. Read.
-  - The `0x00763342` site nearby raises 7, `INVENTORY_REMOVED`, the same way (inferred from the type stored there).
+  - `0x00763240` raises 7, `INVENTORY_REMOVED`, the same way, to the inventory that lost the item (checked 2026-10-18 by lib-agent-2, "Looting" below).
+
+## Looting (lib-agent-2, for DAOParagonEngine)
+
+### Taking loot: AcquireAllItems, AcquireItem (loota, GOG exe, read 2026-10-18)
+
+#### Short answers
+
+1. **Take All.** The panel sends `SelectedChar.AcquireAllItems <Container.ID>` (checked, Container.as TakeAllItems). The text becomes an `AcquireAllItemsMessage` (8 bytes: vtable 0xB1E3F4, object id at +4, made at 0x0077C9D0, name wide string at 0xB1F2D8; checked) and goes to the selected creature, `CCCreature::HandleMessage` 0x006A1FD0 (checked). The handler does no filtering. It calls `ForScript_MoveAllItems` 0x00763570 on the creature's ItemPossessor (creature+0x440) with the container id. That function finds the container's object (0x005D5C20, id to object, vcall +0x34, then +0x18 gives its item location, an `Inventory`), copies **every item of the container's list, in list order** (index 0..n-1, snapshotted into a vector first), and moves each one separately into the creature's own location (the `Backpack*` at creature+0xBFC, see below). No droppable, stolen or plot test is made at this level (checked: the loop 0x00762E90 pushes each item unconditionally; the only per-item tests are CanRemove/CanAdd below). Which items are in a body bag was decided earlier by the use (PLACEABLES.md). Money is an ordinary item (base item row 17, `bitm` Label "Money - Copper", StackSize 1,000,000, Type 1; checked via ghilana), so it is moved like the others; it is not a separate "container copper" number at this layer.
+2. **Full pack.** The destination is a `Backpack` (vtable 0xB26464, a `ListItemLocation`); its `CanAdd` is vtable slot 12, 0x007CA890. Capacity is the **number of entries (stacks count as one)** against an attribute at Backpack+0x28, which the base constructor `ListItemLocation` 0x007CAAE0 sets to **0x60 = 96** (checked; whether the party's Backpack is later given another value was not found). The movie reads `Party.BackpackSize` (attribute +0x18) and `Party.BackpackMaxSize` (+0x28) (strings 0xB060E0 / 0xB060C0, used at 0x0063AEA8 / 0x0063AF2B; checked). When it is reached mid-take: items that cannot fit are **skipped, the rest are still tried** (a stackable item that merges into an existing stack still fits). Nothing is removed from the container for a skipped item. If any item failed, the handler tells the GUI `Inventory.FlashFullOverlay` ("inventory" movie; strings 0xB0F4C8/0xB0F4B4; checked). The panel's own logic (checked): after sending, `full = BackpackSize >= BackpackMaxSize` and `containerNotEmpty = count(Container.Inventory) != 0`; if (containerNotEmpty and full) it calls `Inventory.FlashFullOverlay()` (plays ST_INVENTORY_FULL, overlay for 1.5 s) and **stays open**; otherwise `Close()`.
+3. **Single item.** The loot list's double click, the TakeItem action and the radial menu send `GUI.SelectedChar.AcquireItem <item id>` (checked, ContainerItemList.as lines 92, 101; RadialMenu.as 245). That is taken by `CCCreature::HandleMessage(AcquireItemMessage)` 0x006A70E0 and moves the item **into the selected creature's pack**. The reverse, dropping a pack item onto the container list or radial menu entry, sends `Container.AcquireItem <item id>` (ContainerItemList.as 68/82/..., PlayerItemList.as 182) and is `CCPlaceable::HandleMessage(AcquireItemMessage)` 0x0074FCC0: it moves the item **into the placeable's own inventory**. Same message class (0xB1E3C4), the two handlers differ by receiver (checked). Which receiver the text reaches is decided by the text's prefix, resolved to an object by `Messages::FromCallbackText` 0x00524BE0 (data tree path, then vcall +0x4C; inferred, not followed).
+
+#### Pseudo-code
+
+```
+// text "SelectedChar.AcquireAllItems <id>"  -> CCCreature::Handle(AcquireAllItemsMessage) 0x006A1FD0
+HandleAcquireAll(creature, msg):
+    savedFlags = g_invFlags;  g_invFlags |= 0x424        // 0x400 deliver events at once, 0x4 no on-screen notice, 0x20 (not read)
+    result = MoveAllItems(creature.ItemPossessor /*+0x440*/, msg.id)   // 0x00763570
+    if !result.allMoved:
+        gui.Call("Inventory.FlashFullOverlay")            // string 0xB0F4C8 via 0x004D20C0 to the client
+    g_invFlags = savedFlags
+    return result.allMoved                                // al
+
+MoveAllItems(me, containerId):                             // 0x00763570
+    cont = GetObjectById(containerId)                      // 0x005D5C20; null -> src = null
+    src  = cont ? cont.ItemLocation() : null               // vcall +0x18 of its ItemPossessor part
+    dst  = me.ItemLocation()                               // vcall +0x18 = *(creature + 0xBFC), the Backpack
+    if !src || !dst: return {allMoved=true, moved=[]}      // (initialised "ok")
+    list = []
+    for it in src (iterator: valid/current/next):  list.push(it)   // 0x00762E90, all items, no filter
+    ok = true; moved = []
+    for it in list (index order):                          // 0x00762D60
+        r = MoveItem(it, dst)                              // 0x00762C40
+        if !r.ok: ok = false
+        if r.movedRecord non-empty: moved.push(r.movedRecord)
+    return {ok, moved}
+
+MoveItem(item, dst):                                       // 0x00762C40 -> 0x00762990
+    loc = dst.FindLocationFor(item)                        // 0x00761340, dst vcall +0x50 (Backpack 0x007CA5E0: a stack to merge onto, else new)
+    if item.holder (+0x4E8) == dst:  relocate within dst   // dst vcall +0x20
+    else:
+        canRemove = item.holder == null || item.holder.CanRemove(item)   // vcall +0x34, 0x007611E0
+        canAdd    = dst.CanAdd(item, loc)                  // vcall +0x30, 0x007611A0
+        if canRemove && canAdd:
+            removed = item.holder.Remove(item)             // 0x00762100
+            dst.Add(item, loc)                             // 0x00762010 -> dst vcall +4 (Backpack 0x00762240: stack merge or insert,
+                                                           //   raises EVENT_TYPE_INVENTORY_ADDED 0x00763100; the old holder gets INVENTORY_REMOVED)
+            ok = true
+        else: nothing moves, ok = false
+
+Backpack::CanAdd(item, loc):                               // 0x007CA890
+    if g_invFlags & 0x10: return true                      // CreateItemOnObject sets it: scripted adds ignore the limit
+    count = (end - begin)/4 of the item vector (+0xC/+0x10)
+    max   = attribute at +0x28                             // default 96
+    full  = count >= max && max != -1
+    if item.stacks() && (existing = itemAt(loc)) && CanStack(item, existing): return true   // 0x00753C60, 0x00755CB0
+    return !full
+
+// text "GUI.SelectedChar.AcquireItem <itemId>" -> CCCreature::Handle(AcquireItemMessage) 0x006A70E0
+HandleAcquireItem(creature, msg):
+    item = GetItemById(msg.id)                             // 0x005D5870; null -> return false
+    PlayGuiSound("Click")                                  // 0x00510CA0(0x12, L"Click")
+    saved = g_invFlags; g_invFlags |= 0x424
+    prevHolder = item.holder                               // +0x4E8
+    r = MoveItem(item, creature.ItemLocation())            // via 0x007633F0
+    if !r.ok:
+        gui.Call("Inventory.FlashFullOverlay")
+        if r.moved non-empty: MoveBack(r.moved, prevHolder)  // 0x00762FB0
+    g_invFlags = saved
+    return true
+
+// "Container.AcquireItem <itemId>" -> CCPlaceable::Handle(AcquireItemMessage) 0x0074FCC0
+//   same, into the placeable's own location; no sound, no overlay (calls 0x007633F0 on placeable+0x440, rolls back with 0x00762FB0)
+```
+
+#### Evidence
+
+- Checked in disassembly: 0x006A1FD0 (flags |= 0x424 at 0x006A2018, call 0x00763570 at 0x006A2045 with ecx=this+0x440 and the id at msg+4, failure branch strings 0xB0F4C8 `Inventory.FlashFullOverlay` and 0xB0F4B4 `inventory`, sent with 0x004D20C0); 0x00763570; 0x00762E90; 0x00762D60 (per-item 0x00762C40, `ok=0` on a failed item, loop continues); 0x00762C40; 0x00762990 (CanRemove, CanAdd, then remove and add); 0x00762010; 0x007633F0; 0x006A70E0 (sound "Click", rollback 0x00762FB0); 0x0074FCC0 (same shape); Backpack vtable 0xB26464 and `CanAdd` 0x007CA890; `ListItemLocation` ctor 0x007CAAE0 (+0x18 = 0, +0x28 = 0x60, +0x38 = 0); ItemPossessor slot at creature+0x440 is 0x006BA800, which returns `*(creature+0xBFC)`.
+- Checked in the movie AS (`%TEMP%\lib-agent-2-guicmd-x\allgfx\as_inventory\scripts\__Packages`): Container.as `TakeAllItems`, `Close`; ContainerItemList.as; PlayerItemList.as; Inventory.as `FlashFullOverlay`.
+- Inferred: that `*(creature+0xBFC)` is one Backpack shared by all party members (the GUI reads the party's size from one object, `Party.BackpackSize`); that the 0x20 bit of the flags (in 0x424) means nothing here; the routing from `SelectedChar.` / `GUI.SelectedChar.` to the creature; the container's own item location is `Inventory` (vtable 0xB1B974), whose CanAdd/CanRemove 0x0073F600/0x0073F640 let anything with `item+0x2C4` set, or base item 0x11 (17, copper) through (checked in code; meaning of +0x2C4 inferred as a plot/undroppable flag).
+- Events: each move raises INVENTORY_REMOVED (7) on the old holder and INVENTORY_ADDED (6) on the new (ITEMS.md; 0x00763100); the module's item-acquired script (sp_module_item_acq) is not read here.
+
+#### Not read
+
+- Whether the party Backpack's max (+0x28) is ever changed from 96 (the Backpack constructor 0x0080D220 caller was not found), and what `Party.BackpackSize` (+0x18) is updated from.
+- The body of `Backpack::Add` 0x00762240 in full (stack merge details, and whether copper becomes a normal pack entry or is added to a money counter on the way in).
+- The text router's exact path for `SelectedChar.` versus `GUI.SelectedChar.`, and what the 0x20 flag bit does.
+- `PartyBackpackChangedMessage`/`ContainerChangedMessage` senders (what tells the open panel to refresh).
+- The module item-acquired script chain and the Wilds' blood quest.
+
+### Loot events (lootb): the take's events, the darkspawn blood flag, the bag's end (read 2026-10-18)
+
+Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset's scripts. "checked" is read in disassembly, data or script text; "inferred" is marked.
+
+#### Short answers
+
+1. **The events a take fires** (checked):
+   - `EVENT_TYPE_INVENTORY_ADDED` = 6 and `EVENT_TYPE_INVENTORY_REMOVED` = 7 (`events_h.nss`:175-176). Each goes to the **owner of the inventory that changed**, which is also the creator: ADDED to the receiving creature, REMOVED to the container (the placeable). Not to the item, not to the module.
+   - Fields: object 0 = the item (`CDataArrays::SetObject(0, item id)`, 0x00A5B950). Int 0 = 1 when the global flag 0x400 is set (delivered at once), else 0; the scripts read it as `bProcessImmediate`. REMOVED also gets **flag 0** = bit 5 (0x20) of the global flag word (0x00A5B890 = SetFlag; the scripts do not read it). No other fields. There is no "old owner" or "new owner" field and no stack count.
+   - ADDED is raised by 0x00763100, REMOVED by 0x00763240 (`ret 4` at 0x0076338D). Both: not while global flag 0x2 is set, not if the event type is in the owner's disabled set (0x00698490), not if the item is being destroyed (+0x5D0). With 0x400 the event is created and delivered at once (0x0064AD80, `DeliverNow`); otherwise queued (0x0064ACE0, handler id 10, no delay).
+   - Wrappers: 0x00763390(item) sets the item's +0x440 to the inventory owner's id and raises ADDED; 0x007633C0(item) sets +0x440 to -1 and raises REMOVED. Callers: creature's inventory callbacks 0x006A2EE0 (add) and 0x006A2FA0 (remove), the placeable's add 0x0074BE08 and remove 0x0074FC60 (calls 0x007633C0 at 0x0074FC6A), and 0x006313AA / 0x00631415 (another add path, which raises ADDED itself through 0x00763100).
+2. **The module's item-acquired event is a script event, not an engine one** (checked in the scripts):
+   - The engine never sends it. The creature's script `player_core.nss` (`HandleEvent_InventoryEvent`, :268, dispatched at :515-518) receives the engine's `EVENT_TYPE_INVENTORY_ADDED`. If the item has the local int `ITEM_SEND_ACQUIRED_EVENT` != 0 it calls `SendEventCampaignItemAcquired(GetModule(), oItem, GetEventInteger(ev,0))` (`events_h.nss`:1012): `Event(EVENT_TYPE_CAMPAIGN_ITEM_ACQUIRED)`, object 0 = the item, `SignalEvent(module, ev, bProcessImmediate)`. The event's creator is the signalling creature (OBJECT_SELF), that is the acquirer; `sp_module_item_acq` reads it with `GetEventCreator`.
+   - `EVENT_TYPE_CAMPAIGN_ITEM_ACQUIRED` = **1020** (`events_h.nss`:59; no `EVENT_TYPE_MODULE_ITEM_ACQUIRED` exists).
+   - Chain: module script `sp_module.nss`:114 (case 1020, comment "Sent by: player_core") -> `HandleEvent(ev, RESOURCE_SCRIPT_MODULE_ITEM_ACQUIRED)` = `sp_module_item_acq.ncs` (`global_objects_h.nss`:20) -> case 1020 (:99) -> not the special cases, `ITEM_CODEX_FLAG == -1` -> `_PassEventToPlotHandler(tag, ev)` (:261, :498) -> first three letters of the item tag pick the plot's script: "pre" -> `preev_item_acquired.ncs`.
+   - `preev_item_acquired.nss`:45-71: case 1020; `oItem = GetEventObject(ev,0)`; `if (GetTag(oItem) == "pre200im_darkspawn_blood") WR_SetPlotFlag(PLT_PRE100PT_DARKSPN_BLOOD, PRE_BLOOD_PC_ACQUIRED_DARKSPAWN_BLOOD, TRUE, TRUE)`. (`PRE_IT_DARKSPAWN_BLOOD`, `pre_objects_h.nss`:128.)
+   - **Nothing tests that the acquirer is in the party or is the PC**: the condition is the item's tag alone, plus `ITEM_SEND_ACQUIRED_EVENT` on the item. `pre200im_darkspawn_blood.uti` (designeritems.erf) has Tag `pre200im_darkspawn_blood`, BaseItem 50, Plot 1, and the var `ITEM_SEND_ACQUIRED_EVENT` = 1 (checked). `ITEM_CODEX_FLAG` = -1 there, so it goes to the plot handler. The only "party" condition is that the creature running `player_core` gets the ADDED event (the hero and followers; which creatures use `player_core` was not listed, inferred from its name and comments: "Any party member").
+   - The flag's own script `pre100pt_darkspn_blood.nss`:41: on SET of that flag with value 1, if `UT_CountItemInInventory(PRE_IM_DARKSPAWN_BLOOD) >= 3` and `PRE_BLOOD_PC_HAS_DARKSPAWN_BLOOD` is not set, it sets `PRE_BLOOD_PC_HAS_DARKSPAWN_BLOOD`. So **the item must already be in the acquirer's inventory when the event runs** (ADDED comes after the add, and the count is by the hero's inventory), which is why the events must follow the move and not precede it. (`pre_functions_h.nss`:25 `PRE_ItemAcquired` is the same test, not called from this chain.)
+3. **After the take** (checked in the exe):
+   - Each removal from a placeable ends in 0x0074FC60: REMOVED (7) to the placeable, then the container GUI refresh (`[this+0x238]` slot 9 and the GUI object 0x00636250, inferred ContainerChanged), then **0x0074E710**, the same function `Container.InventoryClosedMessage` runs (0x0074E8D0 calls it, returns true). So the "emptied" handling runs after **every** removal as well as at close.
+   - 0x0074E710: if `+0x618` (cannot add items: a loot-only container, which the OpenInventory native sets) and the inventory (+0x678) is empty: make not interactive (0x0069BA70(0)); if `+0x664` (the body bag's creature id) is not -1: the creature is handled by 0x006A93F0(creature, isCoinBag) (0x0069B830 and 0x0069BA70(0) on the creature, and for a coin bag its +0x790 body-bag id cleared, then 0x006A3AD0 / 0x0069F360(0), inferred "start its decay"); isCoinBag = the placeable's model name (0x0074CB80) equals `plc_bagcoin03_0` (string at 0x00B1BD68); if so the placeable is destroyed (vslot 0x198, arg 0). Then if `+0x614` is set the placeable is destroyed the same way. At the end, if the inventory is still not empty, 0x0069B830 runs.
+   - So an emptied body bag: made non-interactive at once, its dead creature handled; destroyed by the engine only if it is a `plc_bagcoin03_0` bag or has +0x614 (not found who sets +0x614; not read). `gen_ip_bodybag.utp` is Appearance 16 whose `placeable_types` row has an empty ModelName, so it is **not** destroyed by this; it stays, non-interactive (ghilana: Body Bag, StateCnt_Bodybag, RemoveWhenDead 0). The creature body bags' decay is the script's: `creature_core.nss`:254-262 `SetBodybagDecayDelay(bag, 3000)`, `SetObjectInteractive(bag,FALSE)`, `DestroyObject(bag, 20000)` after `SpawnBodyBag` (that is for one death case; other cases :267, :293 plain `SpawnBodyBag`).
+   - No script reacts to the bag's inventory events: `placeable_core.nss`:55 -> `Placeable_HandleInventory` (`placeable_h.nss`:576) has empty ADDED and REMOVED cases. Specific placeables (chests with their own scripts, e.g. `arl120ip_crate`) have cases but no body-bag script does. No `INVENTORY_CLOSED` or `PLACEABLE_ONCLOSE` script event exists in the scripts (grep of the extract: none).
+   - **The panel does not close by itself in the engine as far as read**: the movie's Take All closes it unless the pack is full with items left (`dev/GUI.md`:39). Close sends `Container.InventoryClosedMessage` (runs 0x0074E710 again, a no-op if already done), `GameModeController.PerformUseObject <char> <container> 2` (USE_OBJECT with CLOSE: a body bag in Closed state offers only OPEN_INVENTORY, so it fails -1 at the action check and the script gets no USE event; before the check, 0x006B9620 moves the bag's creature's remaining droppables in, if any), and `GUI.HideFullScreenGUI`.
+
+#### Pseudo-code for Take All of a body bag with the blood
+
+```
+// precondition: the bag is open, the panel is showing; SelectedChar = receiver (a party member)
+// message "SelectedChar.AcquireAllItems <bag id>"  -> CCCreature AcquireAllItemsMessage 0x006A1FD0
+saved = G.flags; G.flags |= 0x424;            // 0x400 deliver events at once, 0x20 (REMOVED flag 0 = 1), 0x4 no on-screen notice
+MoveAll(receiver.inventory, bag.inventory):   // 0x00763570 -> list 0x00762E90 -> per item 0x00762D60/0x00762C40/0x00762990
+  for item in bag.items:                       // money stacks included
+      bag.inventory.Remove(item):              // item.owner = -1
+          raise 7 to bag:      ev7{creator=bag, obj0=item, int0=1, flag0=1}   // delivered now
+          bag script placeable_core -> Placeable_HandleInventory (empty)
+          GUI ContainerChanged(bag)
+          EmptiedCheck(bag)                    // 0x0074E710: only acts when the bag is empty, see below
+      receiver.inventory.Add(item):            // item.owner = receiver.id (+0x440)
+          raise 6 to receiver: ev6{creator=receiver, obj0=item, int0=1}        // delivered now
+          receiver's script (player_core) HandleEvent_InventoryEvent:
+              if item.ITEM_SEND_ACQUIRED_EVENT != 0:
+                  SignalEvent(module, ev{type 1020, creator=receiver, obj0=item}, immediate=int0)
+                  module sp_module -> sp_module_item_acq -> tag prefix "pre" -> preev_item_acquired:
+                      if tag == "pre200im_darkspawn_blood":
+                          SetPlotFlag(PLT_PRE100PT_DARKSPN_BLOOD, PRE_BLOOD_PC_ACQUIRED_DARKSPAWN_BLOOD, 1)
+                          // flag script: if count(blood in hero inventory) >= 3 -> set PRE_BLOOD_PC_HAS_DARKSPAWN_BLOOD
+              if base item is BASE_ITEM_TYPE_QUICK/GIFT: tutorial flags
+G.flags = saved;
+EmptiedCheck(bag) when bag.cannotAdd && bag.inventory.empty:
+    bag.SetInteractive(false)
+    if bag.creature != -1: HandleDeadCreature(bag.creature, isCoinBag = bag.model == "plc_bagcoin03_0")
+    if isCoinBag or bag.destroyWhenEmpty(+0x614): Destroy(bag)
+// then the movie closes the panel (unless the pack is full with items left):
+send Container.InventoryClosedMessage -> EmptiedCheck(bag) again
+send GameModeController.PerformUseObject receiver bag 2  -> fails -1 (no CLOSE action in the bag's state), no script event
+GUI.HideFullScreenGUI
+```
+
+A single-item take (`AcquireItemMessage` 0x006A70E0) is the same Remove then Add per item without the 0x424 flags (so the events are queued, int 0 = 0, no on-screen suppression); not read beyond that its add and remove land in the same callbacks 0x006A2EE0 / 0x0074FC60 (inferred).
+
+#### Evidence
+
+- Event 6 body 0x00763123-0x00763220: gates (flag 0x2, 0x00698490(6)==1, item +0x5D0 via 0x00838210), event allocated 0x50 bytes, `[ev+0x20]=6`, `[ev+0x24]=owner` (vcall slot 0x14 of the inventory), SetObject(0, item +4), then 0x400 test: queued via `0x0064ACE0(0,0,owner,owner,0xA,ev)` or delivered via `0x0064AD80(owner,owner,0xA,ev)` after SetInteger(0,1) (0x00A5B710(0,1)). Event 7 body 0x00763240-0x0076338D: same plus 0x00A5B890(0, bit 5 of 0x00C371B4) before the int. `CDataArrays` vectors: +4 ints, +0xC flags, +0x10 objects (`dev/script_commands/commands.md`:92, `events.md`).
+- `AcquireAllItems` 0x006A1FD0 sets 0x00C371B4 |= 0x424 (0x006A2018), calls 0x00763570 on `this+0x440` with the container id `[msg+4]`, restores the word at 0x006A2118. The result (a bool at +0xA0) false path builds a message (strings 0x00B0F4C8, 0x00B0F4B4; inferred a "pack full" notice). Not read further.
+- 0x00763570: resolves the container object by id (0x005D5C20), its inventory (vcall 0x18), own inventory (vcall 0x18), builds the move list 0x00762E90 and executes it 0x006B2320; per item 0x00762C40 sets flag 0x8 and calls 0x00762990. Inferred that the item-level add/remove reach 0x006A2EE0 / 0x0074FC60 through the inventories' owner callbacks; the call from 0x00762990 down to them was not traced.
+- Scripts: `sp_module.nss`:110-119, `sp_module_item_acq.nss`:99-263 and :498-530, `preev_item_acquired.nss`:56-79, `player_core.nss`:268-324 and :515-518, `placeable_h.nss`:416-473 and :576-592, `creature_core.nss`:254-293, `pre100pt_darkspn_blood.nss`:41-52.
+
+#### Not read
+
+- Which creatures run `player_core` (that followers do is inferred); whether non-party NPCs picking up the item would also raise 1020 if they run it.
+- Who sets the placeable's +0x614 (destroy when emptied) and +0x618 from a template (0x618 is set by the OpenInventory native, per PLACEABLES.md); what 0x006A93F0's callees do exactly.
+- The trace from 0x00762990 to the owner callbacks, the "pack full" path of AcquireAllItems, and the single-item take's flags.
+- Whether the movie closes the panel after Take All on its own (GUI.md says so; the AS was not re-read here).
+- Which 0x00631xxx function holds the second add path (0x006313A0) and what calls it.
 
 ## Equipping
 
