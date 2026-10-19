@@ -511,8 +511,7 @@ Read in the disassembly (daoexe.py, capstone) and the game's files (ghilana). No
 
 - So for the mage cast end / conjure start the fade is **0.433 s** with a hold of 0.108 s at full old weight, then the old falls (and the new rises) until 0.325 s, then 0.108 s of the new clip alone; for berserk / shield bash getup / war cry exits it is **0.6 s** (hold 0.15, change 0.15-0.45).
 - `c_beara.tbi` (bear form): `c_blackbear.pause.ani -> c_blackbear.runf.ani`, 0,1, 0.058,1, 0.175,0, 0.233,0 (**0.233 s**). `c_deepstkra`, `c_dsogre`, `c_goata`, `c_mutta`, `c_spidera`: empty lists (112 bytes). Other creature sets have no .tbi (the file list from ghilana: only those 7 exist).
-- **The .tbi pairs probably never fire** (inferred (corrected 2026-10-18 by lib-agent-2)): their keys name no shipped node file, so the lookup finds no pair.
-- **Which names the keys match** (the .anb node's file name; the tbi uses `shared.pause.ani`, `m.ua_cast_end.ani`, `c_blackbear.pause.ani`): inferred to be the node file names of the .anb (the tbi names are in the same style as the anb's: `mh.dg_lost_wander.ani`); how the set normalises them (`0x00A5E730` resolves a name through the set's tree list at +0x64 and map at +0x38) was not read.
+- **The .tbi pairs probably never fire** (inferred; corrected 2026-10-18 by lib-agent-2): their keys (`shared.pause.ani`, `m.ua_cast_end.ani`, `shared.berserk.ani`, ...) look like clip file names, but none matches a node file of the shipped trees (`mh_c.*` and the like), so the lookup (`0x00A5F350` -> `0x00A69300`) finds no pair. How the set normalises names (`0x00A5E730`) was not read, and a play check (a 0.333 s linear fade against a 0.433 s curve after `ua_cast_end`) would settle it.
 
 #### 5. Cases, in seconds
 
