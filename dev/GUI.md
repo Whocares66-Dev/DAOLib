@@ -427,6 +427,65 @@ Also direct Invokes (checked): `FloatyLayer.DisplayStatusMessage(text:wstring, c
 
 Function `0x00610D50` (called from `GUIMap` vtable 0x00B19FB0 slot 5 = 0x0072F410, and one more call site; scene id 0x2A = Minimap is tested first): SetArraySize then SetArray for `SharedLibrary.SharedMap.BatchCreatureIDs`(int, one per creature), `SharedLibrary.SharedMap.BatchCreaturePositionsOrientations`(float, 3 per creature: world x, y, orientation; element 0..2 is also the camera icon), `SharedLibrary.SharedMap.BatchCreatureFlags`(int bit flags: hostile, in party, show-as-ally, player, within map radius, from `CreatureMapIcon.as`), then `Invoke MiniMap.Instance.UpdateMinimap()`. Frequency: on the map object's update; I did not trace its caller to a per-frame loop (inferred per frame while the minimap is shown). The world map: `WorldMap.GetTravelling`, `WorldMap.GetAnimating`, `WorldMap.AreaLoadedNotify` Invokes (event; `0x0072EDA0`, `ForScript_AddGeneralScoreboardEntry`'s neighbour).
 
+#### What the engine serves as the data tree's `Area.Name` (areaname) (lib-agent-2, read 2026-10-19)
+
+##### Short answers
+
+1. `Area.Name` is the attribute `Name` of the **area object the player's creature is in** (a `CCArea`). It is filled from the area's own `.are` GFF3 field **`Name`**, a LocString (a strref into the talk table), resolved to a wide string. It is not `EnvAreaName` (3012), not the area list's entry, not the module's and not a data table. (checked: exe + files)
+2. It is set once, when the area is loaded from its `.are` (or from its save), and the `Area` node is (re)registered under the data-tree root when the area-load machine runs its first step. It is not updated per frame. If the strref is -1/0 or the lookup fails it is the empty string `""`; there is no fallback to the tag or the resref. (checked for the code; the player-creature part of "which area" is inferred, see below)
+3. Yes, a wide string from the talk table, resolved at area load in the language of the loaded talk table. `minimap.gfx` does **not** uppercase it (no `toUpperCase` anywhere in the movie's AS). It does call `ExternalCommands.ReplaceDesignerTags` on it, but only if the text contains `<` (and the text field is html). (checked in AS)
+
+Examples (checked with ghilana): `bhm600ar_fade_harrowing.are` Name strref 21857 = "The Fade" (the mage origin's Harrowing Fade); `cir300ar_fade.are` strref 21913 = "The Raw Fade"; `arl100ar_redcliffe_village.are` strref 16042 = "Redcliffe". All in `singleplayer_en-us.tlk` (the campaign's table, not `core_en-us.tlk`).
+
+##### Prior work consulted
+
+- `dev/GUI.md:407` lists `Area.Name` for minimap.gfx (already known to the peer); `dev/gui_data_paths.csv:1880,1961,2814` list the users (map.gfx GetValue, minimap.gfx token observer, saveload.gfx GetValue). Nothing on the source of the value, so the rest is new.
+- `dev/gff4_fields.csv:86` `3012,EnvAreaName` and `src/dao/core/Level.cpp:398,619` (`kAreaName = 3012`, `LevelLayout.name`) are the **level layout** (.lvl, GFF4) field, a different thing: the engine's `Area.Name` does not read it (this was the peer's lead, and it is not the source).
+- `dev/LOAD_EVENTS.md:14-30` and `src/dao/Addresses.h:1196-1210` for the area-load machine `0x006C8EF0` (state 6).
+- `dev/GUI.md:281-284,401,718` for the token observer (the movie watches a path; the value arrives as a wide string).
+- DAOEluvianMCP / DAOTurnBased / the address library: grep for `Area.Name`/`AreaName` found nothing relevant (only `SETSHAREDCHARAREANAME`, an unrelated script command).
+
+##### Evidence
+
+###### The `Area` node and its `Name` (checked, exe GOG 1.05, `tools\daoexe.py --disasm`, no Ghidra)
+
+- `CCArea`'s constructor (vftable `0x00B0DE04`, the function around `0x00688CC1`-`0x00689D2B`, `ret 0x4c`) builds the area's attributes by name into the container at `this+0xD4` (the vtable `0x00B0DDE0` stored at `[esi+0xD4]`). The wide-string pushes there: `ResRef` (0x00B0DD4C) -> `this+0x480`; **`Name` (0x00AEDA08, push at 0x006893FA) -> `this+0x4A8`**; `Minimap` (0x00B03828) -> `this+0x4D0`; `North` (0x00B0DD40); `MinimapBottom/Left/Top/Right/Width/Height` (0x00B0DD24 .. 0x00B0DCA0), which are the `Area.Minimap*` paths of `dev/gui_data_paths.csv:1873-1879`. So `Area.Name` = `CCArea+0x4A8`, `Area.Minimap` = `+0x4D0`.
+- The attribute at `+0x4A8` is a string attribute; its destructor and copy are at `0x0068AD2F`, `0x0068C6D9`.
+
+###### What it is filled from (checked)
+
+- The `.are` loader (a `CCArea` method around `0x00682B00`-`0x00683373`; it reads the GFF3 fields by narrow label: `Comments` 0x00B0DC34, `Expansion_List`, `Expansion_ID`, `Tag` 0x00B0DBD4, `ScriptResRefID`, `OnExit`, ...) reads the field **`Name`** (narrow string at 0x00AE5954, `push 0xae5954` at **0x00682DD6**) with the LocString reader `0x00A37300` (call at 0x00682DEB). The result is copied into the area's LocString member at **`this+0x158`**: flag byte `[+0x158]`, strref `[+0x15C]`, text `[+0x160]`, gender flags `+0x17C..+0x17E` (0x00682DF7-0x00682E3B).
+- Right after (0x00682E5F-0x00682E84) it calls the attribute's `Set` (vtable slot at `+0x54` of the attribute's vtable) on `this+0x4A8` with the wstring returned by `0x004D1EB0(this+0x158)`.
+- `0x004D1EB0` is the LocString's "get text": if the resolved flag `[+0]` is 0 it calls `0x004D1D50` (resolve), then returns `this+8`, the wide string. `0x004D1D50` resolves through the talk table manager (global `0x00C1D08C`, lookup `0x004E4990(strref, ..)`; strref `[+4]`), and the result is assigned to `+8` (`0x004D1DC4-0x004D1DCA`). If the global is null or the lookup fails (`0x004D1E41`): the text is set to the empty wide string (`0x00ADEF14`, L""). The default LocString (`0x004D1B80`) is strref `-1`, text `""`. If the strref is -1 or 0 the text stays `""`.
+- A debug path in `0x004D1D50` (`0x004D1DD8`: the call `0x00838210` on `global 0x00C32938 + 0x674`) rewrites the text as `{%u - %ls}` (format at 0x00AF0DB0: strref and text), apparently a "show string ids" debug mode. Not read further; it is off in play (inferred, since the minimap shows plain "The Fade" in play-sessions described elsewhere is not verified here).
+- Data: the `.are` has `Name: {strref: N}` (read with ghilana `resource`): `arl100ar_redcliffe_village.are` 16042 "Redcliffe"; `cir300ar_fade.are` 21913 "The Raw Fade"; `bhm600ar_fade_harrowing.are` 21857 "The Fade"; `char_stage.are` (chargen stage) 311656. (Strings read with `mcp__ghilana__strings`, `id: [16042, 21913, 21857]`; `singleplayer_en-us.tlk`.) Other `.are` fields next to it: `Tag`, `TemplateResRef`, `ScriptResRefID`, `Comments`, `Map`, `North`, `Layout`, `ReverbPreset`, `MusicPreset`. There is no `LocName`/`DisplayName`/`EnvAreaName` in the `.are` and the name is not taken from a 2DA/GDA.
+- The other readers of the same LocString: `0x006675B6`-`0x006675F5` builds `<path>.Area` (wide `Area` at 0x00B08240 appended by `0x004C3030`) and fills it with `0x004D1EB0(areaObject+0x158)` of the area found by object id (`0x005D5960`), or the text `OBJECT_INVALID` (0x00B082C0) when none: this is what `<save or party member>.Area` returns (the saveload movie reads `ExternalCommands.GetValue(_loc3_ + ".Area")`, `as_saveload/.../SaveFile.as:43`). Same source, so the name in the save list and `Area.Name` agree. (checked for the code, inferred for the exact path owner)
+
+###### When the node `Area` points at an area (checked for the code, inferred for the detail)
+
+- `0x006C6FD0` (ID 15085 + ..., unnamed in the address library; GOG `0x006c6fd0`, EA `0x005b8a90` for ID 15093's neighbour; I checked only the GOG address) takes the controlled creature via `0x00694990` (`mov ecx,[0xC327EC]; jmp 0x5D5CC0`, the ClientExoApp's player creature), calls its vtable `+0xA0` (its area), and registers `area + 0xD4` under the name `Area` (0x00B08240) in `SmartData::TokenManager` (`0x00455BF0` + `0x00456540`, the register call at 0x006C7036).
+- Its only caller is `0x006C8F7B`, in the area-load machine **`0x006C8EF0`**, the first case of its jump table (`jmp [eax*4+0x6C9654]` at 0x006C8F55, `eax` = the step at `[ebp+0x74]`; the case at 0x006C8F5C). `dev/LOAD_EVENTS.md:17` numbers the steps 1 to 8; this is step 1. So on every area load/transition, `Area` is re-pointed at the new area's `+0xD4` container before the rest of the load runs.
+- `CCArea`'s destructor (the code at 0x0068A93C-0x0068A9D2) looks up `Area` in the TokenManager (`0x005C6230`), and if it still points at this area's `+0xD4` it removes it (`0x005C6710`): so `Area.Name` is not found (the shared missing attribute: "" / 0, `dev/GUI.md:852`) between an area's destruction and the next area-load step 1.
+- The Name itself is set earlier, when the area is built from its template/save (the `.are` loader above), not at step 1.
+- Consequence for the port: serve `Area.Name` as the LocString text of the `.are` `Name` of the player's current area; publish it at area load (and a movie that observes it gets the new value once, with the coalesced per-frame delivery of `dev/GUI.md:401`). Whether a movie's observer is notified when the `Area` node is swapped for another area's (rather than only when the same `Name` attribute is Set) I did not read: see Not read. In play the minimap re-creates its field per area load (it is part of the scene that is reloaded), so a fresh `GetValue`-style refresh happens on the observer's registration (`0x0051A4A0` refreshes at once, `dev/GUI.md:718`). (inferred)
+
+###### The movie side (checked, `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_minimap`)
+
+- `MiniMap.as:46-56`: `AreaName_mc_init` sets `TextField.autoSize = "center"`, `wordWrap = true`, and registers `TokenManager.AddTokenObserverWithID(_OBSERVER_ID.MINIMAP_AREANAME, "Area.Name", function(a_sName){ areaNameField.SetText(a_sName); areaNameField.SetOutline(true, 3745298); })`. So it only shows the string: no case change, no localization lookup.
+- `SharedLibrary/TextField.as:22-53` `SetText`: null -> ""; `removeString("\r\n","\r")`; if the field is not html (or `GUISystem.ShowRawFormattingTags`) the text is assigned raw; else `&` -> `&amp;` and `htmlText = ProcessText(text)`. `ProcessText` (`TextField.as:127-135`) calls `ExternalCommands.ReplaceDesignerTags(text)` (`ExternalCommands.as:125-130`, `fscommand("ReplaceDesignerTags", ...)`) only if the text contains `<`. Area names such as "The Fade" have none, so the text is displayed as is.
+- No `toUpperCase` in `as_minimap` (grep). Any capitals come from the text field's font/format in the SWF, not from code (not read).
+- map.gfx (`Map.as:172-174`) uses `SetText(ExternalCommands.GetValue("Area.Name"))` and saveload.gfx (`SaveLoad.as:368`, `SaveFile.as:36-43,96,100`) `GetValue("Area.Name")` for the current area; the saveload list uses `<slot>.Area` for other saves. These want the same wide-string text.
+
+##### Not read
+
+- The code path that makes observers on `Area.Name` fire when the `Area` node is replaced by the next area's container (the TokenManager's register call `0x00456540` and `0x005C7CE0`'s re-resolve), so whether the minimap's text changes on a transition by notification or only by the movie being rebuilt.
+- What `0x006C6FD0`'s `0x00694990` returns exactly when there is no player creature (loading screens, chargen before the hero exists), and the case where the node `Area` is registered earlier than step 1 elsewhere (the other refs to the `Area` string at `0x006C7010` (this function), `0x006CCD1D` (save/loading state) and `0x007ABD34/0x007ABE22/0x007B9585` were not opened).
+- The debug `{strref - text}` branch (`0x004D1DD8`) and which global/flag turns it on.
+- Area names for areas of the 15 enciphered add-in archives (ghilana cannot read them); the Fade areas read here are the campaign's.
+- The `Area_List`/`Area_ID`/`Area_Name` labels at `0x006FC0xx` (`CSAreaList` reading a list from a save/module file; `Area_Name` there is a plain string, apparently the area's tag, inferred) are not what `Area.Name` shows.
+- The text field's font and any fixed-case formatting in `minimap.gfx`'s timeline/XML.
+- Other languages: only `en-us` strings were read.
+
 ### Event Invokes (checked paths; argument shapes read from the call sites)
 
 - Scene lifecycle (`GuiMovie`): `_root.StartSceneFromGame()` (0x00518D20, when OpenMovie shows a scene), `_root.FinishSceneFromGame()` (0x00518CD0, on hide), `_root.Rewind()` (0x00518E00), `_root.PlayScene("Outro")` (`PlayOutro` 0x005119F0, one wide-string argument, then record byte +0x101 set), `MovieUtils.UpdateAllLayouts()` (stage size/layout change), `MovieUtils.IsMovieOnStage`, `MovieUtils.CallFunctionOnMovie` (the GUI system's slots 80 and 81: a generic path and argument forwarded), `MovieUtils.PrintHierarchy` (debug, `0x00606C70`).
@@ -1099,6 +1158,81 @@ Marks: [C] checked in the exe or files, [I] inferred. Addresses are GOG VAs. Scr
 - The exact gameplay events that reach 0x6BDC70 (model rebuild) and so refresh a portrait (equipment, appearance, armour tint); no level-up trigger.
 - ReleasePortrait's release of the texture and cache entry; the queued Async job's completion and how Scaleform refreshes the clip.
 - Camera columns of table 7 rows 11-41 (Loghain onward; most are zeros or the Default values; not paged).
+
+## PortraitRenderer::PlaceCamera: what it aims and orients by (lib-agent-2, read 2026-10-19)
+
+Marks: [C] checked in the exe's disassembly or data, [I] inferred. GOG VAs. Disassembly kept in %TEMP%\lib-agent-2-placecam-dis.txt / -dis2.txt.
+
+### Short answer
+
+1. **The head node supplies only a position.** PlaceCamera never reads the head node's rotation or axes [C]. It hands `CCCreature::HeadTransform` (0x006A1EF0) the homogeneous point (0, 0, 0, 1) and gets back that point carried by the node named `head` (wide string at 0x00B0F450): for the origin, that is the node's world translation and nothing of its rotation. The result is divided by w and is the camera's aim point [C for the call and the use; I that the node's `vt+8` is a plain transform of the point, which the origin input makes a translation].
+2. **The camera's direction comes from the pitch alone, in the portrait scene's fixed world axes** [C]. A back-off vector (0, D, 0) is turned by a quaternion built from the pitch (`FromYawPitchRoll(0, pitch, 0)`), the camera looks along its negative, and its yaw is that vector's heading (`Vector::ToAngle`). No creature facing, no node axis goes into it.
+3. **The rotation (CameraRotation) is given to the clone, not the camera** [C]: `CCObject::SetOrientation` (0x00694CE0) on the clone (`renderer+0x20`) with the facing vector (sin(-rot), cos(-rot), 0), every call. That resets the clone's facing absolutely (rot 0 = (0, 1, 0), +Y), whatever the clone had; the camera, at +Y of the head, then looks at the clone's front.
+4. **For the hero's morph head**: the portrait shows the face frontally if the main view does, because both turn the model by the creature's orientation (the object's facing vector), and neither takes the head node's own -Z. A head node a quarter turn off the body's forward does not tilt this camera [C for the camera, I that the model root follows the orientation vector in both scenes]. It would show from the side only if some code built the camera from the node's rotation, and PlaceCamera does not. What a quarter-turned node does change: the node's world translation (the aim point) is the same point whatever its rotation, so the aim is unaffected. A mesh that compensates for the node (as in the main view) compensates the same in the portrait.
+
+DAOTurnBased's reading (dev/UI.md:67, dev/DAOLIB_NEEDS.md:121-122, 124) agrees on every point it made and is now settled by the disassembly, with two corrections: its "the rotation is given to the clone ... the function itself was not read" is confirmed (below), and HeadTransform's point (0,0,0,1) set "just before the call" is at 0x007F35BF-0x007F35DE area (`[esp+0x50..0x5c]` = 0,0,0,1 written at 0x007F356C-0x007F357C, passed to 0x006A1EF0 at 0x007F35D9).
+
+### Prior work used (cited)
+
+- C:\project\DAOTurnBased\dev\UI.md:67 (back-off 3 x CameraDistance, 10 degrees, pitch turns about the head, Z and X along the camera's own up and right, 0.15-40 m), UI.md:70 ("the rotation turns the view round the creature"), UI.md:77 (no head node: aims at the clone's root).
+- C:\project\DAOTurnBased\dev\DAOLIB_NEEDS.md:121 (distance formula `(distance + [0x00C39054]) * 30 / [0x00C11C4C]`), :122 (rotation given to the clone via 0x00694CE0 with a sine/cosine vector; not read further), :124 (HeadTransform (0,0,0,1), clone at scene origin, seen in play).
+- DAOLib master src/dao/Portraits.cpp (header comment, HeadPosition), %TEMP%\lib-agent-2-gui3-portrait.md (Render calls PlaceCamera with 8 values, "unset" = 65505.0 at 0x00B1D9C8; Default row; the clone is rebuilt each Render with p1).
+- New here: the camera's axes and the clone's orientation reset, read from the instructions.
+
+### Evidence [C unless marked]
+
+Constants read from the exe: 0xB1D9C8 = 65505.0 (unset), 0xAF7068 = 30.0, 0xC11C4C = 10.0 (FOV degrees; also given to the scene camera), 0xC39054 = 0.0, 0xAF14C0 = pi/180, 0xAE7108 = 2.0, 0xB00618 = 90.0, 0xAF0E50 = 180/pi.
+
+Helpers (identified by their instructions):
+- 0x004EE200 `Quaternion::FromYawPitchRoll(out, a, b, c)`: multiplies the three angles by pi/180 (degrees in).
+- 0x004CB6D0 rotate a vector by a quaternion (out, quat, vec).
+- 0x004EE570 `Vector::ToAngle` (heading of a vector in XY, degrees).
+- 0x004CBCE0 the quaternion's X axis column (1-2(y2+z2), 2(xy+wz), 2(xz-wy)); 0x004CBD80 its Z axis column (2(xz+wy), 2(yz-wx), 1-2(x2+y2)); 0x00451A30 normalise with a fallback; 0x004CB640 quaternion multiply; 0x004CBCB0 conjugate.
+- 0x00694CE0 `CCObject::SetOrientation(vec4*)`: stores the vector at `this+0x130` and calls virtual +0x80 (update).
+- 0x006A1EF0 `CCCreature::HeadTransform(point*)`: finds node `head`, updates it (node vt+0x18), transforms the point (node vt+8) [the transform's identity I]; returns false with the point untouched when there is no such node.
+
+Flow of 0x007F3130 (`ret 0x20`; args pitch +8, rotation +0xC, distance +0x10, zAdj +0x14?, xAdj ..., lightX/Y/Z +0x1C/+0x20/+0x24; the Z/X order below):
+- 0x007F3130-0x007F3381: any argument equal to 65505.0 is read from the portraits table row (cols 0x5B84AEC7 pitch, 0x97A92B07 rotation, 0xEFBEFD6C distance, 0xDB253899, 0x3A4BFC34, 0x8327EA19, 0x1E280B6F, 0x62492EB4), by tag row then appearance (the chargen tags 0xC3907C / 0xC39060 use the source's own settings). Not new.
+- 0x007F3381-0x007F33CD: `D = (distance + 0) * 30 / 10`; `Q = FromYawPitchRoll(0, pitch, 0)`; `R = Rotate(Q, (0, D, 0))`.
+- 0x007F33DB-0x007F3424: `dir = -R`; `heading = ToAngle(dir)`; `Q2 = FromYawPitchRoll(heading, -pitch, 0)`.
+- 0x007F3429-0x007F34E7: `pos = R + normalise(Q2.X-axis) * s1 + normalise(Q2.Z-axis) * s2` (the two adjusts; the camera's own right and up; by my stack count s1 is the argument at +0x18 and s2 the one at +0x14, which is the reverse of the names DAOLib and DAOTurnBased give them; not reconciled, see Not read).
+- 0x007F34EC-0x007F3538: `Q3 = FromYawPitchRoll(...90.0 ...)`; `final = Q2 * Q3` with a conjugate: a fixed 90-degree camera-convention turn (the camera is not looking down its own Y). [C that 90.0 is the constant; I for its meaning.]
+- 0x007F3541-0x007F35D9: the point (0,0,0,1) goes into `[esp+0x50..0x5C]`; `angle = -rotation * pi/180`; `fsincos`; facing vector = (sin, cos, 0) at 0x007F35A1-0x007F35C6 (sin stored first = x, cos second = y); `SetOrientation(clone = renderer+0x20, facing)` at 0x007F35CD; `HeadTransform(clone, point)` at 0x007F35D9.
+- 0x007F35DE-0x007F3634: `iw = (w != 0) ? 1/w : 1`; `head = point.xyz * iw`; `lightpos = head + (the vector held at [esp+0x20], the aim-relative offset)`. Both lights (`renderer+0x10`, `+0x14`) get vt+0x34 with positions then vt+0x10 with (lightX, lightY, lightZ) (0x007F363C-0x007F3699).
+- 0x007F369B-0x007F3732: the scene camera (`renderer+0xC`): vt+4 with two pointers (position and rotation as built above), vt+0xC with the FOV 10 deg * pi/180, vt+0x18 with near 0.15 (0x00ADEEA8) and far 40.0 (0x00AE7534); then the renderer's `+0x1C` object is asked for a camera (vt+0x28) and its virtual +8 target is set (viewport/dirty); not read in detail.
+
+Pseudo-code:
+
+```
+D     = (distance + 0.0) * 30.0 / 10.0
+Q     = YawPitchRoll(yaw=0, pitch=pitch, roll=0)
+R     = Q * (0, D, 0)                   // back-off vector, world axes, in the clone's scene
+dir   = -R
+Q2    = YawPitchRoll(heading(dir), -pitch, 0)
+eye   = R + Xaxis(Q2)*adj_a + Zaxis(Q2)*adj_b      // then + head (see below)
+face  = (sin(-rotation), cos(-rotation), 0)
+clone.SetOrientation(face)              // absolute; rotation lives here, not in the camera
+p     = (0,0,0,1); clone.HeadTransform(&p)   // node "head" world position; unchanged if no node
+head  = p.xyz / p.w                     // (0,0,0) of the scene when there is no head node
+camera.pos = head + (the eye offset), camera.rot = Q2 * fixed90
+camera.fov = 10 deg, near 0.15, far 40
+```
+
+(The final add of `head` into the camera position is at 0x007F35F9-0x007F3632 for the lights; for the camera, `vt+4`'s first pointer is built at 0x007F36B7-0x007F36C5 from `[esp+0x24]`, which I took to be the same head-plus-offset position; [I], not traced to the last operand.)
+
+### Why the hero's morph head does not matter here
+
+- The camera's yaw and pitch contain no quantity read from the clone: the clone's orientation is set from the rotation argument alone (so any facing it had is overwritten) and the camera is built from the pitch alone. A head node whose -Z is a quarter turn from the body forward changes nothing in them.
+- The head node enters through one translation. Morph heads built by the morph path (dev/CHARACTERS.md 0x0055EC80 / 0x0054EB20, %TEMP%\lib-agent-2-morph-build.md) still have a node named `head`; if the morph-built head node is found by name `head` in the clone's model, the aim is its position, same as Alistair's. If a morph-built model has no node of that name, the engine falls back to the scene origin (the clone's root), as for the deepstalker (DAOTurnBased dev/DAOLIB_NEEDS.md:124) [I for the morph case].
+- So in the portrait the face is frontal exactly when the clone, facing +Y at rotation 0, shows its face along its body's forward, which is what the main view does with the object's orientation. Rotation values from the portraits table then turn the clone by that many degrees from frontal; the Default row's 23.5 is a three-quarter view of a head that is frontal at 0 (inferred from the table values, not from play).
+
+### Not read
+
+- The last operands of the camera's position (vt+4's first argument at 0x007F36B7) and the exact `[esp+0x20]` offset vector fed to the lights; I read the structure, not every stack slot, so the sign convention of the lateral adjust and which of the X/Z adjusts maps to which scalar is unreconciled with DAOTurnBased's "Z up, X sideways" (seen in play there); the arithmetic above may be off by one slot.
+- The node class behind `HeadTransform` (vt+0x10 lookup by name, vt+0x18, vt+8): I did not resolve the class or confirm vt+8 is a point transform; a transform of the origin is a translation if so.
+- Whether the clone's model root yaw follows `CCObject+0x130` as the main view's does (the vt+0x80 update at 0x00694CF5), and the convention (which body axis faces along the vector); inferred equal for both scenes since both are CCCreature.
+- The meaning of the fixed 90.0 turn, the `renderer+0x1C` target branch at the end, and whether a morph-built hero's clone has a `head` node of that name.
+- No game was run and Ghidra was not used.
 
 ## gui4a: the quickbar's length, and a quickbar slot's token (lib-agent-2, read 2026-10-18)
 
