@@ -332,13 +332,42 @@ The 0.1 is the gap under the capsule: feet z = centre - co.
 
 ```
 ray1: origin (x, y, z+3.0), dir (0,0,-1), length FLT_MAX, groups all, mask M
-      M = 0x24 (Placeables|StaticGeometry) and the hit must not carry flag 0x01000000 (Nonwalkable)   if area+0x658->+0x7C == 1 (0x0067B4D0)
+      M = 0x24 (Placeables|StaticGeometry) and the hit must not carry flag 0x01000000 (Nonwalkable)   if area+0x658->+0x7C == 1 (0x0067B4D0): the .arl's EnvAreaChunkIsChunk, below
       M = 0x2000000 (Walkable)                                                                         otherwise
 if hit: z = hit.z; *hitOut = 1; *normalOut = hit.normal; return z
 else:   ray2 from z+100 down with all hits; take the hit with the smallest |hit.z - z| whose flag 0x01000000 is clear (65505 start of the min); if none, return z
 ```
 
 (The 0x0067B4D0 flag's meaning is not read; mask choice checked, who sets it not.)
+
+##### The mask's switch: area+0x658 → +0x7C is the level's EnvAreaChunkIsChunk (3122) (lib-agent-2, read 2026-10-19)
+
+###### Short answer (checked)
+ChunkManager+0x7C is the area layout's "is chunked" flag: GFF4 field 3122 `EnvAreaChunkIsChunk` (bool, int8) of the area's layout file `<name>.arl` (root struct), stored as a dword 0/1. Rule a port can copy: `ground uses mask 0x24 (reject hits with flag 0x01000000) iff the area's .arl has EnvAreaChunkIsChunk != 0`, else mask 0x02000000 (Walkable). Nothing is computed and no data table is involved.
+
+Core already exposes it: `src/dao/core/Level.cpp:407` `kAreaIsChunked = 3122`, read at :644; when nonzero it fills `out.chunks` (`Chunks{rows, columns, width, height}` from fields 3123/3124/3125/3126). So "chunked" = `layout.chunks.has_value()` (check the field name in Level.h).
+
+###### Evidence
+- Test 0x0067B4D0 (checked, daoexe --disasm): `mov eax,[ecx+0x658]; test; je -> 0; cmp dword [eax+0x7c],1; sete al`. Matches master dev/PATHFINDING.md:335.
+- Writers of [reg+0x7C] in the layout load 0x005D1290 (esi = ChunkManager; checked by disasm of the whole function, only two stores): 
+  - 0x005D168E `mov [esi+0x7c], 1`, 0x005D1A7B `mov [esi+0x7c], edi` (edi = 0).
+  - The branch is `test bl,bl` at 0x005D1676 / `je 0x5D1A71`. bl is set at 0x005D1610-0x005D1617: a GFF4 bool read (call 0x4EBFC0, as the other bool reads) of field label 0xC32 = 3122 (`push 0xc32` at 0x005D15E7), `setne bl`.
+  - True branch (0x7C=1) goes on to read 0xC33.. (3123 RowCount, 3124 ColCount, 3125 Width, 3126 Height; `[esi+0xA0]` takes the row count). False branch (0x7C=0) reads 0xBC8 = 3016 `EnvAreaRoomList`, i.e. the room-list layout. So the flag selects chunked (terrain grid) vs room-based levels. 
+  - 3122 name from master dev/gff4_fields.csv: `3122,EnvAreaChunkIsChunk` (also 3123 RowCount, 3124 ColCount, 3125 Width, 3126 Height).
+- File values (tools/gff4.py --dump of packages/core/env/<name>.arl, root fields; checked):
+  - ost100d.arl (Wilds): IsChunk=1, 6 x 6 chunks, width 128.0.
+  - lak100d / lak100c (Lake Calenhad exteriors): 1, 10 x 8, width 132.0.
+  - lak101d (an interior): 0 (no chunk fields).
+  - Scan of 95 .arl in env/ with prefixes brc, lak, ost, orz: 30 are 1, 65 are 0. The 1s: brc000d, brc100d, brc101d, brc300d, brc501d-505d, brc997d, brc999d, lak100c/d/n, lak200d, lak250d, lak300d, lak400d, lak403d, lak510d, lak515d, lak526d, orz100d, orz200d, orz300d, ost000a/c/t, ost100d, ost101d. All the rest of those prefixes are 0. (I did not get a Circle Tower or Redcliffe file: "cir*" and "red*" prefixes were not in my scan; lak101d stands as the interior example. Note ost000a/c/t, the Ostagar camp, are chunked too, so "chunked" is exterior terrain areas, not only the Wilds.)
+
+###### Consequence for the port
+Chunked areas (Wilds, Ostagar, Lake, Brecilian ...) use mask Placeables|StaticGeometry (0x24) minus Nonwalkable-flagged hits in GroundHeight; room-based areas use the Walkable shapes (0x02000000). This is consistent with the terrain shapes being 0x80002020 (static geometry, not Walkable).
+
+###### Prior work
+master dev/PATHFINDING.md:335 and its note "who sets it not read" is now settled; dev/COLLISION.md:116 (ChunkManager vtable 0x00AFFE24); dev/TODO.md:49 (0x005D1290 as the layout load). New here: the store sites, field 3122 as the source, and the file values.
+
+###### Not read
+Other consumers of +0x7C besides 0x0067B4D0 (no xref scan of `[reg+0x7c]` outside 0x005D1290 and the one test); Circle Tower / Redcliffe interior files; the chunk-grid behaviour itself; whether the .arl is the only source (the load reads the layout it is given at 0x005D1290; I took the .arl as the file Level.cpp reads).
 
 #### Body tilt (0x006A7AE0 -> 0x006A7520), structure checked, maths inferred
 
