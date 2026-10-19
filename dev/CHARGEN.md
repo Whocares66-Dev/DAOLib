@@ -109,7 +109,7 @@ Read 2026-10-18 in the GOG exe by lib-agent-2. GUI::GUICharGen's handlers mostly
 ### The appearance scene (CharGenStartAppearanceSceneMessage, `0x00739d20`)
 
 - It resets the head first: `0x0074ba60` on the creature's appearance (the head reset: HeadMorph set to empty and the face, eyes and hair rows set to 1, as dev/CHARACTERS.md and the head-part reading have it). Read.
-- The camera: it looks up table 7, `portraits.gda`, for the row whose `Tag` is `default` (the string at `0x00aea918`), and copies that row's camera values (CameraPitch, CameraRotation, CameraDistance, CameraZAdjust, CameraXAdjust, Expression, by their column hashes) into the creature's portrait camera at +0x598 (its fields +0x58 to +0x68 and +0x7C), then `CCCreature::UpdatePortrait`. Read; which hash is which column is inferred from the table's columns.
+- The camera: it looks up table 7, `portraits.gda`, for the row whose `Tag` is `default` (the string at `0x00aea918`), and copies that row's camera values (CameraPitch, CameraRotation, CameraDistance, CameraZAdjust, CameraXAdjust, Expression, by their column hashes) into the portrait camera at +0x598 of the `PaperCreature` the stage shows (its fields +0x58 to +0x68 and +0x7C; corrected 2026-10-19 by lib-agent-2: not the hero's, "The figure" below), then `CCCreature::UpdatePortrait`. Read; which hash is which column is inferred from the table's columns.
 - The sliders: `0x0080ada0` builds about 60 appearance sliders (`GUI::AppearanceSlider<float>`), each with an id (0 to 0x3A), a talk-table label (string ids 0x5B7A5 to 0x5B7E5), a range and a getter and setter on the creature. The ranges of the list sliders (presets, hair, beards, eyes and the rest) are the counts of name lists in `CharGenMorphCfg.xml`, loaded once into a global (`0x008042d0`, at `0x00c39318`); the continuous ones have fixed ranges (−30..30, −45..45, and others). Which sliders appear depends on the creature's race (racial type 2 takes another set) and on a flag read by `0x006a3650`. `0x00739b10(id, mode, sliders)` adds them to the screen; slider 0x28 is the head preset, whose place it keeps at +0x114 (0x2A is the beard; corrected 2026-10-18). Read; what each slider id changes is not read.
 - The screen's two beard controls (elements 5 and 6 of its list at +0x118) are hidden at the start and shown by `CharGenUpdateBeardMessage` (`0x00737050`) only when the current head preset's beard value is above 1e-6. That handler changes nothing on the creature. Read.
 
@@ -125,6 +125,248 @@ Read 2026-10-18 in the GOG exe by lib-agent-2. GUI::GUICharGen's handlers mostly
 
 - `CharGenSaveInfoMessage` (`0x007371c0`) writes the hero as a `.chr` file under `PLAYERS`, named from the hero's name (or `Hero`). Read.
 - `UpdateHeroAppearanceMessage` (`0x00738550`) applies an entry of a list of saved heroes (the screen's +0x150, each with a name at +0x7C and a morph at +0x98) to the hero through `0x006d1850`, refreshes the hero (`0x007b8470(hero, 0, 1)`) and republishes `CharGenCreature`. That the list is the `.chr` files is inferred.
+
+### What the engine shows behind the chargen movies (lib-agent-2, 2026-10-19, cgstage-scene)
+
+Marks: [C] checked in the exe's code or in the game's files, [I] inferred. Addresses are GOG's. Prior work cited as file:line; the rest is new.
+
+#### Short answers
+
+1. The scene is a real area, not a Paperdoll scene of its own. `char_stage.are` (name strref 311656, layout `oth999d`, whose `.arl` calls itself `PartyPickerLevel`) is loaded as the module's `SharedCharacterStage` (a `CCArea` subclass, vtable 0x00B1592C, built by 0x007072E0 from the module's +0x350 name, default `char_stage` at 0x00C35E00; the party picker shares it). The module holds it at +0x388. The chargen screen's paperdoll (`GUI::GUIPaperdoll`, 0x320 bytes, built by GUICharGen at 0x0073553 via ctor 0x007BFE10) is put in "mode 1" (`SetMode` 0x007BBFF0, called with 1 at 0x00735581) and in mode 1 it does NOT use its own scene: it drives the game's camera over the stage. [C] Modes 0 (own scene, `SceneCamera` + `paperdoll_lightrig` = `el_lr_new_day2` + `paperdoll_lightprobe` = `el_lp_outside_day`, the same rig as the portrait renderer) are the inventory / character record / level-up paperdolls (0x007315C6 and 0x0073C397 set 0). Chargen never uses it. [C]
+2. There are exactly two camera states, not one per page: preset 0 (whole body) and preset 1 (head close-up). The only sender of preset 1 is the appearance page (`AppearanceSoundSetScene.StartScene`, AS line 383 area: `Paperdoll.SetCameraPreset` 1); leaving it, forward or back, sends 0 (lines 358, 368, 376). Race/gender, class, origin (background), attributes, skills, spells/talents, review, specialization and name all show preset 0. [C] AS: `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chargen\scripts\__Packages\AppearanceSoundSetScene.as`.
+3. Both presets are computed by code (`GUIPaperdoll::UpdateCamera(preset)`, 0x007B38A0), not by a `.stg` and not by portraits.gda. The numbers are below. The 0x32 to 0x39 sliders (Look Up/Down, Turn, Camera Distance, Move, Background, Expression) are the portrait record's, not the stage camera (CHARGEN.md:255). [C]
+4. Lighting and backdrop are the area's: the level `oth999d`'s baked lightmaps, three character point lights, two level bounce lights, a grey sun, the `sb_newlayout` sky, the floor `hro_partypkr_floor`, three `hro_partypkr_arch` arches and the effect model `fxe_cha_sel_p` at the hero's feet, plus the area's bloom. The slider "Background 1..20" is the portrait tint (`PortraitTint`), not a model or texture of the stage [I]. [C]
+
+#### Pseudo-code a port can copy (chargen = mode 1, game mode 0xB)
+
+Coordinates: Z up, a creature at identity faces +Y, a quaternion is (x,y,z,w), angles in degrees, `YPR(yaw,pitch,roll)` is `Quaternion::FromYawPitchRoll` (0x004EE200; yaw about Z, positive pitch looks up) [I for the sign of pitch, the call and its argument order are C].
+
+```
+// Setup (0x007BB890, mode 1)
+wp   = object with Tag "char_chargen" in the SharedCharacterStage
+P    = wp.position            // paperdoll+0x130 = (-2.363824, -2.653543, 0.900991)
+Rc   = YPR(wp.euler)          // paperdoll+0x120; wp orientation quat (0,0,0.258819,0.965926) = yaw 30 deg
+creature.SetPosition(P); creature.SetOrientation(Rc)     // SetCreature 0x007BC110 at 0x007BC592-0x007BC5AB
+gameCamera.SetMode(0)         // 0x006C2890 on the module's camera
+UpdateCamera(0)               // first call: sets at once (no blend), state +0x1C4
+
+// UpdateCamera(preset)  0x007B38A0
+FOV   = 45                    // 40 when the game mode is not 0xB; 0xC0FD7C / 0xC0FD78
+gameCamera.SetFOV(FOV, 0 s)   // 0x006C4B20; vertical degrees [I]
+pitch = -10                   // paperdoll+0x164, 0xC0FD80
+Rot   = YPR(180, pitch, 0)    // camera orientation, always yaw 180: looks toward -Y, 10 deg down
+fwdY  = Rot * (0,1,0)         // = (0, -cos10, -sin10) = (0,-0.98481,-0.17365)
+right = Rot * (1,0,0)         // = (-1,0,0)   (0x004CBCE0 returns this column)
+
+if preset == 0:               // whole body
+    h    = 1.9                // chargen: a fixed height; other modes use the creature's bounds, 3.8 for racial type 0xE, 2.1 for gen00fl_shale
+    dist = 1.1 * (h/2) / tan(FOV/2)          // 1.1 = 0xC0FD64; = 2.52284
+    cam  = (P.x, P.y, P.z + h/2)             // + 0xC38AF0 which is never written (0)
+    cam -= Rot * (0, dist, 0)                // = cam + dist*(0, 0.98481, 0.17365)
+    cam += 0.7 * right                       // 0xC0FD68 = -0.7 as the factor; the character sits left of centre
+    // numbers: cam = (-3.0638, -0.1692, 2.2892), looks along (0,-0.98481,-0.17365), aim point on the hero ~ (P.x-0.7, P.y, P.z+0.95)
+else:                         // head close-up (preset 1)
+    H    = CCCreature::HeadTransform(0,0,0,1)   // 0x006A1EF0 then 0x00452EF0: the head's world position
+    cam  = H + (0,0,-0.05)                      // 0xC0FD74
+    cam -= Rot * (0, 0.65, 0)                   // 0xC0FD6C; = H + (0, 0.64012, 0.11287)
+    cam -= (-0.19) * right                      // 0xC0FD70 in mode 1 (0 in mode 0); = +0.19 along right = (-0.19,0,0)
+    // net: cam = H + (-0.19, +0.6401, +0.0628); same Rot and FOV; the head sits 0.19 m left of centre
+
+cam target for both: the pivot at paperdoll+0x190 = P (+ (0,0, h/2 [+ -0.19 mode 1... see Not read])) — used only to blend, the orientation is Rot.
+
+// switching presets: blend, not a cut (per frame update 0x007B4C40..0x007B4E08)
+t = elapsed / 4.0             // duration = 0xC38AEC (never written, 0) + 4.0 (double at 0xAF0C88) seconds [I for seconds]
+pos = lerp(from, to, t)       // 0x005B0DB0;  rot = slerp(...) 0x004CBC10; each frame gameCamera.SetPosition / SetOrientation(.., 0 s)
+done when t >= 1 or |from-to| < 1e-6
+// dragging the hero: AS multiplies the mouse delta by -0.8 and sends RotatePaperdollCamera(dx,dy) (CharGenDragArea.as:44).
+// handler 0x007B2430: finishes any blend at once, then Rc = Rc * YPR(-dx_msg, 0, 0); the hero turns about Z, the camera stays.
+```
+
+For a port that wants the picture: hero at P facing 30 degrees left of +Y, camera about 2.5 m in +Y looking back along -Y, 10 degrees down, 45 degree vertical FOV, shifted 0.7 m to its right so the hero fills the left half (the chargen panel is on the right). For the face: 0.65 m away, 0.19 m shifted, same angles.
+
+#### The stage the camera looks at [C unless marked]
+
+- `char_stage.are` (GFF3, designerareas.erf): Tag `char_stage`, ScriptResRefID `area_core`, Layout `oth999d`, `NoTeleport` 1, MusicPreset empty (the previous theme plays on, AUDIO.md:251), AREA_ID 10010. No creatures, placeables or stages in it. One audio-reverb trigger "DA custom stone room" over 23.6 by 15.8 m with two ambient loops (`amb_ext_rumble1_lp` -4 dB, `amb_ext_subair1_lp`).
+- Waypoints (all z 0.900991): `char_chargen` (-2.363824, -2.653543; quat z 0.258819 w 0.965926 = yaw 30) is the hero's mark and the camera's base; `char_player` (-2.628284, -3.132766; yaw 28), and the companions' marks `char_gen00fl_alistair` (-2.960, -4.019), `_morrigan` (-2.241, -2.384), `_wynne` (-3.612, -3.949), `_zevran` (-4.358, -3.220), `_leliana` (-1.307, -2.401), `_loghain` (-2.961, -4.252), `_sten` (-1.373, -3.650), `_dog` (-3.697, -2.346), `_oghren` (-1.418, -1.347), `_shale` (-4.593, -4.242): the party picker's. `char_chargen` is found by the wide string `char_chargen` (0xB21DB4) in the Setup loop 0x007BB9BA, matching the object's tag at +0xB8.
+- Level `oth999d` (`.arl` in `packages/core/env`, one room `oth999d_0`, 24 by 16 m, z -0.09 to 13.04). Room at (-0.0108, -0.7669, 6.0188). Models: `hro_partypkr_floor` (lightmap `oth999d_Room000.dds`), three `hro_partypkr_arch` at x -7.99, 0, +7.99, y -5.22, bounds centre z 3.95 (lightmaps `oth999d_Room001/002.dds`), the effect model `fxe_cha_sel_p` (user param `fog` 0.30,0.25,0.25,0.75) at (-2.035, -3.843, 0.909), yaw 34.5, which is the platform glow at the hero's feet, and two light-only models `oth999d_0_lc` and `oth999d_0_ll`. Looking down -Y from the camera the centre arch and the floor are the backdrop.
+- Sky `sb_newlayout`. Sun colour 0.5,0.5,0.5 (and the same for characters, "SunlightColorChar"), direction (0.577,0.577,0.577), not occluded. Atmosphere: fog colour 0.16,0.19,0.16, intensity 0.0081, cap 0.65; clouds colour 0.12,0.14,0.12, density 0.667. Room fog disabled. Wind `oth999d_47.wnd`.
+- Lights in world coordinates (room + model + local), `oth999d_0_lc` (AffectDomain 1 = characters): `char_002` warm key (0.51, 0.3375, 0.24) radius 160 at (-4.594, -0.922, 2.420); `char_001` (0.068, 0.136, 0.112) radius 60 at (-0.045, -1.602, 2.179); `char_003` (0.11, 0.19, 0.17) radius 60 at (-2.033, -4.601, 2.265). `oth999d_0_ll` (AffectDomain 2 = level): two static points `bounce_2_RT`, `bounce_2_RT0`, colour (0.915, 0.69, 0.585), radius 3, local (-1.888,-0.362,-2.440) and (-0.159,-0.919,-2.347) from the model at (-1.877,-1.100,-1.110); ambient `Ambient0` (0.026,0.028,0.027); light probe `OTH999d_probe_o.dds` + `.mtx` (SH given in the file, near black). All from ghilana `oth999d_0_lc.mmh`, `_ll.mmh`, `.rml`.
+- Frame effects of the area: `da_bloom` Brightness 0.5, Contrast 0.5, GlowIntensity 0.25, HBlurWidth 3, VBlurWidth 3; `da_hsvmatrix` Brightness 1, Contrast 1, Hue 0, Saturation 1 (via `tools/gff4.py --dump`).
+
+#### Evidence
+
+- Chargen creates and modes the paperdoll: 0x00735500-0x00735581 (`new` 0x320, ctor 0x007BFE10, `call 0x7bd030`, `push 1; call 0x7BBFF0`) [C]. `SetMode` 0x007BBFF0 is `this+0x140 = arg; Setup()` [C]. Other callers 0x007315C6, 0x0073C397 pass 0 [C]; which screens those are is [I] (level-up and import paths).
+- Setup 0x007BB890: mode 1 branch 0x007BB8CF-0x007BBA34 (copies the module's stage +0x62C, activates the stage 0x00707040, iterates the stage's objects from 0x0076AE60, matches the tag `char_chargen`, converts its +0x130..0x138 Euler with 0x004EE200 into this+0x120, copies its +0x120 vec4 into this+0x130); mode 0 branch 0x007BBA39-0x007BBC44 (`SceneCamera` 0xADEEB4, `paperdoll_lightrig` 0xB21D8C from `el_lr_new_day2` 0xB21D6C, `paperdoll_lightprobe` 0xB21D40 from `el_lp_outside_day` 0xB21D1C) [C]. The mode 0 rig is the portrait's (lib-agent-2-portrait2-lights.md:16, 59, 69; GUI.md:1130).
+- UpdateCamera 0x007B38A0 constants (floats read at): 0xC0FD64 1.1; 0xC0FD68 -0.7; 0xC0FD6C 0.65; 0xC0FD70 -0.19; 0xC0FD74 -0.05; 0xC0FD78 40; 0xC0FD7C 45; 0xC0FD80 -10; 0xC0FD84 180; 0xB219E0 1.9 (height in game mode 0xB, 0x007B3ACB); 0xB219BC 3.8; 0xB219C0 2.1 and 0xB0839C -0.1 (gen00fl_shale, 0x007B3AEC); doubles 0xAE70F8 0.5, 0xAF14C0 0.0174533, 0xAF0C88 4.0 [C]. Game mode via `GameModeController::GetGameMode` 0x00640060 == 0xB, the same value CHARGEN.md sets in `StartCharGen` [C].
+- The camera calls: `SceneCamera::SetFOV` (0x006C4B20, sets +0xA0 when the time is 0), `SceneCamera::SetPosition` 0x006C45F0, `SceneCamera::SetOrientation` 0x006C4EC0, on the controller's camera at `[app+0x114]+0x5C` (0x007B3FBC-0x007B4052 and the per-frame 0x007B4D4D-0x007B4E03; same API as CUTSCENES.md and lib-agent-2-cutq-camera.md:30) [C].
+- `SetCameraPresetMessage` handler 0x007B49B0 = `UpdateCamera(msg+4)` (messages.csv:241) [C]. `RotatePaperdollCameraMessage` handler 0x007B2430 [C for the quaternion product, I for the axis names].
+- Both messages come from the movie only as `Paperdoll.SetCameraPreset` and `Paperdoll.RotatePaperdollCamera` (`SharedLibrary/CharGenDragArea.as:44`, `AppearanceSoundSetScene.as`); `Paperdoll.CameraMode` is read for the drag cursor only (dev/gui_data_paths.csv:553) [C].
+- Arithmetic: 1.1 * 0.95 / tan(22.5 deg) = 2.5228; cam.x = -2.363824 - 0.7 = -3.0638; cam.y = -2.653543 + 2.5228 * 0.98481 = -0.1692; cam.z = 0.900991 + 0.95 + 2.5228 * 0.17365 = 2.2892 (pitch sign inferred).
+- Prior notes used: CHARGEN.md:98-112 and :255 (the portrait camera and sliders, unchanged), GUI.md:461 (`char_stage.are` strref), :1130-1134 and lib-agent-2-portrait2-camera.md (the portrait scene and the default row: pitch -7.5, rotation 23.5, distance 0.675, Z 0.038, X 0.007, tint 1), lib-agent-2-scg-plotman.md:31 (module defaults `char_stage`/`partypicker`, the 0x6FC-byte stage), dev/object_casts.csv:2 (`SharedCharacterStage` is a `CCArea`), SAVES.md:67 (the guest's char_stage load and its ~100 objects). New: the paperdoll modes, the two presets and all their numbers, the stage's contents and lights.
+
+#### Not read
+
+- The sign convention of `FromYawPitchRoll`'s pitch (inferred from the camera ending 10 degrees down and aimed at the hero), and the exact rotation order; a play check with Eluvian's camera tool would settle it (the camera's orientation after chargen's first page).
+- What the pivot at paperdoll+0x190 and +0x170/+0x1A0 (blend endpoints) is used for besides the blend; whether the 4 s duration is seconds (dt units not traced).
+- The unit of the vertical-FOV argument (degrees inferred from 45/40 and tan(FOV/2) use).
+- The head position H (the head bone's world position) is a runtime value; for the default human male about P.z + 1.6 is a guess.
+- The Background slider's setter (0x0069ED50 and kin); "tint" is from the range 1..20 and the portraits.gda `PortraitTint` column (default row 1; Alistair 17, Dog 18, Morrigan 16), and GUI.md:550/975 (the portrait frame's tint). Which colours the 20 tints are was not read.
+- Whether the stage's party-picker model `fxe_cha_sel_p` is shown during chargen (it sits at the hero's feet in the level file; its visibility toggles were not traced), and how the game hides the previous area while the stage is shown.
+- How the stage is loaded and entered at `StartCharGen` (0x00707040 is its activation; the loader calls 0x005D6B30, 0x0067C3B0, 0x0067B3A0, 0x0067F5C0 were not read).
+- The mode 0 paperdoll's camera (inventory etc.): only the shared constants were read.
+
+### Chargen stage: the figure and the portrait circle (lib-agent-2, 2026-10-19)
+
+Marks: [C] checked in the GOG exe (disassembly, `tools/daoexe.py`, capstone scans), the scripts, the AS or ghilana; [I] inferred. Addresses are GOG VAs. Scratch: `%TEMP%\lib-agent-2-cgfigure-*`. No game, no Ghidra.
+
+#### Short answers
+
+1. **The figure is not the hero.** It is a second creature, the paperdoll's `PaperCreature` (a fresh `CCCreature`, tag `"paperdoll"`, id -1), built as a clone of the hero from the hero's CAppearance record (`hero+0x7B0`), the hero's head-morph name (`hero+0x96C`) and the hero's equipment, and given to the movies as the token `Paperdoll.PaperCreature`. The hero's own 3D model is switched off for the whole screen (`hero+0x7B4 = 0`; `0x006C1400`, the model build, returns at once while that byte is 0) [C for the writes and the early return, I for the meaning]. No template is loaded: the hero is whatever the scripts made (`Chargen_InitializeCharacter`, `Chargen_SelectRace`, ...) and the figure follows it. [C]
+2. **Outfit.** There is no class preview outfit in the engine. What the figure wears is what the hero has equipped, and the scripts equip it: race chosen: `default_player.utc`; class chosen: `default_warrior/rogue/wizard.utc`; background chosen: the `Template` of `background_defaults.gda` (table 1001) row for race+class+background (`Chargen_GetEquipIndex`). Each is `LoadItemsFromTemplate(hero, tmpl, TRUE)` after `Chargen_ClearInventory`. `default_warrior.utc` equips only `gen_im_cth_com_a01` (common clothes). The engine's `EquipmentChangedMessage` then rebuilds the figure. [C: sys_chargen.nss:200-300, sys_chargen_h.nss:423-470, ghilana default_warrior.utc, table 1001]
+3. **Rebuild granularity.** Whole creature (new `PaperCreature`, old one destroyed, old one's pose and portrait settings carried over): race, gender, class, background (via GUICharGen `0x007356F0` -> `0x007BC110`), hero reset, hero import / saved-hero pick, and every equipment change. Head only (the live `PaperCreature` keeps its body, animation and renderer; its head morph is swapped by name): every appearance slider 0..0x2D (presets, morph weights, hair, beard, eyes, tints, tattoo, makeup) through `CommandCreateMorph` + `CommandApplyMorph`. Portrait camera sliders 0x32..0x39: only the paper creature's portrait settings, then a portrait re-render. [C]
+4. **Pose.** The paper creature plays animation row **1 `pause`** (the normal idle loop, `Pause`, AnimName `pause`) through `CCCreature` vtable slot 44 (+0xB0) as `Play(1, speed 1.0, blend -1.0, 1)` (blend -1 is a hard cut) [C]. Idle twitches: a timer in the paperdoll's per-frame update plays row `640 + rand()%5` (`pausetwitch_v1..v5`) with blend -2.0 every 10 to 49 s, except while the camera mode (`Paperdoll.CameraMode`) is 1, the appearance page's close view [C]. Not per race, gender or class by the engine: the animation tree behind row 1 is the creature's own [I].
+5. **Facing and place.** The creature's scene node is set to position (0,0,0) (that is mode 0's, the inventory's own scene; in chargen, mode 1, `SetCreature` 0x007BC110 takes the position from paperdoll+0x130, which Setup fills from the waypoint `char_chargen`, 0x007BC592–0x007BC5AB: corrected 2026-10-19 by lib-agent-2) and orientation = the paperdoll's quaternion (+0x120), initially a rotation of **30 degrees** (`0x004EE200(30.0, 0, 0)`, its first argument being the turn about the vertical, as in the rotate handlers) [C]. Hold-to-rotate (`RotatePaperdollLeft/Right`) turns that quaternion at 25 degrees a second [C: the constant, I: the sign]. There is no waypoint. In chargen the paperdoll is in its mode 1 (`GUICharGen` open sets it, `0x00735581` -> `0x007BBFF0(1)`), whose scene is the current area's scene (`world->areas(+0x388)+0x62C`; the `char_stage` area), so (0,0,0) is the stage area's origin [C for the mode and the scene pointer, I that this is char_stage's origin; the other reader has the stage].
+6. **Look-at.** Not settled. The model build turns the look-at controller on (mode 1, automatic) unless creature vtable +0x1D0 is true (`0x006BE23E..0x006BE245`), but the paperdoll's own per-frame update (`0x007B4BB0`) never calls the look-at update (`0x0069EAF0` -> `0x006CAD80`); only `0x0069A600(paper, 0)`. So eyes following the camera is NOT something the paperdoll does itself [C for what the update calls; I that no look-at runs on it]. Safe port behaviour: none.
+7. **The portrait circle** is a render of the **paper creature** by `PortraitRenderer`, not a crop of the stage view. `AppearanceSoundSetScene.as:317-320` and `ReviewScene.as:62-64`: `Portrait_mc_init` -> `SetCreatureToken("Paperdoll.PaperCreature")`; `SimplePortrait` observes `Paperdoll.PaperCreature.Portrait` and loads it with `MovieUtils.LoadImageFixedSize(PortraitPicture_mc, name, w, h)` (so `img://portrait_paperdoll<N>.dds?Width=..`, N the global renderer counter), `blendMode = "overlay"`, hidden when the value is empty or ends in `?` [C for the AS; I for the exact name from `"portrait_" + tag + counter` with tag `paperdoll`]. The backdrop ring is `PortraitProperties.PortraitTint` from the same creature (frame number). The attribute page (`AttributesScene.as:42-55`) instead loads `CharGenCreature.Portrait` (the hero) into `PortraitPicture_mc.Image_mc` at 146x146 [C].
+
+#### Pseudo-code a port can copy
+
+```
+// state: hero (the script's creature), paper (PaperCreature, null at first), gen (int), yaw = 30 deg, spin = 25 deg/s,
+//        cameraMode (0 = body view, 1 = appearance close view), twitch = 10 + rand()%40 seconds
+
+onChargenOpen():                       // GUICharGen 0x007354D0
+    paperdoll.mode = 1                 // draw into the stage area's scene
+    hero.model_build_enabled = false   // hero+0x7B4 = 0: only the paper creature is shown
+    releasePortrait(hero)              // 0x0069F470
+    refreshFull(hero, loadMorph=true, syncPose=false)
+
+refreshFull(hero, loadMorph, syncPose):            // Refresh 0x007B8470, ret 0xC; (hero,1,1) reset, (hero,0,1) import/race.., (hero,0,0) equipment
+    gen += 1
+    if loadMorph: editor.loadFromHero(hero); queue CreateMorph(gen)      // head recipe -> morph resource "Head_Morph<N>"
+    queue CreateCreature(gen, hero, syncPose)
+
+CreateCreature.update():                           // 0x007C0BF0, polled every frame until done
+    if hero != paperdoll.hero or gen != paperdoll.gen: discard partial creature; return     // stale: only the newest rebuild finishes
+    if not started:                                // 0x007C1061
+        c = new CCCreature(id=-1)
+        c.setAppearanceType(copy(hero.appearance).type, hero.gender)       // 0x00A63D10 on c+0xA30
+        c.setTag("paperdoll")                                              // vtable +0x1C0
+        c.loadAppearance(copy(hero.appearance))                            // 0x006C1E00 -> 0x006C1400 (parts, armour, head from CAppearance)
+        started = true; return
+    if c.isStillLoading(): return                                         // 0x00A5CB20
+    c.node.position = (0,0,0); c.node.orientation = paperdoll.orientation   // vtable +0x14 / +0x1C of the scene node
+    c.setHeadMorph(hero.headMorphName)                                     // 0x006BD0E0, hero+0x96C
+    c.node.flags |= (0x1A8 = 1)
+    c.play(anim=1 /*pause*/, speed=1.0, blend=-1.0, flag=1)               // slot 44
+    old = paperdoll.PaperCreature
+    if old:
+        if not syncPose and old.hasModel:
+            c.play(old.currentAnim, 1.0, -1.0, 1); c.setAnimTime(old.animTime)   // continue the pose across the rebuild
+        if old.portraitRenderer:                                           // old+0x78C
+            c.portraitSettings = copy(old.portraitSettings)               // 0x007B2730: pitch,yaw,dist,Zadj,Xadj(+0x58..0x68), tint(+0x6C), expression(+0x7C)
+            updatePortrait(c)                                              // 0x006AE2D0: new renderer, new "portrait_paperdoll<N>"
+        destroy(old)                                                       // 0x007B2230
+    paperdoll.PaperCreature = c ; paperdoll.created = true
+    if gameMode == CHARGEN and paperdoll.cameraMode == 1: applyCameraPreset(1)    // 0x007B38A0
+    done
+
+onSlider(id in 0..0x2D except portrait ids):       // setter ends in 0x00802BF0
+    editor.set(id, value)
+    queue CreateMorph(gen) (coalesced if one is still waiting)
+    queue ApplyMorph(n)                              // 0x007C1390: paper.setHeadMorph(editor morph name); NO new creature, NO animation reset;
+                                                     // if cameraMode==1 it also toggles model parts 3,4 (0x007B2D80, hide helmet-like parts: I)
+
+onPortraitSlider(id 0x32..0x39):                   // setters 0x007FF310 ...: write paper.portraitSettings.{pitch,yaw,dist,Zadj,Xadj,tint,expr}
+    renderPortrait(paper, pose=0, camera=1, flag=1)  // 0x0069ED50 = Render(0,1,1) if the creature has a renderer
+
+onAppearancePageStart():                           // AppearanceSoundSetScene.StartScene:380-390
+    GUICharGen.CharGenStartAppearanceScene          // 0x00739D20: head reset on hero appearance (0x0074BA60), editor reset,
+                                                    //   paper.portraitSettings = portraits.gda row "default" (+0x598 block),
+                                                    //   paper.flag7D4 = 1 (needed by UpdatePortrait), updatePortrait(paper)
+    Paperdoll.SetCameraPreset 1                     // camera mode 1: close view, twitch disabled
+    Paperdoll.UpdatePortrait                        // 0x007BC6C0: hero.appearance+0x1E4 = paper head morph name; UpdatePortrait(paper); clear it
+
+perFrame(dt):                                      // 0x007B4BB0
+    if cameraMode != 1: twitch -= dt
+    if twitch <= 0: paper.play(640 + rand()%5, 1.0, -2.0, 1); twitch = 10 + rand()%40
+    serviceComponents(paper)                        // 0x0069A600(paper, 0)
+rotateLeft/Right(dt): orientation = q(yaw += -/+ 25*dt) * orientation; paper.node.orientation = orientation
+
+portraitCircle: texture = renderTarget(146,146) registered as bare name "portrait_paperdoll<N>"; token Paperdoll.PaperCreature.Portrait = that name;
+    movie: LoadImageFixedSize(PortraitPicture_mc, "portrait_paperdoll<N>" -> img://portrait_paperdoll<N>.dds, w, h), blend "overlay"; backdrop frame = PortraitTint
+    clone for the render: UpdatePortrait(p1=1) copies appearance+equipment to a hidden clone and PlaceCamera(Default-row-style values from the creature's OWN settings because tag == "paperdoll"); Render(p1=0) instead plays portrait_exp_m (677) / portrait_exp_f (678) on the clone
+```
+
+#### Evidence
+
+##### The figure
+
+- `GUIPaperdoll` fields (from the code): +0x58 the hero (raw pointer), +0x5C the `PaperCreature` attribute (`0x0053CC40` gets the pointer, vtable +0x54 sets), +0x6C created flag, +0x84 the scene, +0xC0 (in GUICharGen) the hero's id, +0x11C rotate speed, +0x120 orientation quaternion, +0x130 position (zeros), +0x140 mode, +0x144 `CameraMode` attribute, +0x1CC twitch timer, +0x2DC command queue, +0x2F0 generation, +0x2F4 apply-morph counter. [C]
+- Refresh `0x007B8470(hero, loadMorph, noSync)` (`ret 0xC`): `++[this+0x2F0]`, `[this+0x58] = hero`, in game mode 0xB `hero+0x7B4 = 0`; if arg 2 is non-zero it re-reads the head from the hero (`0x00808040`, `0x007FDCF0`, `0x0080AB80`, `0x00805F20`, `0x0080AB30`) and queues `CommandCreateMorph` (vftable `0x00B21848`, 0x1C bytes); it always queues `CommandCreateCreature` (vftable `0x00B218B8`, 0x210 bytes, ctor `0x007B2070(gen, hero, paperdoll, arg2, arg3)`, which copies the hero's appearance record `hero+0x7B0` into the command at +0x10 with `0x0074A610`). The commands run oldest first from the queue; a command whose `(hero, gen)` no longer match the paperdoll's (`0x007C0C32..0x007C0C47`, jumping to `0x007C1161`) deletes what it built and ends. [C]
+- Callers of Refresh (found with a `call` scan): `0x007315AD` (0x731280, (creature,0,1)), `0x007384C4` CharGenResetCreature (hero,1,1), `0x00738624` UpdateHeroAppearance, `0x00738785` ImportHero, `0x0073C37E` (0x73C1D0, (creature,0,1)), `0x007B88ED` EquipmentChanged handler 0x7B8880 (creature,0,0). With the last, arg 3 is 0, so the command's byte +0x20D is 0 and the pose is synced from the old creature (below). [C]
+- Start of the command (`0x007C1061`): `new` 0xD20 bytes + ctor `0x006B9ED0(-1, 0, 1)`; `0x00A63D10` on `creature+0xA30` with the appearance type word (`appearance+0x58`) and the gender flag; `0x00694DB0(creature, 0x007490D0(appearance,0))` (the appearance's body/gear class, from table 2 column `0x5D092182`; I); `SetTag` via vtable +0x1C0 (`0x006A2170` writes `creature+0xB8` into the tag attribute) with the global string `0x00C38B24` = `paperdoll` (static init `0x00AD2E70`, string `0x00AECC9C`); `0x006C1E00(&appearanceCopy, 1, 0, 1)` -> `0x006C1400` model build; `0x00695220(0xE)`; vtable +0x144(0). [C]
+- Finish (`0x007C0C57..0x007C0FB2`): wait while `0x00A5CB20(creature->vt+0x60 object)` says loading; scene node (`0x006958D0` result + 8) vtable +0x14 with a zero vector and +0x1C with `paperdoll+0x120`; `0x006BD0E0(creature, hero+0x96C, 0)` (set the head morph by the resource name string); node byte +0x1A8 = 1; Play slot 44 with `(1, 1.0, -1.0, 1)` (floats `0xAE2E00` = -1.0); if the old `PaperCreature` exists and `[cmd+0x20D] == 0`: Play(old's `+0x13C` animation id, 1.0, -1.0, 1) and set its time scaled from the old's (`0x00A5F980`, `0x00A5C980`); if the old has a portrait renderer (`+0x78C`): copy its `+0x598` settings (`0x007B2730`: floats +0x58..+0x68, attribute +0x6C, float +0x7C) then `UpdatePortrait(new)` (`0x006AE2D0`); `0x007B2230` removes the old (removes it from the scene, deletes it if `+0x6C`, sets the attribute to null); the attribute is set to the new one; `+0x6C = 1`; `0x006951D0`, vtable +0x104 (add to `paperdoll+0x84`), +0x134(1); in game mode 0xB with `CameraMode == 1` it calls `0x007B38A0(1)` (else `0x007B38A0(0)`); finally `0x007C0190`. [C]
+- Animation 1: ghilana Animations row 1 `Pause`, AnimName `pause`, Type 1, TransitionTo 1. Slot 44 is `Play(anim, speed, blend, 1)` (dev/ANIMATION.md:359, :456-463); `0x0069B3D0` adds the speed jitter `(rand%90)/100 - 0.45` to a play of row 1 (dev/ANIMATION.md:908), so the figure's pause plays at 0.55 to 1.44 times speed. Rows 640 to 644: `pausetwitch_v1..v5` (ghilana). The twitch rule: dev/ANIMATION.md:896-898 (0x007B4BB0, double `0xAE7D48` = 10.0, `rand()%0x28` seconds added). [C]
+- Constructor `0x007BFE10` area: orientation `0x004EE200(0xADEBCC = 30.0, 0, 0)` into +0x120; speed `0xAE7528` = 25.0 into +0x11C (the float at +4 there is 100.0, not used here); +0x130..0x138 = 0; +0x140 = 0; twitch timer from `rand()%0x28` + 10.0. Rotate handlers `0x007B2310` (left) and `0x007B23A0` (right): angle = frame time (`[0xC31650]+0x48`) x `+0x11C` x -1.0 (double `0xAE7118`; right negates first), quaternion from `0x004EE200`, multiplied in with `0x004CB640`, stored at +0x120 and applied with `0x007B22A0` (node vtable +0x1C). The multiplication order and the sign were not tested in play. [C for the numbers, I for the direction]
+- The mode: `GUICharGen` open (`0x007354D0`: creates the paperdoll `0x007BD030`, `0x00735581 push 1; call 0x007BBFF0`), the level-up GUI (`0x0073C397`) and `0x007315C6` pass 0. `0x007BBFF0` stores +0x140 and calls `0x007BB890`, whose mode-1 branch (`0x007BB8CF..0x007BB8F3`) takes the scene from `world->0x388 area +0x62C` instead of making an own scene (`0x007BBA99`, via the renderer's vtable +0x34). [C]
+- Race, gender, class and background changes: the movie sends `GUICharGen.CharGenSelectGender/Race/Class/Background` with a trailing "update appearance" flag (`CharGen.as:285-297`); the handler runs `0x007356F0(0)`, which does `0x007BC110(paperdoll, hero, 1, 1, 0)` unless `0x007FEF20` is true, after clearing `hero+0x7B4`. `0x007BC110` has two bodies: one that reuses a cached paper creature from a global list (`0xC38B00`, compared by the appearance bytes +0x50 and +0x54 and the `+0x7C4` attributes: `0x007BC1B0..0x007BC295`) and one that builds synchronously (`0x007BC40A..0x007BC5B1`) with the same recipe plus `Play(1, 1.0, -1.0, 1)` and, in mode 1, position `+0x130` and orientation `+0x120`. Which of the two a given change takes was not traced; the list's purpose (the hero-import "seeded characters", `Paperdoll.SeededCharacters`) is inferred. [C for the code, I for the purpose]
+- Head sliders: setters end in `0x00802BF0`, which queues `CommandCreateMorph` (unless one is waiting unstarted for the same hero: `[this+0x2EC]`) and `CommandApplyMorph` (vftable `0x00B24D88`, built at `0x00802C96`, counter `[this+0x2F4]`). Apply (`0x007C1390`) rebuilds the morph name, calls `0x006BD0E0(paperCreature, morphName, 0)`, sets node byte +0x1A8, notifies the attribute `0xC38AF4`, and with `CameraMode == 1` calls `0x007B2D80(0)` (which, for model parts 3 and 4 of the creature, calls their vtable +0xA0 (+0x9C for 1): hide / show; I) and, for the newest apply, `0x007C0190`. It does not call `UpdatePortrait` or `Render`. [C]
+- `0x007C0190` builds a second paperdoll for a 256 x 512 render target named `CharGenScreenshot` (string `0xB21F10`; `0x00847330` with 0x100, 0x200): the full-body picture for the saved hero (`.chr`, `HeroEntry.Screenshot`). Not read further. [C for the size and name, I for the purpose]
+
+##### The portrait
+
+- Chargen start of the appearance scene (`0x00739D20`): `hero+0x7B4 = 0` (`0x00739E14`), `0x0074BA60` head reset on the hero's appearance, `0x007FEED0`, then it copies the Default row's camera values (read through the table with hash `0x39950924` and others) into **`[paperdoll+0x5C].PaperCreature + 0x598`** (`0x00739FDB..0x0073A042`: floats at +0x58, +0x5C, +0x60, +0x64, +0x68, attribute +0x6C, float +0x7C), `0x007C0190`, `0x0069E480(paper, 1)` (stores `creature+0x7D4 = 1`, which `UpdatePortrait`'s prepare step `0x006ADA50` needs) and `UpdatePortrait(paper)` at `0x0073A08B`. So the settings and the renderer belong to the paper creature, not the hero. This corrects dev/CHARGEN.md:112 ("the creature's portrait camera"): it is the PaperCreature's. [C]
+- `UpdatePortraitMessage` (`0x007BC6C0`, sent by the movie's `Paperdoll.UpdatePortrait`, only found at `AppearanceSoundSetScene.as:384`): if the paperdoll is ready (+0xD9), it stores the figure's current head-morph name (`model vtable +0xE4`) in `hero.appearance+0x1E4`, calls `UpdatePortrait(PaperCreature)` and clears the field again (`0x007BC73E..0x007BC77C`). [C]
+- `PortraitRenderer::Render` (`0x007F46E0`): for a creature tagged `paperdoll` or `player` the camera comes from the creature's own `+0x598` settings (`0x007F4938..0x007F4A14`; dev/GUI.md:1295-1297, :1336), so the Default-row copy above is what frames the circle until the portrait sliders change it. With `p1 = 1` (UpdatePortrait) it refreshes the hidden clone from the creature's appearance and equipment (`0x007F4440`); with `p1 = 0` (the slider path) it plays row 677 `portrait_exp_m` (678 `portrait_exp_f` when `0x006A3650(creature)` returns 2) on the clone with `Play(id, 1.0, 0.0, 1)` and sets the clip's time from the settings' `+0x7C` expression value. Ghilana: 677 "Portrait Expression - Male" AnimName `portrait_exp_m`, 678 "... Female" `portrait_exp_f`. [C]
+- Portrait sliders 0x32..0x39: setters at `0x007FF310` (+0x58 look pitch), `0x007FF350` (+0x5C yaw), and the others down to `0x007FF4E0` (+0x7C expression); each writes the float into the paper creature's `+0x598` block and calls `0x0069ED50`, which is `Render(0, 1, 1)` if the creature has a renderer (`+0x78C`). 146 x 146 render target and the registered bare name: `lib-agent-2-gui3-portrait.md` section 2 and 3 (:15-19, :31-34). [C]
+- AS: `SimplePortrait.as:15-35` (observer on `<token>.Portrait`; `LoadImageFixedSize`; overlay blend; hide on empty or `?` suffix), `Portrait_mc.as:1` (class registration), `AppearanceSoundSetScene.as:317-320`, `ReviewScene.as:62-64`, `AttributesScene.as:42-55` (`CharGenCreature.Portrait` at 146 x 146; backdrop `PortraitProperties.PortraitTint` from `Paperdoll.PaperCreature` if that has the property, else `CharGenCreature`). The name is `"portrait_" + tag + counter` (`lib-agent-2-gui3-portrait.md:7`), so for the figure `portrait_paperdoll<N>`; every new `PaperCreature` that gets `UpdatePortrait` makes a new renderer and so a new N (the counter moves per renderer creation), and the token path changes with the `PaperCreature` attribute. [C for the AS and the name rule, I for the exact string]
+- Prior work reused: dev/CHARGEN.md:111-113, :168-169, :185-188, :255; dev/GUI.md:1123, :1295-1297, :1336; dev/ANIMATION.md:896-908 and :728-757 (look-at); `lib-agent-2-gui3-portrait.md`; `lib-agent-2-chargen-events.md`; DAOTurnBased dev/UI.md:53 (RenderPortrait). New in this note: the PaperCreature as the figure and as the portrait's creature, tag `paperdoll`, the command/generation machinery and the events that use it, animation 1 and the twitch ids, the 30 degree start and the 25 degrees a second turn, mode 1's scene, the equipment source in the scripts.
+
+#### Not read
+
+- Whether the head sliders re-render the circle: no direct call exists in `CommandApplyMorph`, and `0x006BD0E0` was not followed into the model to see if it reaches `0x006BDC70` (which does `Render(1,1,1)` for a creature with a renderer). A play check with Eluvian (`data` on `Paperdoll.PaperCreature.Portrait` before and after a slider) settles it.
+- The cached-creature path of `0x007BC110` and which race/gender/class change takes it; what `0x007B38A0` (the camera preset) and `0x007B2D80` do exactly (the camera is the other reader's); `0x007C0190`'s second paperdoll.
+- Whether any look-at update runs on the PaperCreature (the update is a virtual, `0x0069EAF0`, not called by the paperdoll); what vtable +0x1D0 (`0x006A3660`) tests.
+- The sign and composition order of the rotation quaternion, the unit of its first argument (taken as the turn about the vertical from the rotate handlers), and the node space of (0,0,0) in `char_stage`.
+- `0x0069A600(paper, 0)`: a per-frame service of the creature's components (calls vtable +0xB8 on each of a global list); what it does for the paper creature was not read.
+- What `CharGenCreature.Portrait` (the hero) holds on the attributes page, since the hero's renderer is released when the screen opens (`0x00735599` -> `ReleasePortrait`) and the only `UpdatePortrait` calls found in chargen are on the PaperCreature.
+- The exact outfit per race/class/background (`background_defaults.gda` rows' templates were not opened beyond the first rows); weapons' draw state on the figure.
+
+### chargen review page: who fills sName (cgreview)
+
+Paths below are under `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chargen\scripts\__Packages\`. Output file requested was `lib-agent-2-cgstage-review.md`; see the copy at the end of this task (same text).
+
+#### Short answers
+
+1. The engine does NOT fill `sName` [checked]. Nothing in the exe names it: `daoexe.py --strings sName` finds only `ResName` substrings (0x00af9d90, 0x00afcaa0), and there is no `nNameStrRef` string in the exe. dev/GUI.md:372 (master): the engine writes only `_root.fsc_retval`, `_root.Filename`, `_root.OriginalStageWidth/Height`, `_root.WaitingToBeStopped` by SetVariable.
+2. The movie does NOT fill it either [checked, whole chargen AS tree grep for `sName`]: `RaceGenderScene` builds each entry with `nNameStrRef` (and nID, nIndex, nType, sIcon, nDescriptionStrRef, sLabel, bDisabled, oScene) but never assigns `.sName` (RaceGenderScene.as:288-297 genders, 314-323 races, 340-349 classes, 376-385 backgrounds). The only `x.sName =` assignments in chargen are LevelUp.as:209 (its own class list) and Ability.as:40 (abilities). So `ReviewScene` reads a property no one sets.
+3. Consequence in vanilla [inferred, not played]: `ReviewScene` Race_mc/Gender_mc/Class_mc/Background_mc call `SetText(undefined)`; `SharedLibrary/TextField.as:22-26` does `if(a_sText == null) a_sText = ""` (undefined == null is true), so the four lines are BLANK in vanilla's review page. The peer's "sName stays undefined" is therefore vanilla behaviour, not a port fault. Level ("1") and the hero name (`AppearanceSoundSetScene.m_sCharacterName`) work.
+4. Other pages resolve the name correctly through `ExternalCommands.GetTlkString(nNameStrRef)`; no data-tree token is involved for race/gender/class/background.
+
+#### AS chain (file:line)
+
+- Review lines: ReviewScene.as:86-105: `Race_mc_init`: `this.SetText(RaceGenderScene.m_aRaces[RaceGenderScene.m_nRaceIndex].sName)`; Gender_mc (90-93, `m_aGenders[m_nGenderIndex]`), Class_mc (94-97, `m_aClasses[m_nClassIndex]`), Background_mc (102-105, `m_aBackgrounds[m_nBackgroundIndex]`). Labels (66-85) are `Localization.Strings.LOC_RACE` etc.
+- Indices set in RaceGenderScene.as:409 (gender), 432 (race), 447 (class), 474 (background) when the player picks; reset to INDEX_INVALID at 244-247.
+- Entries built in RaceGenderScene.as:279-385, nNameStrRef from the 2DAs: gender `Get2DAValueByRowIndexColumnHash(TABLE_GENDER,id,HASH_NAME)` (:292); race `TABLE_RACE ... HASH_NAME` (:318); class `TABLE_CLASS ... HASH_NAMESTRREF` (:344); background `Get2DAValueByRowIndexColumnName(TABLE_BACKGROUND_NAMES,row,race.sLabel)` (:380).
+- Resolution where it does work: RaceGenderScene.as:411-422, 433-434, 448-449, 475-476 and InitSubHeader :689: `SubHeaderText_mc.SetText(ExternalCommands.GetTlkString(entry.nNameStrRef))`. CharGenSpecButton.as:46 likewise.
+- GetTlkString: ExternalCommands.as:185-190: `_root.fsc_retval = ""; fscommand("GetTlkString", id + " " + fallback); return _root.fsc_retval;`.
+
+#### GetTlkString contract (port rule)
+
+- Argument: ONE string, `"<id> <fallback>"`, fallback optional and may contain spaces; note the movie sends `"<id> undefined"` when it omits the fallback (the string concatenation of an undefined arg) [inferred from the AS; GUI.md:241, 301].
+- Answer: `_root.fsc_retval` set to a plain STRING (GFx wide string, type 5), not an array (GUI.md:242, 301, 557; handler `GuiFSCommand::GetTlkString` 0x0051EAE0). Arrays are only for ListTactic*/ListMemberNames. It must be set synchronously before `fscommand()` returns; the AS pre-sets `""`, so a handler that finds nothing leaves `""` (the engine uses the fallback text if the id is invalid).
+- Number type matters upstream: the movie does `Number(Get2DAValue...)` on the 2DA answers, so Get2DAValue* must return the cell text/number (a string "NNN" or number both survive `Number()`); a non-numeric answer gives NaN, and GetTlkString("NaN ...") then returns the fallback/"" .
+
+#### Port rule
+
+- To match vanilla: implement GetTlkString (string answer) and the 2DA getters and leave the review lines blank, since `sName` is never defined. Nothing to fix on the port side if the lines are blank.
+- To show names on the review page (a deliberate improvement over vanilla): do not touch the engine; patch the movie's data after `RaceGenderScene.Initialize` builds the arrays, e.g. in the port's loader: for each entry in `RaceGenderScene.m_aRaces/m_aGenders/m_aClasses/m_aBackgrounds` set `entry.sName = ExternalCommands.GetTlkString(entry.nNameStrRef)` (a string, not an array), before the Review scene's `*_mc_init` run (Review is played after the appearance scene, AppearanceSoundSetScene.as:344 / SpellsTalentsScene.as:220), or rewrite ReviewScene.as:88/92/96/104 to call GetTlkString on `.nNameStrRef`. Label it a port enhancement, not vanilla.
+- Wrong answers: if GetTlkString returns an array or number the TextField does `String(a_sText)` and shows e.g. "12345" or "a,b"; if it returns null/undefined the line is blank.
+
+#### Not read
+
+- No play check of the vanilla review page (blank lines are inferred from the AS); no Ghidra read of 0x0051EAE0 beyond GUI.md's note; whether the review page's Race_mc symbols are SharedLibrary.TextField (assumed from SetText's null handling; the symbol-to-class link table was not decoded); the fallback text actually sent when the movie omits the second argument.
 
 ## The head morph a preset and the sliders make
 
