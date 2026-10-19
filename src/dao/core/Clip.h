@@ -51,6 +51,7 @@
 #pragma once
 
 #include "dao/core/Gff4.h"
+#include "dao/core/M2da.h"
 
 #include <array>
 #include <cstdint>
@@ -115,11 +116,33 @@ std::optional<Clip> ClipOf(const gff4::File &animation);
 // An event a clip raises as it plays, from the clip's <name>.evt beside it.
 struct Event
 {
-    double time = 0;          // seconds into the clip
-    std::uint32_t id = 0;     // 16 in every effect's event
-    std::uint32_t target = 0; // 1 in every effect's event
-    std::wstring text;        // what it names: an effect's emitter
+    // seconds into the clip (AnimationEventTime, 4016, a double). A file's events are not in time order.
+    double time = 0;
+    std::uint32_t id = 0; // the events.gda row naming what happens (AnimationEventID, 4017): EventKindOf
+    // AnimationEventTarget (4018): 1 in every event of the game's 3,161 .evt files.
+    std::uint32_t target = 0;
+    // AnimationEventString (4019): the event's argument, by its id. An effect's (16) names the
+    // emitter it fires; many carry none.
+    std::wstring text;
 };
+
+// What an event id is, from events.gda (table 95, "Animation Events"): lib-agent-2's reading of
+// 3 to 6 in dev/ANIMATION.md is the engine's use of EquipEvent, UnequipEvent and RightHand.
+struct EventKind
+{
+    std::uint32_t id = 0;
+    std::wstring label;     // "Equip Right"
+    std::wstring name;      // EventName: "EquipR"
+    bool equip = false;     // EquipEvent: draws a hand's item (3, 4)
+    bool unequip = false;   // UnequipEvent: sheathes it (5, 6)
+    bool rightHand = false; // RightHand: of the right hand's item, else the left's
+    bool audio = false;     // IsAudio: a sound
+};
+
+// Returns what an event id is: the row the game takes for it.
+// @param events events.gda merged (table 95)
+// @return nothing for an id the table has no row of
+std::optional<EventKind> EventKindOf(const m2da::Merged &events, std::uint32_t id);
 
 // Returns a clip's events (an "EVT" file) in the file's order, or nothing for a file that is not
 // one.

@@ -232,6 +232,8 @@ Each clip has three files: `.ani` (the keys), **`.evt`** and `.gad`.
   | 4018 | `AnimationEventTarget` | int | 1 in every file read |
   | 4019 | `AnimationEventString` | string | |
 
+  Read 2026-10-18 over all 3,161 `.evt` the game takes (DAOLib #190, `clip::EventsOf`, creatures' animations included): every event's target is 1, a file's events are not in time order (44 come before the one ahead of them), and every id has a row of events.gda (table 95, "Animation Events": ID, Label, EventName, EquipEvent, UnequipEvent, RightHand, IsAudio, `clip::EventKindOf`) but one, id 15 in `c_dog.pauseturnr180cwalkf`. The commonest: 14 FootDown (7,528), 17 MovementSound (2,520), 16 DetonateEmitter (2,397), 20 Playsound (1,192), 7 AbilityCast (282), 19 Swish (221), 18 Bodyfall (158), 1 AttackImpact (126), 30 DeathblowDamage (73), 27 PlaceableSound (65), 33 GameSpeed (54), 9 ProjectileLoad (42). Never raised: 12 BlendEnd, 39 HideNode, 40 ShowNode. `EquipEvent`, `UnequipEvent` and `RightHand` are set for 3 to 6 alone, as the table above, and `IsAudio` for 17 to 21, 23, 24 and 27.
+
 - **`.gad`** is GFF4 "GAD " V0.1. Its `AnimationAnimLength` (4009) is the clip's length in seconds.
 
 #### Times (checked; seconds, share of the clip in brackets)

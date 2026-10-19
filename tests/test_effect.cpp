@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -446,4 +447,115 @@ TEST_CASE("the game's effects in game/effects, when there, read whole", "[effect
     CHECK(models == 600);
     CHECK(emitters == 2927);
     CHECK(events == 2333);
+}
+
+// events.gda's rows as the game has them for the events dev/ANIMATION.md reads (3 and 6) and the
+// effects' 16, in the columns it has.
+static m2da::Merged EventKinds()
+{
+    m2da::Merged table;
+    for (const auto *name : {"ID", "Label", "EventName", "EquipEvent", "UnequipEvent", "RightHand", "IsAudio"})
+    {
+        table.columns.push_back({.hash = dao::core::GdaColumnHash(name), .type = std::nullopt});
+    }
+    const auto row = [&](std::int64_t id, const wchar_t *label, const wchar_t *name, std::int64_t equip,
+                         std::int64_t unequip, std::int64_t right, std::int64_t audio) {
+        table.rows.push_back({.part = 0,
+                              .cells = {id, std::wstring(label), std::wstring(name), equip, unequip, right, audio},
+                              .id = id,
+                              .conflict = false,
+                              .taken = true,
+                              .alike = {}});
+    };
+    row(3, L"Equip Right", L"EquipR", 1, 0, 1, 0);
+    row(4, L"Equip Left", L"EquipL", 1, 0, 0, 0);
+    row(6, L"Unequip Left", L"UnequipL", 0, 1, 0, 0);
+    row(17, L"Movement sound", L"MovementSound", 0, 0, 0, 1);
+    return table;
+}
+
+TEST_CASE("an event id is named by events.gda, with what the equip events mean", "[effect]")
+{
+    const m2da::Merged kinds = EventKinds();
+    const auto equip = clip::EventKindOf(kinds, 3);
+    REQUIRE(equip);
+    CHECK(equip->name == L"EquipR");
+    CHECK(equip->label == L"Equip Right");
+    CHECK(equip->equip);
+    CHECK_FALSE(equip->unequip);
+    CHECK(equip->rightHand);
+    const auto equipLeft = clip::EventKindOf(kinds, 4);
+    REQUIRE(equipLeft);
+    CHECK(equipLeft->equip);
+    CHECK_FALSE(equipLeft->rightHand); // the hand is RightHand's, not whether it equips
+    const auto unequip = clip::EventKindOf(kinds, 6);
+    REQUIRE(unequip);
+    CHECK(unequip->unequip);
+    CHECK_FALSE(unequip->equip);
+    CHECK_FALSE(unequip->rightHand);
+    CHECK(clip::EventKindOf(kinds, 17)->audio);
+    CHECK_FALSE(clip::EventKindOf(kinds, 15));
+}
+
+TEST_CASE("every animation event of the game's in game/animations, when there, is a row of events.gda",
+          "[effect][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "animations";
+    const auto tablePath = folder / "events.gda";
+    if (!std::filesystem::exists(tablePath))
+    {
+        SKIP("no game/animations/events.gda (ghilana's extract of *.evt and events.gda writes them there)");
+    }
+    const auto tableBytes = FromDisk(tablePath);
+    const auto gda = dao::core::GdaFile::Parse(tableBytes);
+    REQUIRE(gda);
+    const dao::core::GdaFile *parts[] = {&*gda};
+    const m2da::Merged kinds = m2da::Merge(parts);
+
+    std::size_t files = 0;
+    std::map<std::uint32_t, std::size_t> ids;
+    std::size_t notTarget1 = 0;
+    std::size_t backwards = 0;
+    std::size_t unnamed = 0;
+    std::uint32_t unnamedId = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        if (entry.path().extension() != ".evt")
+        {
+            continue;
+        }
+        const auto bytes = FromDisk(entry.path());
+        const auto file = gff4::File::Parse(bytes);
+        INFO(entry.path().filename().string());
+        REQUIRE(file);
+        const auto events = clip::EventsOf(*file);
+        REQUIRE(events);
+        ++files;
+        double last = 0;
+        for (const clip::Event &event : *events)
+        {
+            ++ids[event.id];
+            notTarget1 += event.target != 1 ? 1 : 0;
+            backwards += event.time < last ? 1 : 0;
+            last = event.time;
+            CHECK(event.time >= 0);
+            unnamed += clip::EventKindOf(kinds, event.id) ? 0 : 1;
+            unnamedId = clip::EventKindOf(kinds, event.id) ? unnamedId : event.id;
+        }
+    }
+    CHECK(files > 0);
+    CHECK(notTarget1 == 0);
+    // Counted 2026-10-18 over the 3,161 .evt the game takes (ghilana's extract, #190): 36 of the
+    // table's 39 ids are raised (12, 39 and 40 never), 14 (Foot Down) 7,528 times and 16 (Detonate emitter) 2,397; one
+    // event of the whole, c_dog.pauseturnr180cwalkf's, has id 15, which events.gda has no row of; 44 events come before
+    // the one ahead of them in their file, so a clip's events are not sorted.
+    if (files == 3161)
+    {
+        CHECK(unnamed == 1);
+        CHECK(unnamedId == 15);
+        CHECK(backwards == 44);
+        CHECK(ids[14] == 7528);
+        CHECK(ids[16] == 2397);
+        CHECK(ids[17] == 2520);
+    }
 }

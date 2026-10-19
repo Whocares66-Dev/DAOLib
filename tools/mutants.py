@@ -1399,6 +1399,12 @@ MUTANTS: list[Mutant] = [
         "sizes[i].size - ownerSize > ownerSize - sizes[i - 1].size",
     ),
     Mutant(
+        "clip-event-hand: an equip event's hand is events.gda's RightHand, not its EquipEvent",
+        CLIP,
+        '.rightHand = flag("RightHand"),',
+        '.rightHand = flag("EquipEvent"),',
+    ),
+    Mutant(
         "clip-event-time: an event's time is a double, in seconds",
         CLIP,
         ".time = event.Get<double>(kEventTime).value_or(0.0),",

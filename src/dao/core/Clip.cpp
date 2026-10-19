@@ -4,6 +4,8 @@
 
 #include <cmath>
 #include <numbers>
+#include <string_view>
+#include <variant>
 
 namespace dao::core::clip
 {
@@ -175,6 +177,32 @@ std::optional<std::vector<Event>> EventsOf(const gff4::File &events)
                        .text = event.String(kEventText).value_or(L"")});
     }
     return out;
+}
+
+std::optional<EventKind> EventKindOf(const m2da::Merged &events, std::uint32_t id)
+{
+    const m2da::Row *row = m2da::Taken(events, id);
+    if (row == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto text = [&](std::string_view column) {
+        const GdaFile::Cell *cell = m2da::CellOf(events, *row, column);
+        const auto *string = cell != nullptr ? std::get_if<std::wstring>(cell) : nullptr;
+        return string != nullptr ? *string : std::wstring();
+    };
+    const auto flag = [&](std::string_view column) {
+        const GdaFile::Cell *cell = m2da::CellOf(events, *row, column);
+        const auto *whole = cell != nullptr ? std::get_if<std::int64_t>(cell) : nullptr;
+        return whole != nullptr && *whole != 0;
+    };
+    return EventKind{.id = id,
+                     .label = text("Label"),
+                     .name = text("EventName"),
+                     .equip = flag("EquipEvent"),
+                     .unequip = flag("UnequipEvent"),
+                     .rightHand = flag("RightHand"),
+                     .audio = flag("IsAudio")};
 }
 
 } // namespace dao::core::clip
