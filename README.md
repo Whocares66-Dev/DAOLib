@@ -8,7 +8,7 @@ It works with version 1.05.13263.0 of the game from GOG, EA and Steam. Each stor
 
 ## Requirements
 
-- The latest Microsoft Visual C++ Redistributable, the **x86** one (`vc_redist.x86.exe`) even on 64-bit Windows, from [Microsoft's download page](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Without it, or with an older one, the game does not start and Windows reports error 0xc0000142.
+- The latest [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-supported-redistributable-version). **Download the x86 version**, even on 64-bit Windows.
 
 ## Installing
 
