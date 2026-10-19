@@ -44,7 +44,9 @@
 // can be occluded 0 and affects domain 2; 1,654 flicker at a period of
 // 0.075 s give or take 0.025. 26 probes' irradiance is all 0 in the file
 // (brc201d's seven, orz703d's eleven, lak519d's one, and test levels':
-// combat2, rmtst01, rmtst03).
+// combat2, rmtst01, rmtst03). The engine's probe loader reads the inline
+// irradiance when the probe has field 0x18C0 and the .mtx only when it has
+// not (0x0058E70D-0x0058E850, read 2026-10-19 by lib-agent-2).
 //
 // A room's _lc.mmh (1,448 of them, beside its _ll.mmh) has the same shape and
 // LayoutOf reads it the same way: a "GOB" with point lights (3,766) and in a
@@ -153,7 +155,8 @@ struct Probe
     std::wstring cube;           // its reflection cube's file, such as lak303d_probe_2zz.dds
     std::wstring irradianceFile; // the .mtx its irradiance was exported to
     // Its irradiance: a 4x4 matrix each for red, green and blue, as dao/core/LightProbes.h's
-    // Irradiance keeps them; all 0 if the probe has none, or was never baked.
+    // Irradiance keeps them; all 0 if the probe has none, or was never baked. The engine takes
+    // these inline arrays over the .mtx whenever the probe has them (field 0x18C0).
     std::array<float, 48> irradiance{};
 };
 
