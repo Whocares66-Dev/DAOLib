@@ -1224,15 +1224,200 @@ camera.fov = 10 deg, near 0.15, far 40
 
 - The camera's yaw and pitch contain no quantity read from the clone: the clone's orientation is set from the rotation argument alone (so any facing it had is overwritten) and the camera is built from the pitch alone. A head node whose -Z is a quarter turn from the body forward changes nothing in them.
 - The head node enters through one translation. Morph heads built by the morph path (dev/CHARACTERS.md 0x0055EC80 / 0x0054EB20, %TEMP%\lib-agent-2-morph-build.md) still have a node named `head`; if the morph-built head node is found by name `head` in the clone's model, the aim is its position, same as Alistair's. If a morph-built model has no node of that name, the engine falls back to the scene origin (the clone's root), as for the deepstalker (DAOTurnBased dev/DAOLIB_NEEDS.md:124) [I for the morph case].
-- So in the portrait the face is frontal exactly when the clone, facing +Y at rotation 0, shows its face along its body's forward, which is what the main view does with the object's orientation. Rotation values from the portraits table then turn the clone by that many degrees from frontal; the Default row's 23.5 is a three-quarter view of a head that is frontal at 0 (inferred from the table values, not from play).
+- So in the portrait the face is frontal exactly when the clone, facing +Y at rotation 0, shows its face along its body's forward, which is what the main view does with the object's orientation. Rotation values from the portraits table then turn the clone by that many degrees from frontal; the Default row's 23.5 is a three-quarter view of a head that is frontal at 0 (inferred from the table values, not from play). (Corrected 2026-10-19 by lib-agent-2: the Default row's framing is for creatures other than the player; the hero and the paperdoll use the creature's own camera record, below.)
 
 ### Not read
 
-- The last operands of the camera's position (vt+4's first argument at 0x007F36B7) and the exact `[esp+0x20]` offset vector fed to the lights; I read the structure, not every stack slot, so the sign convention of the lateral adjust and which of the X/Z adjusts maps to which scalar is unreconciled with DAOTurnBased's "Z up, X sideways" (seen in play there); the arithmetic above may be off by one slot.
+- The last operands of the camera's position (vt+4's first argument at 0x007F36B7) and the exact `[esp+0x20]` offset vector fed to the lights; I read the structure, not every stack slot, so the sign convention of the lateral adjust and which of the X/Z adjusts maps to which scalar is unreconciled with DAOTurnBased's "Z up, X sideways" (seen in play there); the arithmetic above may be off by one slot. (Resolved 2026-10-19 by lib-agent-2, below: the X adjust is -1.0 × PositionH, the constant at 0xAF0E48 being the double -1.0, and Z is up and X right, with no swap.)
 - The node class behind `HeadTransform` (vt+0x10 lookup by name, vt+0x18, vt+8): I did not resolve the class or confirm vt+8 is a point transform; a transform of the origin is a translation if so.
 - Whether the clone's model root yaw follows `CCObject+0x130` as the main view's does (the vt+0x80 update at 0x00694CF5), and the convention (which body axis faces along the vector); inferred equal for both scenes since both are CCCreature.
 - The meaning of the fixed 90.0 turn, the `renderer+0x1C` target branch at the end, and whether a morph-built hero's clone has a `head` node of that name.
 - No game was run and Ghidra was not used.
+
+### PortraitRenderer::PlaceCamera read through: the framing, the clone's turn, the light (lib-agent-2, portcam, 2026-10-19)
+
+Marks: [C] checked in disassembly or data, [I] inferred. GOG VAs. Scratch: %TEMP%\lib-agent-2-portcam-*.txt. Builds on %TEMP%\lib-agent-2-placecam.md (cited as placecam.md) and corrects it where noted.
+
+#### Short answers
+
+1. **Probable cause of the mismatch: the hero is not framed by the Default row at all, but by its own saved portrait settings.** Render (0x007F46E0) tests the source creature's tag against two strings (the wide strings at 0x00AECC9C `paperdoll` and 0x00AECCB0 `player`, copied into globals 0x00C3907C and 0x00C39060 by static initialisers at 0x00AD3550 and the like) with the equality test 0x004C0DE0. For a creature tagged `player` (the hero) or `paperdoll` it does NOT pass "unset" (65505.0): it passes the creature's own record at `creature+0x598` (record pointer at +0x5A4, via 0x0053CC40): pitch = rec+0x58, rotation = rec+0x5C, distance = rec+0x60, Z adjust = rec+0x68, X adjust = rec+0x64 times -1.0 (the constant at 0x00AF0E48 is the double -1.0, not 0.017453), the three light values left "unset" (so they come from the table row). [C: Render 0x007F4943-0x007F4A14; the stores that fill the record, 0x00739FED-0x0073A042.]
+   The record is filled at character creation from the Default row (CharGenStartAppearanceScene 0x00739D20, dev/CHARGEN.md:112) and is **in the save game**: `SavegamePlayerPortraitPitch/Yaw/Tint/Expression/Distance/PositionH/PositionV` (dev/gff4_fields.csv:1889-1895, 16332-16338). Read from the saves on this machine [C, tools/gff4.py --dump]: Lyna/AutoSave_1 and Lyna2/QuickSave_1: pitch -7.5, yaw 23.5, distance 0.675, H 0.007, V 0.038 (the Default row). **Leliana/AutoSave_1: pitch 0, yaw 0, distance 0.6, H 0, V 0, tint 1, expression 0.** A hero with those values is framed exactly as the peer sees vanilla: frontal (rotation 0), 0.6/0.675 = 11% nearer, so the head is 12.5% larger (a visible height of 0.315 m against 0.354 m, a length scale of 1.125; 15-20% with the head not being the only thing that changed), and the aim sits on the head node's origin, 0.038 m lower than the Default row's, so the face rides about 0.038/0.354 = 11% of the picture's height higher (about 16 px of 146). **Check the peer's save/hero for `SavegamePlayerPortrait*` first**; if it is a Default-row hero, the exe says vanilla's net turn is 23.5 degrees as the port has it, and this is not the cause.
+2. **The camera is not turned by CameraRotation; only the clone is.** Camera on fixed scene axes from the pitch alone; the clone is turned to face (sin(-rot), cos(-rot), 0); the model follows its facing as yaw = atan2(-x, y) about Z, so rot 0 shows the front to a camera at +Y, and rot 23.5 turns the face 23.5 degrees away from the camera (toward the camera's right) [C for the formulas; I that the model's front is its +Y at yaw 0]. For the Default row the net angle between view direction and face direction is exactly the row's rotation, 23.5 degrees. Nothing cancels it.
+3. **X/Z adjusts are not swapped** (placecam.md's doubt resolved): arg +0x14 (CameraZAdjust, hash 0xDB253899) scales the camera's UP axis, arg +0x18 (CameraXAdjust, 0x3A4BFC34) scales its RIGHT axis [C: column hashes recomputed as CRC32 of the lowercase UTF-16 names]. In metres, not scaled by the distance. The camera's final position is `head + R + right*X + up*Z`, which also moves the aim (the view direction is fixed), so the aim line passes through `head + right*X + up*Z`.
+4. **Framing numbers**: back-off `D = 3 x CameraDistance` (`(dist + 0) * 30 / 10`; the 0 is the float at 0x00C39054, never written; the double added after it, 0x00ADE210, is 0.0), vertical FOV 10 degrees (float 0x00C11C4C = 10.0, written nowhere, converted by pi/180 at 0x007F36A6), near 0.15 and far 40.0, target 146x146 so aspect 1, aim = the `head` node's world translation (the clone stands at the scene origin) plus the two adjusts. Nothing else (no node other than `head`, no further Z offset).
+5. **Lights**: two scene objects loaded by name in Setup ("portrait_lightrig" from "el_lr_new_day2", "portrait_lightprobe" from "el_lp_outside_day", strings at 0x00B24714, 0x00B21D6C, 0x00B246EC, 0x00B21D1C). PlaceCamera sets the same vector (LightXAdjust, LightYAdjust, LightZAdjust) on both with a virtual call (+0x10) after a first virtual call (+0x34) on each, in the scene's frame, not relative to the head or the camera and not turned with the clone. Their classes were not identified, see Not read.
+
+#### Pseudo-code a port can copy
+
+```
+// inputs: (pitch, rot, dist, zAdj, xAdj, lightX, lightY, lightZ)
+// hero (tag "player") or tag "paperdoll": (rec.pitch, rec.yaw, rec.distance, rec.positionV, -rec.positionH, table.lightX/Y/Z)
+// anyone else: all eight from the table row (by tag, else the Default row; the row with Appearance == the creature's when on the Default row)
+// where the table rows apply: any argument equal to 65505.0 is read from the row.
+
+D     = dist * 30 / 10                                   // = 3 * dist
+R     = Rot(Qx(pitch), (0, D, 0))                        // Qx: rotation about X by pitch degrees. R = (0, D cos p, D sin p)
+dir   = -R
+head_ang = atan2(-dir.x, dir.y) in degrees               // 4EE570 ToAngle; 180 when R.x == 0
+Q2    = Qz(head_ang) * Qx(-pitch)                        // 4EE200: Q = Qz(a1) * Qx(a2) * Qy(a3), angles in degrees
+right = normalise(Q2.Xaxis)                              // 4CBCE0 (first column of the rotation matrix)
+up    = normalise(Q2.Zaxis)                              // 4CBD80
+E     = R + right * xAdj + up * zAdj
+clone.SetOrientation((sin(-rot), cos(-rot), 0))          // every call; absolute
+head  = clone.node("head").worldTranslation              // 0x006A1EF0 -> node vt+0x18 (update) and vt+0x8 (0x0055DDF0: copies m[0][3],m[1][3],m[2][3],m[3][3])
+head  = head.xyz * (w != 0 ? 1/w : 1)
+camera.position = head + E
+camera.rotation = conjugate(Q2 * Qx(90))                 // a camera looking along its local -Z with +Y up; the 90 is the float at 0x00B00618
+camera.fov = 10 deg (vertical); near 0.15; far 40
+light(rig).pos = light(probe).pos = (lightX, lightY, lightZ)   // scene frame
+```
+
+Clone yaw: model yaw = atan2(-fx, fy) degrees about Z (0x006955C0 -> 0x00A5CBE0 uses 0x004EE570), so facing (0,1,0) is yaw 0, front toward +Y; facing (sin(-rot), cos(-rot)) is a yaw of +rot, turned counter-clockwise seen from above, i.e. toward -X.
+
+##### Default row worked through (pitch -7.5, rot 23.5, dist 0.675, Z 0.038, X 0.007, light -5/80/5)
+
+- D = 2.025. R = (0, 2.025 cos 7.5, -2.025 sin 7.5) = (0, 2.0077, -0.2643): the camera is 2.01 m in front (+Y) of the head and 0.264 m below it.
+- dir = (0, -2.0077, 0.2643); head_ang = 180 (+-180, the same rotation); Q2 = Qz(180) * Qx(+7.5). Forward = (0, -0.9914, 0.1305): looks toward -Y and 7.5 degrees upward. right = (-1, 0, 0); up = (0, 0.1305, 0.9914).
+- E = R + right*0.007 + up*0.038 = (-0.007, 2.0127, -0.2266). Camera at head + (-0.007, 2.0127, -0.2266).
+- Aim line through head + (-0.007, 0.0050, 0.0377): the aim is 3.8 cm above and 0.7 cm to the camera's right of the head node origin.
+- Visible height at the head's distance 2.025 m: 2 * 2.025 * tan 5 degrees = 0.354 m (the picture is 146 px, so 2.4 mm a pixel).
+- Clone facing (sin -23.5, cos -23.5, 0) = (-0.3987, 0.9171, 0): the face points 23.5 degrees off the line to the camera, toward the camera's right (-X). Net angle between view and face: 23.5 degrees.
+- Hero with the Leliana-save values (0, 0, 0.6, V 0, H 0): D = 1.8, R = (0, 1.8, 0), E = R, camera at head + (0, 1.8, 0), level, face frontal, visible height 0.315 m, aim on the node origin.
+- Hero with the Default values: Z = 0.038, X passed as -0.007 (not +0.007) because of the -1.0 factor, so the aside is (+0.007, ...) in the camera's right (+X world); the table path (non-hero) uses +0.007.
+
+#### Evidence
+
+##### Argument order and the table columns [C]
+- PlaceCamera 0x007F3130, `ret 0x20`, args at ebp+8..+0x24: pitch +8 (col 0x5B84AEC7 CameraPitch), rotation +0xC (0x97A92B07), distance +0x10 (0xEFBEFD6C), +0x14 (0xDB253899 CameraZAdjust), +0x18 (0x3A4BFC34 CameraXAdjust), +0x1C (0x8327EA19 LightXAdjust), +0x20 (0x1E280B6F LightYAdjust), +0x24 (0x62492EB4 LightZAdjust). Hashes recomputed here with CRC32 of the lowercased UTF-16LE column name.
+- Table logic 0x007F3140-0x007F337F: source creature = this+0xD40, row = this+0xD48. If the tag != `paperdoll` (0x004C0E50 is inequality): flag = (appearance word [rec7B0+0x58] != [rec7B0+0x5A]); if row == 1 and appearance != 0xF and tag != `player`, flag |= 1. With the flag set every argument is replaced by the table's value from the row whose Appearance column equals the creature's appearance (loop 0x007F31F0, column 0x052BEA01), else the Default row. Without the flag only arguments equal to 65505.0 (double at 0x00B1D9C8) are read from the row.
+
+##### Which settings the hero passes [C]
+- Render 0x007F4938-0x007F4A14: when tag equals `paperdoll` (0x007F495B jne) or `player` (0x007F4975), the settings branch at 0x007F499E; otherwise 0x007F4977 pushes seven 65505.0. Branch: 0x007F49C0 first lookup (0x0053CC40 returns [attr+0xC], the record), pushes in order rec+0x64 * (-1.0) (fmul qword [0xAF0E48], the double -1.0), rec+0x68, rec+0x60, rec+0x5C, rec+0x58 on top of three 65505.0 slots, then calls 0x007F3130. Argument order from the top of the stack: pitch rec+0x58, rotation rec+0x5C, distance rec+0x60, Z rec+0x68, X = -rec+0x64, then the lights.
+- The record's fields as chargen fills them, 0x00739F49-0x0073A042: CameraPitch -> +0x58, CameraRotation -> +0x5C, CameraDistance -> +0x60, CameraXAdjust -> +0x64, CameraZAdjust -> +0x68, PortraitTint -> +0x6C (attribute set), Expression -> +0x7C. So the save's PositionH = X (+0x64), PositionV = Z (+0x68) [I for the save field to field map; the names and the values (0.007, 0.038) agree].
+- Tag strings: 0x00AECC9C `paperdoll`, 0x00AECCB0 `player` [C data]; the globals 0x00C3907C and 0x00C39060 are initialised from them by 0x00AD3550 and 0x00AD3570 [C for the first push; the second inferred by symmetry of the pair of initialisers]. Placecam.md/gui3-portrait.md called them "chargen tags"; they are the hero's tag and the paperdoll's.
+- Saves read: C:\Users\tianx\OneDrive\Documents\BioWare\Dragon Age\Characters\{Lyna,Lyna2,Leliana}\Saves\...\savegame.das, with `python tools\gff4.py --dump FILE --depth 4 --items 5`.
+
+##### The math [C]
+- 0x007F3381-0x007F33CD: vec (0, D, 0) built at S0+0x20..0x28 (D at +0x24 = `(0.0f(0xC39054) + dist) * 30.0(0x00AF7068, double) / 10.0f(0xC11C4C) + 0.0(0x00ADE210, double)`). `0x004EE200(out, 0, pitch, 0)` then `0x004CB6D0(out, Q, vec)`.
+- 0x004EE200(out, a1, a2, a3): degrees to radians (double 0x00AF14C0 = pi/180); three axis-angle quaternions (0x004CBC40: (axis*sin(t/2), cos(t/2))): a1 about Z (axis from 0x00C1EED0 = (0,0,1)), a2 about X (0x00C1E870 = (1,0,0)), a3 about Y (0x00C30260 = (0,1,0)); the product `Qz(a1) * Qx(a2) * Qy(a3)` by two calls to 0x004CB640 (Hamilton product with out.x = e.x c.w + c.x e.w + e.y c.z - e.z c.y). So the call (0, pitch, 0) is a turn about X by the pitch, and (heading, -pitch, 0) is Qz(heading) * Qx(-pitch). The name "FromYawPitchRoll" fits only as (yaw=a1 about Z, pitch=a2 about X, roll=a3 about Y).
+- 0x004CB6D0: the standard q v q* (terms 2(xy -/+ zw) etc.).
+- 0x007F33DB-0x007F3424: dir = -R at S0+0x30; 0x004EE570(&dir) = atan2(-x, y) in degrees (fld x; fchs; fld y; call 0x008E893A; times 180/pi 0x00AF0E50 = 57.29578); second 0x004EE200(out, heading, -pitch, 0).
+- 0x007F3429-0x007F34E7: `0x004CBCE0(Q2)` writes (1-2(y2+z2), 2(xy+wz), 2(xz-wy)), the first column; 0x00451A30 normalises (fallback (1,0,0)); multiplied by arg +0x18 (stored at S0+0x14 at 0x007F342F) and added to R; then `0x004CBD80(Q2)` = (2(xz+wy), 2(yz-wx), 1-2(x2+y2)), normalised, multiplied by arg +0x14 (stored S0+0x18 at 0x007F348B) and added: P2 = R + right*arg18 + up*arg14.
+- 0x007F34EC-0x007F3541: Q3 = 0x004EE200(out, 0, 90.0f(0x00B00618), 0) = Qx(90); F = Q2 * Q3 (0x004CB640(out, Q2, Q3) = e*c with e = first = Q2); the conjugate (0x004CBCB0) of F is the camera's rotation.
+- 0x007F3541-0x007F35D9: point (0,0,0,1) at S0+0x50; angle = -rot * pi/180; `fsincos`: cos stored to S0+0x1C, sin to S0+0x10; facing = (sin, cos, 0) at S0+0x90..0x98; `0x00694CE0(clone = this+0x20, &facing)` then `0x006A1EF0(clone, &point)`.
+- 0x00694CE0 stores the vector at +0x130 and calls the virtual +0x80 (0x006A0190), which calls 0x006955C0: with the model owner `0x00A5CBE0(&obj+0x130, pitchflag)`: yaw = 0x004EE570(vector) (atan2(-x, y)), pitch 0x004EE5A0 or 0x004EE370, quaternion 0x004EE200(yaw, ...) set as the model's rotation (owner vt+0x1C). ANIMATION.md:63 reads the same for ordinary creatures.
+- 0x007F35DE-0x007F3632: iw = (w == 0) ? 1 : 1/w; head = point.xyz * iw; `S0+0x20 = head + P2` (the camera position; stored by movaps over P2).
+- Head node: 0x006A1EF0 finds the node by the wide string `head` (0x00B0F450) with ObjectNode vt+0x10 on the model, then node vt+0x18 (0x0055DB50, update) and vt+8 = **0x0055DDF0, which does not transform the input point: it overwrites it with the node's matrix column 3 (+0x6C, +0x7C, +0x8C, +0x9C)**. So the aim is exactly the head node's world translation, w normally 1 [C]. (Placecam.md said "a transform of the origin"; the result is the same.)
+- Camera calls 0x007F369B-0x007F3732: vt+4 (SetTransform(position*, rotation*)) with position = S0+0x20, rotation = S0+0x40 (the conjugate F); vt+0xC (FOV in radians: 10 * 0.0174533 = 0.17453); vt+0x18 (near 0.15 = 0x00ADEEA8, far 40.0 = 0x00AE7534). The SceneCamera (0x00AF77AC) forwards to an inner camera at +4. CAMERA.md:37 has the explore camera's FOV (same call) as vertical degrees [C there], so this 10 degrees is vertical.
+
+##### What was not changed by the clone's turn
+- The clone is reoriented each call (absolute), so any facing it had is lost. Render's animation 0x2A5/0x2A6 (anim_base rows "Portrait Expression - Male/Female", AnimName portrait_exp_m / portrait_exp_f, Priority 0, DisableLookAt 0) are facial expression clips and were not decoded for a head turn [I].
+
+#### Cited prior notes
+- %TEMP%\lib-agent-2-placecam.md:7-10 (the aim, the camera from the pitch alone, the rotation given to the clone) confirmed; :33-41 flow confirmed; :60 (last operand) now settled as head + P2; :70 (X/Z doubt) settled, no swap.
+- %TEMP%\lib-agent-2-gui3-portrait.md:20 (said the two strings are chargen tags; they are `paperdoll` and `player`; "x 0.017453 via 0xAF0E48" is wrong, the constant is the double -1.0 and applies to the X adjust only) and :22 (Default row values).
+- C:\project\DAOTurnBased\dev\UI.md:67-70 (3 x distance, 10 degrees, adjusts along the camera's up and right in metres; "side profile ... as we do for humans") agrees. :70 "the rotation turns the view round the creature" is the clone's turn seen from the camera [consistent].
+- DAOLib dev/CHARGEN.md:112 (copying the Default row into +0x598; now known to be what the hero's portrait uses afterwards, and that it is saved), dev/gff4_fields.csv:1889-1895.
+
+#### Not read
+- The classes of the two light objects (Setup's scene-manager call vt+0x80 at 0x007F4064/0x007F40CD, the scene manager is the object at 0x00C31650) and what their vt+0x34 and vt+0x10 do: PlaceCamera calls vt+0x34(buf) then, after overwriting buf's x, y, z with (lightX, lightY, lightZ), vt+0x10(buf); the first looks like a getter of the light's own 4-vector (so its w is kept) and the second a setter, so the pair would set the light's position to the three values; the scene's frame, the lights' type, colour and range come from the rigs el_lr_new_day2 and el_lp_outside_day (resources not located by name in ghilana's search, whose output was too long to read here) [I; (-5, 80, 5) is a position 80 m toward the camera's side, so effectively a directional light from the camera's side].
+- Whether a hero loaded from an older save without the portrait fields gets a record, and what the record's defaults are (the creature's ctor, 0x006B9F39, leaves the attribute's pointer null; where it is allocated was not found).
+- Whether the model's front is +Y at yaw 0 for every model (taken from the facing-vector convention and DAOTurnBased's play).
+- The save-to-record mapping of the field names (only the values were matched).
+- The head node's position in the head's mesh (the face's centre is above the bone's origin by an amount not measured); the peer's actual save and hero.
+- No game was run and Ghidra was not used.
+
+### Portrait clone: does its head turn, what frames it (lib-agent-2, read 2026-10-19, prefix portclone)
+
+Marks: [C] checked in the exe's disassembly or in data, [I] inferred. GOG VAs. Scratch: %TEMP%\lib-agent-2-portclone-* (decoded clip, skeleton, swf xml).
+
+#### Short answers
+
+1. **The vanilla hero's ring does not use the Default row at all.** Render (0x007F46E0, 0x007F4950-0x007F4A14) passes the source creature's OWN portrait camera (creature +0x598 block) to PlaceCamera when the creature's tag is `paperdoll` (string at 0xAECC9C, global 0xC3907C) or `player` (0xAECCB0, global 0xC39060) [C]. The hero's tag is `player`. The block is saved with the game: GFF4 fields SavegamePlayerPortraitPitch/Yaw/Tint/Expression/Distance/PositionH/PositionV (16332-16338, dev/gff4_fields.csv:1889-1895). Real saves in this install, read with tools/gff4.py [C]:
+   - Lyna (made in character creation; chargen copies the Default row into the block, dev/CHARGEN.md:112): pitch -7.5, yaw 23.5, distance 0.675, H 0.007, V 0.038, tint 1, expression 0 (= the Default row; this hero looks 23.5 degrees turned).
+   - Leliana and HurlockVanguard (heroes made without the appearance scene): pitch 0, yaw 0, distance 0.6, H 0, V 0, tint 1, expression 0.
+   So a hero whose save holds 0/0/0.6/0/0 is frontal (no rotation), 12.5% closer (0.675/0.6, a face 12.5% larger linearly) and, with V = 0 instead of 0.038 and pitch 0 instead of -7.5, sits a little higher: exactly the symptom the peer sees. Nothing "cancels" the rotation; the vanilla hero it compared against had yaw 0. Ask the port's source: which save fields does the hero have? The port should read the hero's SavegamePlayerPortrait* and pass them through the same mapping as below. (Which save the peer's vanilla screenshot came from was not known to me; the fix is to compare the same save. If that save says 23.5 the ring would be turned in vanilla too.)
+2. **The clone's head does not turn by animation or look-at.** At the pose Render sets (the `portrait_exp_m/_f` clip at Expression 0) the head, neck and chest rotations are the model's bind pose; no look-at controller runs on the clone [C for the pose, I for "no look-at": nothing in the renderer ticks the clone, see below].
+3. **Nothing else in the renderer sets the clone's scale, LOD or head framing.** The camera is the only framing. The picture is 146x146, shown by portraits.swf in a 72x72 px circle (a circular mask the same size and place as the placeholder), so it is scaled to about 0.49 and the corners cut by the circle; no zoom, no crop of the middle [C].
+
+#### Q1. The clone's pose, animation, look-at
+
+- The clone is a full `CCCreature` embedded in the renderer at +0x20 (constructed by 0x006B9ED0 with id -1; renderer ctor 0x007F3D80, `lea ecx,[esi+0x20]` at 0x007F3DB6) [C]. Setup (0x007F3E20, once per renderer) gives it an animation host (0x00694DB0(8) at 0x007F3FFC, creates the host 0x00A61770(8)), a mode (0x00695220(0xE) = host +0x15C set to 14, 0x00A5CAE0), vtable +0x144(0) and registers it in the world's by-kind list (0x0064B240 on [0xC327EC]+0x1AC) [C that these are called; the meaning of 8, 0xE and +0x144 not read].
+- The only animation the renderer ever starts is **0x2A5 (677) or 0x2A6 (678)** [C]. anim_base (ghilana, table "anim") rows 677 `Portrait Expression - Male` AnimName `portrait_exp_m`, 678 `Portrait Expression - Female` `portrait_exp_f`, Type 0, Priority 0, Replacement 1, DisableLookAt 0 [C]. Female when the appearance record's byte +0x50 is 2 (0x006A3650) [C]. The clip behind them is `default.hm_exp.ani` / `default.hf_exp.ani` (global.rim and anims.erf; my identification by the name pattern, the .anb link not read [I]).
+- That clip, decoded (tools/gff4.py --dump, and Clip.h's 32-bit smallest-three decode) [C]: **AnimLength 0.1333 s, five keys at 1/30 s steps (key times 0, 16383, 32767, 49151, 65535 of 65535)**, 151 channels (face bones: brows, cheeks, lips, jaw, lids, eyes; plus head, neck1, chest, god, legs and arms). Key 0 equals the bind pose of the neck, head and chest: neck1 z 0.082 (bind in hm_uhm_basa_0.mmh: 0.083), head z 0.106 (bind 0.106), chest y 0.077 (bind 0.077), god identity. Keys 1-4 are other expressions with head rotations of 9-25 degrees (head quaternions: key1 (-0.117,-0.010,0.140,0.983), key2 (0.03,0.039,0.06,0.997), key3 (0.001,-0.024,0.214,0.977), key4 (0.066,-0.042,0.11,0.991)).
+- **The time picked is the Expression value**: `SetTime(animId, t)` 0x00A5C980 (-> host vtable +0x78) with t = the source's block +0x7C (the Expression, 0 for the Default row, 0 in the saves above) [C: 0x007F4915-0x007F4933 and 0x007F4650-0x007F4698; the global 0xC39058 compared with 0 is never written, so it is the +0x7C path]. So at Expression 0 the clone is in key 0 = bind pose, face neutral, head not turned relative to the body [C data, I that SetTime at t = 0 samples key 0]. A chargen Expression above 0 would scrub through the five poses (seconds, 0 to 0.1333) [I for the units].
+- Played with `PlayAnimation` = CCCreature vtable +0xB0 (0x006AA7E0): args (id, 0.0, -1.0, 1) (the float at 0xAE2E00 is -1.0) [C]: the speed/advance argument 0.0 and duration -1 are the same shape ANIMATION.md gives the look-at clips (do not advance, no end) [I]. The clip is held at the time SetTime sets; nothing advances it.
+- Two entry points: `Render(p1=0)` plays it unconditionally (0x007F48D3-0x007F4933). `Render(p1=1)` (UpdatePortrait, the rebuild) calls the refresh 0x007F4440: it rebuilds the clone's model from the source's appearance record (0x007F41D0 copies the record field by field from the source +0x7B0), re-applies the same host setup, builds the model (0x006C1E00 on the clone), and plays 0x2A5/0x2A6 and SetTime **only if** the appearance's word +0x58 equals +0x5A (appearance unchanged) and 0x006A25A0 is true (the appearance table's string column 0xDE80B418, hash read by 0x00A2CC40 from table 2, equals the narrow string `combat_humanoid` at 0xB0F318) [C]. Otherwise (a creature that is not a combat humanoid: ogre, dog, spider) the clone plays no portrait clip and stands in its model's default pose [C that nothing plays; I that the default is the bind/idle].
+- **Look-at**: the look-at object is lazy (`CCCreature::GetLookAt` 0x0069E9D0 at +0x768) and is driven by `UpdateLookAt` 0x0069EAF0, called from only two places (0x006BD575, the creature's update, and 0x00765898) [C by scanning every E8/E9 in .text for these targets]. The renderer never calls the clone's update; it only sets facing (SetOrientation), plays, SetTime, builds the model and draws it through the scene (the dirty flag at scene +0x11, 0x007F4A19). So no look-at object exists on the clone and nothing would move the head toward the camera [I: absence of calls in the renderer's functions; the call list of 0x007F3130-0x007F4A44 contains no update, tick or look-at function]. Even the expression clip does not key `eyelookat`/`eyelookbackat` toward a target: they are constants in the clip [C names, values not decoded].
+- **Facing**: `CCObject::SetOrientation` (0x00694CE0) stores the vector at +0x130 and calls vtable +0x80 = 0x006A0190 -> 0x006955C0, which hands the vector to the animation host 0x00A5CBE0 (yaw = `Vector::ToAngle` 0x004EE570 = atan2(-x, y) in degrees, so (0,1,0) is 0 degrees and (sin(-r), cos(-r), 0) is exactly r degrees; a quaternion built with `FromYawPitchRoll(yaw, pitch, roll)` and set on the model's root node immediately, no turn rate) and to the +0xA8 member (vt+0x54 with the same heading) [C]. `FromYawPitchRoll` 0x004EE200 (degrees in): the 2nd argument is a rotation about X (the portrait pitch), the 1st about Z (the yaw), the 3rd about Y [C: axis constants (1,0,0)/(0,0,1)/(0,1,0) derived from the static init at 0x004EE236-0x004EE29A, third mapped by the order of the products]. So yes: the clone's body (and with it the face) is turned by exactly CameraRotation about the vertical, and the camera is on the +Y side of the head; with rotation 0 the face points at the camera. That matches the earlier PlaceCamera reading; the missing piece was that the hero's rotation is not the Default row's.
+- A head-tracking flag, a "portrait mode" flag or a facing-from-the-camera on the clone: none found [C within the renderer's functions: ctor 0x007F3D80, 0x007F3740, setup 0x007F3E20, 0x007F41D0, 0x007F4440, Render, PlaceCamera]. The one per-creature flag the renderer sets is the fade/visibility pair `[clone+0x18C]=[clone+0x18D]=1` with 1.0 via 0x006951D0 (a fade-in of 1.0, i.e. fully shown) [C].
+
+#### Q2/Q3. What frames the face, and the displayed picture
+
+- **PlaceCamera's table forcing** (0x007F3175-0x007F31D1 [C], matches Addresses.h:1675-1681): `0x004C0E50` is "strings differ" and `0x004C0DE0` "strings equal" (both read: `sbb/neg` forms at 0x004C0E02-0x004C0E04 / 0x004C0E72-0x004C0E76). Table forcing (every value read from table 7 by appearance) applies when the tag differs from `paperdoll` AND (the appearance word +0x58 != +0x5A, OR (renderer row +0xD48 == 1 AND appearance != 15 AND the tag differs from `player`)). For the hero (tag `player`): forcing happens only when its appearance has changed since the last record (+0x58 != +0x5A, e.g. after an armour/appearance change that updates the pair); otherwise the hero's own block is used. The port should keep both paths; a hero whose appearance changes is, for that render, framed by the table's row for its appearance or the Default row.
+- **Render's argument mapping for the hero** (0x007F499E-0x007F4A14) [C]: pitch = block+0x58, rotation = +0x5C, distance = +0x60, Z adjust = +0x68 (V), X adjust = **-1.0 * (block +0x64)** (H; the multiplier is the double at 0xAF0E48, which reads -1.0, so earlier notes' "0.017453" was wrong), lights = unset (65505.0, 3 values), so the lights come from the table row `renderer+0xD48` (Default 1) [C]. Save field to block: Pitch +0x58, Yaw +0x5C, Distance +0x60, PositionH +0x64, PositionV +0x68, Tint +0x6C, Expression +0x7C [I from the order of the save fields and the argument order].
+- **Block's chargen ranges**: Look up/down -30..30, turn -45..45, distance 0.5..0.72, move left/right +-0.036, up/down -0.02..0.1 (dev/CHARGEN.md:255).
+- **0x007F3740** (run from the renderer ctor) only sets the block's tint (+0x6C) and Expression (+0x7C) from the table row it finds (for tag `player` it searches table 7 for a row whose Tag column 0x88578372 equals the creature's tag; else row 1) [C: 0x007F3785-0x007F3914]; it never writes the camera fields. So Tint and Expression of the hero are overwritten from the table at each renderer creation (the Default row: 1 and 0), but pitch, yaw, distance, H and V stay as saved.
+- **The scale of the clone**: nothing scales the clone; the camera distance is the only zoom (`D = (distance + [0xC39054 = 0.0]) * 30 / 10`, FOV 10 degrees, near 0.15, far 40; from lib-agent-2-placecam.md:23, :35). No LOD choice for portraits was found in the renderer's functions [C within them; the engine's general model LOD set by host +0x15C = 14 at Setup is a possible portrait LOD mode, the host method 0x00A67A20 not read].
+- **The displayed picture** (swf from lib-agent-2-guicmd-x\allgfx\portraits.swf, converted with FFDec -swf2xml, scratch portraits.xml) [C]: `portrait_mc` (sprite 115, the party bar's) has the mask shape 109 (clipDepth 12 covers Portrait_mc and the alert clips) and `Portrait_mc` (sprite 111, the placeholder, scale 1.0003). Shape 109 (the mask): a circle, bounds x 440..1880 twips, y 400..1840 = 72 x 72 px at (22, 20) px. Shape 110 (the placeholder inside sprite 111): a circle, 1440 twips = 72 x 72 px, placed at (22, 20) px. `Picture_mc_init` (Portrait.as:133-141) takes `nWidth = Portrait_mc._width`, `nHeight = Portrait_mc._height` (about 72.03, from the 1.0003 scale; the URL formats them as numbers) and loads `img://<name>.dds?Width=72.03&Height=72.03` at 100% scale into it (MovieUtils.LoadImage, MovieUtils.as:215-224; GetImageUrl :152-176). The 146 x 146 texture is therefore shown at about 72 x 72 px (a factor 0.493) and the circle (diameter 72) clips its corners only: **the picture is not enlarged or cropped toward the face**. The summon portrait (`portrait_sum`, sprite 237) uses scale 0.5610 on the same shapes, the same logic [C].
+
+#### Pseudo-code a port can copy
+
+```
+// per portrait render of creature C (source), clone K at the scene origin
+tag = C.tag
+if tag in ("paperdoll", "player"):                   // equality, case-sensitive as the string compare
+    cam = C.portrait_block                           // hero: saved SavegamePlayerPortrait* (pitch, yaw, distance, H, V)
+    args = (pitch=cam.pitch, rot=cam.yaw, dist=cam.distance,
+            zadj=cam.V, xadj=-cam.H,                  // the -1.0 multiplier
+            light=unset)                              // lights from the table row (Default row 1 unless C.tag has one)
+else:
+    args = all unset                                  // read from table 7: row by Tag, else Default (1), or by Appearance
+if table_forced(C): args = table row by Appearance    // tag != paperdoll and (appearance changed or (row==1 and appearance != 15 and tag != "player"))
+
+if K needs a rebuild: K.appearance = C.appearance; K.equipment = C.equipment
+if appearance_unchanged and C is a combat humanoid:   // table 2 col 0xDE80B418 == "combat_humanoid"
+    K.Play(female ? 678 : 677, speed=0.0, duration=-1.0, restart=1)   // portrait_exp_f / _m
+    K.SetTime(id, C.expression)                      // seconds in 0..0.1333; Default row 0 -> key 0 = bind pose
+// no look-at, no update tick on K: K stays in that pose
+K.SetOrientation(sin(-rot), cos(-rot), 0)             // yaw = rot degrees about Z, immediate
+head = K.node("head").world_position                  // HeadTransform(0,0,0,1); scene origin if no head node
+D  = (dist + 0.0) * 30 / 10
+R  = Rx(pitch) * (0, D, 0)                            // camera offset on the +Y side
+cam.pos = head + R + right*xadj_scaled + up*zadj      // see lib-agent-2-placecam.md:36-38 for the right/up axes and the unreconciled X/Z slot order
+cam.fov = 10 deg, near 0.15, far 40
+display: texture 146x146 -> 72x72 px circle in the movie
+```
+
+Numbers: the Default row (table 7, ID 1): pitch -7.5, rotation 23.5, distance 0.675, Z 0.038, X 0.007, light -5/80/5. A hero with a default save (Leliana, HurlockVanguard): pitch 0, yaw 0, distance 0.6, X 0, Z 0, tint 1, expression 0, lights from the Default row (-5/80/5). Hero from chargen (Lyna): the Default row's camera values, with X = -0.007 (the -1.0 multiplier).
+
+#### Evidence index
+
+- Render 0x007F46E0 (disassembly /tmp/lib-agent-2-portclone-render.txt, regenerate with `python tools\daoexe.py --disasm 0x007F46E0 400`): the tag test 0x007F494F (`push 0xC3907C`; `call 0x4C0DE0` equality; `jne 0x7F499E`) and 0x007F4969 (`push 0xC39060`), the branches 0x007F4977 (all unset) and 0x007F499E (the block).
+- Tag strings: static initialisers 0x00AD3550 (`push 0xAECC9C` = "paperdoll", `mov ecx,0xC3907C`) and 0x00AD3570 (`push 0xAECCB0` = "player", `mov ecx,0xC39060`), wide strings read at the VAs.
+- Hero tag `player`: dev scripts (toolset\extract\scripts\Landsmeet (Denerim)\_Includes\den_functions_h.nss: `if (sTag == "player")`, "If oFollower is the player "player" is substituted for (tag of party member)") [C text; the creature's actual tag in a save not read].
+- Saves read: `C:\Users\tianx\OneDrive\Documents\BioWare\Dragon Age\Characters\{Lyna\Saves\AutoSave_1, Lyna\Saves\PostCampaign_1, Leliana\Saves\Slot_1, HurlockVanguard\Saves\Slot_1}` with `python tools\gff4.py --dump FILE --depth 3 --items 3 | grep PlayerPortrait`.
+- Animation rows: ghilana `table anim id 677,678`. Clip: ghilana extract of default.hm_exp.ani / default.hf_exp.ani (16330 / 16382 bytes), decoded (scratch lib-agent-2-portclone-x\dump.txt); bind from hm_uhm_basa_0.mmh (scratch skel.json: Neck1 z 0.083, Head z 0.106, Chest y 0.077, Neck (-0.704,-0.063,-0.063,0.704)).
+- Slot addresses: CCCreature vtable 0x00B10484 +0xB0 -> 0x006AA7E0 (PlayAnimation), +0x80 -> 0x006A0190, +0x144 -> 0x0069F180, +0x104 -> 0x00696F00; the +0x70 interface vtable 0x00B1035C +0x60 -> 0x0069A000 (returns the animation host `[this+0xE4]`).
+- Prior notes cited: lib-agent-2-placecam.md:7-13, :23, :33-41 (camera maths, unchanged); lib-agent-2-gui3-portrait.md:19-20, :35-37 (Render shape; the "chargen tags" reading is refined here to paperdoll + player); dev/CHARGEN.md:112, :255; dev/ANIMATION.md:728-757 (look-at; GetLookAt 0x0069E9D0, update 0x006CAD80); C:\project\DAOTurnBased\dev\UI.md:67-81 (the rotation turns the view round the creature, consistent); Addresses.h:1675-1685 (forcing rule, consistent with this reading).
+
+#### New versus prior notes
+
+- The hero's ring is framed by its saved camera, not the Default row (the central finding).
+- The X adjust multiplier is -1.0, not 0.017453.
+- The 677/678 clip, its length (0.1333 s), poses, key 0 = bind, and that the time is the Expression value.
+- No look-at, no tick on the clone; FromYawPitchRoll's axes; the displayed picture is a 72 px circle with no crop of the face.
+
+#### Not read
+
+- The Attribute at creature +0x598: how its target object (`Get()` = 0x0053CC40 returns `[this+0xC]`) is created and loaded from the save fields, and whether load maps the 7 save fields onto +0x58..+0x7C exactly as I listed (inferred from order). The default when a save lacks them.
+- Which save the peer's vanilla screenshot came from; its hero's tag in a save.
+- The `Attribute::Set` path that the sliders use and 0x0069ED50's use (Render(0,1,1)).
+- Host methods 0x00A5CAE0/0x00A67A20 (mode 14), vtable +0x144 / +0x104 of the clone, the by-kind list at 0x0064B240; whether they enable any LOD or tick for the clone.
+- Whether the engine's per-frame model update (skinning, animation host update) runs for the clone when the scene draws, and so whether SetTime's pose is applied that frame (it must be, since vanilla shows the neutral face; the host update was not read).
+- The .anb that maps AnimName `portrait_exp_m` to `default.hm_exp.ani` (named by pattern).
+- The ghilana table for the scene's lights/camera objects (strings 0xB24714/0xB246EC/0xB21D6C/0xB21D1C), the render target's format and clear alpha, and the SetTime unit for Expression above 0.
+- Game not run; Ghidra not used.
 
 ## gui4a: the quickbar's length, and a quickbar slot's token (lib-agent-2, read 2026-10-18)
 
