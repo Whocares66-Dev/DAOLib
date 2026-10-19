@@ -9,7 +9,7 @@ Read 2026-10-18 by lib-agent-2 (and two of its forks) in the GOG exe (`game\DAOr
 ### Summary
 
 - **The engine draws and sheathes on the combat state, natively.** `CCCreature::SetCombatState` (0x006AE0A0) queues command type 39 (Sheathing) at the back of the queue, draw on entering combat with a delay of 0-99 ms, sheathe on leaving it with 1,000-2,999 ms. The scripts only set the state, and they do it for every creature: hostiles per creature, the whole party (controlled or not) through the game mode. The attack command also draws by itself before its swing if the weapons are still sheathed, and moves draw or sheathe with an upper-body overlay.
-- **The row is fixed and the clip comes from the creature's combat set.** anim_combat row 100 `enter` draws and 101 `exit` sheathes; 177 `quick_enter` and 178 `quick_exit` are used while the combat state is set, so a combat-start draw plays `quick_enter`. The node is looked up in the creature's trees, where the weapon set's tree (OW/WS/TW/DW.anb by equipment; Bow/Cbow/Staff.anb from bitm_base's `WieldModel`) supplies it. With no such node the drawn flags flip at once and `unarmed_enter`/`unarmed_exit` (110/111) plays if the creature has it.
+- **The row is fixed and the clip comes from the creature's combat set.** anim_combat row 100 `enter` draws and 101 `exit` sheathes; 177 `quick_enter` and 178 `quick_exit` are used while the combat state is set, so a combat-start draw plays `quick_enter`. The node is looked up in the creature's trees, where the weapon set's tree (OW/WS/TW/DW.anb by equipment; Bow/Cbow/Staff.anb from bitm_base's `WieldModel`, confirmed 2026-10-18 by lib-agent-2: 0x006C1812 calls 0x006B78D0, which reads `WieldModel` and `WieldModelOverlay`, hashes checked) supplies it. With no such node the drawn flags flip at once and `unarmed_enter`/`unarmed_exit` (110/111) plays if the creature has it.
 - **The weapon moves at the clip's events,** in seconds in the clip's `.evt`: events.gda 3 EquipR, 4 EquipL, 5 UnequipR, 6 UnequipL. Each moves one hand's item between its `Wear` and `Wield` node and sets that hand's drawn flag. On a draw, the creature's combat trees are also swapped to the set's, which is the drawn stance and grip. No end-of-clip fallback was found: a clip without the event never moves the weapon.
 
 ### 1. What queues the draw and the sheathe
@@ -511,6 +511,7 @@ Read in the disassembly (daoexe.py, capstone) and the game's files (ghilana). No
 
 - So for the mage cast end / conjure start the fade is **0.433 s** with a hold of 0.108 s at full old weight, then the old falls (and the new rises) until 0.325 s, then 0.108 s of the new clip alone; for berserk / shield bash getup / war cry exits it is **0.6 s** (hold 0.15, change 0.15-0.45).
 - `c_beara.tbi` (bear form): `c_blackbear.pause.ani -> c_blackbear.runf.ani`, 0,1, 0.058,1, 0.175,0, 0.233,0 (**0.233 s**). `c_deepstkra`, `c_dsogre`, `c_goata`, `c_mutta`, `c_spidera`: empty lists (112 bytes). Other creature sets have no .tbi (the file list from ghilana: only those 7 exist).
+- **The .tbi pairs probably never fire** (inferred (corrected 2026-10-18 by lib-agent-2)): their keys name no shipped node file, so the lookup finds no pair.
 - **Which names the keys match** (the .anb node's file name; the tbi uses `shared.pause.ani`, `m.ua_cast_end.ani`, `c_blackbear.pause.ani`): inferred to be the node file names of the .anb (the tbi names are in the same style as the anb's: `mh.dg_lost_wander.ani`); how the set normalises them (`0x00A5E730` resolves a name through the set's tree list at +0x64 and map at +0x38) was not read.
 
 #### 5. Cases, in seconds
@@ -555,7 +556,7 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools
 1. **Play rate: yes, scaled to the creature's actual speed, from a data table, not from the clip's travel.** One rate is applied to every leaf clip of the movement tree (walkf, runf, runleanl/r, walkb, ...). With `x` = the controller's current speed (m/s) and the creature's `apr_base` row (`Anim_*Speed` = the speed the clip was authored at, `Game_*Speed` = the speed the creature really moves at): below the walk speed `rate = x / Anim_WalkSpeed`; between walk and run speed the rate is a straight line between `Game_WalkSpeed/Anim_WalkSpeed` and `Game_RunSpeed/Anim_RunSpeed`; above run speed `rate = x / Anim_RunSpeed`. Combat uses `Anim_CbtSpeed` (strafing/backing `Anim_CbtStrFSpeed`) and `rate = x / thatAnimSpeed`. For a human (Anim walk 1.54, run 3.62; Game walk 1.54, run 6.0): walk plays at 1.0, run at 6/3.62 = 1.657. No sub-clip speed matching, no clip travel in the loop.
 2. **Walk/run is a blend of two sub-trees by speed, in the .anb**: top node `Motion` has children `Run` (runleanl, runf, runleanr) and `Walk` (WalkForward/walkf, or in combat WalkForward/WalkBackward with walkfl/walkfr/walkbl/walkbr). Non-combat weights: `Run = speed / Game_RunSpeed` if `speed > Game_WalkSpeed`, else 0; `Walk = 1 - Run`. Combat: Run is 1.0 (the combat tree's `runf`) and Walk and strafe nodes are weighted by the angle between the heading and the move direction. The speed ramps at 8 m/s^2, so walk to run crossfades over 0.56 s.
 3. **Start, stop and in-place turn have dedicated clips, but only in the non-combat tree** (`movement.anb`'s `Transition` node has 10 clips; `combat_movement.anb`'s has none). The start (pause to walk/run, with a turn of 90 or 180 degrees built in), the stop (run to pause on the left or right foot) and the in-place turn (turnl90/turnr90) are all rows of `anim_base` (84-94, 74-75/80-83, 59/61), played on the `Transition` node while `Motion` goes to 0. The stop's foot is chosen by clip events (`MvmtSetTransition`), the only "foot planting" there is. No foot IK was found.
-4. **Turning: the creature's facing is rotated by code at `Δ' = 180 deg * dt / T`, `T = 0.4 - 0.28 * |Δ|/180` seconds (450 deg/s for a small angle up to 1500 deg/s for 180 deg, clamped so it never overshoots), in every state but idle.** On top of that, a standing creature (non-combat, controller state 4) plays a 90-degree turn clip when the angle is above 30 degrees, at a rate chosen so the turn takes `angle/120` seconds (rate capped at 1.3), the clip's root yaw scaled to the angle. See section 2 for what was not settled (whether the model follows the fast logical turn or the clip).
+4. **Turning: the creature's facing is rotated by code at `Δ' = 180 deg * dt / T`, `T = 0.4 - 0.28 * |Δ|/180` seconds (450 deg/s for a small angle up to 1500 deg/s for 180 deg, clamped so it never overshoots), in every state but idle.** On top of that, a standing creature (non-combat, controller state 4) plays a 90-degree turn clip when the angle is above 30 degrees, at a rate chosen so the turn takes `angle/120` seconds (rate capped at 1.3), the clip's root yaw scaled to the angle. The model follows the fast logical turn and the clip's root yaw does nothing (see "Not settled about the turn" below). (corrected 2026-10-18 by lib-agent-2)
 
 #### Classes
 
@@ -594,7 +595,7 @@ All set through `SetNodeWeight(name, weight, [+0x50], 0)`.
 - Flag bits [+0x40], from `0xA6A0B0` (checked): 1 moving forward (dot of [+0xF0] move direction and [+0x100] facing > 0; in strafing the angle between the heading and the move direction below 89 degrees), 2 backward, 4 the turn is to the left, 8 to the right (sign of the 2D cross of the two facings, 4 when > 0), 0x10/0x20 strafe left/right, 0x40 vertical motion. Only with speed [+0x134] > 0; the facing/move vectors are compared by `Vector::AngleBetween` (0x004D4C90).
 - Non-combat: `runBlend = 0xA69B50(speed)`: 0 when moving backward or not moving, 1.0 in combat, else `speed > Game_WalkSpeed ? speed / Game_RunSpeed : 0` (so at the walk speed Run jumps to 0.257 for a human the instant speed passes 1.54; **not clamped to 1** here, inferred that the tree clamps). `Walk = 1 - runBlend`, `Run = runBlend`, `WalkForward = 1`/`WalkBackward = 0` (swapped for backward, bit 2, with walkb = 1), `walkf = 1`. Run lean (inferred from 0xA6A9A0/0xA6B7A0): `runf = 1 - |lean|`, `runleanl`/`runleanr = |lean|` by the sign, where lean comes from the heading change (0xA6DEE0 through a smoothing object [+0x14], only if anims 65 and 66 exist and the speed reaches the run speed).
 - Combat (strafing, `[+0x4C] = s`): forward: `walkf = s`, the side node `walkfl` or `walkfr` = `1 - s` (bit 0x10 / 0x20, else both 0 except...); backward: `walkb = s`, `walkbl`/`walkbr` = `1 - s`; `Walk = 1`, `Run = 0`, `WalkForward`/`WalkBackward` 1/0 by bit 2. `s` is linear in the angle between heading and move direction (about `(90 - angle)/90` forward, `(angle - 90)/90` backward; the 89/91/179 degree thresholds are floats 0xB59ACC/0xB59AC4/0xB59AC8, the 90 a double 0xB02CC0; inferred from the arithmetic, not followed to a formula). Run in combat is the whole run node when the speed is Game_CbtSpeed.
-- **Blend speed**: `[+0x50]` is -1.0 at construction and 4.0 (float 0xADEF1C) once any mode has been entered (every enter routine writes 4.0); transition clips are played with a blend argument 2.5 (0xB03B08) and rate 1.0. What the number means inside the tree (seconds, or per second) was not read: both look like rates.
+- **Blend speed**: `[+0x50]` is -1.0 at construction and 4.0 (float 0xADEF1C) once any mode has been entered (every enter routine writes 4.0); transition clips are played with a blend argument 4.0, the controller's +0x50, not 2.5 (corrected 2026-10-18 by lib-agent-2) (2.5 is the blend of the 0xA5FCC0 bookkeeping calls in the same function), and rate 1.0. What the number means inside the tree (seconds, or per second) was not read: both look like rates.
 
 ##### Speed thresholds in one list
 
@@ -655,9 +656,9 @@ creature facing = rotate(creature facing, step)    (0x4EE200, 0x4CB6D0, normalis
 ```
 Effective rate `180/T` deg/s: 450 at ~0 degrees, 580 at 45 degrees, 692 at 90, 900 at 120, 1500 at 180. Because the step is recomputed from the remaining Δ each frame, a 90-degree turn takes about 0.13 s. A moving creature (state 1/2) gets its desired facing set to its move direction every update (`0xA64350`: `[+0x80] = normalise(move)`, `SetDesiredFacing([+0x80])`, which does not change the state when it is not 0), so the heading follows the path at this same limit; no other limit.
 
-##### Not settled about the turn
+##### The turn (settled (corrected 2026-10-18 by lib-agent-2))
 
-The creature's logical facing (the object's orientation, +0x130) is rotated by the code above in about 0.13-0.3 s in state 4, while the turn clip (0.8 s) plays with its root yaw scaled to the whole angle. Whether the model shows the logical facing at once (the clip then only animates the body, with the root yaw cancelled), or the root rotation is what turns the model (and the logical facing is the end state), was not decided: the consumer of the root-motion object (AnimBase+0x80, outputs at its +0x10/+0x20) was not read. The controller stays in state 4 until the clip ends (the free test above), which suggests the clip is the visible turn.
+The turn is the fast logical turn. The drawn model follows the object's orientation (+0x130), and the turn clip's root yaw does nothing: these clips lack GFF 4008 `AnimationHasGobAnim`, so the root-motion object holds no clip (see the turn clips in "Movement, casting, hits and gestures" below). The turn clip is cut after about 0.15-0.25 s, when state 4 ends, with a 0.25 s fade (corrected 2026-10-18 by lib-agent-2). This replaces the earlier "not settled" point on whether the model shows the logical facing or the clip's root rotation.
 
 #### Not read
 
@@ -1023,6 +1024,457 @@ Durations, using `dev/ANIMATION.md`'s PlayAnimation timings (length of the clip,
 - Whether the VM really rounds every float operation to float32 (I assumed yes in 3.4).
 - Playing the idle path in the game (no play check; the countdown and its table values are read, not seen).
 - A table dump of rows 0-131 beyond the ones listed (the table is `table 170` in ghilana; three add-ins' rows are enciphered).
+
+## Movement, casting, hits and gestures (read 2026-10-18 by lib-agent-2)
+
+### Movement follow-ups: walk start, stop clips, turn clips, mode exits (anim2mv)
+
+Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, a rel32 call scanner, the .ani/.evt files through ghilana and `tools\gff4.py`. No Ghidra, no game. "(checked)" = read in the disassembly or the data; "(inferred)" = reasoning from what was read. Not seen in play. Addresses are GOG's. Scratch: `%TEMP%\lib-agent-2-anim2-*`.
+
+#### Short answers
+
+1. **Walk start: no clip is played, the controller goes straight to mode 2 in the same frame.** `pausewalkf` (85) has no node in movement.anb, so `0xA6A300` fails its "is the clip in the Transition tree" test and calls `0xA6BF70` (mode 4 -> mode 2). Mode 2's enter then fades `Motion` to 1.0 and `Transition` to 0.0 at blend 4.0 = 0.25 s linear, and the walk/run leaves restart at clip time 0. Run start (`pauserunf` 84, `mov_p_rf.ani` 0.2 s) does have a node and plays.
+2. **Stop clips: the logical position is already at the path's end, and nothing moves the object during them.** State 3 is entered on arrival (speed set to 0 at once, no deceleration), the controller does not move the creature in state 3, and the stop clips drive nothing in the object: the engine's root-motion channels are not in these clips. The 0.05 m of travel in `root_translation` is bone animation inside the model (checked).
+3. **Turn clips: the model's drawn orientation is the creature's logical orientation, rotated by the code's fast turn (about 0.15 to 0.25 s for 90 degrees); the clip animates the body only.** The clip's root yaw is not applied to the object (the root-motion object has no clip for these files), and the clip has no 90 degrees of yaw in any bone (checked). So the "root-yaw scaling" in animmove is a no-op for the human locomotion clips.
+8. **Mode 8 (stop) has no exit on MvmtUnlock or on a time test. Its exits: the engine's Done (event 13) at the clip's end (2.267 s at rate 1.0), or new movement input (mode 4 at once).** The stop clips have no Done in their .evt; Done is raised by the clip event sweep when the playhead crosses the clip's length (inferred from 0x815E81, not seen). Mode 0x10 (turn) exits on Done too, but earlier in practice: as soon as the controller leaves state 4, which is when the facing is within 0.999999 degrees of the desired one, so the 0.8 s turn clip is cut to a 0.25 s fade after about 0.15 to 0.25 s.
+
+#### 1. Walk start from idle (checked unless marked)
+
+Chain, per frame `0xA6BF00(dt ms)`:
+- Controller state [+0x13C] goes 0 -> 1 (walk) when the order starts; flags [+0x40] come from `0xA6A0B0` and are nonzero only with speed [+0x134] > 0. The speed ramps +8 m/s per second (`0xA635D0`), so the flag is set from the first update after the speed leaves 0.
+- `0xA6BD80` (motion flags): mode 1, 8 or 0x10 -> `0xA6BC40(4)`. The mode-4 enter `0xA6B710`: [+0x64] = 0.0, [+0x60] = 0 (the stored stop-clip id is forgotten), then for old mode 1/4/8/0x10 (byte table 0xA6B750: 00 01 01 00 01 01 01 00 ...; entering mode 4 from mode 2 does nothing) [+0x50] = 4.0 (float 0xADEF1C) and `0xA6AE30`.
+- `0xA6AE30` (start): not combat, global switch 0xC1CFAC set; forward: angle between the move direction [+0xF0] and the current facing [+0x110]; running = target speed [+0x138] >= Game_RunSpeed - 1e-6 (`0xA69C70`). Angle < 45 (float 0xB59A6C): id 85 (walk) or 84 (run). 45 <= angle < 157.5 (0xB59A70): 91/93 (right 90 run/walk) or 92/94 (left, by flag bit 4); >= 157.5: 87/89 or 88/90. Backward (flag bit 2): 86 `pausewalkb`. Then `0xA6A300(id, rate 1.0)`.
+- `0xA6A300`: first `0xA6A2B0` clears the previous transition (fades its node to 0 at [+0x50] and zeroes [+0x5c]). Then `0xA5F440(id)` (the row's AnimName -> `0xA5E730`, which answers which root tree of the animation set holds that name, 0 if none) is compared with `0xA5E730("Transition")` (string 0xC4C5BC). **A mismatch (the node is missing, so the answer is 0) jumps to `0xA6A38E`: `0xA6BF70` and return**, and `0xA6BF70` is mode 4 -> `0xA6BC40(2, 0)`, mode 8/0x10 -> mode 1. Only on a match is AnimBase virtual 0x58 (`0xA5E670`, `PlayById(id, rate, 0.0, 1.0, blend = [+0x50], 0, 1)`) called; its bool result is tested too, and false does the same `0xA6BF70`.
+- Which ids have nodes (movement.anb Transition node): 84, 87-94 (the 90/180 starts), 74/75 (run stops), 59/61 (turns), shuffle. **Not present: 85 `pausewalkf`, 86 `pausewalkb`, 80-83 (walk stops).** anim_base rows 85/86 exist (TransitionTo 56/55, Replacement 56/55) but nothing in this path reads TransitionTo (`0xA5F440` reads the AnimName only).
+- Mode-2 enter `0xA6A830(oldMode, arg)`: `0xA69AD0(arg)` first: if the loops are not armed ([+0x6D] = 0) or the `Motion` weight is below 0.01 (float 0xAF7498), set [+0x6D] = 1 and call AnimBase virtual 0x6C on the leaf array (non-combat `{walkf, walkb, runf, runleanl, runleanr}` 0xC4C8BC, combat 0xC4C8CC) with time = arg + [+0x64] and 1.0 (so the loops restart at that phase; arg is 0 from `0xA6BF70`, [+0x64] is 0 unless a start/turn clip's MvmtSetOffset set it, see section 4), then [+0x64] = 0. Old mode 1, 4 or 8: [+0x50] = 4.0. `0xA6A2B0` again. Then the current base clip (AnimBase [+0x140], the idle) is faded to 0 at [+0x50] and `Motion` = 1.0, `Transition` = 0.0, both at blend [+0x50] = **4.0 = 0.25 s linear** (weight rate per second). The per-frame weights of Walk/Run (`0xA6B7A0`) and the play rate (`0xA6AA70`) then act as in animmove.
+- **So a walk start from idle is: idle fades out over 0.25 s while Motion/Walk fades in over 0.25 s, the walk loop starting at clip time 0 (inferred: units of virtual 0x6C's time not read, the 0.0 arg is a start); the speed ramp 0 -> 1.54 m/s takes 0.19 s.** A run start from idle with a straight-ahead angle plays `pauserunf` (0.2 s) as Transition (below), then mode 2.
+- When the transition clip is played (any of the nodes that exist): `0xA6A300` after the play fades `Motion` to 0 and `Transition` to 1 at [+0x50] = 4.0 (0xA6A4A4/0xA6A4C7 and the other branches), the clip itself started with blend [+0x50] = 4.0 (not 2.5 as animmove had it: 2.5 is the blend of the `0xA5FCC0` bookkeeping calls in the same function). If the pair (idle clip, transition clip) has a .tbi curve (`0xA5F350`), the curve replaces the ramp; humanoid.tbi has none for these, so linear.
+
+#### 2. Stop clips and where the creature is (checked unless marked)
+
+- Path following `0xA64350`: remaining path length [+0xE8] = `0xA63E80`. With an anim controller, `0xA6ACF0` returns `0.25 * |node+0x20|` (double 0xAE7FE8 = 0.25) for the stop clip chosen by `0xA69BA0(0)` (the clip node's +0x20 vec3 is its end root translation, filled by the clip wrapper's constructor at 0xA39440..: `0xA390F0(0, node+0x10)` and `0xA390F0(length, node+0x20)`, both zero-initialised first). If that is `< remaining`, `0xA636B0` gives the travel the clip still has; the state-3 test is `remaining < travelLeft + 1e-6`. Then the step is taken (`0xA63450`, `0xA63F40`), and **arrival (`0xA63F40` true) sets state 3 as well**, with the struct's position at the path end.
+- **For the human stop clips `|node+0x20|` is 0**: `0xA390F0` looks for a channel named **"gob_gobtranslation"** (UTF-16 at 0xB58CBC; rotation "gob_gobrotation" at 0xB58C9C) in the clip's channel list (field 4005, names 4000), and these clips (mh_m.mov_rf_p_lfoot/rfoot, mov_p_rf, mov_p_r90trn_p, mov_rf, mov_wf, checked by dump) have `god_translation`, `god_rotation`, `root_translation`, `root_rotation` and no such channel. So travelLeft = 0 and **state 3 begins only at arrival (remaining < 1e-6), at the end of the path**. The travel ratio `AnimBase[+0xB4] = max(0.25, remaining/T)` written by `0xA6AD50` is then a division by zero and is never used (see section 3: the root-motion object has no clip for these files).
+- In state 3 (`0xA644E0`): `0xA63B20` (turn the facing toward [+0x90]) is called, **[+0xE0] speed = 0 at once (no deceleration; the creature arrives at full speed and stops dead)**, `0xA64350` (movement) is not called. The creature update (`0x6BB9CA` region) applies the controller's position to the object as in any frame (`0x6B6880`, then SetOrientation `0x694CE0`) because AnimBase+0xC0 is 0 (section 3). The position does not change, as the struct position is unchanged.
+- The clip itself: `0xA6AD50` (mode 8 enter): id `0xA69BA0(1)` = [+0x60] (set by the run clip's MvmtSetTransition events to `runpausefl` 74 or `runpausefr` 75; walking sets none, so **a walk stop has no clip: [+0x60] = 0 -> `0xA6BF70` -> mode 1, a crossfade to idle**); `0xA6A300(id, 1.0)`: rate 1.0, blend [+0x50] = 4.0 (0.25 s), Motion -> 0, Transition -> 1. So the stop clip plays in place, 2.267 s, 1.0x.
+- The foot is chosen when the run loop's events fire (section 4 of animmove); the stop clips' own events: `mov_rf_p_lfoot.evt`: 0.00 MvmtLock(23), 0.03 MvmtSetTransition(25) "pause", 0.17 FootDown(14) "|Left", 0.30 FootDown "|Scuff", 0.30 MvmtUnlock(24). `mov_rf_p_rfoot.evt`: 0.00 Lock, 0.03 SetTransition "pause", 0.07 FootDown, 0.17 MovementSound(17) "Unknown", 0.27 FootDown "|Left|Scuff", 0.27 Unlock. (The add-in dao_prc_cp_2 has copies of the same sizes, 278/322 bytes; not readable, assumed equal.)
+
+#### 3. Turn clips and the model's orientation (checked unless marked)
+
+- **The root-motion object** (class at AnimBase+0x80, vtable 0xB59728, methods 0xA65BD0 start, 0xA65C80 init, 0xA65CF0 reset, 0xA65D10 set yaw scale, 0xA65E60 add a rotation, 0xA65ED0 update, 0xA66xxx warp helpers). Fields: +0x00 position, +0x10 base orientation (quaternion), +0x20 current orientation, +0x34 translation scale, +0x38 yaw scale, +0x3C clip time (ms), **+0x40 clip (AnimBase+0xC0)**, +0x50 target position, +0x60 target yaw, +0x64 end time, +0x68/+0x69/+0x6A flags (warp to a target position / yaw / ...). `0xA65BD0` stores the clip in +0x40 **only if `0xA38F20(clip)` is true: the clip's GFF4 has field 4008 `AnimationHasGobAnim`**. The locomotion clips' template (anim, node, quat, list, vec3) has no field 4008 (checked on lfoot, rfoot, r90trn_p, mov_p_rf, mov_rf, mov_wf), so **+0x40 = 0**, and `0xA65ED0` then returns false at once unless a warp flag is set. `0xA394F0` and `0xA6458F...` (`AnimBase+0xC0 != 0`, via `0x695670`) are the "gob clip playing" tests.
+- **Consumers**: (a) `0x6BB910..0x6BBB2F` (the per-frame creature update, `dt` in ebp+8): `0xA644E0` (controller) is called with the frame struct (position at +0, facing at +0x10 from the object's +0x120/+0x130). If the controller returns true: if `0x695670` (AnimBase+0xC0 != 0) is false, which it is for every locomotion clip, the creature's position is integrated (`0x6B6880`) and **the facing is stored with `0x694CE0` (object +0x130 = the vector, then virtual 0x80 `0x6A0190` -> `0x6955C0`, which hands +0x130 to the animation owner `0xA5CBE0` (it turns the vector into yaw `0x4EE570` and pitch `0x4EE5A0` and rotates the model) and the yaw to the sub-object at +0xA8)**. If AnimBase+0xC0 is set (a gob clip), the controller's facing change is not applied; its angle difference (yaw/pitch, `0x4EE570/0x4EE5A0`) is turned into a quaternion (`0x4EE200`) and added to the root motion's +0x10/+0x20 with `0xA65E60`, and (b) `0x6A3150` (virtual of the creature, called from the same update chain; vtable 0xB1059C) calls `0xA65ED0` with output pointers and writes the result to the object: position by creature virtual 0x11C (`0x6BBB70`) and facing by `0x694CE0`. `0x695980` is the same with the root-motion output applied; `0xA65ED0`'s outputs are at the object's +0x00 (position) and +0x20 (orientation) when flags +0x68/+0x69 are set, else computed from the clip by `0xA39260` (translation at time +0x3C, scaled by +0x34, rotated by +0x10) and `0xA39300` (rotation, scaled by +0x38).
+- **Result for the turn clips**: the object's orientation (+0x130) is the controller's, from the fast turn `0xA63B20` (same rate formula as animmove, `Δ' = 180 dt / (0.4 - 0.28 |Δ|/180)`: about 580 deg/s at 45, 700 at 90; with the per-frame recomputation, 90 degrees takes about 0.15 to 0.25 s). The model's world rotation is rebuilt from it every frame. The clip's root yaw (`0xA65D10`, the scale `|angle/rot|` of animmove) has nothing to scale: **no clip, no effect** (inferred from +0x40 = 0; the call is made, `0xA65D10` returns early at 0xA65D4B).
+- The clips themselves (checked, decoded with Clip.h's rules): `mov_p_r90trn_p.ani` (0.8 s) has `root_rotation` (a bone, 64-bit keys) at 119 to 121 degrees from the identity all along, i.e. the rest orientation (the Y-up to Z-up turn), `god_rotation` identity at both keys, `god_translation` zero; no bone has a net 90 degree yaw between the first and last key (only `leftspawn`/`rightspawn`/`eyelookatbase`, 90 degrees, and hip, ankle and hip-twist bones swinging 27 to 49 degrees and returning to 0). So the clip is stepping legs in place, not the body turn. `mov_rf_p_lfoot` the same (root_translation ends at z = +0.005 from -0.045, 0.05 m, as a bone).
+- Not seen in play: whether 0.15 to 0.25 s for a 90 degree standing turn matches the vanilla look (the model turns by code, the legs step during 0.8 s of clip that is cut, see section 4).
+
+#### 4. Exit conditions of mode 8 and mode 0x10, and of the others (checked unless marked)
+
+Mode word [+0x54]; per frame `0xA6BF00`: flags [+0x40] = 0 if the controller state [+0x13C] is 0 or 3, else `0xA6A0B0`; **`(flags & 0x33) == 0` -> `0xA6BCC0`, else `0xA6BD80`**.
+
+`0xA6BCC0` (no forward/back/strafe flag):
+| mode | rule |
+|---|---|
+| 2 | state == 3 -> mode 8; else -> mode 1 |
+| 4 | [+0x6E] (lock) != 0 -> stay; else -> mode 8 |
+| 1 | not combat, flags & 0xC (turn bits), state == 4 -> mode 0x10; else `0xA69DF0` (settle: if the weight of node [+0x178] is below 1e-6, fade the leaves/Transition/Motion... `0xA69CF0`, disarm the loops `0xA69AA0`, [+0x70] = 0) |
+| 8 | `Motion` weight below 1e-6 (float 0xB59AB8) -> `0xA69AA0` (disarm loops); then **state == 0 -> mode 1, otherwise stay** |
+| 0x10 | **state == 0 -> mode 1, otherwise stay** |
+
+`0xA6BD80` (motion flags), after `0xA6A7E0`; if flag bit 1 (backward) differs from the previous frame's [+0x44], [+0x60] = 0: modes 1, **8** and **0x10** -> `0xA6BC40(4)` **unconditionally (new movement input leaves the stop or the turn at once, no lock test)**; mode 4: if the playing start clip ([+0x5C]) has under 250 ms left (`0xA5F980 < 0xFA`), the start was a walk (`0xA69C70([+0xD8])` false) and the target is a run (`0xA69C70([+0x138])` true) -> mode 4 again (the run start follows); mode 2 nothing.
+
+Events (`0xA6BFA0`, ids 11-26; the jump table: 11 and 13 -> one handler, 23 -> lock, 24 -> unlock, 25, 26, the rest ignored): 11 BlendStart and 13 Done: the event's string (the engine puts the finished clip's AnimName there) is compared with the AnimName of the row [+0x5C] (the clip being played); if equal, [+0x6E] = 0 and `0xA6BF70` (**mode 4 -> 2, modes 8 and 0x10 -> 1**). 23 MvmtLock: [+0x6E] = 1 if the string matches (the lock event compares the same way). 24 MvmtUnlock: [+0x6E] = 0. **The lock only matters for mode 4 -> 8 in `0xA6BCC0`; mode 8's exit never reads it.** 25: [+0x60] = id of the named clip when the right branch is dominant (animmove). 26: [+0x64] = integer string / 30.0 (double 0xAF7068), the start-phase offset in seconds used at the next `0xA69AD0`: `mov_p_r90_rf` "4" (0.133 s), `mov_p_l90_rf` "21", `mov_p_r180_rf` "15", `mov_p_l180_rf` "34" (frames at 30 per second), each together with an Unlock at 0.20 to 0.23 s.
+
+- **Where Done comes from**: event id 0xD is built in the clip event sweep `0x815990` (called from the tree-entry step `0x811D10` via 0x811E14) at 0x815E81, after the .evt events of the window: when the sweep's window (previous time, current time] contains the clip's length ([ebx+8]), and the clip is not looping ([ebp+0x30] = 0). The event carries the node name in its +0x14/+0x18. The same sweep emits id 0xB at 0x815DCC when a float parameter ([ebp+0x28], not traced to its caller) lies in the window. So Done is the playhead crossing the end of a one-shot, with no .evt entry (inferred; the sweep was read, the caller's arguments were not).
+- **Mode 8, exact**: entered from mode 2 with state 3, or from mode 4 unlocked with no motion flags; stays until (1) Done/BlendStart of [+0x5C]'s clip -> mode 1; (2) `0xA6BCC0` finds state 0 -> mode 1 (but the controller cannot leave state 3 while the anim mode is in {4, 8, 0x10}: `0xA6457B`: `test [anim+0x54], 0x1C` -> stay, so this needs a new order that resets the state); (3) motion flags (a new order) -> mode 4. **No time test, no weight test (the weight test only disarms loops), no MvmtUnlock.** For `runpausefl/fr` with rate 1.0: **2.267 s** until Done; a new walk/run order cuts it at once.
+- **Mode 0x10, exact**: entered from mode 1 (not combat, flags & 0xC, state 4); enter `0xA6AFF0` computes the clip (animmove) and returns to `0xA6BF70` if the angle <= 30 degrees; stays until Done (0.8 s clip at the chosen rate) or **`state == 0` -> mode 1**. State 4 -> 0 happens in `0xA644E0` (0xA645B3..0xA645FD) once the angle between the current facing and the desired one is <= 0.999999 degrees (or the desired is zero) and AnimBase+0xC0 is 0, so after the fast turn (about 0.15 to 0.25 s): mode 1 -> the mode-1 enter `0xA6B6C0` calls `0xA6A2B0` which fades the turn clip out at 4.0 (0.25 s). **So the visible clip is the first 0.15-0.25 s of a rate-adjusted turn clip, then a 0.25 s fade (inferred; not seen).**
+- **Mode 4 (start)** exits: Done of its clip -> mode 2 (the 0.2 s `pauserunf`: Done at 0.2 s; the 90/180 starts are 0.267 and 0.333 s); a missing node or a failed play -> mode 2 at once; no motion flags and unlocked -> mode 8; motion flags again with the re-start rule above. The start's Lock (23 at 0.07 s in the 90/180 starts, 0.1 s in `mov_p_rf`) keeps mode 4 from falling to the stop while the order is withdrawn.
+
+#### Not read
+
+- The caller of the event sweep's parameters (the id-0xB time at [ebp+0x28]) and thus when BlendStart fires; whether Done also fires for clips played with the loop flag off by the set.
+- AnimBase virtual 0x6C's time unit (`0xA69AD0`), 0x70 (`0xA69AA0`), the settle `0xA69DF0`/`0xA69CF0` beyond the weights.
+- Whether a new move order can set state 1 or 2 while state 3 holds (the setter `0xA639C0`/`0xA63800` callers, and the command layer's gate for a move while the stop runs).
+- `0xA63F40` (the path advance: that it puts the position exactly at the path end on arrival), `0xA63E80`, `0xA63450`, `0x6B6880`.
+- How many .ani files in the game have field 4008 (the gob clips) and what plays them; the use of the warp flags +0x68..+0x6A in the root-motion object (`0xA66xxx`).
+- Quadrupeds (their stop/turn trees and whether they have gob channels), the dao_prc_cp_2 add-in's clip/evt copies (assumed equal), the combat tree (no Transition node).
+- Nothing here was seen in play; the numbers 0.15-0.25 s for a turn and the dead stop at the path end are readings of the code and should be checked against the vanilla game.
+
+### Ending a cast (cast-end, conjure, berserk) and the bow/staff trees, read 2026-10-18 by lib-agent-2 in GOG DAOrigins.exe 1.05 (base 0x400000), for DAOParagonEngine
+
+Read with `daoexe.py --disasm`, ghilana (tables, .anb/.ani/.evt/.tbi) and `gff4.py`. Not seen in play. "(checked)" = read in disassembly or data; "(inferred)" = not. Builds on `lib-agent-2-anim-fade.md` (blends, .tbi), master's `dev/ABILITIES.md` and `dev/ANIMATION.md`, `lib-agent-2-playanim.md` (sub-action 37), `lib-agent-2-wstyle.md`. Scratch: `%TEMP%\lib-agent-2-anim2cast-*` (extracted clips under `-mh\`, `-res\`, `-anb\`).
+
+#### Short answers
+
+**Q4**
+1. **Nothing plays the cast-end clip from the ability code.** Only the conjure (sub-action 7) and the cast (sub-action 37, queued by sub-action 8) play clips. The cast-end, the conjure loop and the return to `pause` are the **follow-through of the animation set**: when a non-looping clip finishes, the engine raises animation event 13 "Animation Done" and the creature's handler (vtable slot 51, `0x00696C50`) plays the clip's **TransitionTo** row with **speed 1.0, blend 3.0 (0.333 s linear)**, but only if the finished clip is still the creature's current animation (+0x13C of the animation set). It does not look at the command queue (checked: handler; the raising of event 13 is inferred, see Not read).
+2. The chain is data: `ua_dconjure_start` (244) -> TransitionTo `ua_dconjure_loop` (264, loops); `ua_dcast` (246) -> `ua_dcast_end` (290) -> `pause` (1); `ua_acast` (247) -> `ua_acast_end` (291) -> `pause`; `ua_dcast_loop` (258, loops) -> `ua_dcast_end` (290). `pause` is anim id 1, so its play gets the random speed offset (speed += rand()%90/100 - 0.45, `0x0069B478`) (checked).
+3. **The cast command ends at 80 % of the cast + cast-end length**, before the cast-end clip has finished (1,707 ms for Chain Lightning = 0.8 x (1.3333 + 0.8) s; checked, reproduces the number seen in play). The cast-end is not conditional on a queue: it plays as soon as the cast clip is done; a new command's play that replaces the current animation before then cancels it (the Done handler's current-anim test).
+4. **"dcast" is "direct", "acast" is "area"; neither is a stance** (not dual, not staff). It is picked per ability by `abi_base` ConjureAnim (244 d / 245 a) and CastAnim (246 d / 247 a); staff versus non-staff comes from which tree has the node (Staff.anb's `mh_c.stf_spl_*` or combat_humanoid's `mh_c.ua_spl_*`).
+5. **Berserk**: `BERSERK` (abi 700, AbilityType 1 talent, AbilityMode 1 modal, Range 0, TargetType 1 self, ConjureAnim 0, CastAnim 144 = anim_combat `berserk`, TransitionTo 1) is played as the ability's CastAnim by sub-action 37 (the same path as a spell's cast), clip `mh_c.tal_brsrk.ani` 2.5 s from combat_humanoid.anb; it returns to `pause` by the Done event: Play(pause, 1.0, blend 3.0), command ending 0.8 x 2.5 = 2.0 s after it starts. **The `.tbi` pair `shared.berserk.ani -> shared.pause.ani` (0.6 s Bezier) does not match any node in the shipped trees**, so it does not apply (inferred from the file names, see section 4).
+
+**Q7b** Master's sentence is **right in substance and incomplete in mechanism**: the chooser `0x007C3500` returns no set for bows, crossbows and staves (so no `OW/WS/TW/DW.anb`), and Bow.anb / Cbow.anb / Staff.anb (and the `*Overlay.anb`) come from the item's `bitm_base` `WieldModel` / `WieldModelOverlay` (hashes `0x8BF8FC78` / `0x543CC507`). Two places use them: (a) **at equip**, the creature's item-equipped handler `0x006C16E0` calls, after the appearance slot `0x00748DA0` and the set chooser `0x006B8D40` (call at `0x006C1808`), `0x006B78D0(item, 0)` at `0x006C1812`, which adds both trees to the creature's animation set with `0x006B5B30`; (b) at the **draw's equip animation events** (3-6), `0x006A56B0` swaps the apr_base strings at +0x28/+0x44. (a) answers master's "not read: how the tree is in place before the first draw": it is added at the moment the weapon is equipped. See section 7.
+
+#### 1. The three sub-actions, in order (checked unless marked)
+
+`0x00743F50` queues for an ability: approach (4 / 15 / 14), turn (39 / 40), then sub-action **50** (the command's step), which after COMMAND_PENDING queues **7** (conjure) and **8** (use). `dev/ABILITIES.md` has these. What is new here is what 7, 8 and 37 play.
+
+##### Sub-action 7, the conjure (`0x007A66A0`)
+- Fails -8 if int 2's disabled mask meets the user's disabled flags. On the first run (flag 0 clear), if **int 5 (ConjureAnim) is 0 it answers 1 at once**.
+- Otherwise int 3 (if set) goes to `0x0079FD00` on the user's state; `0x006A2A20` (stop moving) is called; **if int 4 (the conjure's milliseconds) is > 0** it calls the creature's Play (vtable slot 44, +0xB0) with `(anim = int 5, speed = float 0, blend = -2.0, flag 1)` (stack at `0x007A6742`-`0x007A676C`, blend from `0xAFF63C` = -2.0). **If int 4 is 0 no clip is played at all** (the jump at `0x007A673B`). It then calls `0x007A4F90(user, int 6, 1)`, stores int 4 as the duration (+0x14) and sets flag 0.
+- Every run: `0x007A1AE0` (remaining time) and it answers 1 when remaining <= 0.
+- **Blend -2.0 is a code, not a rate** (`dev/` fade note, `0x0069B3D0`): the fade-in lasts 20 % of `AnimationStepLength(anim)` (int arithmetic `len*20/100`, `0x00694FE0`): `blend = 1000 / (0.2 x stepLength_ms)`. Staff `ua_dconjure_start`: 0.4667 s step length (the chain stops before the loop clip, `0x006957A0`) -> 93 ms fade; `ua_aconjure_start` 0.7667 s -> 153 ms.
+- So `Speed` "Instant" (loops 0) spells (conj ms 0) show **no conjure clip**; only spells with a conjure time play `ua_?conjure_start`, which on its Done event hands over to `ua_?conjure_loop` (TransitionTo, blend 3.0) and loops until the conjure's time is up. Chain Lightning: start 0.4667 + 1 loop x 3.4 s = 3.8667 s (the 3,866 ms seen in play, checked against `mh_c.ua_spl_d_strt.ani` 0.4667 s and `mh_c.ua_spl_d_lp.ani` 3.4 s).
+
+##### Sub-action 8, the use (`0x007A7440`): the cast clip
+- After CAST_START (as in `dev/ABILITIES.md`), `0x007A763B` calls `0x007A4F90(user, int 6, 0)`; then, **if the ability has a CastAnim** (`ebx` from the parameter block), it builds a **sub-action 37** (`push 0x25 ... call 0x0073D4D0`, AddSubAction(0x25, params, 0, 1, 0), `0x007A768F`-`0x007A7693`): int 0 = CastAnim, **flag 3 set** (`SetFlag(3, 1)` at `0x007A767F`), int 7 unset. So the cast plays with the default **blend 2.5 (0.40 s linear) from whatever is current** (the conjure loop, or `pause` for an instant spell), speed 1.0 (float 3 = 0).
+- **The 37 in cast mode is timed shorter**: 37's code (`0x007A44AE`-`0x007A44C7`) with flag 3 = 1 subtracts `0x00694FE0(len, -2.0)` = 20 % of the length from the duration; the length is `AnimationStepLength(CastAnim)` when the command is not "play next" (it is not), which is the **cast clip + its TransitionTo chain up to the first looping clip** (cast + cast-end; `pause` loops and is not added).
+  - Duration (ms) = L - L*20/100 with L = len(cast) + len(cast_end) in ms. Combat_humanoid `ua_dcast` (`mh_c.ua_spl_d_cst.ani` 1.3333 s) + `ua_dcast_end` (`mh_c.ua_spl_d_end.ani` 0.8 s) = 2,133 -> 426 cut -> **1,707 ms** (matches play). Staff `mh_c.stf_spl_d_cst` 1.0 s + `mh_c.stf_spl_d_end` 0.5333 s = 1,533 -> **1,227 ms**.
+  - Then the command (nothing queued by 8 after 37) is done: the next command starts 20 % of L before the cast-end clip would finish (0.43 s early for the humanoid set).
+- Impact timing (checked in the clips and the dispatcher): the cast clip's own events call the creature: **event 9 "Projectile Load" -> creature vtable +0xF0 = `0x006B6F60`** (makes the projectile, or with Projectile 0 goes straight to `0x006AF430(0)`, the CAST_IMPACT), **event 10 "Projectile Fire" -> vtable +0xDC = `0x006AFA40`** (ABILITY_PROJECTILE_LAUNCHED), **event 7 "Ability Cast Impact" -> `0x006AF430`** (`0x006C0C5F`). Dispatch: `0x00694EE0` maps 9 -> +0xF0, 10 -> +0xDC, 11 "Blend Start" -> +0xD4 (`0x00696BD0`), 13 "Animation Done" -> +0xCC (`0x00696C50`), 16 -> +0xE0, 33 -> +0xE4, 38 -> +0xE8; `0x006C0BF0` (slot 46, +0xB8) handles 1, 2, 3-6, 7, 8, 21, 28-31 itself.
+  - Clip events (seconds): staff `stf_spl_d_cst` 9 at 0.17, 10 at 0.93 (length 1.0); `mh_c.ua_spl_d_cst` 9 at 0.9, 10 at 0.93 (length 1.3333); staff `stf_spl_a_cst` 7 at 0.9 (length 1.0333); `stf_spl_inst` (instant) 7 at 0.47; `mh_c.tal_brsrk` 7 at 0.0 (length 2.5).
+  - Meaning: a direct cast with a projectile creates it at the "Projectile Load" time and launches it at "Projectile Fire"; a direct cast with Projectile 0 (e.g. Flame Blast) hits at the Load event; an area cast (acast) hits at its Cast Impact event; berserk's impact is at t = 0.
+
+#### 2. The cast-end: how and when (checked)
+
+- Handler `0x00696C50` (CCCreature vtable slot 51, +0xCC), argument the event record:
+  1. anim id of the finished clip = `0x00694C40` (the event's string -> AnimName -> id);
+  2. if that clip loops (`0x00695390`) return (a loop never "finishes");
+  3. if the row's **State** (col 0xE991BD51, via `0x00A5E8A0`) is 1 or 2 -> call vtable +0xD0 (`0x006AA8F0`, not read) and return;
+  4. if the finished id == the set's current id (`0x006956B0`, +0x13C): if the creature has "deactivate pending" (+0x421) call slot +0x140(0); else **Play(next = set+0x140 (`0x00695700`), speed 1.0, blend 3.0, flag 0)** through vtable slot 44. Then it clears set+0xE4 and three byte flags at set+0x80+0x68..0x6A;
+  5. if the finished id is not current: nothing is played.
+- set+0x140 is the row's TransitionTo (`0x00A5F480` stores it at `0x00A5F4A2`; `0x00A5E940` first stores the played id itself when the creature's trees have the node). Nothing else reads +0x140 except the curve scheduling at `0x00A5FC02`.
+- Chain for a direct cast: `ua_dcast` Done -> Play(`ua_dcast_end`, 1.0, 3.0) -> its Done -> Play(`pause`, 1.0, 3.0) (+ random idle speed). Each handover is a 0.333 s linear cross-fade; the old clip keeps playing while its weight falls (fade note).
+- **Command interaction**: the cast command ends before cast-end is done (section 1). If the next command plays a clip (e.g. the next cast's conjure with blend -2.0 or 2.5), that is the new current animation, and the pending cast-end's Done event no longer finds itself current (nothing more is played from it); the old cast-end only fades out.
+- **Berserk**: `anim_combat` 144 `berserk` (Type 4096, TransitionTo 1, State 0, Replacement 107 `attk_v1`): same path, Done -> Play(pause, 1.0, 3.0). With a weapon set whose tree has no `berserk` node (OW, WS, TW, DW have none) the lookup finds it in the base tree combat_humanoid (`berserk` -> `mh_c.tal_brsrk.ani`, flags 1, 2.5 s); Replacement 107 is the fallback when no tree has it (inferred from the column's use for other rows; not read here).
+- Other talents use the same pattern: CastAnim rows 145, 146, 147, 149, 154, 2000-2044 are anim_combat rows with Type 4096, TransitionTo 1, Replacement 107 (attk_v1) (data), e.g. `talent_warcry` 2005, `talent_charge` 147.
+
+#### 3. The abi_base columns and rows (checked, ghilana)
+
+abi_base (table 1) columns that name animation: **`ConjureAnim`, `CastAnim`, `BlendTree`** (a string, e.g. `DoubleStrike.anb`, `ShieldWall.anb`; the one `*****` is a placeholder), also `AutoDraw`, `Flags`, `Speed` (the conjure speed index), `ConjureVFX`. bitm_base has a column **`ModalabilityBlendTree`** (an int, e.g. Longsword 1, Crossbow 0): neither of these two was read in the exe (`BlendTree` / `ModalabilityBlendTree` are candidates for the modal-ability blend trees such as ShieldWall; not followed).
+
+| Group (abi_base) | AbilityType | ConjureAnim | CastAnim | examples |
+|---|---|---|---|---|
+| single-target, projectile or cone, TargetType 4/126/127 | 2 spell | 244 `ua_dconjure_start` | 246 `ua_dcast` | ARCANE_BOLT 200254 (Speed 1, Projectile 137), CHAIN_LIGHTNING 10211 (Speed 2, Proj 114), FIREBALL 10003 (Proj 2), FLAME_BLAST 10001 (Proj 0), WALKING_BOMB, DISPEL_MAGIC |
+| self / ally / ground, no projectile | 2 spell | 244 or 245 | 247 `ua_acast` | HEAL 10104 (244/247), HASTE 10208 (244/247), SPELL_SHIELD 10400 (244/247), INFERNO 10002 (245/247, Speed 2), BLOOD_MAGIC 10700 (245/247), SUMMON_WOLF 1004 (245/247) |
+| talent with a clip | 1 talent | 0 | anim_combat row: 144 berserk (BERSERK 700), 145 deadly strike, 146 dirty fighting, 147 charge (SHIELD_BASH 617), 149 threaten, 154 riposte, 2000-2046 | WAR_CRY 3037 -> 2005, MIGHTY_BLOW 3028 -> 2043, DEADLY_STRIKE 708 -> 145 |
+| aimed archer talents | 1 | 0 | 0 | SCATTERSHOT 800, CRITICAL_SHOT 804: Flags 1 (the aim sub-actions 37 anim 249 / 6 / 243) |
+| item ability | 4 | 0 | 0 / 247 / 257 potion / 904 trap / 2034 throw | ITEM_ELFROOT -> 257 `potion_drink` |
+
+- `dconjure`/`aconjure` and `dcast`/`acast`: the d clips point the staff/arm at a target; the a clips are a general raise. In the data **d goes with abilities that have a target creature, a projectile or a cone/line (TargetType 4, 126, 127), a with self, ground-area, party-wide and summons**; there are exceptions (HEAL, a single-ally heal, uses 244+247; CRUSHING_PRISON and DISPEL_MAGIC use 246). Conjure and cast need not be the same letter. It is chosen by the row only; the engine makes no choice.
+- **anim_base rows** (Type, TransitionTo, State, Replacement):
+
+| id | AnimName | Type | TransitionTo | State | Replacement |
+|---|---|---|---|---|---|
+| 1 | pause | 1 (loop) | 1 | 0 | 1 |
+| 244 | ua_dconjure_start | 4096 | 264 | 0 | 1 |
+| 245 | ua_aconjure_start | 4096 | 265 | 0 | 1 |
+| 264 | ua_dconjure_loop | 4097 | 0 | 0 | 1 |
+| 265 | ua_aconjure_loop | 4097 | 0 | 0 | 1 |
+| 246 | ua_dcast | 4096 | 290 | 4 | 1 |
+| 247 | ua_acast | 4096 | 291 | 4 | 1 |
+| 258 | ua_dcast_loop | 4097 | 290 | 4 | 1 |
+| 290 | ua_dcast_end | 4096 | 1 | 0 | 1 |
+| 291 | ua_acast_end | 4096 | 1 | 0 | 1 |
+| 292 | ua_instant | 4096 | 1 | 0 | 1 |
+| 241-243, 248, 249 | reload, aimloop, fire, withdraw, aim | | 242 / 0 / 248 / 1 / 242 | | |
+
+  `conjure_loop` has TransitionTo 0: it loops until the conjure's time ends and the cast's Play replaces it. A conjure start whose loop is missing from the tree (TransitionTo node absent) is not covered here.
+- **Clip files (humanoid, node name -> file, seconds)**, trees `combat_humanoid.anb` (flat, one-shot nodes flags 1, loops flags 0): `ua_dconjure_start` mh_c.ua_spl_d_strt 0.4667; `ua_dconjure_loop` mh_c.ua_spl_d_lp 3.4; `ua_dcast` mh_c.ua_spl_d_cst 1.3333; `ua_dcast_loop` mh_c.ua_spl_dcst_lp; `ua_dcast_end` mh_c.ua_spl_d_end 0.8; `ua_aconjure_start/_loop`, `ua_acast`, `ua_acast_end` mh_c.ua_spl_a_*; `pause` mh_c.ua_rdy; `berserk` mh_c.tal_brsrk 2.5; `ua_instant` m.ua_ready.ani. Staff.anb (all flags as above): d_strt 0.4667, d_lp 3.4, d_cst 1.0, d_end 0.5333, dcst_lp 0.7, a_strt 0.7667, a_lp 2.7, a_cst 1.0333, a_end 1.0333, spl_inst 0.9667, rdy 1.6. (The non-staff `mh_c.ua_spl_a_*` lengths were not read.)
+
+#### 4. The `.tbi` pairs and the mage / berserk clips
+
+- humanoid.tbi (`lib-agent-2-anim-fade.md`) keys are `.ani` file names: `m.ua_cast_end.ani`, `m.ua_dcast_end.ani`, `m.ua_aconjure_start.ani`, `m.ua_dconjure_start.ani`, `shared.pause.ani`, `shared.berserk.ani`, `ws.talent_shieldbashgetup.ani`, `ws.talent_wcry.ani`.
+- **None of those names is a node file in the shipped humanoid-combat trees.** I searched every readable .anb (1,207 extracted; the enciphered add-ins' are unreadable): `shared.pause.ani` appears only in `lbry.anb` and `noble.anb`; `m.ua_dcast_end.ani` etc. and `shared.berserk.ani` appear in no tree (`wizard.anb` and `pre100_wizard.anb` hold `m.ua_aconjure.ani`, not `_start`). The player and party combat nodes are `mh_c.ua_spl_*`, `mh_c.stf_spl_*`, `mh_c.tal_brsrk.ani`, `mh_c.ua_rdy.ani` and so on.
+- Hence, **if the pair key is the node's file name (the fade note's inference), no mage cast-end, conjure-start or berserk fade uses a Bezier curve for the player and followers: they are all the linear 3.0 / 2.5 / -2.0 blends above.** This is inferred: the key construction in `0x00A5F350` (the model slot 23 lookup `0x00813D10`, then the map `0x00A69300`) was not decoded to the end. A play check (cast-end into pause) would settle it: a 0.333 s linear fade versus a 0.433 s curve with a 0.108 s hold.
+
+#### 5. Constants (checked, floats read from .rdata)
+
+| address | value | use |
+|---|---|---|
+| `0xB03B08` | 2.5 | default blend of sub-action 37 (the cast) |
+| `0xAE7130` | 3.0 | blend of the Done follow-through (`0x00696CCB`) and the stance setters |
+| `0xAFF63C` | -2.0 | conjure's blend code (20 % of step length), also 37's flag-3 cut |
+| `0xAE2E00` | -1.0 | instant |
+| `0xB0F26C` | 0.05 | argument of `0x006A6D90` in `0x006B78D0` (equipment with slot bit 0x10) |
+
+#### 6. Cases in seconds (humanoid combat tree, no staff)
+
+| step | clip | blend | time |
+|---|---|---|---|
+| conjure start (only if conjure ms > 0) | `ua_dconjure_start` 0.4667 | -2.0 code = 20 % x 0.4667 | fade 0.093 s |
+| -> conjure loop (Done of start) | `ua_dconjure_loop` 3.4 | 3.0 | 0.333 s |
+| conjure ends (start + loops x 3.4) | | | sub-action 7 done |
+| cast (sub-action 37, flag 3) | `ua_dcast` 1.3333 | 2.5 | 0.40 s; Projectile Load at 0.9, Fire at 0.93 |
+| cast Done (t = 1.3333 after its start) -> cast-end | `ua_dcast_end` 0.8 | 3.0 | 0.333 s |
+| command done | | | 1.707 s after the cast started |
+| cast-end Done (t = 2.133) -> pause | `pause` 1 | 3.0 | 0.333 s, idle speed +[-0.45, +0.44] |
+
+#### 7. Q7b: Bow.anb, Cbow.anb, Staff.anb
+
+- bitm_base columns `WieldModel` (hash `0x8BF8FC78`) and `WieldModelOverlay` (`0x543CC507`), hashes checked with `gda.column_hash`: Shortbow 19 `Bow.anb`/`BowOverlay.anb`, Crossbow 21 `Cbow.anb`/`CbowOverlay.anb`, Staff 16 `Staff.anb`/`StaffOverlay.anb`, the swords' rows empty (ghilana, checked).
+- The adder is **`0x006B78D0`** (`__thiscall(creature, item, kind)`, `ret 8`), called from only two places, both right after `0x006B8D40` (the set chooser): `0x006C1812` in the on-equip handler `0x006C16E0` (kind 0) and `0x006C1A95` in the on-unequip `0x006C19F0` (kind 2). Body: gate `0x006A25A0` (the appearance's CombatModelTree is `combat_humanoid`); reads WieldModel at the item's base row (`item+0x464`); if the string is non-empty -> `0x006B5B30(creature, kind, string, 0)`; then reads WieldModelOverlay and `EquippableSlots` (`0xD5B0AE22`): if the equippable-slots mask has bit 0x10 it calls `0x006A6D90(0.05)` instead of adding the overlay tree, otherwise (and the string non-empty) it adds the overlay with `0x006B5B30` (`0x006B79E6`).
+- `0x006B5B30(kind, name, flag)`: kinds 0 and 1 call the animation set's vtable slot +0x8C `(name, 0xF)` (add a tree); kind 1 also `0x00A60810` and records the name in a list at creature+0xCA0 (`0x006B5D00` drops those, kind 2); kind 2 calls slot +0x94 (remove the tree) after looking its slot up; it then refreshes (`0x0069E9D0`/`0x006C9EF0`).
+- So a bow or staff in the main hand **adds its WieldModel tree to the animation set when it is equipped** (including a weapon-set switch, which goes through the same handlers), long before the first draw, which is why `enter` / `quick_enter` / `exit` and the staff's spell clips are found. The draw's equip event `0x006A56B0` (master's section) also swaps the apr_base strings +0x28/+0x44 for the none set; the exact interplay of the two was not decoded.
+- Staff.anb holds the staff's own `ua_*` spell nodes (see section 3), `enter`, `exit`, `quick_enter`, `quick_exit`, `pause` (mh_c.stf_rdy), `attk_v*`/`miss_v*` (mh_c.tw_atk_*), `fire` (= `mh_c.stf_spl_d_cst.ani`), `ua_instant`.
+- Master's `dev/ANIMATION.md` sentence "the weapon set's tree (OW/WS/TW/DW.anb by equipment; Bow/Cbow/Staff.anb from bitm_base's WieldModel)" can stay; add that the WieldModel trees are added at equip by `0x006B78D0`, and that the "not read" note on this is now read. Order of lookup between the base tree, the set tree and the WieldModel tree for a node present in more than one was not read.
+
+#### Not read
+
+- **Who raises event 13 "Animation Done"**: the handler is read; the ModelAnimation code that raises it at a one-shot clip's end (the .evt files of the clips have no event 13; none of the 37 scanned authored ids include it) was not found. Also event 11/12 (Blend Start/End; slot +0xD4 `0x00696BD0` plays a 3.0-blend `0x00A5C840` on a state-1/2 row) and `0x006AA8F0` (slot 52, State 1/2).
+- Whether the .tbi keys are file names; the `0x00A5F350` key construction; the exact slot-0x58 "scheduled fade" at `0x00A5FC02` (it schedules at `clipLength - curve.x3` seconds when a pair exists).
+- The part of `AnimationStepLength` (`0x006957A0`) for nodes with property 0x1F / 0x20 (adds another animation's length via `0x006A9140` / `0x006BF8A0`).
+- `0x007A4F90`, `0x0079FD00`, `0x006A2A20`'s use of int 3 / int 6; sub-action 8's exact `ebx` source (read as CastAnim from the parameter block, consistent with 1,707 ms); the aimed path (sub-actions 6 / 37 with anim 249 / 243).
+- `ua_dcast_loop` (258) and who plays it (a channelled cast; no ability row names it); `ModalabilityBlendTree` / `BlendTree` columns' uses; non-staff `ua_spl_a_*` lengths.
+- The order of tree lookup when a node is in several trees; the random-speed behaviour of `pause` after a cast beyond the code at `0x0069B478`.
+- Nothing here was seen in play.
+
+### Which animation rows play for an attack and its reactions, and who picks them (prefix anim2hit, lib-agent-2, 2026-10-18)
+
+Read in the GOG exe (base 0x400000) with `tools\daoexe.py --disasm`, a call scanner, the tables through ghilana and the toolset's scripts. "checked" = read in disassembly or data; "inferred" = a reading of purpose. Scratch is `%TEMP%\lib-agent-2-anim2hit-*`. No game run.
+
+#### Short answers
+
+1. **Normal swing (hit, crit, miss): the engine picks, in `CSSubActionHandler::Swing` 0x007A87C0, from table 104 `nosynccombatanims` (not `anim_combat`).** It takes the two hands' results the scripts left (`SetAttackResult`), folds them to one result, and asks the table manager at handler+0x60 (`0x00A3B0D0`) for a row of AttackerResult x WeaponWield-mask. Several rows fit: **random, but never the same row as the last pick of the same key by the same attacker** (`0x00A3AFE0`). Then `0x006A41A0` plays the row. 0x0069F530 is NOT the chooser: it only folds the two hands' results into one (below). All checked.
+2. **Rows of anim_combat**: hit variants v1..v6 = rows 107, 106, 138, 139, 140, 102; miss variants v1..v4 = rows 105, 182, 191, 192; backstab = 2006 (`talent_backstab`); a crit uses the hit rows (result 2 is folded to 1 in `0x006A40D0` and `0x0069F530`). A DW attack picks its pool by which hand landed (mask), so v4..v6/miss v3,v4 are the off-hand ("|Left") swings.
+3. **Reactions on the target**: a **miss** is the engine's: the attacker's swing clip carries event 2 (`AttackImpactReaction`), which runs `0x006AB040` -> `0x006AAE20` and adds a play-animation command (type 14) to the *target* with row **181** (Evade v1) or **176** (Evade v2), 50/50 by `rand()` parity, if conditions hold. This is **0.2-0.45 s before the impact event** in the attacker's clip. A **hit** is the scripts': `effect_damage_h.nss` calls `PlayAdditiveAnimation(oTarget, 103)` for a non-fatal blow of damage >= 3.0. Blocked/parry/deflect have no row of their own: the scripts turn BLOCKED into MISS (combat_h.nss:1073-1079), and the evade rows' clip is the target's weapon/shield block clip for its set. Rows 141-143 (`hvyDam`, `bdmg_v2`, `bdmg_v3`) and 104 (`cough`) are referenced by nothing I found (no engine immediate, no script).
+4. **Timing**: the result is applied at the swing clip's event 1 (`AttackImpact`) (all dw_ and sw_atk_v3..v7 clips, ua_atk_v1/2); times below. **Open anomaly: the two-handed clips `mh_c.tw_atk_v1..v3` (and `sw_atk_v1`, `v2`, unused) have NO event 1, only event 2.** How a two-hander's blow lands is not found (see Not read).
+
+#### 1. Who picks the swing's row (checked)
+
+Swing 0x007A87C0 (`ret 8`, `this` = sub-action handler; from COMBAT.md steps 4-6), the part after `SignalAttackPending`:
+
+1. `0x006A4000` builds a 0x50-byte event (type 0x23 = 35, COMMAND_PENDING) and runs it on the attacker (already in COMBAT.md).
+2. `0x006A40D0(&result, &wieldMask)` (`__thiscall` attacker, `ret 8`) reads the main-hand record (`0x006A0160`) and off-hand record (`0x006A0170`), each `[+0]` = result. Returns false (swing fails -1) if both are 0, or either is 4 (deathblow). 2 -> 1 for each hand. `wieldMask` out = 3, except for a creature whose combat data `[creature+0xC60]+0x5C` (= `GetWeaponStyle`, `0x006A3C30`; 1 OW/WS, 2 DW, 3 TW, dev/script_commands/spells_combat.md) is **2 (dual wield)**: then mask = `2*(off result in {1,3,9}) | (main result in {1,3,9})`, i.e. bit0 = main hand landed, bit1 = off hand landed. `result` out = `0x0069F530(main, off)`.
+3. **`0x0069F530(a=main, b=off)` (`ret 8`) combines two hands into one result** (this is what you asked about): crit 2 -> 1 in both; a==0 -> b; b==0 -> a; both set: a==1: b in {1,3} -> 1 else 0; a==3: b==1 -> 1, b==3 -> 3, else 0; a==4 -> 1; anything else -> 0. So hit+miss = hit, miss+miss = miss, a lone backstab (9) passes through as 9 (backstab+anything = 0).
+4. If a combined result is non-zero, `0x00A3B0D0(vecResult, vecWield, vecTarget(empty), attackerObjectId)` (`ret 0x10`; `this` = handler+0x60) = `0x00A3A440` (key from the three vectors; `0x00A3A340` packs `(res << (wBits+tBits)) | (wield << tBits) | target`) then **`0x00A3AFE0(attackerId, key)`** (the picker). The table is loaded by `0x00A3B240` from the handler's constructor `0x007ABC40..` (`push 0x68` = table 104, columns AttackerResult 0xE4D64BCE, WeaponWield 0x1DE44006, TargetResult 0x37415711; the same loader class is used for table 102 at 0x00747B00).
+5. `0x006A41A0(row)` plays it (below). If the picker returns 0 (no row fits, e.g. a result of 5, 6, 7, 8, or backstab+other), `0x006A41A0` finds `HasAnimation(0)` false (`0x00694E70`) and **plays row 107 (Attack v1, id 0x6B)** instead.
+
+**The picker `0x00A3AFE0`** (checked): the list for the key is a vector of the table's `AttackerAnimation` values in table order (map lookup `0x005D0AB0`). State per key (map at manager+0x50, entry `{lastIndex, lastAttackerId}`):
+- n = 0 -> 0. n = 1 -> that one, no state.
+- n >= 2 and the stored attacker id equals the current attacker's id: n == 2 -> `(last+1) % 2`; n > 2 -> `(last + 1 + rand() % (n-2)) % n` (so it skips the last one and the one before it).
+- otherwise (a different attacker last used this key, or none): `rand() % n`.
+- stores the index and attacker id. `rand` = `0x008E6A8E` (the CRT's).
+It is one state for all creatures (the manager is the handler's), keyed by (result, wield mask, target result): consecutive swings by the same creature never repeat a clip, but other creatures' swings in between reset it to a plain random.
+How the key sets are built (rows added to every key whose result/wield/target bits include the row's, in `0x00A3B240`) was read only in outline; the effect (inferred): mask 3 (everyone but a dual-wielder with one hand landing) sees all rows of the right result; mask 1 only wield-1 rows; mask 2 only wield-2 rows.
+
+##### Table 104 `nosynccombatanims` (checked, ghilana; columns Variation, AttackerResult, WeaponWield, TargetResult, AttackerAnimation, TargetAnimation)
+
+| ID | Label | AttackerResult | WeaponWield | AttackerAnimation (anim_combat row) |
+|---|---|---|---|---|
+| 1 | HIT v1 | 1 | 1 | 107 attk_v1 |
+| 2 | HIT v2 | 1 | 1 | 106 attk_v2 |
+| 3 | HIT v3 | 1 | 1 | 138 attk_v3 |
+| 4 | HIT v4 | 1 | 2 | 139 attk_v4 |
+| 5 | HIT v5 | 1 | 2 | 140 attk_v5 |
+| 6 | HIT v6 | 1 | 2 | 102 attk_v6 |
+| 7 | MISS v1 | 3 | 1 | 105 miss_v1 |
+| 8 | MISS v2 | 3 | 1 | 182 miss_v2 |
+| 9 | MISS v3 | 3 | 2 | 191 miss_v3 |
+| 10 | MISS v4 | 3 | 2 | 192 miss_v4 |
+| 11 | BACKSTAB | 9 | 0 | 2006 talent_backstab |
+| 12 | Single DEATHBLOW | 4 | 0 | 0 (unused here: result 4 never reaches the swing) |
+
+TargetAnimation is 0 in every row: this table gives the target no animation. The older `synccombatanims` (table 34, "HIT/HIT" pairs with rows 108-119, 153-176, 251 and TargetAnimation) and `halfroundcombatanims` are not read by Swing; I found no reader of the paired-reaction rows (anim_combat rows 112-135, 155-175 are labelled "CUT").
+
+##### anim_combat rows 102, 105-107, 139, 140, 182, 191, 192 (and 106, 138) (checked)
+
+| Row | Label | AnimName | Type | Replacement |
+|---|---|---|---|---|
+| 107 | Attack v1 | attk_v1 | 64 | 0 |
+| 106 | Attack v2 | attk_v2 | 64 | 107 |
+| 138 | Attack v3 | attk_v3 | 64 | 107 |
+| 139 | Attack v4 | attk_v4 | 64 | 107 |
+| 140 | Attack v5 | attk_v5 | 64 | 107 |
+| 102 | Attack v6 | attk_v6 | 64 | 107 |
+| 105 | Miss v1 | miss_v1 | 64 | 107 |
+| 182 | Miss v2 | miss_v2 | 64 | 107 |
+| 191 | Miss v3 | miss_v3 | 64 | 107 |
+| 192 | Miss v4 | miss_v4 | 64 | 107 |
+| 2006 | Talent: Backstab | talent_backstab | 4096 | 107 |
+
+The row's clip depends on the creature's set tree (OW/WS/TW/DW.anb replace the CombatModelTree; ANIMATION.md). Node -> clip, each flags 1 (once), weight 1 (checked, `.anb` dumps):
+
+| Row (node) | OW and WS | TW (also Staff attk_/miss_) | DW | unarmed (combat_humanoid.anb) |
+|---|---|---|---|---|
+| 107 attk_v1 | sw_atk_v4 | tw_atk_v1 | dw_atk_v1 | ua_atk_v1 |
+| 106 attk_v2 | sw_atk_v5 | tw_atk_v2 | dw_atk_v6 | ua_atk_v2 |
+| 138 attk_v3 | sw_atk_v6 | tw_atk_v3 | dw_atk_v6 | ua_atk_v1 |
+| 139 attk_v4 | sw_atk_v7 | tw_atk_v1 | dw_atk_v4 | ua_atk_v2 |
+| 140 attk_v5 | sw_atk_v5 | tw_atk_v2 | dw_atk_v5 | ua_atk_v1 |
+| 102 attk_v6 | sw_atk_v6 | tw_atk_v3 | dw_atk_v3 | ua_atk_v2 |
+| 105 miss_v1 | sw_atk_v4 | tw_atk_v1 | dw_atk_v1 | ua_atk_v1 |
+| 182 miss_v2 | sw_atk_v5 | tw_atk_v2 | dw_atk_v6 | ua_atk_v2 |
+| 191 miss_v3 | sw_atk_v6 | tw_atk_v1 | dw_atk_v4 | ua_atk_v1 |
+| 192 miss_v4 | sw_atk_v7 | tw_atk_v2 | dw_atk_v5 | ua_atk_v2 |
+| 2006 talent_backstab | sw_tal_flnk | tw_tal_flnk | dw_tal_flnk | (none) |
+
+(Staff tree: attk_v1..v6 -> tw_atk_v1,2,3,1,2,3; miss_v1..v4 -> tw_atk_v1,2,1,2. Bow/Cbow trees have no attk_/miss_ nodes. All clips are `mh_c.<name>.ani`.) Dual-wield: variants whose clip events carry "|Left" (dw_atk_v3, v4, v5) are the off-hand swings, matching wield mask 2 (rows 139, 140, 102 and misses 191, 192). In the OW/WS/TW trees (not dual) the mask is always 3, so all 6 hit variants (4 miss) are in the pool; the 2-wield "left" variants there are plain right-hand clips (their events are not "|Left").
+
+A row the creature lacks (non-humanoids with their own trees) is not replaced by the table's `Replacement` column in the swing path; `0x006A41A0` only falls back to row 107 (checked; the Replacement column's own reader is not read here).
+
+##### Backstab, crit, deathblow, ranged, dual wield
+
+- **Crit**: same rows as a hit. The scripts' result 2 is folded to 1 in `0x006A40D0` and `0x0069F530`; the crit differs only in the damage the scripts compute and the floaty/gore. (checked)
+- **Backstab**: the scripts return COMBAT_RESULT_BACKSTAB (9) from `Combat_PerformAttack` for melee, no ability, `Combat_CheckBackstab`; `combat_h.nss` ~596, 970 pass it as the main-hand result with off-hand INVALID. -> row 2006, one row, no variation. Its clip carries the impact (sw_tal_flnk 1@0.97 of 1.933 s; tw_tal_flnk 1@0.67 of 2.133 s; dw_tal_flnk 1@1.06 of 1.933 s). (checked)
+- **Dual wield**: `SetAttackResult(main result, effect, off result, effect)` for HAND_BOTH (combat_h.nss ~976-990), main-only for HAND_MAIN, off-only for HAND_OFFHAND (a swing with only the off hand: mask 2). Each hand's own impact comes from its own "|Left"-tagged event (0x006A6230 / 0x006AB040 pick the off-hand record when the event string contains "Left", string at 0x00B0F840). (checked)
+- **Deathblow (the synchronized kill)** is NOT table 104. The scripts' `Combat_PerformAttack` returns result 4 with `nDeathblowType` 0 ("auto select in engine") or 5 (ogre slowmo) for a party member's killing blow (combat_h.nss ~700-810), `SetAttackResult` then `CommandDeathBlow` at the queue's front (`WR_AddCommand(...)`, combat_h.nss ~955). The command's start handler (the function around 0x00745F00..0x00746300, not fully read) picks a row of **table 102 `syncdeathanimations`** (columns WeaponWield 1 = WS, 2 = DW, 3 = TW, Partsbased, Position, Appearance, PiercingType, CastAnim, React) with the key (target's apr_base `ValidDeathBlows`, hash 0x8A442AFE, read at 0x0074603F; weapon style via `0x006A3780`; the weapon's piercing/bladed flag), then **`0x00A3A510` (key + `0x00A3A4A0`: plain `rand() % n`, no anti-repeat)**, reading the same table class (`push 0x66` at 0x00747B00; columns Appearance 0x052BEA01, WeaponWield 0x1DE44006, PiercingType 0x97F088C1). It plays `CastAnim` on the attacker and `React` on the target (anim_base rows, e.g. WS humanoid V1 300 / 306, V2 301 / 308, bladed V3 318 / 321, decap 327 / 330, beast bladed 341 / 268; DW 304/314, 305/316, 329/334, 320/325, 343/270, 338/366; TW 302/310, 303/312, 319/323, 328/332, 342/269, 337/365; positional 346-350 / 351-355). Their next rows (loops 307, 309 ... and 263 getup) are the rows' TransitionTo/Replacement. The kill lands from **event 30 (DeathblowDamage)** in the *target's* React clip (`0x006A62F0` builds a 0x7C-byte script event of type 4 (read as EVENT_TYPE_DEATH) with int 0 = the event string's integer or 0x3F7; sw_dblow_die_v1 30@0.57, v2 30@0.57, v3 30@0.5 and 1.13, tw_dblow_die_v2 30@0.67 and 1.73, v3 30@1.03 and 2.23, dw_dblow_die_v1 30@0.33 and 0.9, v2 30@0.37 and 0.43, v3 30@0.57 + event 29 DecapitateVFX @0.73), not from the attacker's clip, which has no event 1 (checked in `.evt`). The row-selection function's details (which column wins when several rows fit) were not read.
+- **Ranged shot**: no table 104. The attack command's sub-action 50 queues turn (39) then sub-action 2 (`0x007A6490`, COMMAND_PENDING), then `0x007A4DD0` queues 37 Aim (anim_base row 249, `aim`), 6 aim wait, 37 Fire (anim_base row 243, `fire`); loops 242 `aimloop`, withdraw 248 (`src/dao/Animation.cpp`, DAOLib #51). Bow clips `mh_c.bw_aim/_aim_lp/_fire/_wdrw`, crossbow `cbw_`, staff `stf_spl_d_cst` (ua_dcast) as `fire`. The impact is the projectile's (ATTACK_IMPACT from `0x007E87C0`, COMBAT.md), via events 9 ProjectileLoad / 10 ProjectileFire. Talent shots use rows 2007 / 2021 / 2000 (`talent_ranged_v1..v3`). (checked for rows and the trees; the event times of bw_fire are not read here.)
+
+##### Play speed and length (read at `0x006A41A0`; the numbers are checked, the reading of the speed is inferred)
+
+`0x006A41A0(row)` (`ret 4`): row replaced by 107 if `HasAnimation(row)` (0x00694E70) is false. L = `0x00694E50(row)` (clip length, ms, from `Animation::...` at 0x00A5F7A0). `blend(x)` = `0x00694FE0(x, -2.0f)` is about 20% of x (`x*20/100` in the common branch). T = `[creature+0xC60]+0x64` (what `SetAttackDuration` stored, ms). With T <= 0: play speed 1.0, the step lasts L - blend(L), and the fade-in rate is 1000/blend(L). With T > 0: speed = (L - blend(T)) / T, the step lasts T. It calls the model's play slot (+0xB0) with row, speed, fade rate. The wall time of an event = event time / speed. (`Animation.cpp` records the same: scripted time for a humanoid with a weapon, else 0.8 L.)
+
+#### 2. Event times of the swing clips (checked: `.evt`, `.gad` length; events by id: 2 AttackImpactReaction, 19 Swish, 1 AttackImpact; seconds in clip time, before the speed above)
+
+| Clip | Length | event 2 (target reacts) | event 19 swish | event 1 (impact) |
+|---|---|---|---|---|
+| mh_c.sw_atk_v3 (unused by trees) | 1.833 | 0.30 | 0.57 | 0.70 |
+| mh_c.sw_atk_v4 (OW/WS attk_v1, miss_v1) | 2.000 | 0.63 | 0.70 | 0.93 |
+| mh_c.sw_atk_v5 (attk_v2, v5; miss_v2) | 2.000 | 0.80 | 0.90 | 1.10 |
+| mh_c.sw_atk_v6 (attk_v3, v6; miss_v3) | 1.967 | 0.50 | 0.57 | 0.80 |
+| mh_c.sw_atk_v7 (attk_v4; miss_v4) | 1.967 | 0.77 | 0.87 | 1.07 |
+| mh_c.dw_atk_v1 | 1.467 | 0.20 | 0.37 | 0.50 |
+| mh_c.dw_atk_v3 (|Left) | 1.467 | 0.40 | 0.57 | 0.70 |
+| mh_c.dw_atk_v4 (|Left) | 1.467 | 0.30 | 0.47 | 0.60 |
+| mh_c.dw_atk_v5 (|Left) | 1.467 | 0.23 | 0.37 | 0.53 |
+| mh_c.dw_atk_v6 | 1.467 | 0.43 | 0.53 | 0.73 |
+| mh_c.ua_atk_v1 (unarmed) | 1.500 | none | none | 0.63 |
+| mh_c.ua_atk_v2 | 1.533 | none | none | 0.60 |
+| mh_c.tw_atk_v1 | 2.300 | 0.90 | (a custom sound 0.93) | **none** |
+| mh_c.tw_atk_v2 | 2.433 | 0.83 | none | **none** |
+| mh_c.tw_atk_v3 | 2.500 | 0.73 | 0.30 | **none** |
+| mh_c.sw_tal_flnk (backstab, OW/WS) | 1.933 | none | 0.73 | 0.97 |
+| mh_c.tw_tal_flnk | 2.133 | none | none | 0.67 |
+| mh_c.dw_tal_flnk | 1.933 | none | 0.89 | 1.06 |
+
+(Unarmed clips have no event 2 at all, so an unarmed attacker's miss makes no evade reaction. sw_atk_v2 has event 2 twice, 0.80 and 0.87, and no event 1.) The impact is the engine's event 1 -> `CCCreature::OnAnimationEvent` 0x006C0BF0 (id -1 into a byte table at 0x006C0DB0 and a jump table at 0x006C0D70: id 1 -> 0x006A6230 -> 0x006A6080 -> ATTACK_IMPACT, id 2 -> 0x006AB040, ids 3-6 equip/unequip, 7 -> 0x006AF430 AbilityCast, 21 -> 0x006A5B70 WeaponBlocked, 28 -> 0x006AAC20 Decapitate, 29 -> 0x006A5C10, 30 -> 0x006A62F0, 31 -> 0x006AABB0, 32 -> 0x006BFC80, 34/37 -> 0x0069E5B0 attach point; the case mapping is checked, the handlers' purposes other than 1, 2, 30 are not read).
+
+#### 3. Reactions on the target (checked unless marked)
+
+##### Evade / miss (the engine, event 2)
+
+Function chain: attacker's clip event 2 -> `OnAnimationEvent` -> `0x006AB040(event)` (picks the attacker's off-hand record `0x006A0170` if the event string contains "Left", else main `0x006A0160`) -> **`0x006AAE20(this = attacker, event, handRecord)`** (`ret 8`, frame `ebp`). Hand record: `[+0]` result, `[+4]` target id, `[+8]` effect id.
+
+Gates, in order (all must hold, else nothing plays):
+1. event and record non-null; `record.result == 3` (MISS). A hit, crit, backstab or block (5) plays nothing here.
+2. the target `esi = GetCreatureById(record.target)` exists (`0x005D58C0`) and `HasAnimation(0xB5 = 181)` is true (so a target without the Evade v1 row never evades; row 176 is then also reached through its Replacement 181).
+3. the target's own command state: `0x0073C600(target)` is the type of its head command (byte at +2; 0 = none) and `0x0073C7B0` another field of it.
+   - no command (0): require the attacker's `[attacker+0x2CC]` object's `+8` (`0x007B51E0`) to be 0 (not read further);
+   - an attack command (type 1) with `0x0073C7B0 == 1`: require the target's combat data target (`[target+0xC60]+4`) to be the attacker's id, `0x006A2AD0(target)` == 0 (that function is true if the target's main-hand item's base item `Type` (bitm_base column hash 0x12A02374) is 5 or 6: a staff or ranged weapon), and the target's own hand results (`0x006A0160/0x006A0170`) each be 0 or 3;
+   - any other command type: no evade.
+4. melee reach: `0x006A3DC0(attacker, target)` true: the target is a creature (`[target+0x14] == 6`) and the xy distance is within `0x00695320(a, t)` + 1.2 (constant 0x00AFEBC0) (so it never fires for ranged attacks, whose impact is a projectile anyway).
+5. facing: the angle (`0x004D4C90`, radians x 57.29582) between the target's facing (`target+0x130`) and the direction target -> attacker (positions at +0x120) is **<= 30 degrees** (constant 0x00AF7068 = 30.0). The target must be facing its attacker.
+
+If all hold: row = 181 (0xB5) normally; `call 0x008E6A8E` (rand), `eax & 0x80000001` then sign-fixup; if the result is 0 (even rand) the row becomes **176 (0xB0, Evade v2)**. So 50/50 (CRT rand parity). Then a parameter block `{ int0 = row, int7?(index 1) = 1, int 1 = 1, float 3 = 1.0 }` (ctor 0x0069F670) goes to **`0x0073D150(target, block, 1, 0, 2)`**, which builds a command of **type 14 (COMMAND_TYPE_PLAY_ANIMATION, the same as `CommandPlayAnimation`)** and adds it with `0x0073D000` to the target (AddCommand variant with flags (1, 0, 2); the meaning of the three flags was not read). So the evade runs as a normal queued command on the target (it queues behind or at the front depending on those flags; it is an ordinary PlayAnimation step, sub-action 37).
+
+Rows (anim_combat): **181 `Evade v1`** (`evade_v1`, Replacement 1), **176 `Evade v2`** (`evade_v2`, Replacement 181). Clips by the target's set tree (OW/WS/TW/DW.anb replace the CombatModelTree; combat_humanoid.anb is the fallback for no set):
+
+| Target set | evade_v1 (row 181) | evade_v2 (row 176) | lengths |
+|---|---|---|---|
+| OW | mh_c.rct_ow_block | mh_c.rct_ev_v1 | block 0.967 s, ev_v1 0.933 s |
+| WS | mh_c.rct_sw_block | mh_c.rct_ev_v1 | 0.933 s |
+| TW | mh_c.rct_tw_block_v2 | mh_c.rct_tw_block_v2 | 0.967 s |
+| DW | mh_c.rct_dw_block | mh_c.rct_ev_v1 | 0.933 s |
+| none/unarmed (combat_humanoid) | mh_c.rct_ev_v1 | mh_c.rct_ev_v1 | 0.933 s |
+
+So the "block" (weapon or shield parry, with a WeaponBlocked sound event 21 at 0.33 s of each block clip) and the "dodge" (ev_v1) are the same two rows; there is no separate shield-block, deflect or parry row. COMBAT_RESULT_BLOCKED (5) is converted to MISS by the scripts (combat_h.nss:1073-1079, "We retired combat result blocked"). A `Replacement` of 1 means "none, play nothing" (as `anim_combat` elsewhere).
+
+Plus the scripts: `combat_h.nss:403-411` (displacement/Evasion talent) applies `Effect(1055)` on the target on certain misses (Evasion only plays during wait/attack commands): an effect, not a row.
+
+##### Hit reaction (the scripts, at the impact)
+
+At event 1 (ATTACK_IMPACT) `rules_core` -> `Combat_HandleAttackImpact` -> `Effects_ApplyInstantEffectDamage` (`effect_damage_h.nss`, lines 28 and 738-755): for a creature target and a non-fatal blow, **`if (fDamage >= 3.0f) PlayAdditiveAnimation(oTarget, ANIMATION_DAMAGE_ADDITIVE = 103)`**. A fatal blow plays nothing here (KillCreature -> the death command, dev/COMBAT.md). A placeable target gets 103 for any non-fatal damage (line 942). Nothing else in the scripts plays a hit reaction (grep of `PlayAdditiveAnimation` in all of `toolset\extract\scripts`: only these two sites).
+
+Engine side of `PlayAdditiveAnimation` (command 196, handler 0x00659300; dev/script_commands/objects.md "PlayAdditiveAnimation"): plays at once on the model, no command: it does nothing if the object's current animation row has `State` = 1 (column hash 0xE991BD51; e.g. rows 2, 3, 250, 254, 268-283), and without bForceRestart only if the additive is not already playing (`0x00A5F810(anim,0)` == 0.0). The scripts pass no force, so a second hit while 103 plays does not restart it.
+
+Row 103 `Damage` (`bdmg`, Type 1024 = additive, State 0, Replacement 0): the node `bdmg` is in **`humanoid_overlay.anb`** -> clip **`mh_o.rct_odmg_v1`**, 1.30 s, flags 1, no events (checked). It is an overlay (additive) drawn over whatever the body plays, not a body clip. Non-humanoids need a `bdmg` node in their own overlay tree to show it. Rows 141 (`hvyDam`, Replacement 103; `humanoid.anb` node -> `mh_c.rct_hdmg_f`, 1.30 s), 142, 143 (`bdmg_v2/v3`) exist in the tables and the tree, but nothing I found plays them (no `push 0x8D/0x8E/0x8F` in the code is a row id: they are table ids; the scripts never name them).
+
+Conditions: no per-appearance column such as a "no hit reaction" flag is read for this: the engine has no hash for `SynchronizedCombat` (0xCDD753B2, not in the exe), and the damage gate is the script's 3.0. The only suppressions are the State-1 test and the not-already-playing test above, and a model with no `bdmg` node.
+
+#### 4. When, in order (one melee swing, checked except where marked)
+
+1. COMMAND_PENDING (the scripts roll the blow, SetAttackResult, SetAttackDuration T, SetCommandResult).
+2. `Swing` picks and plays the row (0x006A41A0): the clip starts at speed (L - 0.2T)/T (inferred reading), fading in over 0.2L.
+3. Event 2 at t2 (clip time; wall t2/speed): if the result is a miss and the gates hold, the target gets the Evade command and starts the block/dodge clip at once (0.2-0.4 s of clip time before the impact).
+4. Event 1 at t1: ATTACK_IMPACT to the attacker's script (queued with no delay) -> damage effect applied -> for a non-fatal damage >= 3.0 the target starts overlay 103 (1.3 s) in the same frame as the damage, not before.
+5. At T (or 0.8 L) the swing sub-action ends; COMMAND_COMPLETE.
+
+So a hit's reaction starts at the impact event, and a miss's evade starts at event 2, before it; a hit never plays the evade, a miss never plays 103.
+
+#### Not read
+
+- **How a two-hander's blow lands**: `mh_c.tw_atk_v1..v3` carry event 2 (0.90, 0.83, 0.73) but no event 1, yet the TW tree plays them for every normal attack. The only code that raises ATTACK_IMPACT for a melee swing is `0x006A6230` -> `0x006A6080` from event id 1 (checked: no other caller of either). I did not find a fallback (a time-based impact, the swing's end, or event 2 doing it); the event-2 path `0x006AAE20` does nothing but the evade and only for results of 3. To settle it: a probe that logs the time from the swing's start to ATTACK_IMPACT for a greatsword wielder (the DAOLib #88 probe did it for one-handed weapons).
+- The deathblow command's row choice (which of several table-102 rows is taken, and the start handler's entry address; I read only its key inputs and the final `0x00A3A510` random pick), and which clip a deathblow command plays on a creature without the CastAnim row.
+- The key-set construction in `0x00A3B240` (I took the subset semantics from its loops' shape).
+- The AddCommand variant `0x0073D000`'s flags (1, 0, 2): whether the evade queues at the front, interrupts or waits behind the target's current command.
+- `0x0073C600` / `0x0073C7B0` fields' names; `0x007B51E0`'s object; `0x006A3A30` (gate of event 30).
+- Ranged shots' impact event times (`bw_fire` etc.) and the staff's basic-attack path (the staff tree maps attk_ to the tw_atk clips, which have no event 1; whether the staff attacks as ranged in play was not checked).
+- Creatures with their own trees (spiders, dogs, ogres, dragons): their attk_/miss_/evade/bdmg nodes were not dumped.
+- Not seen in play.
+
+### Conversation gestures on a line with no cut (anim2talk), read 2026-10-18 by lib-agent-2
+
+GOG exe 1.05 (base 0x400000), no Ghidra, no game. "checked" = read in disassembly or data; "inferred" = not. Scratch: `%TEMP%\lib-agent-2-anim2talk-*`. Builds on lib-agent-2-audio-vo.md (ShowLine's non-cut branch), lib-agent-2-anim-layers.md (look-at), lib-agent-2-anim-fade.md (slot 44, blend codes).
+
+#### Short answer
+
+1. **A no-cut line animates its speaker only by what the .dlg line says, and mostly says nothing.** The only body-gesture field is the line's `ConversationLineAnimation` (12213, U32, a row id of `anim_base`; 0xFFFFFFFF = none). There is **no emotion, gesture, slide or random-pick field** on the line (NTRY/RPLY templates, checked with `gff4.py --templates`: StageName, StageAtCurrentLocation, Text, Speaker, Listener, GameLanguage, Icon, Visibility, Ambient, Cond, Action, Cut, Animation, Skip, FastPath, NoVOIngame, RevertAnim, SlideShowTexture, ChildrenList, Active). Of the 88,632 no-cut lines in the 1,721 campaign conversations, **only 350 have an Animation**; the other ~88,300 play no gesture: the speaker keeps whatever it was doing (its idle/pause, an ambient loop, a previous line's looping gesture), plus FaceFX lip-sync, plus the look-at. Gestures in vanilla dialogues come from the cut (authored cutscene actions), not from this path. Checked (data scan of all 1,721 .dlg).
+2. **How it is played (checked, ShowLine 0x0068E250 at 0x0068E973-0x0068E997):** `speaker->vtable[0xB0](animId, speed 1.0, blend -2.0, 1)`, i.e. the creature's slot 44 (0x006AA7E0 -> 0x0069B3D0) with exactly the exit-clip arguments of sub-action 37: blend -2.0 is a code = fade over **20 % of the clip's step length** (lib-agent-2-anim-fade.md), speed 1.0, last arg 1. It is a plain base-layer play, not an overlay; looping rows loop until something replaces them.
+3. **Face:** the VO line's FaceFX animation (`<strref>_m.fxe`, from `modulefacialanimations.erf`) through `PlayVO` 0x00A5DA60 -> FacialAnimationPlayer slot 6 (0x0084EEF0). No per-emotion facial pose exists in the line; the face is whatever the .fxe authors. FaceFX output sits after the whole body pose (node rotation = FaceFX * animation).
+4. **Look-at (checked):** at line start the speaker and the **controlled creature** (not the line's Listener tag) are made to look at each other with `SetLookAtTarget(id, slot 1)` (0x0069EAA0), controllers resumed (mode 1, automatic). Cleared at the end of the conversation (`SetLookAtTarget(-1, 1)` at 0x007F108A).
+5. **Stage (.stg):** not used by a no-cut line. `ConversationStageName` (12100) / `StageAtCurrentLocation` (12104) are read only inside the cut branch (0x0068E584 `0x007D2AA0` runs after the cut player exists). Checked.
+
+#### (a) Body gestures
+
+##### The field and who chooses
+- `ConversationLineAnimation` 12213, read by `0x007F0050(line)`; `ConversationLineRevertAnim` 12217 (U8, 255 or 0), read by `0x007F00A0`. Chosen **by the .dlg author per line**; nothing random, no list, no emotion mapping. The Paragon port needs no picker: play that row.
+- Table: it is an `anim_base` id (m2da "Animations", `anim_base.gda`, columns ID, Brow, StrRef, Type, AnimName, WieldType, SynchAnim, TransitionTo, Priority, DisableLookAt, State, Replacement). The id is passed straight to slot 44.
+- Distribution over the 350 animated no-cut lines (checked, my scan): 820 Talk Sad 42, 824 Headshake 35, 817 Talk Speak 25, 818 Talk Reaction 17, 822 Talk Angry 15, 825 Nodding 15, 811 Pound Fist 12, 658 Guard Stand at Attention 12, 823 Headache 11, 607 Greeting Slight Head Bow 10, 821 Talk Confident 9, 287 Horror 9, 3019 Talk Dismissive 8, 808 Point Forward 7, 813 Looking Right 6, 850 Salute 6, 854 Point Forward 2 6, 644 Idle Twitch v5 6, then a tail of the dg_* (800-854), dg_tk_* (3003-3030), amb* (606-660) and a few wi_/am_ rows (905, 906, 919, 941, 986, 978, 3002). Also on 4 cut-carrying lines (803, 820, 850, 655), where the cut path does not use it (checked: only the non-cut branch calls the play).
+- Rows (checked, `anim_base`): 800-854 are the "dg" (dialogue gesture) set. Type **5** (loop) rows: 815-822 `Talk Normal 1/2, Speak, Reaction, Cursing, Sad, Confident, Angry` (AnimName dg_tk_norm_1, dg_tk_norm_2, dgtalkspeak, dgtalkreaction, dgtalkcursing, dgtalksad, dgtalkconfident, dgtalkangry), 844 Hands Behind Back, 3003 Preach, 3011-3023 Begging/Barter/Beseech/Normal 3-4/Bossy/Contradict/Dismissive/Listen/Nervous/Salesman/Beckon, 3030 Madman. Type **4** (one-shot) rows: 808-814 points/pound fist/stop/looking, 823 Headache, 824 Headshake, 825 Nodding, 826-843 body gestures (Shrug v1/v2 842-843, Hand*, Raised Finger, Surrender 827...), 850 Salute. TransitionTo is 1 (the idle `pause`) on all the talk/gesture rows except the enter/loop/exit chains (800-802, 803-805, 844/848/849). DisableLookAt is 1 only on headshake/nod/headache/bless/salute rows (the head-moving clips), 0 on the talk loops and arm gestures.
+- Clips: the blend tree node names map to files, e.g. `dgtalksad` -> `mh.dg_tk_sad.ani`, `dg_tk_norm_1` -> `mh.dg_tk_norm.ani`, `dgheadshake` -> `mh.dg_tk_shake.ani` (humanoid.anb, checked). The node's Flags are 1 for a one-shot (headshake) and 0 for the talk loops, matching row Type 4/5. Clip lengths not read.
+
+##### How it is played (checked)
+- ShowLine non-cut branch, after the voice and timer are set (0x0068E96E):
+  - `eax = 0x007F0050(dialog+0x1C8 (the conversation), line)`; if not -1: `speaker->vtable[0xB0](eax, 1.0f, -2.0f, 1)` (0x0068E978-0x0068E997: float 0xAFF63C = -2.0, `fld1`, push 1).
+  - Then `dialog+0x2C8 = 0x007F00A0(conversation, line)` (RevertAnim flag).
+- Slot 44 (`0x006AA7E0`, then `0x0069B3D0`): per lib-agent-2-anim-fade.md: row Type bit 2 goes to the face queues; otherwise the animation set's play with blend. blend -2.0 = a code: fade 20 % of the clip's step length (so a 2 s loop fades in over 0.4 s). "Same clip again" is a no-op. No stop is called on the previous clip: it is the normal cross-fade of the base layer.
+- No `CommandPlayAnimation` is queued: the call is direct, so it does not go through the creature's command queue (it is not a sub-action 37 run, has no duration, and nothing ends it). A one-shot row returns to its TransitionTo (1, the idle) through the animation set itself (inferred from lib-agent-2-playanim.md); a loop row loops until replaced.
+- **Revert:** the next time a reply is taken (`0x0068D8F0`, checked 0x0068D98C-0x0068D9B5) and the previous line had no cut (+0x20C clear): the previous speaker (+0x16C) has its VO stopped (`StopVO`, 0x00A5D360 via vtable +0x60 of obj+0x70), and **if +0x2C8 is set, `speaker->vtable[0xB0](1, 1.0, -2.0, 1)`: animation id 1 (`pause`, the idle) with blend -2.0.** RevertAnim is 255 on 279 lines of the campaign (123 of them on animated no-cut lines).
+- **At the end of the conversation (0x007F1000-0x007F109E, checked)** for each participant (the 0x14-byte entries at conversation +0x70): `0x006CA130` (look-at controller), the look-at enabled byte `[lookat+0x16D] = 0`, `SetLookAtTarget(-1, 1)`, then `0x006A0040` (resume look-at, or return to neutral if the current animation's State flag says so). **No animation is played to undo a gesture**: a looping talk row set without RevertAnim keeps looping after the conversation ends until the creature's next animation (the script side: AMBIENT_CONTINUE at a conversation's end restarts ambient patterns, dev/AI.md; a party member's follow/idle replaces it). Inferred for what ends it; the absence of an undo is checked.
+- Lines in the middle of a chain: a following line without an Animation does not touch the body layer, so the previous line's loop continues under it.
+
+#### (b) The face
+
+- The VO for the line: name from `0x007F2B70` (`<vobank>/VO/<strref>_m|_f`), `PlayVO` 0x00A5DA60 (callers: ShowLine 0x0068E916, 0x0069FF54, ambient manager 0x006FE71B) unless `NoVOIngame`. In PlayVO (checked 0x00A5DC6F-0x00A5DCD6): the speaker's face animatable (obj+0x18 -> +4 -> vtable +0x60 -> vtable +8) must exist; the FacialAnimationManager (singleton 0x0084DCB0) slot 8 (0x0084E1E0 -> 0x0084DEA0) is asked whether it has the animation (a wstring name); if so the name is stored at AnimBase+0x1B4 and `FacialAnimationPlayer::Play` (slot 6, 0x0084EEF0) is called with (name strings, content = the sound when faceSync else 0, 0, 0). 0x0084EEF0 narrows the two wstrings (0x00A098E0) and calls FaceFX's `PlayAnim` (0x00A0C0A0) with them. If FaceFX does not have the animation, the sound is played alone (Play(0,0)).
+- The .fxe is `<strref>_m.fxe` in `modulefacialanimations.erf` (dev/CUTSCENES.md); the actor is the race/gender `.fxa` in `face.erf` (`humanmale.fxa`...). **There is no emotion input anywhere on the line or in PlayVO**: no group per emotion is selected by the engine. Any smile/frown/brow pose is baked in the line's own .fxe. (Checked: no emotion field in the template; PlayVO's arguments are names only.)
+- What FaceFX writes: the bone nodes' +0xF0 rotation and +0x130 translation, applied after body and additive look clips (dev/CHARACTERS.md; lib-agent-2-face-additive.md). Its length is the line timer on a voiced line (`0x00A5D4D0`, timer = max(0, T - 0.3), lib-agent-2-audio-vo.md).
+- The idle blink/eye clips (`mh_o.eyelids`, `eyejitter`) are not played by this path (lib-agent-2-face-eyes.md: they exist only as cut actions).
+- Skip: `+0x2C9` makes the next StopVO reset the face (resetFace).
+- Not read: the .fxe's animation-group/animation names inside (the group name FaceFX gets from the two wstrings) and whether the .fxe contains emotion-keyed curves; `.fxe` is not parsed by core.
+
+#### (c) Idle, listener and the look-at
+
+- **There is no "talk stance" row for a no-cut line.** The engine plays no stance, no turn-to-face and no talk idle at line start. Idle is whatever the creature was doing (checked: ShowLine's non-cut branch makes only the calls listed here; no PlayAnimation command, no 0x006A2A20 stop-moving). The `dg_tk_*` loops are used only if the author sets Animation. Whole-body turning toward the player is not done here either; only the look-at body/head/eye controllers turn (Body part: limit MaxAllowedYaw 45 deg, 96 deg/s; Head 45 deg, 20-200 deg/s; Eyes 20 deg, 360 deg/s; `look_at` table, lib-agent-2-anim-layers.md).
+- **Look-at at line start (checked, 0x0068E60A-0x0068E6EB):**
+  - `B = 0x0068D270()` = the **controlled creature** (`[[app+0xD0]+0x5C]`), or the party's +0x1F8 creature if B is the conversation's owner (CUTSCENES.md); `speaker` = the object the line's speaker resolved to.
+  - `B->SetLookAtTarget(speakerId, 1)` (0x0069EAA0; ecx = B, args (id, slot) pushed 1 then id), then `lookat(B)->Resume()` (0x0069E9D0 -> 0x006CAB00: mode 1, automatic, blend constants 0xAE2E00), `0x006CA130` (an immediate Apply with a large dt: snap), `[lookat+0x16D] = 1` (enabled).
+  - Same for the speaker (only if the speaker's cast to creature, vtable +0x10, is non-null): `speaker->SetLookAtTarget(B.id, 1)`, Resume, Apply, enable.
+  - 0x0069EAA0 -> `0x006CA950`: `slot[id == self ? -1 : id]` stored at `lookat + 0x14C + 4*slot`; slot 1 is the conversation/cutscene slot. So the speaker's head/eyes/body track B's eye position while the line plays, B's likewise (but the automatic mode excludes the player-controlled leader from automatic targets, lib-agent-2-anim-layers.md, so the player's own creature probably does not turn; inferred, not reconciled).
+  - The line's **Listener (12203) is not used in this branch**: ShowLine takes (speakerId, line index) only (checked: no call to the Listener resolver 0x007F02F0 in 0x0068E250; PlayLine resolves speaker 0x007F0210 and passes the id). The listener matters for ambient barks (the manager's speaker/listener pair, 0x006FE7F6/0x006FE808) and for cuts.
+  - The look-at is not changed between lines of the same conversation except by the next ShowLine repeating it; the slot is cleared (-1) for every participant at the conversation's end.
+- Time/blend: the Apply is immediate at line start (a snap), then the part controllers move at their table speeds toward the target each frame as in any look-at.
+- Look-at disabling: animation rows with `DisableLookAt` = 1 (headshake, nod, headache, bless, salute, horror 287...) are said to suspend the look-at while they play (effect inferred; consumer not read, lib-agent-2-anim-layers.md).
+
+#### (d) Stage (.stg)
+
+- A no-cut line uses no stage: `ConversationStageName`/`AtCurrentLocation` only feed `0x007D2AA0` and the stage transform for a cut player that exists (the cut branch 0x0068E514-0x0068E5C4). Many no-cut lines still carry a stage name in the file (e.g. aoa100_aidan's first lines, stage `aoa100st_aidan`); ignored. For the camera on a no-cut line: `0x0068D4B0` (the speaker/B pair; dev/CUTSCENES.md).
+
+#### Not read
+- Clip lengths and root-motion of the dg_tk_* / dg* clips; whether any dg clip is additive or override (flags 4011/4012 not scanned for these).
+- Who/what ends a looping talk row after the conversation (no undo found in the conversation code; the follow/ambient scripts replace it).
+- The FaceFX animation/group names passed to 0x00A0C0A0 and the .fxe's contents (emotion curves, if any).
+- Whether `DisableLookAt` actually gates the look-at controllers (consumer not found).
+- The cast at speaker vtable +0x10 (assumed AsCreature) and 0x006CA130's exact Apply arguments.
+- The animated-line counts for ambient (bark) lines: the ambient manager plays Animation through the same slot (barks note) but its blend was read only there.
 
 ## The face: additive clips and the eyes (read 2026-10-18 by lib-agent-2)
 
