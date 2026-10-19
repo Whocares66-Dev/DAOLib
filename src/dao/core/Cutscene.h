@@ -27,7 +27,8 @@
 // Only TRAK, AANI, ACSP, AFBE and ASHK have curves: 372,345 of them, with
 // 320,650 vertices and 226,293 transitions. A stop time of 1e10 is "to the
 // end". 279 files have an end script (275 gen00cs_cutscene_end), 2,866 a
-// stage, none a henchman tag or henchman actions; 2,396 run at 100 frames a
+// stage, none a henchman tag or henchman actions (a conversation line's cut
+// can have both: alistair_main's line 1351); 2,396 run at 100 frames a
 // second, 762 at 30. The run times are 1 to 213 seconds. Shakes', gore's
 // and head tracking's speed and realignment are left unread.
 #pragma once
@@ -137,14 +138,16 @@ struct Action
     std::wstring voBank;                         // ASLN
     std::wstring lipsync;                        // ASLN
     std::wstring sound;                          // ACSP
-    std::int32_t actor = -1; // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
-    std::int32_t node = -1;  // ALNK: the target's node linked to
-    std::wstring tag;        // AJSC's and AJSP's stage tag
-    std::wstring lookAt;     // AJSP
-    bool visible = false;    // ACVI
-    bool drawMain = false;   // ADW_: the main hand's weapon drawn
-    bool drawOff = false;    // ADW_
-    std::wstring effect;     // AFBE: "da_dof", "da_colorfade"
+    std::int32_t actor = -1;          // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
+    std::int32_t node = -1;           // ALNK: the target's node linked to
+    std::wstring tag;                 // AJSC's and AJSP's stage tag
+    std::wstring lookAt;              // AJSP
+    bool stageCameraDefault = false;  // AJSC: the tag is a place's, its default camera is the camera
+    bool stageCameraHenchman = false; // AJSC: the camera is the henchman's place's default; wins over the above
+    bool visible = false;             // ACVI
+    bool drawMain = false;            // ADW_: the main hand's weapon drawn
+    bool drawOff = false;             // ADW_
+    std::wstring effect;              // AFBE: "da_dof", "da_colorfade"
     std::vector<EffectParameter> parameters; // AFBE
     std::wstring movie;                      // APBM
     std::optional<Fog> fog;                  // AFOG

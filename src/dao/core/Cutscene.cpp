@@ -74,6 +74,8 @@ constexpr std::uint32_t kParameterCurve = 5525;
 constexpr std::uint32_t kParameterVector = 5526;
 constexpr std::uint32_t kLineLipsync = 5562;
 constexpr std::uint32_t kLineVoBank = 5563;
+constexpr std::uint32_t kStageCameraDefault = 5570;
+constexpr std::uint32_t kStageCameraHenchman = 5571;
 constexpr std::uint32_t kStageLookAt = 5580;
 // The four actions that name another actor, each in a field of its own:
 // AACC's camera and ALNK's and ACRU's targets an S32, ACHT's a U32.
@@ -238,6 +240,10 @@ Action ActionOf(const gff4::Struct &in)
     action.node = in.Get<std::int32_t>(kLinkNode).value_or(-1);
     action.tag = in.String(kTag).value_or(L"");
     action.lookAt = in.String(kStageLookAt).value_or(L"");
+    // Bools to the engine, which takes any value but 0 as set (0x007DC450; dev/CUTSCENES.md,
+    // JumpToCamera, DAOLib #203).
+    action.stageCameraDefault = in.Get<std::uint8_t>(kStageCameraDefault).value_or(0) != 0;
+    action.stageCameraHenchman = in.Get<std::uint8_t>(kStageCameraHenchman).value_or(0) != 0;
     action.visible = in.Get<std::int8_t>(kVisible).value_or(0) != 0;
     action.drawMain = in.Get<std::uint8_t>(kDrawMain).value_or(0) != 0;
     action.drawOff = in.Get<std::uint8_t>(kDrawOff).value_or(0) != 0;

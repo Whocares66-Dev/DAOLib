@@ -42,62 +42,67 @@ std::uint32_t FloatList(Builder &b, const std::vector<float> &values)
 
 // A cutscene laid out as bhmcs_intro.cut is (tools/gff4.py --templates), cut down: its header,
 // one actor, and in its generic queue an animation with one curve of one vertex and a
-// transition, and a spoken line.
+// transition, a spoken line, and a stage camera by the henchman's place as alistair_main's
+// line 1351 has (DAOLib #203).
 std::vector<std::byte> CutsceneFile()
 {
     constexpr std::uint16_t kStructList = gff4::kList | gff4::kStruct;
-    Builder b =
-        Start("CUT ", {{"CUT",
-                        40,
-                        {{3010, 14, 0, 0},
-                         {5000, 8, 0, 4},
-                         {5001, 14, 0, 8},
-                         {5007, 14, 0, 12},
-                         {5016, 4, 0, 16},
-                         {5017, 14, 0, 20},
-                         {5018, 0, 0, 24},
-                         {5019, 0, 0, 25},
-                         {5050, 14, 0, 28},
-                         {5100, 14, gff4::kList, 32},
-                         {5200, 6, kStructList, 36}}},
-                       {"VERT", 8, {{5370, 8, 0, 0}, {5371, 8, 0, 4}}},
-                       {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
-                       {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
-                       {"AANI",
-                        48,
-                        {{5300, 0, 0, 0},
-                         {5301, 8, 0, 4},
-                         {5302, 8, 0, 8},
-                         {5303, 3, kStructList, 12},
-                         {5304, 0, 0, 16},
-                         {5400, 14, 0, 20},
-                         {5401, 14, 0, 24},
-                         {5402, 8, 0, 28},
-                         {5403, 8, 0, 32},
-                         {5405, 0, 0, 36},
-                         {5410, 0, 0, 37},
-                         {5411, 0, 0, 38},
-                         {5413, 0, 0, 39},
-                         {5408, 8, gff4::kList, 40},
-                         {5409, 8, gff4::kList, 44}}},
-                       {"ASLN",
-                        32,
-                        {{22, 17, 0, 0},
-                         {5300, 0, 0, 8},
-                         {5301, 8, 0, 12},
-                         {5302, 8, 0, 16},
-                         {5304, 0, 0, 20},
-                         {5562, 14, 0, 24},
-                         {5563, 14, 0, 28}}},
-                       {"ACTR",
-                        36,
-                        {{2, 14, 0, 0},
-                         {5201, 4, 0, 4},
-                         {5202, 14, 0, 8},
-                         {5206, dao::test::kGeneric, gff4::kList | gff4::kReference, 12},
-                         {5216, 14, 0, 16},
-                         {5226, 8, 0, 20},
-                         {5214, 10, 0, 24}}}});
+    Builder b = Start(
+        "CUT ",
+        {{"CUT",
+          40,
+          {{3010, 14, 0, 0},
+           {5000, 8, 0, 4},
+           {5001, 14, 0, 8},
+           {5007, 14, 0, 12},
+           {5016, 4, 0, 16},
+           {5017, 14, 0, 20},
+           {5018, 0, 0, 24},
+           {5019, 0, 0, 25},
+           {5050, 14, 0, 28},
+           {5100, 14, gff4::kList, 32},
+           {5200, 6, kStructList, 36}}},
+         {"VERT", 8, {{5370, 8, 0, 0}, {5371, 8, 0, 4}}},
+         {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
+         {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
+         {"AANI",
+          48,
+          {{5300, 0, 0, 0},
+           {5301, 8, 0, 4},
+           {5302, 8, 0, 8},
+           {5303, 3, kStructList, 12},
+           {5304, 0, 0, 16},
+           {5400, 14, 0, 20},
+           {5401, 14, 0, 24},
+           {5402, 8, 0, 28},
+           {5403, 8, 0, 32},
+           {5405, 0, 0, 36},
+           {5410, 0, 0, 37},
+           {5411, 0, 0, 38},
+           {5413, 0, 0, 39},
+           {5408, 8, gff4::kList, 40},
+           {5409, 8, gff4::kList, 44}}},
+         {"ASLN",
+          32,
+          {{22, 17, 0, 0},
+           {5300, 0, 0, 8},
+           {5301, 8, 0, 12},
+           {5302, 8, 0, 16},
+           {5304, 0, 0, 20},
+           {5562, 14, 0, 24},
+           {5563, 14, 0, 28}}},
+         {"ACTR",
+          36,
+          {{2, 14, 0, 0},
+           {5201, 4, 0, 4},
+           {5202, 14, 0, 8},
+           {5206, dao::test::kGeneric, gff4::kList | gff4::kReference, 12},
+           {5216, 14, 0, 16},
+           {5226, 8, 0, 20},
+           {5214, 10, 0, 24}}},
+         {"AJSC",
+          20,
+          {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {1, 14, 0, 12}, {5570, 0, 0, 16}, {5571, 0, 0, 17}}}});
     const std::size_t root = Struct(b, 40);
     b.U32(root, b.String(u"bhm500ar_tower_harrowing"));
     Float(b, root + 4, 61.0F);
@@ -107,7 +112,7 @@ std::vector<std::byte> CutsceneFile()
     b.U32(root + 20, kNone);
     b.U8(root + 24, 0);
     b.U8(root + 25, 255);
-    b.U32(root + 28, kNone);
+    b.U32(root + 28, b.String(u"gen00fl_alistair"));
     const std::uint32_t cub = b.String(u"bhmcs_intro.cub");
     const std::uint32_t dof = b.String(u"da_dof.ffx.xml");
     b.U32(root + 32, b.Numbers({cub, dof}));
@@ -162,7 +167,14 @@ std::vector<std::byte> CutsceneFile()
     b.U8(line + 20, 255);
     b.U32(line + 24, b.String(u"bhm_jowan_lip"));
     b.U32(line + 28, b.String(u"vo_bhm_jowan"));
-    b.U32(actor + 12, Children(b, {{4, animation}, {5, line}}));
+    const std::size_t camera = Struct(b, 20);
+    b.U8(camera, 24);
+    Float(b, camera + 4, 0.0F);
+    Float(b, camera + 8, 1e10F);
+    b.U32(camera + 12, b.String(u"gen00fl_alistair"));
+    b.U8(camera + 16, 0);
+    b.U8(camera + 17, 255);
+    b.U32(actor + 12, Children(b, {{4, animation}, {5, line}, {7, camera}}));
     return b.bytes;
 }
 
@@ -177,7 +189,7 @@ std::vector<std::byte> FromDisk(const std::filesystem::path &path)
 
 } // namespace
 
-TEST_CASE("a cutscene's header, an actor, and its queue of actions of two templates", "[cutscene]")
+TEST_CASE("a cutscene's header, an actor, and its queue of actions of three templates", "[cutscene]")
 {
     const auto bytes = CutsceneFile();
     const auto file = gff4::File::Parse(bytes);
@@ -192,6 +204,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of two templa
     CHECK(read->stage.empty());
     CHECK(read->playUntilVoCompletes == 0);
     CHECK(read->areaRequired == 255);
+    CHECK(read->henchmanTag == L"gen00fl_alistair");
     CHECK(read->resources == std::vector<std::wstring>{L"bhmcs_intro.cub", L"da_dof.ffx.xml"});
     REQUIRE(read->actors.size() == 1);
     const auto &actor = read->actors[0];
@@ -201,7 +214,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of two templa
     CHECK(actor.mappingTag == L"bhm_jowan");
     CHECK(actor.scale == 1.5F);
     CHECK(actor.originPosition == std::array<float, 3>{1.0F, 2.0F, 3.0F});
-    REQUIRE(actor.actions.size() == 2);
+    REQUIRE(actor.actions.size() == 3);
 
     const auto &animation = actor.actions[0];
     CHECK(animation.kind == "AANI");
@@ -246,6 +259,14 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of two templa
     CHECK(line.voBank == L"vo_bhm_jowan");
     CHECK(line.animation.empty());
     CHECK(line.curves.empty());
+    CHECK_FALSE(line.stageCameraHenchman);
+
+    const auto &camera = actor.actions[2];
+    CHECK(camera.kind == "AJSC");
+    CHECK(camera.type == 24);
+    CHECK(camera.tag == L"gen00fl_alistair");
+    CHECK_FALSE(camera.stageCameraDefault);
+    CHECK(camera.stageCameraHenchman);
 }
 
 TEST_CASE("a file of another type is no cutscene", "[cutscene]")
