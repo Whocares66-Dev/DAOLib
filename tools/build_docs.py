@@ -12,17 +12,26 @@ SkyrimFollowerTactics sites are). Its pages come from three places:
 The working tree's docs are the site's root ("Current"); each release tag
 vX.Y.Z is built from that tag's own headers and guide, with today's styling,
 converter and filter, into X.Y.Z/. Every version is listed in the
-version selector, which keeps the page you are on where that version has it.
+version selector, which keeps the page you are on where that version has it;
+the selector reads the list from versions.json at the site's root.
+
+A release's built site is kept in build/docs-cache under its tag and a hash
+of everything that makes it (the tag's commit, docs/, the filter, the
+converter, this script and Doxygen's version), and only built again when one
+of those changes (DAOLib #201). A push that changes the headers alone builds
+Current alone.
 
 Needs Doxygen 1.18 (on PATH, or the Windows zip unpacked in build/tools/doxygen)
 and Ruby with Bundler (`bundle install` in docs/ once).
 
     python tools/build_docs.py            # build
     python tools/build_docs.py --serve    # build, then serve on http://127.0.0.1:8045/DAOLib/
+    python tools/build_docs.py --current  # the working tree's docs alone, no release's
 """
 
 import argparse
 import functools
+import hashlib
 import http.server
 import io
 import json
@@ -45,6 +54,9 @@ REPOSITORY = "https://github.com/Whocares66-Dev/DAOLib"
 # today's.
 FROM_THE_TAG = ("src/dao", "dev/PLUGINS.md")
 FROM_TODAY = ("docs", "tools/doxygen_filter.py")
+CACHE = BUILD / "docs-cache"
+# Today's files a release's built site depends on, beside docs/ and its tag.
+BUILT_BY = ("tools/build_docs.py", "tools/doxygen_xml.py", "tools/doxygen_filter.py")
 # What a local `jekyll serve` or `bundle install` leaves in docs/.
 LOCAL_OUTPUT = shutil.ignore_patterns(
     "_site", ".jekyll-cache", ".jekyll-metadata", ".bundle", "vendor"
@@ -153,6 +165,70 @@ def stage_release(tag, staging):
     return source
 
 
+def release_key(tag):
+    """A hash of what a release's built site is made from."""
+    digest = hashlib.sha256()
+    for command in (
+        ["git", "rev-parse", f"{tag}^{{commit}}"],
+        [doxygen(), "--version"],
+    ):
+        out = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True, check=True
+        )
+        digest.update(out.stdout.strip().encode() + b"\0")
+    files = [ROOT / part for part in BUILT_BY]
+    skipped = {"_site", ".jekyll-cache", ".jekyll-metadata", ".bundle", "vendor"}
+    files += sorted(
+        path
+        for path in DOCS.rglob("*")
+        if path.is_file() and not skipped & set(path.relative_to(DOCS).parts)
+    )
+    for path in files:
+        digest.update(path.relative_to(ROOT).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()[:16]
+
+
+def release_site(tag, staging, url):
+    """A release's built site and its pages' URLs: from the cache, or built
+    into it. None when the tag has no docs to build."""
+    kept = CACHE / f"{tag}-{release_key(tag)}"
+    if not (kept / "pages.json").exists():
+        source = stage_release(tag, staging)
+        if source is None:
+            return None
+        count, _ = api_pages(source, staging / f"xml-{tag}", tag)
+        guide_page(source)
+        print(f"{tag[1:]}: {count} API pages", flush=True)
+        for stale in CACHE.glob(f"{tag}-*"):
+            shutil.rmtree(stale)
+        jekyll(source / "docs", kept / "site", overlay(staging, tag[1:], url))
+        (kept / "pages.json").write_text(
+            json.dumps(pages(source / "docs")), encoding="utf-8"
+        )
+    else:
+        print(f"{tag[1:]}: kept from {kept.relative_to(ROOT)}", flush=True)
+    return kept / "site", json.loads((kept / "pages.json").read_text(encoding="utf-8"))
+
+
+def overlay(staging, label, url):
+    """The config Jekyll merges after the site's own for one version: its
+    baseurl and label, and where the site's root is (versions.json)."""
+    path = staging / f"config-{label}.yml"
+    # JSON is valid YAML.
+    path.write_text(
+        json.dumps(
+            dict(
+                baseurl=url,
+                docs_version=label,
+                docs_root=setting("baseurl").rstrip("/"),
+            )
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def stage_current(staging):
     """The working tree's sources."""
     source = staging / "current"
@@ -192,49 +268,34 @@ def jekyll(site_source, destination, overlay):
     )
 
 
-def build():
+def build(releases_too=True):
     baseurl = setting("baseurl").rstrip("/")
     if SITE.exists():
         shutil.rmtree(SITE)
     destination = SITE / baseurl.lstrip("/")
     destination.mkdir(parents=True)
-    warnings = []
     with tempfile.TemporaryDirectory(prefix="docs-sources-", dir=BUILD) as temporary:
         staging = pathlib.Path(temporary)
-        sources = [("Current", stage_current(staging), baseurl, "master")]
-        for tag in releases():
-            source = stage_release(tag, staging)
-            if source is not None:
-                sources.append((tag[1:], source, f"{baseurl}/{tag[1:]}", tag))
-        for label, source, _, ref in sources:
-            count, warned = api_pages(source, staging / f"xml-{label}", ref)
-            guide_page(source)
-            print(f"{label}: {count} API pages")
-            if warned and label == "Current":
-                warnings.append(warned)
+        current = stage_current(staging)
+        count, warnings = api_pages(current, staging / "xml-Current", "master")
+        guide_page(current)
+        print(f"Current: {count} API pages", flush=True)
+        jekyll(current / "docs", destination, overlay(staging, "Current", baseurl))
         versions = [
-            dict(label=label, baseurl=url, pages=pages(source / "docs"))
-            for label, source, url, _ in sources
+            dict(label="Current", baseurl=baseurl, pages=pages(current / "docs"))
         ]
-        for index, (label, source, url, _) in enumerate(sources):
-            # JSON is valid YAML; Jekyll merges this after the site's own config.
-            overlay = staging / f"config-{index}.yml"
-            overlay.write_text(
-                json.dumps(
-                    dict(baseurl=url, docs_version=label, docs_versions=versions)
-                ),
-                encoding="utf-8",
-            )
-            jekyll(
-                source / "docs",
-                destination if index == 0 else destination / label,
-                overlay,
-            )
+        for tag in releases() if releases_too else []:
+            url = f"{baseurl}/{tag[1:]}"
+            built = release_site(tag, staging, url)
+            if built is not None:
+                shutil.copytree(built[0], destination / tag[1:])
+                versions.append(dict(label=tag[1:], baseurl=url, pages=built[1]))
+    (destination / "versions.json").write_text(json.dumps(versions), encoding="utf-8")
     (destination / ".nojekyll").touch()
-    (SITE / "warnings.txt").write_text("\n".join(warnings), encoding="utf-8")
+    (SITE / "warnings.txt").write_text(warnings, encoding="utf-8")
     print(
         f"site: {destination}; {len(versions)} version(s); "
-        f"{len(warnings[0].splitlines()) if warnings else 0} Doxygen warning line(s) in {SITE / 'warnings.txt'}"
+        f"{len(warnings.splitlines())} Doxygen warning line(s) in {SITE / 'warnings.txt'}"
     )
     return baseurl
 
@@ -255,9 +316,14 @@ def main():
     parser.add_argument(
         "--serve", action="store_true", help="serve the site after building it"
     )
+    parser.add_argument(
+        "--current",
+        action="store_true",
+        help="build the working tree's docs alone, for a quick look",
+    )
     parser.add_argument("--port", type=int, default=8045)
     args = parser.parse_args()
-    baseurl = build()
+    baseurl = build(releases_too=not args.current)
     if args.serve:
         serve(args.port, baseurl)
 

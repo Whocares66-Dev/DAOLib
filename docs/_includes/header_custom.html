@@ -1,23 +1,44 @@
 {%- comment -%}
 The header's right: the version selector (the versions tools/build_docs.py
-lists; each keeps the page you are on where that version has it), the Nexus
+lists in versions.json at the site's root, read when the page opens, so that a
+release's pages need no rebuild for a newer version, DAOLib #201; each keeps
+the page you are on where that version has it), the Nexus
 Mods link and the GitHub link. The Nexus Mods mark is Simple Icons' (v11.15.0,
 CC0), drawn in the link's own colour like GitHub's.
 {%- endcomment -%}
 {% assign version_label = 'Current' %}
-{% if site.docs_versions %}
-{% assign current_baseurl = site.docs_versions.first.baseurl %}
-{% if site.baseurl != current_baseurl %}{% assign version_label = site.docs_version | prepend: 'v' %}{% endif %}
-<details class="docs-versions">
+{% if site.docs_root %}
+{% if site.docs_version != 'Current' %}{% assign version_label = site.docs_version | prepend: 'v' %}{% endif %}
+<details class="docs-versions" data-versions="{{ site.docs_root }}/versions.json" data-page="{{ page.url }}" data-baseurl="{{ site.baseurl }}">
   <summary aria-label="Documentation version: {{ version_label }}"><span>{{ version_label }}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
   <ul aria-label="Documentation versions">
-    {% for version in site.docs_versions %}
-    {% assign version_page = '/' %}
-    {% if version.pages contains page.url %}{% assign version_page = page.url %}{% endif %}
-    <li><a href="{{ version.baseurl }}{{ version_page }}"{% if version.baseurl == site.baseurl %} aria-current="true"{% endif %}>{% if forloop.first %}Current{% else %}v{{ version.label }}{% endif %}</a></li>
-    {% endfor %}
+    <li><a href="{{ site.docs_root }}/">Current</a></li>
   </ul>
 </details>
+<script>
+  (function () {
+    var menu = document.currentScript.previousElementSibling;
+    fetch(menu.dataset.versions)
+      .then(function (response) { return response.json(); })
+      .then(function (versions) {
+        var list = menu.querySelector("ul");
+        list.textContent = "";
+        versions.forEach(function (version, index) {
+          var link = document.createElement("a");
+          var has = version.pages.indexOf(menu.dataset.page) >= 0;
+          link.href = version.baseurl + (has ? menu.dataset.page : "/");
+          link.textContent = index === 0 ? "Current" : "v" + version.label;
+          if (version.baseurl === menu.dataset.baseurl) {
+            link.setAttribute("aria-current", "true");
+          }
+          var item = document.createElement("li");
+          item.appendChild(link);
+          list.appendChild(item);
+        });
+      })
+      .catch(function () {});
+  })();
+</script>
 {% else %}
 <span class="docs-version">{{ version_label }}</span>
 {% endif %}
