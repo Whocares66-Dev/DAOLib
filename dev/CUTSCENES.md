@@ -159,7 +159,14 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
   - The setters `0x006C45F0`, `0x006C4EC0` and `0x006C4B20` only save and restore at the mode's entry and exit.
 - **A camera target** (5209): at category 50 the camera is re-aimed at that actor each step, yaw and pitch, its roll kept.
 - **`JumpToCamera`** (type 24, `0x007DF2F0`): a `.stg` camera by tag (FOV 11003, LookingFrom 11006, LookingAt 11007–11009), placed by the stage's transform, its FOV through the same divide. **It is not aimed at LookingAt** (read 2026-10-19 by lib-agent-2, for DAOParagonEngine #29; checked unless said):
-  - At its first execution only (the action's +0x46), `0x007DEAF0` reads the camera through `0x007D1EA0` and places it: position = R(stage q) × position + stage p, orientation = stage q × orientation (the stage's +0xB0 and +0xA0). `0x007D1EA0` is the only code that reads the five fields 11003 and 11006–11009. A camera that is not found changes nothing.
+  - **Its fields** (the constructor `0x007DC450`, the only holder of its vtable `0x00B2346C`): the cut's `Tag` (1) at +0x28, `CutsceneActionStageCameraDefault` (5570) at +0x44 and `CutsceneActionStageCameraHenchman` (5571) at +0x45, both as bools. The pose starts at (0,0,0), identity and FOV 60 (`0x00ADEF18`).
+  - **The camera's tag**, found at the first execution (followed up the same day by lib-agent-2):
+    - With +0x45, the henchman's: take the cutscene actor at the player's +0x22C, the first bound to the object whose tag is `CutsceneHenchmanTag` (5050). Take the place of its first `JumpToPlace` (type 0x19 in its action list at +0x518), then that place's `DefaultCamera` (11004). Which actor is bound is partly inferred.
+    - With +0x44: the place with the action's tag in `StagePlaceList` (`0x007D1E10`), then its `DefaultCamera`, or an empty tag.
+    - Otherwise the action's tag itself.
+  - **A camera not found still applies:** the constructor's pose, world (0,0,0), identity and FOV 60, is put on the camera, not the camera's last pose.
+  - An example: `alistair_main`'s line 1351 cuts on `pre100st_argue.stg` with `JumpToCamera` "gen00fl_alistair" by the henchman path. The stage has no place of that tag, so the camera comes from the henchman's place. Inferred: that is `node2`, with its camera `cam2_3_2` (FOV 38, type 1).
+  - At its first execution only (the action's +0x46), `0x007DEAF0` reads the camera through `0x007D1EA0` and places it: position = R(stage q) × position + stage p, orientation = stage q × orientation (the stage's +0xB0 and +0xA0). `0x007D1EA0` is the only code that reads the five fields 11003 and 11006–11009. A camera that is not found leaves the pose as the constructor set it.
   - Every execution then copies the stored position, orientation and FOV to the active camera, so nothing tracks.
   - LookingAt then adjusts that pose once, by `LookingAtType`:
     - **0:** nothing. The toolset baked the aim into the stored orientation: every camera of `2p_200_cullen.stg` has a primary, type 0 included.
@@ -167,7 +174,7 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
     - **2** (`0x007DE220`): re-pitches the camera, not its yaw, and moves its height, from LookingFrom to the primary. It uses both places' ground deltas, the actors' heights over 1.75, and an atan2 of the vertical difference over the horizontal distance. The exact formula was not reduced.
     - Any other value: nothing.
   - **The secondary is a list of tags in one string,** split at the delimiters at `0x00AF0CA4` (space, backslash and colon first; the rest not read). The files read had it empty. Type 2 ignores it.
-  - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is, and the camera found as a placed object (+0x45, `0x007D1E10`).
+  - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is.
 - **Shake** (type 20) multiplies an Euler noise onto the camera (not read in detail).
 - **Depth of field** is the `FrameBufferEffect` (type 19) `da_dof`, not a camera property.
 
