@@ -472,10 +472,10 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
 | `0x00636C00` (from `SetControllable(false)` 0x006A5F40) | (id, 1, 1) | the first controllable (+0x7F9) living (slot 0x1D0 = 0) member of the active party (+0x234, its items at +0x238), else -1 |
 | `0x00637560`, a member into the active party | (id, 0, 1) | only when the active party had been empty: that member becomes the leader too (0x006376A3–0x006376BB, checked) |
 | `0x006377E0`, a member out of the active party | (first active, 0, 1) or (-1, 0, 1) | only when it was the controlled creature (0x0063784E–0x00637882, checked) |
-| 0x00638560, from the client load's step 0x16 (0x006C76F0, `dev/LOAD_EVENTS.md`) | (party+0x208, 0, 1) | when party+0x208 is not -1 (checked; inferred: the controlled id kept across the load) |
+| 0x00638560, from the client load's step 0x15 (0x006C76F0, at 0x006C8276, right after the party is placed at 0x006C8264; `dev/LOAD_EVENTS.md`) | (party+0x208, 0, 1) | when party+0x208 is not -1 (checked; inferred: the controlled id kept across the load) |
 | 0x006D7DE0, in `CClientVirtualMachineCommands::InitializeCommands`' table (0x006DBBBE) | (id, 0, 1) | a client-side `SetPrimaryControlled`: `SetControllable(1)`, then only for a creature that exists, is controllable and alive (checked) — unlike 815's handler, it does not crash on an invalid object. When the client VM runs it was not read |
 
-The hero's creation also sets the controlled creature directly: `CCPlayer` 0x0069D910 (from 0x0069DF10, character creation's hero, and 0x0069DBB0) calls 0x0069D540 (checked: the call; the purpose of 0x0069DBB0 is inferred, a load).
+The hero's creation does not select it (corrected 2026-10-19 by lib-agent-2; this said it set the controlled creature directly): `CCPlayer` 0x0069D910's only call to 0x0069D540 (0x0069DA2B) passes null on a failure branch, before the creature is deleted. The hero is selected because 0x0069DF10 calls `SetFollowerState(hero, 1)` at 0x0069E015, and 0x00637560, with the active party empty, makes it the leader and calls `SetSelection` (0x006376BB). Both calls checked; "The selection: where it starts" below.
 
 ### Selection: growing, shrinking, all
 
@@ -498,6 +498,109 @@ Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194
   - While dragging, 0x007121E0 rebuilds the list: living active members (+0x234) whose screen position is inside the rectangle, in the active party's order; with 49 held, those already selected are kept too. No controllable test.
   - Each candidate is highlighted (0x0070C900: creature+0x430, then 0x006965E0).
   - On release, a non-empty list goes to 0x00635630(list, 1): +0x184/+0x194 cleared and filled in the list's order, then +0x194's slot 0x24 (0x0063583A–0x00635849, checked). **No ON_SELECT; control passes to the list's first** through the observer.
+
+### The selection: where it starts, when it is empty, what to use in place of "empty = hero" (lib-agent-2, 2026-10-19)
+
+Read in GOG's DAOrigins.exe (capstone via tools\daoexe.py and a byte scan for call sites) and the toolset scripts. Not seen in play, except one corroboration from DAOTurnBased (below). **Checked** = read in disassembly or scripts; **inferred** = from shape or names. Prior notes: master's `dev/PARTY.md` "Control and selection, as the engine runs it" (lines 393-478, the caller table 462-476, "Selection: growing, shrinking, all" from 480), `dev/COMBAT.md` 243, 272-277, `dev/LOAD_EVENTS.md` 98, 111, `dev/gff4_fields.csv` 1829, 1837. Short names: SetSelection = CCParty 0x006368F0 (ID 12442); Deselect = 0x00639DB0; Observer = 0x00637220; Bar = CCParty+0xC8.
+
+#### Short answers
+
+1. **The hero enters +0x184 when the engine makes it ACTIVE, not through any script.** Chargen's end (0x0069DF10) creates the hero (0x0069D910, which does NOT select it) and calls `SetFollowerState(hero, 1)` (0x0063B9A0) at 0x0069E015. That goes to 0x00637560, and an empty active party makes its first member the leader and the selection `[hero]` (SetSelection(id, 0, 1) at 0x006376BB); the observer then derives the controlled id (CCPlayer+0x5C). No script at chargen end or module start sets control or the leader (the only `SetPrimaryControlled` in the scripts is `bhm600pt_harrowing.nss`:266, a mage-origin tutorial step). **A save does not store +0x184.** It stores one id, `SavegameSelectedCharacter` (16270) = the controlled creature at save time (-1 if none). The load reads it to party+0x208; the client load's step 0x15 places the party, then `0x00638560` (called at 0x006C8276) does SetSelection(party+0x208) if it is not -1, replacing whatever the roster's joins selected. So a "whole party selected" state does not survive a save. **An area transition touches no selection** (none of the 11 callers of SetSelection is a transition's); it stays as it was (inferred from the caller list).
+2. **Yes, the selection can be empty or hold only a dead member, with members alive.** (a) A selected member's death never empties it: Deselect keeps a sole selected member and asks for the next character; if no other living controllable one exists the selection stays on the dead one. (b) Empty (-1) happens with: `SetControllable(false)` on the controlled one when no other controllable living active member exists (0x00636C00 then SetSelection(-1)); a controlled member removed from the active party with nobody else active (forced, 0x006377E0; unforced it refuses the sole member); a load with saved -1 before any join. (c) Control is never given to "the hero" by default anywhere; the hero is only first in the active party order.
+3. **Use: controlled = first entry of the selection (the engine's own definition), -1 when empty. Never substitute the hero.** At a new game: `[hero]`. At a load: `[saved controlled id]` (or the first ACTIVE member that joined, if the save had -1). On a death: the rule below.
+
+#### Pseudo-code a port can copy
+
+```
+// state: activeParty (ordered, +0x234), selection (ordered ids, +0x184), leader (+0x1E8), bar = first 4 of activeParty
+//        (minus members whose flag creature+0x604's byte +0xC is set; inferred meaning: hidden from the bar), -1 for empty slots
+controlled() = selection.empty() ? INVALID : selection[0]          // 0x00637329-0x0063736A; GetMainControlled = CCPlayer+0x5C
+
+SetSelection(id):                                                   // 0x006368F0
+    if selection == [id]: return false
+    selection.clear()
+    if id is a creature: selection.push(id)                         // id == -1 leaves it EMPTY
+    // observer: controlled = selection[0] or -1; SelectedChar token, camera focus, AI level
+
+AddToActiveParty(m):                                                // 0x00637560, from SetFollowerState 1/7
+    if m not in activeParty (+0x234) and not in followers (+0x260):
+        if m.isPC (creature+0x7D4 == 1) or m == leader: activeParty.insert(0, m)   // hero is always first
+        else if m.isPC == 0: activeParty.push_back(m)
+        else: insert before the first member whose isPC value is smaller (rank order; not exercised by hero/companions)
+    if activeParty.size() == 1: leader = m; SetSelection(m)          // only when the party was empty
+
+NewGame:  hero created -> AddToActiveParty(hero)  =>  selection=[hero], leader=hero, controlled=hero
+
+SaveGame: write SavegameSelectedCharacter = controlled()           // -1 if none; the selection list itself is not saved
+LoadGame: roster joins run (first ACTIVE joiner is selected if party was empty) ...
+          step 0x15 places the party, then: if saved != -1: SetSelection(saved)   // no controllable/alive check
+
+OnMemberDeath(m):                                                   // DEATH handler 0x007AAC10 -> 0x007AB4C2, after the death animation, m already IsDead; only if the creature's party flag byte (creature+0x504) is set
+    Deselect(m)
+Deselect(m):                                                        // 0x00639DB0
+    if m not in selection: return false
+    if selection.size() <= 1: SelectNextCharacter(+1); return true  // NOTE: does not remove m
+    selection.remove(m)                                             // controlled = new selection[0]
+SelectNextCharacter(+1):                                            // 0x00636CD0
+    cur = controlled(); i = bar.indexOf(cur); if i == -1: return false
+    loop k = i+1, i+2, ... (mod bar.size):                          // bar order = active party order, hero first
+        e = bar[k]; if e == -1: continue
+        if e == cur: break                                          // wrapped to itself: accepted, no change
+        if e.controllable (+0x7F9) and not e.IsDead: break
+    SetSelection(bar[k])                                            // bar[k] == cur => "already so", selection unchanged (may be a dead member)
+// with several selected: m is just removed; the next in selection order becomes controlled, no bar search.
+// Whole party dead (game over): selection = the last member left selected (a dead one); controlled = that id. Nothing clears it.
+
+SetControllable(m, false):                                          // 0x006A5F40
+    m.controllable = false; Deselect(m)
+    if controlled() == -1: first = first controllable living member of activeParty (+0x234 order); SetSelection(first or -1)
+RemoveFromActiveParty(m, force):                                    // 0x006377E0 (SetFollowerState 0/2/3/5)
+    if !force and activeParty == [m]: refuse
+    activeParty.remove(m)
+    if m == controlled(): SetSelection(activeParty.empty() ? -1 : activeParty[0])   // first active, dead or not
+    else: selection.remove(m) if present
+```
+
+Port rules that follow: a death of the controlled hero with a living controllable follower passes control to the **next bar slot after the hero's** (active party order: hero first, then companions in join order, wrapping), skipping slots that are empty, uncontrollable or dead; with several selected, to the next in the selection. With none such it stays on the corpse (controlled = the dead hero). A "hero" fallback for an empty selection is wrong both ways: an empty selection means nobody is controlled (-1), and a non-empty one may be a follower or a corpse. Compare ids; do not infer "hero".
+
+#### Evidence
+
+##### Q1 start of the selection
+
+- **Observer derives control** (PARTY.md:430-444 region, "Observer"): checked there; I did not redo it. Selection first entry -> CCParty::SetControlled 0x0062F260 -> CCPlayer 0x0069D540, the only write of CCPlayer+0x5C (0x0069D58E).
+- **0x0069D910 does not select or set control on success** (checked, corrects PARTY.md:478 "calls 0x0069D540"). It builds the creature (0x00413660 size 0xD20, ctor 0x006B9ED0), sets creature+0xBDC, calls 0x0069D790; its only call of 0x0069D540 is at 0x0069DA2B, **with argument 0 on the failure branch** (`push 0` at 0x0069DA27; 0x0069D540 returns at once on a null arg, 0x0069D554), followed by the creature's destructor (vtable slot 0, arg 1) and a null return. On success it returns the creature (0x0069DA3E). So the hero is not made controlled by creation itself.
+- **0x0069DF10 then joins it** (checked): 0x0069DFB8 `call 0x69D910`, tag `player_core` (0x0069DFCE-0x0069E003), then `push 1; push creatureId; call 0x63B9A0` at 0x0069E008-0x0069E015 (COMBAT.md:277 has the same call, "the hero is ACTIVE from its creation"). 0x0063B9A0 states 1 and 7 -> 0x00637560 (PARTY.md:150, 163).
+- **0x00637560** (checked, disassembly above): `lea esi,[edi+0x234]`, Contains in +0x234 and +0x260 (0x008663A0) else skip to 0x006377CB; then group copy; then creature byte +0x7D4: `== 1` -> insert at index 0 (`0x006CE860(…, 0)`, 0x0063766F); the id equal to the leader attribute (+0x1E8, 0x006375F5) -> index 0; byte 0 -> push_back (0x006F1340); other values -> insert before the first member with a smaller byte (0x00637618-0x0063765C, inferred what the byte ranks). **If the list is then of size 1** (0x0063769E), the leader attribute is set (slot 0x54 at 0x006376A9) and `SetSelection(id, 0, 1)` runs (0x006376BB). PARTY.md:473 has this row; the hero-first insertion and the size test are new.
+- **Scripts** (checked, grep of `toolset\extract\scripts` for SetPrimaryControlled and SetPartyLeader): the first only at `bhm600pt_harrowing.nss`:266 (after the valor-sword step, `SetPrimaryControlled(oPC)` then `BeginTrainingMode`). SetPartyLeader only in the Fade (`arl300pt_fade.nss`:87-229), `cli410`, `cli800`, `epi_attendees_h`:440, `denpt_captured`, `denpt_main`. None at chargen end or a module start. In the Fade the hero is made UNAVAILABLE after Morrigan/Wynne join; the hero leaves the active party, so by 0x006377E0 the selection moves to the first active member: **the controlled creature is a non-hero for a whole area**, which the "empty = hero" read would miss.
+- **Save** (checked): the party's save at 0x00634610-0x00634651 writes field 0x3F8E (16270, `SavegameSelectedCharacter`, gff4_fields.csv:1829) = `0x005D5CA0` (GetMainControlled) or -1 when the app is null (0x00634632-0x0063463F); the same function writes 0x3F96 (16278 `SavegamePartyLeader`) = the leader attribute (0x00634610 region; the leader value's read at 0x00637ED3-0x00637EDD, passed to SetPartyLeader 0x00636180). A second save routine at 0x00637A60-0x00637A97 pushes the same labels (`0x3f96`, `0x3f8e`); no label for +0x184 exists in either.
+- **Load** (checked): the party's load 0x00637D50 reads 0x3F96 to SetPartyLeader (0x00637EDD) and 0x3F8E into party+0x208 (`mov [ebp+0x208], eax` at 0x00637F0D; the constructor's init at 0x0063A6BE writes the same field from ebp, -1 inferred). Only 0x00637F0D and the constructor write it (byte scan 0x628000-0x640000 for `[reg+0x208]`: 0x0062CAAE push only, 0x00637F0F, 0x00638562 read, 0x0063A6C0). Reads: `0x00638560`: `mov eax,[ecx+0x208]; cmp eax,-1; je ret; push 1; push 0; push eax; call 0x6368F0`. Its only caller is 0x006C8276, after `0x006C73C0` (the party placed, step 0x15, 0x006C8262-0x006C8264) and before the state moves to 0x16 (0x006C827B). LOAD_EVENTS.md:98, 111 cover 0x006C73C0. Roster restore is the creatures' own loads: `CCCreature` slot 34 0x006BE980 calls 0x0063B9A0 (call site 0x006BEAA1; COMBAT.md:274), so ACTIVE members join in load order, the first selecting itself in an empty party; step 0x16 then overrides with the saved id.
+- **Chargen's end and an area transition** use kind-7 requests (LOAD_EVENTS.md:62), which skip step 0x15 (that state machine 0x006C76F0 runs for kinds 2 and 8: inferred from LOAD_EVENTS.md:62). SetSelection's 11 call sites (byte scan for `E8` to 0x006368F0): 0x00636CA6/CBC/DFB (0x00636C00 and 0x00636CD0), 0x00636F0D/F29 (ToggleFullPartySelect), 0x006376BB, 0x00637882, 0x00638570, 0x00639F02 (Party::Select), 0x006610C2 (command 815), 0x006D7E52. None in a transition, so a transition leaves the selection alone (inferred).
+
+##### Q2 shrinking the selection
+
+- **Death** (checked): the sub-action handler 0x007AAC10 runs the DEATH script event at the end of the death animation (COMBAT.md:243), then at 0x007AB49D-0x007AB4C2: `lea ecx,[ebp+0x4F8]; call 0x838210` (reads byte [ecx+0xC] = creature+0x504; meaning inferred: a party-member-style flag; COMBAT.md says "for a party member"), then `ecx=party (0x006A2CC0: [[app+0xD0]+0x58]); push creatureId; call 0x00639DB0`. At that time the creature is already IsDead (health 0).
+- **Deselect 0x00639DB0** (checked, disassembly above): `0x008663A0(+0x184, &id)` Contains; absent -> return false (0x00639E43). Present and the creature exists: if the vector has `<= 1` entries (`cmp eax,1; ja 0x639E0C`) -> `0x00636CD0(1)` and return true **without removing** (0x00639DFA-0x00639E09); else remove from +0x184 (`0x004E9640` at 0x00639E13) and +0x194, and run +0x194's slot 0x24 (the observer) (0x00639E2C-0x00639E3A).
+- **0x00636CD0(dir)** (checked): `bar = party+0xC8` (0x00636CED); empty bar (0x0086BEE0) -> false; `cur = GetMainControlled()` (0x00636D0B); `i = index of cur in the bar` (0x0063C4B0, -1 -> return false at 0x00636D35); loop: `idx = (idx + n + dir) mod n` (0x00636D43-0x00636D4D, `div ebx`); skip an entry of -1 (0x00636D6E); an entry equal to `cur` is accepted before any other test (0x00636D96 `je 0x636DE8`); else the creature must have +0x7F9 != 0 (0x00636DC7) and slot 0x1D0 (IsDead) == 0 (0x00636DD4-0x00636DE2), else the loop goes on. Accepted: `SetSelection(bar[idx], 1, 1)` (0x00636DFB). With nobody else qualifying the loop reaches `cur` itself, SetSelection(cur) finds `selection == [cur]` and does nothing (PARTY.md step 1): **the corpse stays selected and controlled.**
+- **The bar's order** (checked): 0x00635B60 (callers 0x0063623B, 0x006373B5, 0x006BBED9) builds Bar = party+0xC8 as 4 slots from the active party list +0x238, in its order, for up to 4 entries, **skipping a member whose creature+0x604 flag byte (+0xC) is set** (0x00635D2C-0x00635D39; what the flag means was not read), slots without a member stay -1 (0x00635C04, the default 0xC313C0 is -1). It marks selected slots by Contains(+0x184) (0x00635E17), living by slot 0x1D0 (0x00635D11-0x00635D1D) and slot 0x190 (not named). The hero is first in +0x238 (0x00637560 above), so first in the bar, then companions in join order. PARTY.md:469 had "the party bar's list at party+0xC8 (inferred: the bar)": now checked to be a view of the active party.
+- **0x00636C00** (checked, disassembly above): walks +0x238 from the front: `GetObject` (0x005D58C0), keep the first with +0x7F9 != 0 and IsDead == 0 (0x00636C62-0x00636C79), then SetSelection(thatId, 1, 1) (0x00636CA6); at the end of the list: `SetSelection(-1, 1, 1)` (0x00636CAE-0x00636CBC; the -1 is the vector's static default 0xC313C0). So **-1 = empty selection** when no active member is controllable and alive. Its only caller is 0x006A5F80, in `SetControllable` 0x006A5F40: for false, Deselect(self) (0x006A5F65), then **only if GetMainControlled == -1** call 0x00636C00. So with a sole selected member made uncontrollable the 0x00636CD0 pass leaves it selected (it accepts itself), `GetMainControlled` is not -1, and 0x00636C00 is not run.
+- **0x006377E0** (checked, disassembly above): not in +0x234 -> skip; unforced (`[esp+0x10]==0`) and list size `<= 1` -> return 0 (0x00637819); else remove from +0x234 (0x00637828), and `if id == GetMainControlled` (0x00637853) -> SetSelection(first of the remaining +0x234 or -1, 0, 1) (0x0063785A-0x00637882), "first" not tested for alive or controllable; else, further down, the +0x194 pointer list loses the creature if it contained it (0x00637962-0x0063798A). Callers: 0x0063B9BB/B9F3/BB72/BB85 (SetFollowerState), 0x006BB120 (a creature's destruction path, with force 1: the one that can empty the party).
+- **Set -1 empties** (checked): SetSelection step 3 clears the vector (PARTY.md:408), step 4 pushes only when `id != -1` and a creature. Then the observer: controlled = -1 (PARTY.md:437 "or -1 if empty").
+- **Whole active party dead:** nothing runs once the last Deselect finds one entry; selection = the last remaining selected member, dead; GetMainControlled = its id. Inferred from the above: no other writer of +0x184 exists that a death reaches (SetSelection's callers are listed in PARTY.md:462-476 and above).
+- **Played corroboration** (DAOTurnBased, `src/game/Bridge.cpp`:589-600): in the Ortan Thaig fight of its issue 42, "with the hero dead and the last of the party standing 83 m from her body, GetPartyLeader answered the hero (IsDead 1) and GetMainControlled the survivor". Consistent with: death moves control to a living follower, the leader attribute stays the hero's. (A comment there; the log is not in what I read.)
+
+##### Q3
+
+See pseudo-code. Order rule on death: with a sole selected hero the next is the first living controllable slot after the hero's in the bar; (hero first in the bar) so Alistair-or-whoever joined first. With a multi-select it is the next selected id in the +0x184 order.
+
+#### Not read
+
+- The meaning of the flag byte at creature+0x504 (the death handler's gate) and creature+0x610 (the bar's skip), and slot 0x190 in the bar build; I took the first for "party member" from COMBAT.md only.
+- Who sets creature+0x7D4 on the hero before 0x0063B9A0 runs (the insert-at-0 branch also fires through "id == leader"; with an empty list either branch gives the same result).
+- The 0x0069DF10 loop at 0x0069E01C-0x0069E023 (it re-tests a party state after the join; might create more than one member) and 0x0069DBB0's purpose (a load, inferred).
+- Whether the loader of kind-7 requests (new game, area transition) runs any step that calls SetSelection indirectly (I used the caller list: none).
+- Whether the leader attribute or the selection is re-set at the Fade's end and the Harrowing by other engine paths (e.g. CCCreature slot 86 0x006A8AC0 re-adding a PC as ACTIVE, PARTY.md:~432; its flow after the join was not followed).
+- The client-side `SetPrimaryControlled` 0x006D7DE0 (when the client VM runs it).
+- No game run; none of this is seen in play.
 
 ### Orders to the selected
 
