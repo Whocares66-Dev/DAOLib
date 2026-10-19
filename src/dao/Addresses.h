@@ -1863,8 +1863,20 @@ DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
 // ring's entries); 0 only finds it), then the target's InMeleeReach (slot
 // 33, __thiscall (attacker, place), `ret 8`: the centres at most both
 // spaces and 1.2 apart in x, y and z, and the attacker within 1.25 of the
-// place in x and y alone, WithinBand being flat), and
-// ends at once if so, else walks to the place. The swing, sub-action 1
+// place in x and y alone, WithinBand being flat; the band passed is 1.2f at
+// 0xAE7540 and WithinBand adds 0.05, so 1.25: checked 2026-10-18 by lib-agent-2), and
+// ends at once if so, else walks to the place. Corrected 2026-10-18 by
+// lib-agent-2: the walk itself ends the approach, and that is the usual end:
+// the move update 0x007A9130 (stop 0.05, flags 7) answers 1 within float 2
+// (unset, so 0) + 0.05 m of the place in x and y; InMeleeReach is only an
+// early-out, on the first run (0x007AA749) and before the re-path check
+// (0x007AA8CF). The place's radius includes the attacker's own ring-0
+// MeleeRingOffset (0x006A8EE0 to 0x007CC2B0), so for an attacker with an
+// offset InMeleeReach is false at its place by that offset, and
+// InStrikingReach's limit (PersonalSpaces + 1.2 + 1.0, 0x00ADE218, checked)
+// still allows the blow. -9 from the move update is PATH_ACTION_REQUIRED (a
+// door), not arrival: the approach asks the ring again with claim, runs
+// 0x007A6CA0 again, sets int 3 = 1500 ms and goes on. The swing, sub-action 1
 // (Swing), tests on its first run, in order: the target found and not
 // dead; the attacker's InStrikingReach (below); the direction to the
 // target within 60 degrees of level (Vector::Elevation); and line of

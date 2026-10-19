@@ -134,7 +134,7 @@ The turn-based mod measured its player's dagger strikes against a giant spider l
 
 - **The attack command's step** (`0x00742FD0`, ID 17685) asks whether the weapon is ranged and queues an approach, then the attack (sub-action 50). It tests no reach itself; the approach does, on its first run, and walks only if needed.
 - **A creature's personal space** is `PerSpace` from `apr_base`, read once per creature (`0x00748A40`, beside `Height`, or `Height_F` for a female body) into its size record (the creature's +0x7B0, `PerSpace` at +0x60, `Height` at +0x64); the creature's vtable slot 39 (`0x006A21A0`) answers it. Elves, humans and dwarves 0.35, children 0.30, giant spiders 0.70.
-- **Melee** (sub-action 4, `0x007AA560`): the target gives the attacker a place on its melee ring (slot 38, `0x006A8EE0`; every creature has a ring, not only the large monsters), and its slot 33 (`0x006A3D00`, ID 14499) judges reach: the distance between centres at most **attacker's `PerSpace` + target's `PerSpace` + 1.2 m**, **and** the attacker within 1.25 m of that place, on the ground (x and y; the centres' distance counts height). Corrected 2026-10-04: the second test was first written here as a facing test; it is the ring place. Out of reach, it walks to the place.
+- **Melee** (sub-action 4, `0x007AA560`): the target gives the attacker a place on its melee ring (slot 38, `0x006A8EE0`; every creature has a ring, not only the large monsters), and its slot 33 (`0x006A3D00`, ID 14499) judges reach: the distance between centres at most **attacker's `PerSpace` + target's `PerSpace` + 1.2 m**, **and** the attacker within 1.25 m of that place, on the ground (x and y; the centres' distance counts height). Corrected 2026-10-04: the second test was first written here as a facing test; it is the ring place. Out of reach, it walks to the place. Corrected 2026-10-18 by lib-agent-2: the walk itself ends the approach, and that is the usual end. The move update `0x007A9130` (stop distance 0.05, flags 7) answers 1 within float 2 (never set, so 0) + 0.05 m of the place in x and y. `InMeleeReach` is only an early-out: on the first run (`0x007AA749`), and before the re-path check (`0x007AA8CF`). See "Why an attacker with a ring offset is never in reach at its place" below.
 - **Ranged** (sub-action 15, `0x007AA200`, a staff, bow or crossbow in the main hand: `bitm_base`'s `Type` 5 or 6, its `WeaponWield` not; corrected 2026-10-04, staves first written here as not ranged): in range when the distance on the ground (x and y) is at most the weapon's `Range` from `bitm_base` (capped at 60 m) and at least both personal spaces, and the attacker has line of sight (`0x0067C750`). Corrected 2026-10-04: the spaces are a minimum, not added to the range. Out of range or sight, it walks toward the target until within `Range` less both spaces.
 - **The swing** (sub-action 1, `0x007A87C0`), after a turn to face (sub-action 39, to within 1 degree), waits while the target is more than 60 degrees above or below the attacker or out of its line of sight, then sends `EVENT_TYPE_COMMAND_PENDING` for the scripts to resolve the blow. Corrected 2026-10-04: the 60 degrees were first read here as facing; they are elevation (`0x004EE5A0`). The melee attack's own set-up (`0x00745E10`, ID 17720) places the swing at `-(sum + 1.2)` along the attacker's facing, with 0.15 m of play.
 
@@ -196,7 +196,7 @@ Claims are checked (read in disassembly or data) unless marked inferred. Hex add
 #### Short answers
 
 1. A ring (0x007CB400) always has 40 places, whatever its radius or the attacker. The count is the one-entry table at 0xB230F8 (value 40; the index at ring+0x18 is forced to 0, and ring+0x18 is set to 0 at creation). Step = 360/40 = 9 degrees. Angles are world-fixed (no facing in them): place 0 starts at +Y (north) and they run clockwise seen from above (toward +X). A "place" is the arc between two consecutive points on a polyline of 40 points; place i spans 9i..9i+9 degrees from +Y, its middle at 9i+4.5. Point j is at centre + (sin(9j), cos(9j), 0) * R, with R = ring.+0x10 (already + 0.1, see below). The creature's facing only enters through the ring's centre offset and the disabled arc.
-2. MeleeRingSpot (0x006A8EE0) takes the target's rings, sorts them by (distance from attacker to the ring's centre minus its radius) ascending, and tries each in that order. The first ring where a run of free places is found wins. In the ring, the run is centred on the place where the attacker already is (its angle from the ring's centre), widening alternately -1, +1, -2, +2, ... until a place whose run fits is found. The run's width is odd, 1 + 2m, m counted from the attacker's width (PersonalSpace) as below. The returned point is on the ray from the ring's centre through the chosen place's middle, at radius (ring radius_without_0.1 + attacker PersonalSpace + attacker's ring-0 MeleeRingOffset), checked against the walk mesh. Nothing free in any ring: returns false (the -5 NO_SPACE path is the caller's).
+2. MeleeRingSpot (0x006A8EE0) takes the target's rings, sorts them by (distance from attacker to the ring's centre minus its radius) ascending, and tries each in that order. The first ring where a run of free places is found wins. In the ring, the run is centred on the place where the attacker already is (its angle from the ring's centre), widening alternately -1, +1, -2, +2, ... until a place whose run fits is found. The run's width is odd, 1 + 2m, m counted from the attacker's width (PersonalSpace) as below. The returned point is on the ray from the ring's centre through the chosen place's middle, at radius (ring radius_without_0.1 + attacker PersonalSpace + attacker's ring-0 MeleeRingOffset), checked against the walk mesh. Nothing free in any ring: returns false (the -5 NO_SPACE path is the caller's). Corrected 2026-10-18 by lib-agent-2: the radius includes the attacker's own ring-0 MeleeRingOffset (`0x006A8EE0` to `0x007CC2B0`), so for an attacker with an offset `InMeleeReach` is false at its place by that offset; `InStrikingReach`'s limit, PersonalSpaces + 1.2 + 1.0 (`0x00ADE218`, checked), still allows the blow.
 
 #### 1. Ring layout (object at creature+0xB44's vector; ring pointers 4 bytes each)
 
@@ -349,7 +349,7 @@ GOG exe, base 0x400000. "checked" = read in disassembly or data; "inferred" = no
 2. **A place's world point** (`0x007CB620`, entry i): centre + (local[i] + local[next(i)]) / 2 (the midpoint of the two neighbouring ring points; `0x00A38A20` adds the centre, `0x004D47E0` divides by 2.0), at R*cos(4.5 deg) from the centre.
 3. **The claim is re-chosen on every call that sets claim** (checked). `ApproachMelee` (`0x007AA560`, at `0x007AA63x`) calls the target's slot 38 `MeleeRingSpot(attackerId, out, attackerPersonalSpace, claim = 1, 0)` on **every update** of the approach (it starts after finding the target, in the path-update part of the sub-action). With claim set, `0x007CC5B0` first calls `0x007CC060` which releases **every place this attacker holds on every ring** of the target, then picks again from scratch: rings sorted by `(distance from the attacker's position to the ring centre) - R` (`0x007CBCA0`, nearest first); in each ring (`0x007CC2B0`) the **first candidate is the place whose compass bearing from the ring centre is nearest to the attacker's own bearing** (`0x007CAF60`, bearing of the attacker minus the centre, then `0x007CB9E0` turns the wanted angle into an index), and then goes 0, -1, +1, -2, +2... places away (the loop at 0x007CC3B3 / 0x007CC446; corrected the same day); a candidate is taken if it is free (`0x007CAED0`: not disabled (+8), not near-only (+9) unless the attacker is inside the radius, and no other holder in +0xC/+0x14/+0x18/+0x1C) for the whole run of places the attacker's width covers (`0x007CB010`), and passes the fit test (`0x007CB0E0`: slope under 60 degrees, no unwalkable cell or other creature's stamp, `0x00A46FC0`). The claim writes the attacker's id into holder +0x18 of the run and adds the id to the ring's claimant list (+0x30/+0x38, `0x00698C30`). So it is **not a claim on a fixed place index**: the attacker re-asks and gets the free place nearest to *where it now stands*, so it stays on "its" place while it keeps its bearing and drifts to the next free place if the target or it moves round. With claim = 0 (`InMeleeReach`-style queries, `dao::attack::ApproachOf`) nothing is released or written.
 4. **The re-path rule** (`0x007A50F0`, 4 m / 1.5 m) compares the place just given with the one the walk was pathed to, so a place that moved because the target moved, or because the attacker was given a different place, re-paths; master's TURN_BASED.md line 183 is right and needs only one added fact (see "Correction").
-5. **When the attacker arrives and swings**: the approach handler ends at once when `InMeleeReach(attacker, place)` holds (it has just claimed the place in that same update), so no further `MeleeRingSpot` calls are made in the approach sub-action; the turn (39) and the swing (1) do not call it (the swing tests `InStrikingReach`, `0x006A3DC0`, on the attacker's own point and the target's slot-29 point). The attacker's claim is **not released on arrival**: it stays in holder +0x18 and in the claimant list through the swing, so the ring keeps being refreshed (claimants > 0), and the place stays held. If the target moves during the swing, nothing re-chooses it until another approach runs.
+5. **When the attacker arrives and swings** (corrected 2026-10-18 by lib-agent-2: the walk's arrival is the usual end, `InMeleeReach` only an early-out, see the subsection after this section's pseudo-code): the approach handler ends at once when `InMeleeReach(attacker, place)` holds (it has just claimed the place in that same update), so no further `MeleeRingSpot` calls are made in the approach sub-action; the turn (39) and the swing (1) do not call it (the swing tests `InStrikingReach`, `0x006A3DC0`, on the attacker's own point and the target's slot-29 point). The attacker's claim is **not released on arrival**: it stays in holder +0x18 and in the claimant list through the swing, so the ring keeps being refreshed (claimants > 0), and the place stays held. If the target moves during the swing, nothing re-chooses it until another approach runs.
 6. **Release** (checked): the shared command end (`0x00746900`, which then queues COMMAND_COMPLETE) calls `0x006A3610(this = attacker, command target)` at `0x00746A65`: it looks the target object up and calls `0x007CC060` on the target's rings (`creature+0xB44`) with the attacker's id (`0x007CC000` per ring; `0x00745230` is the generic list-remove it ends in, which takes the id out of the ring's claimant list at +0x30). It runs for **every end of the command**, including a clear, a failure and a death of the attacker (the command is ended). A ring with no claimants and UpdateAlways 0 is **emptied** on its next refresh (`0x007CBDD0`; `MeleeRing::Clear`); with UpdateAlways 1 (ogres, dragons, Broodmother, tentacles) it stays active and filled with perceived bodies. I did not look for a release on the *target's* death or on the target changing (the command changes target only by ending).
 7. **Bodies**: for every creature the target perceives (its +0xC18 set, excluding itself) `0x007CC870` (called from the refresh) marks the places that creature's body covers with its id and distance, and resets holders +0x14/+0x18/+0x1C to -1 over them, which **clears any claim there**: a perceived creature standing on a claimed place pushes the claim off (the claimant's next approach update re-claims elsewhere). Also each refresh marks a place near-only (+9) when `0x00A471E0` (a wall test from the ring's point) or a slope over 60 degrees (`0x00B03BF8` = 60.0) cuts it off.
 
@@ -385,10 +385,81 @@ for ring in T.rings sorted by (|A.pos - ring.centre| - ring.R):
     for k in 0,1,2...: cand = start + (k odd ? +(k+1)/2 : -(k/2))   // alternating
         if free(cand over A's width in places) and fits(placePoint(cand)): claim(A.id); return placePoint(cand)
 return NO_PLACE (-5)
-if InMeleeReach(A, place): end approach; else walk to place (re-path 4 m / 1.5 m rule)
+if InMeleeReach(A, place): end approach; else walk to place (re-path 4 m / 1.5 m rule)   // corrected 2026-10-18 by lib-agent-2: the walk's arrival ends it too, see below
 
 // command end (any reason): T.releaseAll(A.id)
 ```
+
+### Why an attacker with a ring offset is never in reach at its place (GOG exe, read 2026-10-18, lib-agent-2)
+
+Claims are checked (read in disassembly or data) unless marked inferred. Not seen in play.
+
+#### Short answers
+
+1. **The approach does not end on InMeleeReach.** It ends when the walk arrives: the move update `0x007A9130` answers 1 when the attacker is within (sub-action float 2 + 0.05) in x and y of the sub-action's goal (vec 1 = the ring place), and ApproachMelee returns that 1 (`0x007AA7D1` only special-cases -9). Float 2 of sub-action 4 is never set (AttackStep sets floats 0, 1, 3, 5 only; the sub-action is zero-made), so it is 0: arrive within 0.05 m of the place. InMeleeReach is only an early-out (first run at `0x007AA749`, and before the re-path check on later updates at `0x007AA8CF`). So the wolf stands exactly on its place (2.40 m from a human), InMeleeReach is false there, and it does not matter.
+2. **WithinBand (`0x007A3090`)** is a flat distance test: d = sqrt(dx^2 + dy^2) of (b - a) (z is multiplied by 0 and ignored); true when max(0, arg4 - 0.05) <= d <= arg3 + 0.05 (the double 0.05 at `0x00AF70B0`; arg4 is the "least", 0.0 in every call seen, so the lower test is vacuous). InMeleeReach calls it (attacker pos, place, 1.2f, 0.0f): the attacker within 1.25 of the place in x,y.
+3. **Walk goal = the place itself.** `0x007A6CA0` reads vec 1 (the place), floats 0 (=0), 1 (=0), 4 (=0). Float 4 == 0 selects `0x007A31C0`, which returns goal + unit(attacker - goal) * float1; float1 = 0, so the goal is the place unchanged (the extra `0x0073E370`/`0x0073E7F0` calls in it only test and fill a scratch buffer, not the output). Float 4 != 0 would pick `0x007A5450` (a random scatter of the goal by an angle, not used by AttackStep). The move update hands the controller the stop distance 0.05f (stored at [controller + 0x90]). Sub-action 4's float 3 is the attacker's PersonalSpace and is only the "unread" argument passed to MeleeRingSpot; it is not a stop distance. No offset by the attacker's MeleeRingOffset is applied to the goal beyond the one already inside the ring's stand radius.
+4. **-9 is not arrival.** The move update returns -9 when the path search answered 6 (path action required, e.g. a door; `dev/PLACEABLES.md` lists -9 PATH_ACTION_REQUIRED). `0x007AA7E0` then (if the `0x006A7E10` value equals the saved target id and the target's slot-4 flag is zero) re-asks MeleeRingSpot with claim = 1 (`0x007AA802`), re-runs `0x007A6CA0`, sets int 3 = 1500 (0x5DC) and returns 0 (keep going); else it returns -9 as the failure.
+5. **After the approach**, sub-action 39 turns, then the swing (sub-action 1) tests InStrikingReach (`0x006A3DC0`, this = attacker, arg target, only if the target's type byte (+0x14) is 6): false when the flat-then-3D distance from the attacker to the target's slot-29 point (vtable +0x74, called with the attacker's position) exceeds PersonalSpaces(attacker, target) + 1.2 + 1.0 (double `0x00ADE218` = 1.0). That is 1.0 m more than InMeleeReach's. Slot 29's point (target centre or nearest surface point) not read, so the strike limit is "<= 3.0 m from the centre" if it is the centre.
+
+#### The wolf on a human, numbers
+
+apr_base (ghilana, patch003 copy): Wolf ID 49 PerSpace 0.45, MeleeRingOffset 0.4; Human 15 / Elf / Dwarf PerSpace 0.35, offset 0. (Wolf, Blight 0.45 / 0.3; Dog Mabari 0.45 / 0.4.)
+
+```
+ring0 radius (stored)  = 0.35 + 1.2 + 0.1  = 1.65         r0 = 1.55
+place stand radius den = r0 + 0.45 + 0.4   = 2.40  (from the human's ring centre = its position, offset 0)
+InMeleeReach limit     = 0.45 + 0.35 + 1.2 = 2.00  and place within 1.25 of the wolf (xy)
+wolf at its place      : distance 2.40 > 2.00  -> InMeleeReach FALSE (by 0.40)
+approach result        : arrives (within 0.05 of the place) -> returns 1, done
+InStrikingReach limit  = 2.00 + 1.0        = 3.00  -> 2.40 <= 3.00 -> TRUE (if slot 29 is the centre)
+human vs human, for contrast: den = 1.55 + 0.35 = 1.90 = the reach limit 1.90: InMeleeReach holds on the place.
+```
+
+So the exe does leave the wolf "out of InMeleeReach" at the place, by exactly the attacker's offset, and that is by design: the approach never asks InMeleeReach after the walk. (The offset exists because the wolf's own ring centre is its position + 0.4 along its facing, the snout; den puts that point on r0 + space. Inferred reason.) The swing then passes InStrikingReach with 0.6 m to spare. For any attacker: strike limit - stand = (ps_t + 1.2 + 1.0 + ps_a) - (ps_t + 1.2 + ps_a + off_a) = 1.0 - off_a, so any offset below 1.0 (apr_base's largest is 0.5) is inside striking reach.
+
+#### When the approach would not arrive (loop and counters)
+
+- Re-path rule `0x007A50F0` (4 m / 1.5 m) and the claim re-ask live in the "later update" path (`0x007AA86D` onward); on a true result it asks MeleeRingSpot(claim = 1) again (`0x007AA969`), and if the ring answers false returns -5 (`0x007AA654`). While the place stays, nothing re-asks.
+- Standing counter: in `0x007A9130` (`0x007A9785` onward): if the attacker moved under 0.02 (double `0x00B211A8`) in an update shorter than 300 ms (0x12C), the update's ms are added to int 1; past 1 or 2 x [`0x00C0F6C8`] (1000) it returns -4. Any real move resets it. This is what a port that never lets the walk arrive (because it waits for InMeleeReach) ends up in: the wolf reaches the place, stands, the counter passes 1000 ms, -4. That is the peer's stall.
+- Timer: int 3 = 1500 ms is set on the first run, on a re-ask in the -9 branch, and in the later-update path (`0x007AA8DD`..: it takes `0x00A5A220`(3) minus the creature's ms at [+0x2B8]+8; when it goes negative it sets a flag and refills 1500). It is the re-ask throttle of the "later update" path (inferred: its consumers beyond this were not read). The command timeout (float 5, -10) is separate.
+- Early-out on later updates (`0x007AA893`..`0x007AA8D7`): when the target's slot 9 object (vtable +0x24) is non-null and its byte +0x638 != 1, InMeleeReach(attacker, vec 1 as stored) true returns 1 at once. What byte +0x638 is was not read.
+
+#### Pseudo-code a port can copy
+
+```
+// sub-action 4 made by AttackStep: f0 = 0, f1 = 0, f2 = 0 (unset), f3 = attacker slot39, f4 = 0, f5 = timeout; bool1 = 1, int2 = 1
+ApproachMelee(T, A, sub):                  // 0x7AA560
+  place = T.MeleeRingSpot(A.id, claim=1)   // false -> -5
+  sub.goal = place                         // vec1 (f1 = 0 so no offset)
+  if firstRun:
+      if T.InMeleeReach(A, place): return 1
+      sub.timer3 = 1500
+  else:
+      if InMeleeReach(A, sub.goal) [gate above]: return 1
+      if repathRule(sub.goal vs asked place):      // 0x7A50F0
+          place = T.MeleeRingSpot(A.id, claim=1);  if !place return -5
+          sub.goal = place
+  r = MoveUpdate(A, sub, stop=0.05, flags=7)       // 0x7A9130
+  if r == -9 and sameTarget: re-ask ring (claim=1), set goal, timer3 = 1500, return 0
+  return r                                          // 1 arrived, 0 going, -4 stuck/no path
+
+MoveUpdate: request path to sub.goal (stop dist 0.05); each update
+  arrived = flatDist(A.pos, goal) <= sub.f2 + 0.05     // WithinBand(.., f2, 0)
+  if arrived return 1
+  stand counter: if update < 300 ms and moved < 0.02: sub.int1 += ms; if int1 > 1000 (x2 unless combat byte): return -4
+                 else sub.int1 = 0
+
+Reach(T, A) = dist3(A.pos, T.pos) <= A.ps + T.ps + 1.2  &&  flatDist(A.pos, place) <= 1.25   // early-out only
+Strike(A, T) = dist(A.pos, T.slot29Point(A.pos)) <= A.ps + T.ps + 1.2 + 1.0                 // the swing
+```
+
+#### Not read
+
+- Slot 29 (target vtable +0x74) of creatures: whether the strike distance is to the centre or the nearest point; slot 4 / slot 9 of the target, the byte +0x638 and `0x006A7E10`; the exact meaning of the int 3 refill in the later-update path; `0x0073EA80` return codes beyond 5, 6, 8 (-4, -9, -4 as above) and state 1 (path finished, `0x007A9356` branch) and what the controller does when its path ends short of the goal (the next update re-requests; inferred); `0x0073E370` / `0x0073E7F0` purpose in `0x007A31C0` (they do not change its output).
+- Whether sub-action floats default to 0 when never set: read (`0x00A5A250` answers fldz when the index is beyond the list), checked.
+
+Corrections to this section's earlier text, 2026-10-18 by lib-agent-2: the approach's end is the walk's arrival; the stand radius includes the attacker's ring-0 MeleeRingOffset; -9 from the move update is PATH_ACTION_REQUIRED (a door), not arrival; "within 1.25 of the place" for InMeleeReach is right (checked 2026-10-18 by lib-agent-2: the band passed is 1.2f at `0xAE7540`, and WithinBand adds 0.05, d <= band + 0.05).
 
 ## Next readings
 
