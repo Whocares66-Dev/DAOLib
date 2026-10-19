@@ -74,7 +74,6 @@ constexpr std::uint32_t kKillWhenHit = 6188;
 constexpr std::uint32_t kFlipbookType = 6189;
 constexpr std::uint32_t kDataIsIndexStream = 6168;
 constexpr std::uint32_t kEmitType = 6234;
-constexpr std::uint32_t kCrustHookId = 6235;
 constexpr std::uint32_t kPhysicsEmitter = 6239;
 constexpr std::uint32_t kPhysicsObjectSpawn = 6243;
 constexpr std::uint32_t kAttachmentType = 6246;
@@ -484,7 +483,6 @@ Item ItemOf(model::Node node, const gff4::Struct &from)
     Item item{.node = std::move(node),
               .emitter = std::nullopt,
               .light = std::nullopt,
-              .crustHook = std::nullopt,
               .material = {},
               .bounds = std::nullopt,
               .fields = FieldsOf(from),
@@ -497,10 +495,6 @@ Item ItemOf(model::Node node, const gff4::Struct &from)
     else if (kind == "nplt")
     {
         item.light = LightOf(from);
-    }
-    else if (kind == "crst")
-    {
-        item.crustHook = U8(from, kCrustHookId);
     }
     if (kind == "nemg" || kind == "mshh")
     {
@@ -560,9 +554,35 @@ std::wstring WithExtension(const std::wstring &stem, const wchar_t *extension)
 
 } // namespace
 
-std::wstring Row::ModelFile() const
+std::wstring Sized::File() const
 {
     return WithExtension(model, L".mmh");
+}
+
+// Read 2026-10-18 by lib-agent-2 in the exe (0x007EA550, dev/EFFECTS.md, "How vfx_base's model is
+// chosen").
+std::optional<Chosen> Row::ModelFor(float ownerSize) const
+{
+    if (sizes.empty())
+    {
+        return std::nullopt;
+    }
+    std::size_t at = 0;
+    if (ownerSize > 0 && sizes[0].size > 0 && sizes.size() > 1 && ownerSize > sizes[0].size)
+    {
+        at = sizes.size() - 1;
+        for (std::size_t i = 1; i < sizes.size(); ++i)
+        {
+            if (ownerSize <= sizes[i].size)
+            {
+                const bool upper = sizes[i].size - ownerSize < ownerSize - sizes[i - 1].size;
+                at = upper ? i : i - 1;
+                break;
+            }
+        }
+    }
+    const Sized &taken = sizes[at];
+    return Chosen{.model = taken, .scale = ownerSize > 0 && taken.size > 0 ? ownerSize / taken.size : 1.0F};
 }
 
 std::wstring Row::TreeFile() const
@@ -584,7 +604,6 @@ std::optional<Row> RowOf(const m2da::Merged &effects, std::int64_t id)
             .type = text("Type"),
             .fixedOrientation = number("FixedOrientation") != 0,
             .alignToGround = number("AlignToGround") != 0,
-            .model = text("ModelName"),
             .sizes = {},
             .tree = text("BlendTreeName"),
             .crust = number("CrustEffect") != 0,
@@ -599,10 +618,15 @@ std::optional<Row> RowOf(const m2da::Merged &effects, std::int64_t id)
     for (const auto &[model, size] :
          {std::pair{"ModelName1", "Size1"}, std::pair{"ModelName2", "Size2"}, std::pair{"ModelName3", "Size3"}})
     {
-        if (std::wstring name = text(model); !name.empty())
+        std::wstring name = text(model);
+        const std::size_t first = name.find_first_not_of(L" 	");
+        name = first == std::wstring::npos ? std::wstring()
+                                           : name.substr(first, name.find_last_not_of(L" 	") - first + 1);
+        if (name.empty() || (!out.sizes.empty() && out.sizes[0].size <= 0))
         {
-            out.sizes.push_back({.model = std::move(name), .size = static_cast<float>(number(size))});
+            break;
         }
+        out.sizes.push_back({.model = std::move(name), .size = static_cast<float>(number(size))});
     }
     return out;
 }

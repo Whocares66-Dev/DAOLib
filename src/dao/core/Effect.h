@@ -5,13 +5,14 @@
 // (DAOParagonEngine #26); dao/Vfx.h is the running game's effects.
 //
 //   const auto row = dao::core::effect::RowOf(effects, 3006); // the wisp's crust
-//   row->ModelFile();                                          // L"fxc_wisp_c.mmh"
+//   row->ModelFor(0)->File();                                  // L"fxc_wisp_c.mmh"
 //   const auto effect = dao::core::effect::EffectOf(model);
 //   effect->Find(L"glow")->emitter->birthRate;                 // 7
 //
 // There is no effect file of its own. An effect is the visual effects
 // table's row (table 8, vfx_: vfx_base.gda and the add-ins'), which names a
-// model (ModelName, an .mmh) and an animation tree (BlendTreeName, an .anb).
+// model (ModelName1 to 3, an .mmh each, chosen by the size of what the effect is on; the
+// ModelName column the engine never reads) and an animation tree (BlendTreeName, an .anb).
 // The model is a model hierarchy whose nodes are the effect's parts: emitters
 // ("nemt"), point lights ("nplt"), crust hooks ("crst", a place on the
 // creature the effect is a crust of), emitter groups ("nemg"), target groups
@@ -57,8 +58,18 @@ struct Sound
 // A model a row takes at a size.
 struct Sized
 {
-    std::wstring model;
-    float size = 0;
+    std::wstring model; // ModelNameN trimmed of spaces and tabs, as the engine loads it, without .mmh
+    float size = 0;     // SizeN
+
+    // Returns the model's file, "fxc_wisp_c.mmh".
+    std::wstring File() const;
+};
+
+// The model an effect is drawn with and how much it is scaled.
+struct Chosen
+{
+    Sized model;
+    float scale = 1; // the owner's size over the model's: 1 where either is 0
 };
 
 // An effect's row of the visual effects table.
@@ -69,10 +80,13 @@ struct Row
     std::wstring type; // "D" (601 rows), "F" (381), "T" (9), "C" (1)
     bool fixedOrientation = false;
     bool alignToGround = false;
-    std::wstring model;       // ModelName: the .mmh without its extension, as written
-    std::vector<Sized> sizes; // ModelName1 to 3 with Size1 to 3, those that name a model
-    std::wstring tree;        // BlendTreeName: the .anb without its extension
-    bool crust = false;       // CrustEffect
+    // ModelName1 to 3 with Size1 to 3: the leading ones that name a model, and ModelName2 and 3 only
+    // when Size1 is above 0, as the engine's row loader reads them. The ModelName column is no
+    // part of it: the engine never reads it for this table (it equals ModelName1 in 991 of the
+    // vanilla table's 993 rows, and the other two have both empty).
+    std::vector<Sized> sizes;
+    std::wstring tree;  // BlendTreeName: the .anb without its extension
+    bool crust = false; // CrustEffect
     Sound impact;
     Sound duration;
     Sound cessation;
@@ -82,8 +96,12 @@ struct Row
     std::int64_t priority = 0;
     bool showInPaperDoll = false;
 
-    // Returns the model's file, "fxc_wisp_c.mmh"; empty for a row with no model.
-    std::wstring ModelFile() const;
+    // Returns the model the engine takes for an owner of a size, as it chooses: with a size and
+    // Size1 above 0 and several models, the one whose size is nearest the owner's (a tie the
+    // smaller, one past the last size the last), else the first; scaled by owner size over its size.
+    // @param ownerSize the owning creature's apr_base PerSpace; 0 for a location or anything but a creature
+    // @return nothing for a row with no model
+    std::optional<Chosen> ModelFor(float ownerSize) const;
     // Returns the tree's file, "fxc_wisp_c.anb"; empty for a row with no tree.
     std::wstring TreeFile() const;
 };
@@ -311,7 +329,6 @@ struct Item
     model::Node node; // its name, kind ("nemt", "nplt", "crst" ...), place in the tree, transform and exports
     std::optional<Emitter> emitter;                            // a "nemt"
     std::optional<Light> light;                                // an "nplt"
-    std::optional<std::uint8_t> crustHook;                     // a "crst": MMHNodeCrustHookID
     std::wstring material;                                     // a "nemg"'s or a "mshh"'s MMHMaterialObject
     std::optional<std::array<std::array<float, 4>, 2>> bounds; // its "bbox": the least and most corners
     std::vector<Raw> fields; // every field of its struct that is no list nor struct, as the file has it

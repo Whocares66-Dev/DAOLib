@@ -109,6 +109,7 @@ MORPHCONFIG = "src/dao/core/MorphConfig.cpp"
 CLIP = "src/dao/core/Clip.cpp"
 EFFECT = "src/dao/core/Effect.cpp"
 FEV = "src/dao/core/Fev.cpp"
+MODEL = "src/dao/core/Model.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -1386,10 +1387,16 @@ MUTANTS: list[Mutant] = [
         ".parameter = static_cast<Parameter>(exported.controllerType)};",
     ),
     Mutant(
-        "effect-crust-hook: a crust hook keeps its id, the place on the creature it is",
-        EFFECT,
-        "        item.crustHook = U8(from, kCrustHookId);\n",
+        "model-crust-hook: a crst node keeps its hook id, the place on the creature it is",
+        MODEL,
+        "            node.crustHook = static_cast<std::uint8_t>(*hook);\n",
         "",
+    ),
+    Mutant(
+        "effect-model-nearest: the model whose size is nearer the owner's is taken, as the engine does",
+        EFFECT,
+        "sizes[i].size - ownerSize < ownerSize - sizes[i - 1].size",
+        "sizes[i].size - ownerSize > ownerSize - sizes[i - 1].size",
     ),
     Mutant(
         "clip-event-time: an event's time is a double, in seconds",

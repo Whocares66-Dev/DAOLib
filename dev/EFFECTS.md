@@ -12,8 +12,8 @@ There is no `.vfx` resource. An effect is four kinds of file, all GFF4, named fo
 
 m2da_base names table 8 "Visual Effects", prefix `vfx_`: `vfx_base.gda` and the add-ins' `vfx_base_*.gda`, `vfx_str.gda` and kin (enciphered, not read). An ID in it is what a creature's appearance (apr_base's Crust_Effect: 3006 for `cn_wispa`) and the scripts' effects name. Its columns: ID, Label, Type, FixedOrientation, AlignToGround, ModelName, ModelName1, Size1, ModelName2, Size2, ModelName3, Size3, BlendTreeName, CrustEffect, SoundImpact, SoundImpactVolume, SoundImpactPitch, SoundDuration, SoundDurationVolume, SoundDurationPitch, SoundCessation, SoundCessationVolume, SoundCessationPitch, Tint, LoadGlobal, PauseAnimate, Priority, ShowInPaperDoll.
 
-- ModelName is the model's file without `.mmh`, BlendTreeName the tree's without `.anb`. They are the same name in 991 rows; 928 rows name one of the 600 `fx*.mmh`, 63 another (`SR_PTY`, the selection rings; `fxm_*`; test rows), 2 none. 899 name an `fx*.anb`, 4 none. One ModelName starts with a space (4024, `" fxe_R_Ripple_aoe_P"`); the reader keeps it as written.
-- ModelName1 is ModelName in every row. Seven rows (4007, a fire; 30005 and kin, the rings) name three models with their sizes: 0.35, 1.3 and 2.5 for the fires small, medium and large. By the look of it the engine takes the model whose size suits what the effect is on; not read.
+- ModelName1 to 3 are the model's file without `.mmh` (ModelName, which the engine never reads, equals ModelName1 in 991 of the 993 rows; the other two have both empty), BlendTreeName the tree's without `.anb`. Model and tree are the same name in 991 rows; 928 rows name one of the 600 `fx*.mmh`, 63 another (`SR_PTY`, the selection rings; `fxm_*`; test rows), 2 none. 899 name an `fx*.anb`, 4 none. One ModelName starts with a space (4024, `" fxe_R_Ripple_aoe_P"`); the engine trims spaces and tabs before it loads the name, and so does the reader.
+- ModelName1 is ModelName in every row. Seven rows (4007, a fire; 30005 and kin, the rings) name three models with their sizes: 0.35, 1.3 and 2.5 for the fires small, medium and large. The engine takes the model whose Size is nearest the owner's `PerSpace` and scales it by `PerSpace / Size`, ModelName2 and 3 read only when Size1 > 0 (lib-agent-2, 2026-10-18; the section on the model's choice below); `effect::Row::ModelFor` does the same.
 - Type is `D` in 601 rows, `F` in 381, `T` in 9 (the sprite armies), `C` in one, empty in one. `F` rows' trees are mostly the impact alone (323 of 381), `D` rows' the three phases (395 of 601): by the look of it `F` is an effect that plays once and `D` one that lasts.
 - CrustEffect is 1 in 637 rows, a crust (an effect on a creature, at its crust hooks). The sounds are sound events, `vfx_spells/vfx_new/monster/fxc_wisp_c_dur_n` and kin, one a phase.
 
@@ -68,7 +68,7 @@ A clip's events (`<clip>.evt`, `clip::EventsOf`) are a list (AnimationEventList,
 
 ## What is not read
 
-- What the files hold that the runtime section does not explain: the attachment types 1 and 4 (`emat`), the remote material, the target groups (`emtg`), `nemg`'s own material, and which of ModelName1 to 3 the engine takes.
+- What the files hold that the runtime section does not explain: the attachment types 1 and 4 (`emat`), the remote material, the target groups (`emtg`), `nemg`'s own material.
 - What Type `T` and `C`, Tint, LoadGlobal and Priority do.
 - No tree of the game's has a `vfxcast` node, the runtime's first phase; one has `vfx` (`.cust.ani` in two), which the phases do not name.
 - Where the two readings differ: the runtime section reads WorldAxisAcceleration as a vec4, where the files' field is a Vector3 (type 10) in every emitter.

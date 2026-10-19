@@ -205,20 +205,20 @@ m2da::Merged Effects()
 {
     m2da::Merged table;
     for (const auto *name : {"ID", "Label", "Type", "ModelName", "ModelName1", "Size1", "BlendTreeName", "CrustEffect",
-                             "SoundDuration", "SoundDurationVolume", "SoundDurationPitch"})
+                             "SoundDuration", "SoundDurationVolume", "SoundDurationPitch", "ModelName2", "Size2"})
     {
         table.columns.push_back({.hash = dao::core::GdaColumnHash(name), .type = std::nullopt});
     }
     const auto row = [&](bool taken, const wchar_t *model) {
-        table.rows.push_back(
-            {.part = taken ? 0U : 1U,
-             .cells = {std::int64_t{3006}, std::wstring(L"Wisp Crust"), std::wstring(L"D"), std::wstring(model),
-                       std::wstring(model), 0.5, std::wstring(model), std::int64_t{1},
-                       std::wstring(L"vfx_spells/vfx_new/monster/fxc_wisp_c_dur_n"), -3.0, 0.0},
-             .id = 3006,
-             .conflict = true,
-             .taken = taken,
-             .alike = {}});
+        table.rows.push_back({.part = taken ? 0U : 1U,
+                              .cells = {std::int64_t{3006}, std::wstring(L"Wisp Crust"), std::wstring(L"D"),
+                                        std::wstring(L"never_read"), std::wstring(model), 0.5, std::wstring(model),
+                                        std::int64_t{1}, std::wstring(L"vfx_spells/vfx_new/monster/fxc_wisp_c_dur_n"),
+                                        -3.0, 0.0, std::wstring(L" fxc_wisp_big_c	"), 1.5},
+                              .id = 3006,
+                              .conflict = true,
+                              .taken = taken,
+                              .alike = {}});
     };
     row(false, L"fxc_dropped");
     row(true, L"fxc_wisp_c");
@@ -253,18 +253,27 @@ TEST_CASE("an effect's row names its model and tree, the row the game takes of i
     const m2da::Merged effects = Effects();
     const auto row = effect::RowOf(effects, 3006);
     REQUIRE(row);
-    CHECK(row->model == L"fxc_wisp_c");
-    CHECK(row->ModelFile() == L"fxc_wisp_c.mmh");
+    REQUIRE(row->ModelFor(0));
+    CHECK(row->ModelFor(0)->model.File() == L"fxc_wisp_c.mmh");
     CHECK(row->TreeFile() == L"fxc_wisp_c.anb");
     CHECK(row->type == L"D");
     CHECK(row->crust);
     CHECK(row->duration.name == L"vfx_spells/vfx_new/monster/fxc_wisp_c_dur_n");
     CHECK(row->duration.volume == Approx(-3.0F));
-    REQUIRE(row->sizes.size() == 1);
+    REQUIRE(row->sizes.size() == 2); // ModelName is no part of it; ModelName2 is trimmed
     CHECK(row->sizes[0].size == Approx(0.5F));
+    CHECK(row->sizes[1].model == L"fxc_wisp_big_c");
+    // The engine's choice by the owner's size: the nearest, a tie the smaller, scaled to it.
+    CHECK(row->ModelFor(0.3F)->model.model == L"fxc_wisp_c");
+    CHECK(row->ModelFor(0.3F)->scale == Approx(0.6F));
+    CHECK(row->ModelFor(0.9F)->model.model == L"fxc_wisp_c");
+    CHECK(row->ModelFor(1.1F)->model.model == L"fxc_wisp_big_c");
+    CHECK(row->ModelFor(1.1F)->scale == Approx(1.1F / 1.5F));
+    CHECK(row->ModelFor(9.0F)->model.model == L"fxc_wisp_big_c");
+    CHECK(row->ModelFor(0)->scale == Approx(1.0F));
     CHECK(row->impact.name.empty());
     CHECK_FALSE(effect::RowOf(effects, 3007));
-    CHECK(effect::Row{}.ModelFile().empty());
+    CHECK_FALSE(effect::Row{}.ModelFor(1.0F));
 }
 
 TEST_CASE("an effect's model is its nodes, each read by its kind", "[effect]")
@@ -293,7 +302,7 @@ TEST_CASE("an effect's model is its nodes, each read by its kind", "[effect]")
     const effect::Item &hook = read->items[1];
     CHECK(hook.node.kind == "crst");
     CHECK(hook.node.parent == 0);
-    CHECK(hook.crustHook == std::optional<std::uint8_t>{1});
+    CHECK(hook.node.crustHook == std::optional<std::uint8_t>{1});
 
     const effect::Item *glow = read->Find(L"GLOW");
     REQUIRE(glow != nullptr);
@@ -430,7 +439,7 @@ TEST_CASE("the game's effects in game/effects, when there, read whole", "[effect
             const effect::Item *glow = read->Find(L"glow");
             REQUIRE(glow != nullptr);
             CHECK(glow->emitter->birthRate == Approx(7.0F));
-            CHECK(read->items[1].crustHook == std::optional<std::uint8_t>{1});
+            CHECK(read->items[1].node.crustHook == std::optional<std::uint8_t>{1});
         }
     }
     // The counts read 2026-10-18 in the 600 effect models and 1,070 event files the game takes.

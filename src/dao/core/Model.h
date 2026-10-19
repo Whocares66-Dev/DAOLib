@@ -182,6 +182,9 @@ struct Node
     Quaternion rotation{0, 0, 0, 1};
     std::optional<float> scale;
     std::optional<int> bone; // its index among the model's bones, if it is one
+    // A crst node's MMHNodeCrustHookID (6235): the place on a creature it is the effect's hook for,
+    // which a creature's hook of the same id carries it to (dev/EFFECTS.md).
+    std::optional<std::uint8_t> crustHook;
     std::optional<MeshRef> mesh;
     // Its exports, its children of kind xprt: a clip's channel names one of them, not the node
     // ("doorlow_rotation" for the node DoorLow).

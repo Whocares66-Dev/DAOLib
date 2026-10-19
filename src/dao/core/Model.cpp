@@ -227,6 +227,13 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
     node.kind = from.Label();
     node.parent = parent;
     TransformOf(from, node);
+    if (node.kind == "crst")
+    {
+        if (const auto hook = Number(from, kCrustHookId))
+        {
+            node.crustHook = static_cast<std::uint8_t>(*hook);
+        }
+    }
     if (const auto bone = Number(from, kBoneIndex); bone && *bone >= 0)
     {
         node.bone = static_cast<int>(*bone);

@@ -22,6 +22,7 @@ inline constexpr std::uint32_t kTranslation = 6047;
 inline constexpr std::uint32_t kRotation = 6048;
 inline constexpr std::uint32_t kScale = 6278;
 inline constexpr std::uint32_t kBoneIndex = 6254;
+inline constexpr std::uint32_t kCrustHookId = 6235; // a crst node's MMHNodeCrustHookID
 inline constexpr std::uint32_t kBonesUsed = 6255;
 inline constexpr std::uint32_t kTotalBones = 6256;
 inline constexpr std::uint32_t kChildren = 6999;
