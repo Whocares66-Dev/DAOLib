@@ -496,6 +496,38 @@ Examples (checked with ghilana): `bhm600ar_fade_harrowing.are` Name strref 21857
 - The text field's font and any fixed-case formatting in `minimap.gfx`'s timeline/XML.
 - Other languages: only `en-us` strings were read.
 
+#### The area map's explored cells and its notes (read 2026-10-20 by lib-agent-2, DAOParagonEngine #19)
+
+Checked in the disassembly, the movies' ActionScript (map.gfx's `Map.as`, `SharedMap.as`, `MapNoteIcon.as`, `PlotMapIcon.as`) and the data; [I] inferred. Nothing was run.
+
+##### The explored cells
+
+- **A bit a 6 m cell, on the area** (`CCArea+0x4F8`, built at the area's load by 0x007C9890): its rectangle is the `_mmi` one above (Left, Bottom, Right, Top). `0x007C9580` sizes it: W = trunc((Right − Left) / 6), H = trunc((Top − Bottom) / 6), the cell the double 6.0 at 0xB1B7C0; (W·H)/8 + 1 bytes, zeroed.
+- **Only the main controlled creature marks it** (`MarkPosition` 0x007C9D20): from its position sync (0x006B5EF0) and when an area becomes the current one (0x0068819A). A cell is marked only when the creature's cell changes: cell = round to nearest of ((x − Left)/(Right − Left)·W, (y − Bottom)/(Top − Bottom)·H) (0x007C9740), clamped to 0..W and 0..H, and its bit set if inside the grid, idx = y·W + x, `bits[idx >> 3] |= 1 << (idx & 7)` (0x007C99C0). Followers mark nothing; nothing depends on what is seen.
+- **Saved raw** as `SavegameAreaMap` (16016), a list of the bytes in the area's save record (0x6845C5). At the load (0x68BB75) it is taken only if its size is the grid's, then **OR-merged with every area `LinkAreaMiniMaps` links it to** (`CCModule+0x340`, 0x00602AF0; 0x68BBC4–0x68BDC0), so explored ground is shared between linked areas (Kings Camp and its night variant, for one). Nothing clears it; `DisableMiniMap` (519) has no backend.
+
+##### The `mapmask` texture
+
+- **`GUI::GUIMap`'s builder** (0x0072F5D0) makes a 256 × 256 render texture named **"mapmask"** (the string's only use, 0xB19F1C), and the brushes `mapvisbrush` (`GUIMaterial_MaxAlpha.mat`: BLENDOP_MAX, src and dest ONE; `mapvisbrush.dds` 64 × 64, black, alpha a soft irregular blob) and `mapfogbrush` (MIN; never drawn).
+- **Redrawn from nothing on every update while the full map screen (scene 0xF) is open** (`GUIMap` slot 5 0x0072F410 → 0x007C9D70, run on the render thread by 0x007C9C60): cleared to (0, 0, 0, 0), then for every set cell the brush quad is stamped (0x0072F040) at clip (2·ix/W − 1, 2·iy/H − 1), the cell's lower-left corner, y up; its edge 180 / (Right − Left) clip units, about 90 m whatever the height; turned `rand() % 360` degrees with `srand` seeded by the bits of (x·10 + y), so a repaint is the same picture. The texture covers the whole `_mmi` rectangle, not the Width/Height fraction. It is not saved; it is redrawn from the bits.
+- **In the movie:** `Map.InitializeAreaMap` loads `img://mapmask.dds?Width=<OriginalWidth>&Height=<OriginalHeight>` into `MapMask_mc` (OriginalWidth = the map picture's width × `Area.MinimapWidth`, and the same for the height) and sets its blend mode to **"erase"**. The picture is loaded twice beneath and above it: `MapImageAlpha_mc` with "erase", `MapImage_mc` with "alpha" (depths 1 the mask, 3, 5, then the icons at 7). `ScaleformManager::LoadImage` (0x00516A20) finds the name as a texture [I for the lookup finding this live render texture; no "mapmask" resource exists].
+- **Polarity is not settled:** the engine leaves alpha 0 where the party has not been and up to 255 inside the stamps. What GFx makes of the three layers' "alpha" and "erase" modes was not run. A screenshot of a fresh area against one walked, through Eluvian, settles it.
+
+##### The notes on the map
+
+- **MapNotes** are waypoints alone, held in the singleton `MapNoteList` (0x00C38D30) at +0x58: those with `HasMapNote` (+0x440) and `MapNoteEnabled` (+0x444) in the player's area, added or removed by `CCWayPoint::UpdateMapNoteList` (0x007C4370) at the waypoint's load (0x007C4860), its area set (0x007C491F), `SetMapPinState` (0x007C493A) and its destructor. Nothing sweeps the list on an area change [I: entries of an area left loaded stay]. `.MapNote` is the waypoint's LocString (+0x44C); `.Icon` (+0x480) is `waypointtypes`' (table 106) `Icon` column for its MapNoteType (`ico_mm_mapPin`, `ico_mm_exit`, `ico_mm_store`), a library symbol the movie adds as a child.
+- **PlotGivers** (`Journal+0x150`, rebuilt by 0x006F1FE0): the objects whose plot-giver flag (+0x25A) is set, in the player's area and in the world, only while the PlotAssist option (`[0x00C32938]+0xA8`) is on.
+- **PlotDestinations** (`Journal+0x16C`, rebuilt by 0x006F20E0): for each tag in the journal's destination map, each object of that tag in the player's area and in the world, as an entry with `.Object`, `.Tooltip` (the plot's name: the active plot's if one of the tag's plots is active, else the first's) and `.ActiveQuest`. The map is filled when a plot flag is set true from its `PlotAssistList` (13019; `PlotAssistTag` 13020, `PlotAssistAdvancesPlot` 13021: false adds the tag, true removes it), and saved (16513–16515). The movie reads `.Object.Name`, `.Object.WorldPositionX/Y` and `.Object.MapNoteVisible`.
+- **When they are rebuilt** (no list per frame): the area load's step 1 (0x006C7061, 0x006C7068), an object made active (0x00698D30, 0x00698D4B), `SetPlotGiver`, a plot flag with a `PlotAssistList`, the PlotAssist option (0x005E173D, 0x005E174F), and 0x006F4135 [I: the active plot changing]. Positions follow through per-entry observers on WorldPositionX and Y, not a rebuild.
+- **`MapNoteVisible`** (an object's +0x25C, false at construction) is written by 0x007C9BF0 → 0x00697970 from 0x007C9A50, inside 0x007C9E30's pass over the area's objects and the party on each map update: **true when an explored cell lies within 34.2 m** (0.95 × 36, the global 0xC38DF4) of the object [C for the write]. A party member's is set straight to 1 when `[0xC32938]+0xA8` > 1 (that setting not identified). The movie hides a note, giver or destination whose MapNoteVisible is false only on the full area map (`ApplyMask`, `Map.as:201`); the minimap ignores it.
+
+##### Not read
+
+- The mask's polarity on screen; the render texture's creation flags (1, 3, 1, 0, 0) and pixel format; the bodies of 0x4EE200 and 0x4D3E30 (the stamp's rotation and transform).
+- Whether the HUD minimap's own `GUIMap` (scene 0x2A) makes a "mapmask" too (only scene 0xF's is repainted); `MinimapRenderOperation` (+0x28), registered but written by nothing found [I: dead].
+- The linked-areas merge's exact name pairing; how the bit list is laid into the save record.
+- What 0x0075F160 and 0x0075EE60 return exactly (taken as the plot's key and its name); `CCObject +0x1AC` and +0x421; whether `Name` resolves for creatures with an empty name; the PlotAssist option's place on the options screen; whether the `ico_mm_*` symbols exist in map.gfx and minimap.gfx.
+
 ### Event Invokes (checked paths; argument shapes read from the call sites)
 
 - Scene lifecycle (`GuiMovie`): `_root.StartSceneFromGame()` (0x00518D20, when OpenMovie shows a scene), `_root.FinishSceneFromGame()` (0x00518CD0, on hide), `_root.Rewind()` (0x00518E00), `_root.PlayScene("Outro")` (`PlayOutro` 0x005119F0, one wide-string argument, then record byte +0x101 set), `MovieUtils.UpdateAllLayouts()` (stage size/layout change), `MovieUtils.IsMovieOnStage`, `MovieUtils.CallFunctionOnMovie` (the GUI system's slots 80 and 81: a generic path and argument forwarded), `MovieUtils.PrintHierarchy` (debug, `0x00606C70`).

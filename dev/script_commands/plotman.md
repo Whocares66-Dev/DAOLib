@@ -47,7 +47,7 @@ Shared facts, all checked:
   - adds the object's id to the journal's plot-giver list at +0x108 (0x006F4640, only if absent), or removes it (0x006F4680);
   - refreshes the journal (0x006F1FE0; probably the map's pins, inferred);
   - calls slot 99 (0x006979A0) to update the object's overhead icon.
-- **The icon (slot 99):** it is set only when the object's +0x1AC is set, the **PlotAssist** option is on (`[0x00C32938]+0xA8`, named at 0x005E8C3C) and there is a party. The icon is `PlotDestination` if the party counts the object as a destination (0x00631830); otherwise `PlotGiver` if +0x25A is set; otherwise none. It goes through the floaty manager (0x00523880 → 0x0063FCF0). Changing the option refreshes every object's icon (0x005E1714). (checked)
+- **The icon (slot 99):** it is set only when the object's +0x1AC is set, the **PlotAssist** option is on (`[0x00C32938]+0xA8`, named at 0x005E8C3C) and there is a party. The icon is `PlotDestination` if the object's destination flag (+0x259, set by slot 97) is set, and none for a member of the active party, which 0x00631830 tests (`CCParty::IsInParty`; corrected 2026-10-20 by lib-agent-2: it is the in-party test, not a destination test); otherwise `PlotGiver` if +0x25A is set; otherwise none. It goes through the floaty manager (0x00523880 → 0x0063FCF0). Changing the option refreshes every object's icon (0x005E1714). (checked)
 - **State:** object+0x25A. This is saved as `SavegameIsPlotGiver` (16455) and put back through slot 98 on load (0x006C0A85). (checked)
 - **Edge cases:**
   - `CCObject`'s slot 98 is `ret 4`, so items, triggers, waypoints, sound objects, AoEs and VFX objects do nothing. Areas, modules and the party fail the cast and do nothing. An invalid id does nothing. (checked)
