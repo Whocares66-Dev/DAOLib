@@ -154,6 +154,7 @@ add_library(
     src/dao/core/Collision.cpp
     src/dao/core/Conversation.cpp
     src/dao/core/Cutscene.cpp
+    src/dao/core/FaceFx.cpp
     src/dao/core/Stage.cpp
     src/dao/core/Wind.cpp
     src/dao/core/DaZip.cpp

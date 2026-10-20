@@ -16,6 +16,7 @@ add_executable(
     test_collision.cpp
     test_crashlog.cpp
     test_cutscene.cpp
+    test_facefx.cpp
     test_stage.cpp
     test_wind.cpp
     test_dazip.cpp
