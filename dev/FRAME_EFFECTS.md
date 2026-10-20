@@ -178,7 +178,10 @@ There is **no glow or bloom mask written into alpha.** No vanilla scene shader w
 - **Under alpha-blended effects (water, particles, glass, character alpha cards):** `1 - a + a^2`, from 0.75 to 1, never lower over a solid.
 - **Under additive effects (spells, fire, glows):** stays 1 (an additive pass only raises alpha).
 - **Pixels nothing draws:** 1, from the (0,0,0,1) clear (the main view's clear is [inferred]); their rgb is 0, so no glow.
-- **Open, from play:** DAOParagonEngine's frame work measured vanilla at 8 samples (the Circle tower and the Fade, 2026-10-19). There, `da_bloom` adds nothing visible on opaque level geometry, the terrain included, but does on the sky, although by the exe both carry alpha 1. Unresolved: it needs a capture of the LightMask and of the back buffer's alpha before the bloom.
+- **Open, from play:** DAOParagonEngine's frame work measured vanilla at 8 samples (the Circle tower and the Fade, 2026-10-19). There, `da_bloom` adds nothing visible on opaque level geometry, the terrain included, but does on the sky.
+  - **Alpha is not the reason** (elgara-agent's capture the same day, vanilla, Redcliffe, at 8 samples and at none). Opaque geometry's alpha is about 1 before `da_bloom`, `mml_fOpacityMultiplier` is 1.0 on every draw, and `COLORWRITEENABLE` is 15.
+  - **Nor is the shader.** The bloom's first pass, captured as hash f96e4b9d285176af, is the FNV-1a 64 of `illuminationmaskmult.psh.fxo` from `patch002.erf`, the copy the game takes. Disassembled with `fxc /dumpbin`, it is the same code as `shaders.erf`'s (only the debug path differs): k = (luma + fBrightness)(1 + fContrast), oC0 = c·k.
+  - **Still open: the inputs,** the `fBrightness`, `fContrast` and `fGlowIntensity` vanilla applies per area, against what Paragon applies.
 - **A peer port that keeps alpha at 1 everywhere** matches vanilla on solids, sky and additive effects. It differs only on cut-outs and hair (vanilla weaker where `a*k < 1`) and slightly under blended effects. It must keep the blur's `centre.a >= mean.a` selection to match vanilla's bloom shape.
 
 ## The blur behind full-screen GUI screens (guiblur; lib-agent-2, 2026-10-19)
