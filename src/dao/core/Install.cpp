@@ -72,10 +72,13 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <fstream>
+#include <iterator>
 #include <span>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 
 namespace dao::core::install
 {
@@ -427,6 +430,33 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
     record.files = read.files.size();
     const auto index = static_cast<std::uint32_t>(archives_.size());
     const bool readable = record.header.Encryption() == 0 && record.header.Compression() == 0;
+    // An archive the index cannot read takes its copies' bytes from plain files where the program
+    // has them (DAOLib #211): its folder under archiveCopies, listed once, matched by name in any
+    // case as the game's names are.
+    std::unordered_map<std::string, std::string> plain;
+    if (!readable && !options_.archiveCopies.empty())
+    {
+        const std::string sourceFolder = Lower(source.folder);
+        const std::string name = sourceFolder.substr(sourceFolder.find_last_of('/') + 1);
+        const std::string inside =
+            record.path.starts_with(source.folder + "/") ? record.path.substr(source.folder.size() + 1) : record.path;
+        record.copies = options_.archiveCopies / fs::path(std::u8string(name.begin(), name.end())) /
+                        fs::path(std::u8string(inside.begin(), inside.end()));
+        std::error_code missing;
+        for (const auto &file : fs::directory_iterator(record.copies, missing))
+        {
+            const std::u8string own = file.path().filename().u8string();
+            plain.emplace(Lower(std::string(own.begin(), own.end())), std::string(own.begin(), own.end()));
+        }
+        if (plain.empty())
+        {
+            record.copies.clear();
+        }
+        else
+        {
+            record.copied.resize(read.files.size());
+        }
+    }
     archives_.push_back(std::move(record));
     ++source.archives;
     for (std::size_t e = 0; e < read.files.size(); ++e)
@@ -436,10 +466,19 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
         {
             continue;
         }
+        bool covered = false;
+        if (!plain.empty())
+        {
+            if (const auto found = plain.find(Lower(name)); found != plain.end())
+            {
+                archives_.back().copied[e] = found->second;
+                covered = true;
+            }
+        }
         gathered_.emplace_back(std::move(name),
                                Copy{pending.source, index, static_cast<std::uint32_t>(e), std::min(size, kLargest)});
         ++source.files;
-        source.unreadable += readable ? 0 : 1;
+        source.unreadable += readable || covered ? 0 : 1;
         ++stats_.copies;
     }
 }
@@ -542,8 +581,18 @@ bool Index::Readable(const Copy &copy) const
     {
         return true;
     }
-    const auto &header = archives_[copy.archive].header;
-    return header.Encryption() == 0 && header.Compression() == 0;
+    const ArchiveRecord &archive = archives_[copy.archive];
+    const auto &header = archive.header;
+    return (header.Encryption() == 0 && header.Compression() == 0) ||
+           (copy.entry < archive.copied.size() && !archive.copied[copy.entry].empty());
+}
+
+bool Index::Whole(std::string_view uid) const
+{
+    const std::string id = "addin:" + Lower(std::string(uid));
+    const auto found = std::ranges::find_if(sources_, [&](const Source &s) { return Lower(s.id) == id; });
+    return found != sources_.end() && found->settings && found->settings->enabled.value_or(false) &&
+           found->unreadable == 0;
 }
 
 std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
@@ -562,6 +611,21 @@ std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
         {
             return std::nullopt;
         }
+        return bytes;
+    }
+    if (const ArchiveRecord &record = archives_[copy.archive];
+        copy.entry < record.copied.size() && !record.copied[copy.entry].empty())
+    {
+        // A plain copy of an archive the index cannot read (DAOLib #211): the file whole.
+        const std::string &file = record.copied[copy.entry];
+        std::ifstream in(record.copies / fs::path(std::u8string(file.begin(), file.end())), std::ios::binary);
+        std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        if (!in.eof() && in.fail())
+        {
+            return std::nullopt;
+        }
+        std::vector<std::byte> bytes(chars.size());
+        std::memcpy(bytes.data(), chars.data(), chars.size());
         return bytes;
     }
     std::shared_ptr<erf::Archive> archive;

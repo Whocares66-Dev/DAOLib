@@ -234,6 +234,26 @@ TEST_CASE("a copy in an enciphered archive is listed and not read", "[install]")
     REQUIRE(copies != nullptr);
     CHECK_FALSE(index->Readable(copies->front()));
     CHECK_FALSE(index->Read(copies->front()));
+    CHECK_FALSE(index->Whole("DAO_PRC_CP_1"));
+}
+
+TEST_CASE("an enciphered archive's copy reads from its plain copy in the folder the program names", "[install]")
+{
+    const Folder folder;
+    // The archive's full name kept as a folder, the file in another case than the archive's (DAOLib #211).
+    folder.root.Write(L"copies/dao_prc_cp_1/core/data/2da.erf/ABI_CP1.gda", files::FromText("plain"));
+    const auto index = install::Index::Build(folder.root.path / L"game", folder.root.path / L"documents",
+                                             {.archiveCopies = folder.root.path / L"copies"});
+    const auto *copies = index->Find("abi_cp1.gda");
+    REQUIRE(copies != nullptr);
+    CHECK(copies->front().source == index->SourceOf("addin:dao_prc_cp_1"));
+    CHECK(index->Readable(copies->front()));
+    CHECK(Text(index->Read(copies->front())) == "plain");
+    const auto *addin = Named(*index, "addin:dao_prc_cp_1");
+    REQUIRE(addin != nullptr);
+    CHECK(addin->unreadable == 0);
+    CHECK(index->Whole("dao_prc_cp_1"));
+    CHECK_FALSE(index->Whole("DAO_PRC_NONE"));
 }
 
 TEST_CASE("an install with no Documents folder has no Documents sources", "[install]")

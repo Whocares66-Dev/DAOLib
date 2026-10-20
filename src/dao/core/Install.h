@@ -76,6 +76,10 @@ struct ArchiveRecord
     std::string path; // relative to its source's base folder, UTF-8 with forward slashes
     erf::Header header;
     std::size_t files = 0;
+    // An archive the index cannot read, with plain copies under Options::archiveCopies: its folder
+    // there, and by entry the copy's file name in it, empty where there is none.
+    std::filesystem::path copies;
+    std::vector<std::string> copied;
 };
 
 inline constexpr std::uint32_t kLoose = 0xFFFFFFFF;
@@ -123,6 +127,12 @@ struct Options
     // A folder to keep the archives' directories in between builds (archives.bin): an archive
     // whose path, size and last-write time are as kept is not read again. Empty for none.
     std::filesystem::path cache{};
+    // A folder of plain copies of the archives the index cannot read, that the program names; none
+    // by default. An archive's copies are in <folder>/<its source's folder name, in lower case>/<the
+    // archive's path in that folder>/, the archive's full name kept: dao_prc_cp_1/module/data/
+    // kcc_designerscripts.erf/kcc100.ncs. A copy stays the archive's, at its place in the order; only
+    // its bytes come from the plain file.
+    std::filesystem::path archiveCopies{};
 };
 
 // A file by its name, and a copy of it.
@@ -227,7 +237,12 @@ class Index
     // and its archive's path, or its own file's folder, in lower case.
     std::string EngineSource(const Copy &copy) const;
 
-    // Returns true if a copy's bytes can be read: not in an enciphered or compressed archive.
+    // Returns whether an add-in is installed, enabled in AddIns.xml, and has every copy readable:
+    // what the scripts' IsPackageLoaded asks.
+    // @param uid the add-in's UID, in any case: "DAO_PRC_CP_1"
+    bool Whole(std::string_view uid) const;
+    // Returns true if a copy's bytes can be read: not in an enciphered or compressed archive, or
+    // with a plain copy under Options::archiveCopies.
     bool Readable(const Copy &copy) const;
     // Returns a copy's bytes.
     // @return nullopt if it is not Readable, or its file has gone or shrunk since the index. An
