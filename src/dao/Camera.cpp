@@ -41,6 +41,7 @@
 #include "dao/Module.h"
 #include "dao/RenderCamera.h"
 #include "dao/SafeRead.h"
+#include "dao/World.h"
 #include "dao/core/Angle.h"
 #include "dao/generated/ScriptApi.h"
 
@@ -556,7 +557,8 @@ float CloseDistance()
 // near, far), `ret 0x10`, writes all four and sets +0x30, and slot 34
 // (0x00465AA0) remakes the projection (+0x40) from them through slot 40
 // (0x00A25AD0) when +0x30 is set: 0x004D3A60 (out, fov, the view's aspect
-// times +0x144, near, far), D3DXMatrixPerspectiveFovLH's arguments. Slot 33
+// times +0x144, near, far), D3DXMatrixPerspectiveFovLH's arguments but not
+// its matrix (below, DAOLib #204). Slot 33
 // (0x00A259F0) answers +0x140. The constructor's default is pi/2. Slot 3
 // (0x00A25A50), __thiscall (fov), `ret 4`, writes +0x140 alone and sets
 // +0x30; no other code writes +0x140 but the constructor (0x00A25B30). A
@@ -579,6 +581,9 @@ namespace
 
 constexpr std::size_t kFieldOfView = 0x140; // radians, vertical
 constexpr std::size_t kRemake = 0x30;       // the projection is to be made again
+constexpr std::size_t kMatrix = 0x40;       // the projection, 16 floats
+constexpr std::size_t kNearPlane = 0x130;
+constexpr std::size_t kFarPlane = 0x134;
 constexpr std::size_t kSetFieldOfViewSlot = 3;
 constexpr std::size_t kSetPerspectiveSlot = 41;
 
@@ -669,6 +674,49 @@ std::optional<float> FieldOfView()
     const auto radians =
         camera != nullptr ? TryRead<float>(reinterpret_cast<std::uintptr_t>(camera) + kFieldOfView) : std::nullopt;
     return radians ? std::optional(*radians / kDegree) : std::nullopt;
+}
+
+// The projection (DAOLib #204, for Eluvian #156 and DAOPhotoCam #1): the
+// fields #126 read, and the matrix slot 40 makes from them (0x00A25AD0 calls
+// 0x004D3A60, read 2026-10-19: 1 / tan(fov / 2) at [5], that over the aspect
+// at [0]). The aspect is the view's times +0x144, the view's from 0x00A25AA0
+// (1 unless +0x148 is set), so it is taken from the matrix as [5] / [0]
+// rather than worked out again.
+//
+// Seen in play 2026-10-19 by Eluvian's session (instance eluvian-test, 1600 x
+// 1000, the Forest Clearing), the matrix in explore read row major as
+// (1.082533 0 0 0 / 0 1.732052 0 0 / 0 0 -1.000037 -0.150006 / 0 0 -1 0):
+// right-handed, depth 0 to 1, for column vectors, the transpose of
+// D3DXMatrixPerspectiveFovRH, not the LH one its arguments suggested. The
+// field of view 59.99995, aspect 1.6 (times 1000 is the width), far 4000 in
+// every state; near 0.15 exploring, 0.01 in DAOPhotoCam's free view and
+// 0.25 after it (the fly camera mode's entry passes 0.25 and 4000 to a
+// renderer setter, 0x0076D5D9 to 0x0076D5F6; what sets 0.01 is not read).
+// A field of view of 40 held in the free view read 40.
+std::optional<Projection> CurrentProjection()
+{
+    void *camera = detail::RenderCamera();
+    const auto size = world::ScreenSize();
+    if (camera == nullptr || !size)
+    {
+        return std::nullopt;
+    }
+    const auto at = reinterpret_cast<std::uintptr_t>(camera);
+    const auto fov = TryRead<float>(at + kFieldOfView);
+    const auto nearPlane = TryRead<float>(at + kNearPlane);
+    const auto farPlane = TryRead<float>(at + kFarPlane);
+    const auto matrix = TryRead<std::array<float, 16>>(at + kMatrix);
+    if (!fov || !nearPlane || !farPlane || !matrix || (*matrix)[0] == 0.0F)
+    {
+        return std::nullopt;
+    }
+    return Projection{.fieldOfView = *fov / kDegree,
+                      .aspect = (*matrix)[5] / (*matrix)[0],
+                      .nearPlane = *nearPlane,
+                      .farPlane = *farPlane,
+                      .width = size->width,
+                      .height = size->height,
+                      .matrix = *matrix};
 }
 
 void SetFieldOfView(std::optional<float> degrees)

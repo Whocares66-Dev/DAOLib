@@ -100,6 +100,7 @@
 #include "dao/ObjectId.h"
 #include "dao/Structures.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -472,6 +473,26 @@ std::optional<float> FieldOfView();
 // It holds through the game's own changes to it, conversations' and cutscenes' among them, and
 // from one area to the next. Call on the game thread.
 void SetFieldOfView(std::optional<float> degrees);
+
+// The projection the scene is drawn with.
+struct Projection
+{
+    float fieldOfView = 0.0F; // the vertical angle, top to bottom, in degrees
+    float aspect = 0.0F;      // width over height, as the projection uses it
+    float nearPlane = 0.0F;   // metres
+    float farPlane = 0.0F;    // metres
+    std::int32_t width = 0;   // the view, in pixels
+    std::int32_t height = 0;
+    // The matrix as the engine keeps it, row major: right-handed, depth 0 to 1, for column
+    // vectors (v' = M v). [0] is [5] over the aspect, [5] is 1 / tan(fov / 2), [10] is
+    // far / (near - far), [11] near * far / (near - far), [14] -1. It is the matrix the last frame
+    // was drawn with; a change made this frame is in it from the next.
+    std::array<float, 16> matrix{};
+};
+
+// Returns the projection the scene is drawn with.
+// @return nullopt with no scene drawn, or off the game thread
+std::optional<Projection> CurrentProjection();
 
 // A view of the world: where the eye is and which way it looks.
 struct View

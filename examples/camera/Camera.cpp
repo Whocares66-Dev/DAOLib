@@ -21,6 +21,9 @@
 //
 // The free view: another key ("DAOLib example: free view") takes the camera from where it is
 // and turns it slowly in place, a sixth of a turn in ten seconds, until pressed again.
+//
+// The projection (CurrentProjection) is logged with each field of view press, and a second into
+// a free view, when the fly camera's own near and far planes are in it.
 #include "dao/Camera.h"
 #include "dao/Frame.h"
 #include "dao/Input.h"
@@ -78,6 +81,16 @@ void Ended(dao::camera::Move move, dao::camera::MoveEnd why)
 
 std::optional<float> g_held; // degrees
 
+void LogProjection(const char *when)
+{
+    if (const auto p = dao::camera::CurrentProjection())
+    {
+        spdlog::info("projection {}: {:.2f} degrees, aspect {:.4f}, near {} far {}, {}x{}; [0] {:.4f} [5] {:.4f}", when,
+                     p->fieldOfView, p->aspect, p->nearPlane, p->farPlane, p->width, p->height, p->matrix[0],
+                     p->matrix[5]);
+    }
+}
+
 void Toggle(float degrees)
 {
     const auto before = dao::camera::FieldOfView();
@@ -86,13 +99,16 @@ void Toggle(float degrees)
     const auto after = dao::camera::FieldOfView();
     spdlog::info("field of view {}: {:.1f} degrees before, {:.1f} after", g_held ? "held" : "given back",
                  before.value_or(-1.0F), after.value_or(-1.0F));
+    LogProjection("at the press");
 }
 
 std::optional<dao::camera::View> g_free;
+int g_freeFrames = 0; // frames since the free view was taken
 
 void ToggleFree()
 {
     g_free = g_free ? std::nullopt : dao::camera::CurrentView();
+    g_freeFrames = 0;
     if (g_free && !dao::camera::SetFreeView(g_free))
     {
         spdlog::info("free view refused: the game is not exploring or fighting");
@@ -112,6 +128,10 @@ void TurnFree()
     if (g_free)
     {
         g_free->yaw += kTurnPerFrame;
+        if (++g_freeFrames == 30)
+        {
+            LogProjection("a second into the free view");
+        }
         if (!dao::camera::SetFreeView(g_free))
         {
             spdlog::info("free view ended by the game");
