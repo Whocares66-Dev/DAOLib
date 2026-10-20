@@ -101,6 +101,10 @@ struct Entrance
     std::int32_t column = 0; // the grid's cell
     std::int32_t row = 0;
     std::vector<Edge> edges;
+    // On the first level of a grid with a second: the entrance of its parent block on the second
+    // level that covers it, an index into that block's entrances; -1 otherwise. The parent block
+    // is (column / 2) + the second level's columns * (row / 2), by the first level's block.
+    std::int32_t parent = -1;
 };
 
 // One level of the coarse graph: its blocks row by row, each with its entrances.

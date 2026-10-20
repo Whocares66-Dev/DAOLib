@@ -119,7 +119,8 @@ struct Cut
     std::int32_t columns = 0;
     std::int32_t rows = 0;
     std::span<const Sector> sectors;
-    bool second = false; // places in sixteenths of the block, not cells
+    bool second = false;  // places in sixteenths of the block, not cells
+    bool parents = false; // a first level under a second: each entrance's parent byte before the records
 };
 
 // An entrance's cell from its place byte in block `block`.
@@ -151,6 +152,14 @@ std::vector<Entrance> EntrancesOf(const Cut &cut, std::uint32_t block, std::span
     {
         const auto [column, row] = CellOf(cut, block, memory[first + (2 * k)], size);
         Entrance entrance{.column = column, .row = row, .edges = {}};
+        // The byte before the records, counting back from the first entrance's, is its parent on
+        // the second level (0x00A49F00: memory[offset - k - 1]; the parent block 0x00A49D10). Read
+        // 2026-10-20 by lib-agent-2 and checked over the game's 204 layouts with a second level:
+        // every byte a valid index, 0xFF (none to the engine) in none (DAOLib #215).
+        if (cut.parents && first >= k + 1 && memory[first - k - 1] != 0xFF)
+        {
+            entrance.parent = memory[first - k - 1];
+        }
         const std::size_t to = memory[first + (2 * k) + 1];
         for (std::size_t j = from; j < to && edges + j < memory.size(); ++j)
         {
@@ -198,8 +207,12 @@ std::vector<Level> AbstractionOf(const Grid &grid, const std::vector<Sector> &se
         return out;
     }
     const std::span<const Sector> all(sectors);
-    out.push_back(
-        LevelOf({.blockCells = size, .columns = columns, .rows = rows, .sectors = all.first(first)}, memory, size));
+    out.push_back(LevelOf({.blockCells = size,
+                           .columns = columns,
+                           .rows = rows,
+                           .sectors = all.first(first),
+                           .parents = sectors.size() == first + second},
+                          memory, size));
     if (sectors.size() == first + second)
     {
         out.push_back(LevelOf({.blockCells = 2 * size,

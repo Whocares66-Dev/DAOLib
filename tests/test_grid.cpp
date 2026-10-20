@@ -45,8 +45,9 @@ std::uint32_t Shorts(Builder &b, const std::vector<std::int16_t> &values)
 // 2 rows of cells at (10, 20, 0), a sector size of 2, so a first level of 2 blocks by 1 and a
 // second of 1. The first block's one entrance is at cell (1, 0) with an edge to the second block's
 // entrance, at cell (2, 0), whose edge leads back; the second level's entrance is at 8 sixteenths
-// of its 4-cell block across, cell (2, 0). The cells: 10, 1, 1 with a counter in its high bits, 9,
-// 10, 10; heights 0, 16, -8, 0, 0, 0; sound data -1, 0, 0, 1, -1, -1.
+// of its 4-cell block across, cell (2, 0). Before each first-level block's records is its
+// entrance's parent byte, 0: the second level's one entrance. The cells: 10, 1, 1 with a counter in
+// its high bits, 9, 10, 10; heights 0, 16, -8, 0, 0, 0; sound data -1, 0, 0, 1, -1, -1.
 std::vector<std::byte> LayoutFile()
 {
     Builder b = Start("ARL ", {{"AREA", 96, {{3020, 1, gff4::kStruct, 0}}},
@@ -84,12 +85,13 @@ std::vector<std::byte> LayoutFile()
     const std::size_t second = Struct(b, 4);
     const std::size_t super = Struct(b, 4);
     b.U32(grid + 76, static_cast<std::uint32_t>(sectors - b.data));
+    b.U8(first, 1);
     b.U8(first + 2, 1);
-    b.U8(second, 3);
+    b.U8(second, 5);
     b.U8(second + 2, 1);
-    b.U8(super, 6);
+    b.U8(super, 8);
     b.U8(super + 2, 1);
-    b.U32(grid + 84, Bytes(b, {1, 1, 0x20, 0, 1, 0x60, 0x80, 0}));
+    b.U32(grid + 84, Bytes(b, {0, 1, 1, 0x20, 0, 0, 1, 0x60, 0x80, 0}));
     return b.bytes;
 }
 
@@ -151,6 +153,9 @@ TEST_CASE("a walk grid's coarse levels have their entrances where the exe puts t
     CHECK(first.blocks[1][0].column == 2);
     REQUIRE(first.blocks[1][0].edges.size() == 1);
     CHECK(first.blocks[1][0].edges[0].block == 0); // to the left
+    // Both under the second level's one block, its entrance 0 (DAOLib #215).
+    CHECK(first.blocks[0][0].parent == 0);
+    CHECK(first.blocks[1][0].parent == 0);
 
     const navigation::Level &second = grid->abstraction[1];
     CHECK(second.blockCells == 4);
@@ -159,6 +164,7 @@ TEST_CASE("a walk grid's coarse levels have their entrances where the exe puts t
     CHECK(second.blocks[0][0].column == 2); // 8 sixteenths of 4 cells
     CHECK(second.blocks[0][0].row == 0);
     CHECK(second.blocks[0][0].edges.empty());
+    CHECK(second.blocks[0][0].parent == -1); // the second level has none
 }
 
 TEST_CASE("a layout with no grid has none", "[grid]")
@@ -182,6 +188,8 @@ struct Counts
     std::size_t walls = 0;
     std::size_t outside = 0;
     std::size_t unwalkable = 0; // first-level entrances on a cell that cannot be walked
+    std::size_t parents = 0;    // first-level entrances of two-level grids, each with a parent that is there
+    std::size_t orphans = 0;    // such entrances whose parent is none, or not among its parent block's
 };
 
 // Checks one grid's lists and adds what it holds to the counts.
@@ -196,11 +204,23 @@ void Tally(const navigation::Grid &grid, Counts &counts)
     CHECK((grid.lightSubsets.empty() || grid.lightSubsets.size() == cells));
     REQUIRE(!grid.abstraction.empty());
     counts.twoLevels += grid.abstraction.size() == 2 ? 1 : 0;
-    for (const std::vector<navigation::Entrance> &block : grid.abstraction[0].blocks)
+    const navigation::Level &first = grid.abstraction[0];
+    for (std::size_t index = 0; index < first.blocks.size(); ++index)
     {
-        for (const navigation::Entrance &entrance : block)
+        for (const navigation::Entrance &entrance : first.blocks[index])
         {
             counts.unwalkable += grid.Walkable(entrance.row, entrance.column) ? 0 : 1;
+            if (grid.abstraction.size() == 2)
+            {
+                // The parent block by 0x00A49D10's rule (DAOLib #215).
+                const navigation::Level &second = grid.abstraction[1];
+                const auto column = static_cast<std::int32_t>(index) % first.columns;
+                const auto row = static_cast<std::int32_t>(index) / first.columns;
+                const auto parent = static_cast<std::size_t>((column / 2) + (second.columns * (row / 2)));
+                const bool there = entrance.parent >= 0 && parent < second.blocks.size() &&
+                                   static_cast<std::size_t>(entrance.parent) < second.blocks[parent].size();
+                (there ? counts.parents : counts.orphans) += 1;
+            }
         }
     }
     for (const std::uint8_t cell : grid.cells)
@@ -247,5 +267,7 @@ TEST_CASE("the game's walk grids in game/levels, when there, have whole lists an
         CHECK(counts.walls == 3781551);
         CHECK(counts.outside == 26679058);
         CHECK(counts.unwalkable == 15); // all arena2's, a test arena: its grid changed after its abstraction was made
+        CHECK(counts.parents == 71518); // lib-agent-2's count, 2026-10-20 (DAOLib #215)
+        CHECK(counts.orphans == 0);
     }
 }
