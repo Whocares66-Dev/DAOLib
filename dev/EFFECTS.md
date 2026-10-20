@@ -297,6 +297,30 @@ p'.z += -9.8*Gravity*0.5*(T^2 - (T - h)^2)    // gravity never enters v
   - Then the effect is destroyed.
 - **While paused:** the wisp's `PauseAnimate` is 0, so its effect freezes.
 
+### An effect a level places (read 2026-10-20 by lib-agent-2)
+
+Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngine's tower flames. [C] checked, [I] inferred. Nothing seen in play.
+
+- **What they are** [C]: a room's `.rml` `EnvRoomModelList` places effect models as it places meshes. The Circle tower's candle flames are `fxe_fire_cnd_p` and its statue bowls' fires `fxe_fire_small_p`. Nothing in the `.are`, the `.arl` or a script starts them, and the candle and statue meshes (`prp_cand0x_0`, `prp_candlehold01_0`, `prp_elfstatue03_0`, `prp_steshelf01_0`) have no emitters of their own. The chargen stage's `fxe_cha_sel_p` (`dev/CHARGEN.md`) is placed the same way.
+- **Counts** [C]: `bhm200ar_tower_level_2` (layout `lak304d`) places 241 `fxe_fire_cnd_p`, 19 `fxe_fire_small_p` and 22 `fxe_sunbeam_w_p`. `bhm700ar_tower_basement` (layout `lak302d`) places 61 `fxe_fire_cnd_p` and 14 `fxe_fire_small_p`, with `fxe_moonbm_s_p`, `fxe_swampcloud_p` and `fxe_caustic_p`.
+- **Where** [C]: a lit candle has three `fxe_fire_cnd_p` (scale 1.0 to 1.5) 0.7 to 1.0 m above its origin, e.g. `prp_cand02_0` at (-18.33, -38.89, 0.82) in `lak304d_141` with fires at about (-18.3, -38.9, 1.53 to 1.78). A statue has one `fxe_fire_small_p` about 2 m above its origin, e.g. `prp_elfstatue03_0` at (31.15, -50.91, 1.63) in `lak302d_1103` with its fire at (30.77, -50.98, 3.65). A placed model's level position is the room's position plus its orientation times the model's (`Level.h`'s `InLevel`); only `lak304d_147` is turned. The torch sounds are the area's own `SoundList` entries beside the fires.
+- **Who loads them** [C]: the `.rml` handler (0x005CEA80) loops over every record (0x005CEC60 to 0x005CED21), makes each an object (0x005CC5D0) and sets it up with `0x0053A510(scene, object, record)` (at 0x005CECEE), with no filter on the model's name or kind. 0x0053A510 sets the position, orientation and scale (when not 0), loads the model (0x00537F90), applies `EnvModelCutAwayOverride` (record +0x13C: 1 passes 0 and 2 passes 1 to slot 0x148), hands the user-param map to slot 0x138 (0x005462F0, at 0x0053A759), which gives it to each node's slot 12 (0x005413E0, above), and sets the bounds (slot 0x94). Added to the scene, the effect is presimulated (one step of 0.0666 s for these, presim 0.0333 s).
+- **Each frame** [C, the visibility's meaning I]: an emitter's update (slot 34, 0x00552CF0) skips when `[0xC31650]` slot 0xF8 answers true, the emitter has `UpdateOnlyWhenVisible` (all of these do) and the object's flags (`Object+0x260`, 0x0054F850) lack 0x20. The flags start as 0x4001 (0x0054FCAE). So vanilla's flames neither age nor spawn while culled, and with lives of 0.4 to 1.0 s they are full a second after they come into view; a port that updates them always looks the same.
+- **`fxe_fire_cnd_p`** (patch002.erf) [C], four emitters under `NewDummy_5`:
+  - `Flame01` and `flame02`: `dotblur_add`, 5 and 4 a second, life 1.0, linked ribbons (`LinkParticlesTogether`), orientation 3, speed 0.1, spread 2/2, an age map of three keys with colour (0.8, 0.3, 0.1) and alpha 0, 1, 1, scale multipliers 0.5.
+  - `glow`: `dotblur_add`, 10 a second, life 0.4, orientation 0, the quad on the wick.
+  - `NewEmitter_4`: `Sum_Conj_03`, birth rate 0 in model and clip, so it never emits.
+  - Its tree's `vfxduration` clip keys every value as the model has it, so the clip changes nothing visible. No user parameters on its records.
+- **`fxe_fire_small_p`** (patch002.erf; no tree, no clip) [C], four emitters under `fire_dummy`:
+  - `Glow`: `dotblur_add`, 7 a second, life 0.4, orientation 0, +0.314 in z, age-map colour multiplier alpha 0.1, scale multipliers 1.25.
+  - `FireMeat_4`: `fx_fireringfb_add`, a 4 × 4 flipbook at 24 fps, 5 a second, life 1.0, speed 0.5.
+  - `Flame`: `fx_firetorchfb_add`, a 4 × 8 flipbook at 24 fps as a linked ribbon, 7 a second, orientation 3.
+  - `Distortion_8`: `fx_dis_noise02`, a distortion sprite.
+  - The first three name the user parameter `fire`, and every placed `fxe_fire_small_p` record sets `fire` = (1, 1, 1, 1). A value a record lacks defaults to (0, 0, 0, 1), which would tint them black.
+- **No light in them** [C for the models]: neither fire model has a light node, so `src/fix/LightFlicker` does nothing to them; a candle's light on the walls is a separate light-only model's.
+- **Core** does not yet read a placed model's `EnvModelUserParamList` (3506: `EnvModelUserParamName` 3507, `EnvModelUserParamValue` 3508, a vec4) into `level::Placed`: DAOLib #212.
+- Not read: who sets the object's flag 0x20 and what `[0xC31650]` slot 0xF8 answers, so whether a fire is presimulated at room load or only once seen; the record's animation and tree path in 0x0053A510, and slots 0x94 and 0x148; which `EnvModelCutAwayOverride` value (0 and 2 seen) hides a model under the camera's cut-away, and whether fire models obey it; whether a level's rooms load all at once or room by room, and what `EnvRoomVisibilityList` does to emitters beyond the cull; the two flipbook materials' shaders and textures.
+
 ### Effects, the open questions: read 2026-10-18
 
 Read in the GOG exe and the game's files by lib-agent-2 (with subagents), for DAOParagonEngine #28's nine questions on lib-agent-2's first effects reading (dev/EFFECTS.md). Not seen in play. Three parts, each a subagent's; spot checks noted in each.

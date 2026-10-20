@@ -211,7 +211,7 @@ For a port that wants the picture: hero at P facing 30 degrees left of +Y, camer
 - The unit of the vertical-FOV argument (degrees inferred from 45/40 and tan(FOV/2) use).
 - The head position H (the head bone's world position) is a runtime value; for the default human male about P.z + 1.6 is a guess.
 - The Background slider's setter (0x0069ED50 and kin); "tint" is from the range 1..20 and the portraits.gda `PortraitTint` column (default row 1; Alistair 17, Dog 18, Morrigan 16), and GUI.md:550/975 (the portrait frame's tint). Which colours the 20 tints are was not read.
-- Whether the stage's party-picker model `fxe_cha_sel_p` is shown during chargen (it sits at the hero's feet in the level file; its visibility toggles were not traced), and how the game hides the previous area while the stage is shown.
+- Whether the stage's party-picker model `fxe_cha_sel_p` is shown during chargen: it is a room's placed effect model, loaded and run as any other (`dev/EFFECTS.md`, "An effect a level places", 2026-10-20), so it is there unless something hides it; what might hide it was not traced. And how the game hides the previous area while the stage is shown.
 - How the stage is loaded and entered at `StartCharGen` (0x00707040 is its activation; the loader calls 0x005D6B30, 0x0067C3B0, 0x0067B3A0, 0x0067F5C0 were not read).
 - The mode 0 paperdoll's camera (inventory etc.): only the shared constants were read.
 
