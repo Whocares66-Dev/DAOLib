@@ -427,6 +427,16 @@ Also direct Invokes (checked): `FloatyLayer.DisplayStatusMessage(text:wstring, c
 
 Function `0x00610D50` (called from `GUIMap` vtable 0x00B19FB0 slot 5 = 0x0072F410, and one more call site; scene id 0x2A = Minimap is tested first): SetArraySize then SetArray for `SharedLibrary.SharedMap.BatchCreatureIDs`(int, one per creature), `SharedLibrary.SharedMap.BatchCreaturePositionsOrientations`(float, 3 per creature: world x, y, orientation; element 0..2 is also the camera icon), `SharedLibrary.SharedMap.BatchCreatureFlags`(int bit flags: hostile, in party, show-as-ally, player, within map radius, from `CreatureMapIcon.as`), then `Invoke MiniMap.Instance.UpdateMinimap()`. Frequency: on the map object's update; I did not trace its caller to a per-frame loop (inferred per frame while the minimap is shown). The world map: `WorldMap.GetTravelling`, `WorldMap.GetAnimating`, `WorldMap.AreaLoadedNotify` Invokes (event; `0x0072EDA0`, `ForScript_AddGeneralScoreboardEntry`'s neighbour).
 
+#### Where `Area.MinimapLeft`, `Right`, `Top`, `Bottom`, `Width` and `Height` come from (read 2026-10-19 by lib-agent-2)
+
+- **Copied, not computed,** by `CCArea`'s load (0x0068B3C0–0x0068BB48) from a small file of the level's, `<layout>_mmi.gff` (GFF4 `mmi`, 128 bytes, in the level's `.rim`) [checked]:
+  - Left and Bottom are `EnvMinimapLowerLeftPoint` (3138) x and y; Right and Top are `EnvMinimapUpperRightPoint` (3139) x and y: the world's x and y at the picture's corners.
+  - Width and Height are `EnvMinimapTextureMapCoords` (3137) x and y: the fraction, 0 to 1, of the power-of-two texture the picture covers. `minimap.gfx` multiplies its image's size by them (`SharedMap.as:65-66`).
+  - Each point's z is not used. The layout itself holds none of these fields.
+- **With no `_mmi`,** they are the layout's bounds, and Width and Height are 1.
+- **An example:** `brc100d_mmi.gff` holds Width and Height (0.77362, 0.63579), the lower left (−8.2475, 32.0926) and the upper right (255.8165, 249.1079), as the live game served them [checked].
+- Not read: the map's North, and `LvlMinimapPositionX`/`Y` and the other fields 3740 to 3743, which this load does not read. Core's level reader does not read `_mmi` yet.
+
 #### What the engine serves as the data tree's `Area.Name` (areaname) (lib-agent-2, read 2026-10-19)
 
 ##### Short answers

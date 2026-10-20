@@ -130,6 +130,14 @@ The mover's size: IsFree's r (radius * 0.5); the straight-walk test's `wide` fla
 ```
 A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 are 9) and the clear floor one row south (row 677 all 1). Under the exe's IsFree the point is not free (centre (927.33, 977.44) is 0.21 m away, under a cell); one row south it would be. The cell holds the wolves' z, so they stood on a cell the level's own grid marks as a wall band (the clearance band), not a cell a stamp made. Straight-walk from it fails (centre kind 9). The nearest free place by the exe's own search is NearestFree/FanSearch (above), not a fixed 2 m snap: reach 5.0 m for a start, 2.0 m back toward the start for a goal.
 
+### 7. The fine search's failure: the node it keeps (read 2026-10-19 by lib-agent-2, for DAOParagonEngine #96; checked unless said)
+
+- **On a failed search,** the fine A* (0x00A555B0) builds its path through 0x00A54EF0 to the node it kept at `this+0x40`, and the leg still answers 3.
+- **The kept node** starts as the start (0x00A555F1), with its h at `this+0x44`. Only a node newly pushed onto the open list can replace it (in 0x00A552E0, the compare at 0x00A55452), and only with a strictly smaller h, so the first of equal h wins. A node already open whose g is lowered (0x00A55480) does not.
+- **h** is `Pathfinding::MapSearchEnvironment`'s slot +8 (vtable 0xB592E0, 0x00A45AA0), called as (node, goal, goal): the octile distance in cells, (max − min) + 1.5·min of the cell differences, a diagonal costing 1.5 (the double at 0x00B03BE8). The same function is a step's cost, called as (parent, neighbour, goal), with the cell's penalties added when the cell is not the goal: +7 for kind 5 or 6 in the mover-obstacle case, +8 for kind 7, and 3 times a count from 0x00A49240.
+- **Push order:** the four straight neighbours (+x, −x, +y, −y), then the diagonals (0x00A461A0). The open list is a binary heap on f = g + h, g and h each packed at half a cell.
+- Not read: the heap's order among equal f (0x00A536A0 and the sift-down), the rest of 0x00A45AA0's penalties, 0x00A54EF0 itself, and the environment's second argument (+0x10).
+
 ### What a port should copy (summary)
 
 1. Keep the grid's cell kinds as the file's 4-bit kinds, with the counters; implement `IsFree` as in section 2 (cells blocked at >= 8 / == 7, but only by centre distance <= max(r, cell)), not "the cell under the point is blocked".
