@@ -254,6 +254,14 @@ struct LightmapPart
     std::array<float, 4> offsetScale{0, 0, 1, 1}; // u and v offset, u and v scale
 };
 
+// A value a placed model gives its emitters by name: an emitter whose user parameter has the
+// name takes it. A name the model does not give is (0, 0, 0, 1).
+struct UserParam
+{
+    std::wstring name; // "fire"
+    std::array<float, 4> value{0, 0, 0, 1};
+};
+
 struct Placed
 {
     std::wstring file; // the model's name, with no extension
@@ -261,6 +269,7 @@ struct Placed
     Quaternion turn{0, 0, 0, 1};
     float scale = 1;
     std::vector<LightmapPart> parts;
+    std::vector<UserParam> userParams; // in the file's order
 };
 
 // A SpeedTree tree or grass placed in a room, in the room's space.

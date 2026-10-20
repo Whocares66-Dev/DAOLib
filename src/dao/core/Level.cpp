@@ -25,6 +25,12 @@ constexpr std::uint32_t kRoomModels = 3050;
 constexpr std::uint32_t kRoomConnects = 3099;
 constexpr std::uint32_t kModelScale = 3059;
 constexpr std::uint32_t kModelFile = 3063;
+// A placed model's user params (DAOLib #212): the level loader hands them to the model
+// (0x0053A510, its slot 0x138 at 0x005462F0), whose emitters take a value by name
+// (dev/EFFECTS.md, "An effect a level places").
+constexpr std::uint32_t kModelUserParams = 3506;
+constexpr std::uint32_t kUserParamName = 3507;
+constexpr std::uint32_t kUserParamValue = 3508;
 constexpr std::uint32_t kProbeCube = 3104;
 constexpr std::uint32_t kLightmapPart = 3235;
 constexpr std::uint32_t kRoomTrees = 3354;
@@ -701,6 +707,16 @@ std::optional<Room> RoomOf(const gff4::File &definition)
                 std::ranges::copy(place, lightmap.offsetScale.begin());
             }
             placed.parts.push_back(std::move(lightmap));
+        }
+        for (const gff4::Struct &param : model.Structs(kModelUserParams))
+        {
+            UserParam user;
+            user.name = param.String(kUserParamName).value_or(L"");
+            if (const std::vector<float> value = param.Floats(kUserParamValue); value.size() == 4)
+            {
+                std::ranges::copy(value, user.value.begin());
+            }
+            placed.userParams.push_back(std::move(user));
         }
         room.models.push_back(std::move(placed));
     }

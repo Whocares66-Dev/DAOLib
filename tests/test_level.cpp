@@ -288,7 +288,8 @@ std::vector<std::byte> LevelLayoutFile()
 
 // A room at (100, 0, 0) that sees rooms 7 and 9 and opens onto 9 and 12, with the model "slab"
 // placed in it at (0, 0, 5), twice the size, its part "_a" in the atlas
-// "room.dds" at an offset of (0.5, 0.25) and a scale of (0.25, 0.5).
+// "room.dds" at an offset of (0.5, 0.25) and a scale of (0.25, 0.5), and its user param "fire"
+// (1, 1, 1, 1), as the tower's fxe_fire_small_p are placed (DAOLib #212).
 std::vector<std::byte> RoomFile()
 {
     Builder b = Start("RML ", {{"ROOM",
@@ -305,7 +306,9 @@ std::vector<std::byte> RoomFile()
                                  {5, 13, 0, 16},
                                  {3059, 8, 0, 32},
                                  {3063, 14, 0, 36},
-                                 {3326, 1, gff4::kList | gff4::kStruct, 40}}}});
+                                 {3326, 1, gff4::kList | gff4::kStruct, 40},
+                                 {3506, 3, gff4::kList | gff4::kStruct, 44}}},
+                               {"UPRM", 20, {{3507, 14, 0, 0}, {3508, 12, 0, 4}}}});
     const std::size_t root = Struct(b, 44);
     Floats(b, root, {100, 0, 0});
     Floats(b, root + 16, {0, 0, 0, 1});
@@ -326,6 +329,12 @@ std::vector<std::byte> RoomFile()
     Floats(b, part, {0.5F, 0.25F, 0.25F, 0.5F});
     b.U32(part + 16, b.String(u"room.dds"));
     b.U32(part + 20, b.String(u"_a"));
+    const std::size_t params = b.bytes.size();
+    b.U32(params, 1);
+    const std::size_t param = Struct(b, 20);
+    b.U32(model + 44, static_cast<std::uint32_t>(params - b.data));
+    b.U32(param, b.String(u"fire"));
+    Floats(b, param + 4, {1, 1, 1, 1});
     return b.bytes;
 }
 
@@ -571,6 +580,9 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
     REQUIRE(room->models.size() == 1);
     CHECK(room->models[0].file == L"slab");
     CHECK(room->models[0].scale == 2.0F);
+    REQUIRE(room->models[0].userParams.size() == 1);
+    CHECK(room->models[0].userParams[0].name == L"fire");
+    CHECK(room->models[0].userParams[0].value == std::array<float, 4>{1, 1, 1, 1});
     REQUIRE(room->models[0].parts.size() == 1);
     CHECK(room->models[0].parts[0].atlas == L"room.dds");
     CHECK(room->trees.empty());
