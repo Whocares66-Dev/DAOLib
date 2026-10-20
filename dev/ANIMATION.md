@@ -1460,6 +1460,32 @@ GOG exe 1.05 (base 0x400000), no Ghidra, no game. "checked" = read in disassembl
   - **No blink layer in the engine:** a blink shows only when the line's curves drive the eyeBlink or lowLid bones.
   - **Cut action 44 is `ActionAnimateFace`** (vtable 0xB232E0, update 0x007CE9A0): it plays a named FaceFX animation on the actor's face through the manager, from the action's start, and stops it at its end. Its arguments are inferred.
   - **Order in a frame:** the scene's tick (0x0052A090, from the scene loop 0x0052A565, after the scene's preparation) calls the manager's slot 13 (0x0084CB60) with the scene time (`[edi+0x48]`), then 0x0084CAF0, which runs each player's update (0x00850FB0), which runs the evaluator (0x0084F550). The player fades the face out near its end (0x00851007–0x00851036; inferred from the code's shape).
+  - **The face graph's evaluation** (read 2026-10-19 by lib-agent-2's readers, for #206; the starred items checked, the rest read in the listings):
+    - **Order:** `FxFaceGraph::Update` (0x00A19B60) makes one forward pass in the file's node order, with no recursion and no sort. In all 13 readable `.fxa` every link's input index is below its node's; the four enciphered add-ins' actors were not read.
+    - **A curve sets its node:** the tick (0x00A0BAF0) sets the node's pending value to the curve's value at t, finding the node by the curve's name (0x00A1AB50).
+    - **A node's value:**
+      ```
+      acc = inputOp == 0 ? 0 : 1          // table 0xB57C5C, only when the node has links
+      for each link that is not corrective: acc = acc (+ or ×) f(link, input.value)
+      corr = for each corrective link: min(1, corr + p0 · max(I.maxRecip · v, -I.minRecip · v))
+      value = clamp((acc + pending) · (1 - corr), min, max); pending = 0
+      ```
+      A curve adds to its links' result. inputOp 0 is sum and 1 multiply; one shipped node uses 1 ("6 multi", with no links). A node's four floats are (min, 1/min, max, 1/max); the reciprocals serve only the corrective link, whose `min(1, ...)` is inferred from one compare. I is the corrective link's input node and v its value.
+    - **The link functions** (*): the id is each class's vtable slot 8 (`mov eax, N`), and the evaluation is a switch on the file's id (jump table 0xA1A688, 11 entries; its copy at 0xA1A6B4 agrees). With x the input node's value, p the parameters and n their count:
+      - 0 Null: 0.
+      - 1 Linear (m = 1, b = 0): m·x + b with two parameters, m·x with one, x with none.
+      - 2 Quadratic (a = 1): a·x·|x|.
+      - 3 Cubic (a = 1): a·x³.
+      - 4 Sqrt (a = 1): a·sign(x)·√|x|, and 0 at 0.
+      - 5 Negate: −x.
+      - 6 Inverse: 0 when |x| < FLT_EPSILON, else 1/x.
+      - 7 OneClamp: 1 when x ≤ 1, else 1/x.
+      - 8 Constant (c = 1): p0.
+      - 9 Corrective (factor = 1): above.
+      - 10 ClampedLinear (m = 1, clampx = 0, clampy = 0, clampdir = 1): with clampdir > 0, m·(x − clampx) + clampy when x > clampx, else clampy; with clampdir ≤ 0 the sides swap.
+      - Only Linear, Negate, Constant and Corrective occur in the shipped files. The formulas were checked by running the disassembly through an x87 emulator.
+    - **Node types** 0, 4 and 8 alone occur, and the update treats them alike. Inferred: 0 a combiner or generic target, 4 a bone pose's target (every bone pose names a type 4), 8 `FxEmotionsWeightNode`. The Delta, CurrentTime and MorphTarget classes exist and are not used; the nodes' track records (state 3, none) do nothing.
+    - Not read: how the tick works out its elapsed time, the blend in and out, the per-bone weight (1.0 in every shipped file), and ids above 10.
   - A core reader needs the face graph as well as the curves: the `.fxe` holds curves on graph nodes, and the `.fxa` holds the graph, its link functions (linear, quadratic, cubic, sqrt, negate, inverse, oneclamp, constant, corrective, clampedlinear, perlin noise, custom; strings 0xB573E0–0xB57810) and the bones' poses.
 - Not read: the `.fxe` and `.fxa` layouts (the reader, #206); how FaceFX's tick uses the external time; what writes the scene time `[edi+0x48]`, so whether a pause freezes a face with no voice; the `.fxe` loader (0x0084DBA0) and how the head's field reaches the player; whether record type 8 is exactly `FxEmotionsWeightNode`; the fade's constants (0xB2B56C, 0xAE70F8); where the node's compose (0x005B5D40) runs against the face's update in a frame, so whether the face lags a frame; `ActionAnimateFace`'s arguments and whether a shipped cut uses it; whether every `_f` event has an `_f.fxe`; `g_eclipseGame+0x254`, which decides faceSync.
 
