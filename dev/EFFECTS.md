@@ -1061,6 +1061,14 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
       Version 1: score = f(reach) * (reach - d) * |intensity| * brightness(+0x1B8)   // f = 0x004CB490, not read
       ```
     - Effect lights inferred to have no room, so they reach across rooms.
+  - **For a level mesh** (read 2026-10-19 by lib-agent-2, for DAOParagonEngine #90; checked unless said):
+    - **P and s:** the object handed to `ChooseForLevel` is the mesh node's renderable (node +0x180). P is the node's world matrix (node +0x60) times the `.msh` chunk's `MeshBoundsSphere` centre (8019), divided by w when w is not 0; s is that sphere's radius, not scaled by the matrix. R is the node's room id (+0x168); an owner flagged 0x100000 gives two ids instead.
+    - **The room test** (0x0053D210) also passes when the light's room object's list (+0xC0) holds the id. The id list a CanBeOccluded light is tested against is the layout's table of the lights each room sees; no vanilla layout lamp is CanBeOccluded.
+    - **A layout lamp's |intensity| is 1.0:** the node's constructor (0x0053CCA0) sets intensity, brightness and flicker to 1.0, and the blueprint's instantiation (0x0055FAC0) copies the radius, domain, MMHID, CanBeOccluded and Version but no intensity.
+    - **Ties and held lights:** the sort is MSVC's `std::sort` with the score descending (0x004621D0), so exact ties come out in an order that is fixed but not stable. A light already held keeps its slot; one that drops out fades over about 0.25 s and holds its slot until its fade ends; a newcomer fades in only to take the place of one whose fade has ended. All of it is cleared at once when the layout changes, or when the best light has the flag +0x194.
+    - **When it runs:** `ChooseLightsOf` (0x004654E0) runs for each listed object every frame (0x0045BE65). The dynamic list is chosen each time. For a static mesh, the static and probe lists are chosen again only at the area's load or when a light is added or removed, by two counters on the manager.
+    - **Correction to a capture's reading** (DAOElgaraShaders' `tower_lights.txt`): [9]/[11] is dynamic light 0 and [10]/[12] light 1, as above. The listing printed [9]–[11] as one light.
+    - Not read: f (0x004CB490) and whether any lamp is Version 1; the flag +0x194; a lamp of another Version keeps its last score.
   - **The pick:** sorted by score (0x00463B40). The best non-zero ones up to the group's capacity (the group's +4) are kept, and lights already held are kept.
   - **The fade:** an entry fading in or out is weighted by `min(1, t·4)` or its complement (0x0046A470; the rate 4.0 is at 0x00BF29AC, about 0.25 s). The unit of t was not read.
 - **Capacity** [C]:
