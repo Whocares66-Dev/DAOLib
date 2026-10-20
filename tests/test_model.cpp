@@ -85,6 +85,15 @@ TEST_CASE("a mesh's chunks are its slices of the file's buffers, each with its w
     CHECK(model::Indices(body) == std::vector<std::uint32_t>{0, 1, 2});
     // Its own three indices, from the fourth of the file's, with its base vertex added.
     CHECK(model::Indices(cap) == std::vector<std::uint32_t>{1, 2, 2});
+
+    // Its bounds, as the file keeps them (DAOLib #208).
+    REQUIRE(body.bounds);
+    CHECK(body.bounds->boxMin == std::array<float, 3>{0, 0, 0});
+    CHECK(body.bounds->boxMax == std::array<float, 3>{2, 0, 0});
+    CHECK(body.bounds->centre == std::array<float, 3>{1, 0, 0});
+    CHECK(body.bounds->radius == Approx(1));
+    REQUIRE(cap.bounds);
+    CHECK(cap.bounds->boxMax == std::array<float, 3>{5, 2, 0});
 }
 
 TEST_CASE("a chunk that runs out of the file's vertices is left out, and a file that is no mesh is none", "[model]")
@@ -180,6 +189,21 @@ TEST_CASE("the ogre's body, when it is in game/models, reads whole", "[model]")
     CHECK(chunk.vertexCount == 9652);
     CHECK(chunk.declaration.size() == 7);
     CHECK(model::Indices(chunk).size() == 29505);
+    // Every place is in the chunk's box and its sphere.
+    REQUIRE(chunk.bounds);
+    const model::Bounds &bounds = *chunk.bounds;
+    const std::vector<model::Value> places = model::Floats(chunk, *chunk.Find(model::Usage::Position));
+    const auto outside = std::ranges::count_if(places, [&](const model::Value &place) {
+        float squared = 0;
+        bool inBox = true;
+        for (std::size_t axis = 0; axis < 3; ++axis)
+        {
+            inBox = inBox && place[axis] >= bounds.boxMin[axis] - 1e-3F && place[axis] <= bounds.boxMax[axis] + 1e-3F;
+            squared += (place[axis] - bounds.centre[axis]) * (place[axis] - bounds.centre[axis]);
+        }
+        return !inBox || squared > (bounds.radius + 1e-3F) * (bounds.radius + 1e-3F);
+    });
+    CHECK(outside == 0);
     const std::vector<model::Value> weights = model::Floats(chunk, *chunk.Find(model::Usage::BlendWeight));
     REQUIRE(weights.size() == 9652);
     CHECK(weights[0][0] + weights[0][1] + weights[0][2] + weights[0][3] == Approx(1).epsilon(0.01));

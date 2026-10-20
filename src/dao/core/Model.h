@@ -109,6 +109,16 @@ struct Element
 
 // One chunk of a mesh: its declaration, its counts and offsets as the file
 // has them, and its slices of the file's buffers.
+// A chunk's bounds as the file keeps them (ChunkBounds): the box of its places, and the sphere
+// through the box's corners about its centre.
+struct Bounds
+{
+    std::array<float, 3> boxMin{};
+    std::array<float, 3> boxMax{};
+    std::array<float, 3> centre{};
+    float radius = 0.0F;
+};
+
 struct Chunk
 {
     std::wstring name;
@@ -125,6 +135,7 @@ struct Chunk
     std::uint32_t startIndex = 0;        // in indices, into the file's indices
     std::span<const std::byte> vertices; // this chunk's: vertexCount of vertexSize bytes
     std::span<const std::byte> indices;  // this chunk's: indexCount of 2 or 4 bytes
+    std::optional<Bounds> bounds;        // nullopt when the chunk has none
 
     // Returns the element for a usage and its index, or null with none.
     const Element *Find(Usage usage, std::uint8_t usageIndex = 0) const;

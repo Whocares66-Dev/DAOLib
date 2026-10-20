@@ -70,6 +70,29 @@ std::optional<Element> ElementOf(const gff4::Struct &declarator)
                    .usageIndex = static_cast<std::uint8_t>(Number(declarator, kDeclaratorUsageIndex).value_or(0))};
 }
 
+// The box's corners and the sphere are four floats each, the box's w 1 and the sphere's w its
+// radius. The engine places a level chunk by the sphere for its lights: the node's world matrix
+// times the centre, with the radius unscaled (dev/EFFECTS.md, "For a level mesh"; DAOLib #208).
+std::optional<Bounds> BoundsOf(const gff4::Struct &chunk)
+{
+    const std::optional<gff4::Struct> bounds = chunk.Child(kChunkBounds);
+    if (!bounds)
+    {
+        return std::nullopt;
+    }
+    const std::vector<float> low = bounds->Floats(kBoundsBoxMin);
+    const std::vector<float> high = bounds->Floats(kBoundsBoxMax);
+    const std::vector<float> sphere = bounds->Floats(kBoundsSphere);
+    if (low.size() < 3 || high.size() < 3 || sphere.size() < 4)
+    {
+        return std::nullopt;
+    }
+    return Bounds{.boxMin = {low[0], low[1], low[2]},
+                  .boxMax = {high[0], high[1], high[2]},
+                  .centre = {sphere[0], sphere[1], sphere[2]},
+                  .radius = sphere[3]};
+}
+
 std::optional<Chunk> ChunkOf(const gff4::Struct &from, std::span<const std::byte> vertices,
                              std::span<const std::byte> indices)
 {
@@ -85,6 +108,7 @@ std::optional<Chunk> ChunkOf(const gff4::Struct &from, std::span<const std::byte
     chunk.minIndex = U32(from, kChunkMinIndex);
     chunk.verticesReferenced = U32(from, kChunkVerticesReferenced);
     chunk.startIndex = U32(from, kChunkStartIndex);
+    chunk.bounds = BoundsOf(from);
     for (const gff4::Struct &declarator : from.Structs(kChunkDeclarators))
     {
         if (const std::optional<Element> element = ElementOf(declarator))
