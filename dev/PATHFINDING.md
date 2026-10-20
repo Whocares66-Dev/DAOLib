@@ -138,6 +138,32 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **Push order:** the four straight neighbours (+x, −x, +y, −y), then the diagonals (0x00A461A0). The open list is a binary heap on f = g + h, g and h each packed at half a cell.
 - Not read: the heap's order among equal f (0x00A536A0 and the sift-down), the rest of 0x00A45AA0's penalties, 0x00A54EF0 itself, and the environment's second argument (+0x10).
 
+### 8. The whole search's answers, and what DAOLib's `Pathfind` adds (from `src/dao/World.cpp`, seen in play 2026-09-30 to 2026-10-03)
+
+- **The coarse search ends as found when it gives up** (0x00A4D1F0, read 2026-10-03, DAOLib #5): it plans a fine stretch between each two points of its coarse route, and two stretches in a row that fall short of their point end the whole search with answer 1. So a fine leg that fails (3, section 7) shows to RequestPath's caller as 1, "found", with a path that stops short.
+- **The answers** RequestPath's search gives, a slice at a time:
+  - 1: found, or gave up part way;
+  - 4: still searching;
+  - 5: no path;
+  - 6: barred, a cell of kind 7 on the way. The engine notes the barred cell in the path (`kBarredAt` in World.cpp), for the creature's PathBlocker to look within 5 m of it. The game ends such a move with COMMAND_FAILED_PATH_ACTION_REQUIRED;
+  - 8: no walk mesh there.
+- **6 comes only near the door** (seen in play through Eluvian): from 1.2 m before a shut door, [4, 4, 6]. From 80 to 143 m off, the search gave up 53.38 m along, short of the door, with 1 and no 6.
+- **Inferred, to check against a walk logged through Eluvian:** the end of `Pathfind`'s `partial` path is the kept node of the last failed fine leg (section 7).
+- **DAOLib's own, not vanilla's:**
+  - `Pathfind`'s budget of 40 ms in slices of 0.01 s, up to 200. A walker's own search gets 3 to 6 ms a frame (RequestPath 0x0073EA80).
+  - Its searching on from where a search gave up, up to six searches each at least 2 m nearer, where no placeable lies ahead. With it, 229.5 m from Ishal's courtyard found 276.4 m; without it, 244 m in the Korcari Wilds found nothing. How a click's own move reaches the end of so long a walk is not read.
+
+### 9. Invisible walls: placeables that stamp kind 8 under a static coarse route (read 2026-10-20 by lib-agent-2, from DAOTurnBased's play logs; checked in the data, the searches reproduced in Python)
+
+- **Invisible wall placeables stamp kind-8 cells into the live fine grid,** and kind 8 is never stepped onto (section 4). Their patches are `plc_invisowide_01_0_<appearance>.pwk`, 60 × 2 cells of 1/6 m: a wall 10 m long and 0.33 m deep. Kind 8 ends a search with 1, gave up part way; only kind 7, a shut door, gives 6.
+- **The coarse level is baked and static:** it is not changed by those stamps, so its route can run through them, and the fine stretches then fall short (section 8).
+- **`ran210ar_forest_spiders`** (layout `brc503d`), the forest road's long-standing "no path": ten `wmt_rand_blocker_wide` (appearance 163, tag `wmt_rand_encounter_blocker`) each stamp such a wall.
+  - The level's grid is one region of 67,061 cells, and all 6,982 coarse edges are connected in the fine grid.
+  - The coarse route's stretches 4 and 5 end in a pocket of 102 cells closed off by the walls and the rock, so two stretches in a row fall short: "found" (1) with "gave up 2", and a partial path of about 15 m to the kept node.
+  - A path of about 40 m round the walls' ends exists on the stamped grid, which vanilla does not find, because it follows the coarse route. The route was reproduced here, not read from 0x00A4D1F0.
+- **`urn200ar_ruined_temple`** (layout `lak401d`): the "World Map" `wmt_wow_generic` (appearance 159, "Area Transition, Invisible, Wide") stamps `plc_invisowide_01_0_159.pwk`, kind 8 in both its states, across the whole 6 m entrance corridor. No path either way, answer 1.
+- These explain DAOTurnBased's DAOLIB_NEEDS item 6 cases. A port matching vanilla stamps the patches into the fine grid and leaves the coarse level as baked.
+
 ### What a port should copy (summary)
 
 1. Keep the grid's cell kinds as the file's 4-bit kinds, with the counters; implement `IsFree` as in section 2 (cells blocked at >= 8 / == 7, but only by centre distance <= max(r, cell)), not "the cell under the point is blocked".
