@@ -68,7 +68,50 @@ For the Fade: R' = 0.8741R + 0.1657G − 0.0198B − 0.01; G' = 0.0060R + 0.9664
 **The exe:**
 - An effect runs (`FrameBufferEffect` slot 1, 0x004600B0) when enabled and its `minlod` (+0x84) ≤ the detail setting [0x00BF22C8] (inferred). `da_fade`'s minlod is 1, so it is off at the lowest.
 - The `.arl`'s floats are clamped to the file's `range` (0x0045DDE0; BlurStrength −20..20) and copied in by 0x0045F490.
-- The engine's own values (0x0045DF70, updated at the frame's start by 0x0045EEE0): back-buffer width and height, `effect_time` (+dt, reset at stop) and the focal plane. `ApplicationTime` (usage 0x29) and `ColorCurveTexture` (0x32) come from the table at 0x00509870; `g_fApplicationTime`'s source wasn't traced (inferred: the application's clock in seconds).
+- The engine's own values (0x0045DF70, updated at the frame's start by 0x0045EEE0): back-buffer width and height, `effect_time` (+dt, reset at stop) and the focal plane, which is the scene camera's far plane (answered 2026-10-20: "da_dof" below). `ApplicationTime` (usage 0x29) and `ColorCurveTexture` (0x32) come from the table at 0x00509870; `g_fApplicationTime`'s source wasn't traced (inferred: the application's clock in seconds).
+
+## da_dof: depth of field (read 2026-10-20 by lib-agent-2)
+
+Read in the GOG exe and vanilla's files (`da_dof.ffx.xml`, `dof.mat.xml`, the shaders' fxc listings; patch002's copies have the same code). [C] = checked, [I] = inferred.
+
+### Targets, passes and widths
+
+- **A target's `.width` and `.height` in the ffx are constants baked at parse** [C]: the filter parser (0x00460590) splits `target.member`, and `width` is `(float)(int)[target+0x2C]` (`fild` at 0x0046091E), `height` [target+0x30], wrapped in a constant node like a literal. The target's own attribute parser (0x0045DBF0, Size 0x0045DA20) sets them from `BACKBUFFER_WIDTH` / `BACKBUFFER_HEIGHT` with one `*n` or `/n`. Whether a resize parses them again is not read.
+- **The targets:** BackBufferCopy is the back buffer's size; DOFDownsampledCoC, DOFBlurredA and DOFBlurredB are half its width and height (960 × 540 at 1920 × 1080). `WindowWidth` / `WindowHeight` are runtime values, the full back buffer.
+- **The passes, each run once** (one stage `rangeDOF` on EndFrame; no repeat attribute) [C]:
+  1. CreateCoCTexture: the back buffer copy and depth into DOFDownsampledCoC, its texel from the full window size.
+  2. CoCBlurH into DOFBlurredA, `fWindowWidth` = `DOFBlurredA.width` (960), `fBlurWidth` = WeightBlur.
+  3. CoCBlurV into DOFBlurredB, `fWindowHeight` = `DOFBlurredA.height` (540).
+  4. ArtifactBlur (SmallBlur) back into DOFBlurredA, its window DOFBlurredB's size, `fBlurWidth` = ArtifactBlur.
+  5. FinalDoFComposition onto the back buffer, SRCALPHA / INVSRCALPHA.
+  6. Finish: the back buffer copied to BackBufferCopy.
+- **Taps** [C]: the blurs' vertex shaders step `s = fBlurWidth / fWindowWidth` (or height), seven taps at k = −3 … 3 with weights 0.05, 0.1, 0.2, 0.3, 0.2, 0.1, 0.05 over rgb and the CoC in alpha, then `a = 2·max(blurred.a, centre.a) − centre.a` (the centre from DOFDownsampledCoC). So at WeightBlur 0.81 a step is 0.81 of a half-resolution texel, 1.62 screen pixels. SmallBlur averages the four corners at ±0.5 step.
+
+### The circle of confusion [C]
+
+- **Downsample** (CoCDownsample): rgb is the average of four point-sampled taps around the pixel at ±1 full-resolution pixel; for each of four depth taps, `d = dot(depth.rgb, (1/65536, 1/256, 1)) × focalplane` and `coc = saturate((FocusDistance − FocalRadius − d) / max(NearFade, 0.001))`, and alpha is their largest: the near CoC alone.
+- **Compose** (ComposeDoF): `d` from the full-resolution depth, point sampled; `far = saturate((d − (FocusDistance + FocalRadius)) / max(FarFade, 0.001))`; `b` = DOFBlurredA point-sampled (half resolution); out = (b.rgb, max(b.a, far) × MaxBlur), or the CoC as grey when RenderBlurRadius is 1 (a debug view).
+- FocusDistance is the centre of the sharp band and FocalRadius its half-width; NearFade and FarFade are the ramps in metres either side; MaxBlur scales the final alpha.
+
+### The focal plane and the depth target [C]
+
+- **`scene_focalplane`** (runtime kind 3) is the global 0xBF2200, copied each frame by 0x0045EEE0 (0x0045EFB2). 0x00455D50 sets it each frame to the scene camera's far plane, its vtable slot 16 (0x00465760, `[cam+0x134]`; 4000 in play, `src/dao/Camera.cpp`). The scene shaders' `g_fFocalPlane` is the same global, so a far plane a plugin changes moves the packing and the DOF together.
+- **The scene's second target (oC1) packs the view distance** (vanilla `static1_fast.psh`'s tail): x = saturate(distance / g_fFocalPlane); f = frac(x · (16777246, 65536, 256, 1)); oC1.rgb = f.yzw − f.xyz / 256; oC1.a = 1. `static_depth.psh` (the depth-only pass with antialiasing) writes the same to oC0. The DOF decodes it as `(r / 65536 + g / 256 + b) × focalplane`, point sampled, clamped.
+
+### Conversations and cutscenes [C unless marked]
+
+- **`conversation_dof_values`** (table 203; `conversation_dof_parameters`, 204, names the columns to apply) is read only by GameModeDialog's constructor (0x0068FA70). It takes the first row whose FocusDistance is negative, ID 8 (FocalRadius 8, WeightBlur 0.5, ArtifactBlur 1.3, NearFade 1, FarFade 20, MaxBlur 1), and sets the dialog's own da_dof instance from it once. Rows 1 to 6 are used by nothing found.
+- **The per-frame focus:** the dialog's update sets the speaker's distance from the camera under the key "focus" (0xB0E25C). da_dof has no such parameter (an exact map lookup), so FocusDistance stays at the ffx's 5 [I].
+- **When the dialog's instance draws:** each line's start (0x0068E250) takes it out of the effect manager, and puts it back (0x0068E6EB) only for a line with no cut. The dialog's end deletes it. Nothing fades.
+- **A cut's own `da_dof`** is its AFBE action (type 19, ActionFrameBufferEffect, vtable 0xB23290): its own instance, added to the manager on its first live frame, every parameter set each frame from its curve or base value with no easing, enabled while its actor is the cutscene's active camera actor [I for that reading of +0x1D8], and removed at once by the action's slot 2 at the cutscene's reset or end. Reaching the action's stop time does not remove it [I].
+
+### Not read
+
+- The oC1 target's format and any antialiasing resolve; what interpolant the shaders divide as the view distance.
+- Whether a resize parses the ffx's baked widths again; Size's `+` and `−`; the case-insensitivity of the names.
+- The blurs' sampler filters (GaussianBlurCoC.sta).
+- Whether rows 1 to 6 of table 203 are used elsewhere (a list at 0x0086FB26); the "focus" key's fate in play.
+- The dialog's other branch at 0x0068E476; what ends a line's cutscene when it finishes by time.
 
 ## The back buffer's alpha in vanilla, as the bloom reads it
 

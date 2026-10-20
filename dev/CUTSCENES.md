@@ -176,7 +176,7 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
   - **The secondary is a list of tags in one string,** split at the delimiters at `0x00AF0CA4` (space, backslash and colon first; the rest not read). The files read had it empty. Type 2 ignores it.
   - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is.
 - **Shake** (type 20) multiplies an Euler noise onto the camera (not read in detail).
-- **Depth of field** is the `FrameBufferEffect` (type 19) `da_dof`, not a camera property.
+- **Depth of field** is the `FrameBufferEffect` (type 19) `da_dof`, not a camera property. Its passes and maths, its focal plane (the camera's far plane), and how conversations and cuts drive it: `dev/FRAME_EFFECTS.md`, "da_dof: depth of field".
 
 ### The dialogue camera on a line with no cut (`0x0068D4B0`; read 2026-10-18 by lib-agent-2; checked unless said)
 
