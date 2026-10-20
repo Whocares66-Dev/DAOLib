@@ -33,7 +33,7 @@ An effect's `.mmh` is a model hierarchy as `dao/core/Model.h` reads one: a top s
 | `nplt` | 109 | a point light | MMHID, MMHNodePointLightColor (it passes 1: the wisp's 0.6, 1.4, 2), Radius, IsStatic (0 in all), IntensityVariation, IntensityPeriod, IntensityPeriodDelta (set in 45), MMHNodeLightAffectDomain (1 or 2), MMHLightCanBeOccluded (0), MMHUseVariationTint, MMHNodeLightVersion (0) |
 | `mshh` | 49 | a mesh, as any model's; MMHMeshIsVFXMesh 1 in 14 | Model.h's |
 
-The top struct has, besides a model's fields, MMHEmitterPresimulateTime (423 files) and, in 45, a remote material: MMHRemoteMaterialDecalName (`White.dds` in 22), FresnelFalloff, InvertFresnel, Alpha and Tint. By the look of it a material the effect lays over what it is a crust of; not read.
+The top struct has, besides a model's fields, MMHEmitterPresimulateTime (423 files) and, in 45 of the 600 effect models, a remote material: MMHRemoteMaterialDecalName (`White.dds` in 22 of them, and in `remotematerialdummy.mmh` outside the fx set, 23 in all), FresnelFalloff, InvertFresnel, Alpha and Tint. At run time it is laid on every material of the crust target that has `mml_tRMPDecal`, as a colour lerp in the target's own pass, with no alpha (read 2026-10-20: "An effect's remote material and its emitters' attachments", below).
 
 An emitter (`nemt`) has 59 fields of its own, every one in every emitter (the labels' names are xoreos's, `dev/gff4_fields.csv`): its material (MMHMaterialObject, of the library MMHMaterialLibrary, a `.mal`, named with its extension in 2,290 emitters and without it in 637), MMHNodeEmitBirthRate and its range, Life and its range, ScaleRange, InitialSpeed and its range, Acceleration, InitialRotation and its range, InitialRotationSpeed and its range, RotationalAcceleration, MMHNodeInvEmitterMovementSpreadUpdateDelay, SpawnSpreadX and Y (180 and 180 in the wisp's glow: by the look of it degrees, all round), MovementSpreadX and Y, GravityMultiplier, WorldAxisAcceleration (a vector: the wisp's smoke rises at 0.5), ObjectSpaceAcceleration, BirthrateInParticlesPerMeter (1 in 131), ParticlesAffectedByWind (1 in one), ParticlesFollowPath (25), LinkParticlesTogether (29: by the look of it a ribbon), UpdateOnlyWhenVisible, EnableParticleCollisions (0 in all), InheritVelocityInsteadOfPos, Bounciness, Friction, OrientationBehavior (0 in 1,868, 3 in 629, 1 in 256, 2 in 88, 4 in 86), ParticleInheritance (0 to 3), the flipbook (MMHEmitterFlipbookType 0 to 2, FramesPerSecond, Rows and Columns up to 64 and 16, RandomStartFrame), the target (MMHEmitterTargetName, set in 278, TargetAttraction, TargetRadius, SpawnDirectionTracksTarget, KillParticleWhenTargetHit), IsPhysicsEmitter (61), IsPhysicsObjectSpawnEmitter (185), the mesh particle (MMHNodeEmitMeshParticleModelName, a model such as `fx_rock`, and its up and roll axes), MmnNodeEmitVertexFormat (255 in all), UvDistributionSize, IgnoreDistortion (0), CanParticlesSplat (7), Lod (0 to 2), MMHNodeEmitUserParamName (`color`, `fire`, `Drops`: by the look of it the name a tint is given by), MMHUseVariationTint, the age map's multipliers (MMHNodeEmitAgemapColorMultiplier, ScalexMultiplier, ScaleyMultiplier), and MMHNodeEmitType.
 
@@ -43,7 +43,7 @@ An emitter's structs:
 
 - `amap`, its age map (in every emitter): MMHNodeAgeMapCount and its keys, `amel` structs, each MMHNodeAgeMapElementPercentLifeElapsed (0 at birth, 1 at death, rising), ScaleX, ScaleY and Color, a particle's size and colour at that share of its life. 13,868 keys. The wisp's glow: 0.6 by 0.5 and transparent at birth, 0.56 by 0.47 and opaque at 0.1, 0.2 by 0.15 and transparent at death, blue (0.4, 0.7, 1).
 - `spnv`, its spawn volume (1,145): MMHNodeSpawnVolumeType 0 a mesh (20), 1 a sphere (200, its radius), 2 a cylinder (608, its radius, length and axis), 3 a box (317, its corners); the fields of the other shapes are NaN. With SpawnWithinVolume, InvertSpawnVolumeNorms and NormalsAsDirection. A mesh volume holds two `data` structs: the points (MMHDataIsIndexStream 0, a Vector3fList) and the indices into them (1, a Uint16List), as many as MMHDataCount says (20 to 384), by the look of it a triangle list.
-- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, 4 in 32), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. By the look of it what the particles are born on (the creature's mesh); not read.
+- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, in 66 models; 4 in 32, in 5), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. The particles are born on the owner's `.phy` shapes, not its visible mesh: type 1 the owner's physics nodes, type 4 a scene-level source [inferred] (read 2026-10-20, below).
 - `spla`, its splat (7, the blood pools): a material, a size, samples, an orientation range, a life, a flipbook, HoldLastFrame, a colour multiplier, and an age map of its own.
 
 A list of Vector3 keeps each element in 16 bytes, the fourth float junk (`2.28e-38` in `fxa_lit_cone_c.mmh`): the 384th point of that file's lists is a point at that stride and not at 12. `tools/gff4.py --dump` reads such a list at 12 and shows it garbled; `dao::core::gff4::Struct::ListBytes` reads it at 16.
@@ -68,7 +68,7 @@ A clip's events (`<clip>.evt`, `clip::EventsOf`) are a list (AnimationEventList,
 
 ## What is not read
 
-- What the files hold that the runtime section does not explain: the attachment types 1 and 4 (`emat`), the remote material, the target groups (`emtg`), `nemg`'s own material.
+- What the files hold that the runtime section does not explain: the target groups (`emtg`) and `nemg`'s own material. The attachments and the remote material are read below (2026-10-20); attachment type 4's source and types 2 and 3 (by Name, which no file uses) are not.
 - What Type `T` and `C`, Tint, LoadGlobal and Priority do.
 - No tree of the game's has a `vfxcast` node, the runtime's first phase; one has `vfx` (`.cust.ani` in two), which the phases do not name.
 - Where the two readings differ: the runtime section reads WorldAxisAcceleration as a vec4, where the files' field is a Vector3 (type 10) in every emitter.
@@ -320,6 +320,72 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
 - **No light in them** [C for the models]: neither fire model has a light node, so `src/fix/LightFlicker` does nothing to them; a candle's light on the walls is a separate light-only model's.
 - **Core** does not yet read a placed model's `EnvModelUserParamList` (3506: `EnvModelUserParamName` 3507, `EnvModelUserParamValue` 3508, a vec4) into `level::Placed`: DAOLib #212.
 - Not read: who sets the object's flag 0x20 and what `[0xC31650]` slot 0xF8 answers, so whether a fire is presimulated at room load or only once seen; the record's animation and tree path in 0x0053A510, and slots 0x94 and 0x148; which `EnvModelCutAwayOverride` value (0 and 2 seen) hides a model under the camera's cut-away, and whether fire models obey it; whether a level's rooms load all at once or room by room, and what `EnvRoomVisibilityList` does to emitters beyond the cull; the two flipbook materials' shaders and textures.
+
+### An effect's remote material and its emitters' attachments (the Spirit of Valor's ghost; read 2026-10-20 by lib-agent-2)
+
+[C] read in the GOG exe or the files, [I] inferred. Nothing seen in play. For DAOParagonEngine's Spirit of Valor, the Harrowing's ghost: `vfx_base` 3007 "Fade - Ghost Crust" (`VFX_CRUST_GHOST`), model `fxc_fade_ghost_c`.
+
+#### The remote material [C unless marked]
+
+- **Loaded** by the model blueprint's loader (0x00595E90): Tint (6332) at +0xA0, DecalName (6327) at +0xB0, FresnelFalloff (6328, default 1) at +0x94, Alpha (6331, default 0) at +0xCC, InvertFresnel (6329) at +0x91. A model has a remote material only when it has the Tint field (+0x90 set at 0x00596233).
+- **Made** when the effect is instanced (0x00567F80 for a crust, 0x00568590 plain): a 0x40-byte object (constructor 0x00542F70) of tint, decal name, falloff, invert, alpha and its effect object, kept at the effect object's +0x2F4.
+- **Laid on the target** by 0x00546350, from the effect manager (0x0079ECA0, ID 19707) through the owner's graphics object's slot 79 (0x00549970): every material instance of the target that has `mml_tRMPDecal` gets the decal as that texture, then the target's +0x2FC = 1 (0x0054645C) and +0x2F8 = the remote material. Character.mat's passes have the parameter (101 of them), and so do eye, face, hairalpha and weapon: body, armour, eyes, face, alpha hair and weapons take it; opaque hair does not. **Removed** by slot 80 (0x00546490): `mml_tRMPDecal` back to `Default_Black` and the pointer cleared. +0x2FC is never cleared.
+- **The shader block** (vanilla Ch1.psh and Ch1Alph.psh, in the creature's own pass after lighting and before tint and fog), gated by b4:
+  ```
+  if (b4) {
+      decal = tex2D(s11, uv0)                         // smpRemoteMaterialDecal
+      x = saturate(abs(dot(N, V) / c23.y) - c23.z)    // falloff, invert 0 or 1
+      w = abs((1 - c23.z) - x) * decal.a * c23.x * c22.w
+      colour = lerp(colour, decal.rgb * c22.rgb, w)
+  }
+  ```
+  - Colour only: alpha stays `texture.a × mml_fOpacityMultiplier` (c27). No second pass, no blend or depth change.
+  - With invert 0 the weight is a rim, 1 − saturate(|N·V| / falloff): for the ghost's 1.2 that is 0.17 facing the camera and 1 at the silhouette. Invert 1 with a falloff under 1 is a centre glow.
+- **The constants** (the provider for usage 0x1F `RemoteMaterialParams`, 0x004F8F50), from the target's +0x2F8:
+  - c22 = (tint.rgb × the effect object's +0x2D4 rgb, its w);
+  - c23 = (alpha, falloff, invert, 1);
+  - with none, (1,1,1,1) and (0,1,0,1), a weight of 0.
+  - What +0x2D4 is, inferred to be the effect's creation tint, is not read.
+- **b4** (`g_bShaderControlBooleans[4]`, usage 0x15, provider 0x004F8BF0 through the switch 0x004F8A10) is the drawn object's +0x2FC; b5 is the global byte 0x00BF2300.
+- **Clip channels 33 to 35 are bound live** (the name table 0x0055D9A0, the lookup 0x00542A50): RemoteMaterialTintColor, FresnelFalloff and Alpha write the remote material's own fields. Many effects have a static alpha of 0 and raise it from a clip. The ghost's clip keys nothing (its `dura` is 0.5 s with no channels, and no events), so its values are the model's: White.dds, falloff 1.2, invert 0, alpha 1, tint (0.95, 1, 0.6).
+- **The White.dds the game takes** for it is an add-in's copy (the dao_prc_str and dao_prc_gib texture pack, higher in the order), not core's `gui.erf` copy, a 16 × 16 all-white texture.
+
+#### The emitters' attachments (`emas`, `emat`) [C unless marked]
+
+- **Loaded** by the emitter blueprint's loader (0x0058E9A0 to 0x0058EB18) into 0x24-byte records at the blueprint's +0x270: AttachmentType (6246), SpawnOnSurface (6342), UseNormalForVelocity (6343), Name (6247). The blueprint's +0x130 bit 1 says it has any.
+- **Bound once, at the effect's attach** (0x0054DD80, the owner's slot 0xD4, from the attach chain above), for each emitter with records:
+  - type 1: every node of the owner that has a physics actor (the owner's list at +0xB0, filled by `PhysicsNodeFunctor`);
+  - type 4: a scene-level list (0x00548A70, the manager 0x0053F290's +0x1F8) [inferred: a level-wide source];
+  - types 2 and 3 match by Name, which no file sets.
+  - Bound by 0x005420F0, a record per shape of the actor whose `MMHShapeAllowEmitterSpawn` (6244) is set, its weight `MMHShapeVolume` (6240) [inferred, from the shape reader 0x00589DB0].
+  - With nothing bound, the emitter emits as an unattached one. Detached by 0x0054E0C0.
+- **Births** (the sprite emitter's update 0x00552CF0; the same for the linked sprite and the mesh emitter):
+  - The count is unchanged: the birth rate, or per metre moved.
+  - The count is shared out over the records by volume / total volume, with a fractional carry per record, each birth on a uniformly random shape of that record's actor. Each `emat` adds a full share, so two emats double the births.
+  - SpawnOnSurface 1 takes a point on the shape's surface and its outward normal (0x0081D190; for a capsule, pushed out to the radius); 0 a point inside it (0x0081CE60), with no normal.
+  - The points are world space, from the shape's current pose. UseNormalForVelocity 1 aims along that normal, 0 along the emitter's +z; with an initial speed of 0, as the ghost's, neither moves the particle.
+  - A spawn volume, when the emitter has one, takes priority over the attachment.
+- **The creature's own mesh is not touched.** For the ghost the shapes are the armour's ragdoll capsules (`hm_arm_masa_0.phy`: capsules under the chest, hips and collars, volumes 0.0038 to 0.038, AllowEmitterSpawn 1).
+- **Core's `.phy` reader does not keep a shape's volume or AllowEmitterSpawn yet: DAOLib #213.**
+
+#### Opacity, and the Valor's script [C unless marked]
+
+- **No effect code writes opacity.** `mml_fOpacityMultiplier` is set only through `SetOpacity(mode, value)` (0x004F4900, the object's +0xB4 block, a mode owning it at a time), from three systems:
+  - the object fade (mode 0, 0x00466930);
+  - a CCObject's alpha (mode 4: +0x190, `SetAlpha` 0x00695060, applied through AnimBase slot 8, 0x00A61280; set below 1 by a creature's fade-in and hide and show);
+  - an exterior chunk (mode 5, 0x005CC770, not read further).
+  - Each takes the render-class override (0xB → 1, 0xC → 5, 0xD → 6) first.
+- **The Valor's own data is not ghostly:** `bhm600cr_valor.utc` is a Human (`apr_base` 15) in massive armour, `ArmourSkinTint`, opaque. Its script (`bhm600cr_valor.nss`:39-46) applies 3007 permanently at spawn, and `AddItemVisualEffect(weapon and shield, 3007)`. That puts the effect, and its remote material, on each item's own graphics object (the longsword `w_lsw_ls01a_0` has crust hook 1).
+- 3007 is also the Harrowing's spirit wolf's, `cir320cr_darkspawn_sp`'s, the Fade demon's in `arl300`, and Wynne's spell's.
+- **The ghost's particles:** two emitters on crust hook 1, `Additive` (about 40 a second, life 1.25 s) and `Additive_1` (30 a metre moved, life 0.75 s), material `Sum_Conj_04` (VFX.mat, `ContactSheetAddv`, `smoke_ciga_f4.dds`, an 8 × 8 flipbook), each with one attachment of type 1, on the surface. The semantic's blend is inferred from its name.
+- **Nothing found makes a lower body see-through:** no height or gradient term in the shaders' alpha, an opaque decal and opaque armour. The likeliest reading is the rim lerp on a leg, whose surface is mostly side-on to the camera, together with the additive particles [inferred].
+
+#### Not read
+
+- Who calls the slots 79 and 80, and exactly which event lays the material (attach or each frame); the effect object's +0x2D4.
+- Attachment type 4's source; the box and sphere surface branches in detail; the random unit vector (0x00A3C9E0, 0x008187E0); where the blueprint's +0x130 bit 1 is set.
+- Whether a humanoid's parts' `.phy` nodes all land in the creature's physics list, and so exactly which capsules the Valor has.
+- VFX.mat's `ContactSheetAddv` states; the add-in's White.dds pixels; the render-class override pairs' meaning; mode 5's owner; b5's writer; stealth's look.
 
 ### Effects, the open questions: read 2026-10-18
 
