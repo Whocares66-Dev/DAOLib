@@ -118,7 +118,8 @@ The sources were checked against vanilla's `postprocesseffects.erf`, not the ins
   - 0: occlusion queries, contribution tests, HairAlphaPass1 (depth only).
   - 3: PSSMStatic (shadow map).
   - 8: PunchThroughMask (alpha only).
-- Whether the engine re-applies DefaultState under each pass's state, or leaves the last value standing, is [not traced].
+- **The mask is sticky** (read 2026-10-19 by lib-agent-2) [checked]: the state manager applies only the device states a state file lists, and 152 of the 178 states in `states.erf` list no `DS_COLORWRITEMASK`, all the DAMsh* scene states among them. `DefaultState` is the manager's initial state (0x4FCB1B) and the one a pass with no valid state gets (0x4FC7AB, 0x4FC7D8); it is not applied again under each pass. Every state that sets a mask other than 15 is a depth, shadow or query state, and one that sets 15 follows them in practice (DepthPass, SPT_*, PSSM). That nothing leaves 0 or 3 standing into the scene is [inferred], with DAOElgaraShaders' read-back of the picture's alpha (its NOTES.md:218).
+- **With antialiasing on,** the depth pre-pass draws the opaque materials with `DepthPass.sta` (mask 15), and the target is then cleared to (0,0,0,1), so the pre-pass leaves nothing in the alpha (DAOElgaraShaders' trace at 8 samples, NOTES.md:218).
 
 **Separate alpha blend** [checked]:
 - Only DistortionMask.sta, WeaponTrail.sta and PPQuadState.sta enable it.
@@ -135,8 +136,8 @@ The sources were checked against vanilla's `postprocesseffects.erf`, not the ins
 | Surface | oC0.w | State | Alpha left in the back buffer |
 |---|---|---|---|
 | Terrain1/2/3 | literal 1 (`c32.z`) | DATerrain: no blend | 1 [checked] |
-| Level and room meshes: Static1, _fast, _relief, Static2, Static3, BakedLowLOD, Vista3 | `mml_fOpacityMultiplier` | DAMshOpqe*: no blend | the opacity multiplier, normally 1 [value inferred] |
-| Characters: Ch1/Ch2 (non-`alph`), Face0/2, Weapon1/2, Prop1/2, Cloth1 | `mml_fOpacityMultiplier` (Cloth1/Prop2: × texture alpha) | Character, Face, Weapon, Prop: no blend | the opacity multiplier, normally 1 [value inferred]; Cloth1 and Prop2 carry their texture alpha |
+| Level and room meshes: Static1, _fast, _relief, Static2, Static3, BakedLowLOD, Vista3 | `mml_fOpacityMultiplier` | DAMshOpqe*: no blend | the opacity multiplier, 1 where the .mao does not set it (below) [checked] |
+| Characters: Ch1/Ch2 (non-`alph`), Face0/2, Weapon1/2, Prop1/2, Cloth1 | `mml_fOpacityMultiplier` (Cloth1/Prop2: × texture alpha) | Character, Face, Weapon, Prop: no blend | the opacity multiplier, 1 where the .mao does not set it [checked]; Cloth1 and Prop2 carry their texture alpha |
 | Eye0 | vertex colour alpha `v0.w` | Character | v0.w, presumably 1 [inferred] |
 | Cut-outs: Static1_Punch, Prop1_Punch | `decal.a * opacity`, texkill below 0.3 | DAMshPnch*: no blend, alpha test > 127 | **the texture alpha, 0.5 to 1** [checked] |
 | SpeedTree leaf cards, fronds, billboards | `tex.a * g_fAlphaMultiplier` (billboards: `* v0.z`) | SPT_*: no blend, test > 90 or > 84 | **the texture alpha, at least about 0.35** [checked] |
@@ -152,7 +153,9 @@ The sources were checked against vanilla's `postprocesseffects.erf`, not the ins
 | VFX0 under DAMshOpqe1S | same | no blend | **the raw particle alpha** (rare) |
 | VFX0_Addv (additive) | `min(a, max(rgb))` | DAEmtAddv*: SRCALPHA/ONE | stays 1 over a solid; raised where below 1 |
 | Static1_Alpha, PropAlpha1 | `tex.a * opacity` | DAMshNorm1S: SRC/INVSRC | `1 - a + a^2` |
-| PunchThroughMask.psh | `saturate(tex.r + c0.x)` | ONE/ZERO, CWM 8 (alpha only) | writes alpha outright [checked]. Which target it draws to is [not traced] |
+| PunchThroughMask.psh | `saturate(tex.r + c0.x)` | ONE/ZERO, CWM 8 (alpha only) | writes alpha outright [checked]; never drawn, since no .mao uses it (2026-10-19) [checked] |
+
+**A material's Float that the .mao does not set is the definition's `Default` at draw** (read 2026-10-19 by lib-agent-2): the `.mat` definition's parse (0x0050A4A0, 0x005093D0) keeps the Default on the definition's parameter, the .mao's own map (+0xD0) holds only the `<Float>`s it names, and `MaterialArtFloat`'s slot 5 (0x0050F180) falls back to the Default. DAOElgaraShaders saw it in play (its NOTES.md:192 and :194: a Default of 1 made every figure metal, 0 none). So `mml_fOpacityMultiplier` is 1 on a mesh whose .mao lacks it (`static.mat.xml:30`), not 0.
 
 There is **no glow or bloom mask written into alpha.** No vanilla scene shader writes an emissive term into oC0.w; the `em` character variants write `mml_fOpacityMultiplier` like the rest. The second target's alpha (oC1.w, a literal 1) is the distance target and is not the back buffer.
 
@@ -175,6 +178,7 @@ There is **no glow or bloom mask written into alpha.** No vanilla scene shader w
 - **Under alpha-blended effects (water, particles, glass, character alpha cards):** `1 - a + a^2`, from 0.75 to 1, never lower over a solid.
 - **Under additive effects (spells, fire, glows):** stays 1 (an additive pass only raises alpha).
 - **Pixels nothing draws:** 1, from the (0,0,0,1) clear (the main view's clear is [inferred]); their rgb is 0, so no glow.
+- **Open, from play:** DAOParagonEngine's frame work measured vanilla at 8 samples (the Circle tower and the Fade, 2026-10-19). There, `da_bloom` adds nothing visible on opaque level geometry, the terrain included, but does on the sky, although by the exe both carry alpha 1. Unresolved: it needs a capture of the LightMask and of the back buffer's alpha before the bloom.
 - **A peer port that keeps alpha at 1 everywhere** matches vanilla on solids, sky and additive effects. It differs only on cut-outs and hair (vanilla weaker where `a*k < 1`) and slightly under blended effects. It must keep the blur's `centre.a >= mean.a` selection to match vanilla's bloom shape.
 
 ## The blur behind full-screen GUI screens (guiblur; lib-agent-2, 2026-10-19)
