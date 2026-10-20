@@ -254,9 +254,11 @@ DAO_ADDRESS(kCCModule_CurrentArea, 11018)
 // party's members stand in (0x00635FD0, on the party, into the area's
 // +0x61C) and, when they have changed, runs RoomsSeen (__thiscall on the
 // area (const std::vector<int> &rooms), `ret 4`): those rooms, and each
-// neighbour of one that passes a test of the two (0x00687EC0, not read:
-// in play a room behind a door just opened stayed unseen until the hero
-// walked in), are in view; each is added to the area's list of rooms seen
+// neighbour of one that passes a test of the two (0x00687EC0: a room the
+// first sees, through its connects where it has them, and no door whose
+// state blocks the view; read 2026-10-20, dev/COLLISION.md "Rooms seen";
+// seen in play the same day, a door opened made the room behind it seen
+// within 1.5 s), are in view; each is added to the area's list of rooms seen
 // (a std::vector<int> at +0x460, which a save keeps as
 // SavegameAreaRoomsViewed, 16018); then every room is told which it is
 // (its slot 22, SetSeen, which keeps it at the room's +0x100: 1 in view, 2

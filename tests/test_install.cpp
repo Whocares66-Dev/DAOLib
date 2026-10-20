@@ -763,3 +763,33 @@ TEST_CASE("on the GOG install, an index built from its cache is the one built wi
     WARN("read " << read->Measured().ms << " ms, from the cache " << kept->Measured().ms << " ms, "
                  << kept->Measured().kept << " archives");
 }
+
+TEST_CASE("a table is parsed once and kept, and a worksheet merged from its files in the game's order", "[install]")
+{
+    files::TempFolder root;
+    const std::vector<std::uint32_t> baseHashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label"),
+                                                dao::core::GdaColumnHash("Worksheet")};
+    root.Write(
+        L"game/packages/core/override/m2da_base.gda",
+        files::Gda({"ID", "Label", "Worksheet"}, {{7, std::string("Abilities"), std::string("ABI_")}}, baseHashes));
+    const std::vector<std::uint32_t> hashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label")};
+    root.Write(L"game/packages/core/override/abi_base.gda",
+               files::Gda({"ID", "Label"}, {{1, std::string("one")}, {2, std::string("two")}}, hashes));
+    root.Write(L"game/packages/core/override/abi_more.gda",
+               files::Gda({"ID", "Label"}, {{3, std::string("three")}}, hashes));
+    const auto index = install::Index::Build(root.path / L"game", {});
+
+    // Kept: the same table for a name in any case (DAOLib #207).
+    const auto table = index->Table("abi_base.gda");
+    REQUIRE(table != nullptr);
+    CHECK(table->Rows().size() == 2);
+    CHECK(index->Table("ABI_BASE.GDA") == table);
+    CHECK(index->Table("none.gda") == nullptr);
+
+    const auto *merged = index->Worksheet(7);
+    REQUIRE(merged != nullptr);
+    CHECK(merged->rows.size() == 3);
+    CHECK(dao::core::m2da::Taken(*merged, 3) != nullptr);
+    CHECK(index->Worksheet(7) == merged);
+    CHECK(index->Worksheet(8) == nullptr);
+}

@@ -32,6 +32,8 @@
 #include "dao/core/AddIns.h"
 #include "dao/core/ArchiveCache.h"
 #include "dao/core/Erf.h"
+#include "dao/core/GdaFile.h"
+#include "dao/core/M2da.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -237,6 +239,17 @@ class Index
     // and its archive's path, or its own file's folder, in lower case.
     std::string EngineSource(const Copy &copy) const;
 
+    // Returns a data table file as the game takes it, its first copy, parsed once and kept: a later
+    // call for the name, in any case, gives the same table. Null where there is none.
+    // @param name the file's name: "apr_base.gda"
+    // Thread safe.
+    std::shared_ptr<const GdaFile> Table(std::string_view name) const;
+    // Returns a worksheet merged as the game merges it: every table file m2da_base's row `id` takes,
+    // in the order the game lists them (dao/core/M2da.h). Made once and kept. Null where
+    // m2da_base.gda has no such row.
+    // Thread safe; the first call for a worksheet merges it, so ask early, from any thread.
+    const m2da::Merged *Worksheet(std::int64_t id) const;
+
     // Returns whether an add-in is installed, enabled in AddIns.xml, and has every copy readable:
     // what the scripts' IsPackageLoaded asks.
     // @param uid the add-in's UID, in any case: "DAO_PRC_CP_1"
@@ -297,6 +310,11 @@ class Index
     // Every copy by its name in the walk's order, put into resources_ in one pass after.
     std::vector<std::pair<std::string, Copy>> gathered_;
     std::vector<std::string> packages_;
+    // Tables and worksheets made on first asking (DAOLib #207): each under its own lock.
+    mutable std::mutex tablesLock_;
+    mutable std::map<std::string, std::shared_ptr<const GdaFile>, std::less<>> tables_;
+    mutable std::mutex worksheetsLock_;
+    mutable std::map<std::int64_t, std::unique_ptr<const m2da::Merged>> worksheets_;
 
     // The archives last read from, held open.
     mutable std::mutex openLock_;

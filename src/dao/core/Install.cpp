@@ -587,6 +587,90 @@ bool Index::Readable(const Copy &copy) const
            (copy.entry < archive.copied.size() && !archive.copied[copy.entry].empty());
 }
 
+// A table parsed again for each cell asked cost Paragon 1,850 parses at 0.8 ms in Ostagar's camp,
+// and a worksheet merged at its first use 0.2 to 0.7 s; its shim kept both, and they are kept here
+// for every caller (DAOLib #207, dev/PARAGON_LOAD_TIME.md items 3 and 5).
+std::shared_ptr<const GdaFile> Index::Table(std::string_view name) const
+{
+    const std::string key = Lower(std::string(name));
+    {
+        const std::scoped_lock held(tablesLock_);
+        if (const auto found = tables_.find(key); found != tables_.end())
+        {
+            return found->second;
+        }
+    }
+    std::shared_ptr<const GdaFile> made;
+    if (const auto *copies = Find(key); copies != nullptr && !copies->empty())
+    {
+        if (const auto bytes = Read(copies->front()))
+        {
+            if (auto table = GdaFile::Parse(*bytes))
+            {
+                made = std::make_shared<const GdaFile>(std::move(*table));
+            }
+        }
+    }
+    // Two threads may both parse one table; the first kept is the one every caller gets.
+    const std::scoped_lock held(tablesLock_);
+    return tables_.emplace(key, std::move(made)).first->second;
+}
+
+namespace
+{
+
+// A worksheet's files merged: each the game's copy of a .gda the worksheet takes, read in the order
+// the game lists them.
+m2da::Merged MergedSheet(const Index &index, const m2da::Worksheet &sheet)
+{
+    std::vector<NamedCopy> files;
+    for (const auto &[name, copies] : index.Resources())
+    {
+        if (name.ends_with(".gda") && !copies.empty() && m2da::Takes(sheet, std::wstring(name.begin(), name.end() - 4)))
+        {
+            files.push_back({name, copies.front()});
+        }
+    }
+    index.SortFiles(files);
+    std::vector<GdaFile> tables;
+    for (const NamedCopy &file : files)
+    {
+        const auto bytes = index.Read(file.copy);
+        if (auto table = bytes ? GdaFile::Parse(*bytes) : std::nullopt)
+        {
+            tables.push_back(std::move(*table));
+        }
+    }
+    std::vector<const GdaFile *> parts;
+    parts.reserve(tables.size());
+    for (const GdaFile &table : tables)
+    {
+        parts.push_back(&table);
+    }
+    return m2da::Merge(parts);
+}
+
+} // namespace
+
+const m2da::Merged *Index::Worksheet(std::int64_t id) const
+{
+    const std::scoped_lock held(worksheetsLock_);
+    if (const auto found = worksheets_.find(id); found != worksheets_.end())
+    {
+        return found->second.get();
+    }
+    std::unique_ptr<const m2da::Merged> made;
+    if (const auto base = Table("m2da_base.gda"))
+    {
+        const std::vector<m2da::Worksheet> sheets = m2da::Worksheets(*base, true);
+        if (const auto sheet = std::ranges::find(sheets, id, &m2da::Worksheet::id); sheet != sheets.end())
+        {
+            made = std::make_unique<const m2da::Merged>(MergedSheet(*this, *sheet));
+        }
+    }
+    return worksheets_.emplace(id, std::move(made)).first->second.get();
+}
+
 bool Index::Whole(std::string_view uid) const
 {
     const std::string id = "addin:" + Lower(std::string(uid));

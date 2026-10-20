@@ -53,7 +53,9 @@ enum class Type : std::uint32_t
 // A field of a struct: its label, its type, and its value or where its value is.
 struct Field
 {
-    std::string label;
+    // Its label, a view of the file's label table: valid as long as the bytes the File was parsed
+    // from, as everything else a Struct gives is.
+    std::string_view label;
     Type type = Type::Byte;
     std::uint32_t data = 0;
 };

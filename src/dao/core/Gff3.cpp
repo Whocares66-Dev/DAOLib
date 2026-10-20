@@ -54,6 +54,25 @@ std::string Letters(std::span<const std::byte> bytes, std::size_t at, std::size_
     return text;
 }
 
+// A label as a view of the file's bytes, up to its NUL, trailing spaces left off: a struct's fields
+// are made for every struct of a list, and a string each was most of a template's read (Paragon:
+// 7.8 ms a creature template, DAOLib #207).
+std::string_view LabelAt(std::span<const std::byte> bytes, std::size_t at, std::size_t count)
+{
+    if (at >= bytes.size())
+    {
+        return {};
+    }
+    const std::size_t most = std::min(count, bytes.size() - at);
+    const std::string_view all(reinterpret_cast<const char *>(bytes.data() + at), most);
+    std::string_view text = all.substr(0, all.find('\0'));
+    while (!text.empty() && text.back() == ' ')
+    {
+        text.remove_suffix(1);
+    }
+    return text;
+}
+
 bool Inside(std::size_t size, std::uint64_t offset, std::uint64_t length)
 {
     return offset <= size && length <= size - offset;
@@ -156,9 +175,9 @@ Struct::Struct(const File &file, std::uint32_t index) : file_(&file), index_(ind
         out.data = ReadAt<std::uint32_t>(bytes, f + 8).value_or(0);
         if (label < h.labelCount)
         {
-            out.label = Letters(bytes, h.labels + (std::size_t{label} * kLabelSize), kLabelSize);
+            out.label = LabelAt(bytes, h.labels + (std::size_t{label} * kLabelSize), kLabelSize);
         }
-        fields_.push_back(std::move(out));
+        fields_.push_back(out);
     }
 }
 
