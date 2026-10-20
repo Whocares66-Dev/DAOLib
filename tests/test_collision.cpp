@@ -309,6 +309,8 @@ dao::test::TemplateSpec ShapTemplate()
                                   {6060, 13, 0, 0},
                                   {6061, 12, 0, 16},
                                   {6241, 14, 0, 36},
+                                  {6240, 8, 0, 40},
+                                  {6244, 0, 0, 77},
                                   {6998, dao::test::kGeneric, gff4::kReference, 52},
                                   {6999, dao::test::kGeneric, gff4::kList | gff4::kReference, 60}}};
     for (const Flag &flag : kFlags)
@@ -378,9 +380,11 @@ std::vector<std::byte> Door()
     b.U32(capsule + 32, 3);
     Floats(b, capsule, {0, 0, 0.7071F, 0.7071F});
     b.U32(capsule + 36, b.String(u"Capsule07"));
-    FlagOn(b, capsule, 6069); // StaticGeometry, not fadeable
-    FlagOn(b, capsule, 6305); // Walkable
-    FlagOn(b, capsule, 6178); // Effects, which the engine does not read
+    FlagOn(b, capsule, 6069);                   // StaticGeometry, not fadeable
+    FlagOn(b, capsule, 6305);                   // Walkable
+    FlagOn(b, capsule, 6178);                   // Effects, which the engine does not read
+    dao::test::Float(b, capsule + 40, 0.0343F); // its volume, as hm_rob_tmpa_0's Capsule07
+    b.U8(capsule + 77, 1);                      // an emitter may spawn on it
     b.U32(capsule + 52, 6 | (std::uint32_t{gff4::kStruct} << 16));
     b.U32(capsule + 56, Ref(b, capsuleSize));
     Floats(b, capsuleSize, {0.687F, 1.778F});
@@ -407,6 +411,8 @@ TEST_CASE("a placeable's shapes are read under their nodes with the masks the en
     CHECK(box.position[2] == Approx(1.9939F));
     CHECK(box.rotation == std::array<float, 4>{0, 0, 0, 1});
     CHECK(box.mask == 0x81000004);
+    CHECK_FALSE(box.allowEmitterSpawn);
+    CHECK(box.volume == 0.0F);
     const collision::Shape &capsule = shapes[1];
     CHECK(capsule.node == L"GOB");
     CHECK(capsule.kind == collision::Kind::Capsule);
@@ -416,6 +422,32 @@ TEST_CASE("a placeable's shapes are read under their nodes with the masks the en
     CHECK(capsule.rotation[3] == Approx(0.7071F));
     CHECK(capsule.mask == (0x80000000 | 0x02000000 | 0x2000 | 0x20));
     CHECK(collision::MaskOf(shapes) == (0x83002024));
+    CHECK(capsule.allowEmitterSpawn);
+    CHECK(capsule.volume == Approx(0.0343F));
+}
+
+TEST_CASE("a robe's shapes, when hm_rob_tmpa_0.phy is in game/models, all take spawns, with their volumes",
+          "[collision][game]")
+{
+    const auto path =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "models" / "hm_rob_tmpa_0.phy";
+    if (!std::filesystem::exists(path))
+    {
+        SKIP("no game/models/hm_rob_tmpa_0.phy (ghilana's extract writes it)");
+    }
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    std::vector<std::byte> bytes(chars.size());
+    std::memcpy(bytes.data(), chars.data(), chars.size());
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const std::vector<collision::Shape> shapes = collision::ShapesOf(*file);
+    REQUIRE(shapes.size() == 12);
+    for (const collision::Shape &shape : shapes)
+    {
+        CHECK(shape.allowEmitterSpawn);
+        CHECK(shape.volume > 0.0F);
+    }
 }
 
 TEST_CASE("a shape's mask: All sets every bit, a fadeable static shape lacks 0x2000, no flag is 0", "[collision]")

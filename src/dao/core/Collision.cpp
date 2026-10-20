@@ -59,7 +59,9 @@ constexpr std::uint32_t kMaskNonwalkable = 6070;
 constexpr std::uint32_t kBoxDim = 6071;
 constexpr std::uint32_t kRadius = 6072;
 constexpr std::uint32_t kHeight = 6073;
+constexpr std::uint32_t kShapeVolume = 6240;
 constexpr std::uint32_t kShapeName = 6241;
+constexpr std::uint32_t kAllowEmitterSpawn = 6244;
 constexpr std::uint32_t kFadeable = 6252;
 constexpr std::uint32_t kMaskWater = 6277;
 constexpr std::uint32_t kMaskTerrainWall = 6295;
@@ -847,6 +849,10 @@ Shape ShapeOf(const gff4::Struct &shap, const std::wstring &node, std::uint32_t 
     shape.mask = MaskOf(shap);
     shape.fadeable = shap.Get<std::uint8_t>(kFadeable).value_or(0) != 0;
     shape.objectType = objectType;
+    // For an emitter attached to the owner (DAOLib #213; dev/EFFECTS.md, the Spirit of Valor's
+    // ghost): it spawns on the shapes that allow it, weighted by their volume.
+    shape.allowEmitterSpawn = shap.Get<std::uint8_t>(kAllowEmitterSpawn).value_or(0) != 0;
+    shape.volume = shap.Get<float>(kShapeVolume).value_or(0.0F);
     if (const std::optional<gff4::Struct> size = shap.Child(kTypeStruct))
     {
         shape.dimensions = PointOf(size->Floats(kBoxDim));

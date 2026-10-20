@@ -169,6 +169,10 @@ struct Shape
     std::uint32_t mask = 0;                    // bits0, built from the flags as the engine builds it
     bool fadeable = false;                     // MMHShapeFadeable
     std::uint32_t objectType = 0;              // its cobj's MMHNodeCollisionObjType: 1 or 2
+    // MMHShapeAllowEmitterSpawn: an emitter attached to the model's owner spawns on it, picked by
+    // its volume (MMHShapeVolume, cubic metres) among the shapes that allow it.
+    bool allowEmitterSpawn = false;
+    float volume = 0;
 };
 
 // Returns a placeable model's shapes, in the file's order; none for a file that is no .phy.
