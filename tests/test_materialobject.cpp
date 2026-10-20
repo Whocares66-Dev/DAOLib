@@ -102,6 +102,27 @@ TEST_CASE("the last close is the one elements go before", "[mao]")
     CHECK(read->material == "m.mat");
 }
 
+TEST_CASE("an element's name is matched whatever its case, as Clouds.mao's <texture>", "[mao]")
+{
+    // Clouds.mao's shape (DAOLib #209): the textures written in lower case, single-quoted.
+    constexpr std::string_view kClouds = "<MaterialObject Name='Clouds'>\n"
+                                         "<Material Name='Clouds.mat' />\n"
+                                         "<texture Name='SkyTextureA' ResName='SB03_BCloud' />\n"
+                                         "<TEXTURE Name='PerlinNoise' ResName='perlin' />\n"
+                                         "<float Name='mml_fCloudSpeed' value='0.5' />\n"
+                                         "</MaterialObject>";
+    const auto read = mao::Read(kClouds);
+    REQUIRE(read);
+    CHECK(read->material == "Clouds.mat");
+    REQUIRE(read->textures.size() == 2);
+    REQUIRE(read->TextureIn("SkyTextureA") != nullptr);
+    CHECK(read->TextureIn("SkyTextureA")->resource == "SB03_BCloud");
+    CHECK(read->TextureIn("PerlinNoise") != nullptr);
+    // A lower-case texture is no parameter, and a lower-case parameter is still one.
+    REQUIRE(read->parameters.size() == 1);
+    CHECK(read->parameters[0].name == "mml_fCloudSpeed");
+}
+
 TEST_CASE("text that is not a material object", "[mao]")
 {
     CHECK_FALSE(mao::Read(""));

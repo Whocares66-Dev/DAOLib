@@ -34,6 +34,17 @@ std::string Source(std::string_view text)
     return std::string(path);
 }
 
+// Whether two element names are the same, ASCII letters' case aside: Clouds.mao and
+// CloudMaterial.mao write <texture>, and the game draws their clouds with those textures
+// (DAOLib #209, from DAOParagonEngine's level reader and elgara-agent's captures).
+bool Is(std::string_view element, std::string_view name)
+{
+    return std::ranges::equal(element, name, [](char a, char b) {
+        const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+        return lower(a) == lower(b);
+    });
+}
+
 // One element's tag read into the material object.
 void Take(std::string_view tag, MaterialObject &out)
 {
@@ -41,24 +52,25 @@ void Take(std::string_view tag, MaterialObject &out)
                                                              "Texture"};
     const std::string_view element = ElementOf(tag);
     const auto name = Attribute(tag, "Name");
-    if (element == "MaterialObject")
+    if (Is(element, "MaterialObject"))
     {
         out.name = name.value_or("");
     }
-    else if (element == "Material")
+    else if (Is(element, "Material"))
     {
         out.material = name.value_or("");
     }
-    else if (element == "DefaultSemantic")
+    else if (Is(element, "DefaultSemantic"))
     {
         out.defaultSemantic = name.value_or("");
     }
-    else if (element == "Texture")
+    else if (Is(element, "Texture"))
     {
         out.textures.push_back({name.value_or(""), Attribute(tag, "ResName").value_or("")});
     }
     else if (const auto value = Attribute(tag, "value");
-             name && value && std::ranges::find(kNotParameters, element) == kNotParameters.end())
+             name && value &&
+             std::ranges::none_of(kNotParameters, [&](std::string_view other) { return Is(element, other); }))
     {
         out.parameters.push_back({std::string(element), *name, *value});
     }
@@ -93,7 +105,7 @@ std::optional<MaterialObject> Read(std::string_view text)
     xml::ForEachTag(text.substr(0, end), [&](std::string_view tag) {
         if (!tag.starts_with('/'))
         {
-            seen = seen || ElementOf(tag) == "MaterialObject";
+            seen = seen || Is(ElementOf(tag), "MaterialObject");
             Take(tag, out);
         }
     });
