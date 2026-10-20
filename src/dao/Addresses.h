@@ -1594,9 +1594,11 @@ DAO_ADDRESS(kCameraControllerBase_TurnBehind, 21242)
 DAO_ADDRESS(kSceneCameraManager_Update, 15038)
 // The game's fly camera, read 2026-10-15 for DAOLib #125 (dao/Camera.h,
 // SetFreeView). GameModeFlyCam (GM_FLYCAM, 6) is a mode the scripts'
-// SetGameMode enters. Its entry (slot 7, 0x0076D560) turns on the input
-// group "GameModeFlyCam" and sets the renderer's near and far to 0.25 and
-// 4000; its update (slot 8, 0x0076DDF0) reads inputs 30 to 35
+// SetGameMode enters. Its entry (slot 6, 0x0076D4A0) turns on the input
+// group "GameModeFlyCam" and sets the renderer's near and far to 0.01 and
+// 4000, and its exit (slot 7, 0x0076D560) turns it off and sets 0.25 and
+// 4000 (corrected 2026-10-19, DAOLib #205: entry and exit were swapped
+// here); its update (slot 8, 0x0076DDF0) reads inputs 30 to 35
 // (FlyCam_MoveLeft ... FlyCam_MoveSlow, dao/Input.cpp's list) and moves the
 // camera at the mode's +0x58, set by the base GameMode's constructor, by
 // 15 m/s through its orientation: SetPosition, __thiscall (const Vector4

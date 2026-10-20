@@ -584,6 +584,7 @@ constexpr std::size_t kRemake = 0x30;       // the projection is to be made agai
 constexpr std::size_t kMatrix = 0x40;       // the projection, 16 floats
 constexpr std::size_t kNearPlane = 0x130;
 constexpr std::size_t kFarPlane = 0x134;
+constexpr std::size_t kAspectMultiplier = 0x144;
 constexpr std::size_t kSetFieldOfViewSlot = 3;
 constexpr std::size_t kSetPerspectiveSlot = 41;
 
@@ -768,6 +769,84 @@ GameMode g_before = GameMode::Explore;
 bool g_free = false;
 bool g_flying = false; // the fly camera's mode seen since the free view began: it comes a frame later
 
+// The scene camera's near and far planes when a free view began, given back by the fly camera
+// mode's exit, after its own (DAOLib #205; why beside SetFreeView). Empty when no free view of
+// the plugin's is in the mode, so the game's own fly camera ends as in vanilla.
+struct Planes
+{
+    float nearPlane = 0.0F;
+    float farPlane = 0.0F;
+};
+std::optional<Planes> g_planes;
+std::once_flag g_exitOnce;
+constexpr std::size_t kModeExitSlot = 7;
+
+std::optional<Planes> PlanesNow()
+{
+    void *camera = detail::RenderCamera();
+    if (camera == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto at = reinterpret_cast<std::uintptr_t>(camera);
+    const auto nearPlane = TryRead<float>(at + kNearPlane);
+    const auto farPlane = TryRead<float>(at + kFarPlane);
+    return nearPlane && farPlane ? std::optional(Planes{*nearPlane, *farPlane}) : std::nullopt;
+}
+
+void GivePlanesBack(const Planes &planes)
+{
+    void *camera = detail::RenderCamera();
+    const auto *const table = reinterpret_cast<void *const *>(Module::Address(addr::kPerspectiveCamera_Vftable));
+    if (camera == nullptr || table == nullptr)
+    {
+        return;
+    }
+    const auto at = reinterpret_cast<std::uintptr_t>(camera);
+    const auto fov = TryRead<float>(at + kFieldOfView);
+    const auto multiplier = TryRead<float>(at + kAspectMultiplier);
+    if (fov && multiplier)
+    {
+        reinterpret_cast<SetPerspectiveFn>(table[kSetPerspectiveSlot])(camera, 0, *fov, *multiplier, planes.nearPlane,
+                                                                       planes.farPlane);
+    }
+}
+
+// The exit returns what the base GameMode's (0x006945A0) left in eax, which is passed on as is.
+using ModeExitFn = int(__fastcall *)(void *mode, int edx, void *next);
+Detour<ModeExitFn> g_flyCamExit;
+
+int __fastcall FlyCamExit(void *mode, int edx, void *next)
+{
+    const int result = g_flyCamExit.Original()(mode, edx, next);
+    if (g_planes)
+    {
+        GivePlanesBack(*g_planes);
+        g_planes.reset();
+    }
+    return result;
+}
+
+GameModeController *Modes()
+{
+    auto *app = CClientExoApp::Get();
+    return app != nullptr ? app->GameModes() : nullptr;
+}
+
+void AttachFlyCamExit(const GameModeController *modes)
+{
+    std::call_once(g_exitOnce, [modes] {
+        auto *mode = modes->ModeObject(GameMode::FlyCam);
+        const auto vtable =
+            mode != nullptr ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(mode)) : std::nullopt;
+        const auto exit = vtable ? TryRead<std::uintptr_t>(*vtable + (kModeExitSlot * sizeof(void *))) : std::nullopt;
+        if (exit && *exit != 0)
+        {
+            g_flyCamExit.AttachTo(reinterpret_cast<ModeExitFn>(*exit), &FlyCamExit);
+        }
+    });
+}
+
 // Whether a free view went on, or ended without the plugin: a mode other than the fly camera's
 // after the game was seen in it, as a script's SetGameMode does (DAOPhotoCam's test, a fight).
 bool StillFree(const GameModeController *modes)
@@ -785,12 +864,6 @@ void EndFree()
     input::detail::WithholdFlyCamera(false);
     g_free = false;
     g_flying = false;
-}
-
-GameModeController *Modes()
-{
-    auto *app = CClientExoApp::Get();
-    return app != nullptr ? app->GameModes() : nullptr;
 }
 
 std::uintptr_t SceneCameraOf(const GameModeController *modes)
@@ -828,6 +901,19 @@ void Place(std::uintptr_t camera, const View &view)
 // the same, until a script's SetGameMode took the game from the fly camera to explore and on to
 // combat, ending the free view; the pick and ToScreen followed the drawn view; nothing near the
 // eye hid, faded or was clipped at 0.15 m.
+//
+// The near plane (DAOLib #205; read 2026-10-19 in GOG's exe, after Eluvian's session saw it 0.15
+// exploring, 0.01 in a free view and 0.25 after): the area's scene camera is made with near 0.15
+// and far 4000 (0x0040AE60, from the area's load at 0x006892A7). The fly camera mode's entry
+// (slot 6, 0x0076D4A0) sets 0.01 and 4000, and its exit (slot 7, 0x0076D560) 0.25 and 4000,
+// fixed values, not those it found: so the game's own fly camera leaves 0.25 standing until the
+// next area's camera. Slot 6 is a mode's entry and 7 its exit (GameModeGUI's 0x007187D0 and
+// 0x007188C0). A free view gives the camera back as it was, so the mode's exit is detoured
+// (slot 7, found through the mode object's vtable) and, after its own, sets the planes found
+// when the free view began through the camera's slot 41, whether the plugin or a script ended
+// the mode. A first try gave them back a frame after the mode had gone: right when the plugin
+// ended it, but a script's SetGameMode had the exit write its 0.25 after (Eluvian's play check,
+// 2026-10-19).
 std::optional<View> CurrentView()
 {
     const std::uintptr_t camera = SceneCameraOf(Modes());
@@ -873,6 +959,8 @@ bool SetFreeView(std::optional<View> view)
             return false;
         }
         g_before = now;
+        AttachFlyCamExit(modes);
+        g_planes = PlanesNow();
         input::detail::WithholdFlyCamera(true);
         modes->SetMode(GameMode::FlyCam);
         g_free = true;
