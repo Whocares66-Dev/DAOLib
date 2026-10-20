@@ -155,6 +155,12 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
   v0 = P-A-B uv(0,0); v1 = P+A-B uv(0,1); v2 = P+A+B uv(1,1); v3 = P-A+B uv(1,0); TEXCOORD0.zw = (p.frame, 0)
   ```
   Which scale is the toolset's X and which Y is open.
+- **A sprite's size, end to end** (read 2026-10-20 by lib-agent-2, for Paragon's fire size; checked unless said):
+  - **The owner's scale S** (+0x5C) is 1.0 from the object's constructor (0x0054FA46); the fill reads it through the owner's slot 0xE0 (0x0054F7B0). A room's placed model sets it through slot 0xAC (0x00545330) only when the record's scale is not 0, so a 0 leaves 1.0.
+  - **A particle's size** is 1 + r · ScaleRange, r uniform in [−1, 1], set at birth (0x00552AF0). No factor of 0.5 or 2 anywhere on the way.
+  - **A key is a half size:** the corners are P ± A ± B, so the age map's key × the emitter's multiplier × size is half the quad's extent. A key of 1 makes a quad 2 m by 2 m.
+  - **S² applies to sprites, and S not at all to ribbons**, whose half-width is axisB × the Y key × the Y multiplier × size.
+  - **Worked:** `fxe_fire_cnd_p`'s glow (size 0.85 to 1.15, multipliers 1.25) is 0.30 m wide and 0.39 m high at S 1; a candle record of scale 1.5 makes it 2.25 times that.
 - **Facing** (`OrientationBehaviour`, emitter params +0x334; set at spawn 0x0057C520, each frame 0x0057C7B0), with the camera's position, forward, up and right:
 
   | Mode | Name | Axes |
