@@ -43,7 +43,7 @@ An emitter's structs:
 
 - `amap`, its age map (in every emitter): MMHNodeAgeMapCount and its keys, `amel` structs, each MMHNodeAgeMapElementPercentLifeElapsed (0 at birth, 1 at death, rising), ScaleX, ScaleY and Color, a particle's size and colour at that share of its life. 13,868 keys. The wisp's glow: 0.6 by 0.5 and transparent at birth, 0.56 by 0.47 and opaque at 0.1, 0.2 by 0.15 and transparent at death, blue (0.4, 0.7, 1).
 - `spnv`, its spawn volume (1,145): MMHNodeSpawnVolumeType 0 a mesh (20), 1 a sphere (200, its radius), 2 a cylinder (608, its radius, length and axis), 3 a box (317, its corners); the fields of the other shapes are NaN. With SpawnWithinVolume, InvertSpawnVolumeNorms and NormalsAsDirection. A mesh volume holds two `data` structs: the points (MMHDataIsIndexStream 0, a Vector3fList) and the indices into them (1, a Uint16List), as many as MMHDataCount says (20 to 384), by the look of it a triangle list.
-- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, in 66 models; 4 in 32, in 5), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. The particles are born on the owner's `.phy` shapes, not its visible mesh: type 1 the owner's physics nodes, type 4 a scene-level source [inferred] (read 2026-10-20, below).
+- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, in 66 models; 4 in 32, in 5), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. The particles are born on the owner's `.phy` shapes, not its visible mesh: type 1 the owner's physics nodes, type 4 the physics actor reached through the effect's first dependency record, not settled (read 2026-10-20, below).
 - `spla`, its splat (7, the blood pools): a material, a size, samples, an orientation range, a life, a flipbook, HoldLastFrame, a colour multiplier, and an age map of its own.
 
 A list of Vector3 keeps each element in 16 bytes, the fourth float junk (`2.28e-38` in `fxa_lit_cone_c.mmh`): the 384th point of that file's lists is a point at that stride and not at 12. `tools/gff4.py --dump` reads such a list at 12 and shows it garbled; `dao::core::gff4::Struct::ListBytes` reads it at 16.
@@ -361,17 +361,23 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
 - **Loaded** by the emitter blueprint's loader (0x0058E9A0 to 0x0058EB18) into 0x24-byte records at the blueprint's +0x270: AttachmentType (6246), SpawnOnSurface (6342), UseNormalForVelocity (6343), Name (6247). The blueprint's +0x130 bit 1 says it has any.
 - **Bound once, at the effect's attach** (0x0054DD80, the owner's slot 0xD4, from the attach chain above), for each emitter with records:
   - type 1: every node of the owner that has a physics actor (the owner's list at +0xB0, filled by `PhysicsNodeFunctor`);
-  - type 4: a scene-level list (0x00548A70, the manager 0x0053F290's +0x1F8) [inferred: a level-wide source];
+  - type 4 (0x00548A70, called at 0x0054DF0C): not a global manager. 0x0053F290 is a vector's operator[] on the effect's +0x1F8, its list of dependency records, taken at 0. Through the first record's object, the first attached entry whose slot 0x18 answers true gives `[+8][+0x170]`'s interface as the source, a physics actor bound by the same 0x005420F0. Which object that is for a crust on a creature is not settled. Five models use it: fxa_fire_crust_c, fxa_stealth_c, fxc_sylvan_fire_c, fxa_ice_imp_c and fxc_ashwraith_c; the ghost's are both type 1 [C for the code];
   - types 2 and 3 match by Name, which no file sets.
   - Bound by 0x005420F0, a record per shape of the actor whose `MMHShapeAllowEmitterSpawn` (6244) is set, its weight `MMHShapeVolume` (6240) [inferred, from the shape reader 0x00589DB0].
   - With nothing bound, the emitter emits as an unattached one. Detached by 0x0054E0C0.
 - **Births** (the sprite emitter's update 0x00552CF0; the same for the linked sprite and the mesh emitter):
   - The count is unchanged: the birth rate, or per metre moved.
   - The count is shared out over the records by volume / total volume, with a fractional carry per record, each birth on a uniformly random shape of that record's actor. Each `emat` adds a full share, so two emats double the births.
-  - SpawnOnSurface 1 takes a point on the shape's surface and its outward normal (0x0081D190; for a capsule, pushed out to the radius); 0 a point inside it (0x0081CE60), with no normal.
+  - SpawnOnSurface 1 takes a point on the shape's surface and its outward normal (0x0081D190); 0 a point inside it (0x0081CE60), with no normal (read further 2026-10-20 by lib-agent-2) [C]:
+    - **The random unit vector** is not continuous: `0x008187E0` builds once a table of 162 unit vectors, an icosahedron subdivided twice (12, 42, 162), and `0x00A3C9E0` takes `table[rand % 162]` from its own LCG (`s = s · 0x343FD + 0x269EC3`, `(s >> 16) & 0x7FFF`, at 0x00C4BF74). The sampler's other draws use another such stream (0x00C398A0), the particle's radius draws a third (0x00C31994), and the shape's pick the CRT's `rand`; none is seeded.
+    - **A box's surface:** one of six faces chosen evenly (not by area, the jump table at 0x0081DA84), a point on it, and the face's normal. The position ignores the box's rotation, so a turned box is sampled as its axis-aligned world box; the rotation turns only the normal. Inside: C + H · (s1, s2, s3), also unturned.
+    - **A sphere's surface:** centre + R · w, the normal w from the table. Inside: centre + w · (p · R).
+    - **A capsule's surface:** c = A · u1 + B · (1 − u1), X = c + w · (u2 · R), then pushed out from the closest point of the axis to the radius, its normal radial on the cylinder and the cap's near the ends. Inside: A · (1 − a) + B · a + w · (p · R).
+    - **World space:** the getters are PhysX's world shape (the actor's pose times the shape's own), and the sampler applies no matrix of its own [I by the layouts; whether the actor follows the animated bone each frame is not read].
   - The points are world space, from the shape's current pose. UseNormalForVelocity 1 aims along that normal, 0 along the emitter's +z; with an initial speed of 0, as the ghost's, neither moves the particle.
   - A spawn volume, when the emitter has one, takes priority over the attachment.
-- **The creature's own mesh is not touched.** For the ghost the shapes are the armour's ragdoll capsules (`hm_arm_masa_0.phy`: capsules under the chest, hips and collars, volumes 0.0038 to 0.038, AllowEmitterSpawn 1).
+- **The creature's own mesh is not touched.** A humanoid is one object: its parts' blueprints are merged into it (`ConstructMergeObjectTask`, 0x00566410 to **0x00571670**), and a part's `.phy` rigid body replaces its bone's, the last merged part with one winning per bone. So the owner's list holds every part's capsules [C for the merge, I for the parts' order]. A weapon or shield is an object of its own, with its own list.
+- **The Valor's 17 capsules** [C data, I for the order]: its chest `hm_rob_tmpa_0` (the templar robe; torso, collars, shoulders, hips, knees, ankles), gloves `hm_glv_masa_0` (elbows, wrists), boots `hm_boo_nuda_0` (probably the bare boots, the variation row being empty; the same four leg capsules either way), and the head `hm_hed_dcpa_0` (the neck); the helmet's `.phy` has none. All are AllowEmitterSpawn 1, total volume 0.1783: the two chest capsules take 21.2% and 19.2% of the births, each hip 10.3%, the neck 1.3%. The longsword's own capsule has a volume of 6.257 in the file, far from its shape's; the kite shield has none, so its crust emits unattached.
 - **Core's `.phy` reader does not keep a shape's volume or AllowEmitterSpawn yet: DAOLib #213.**
 
 #### Opacity, and the Valor's script [C unless marked]
@@ -389,8 +395,8 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
 #### Not read
 
 - Who calls the slots 79 and 80, and exactly which event lays the material (attach or each frame); the effect object's +0x2D4.
-- Attachment type 4's source; the box and sphere surface branches in detail; the random unit vector (0x00A3C9E0, 0x008187E0); where the blueprint's +0x130 bit 1 is set.
-- Whether a humanoid's parts' `.phy` nodes all land in the creature's physics list, and so exactly which capsules the Valor has.
+- Attachment type 4's source object (which object the effect's first dependency is registered on; the crust bind's dependency, 0x00543BD0); where the blueprint's +0x130 bit 1 is set.
+- Whether a physics actor follows its animated bone each frame; the PhysX getters' slots (identified by layout); the parts' merge order; why the sword's capsule has a volume of 6.257.
 - VFX.mat's `ContactSheetAddv` states; the add-in's White.dds pixels; the render-class override pairs' meaning; mode 5's owner; b5's writer; stealth's look.
 
 ### Effects, the open questions: read 2026-10-18
