@@ -63,3 +63,34 @@ TEST_CASE("a header of no version an archive has is no cache", "[archive-cache]"
     bytes[at] = std::byte{7};
     CHECK_FALSE(install::ReadKept(bytes));
 }
+
+// Many directories are parsed on several threads (DAOLib #207): they come back in the order written.
+TEST_CASE("hundreds of kept directories come back in their order, and one bad among them is no cache",
+          "[archive-cache]")
+{
+    std::vector<install::KeptDirectory> many;
+    for (std::uint32_t d = 0; d < 300; ++d)
+    {
+        install::KeptDirectory kept{"C:/game/a" + std::to_string(d) + ".erf",
+                                    d,
+                                    -static_cast<std::int64_t>(d),
+                                    archive::Header{archive::Version::V22, d, 0},
+                                    {}};
+        for (std::uint32_t f = 0; f < d % 7; ++f)
+        {
+            kept.files.emplace_back("file" + std::to_string(d) + "_" + std::to_string(f) + ".utc", f * d);
+        }
+        many.push_back(std::move(kept));
+    }
+    auto bytes = install::WriteKept(many);
+    CHECK(install::ReadKept(bytes) == many);
+    // The version of the 151st directory's header, after the first 150 and its own path, size and time.
+    const std::vector<install::KeptDirectory> before(many.begin(), many.begin() + 150);
+    const std::size_t at = install::WriteKept(before).size() + 4 + many[150].path.size() + 8 + 8;
+    bytes[at] = std::byte{7};
+    CHECK_FALSE(install::ReadKept(bytes));
+    bytes[at] = std::byte{1};
+    CHECK(install::ReadKept(bytes) == many);
+    bytes.pop_back();
+    CHECK_FALSE(install::ReadKept(bytes));
+}

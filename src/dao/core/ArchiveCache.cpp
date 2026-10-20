@@ -9,10 +9,12 @@
 // the cache folder.
 #include "dao/core/ArchiveCache.h"
 
+#include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <fstream>
-#include <iterator>
 #include <random>
+#include <thread>
 
 namespace dao::core::install
 {
@@ -83,6 +85,16 @@ class Reader
         std::memcpy(text.data(), bytes_.data() + at_, *length);
         at_ += *length;
         return text;
+    }
+    // Steps over bytes with no look at them; false for more than are left.
+    bool Skip(std::size_t count)
+    {
+        if (bytes_.size() - at_ < count)
+        {
+            return false;
+        }
+        at_ += count;
+        return true;
     }
     bool Ended() const
     {
@@ -166,13 +178,48 @@ std::vector<std::byte> WriteKept(std::span<const KeptDirectory> directories)
     return out;
 }
 
+namespace
+{
+
+// How far a directory goes, with no copy of its names: the offsets of the directories (DAOLib
+// #207), which ReadKept then parses on several threads. Nullopt for bytes that end inside one.
+std::optional<std::size_t> DirectoryLength(std::span<const std::byte> bytes)
+{
+    Reader in(bytes);
+    const auto path = in.Number<std::uint32_t>();
+    if (!path || !in.Skip(*path) || !in.Skip(8 + 8 + 4 + 4 + 4))
+    {
+        return std::nullopt;
+    }
+    const auto files = in.Number<std::uint32_t>();
+    if (!files || *files > in.Left() / 8)
+    {
+        return std::nullopt;
+    }
+    for (std::uint32_t f = 0; f < *files; ++f)
+    {
+        const auto name = in.Number<std::uint32_t>();
+        if (!name || !in.Skip(*name) || !in.Skip(4))
+        {
+            return std::nullopt;
+        }
+    }
+    return bytes.size() - in.Left();
+}
+
+constexpr std::uint32_t kMostParsers = 16;
+constexpr std::uint32_t kFewestParsed = 64; // fewer directories than this are parsed on this thread
+
+} // namespace
+
 std::optional<std::vector<KeptDirectory>> ReadKept(std::span<const std::byte> bytes)
 {
     if (bytes.size() < sizeof kMagic || std::memcmp(bytes.data(), kMagic, sizeof kMagic) != 0)
     {
         return std::nullopt;
     }
-    Reader in(bytes.subspan(sizeof kMagic));
+    const std::span<const std::byte> body = bytes.subspan(sizeof kMagic);
+    Reader in(body);
     const auto version = in.Number<std::uint32_t>();
     const auto count = in.Number<std::uint32_t>();
     // Each directory takes 36 bytes at the least.
@@ -180,20 +227,52 @@ std::optional<std::vector<KeptDirectory>> ReadKept(std::span<const std::byte> by
     {
         return std::nullopt;
     }
-    std::vector<KeptDirectory> directories;
-    directories.reserve(*count);
+    constexpr std::size_t kPrefix = 8;
+    std::vector<std::size_t> starts;
+    starts.reserve(*count);
+    std::size_t at = kPrefix;
     for (std::uint32_t d = 0; d < *count; ++d)
     {
-        auto kept = ReadOne(in);
+        const auto length = DirectoryLength(body.subspan(at));
+        if (!length)
+        {
+            return std::nullopt;
+        }
+        starts.push_back(at);
+        at += *length;
+    }
+    if (at != body.size())
+    {
+        return std::nullopt;
+    }
+    std::vector<std::optional<KeptDirectory>> parsed(*count);
+    std::atomic<std::size_t> next = 0;
+    const auto work = [&] {
+        for (std::size_t d = next++; d < parsed.size(); d = next++)
+        {
+            Reader own(body.subspan(starts[d]));
+            parsed[d] = ReadOne(own);
+        }
+    };
+    const unsigned threads =
+        *count < kFewestParsed ? 1U : std::clamp(std::thread::hardware_concurrency(), 1U, kMostParsers);
+    {
+        std::vector<std::jthread> workers;
+        for (unsigned t = 1; t < threads; ++t)
+        {
+            workers.emplace_back(work);
+        }
+        work();
+    } // each joined
+    std::vector<KeptDirectory> directories;
+    directories.reserve(*count);
+    for (auto &kept : parsed)
+    {
         if (!kept)
         {
             return std::nullopt;
         }
         directories.push_back(std::move(*kept));
-    }
-    if (!in.Ended())
-    {
-        return std::nullopt;
     }
     return directories;
 }
@@ -205,8 +284,18 @@ KeptByPath LoadKept(const fs::path &folder)
     {
         return kept;
     }
-    std::ifstream in(folder / kKeptFile, std::ios::binary);
-    const std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    std::ifstream in(folder / kKeptFile, std::ios::binary | std::ios::ate);
+    if (!in)
+    {
+        return kept;
+    }
+    std::string text(static_cast<std::size_t>(std::max<std::streamoff>(in.tellg(), 0)), '\0');
+    in.seekg(0);
+    in.read(text.data(), static_cast<std::streamsize>(text.size()));
+    if (!in)
+    {
+        return kept;
+    }
     auto directories = ReadKept(std::as_bytes(std::span(text)));
     if (!directories)
     {

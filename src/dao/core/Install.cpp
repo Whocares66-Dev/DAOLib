@@ -73,6 +73,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <execution>
 #include <fstream>
 #include <iterator>
 #include <span>
@@ -171,7 +172,6 @@ std::string BaseName(Base base)
 }
 
 } // namespace
-
 std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &documents, const Options &options)
 {
     const auto start = std::chrono::steady_clock::now();
@@ -247,6 +247,16 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
     }
     const fs::path &base = Folder(sources_[source].base);
     const std::string skipped = Lower(Utf8(skip));
+    // The walk is under the base, so a path's place in it is the path with the base's text taken
+    // off: the same as lexically_relative, which was a third of the walk (DAOLib #207).
+    std::string prefix = Utf8(base);
+    if (!prefix.empty() && prefix.back() != '/')
+    {
+        prefix.push_back('/');
+    }
+    const auto placeIn = [&](const fs::path &path, const std::string &full) {
+        return full.starts_with(prefix) ? full.substr(prefix.size()) : Relative(path, base);
+    };
     for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, error), end;
          !error && it != end; it.increment(error))
     {
@@ -260,13 +270,14 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
         {
             continue;
         }
-        const std::string name = Lower(Utf8(it->path().filename()));
+        const std::string full = Utf8(it->path());
+        const std::string name = Lower(full.substr(full.rfind('/') + 1));
         const std::string extension = Extension(name);
         if (extension == "erf" || extension == "rim")
         {
             // The listing's size and time, which the walk has read already (MSVC's
             // directory_entry keeps them from the folder's listing).
-            Pending pending{source, it->path()};
+            Pending pending{source, it->path(), placeIn(it->path(), full)};
             std::error_code sized;
             std::error_code timed;
             const auto size = it->file_size(sized);
@@ -283,7 +294,7 @@ void Index::Collect(std::uint32_t source, const fs::path &root, const fs::path &
         }
         std::error_code sizeError;
         const auto size = it->file_size(sizeError);
-        loose_.push_back(Relative(it->path(), base));
+        loose_.push_back(placeIn(it->path(), full));
         gathered_.emplace_back(name, Copy{source, kLoose, static_cast<std::uint32_t>(loose_.size() - 1),
                                           static_cast<std::uint32_t>(std::min<std::uintmax_t>(size, kLargest))});
         ++sources_[source].loose;
@@ -403,21 +414,32 @@ void Index::KeepDirectories(const std::vector<DirectoryRead> &reads, std::size_t
     {
         return;
     }
-    std::vector<KeptDirectory> keep;
+    // Written again when an archive was read, or one kept has gone. Counted before any names are
+    // copied, so that a cache nothing changed in costs nothing (DAOLib #207).
+    std::size_t holding = 0;
     bool changed = false;
     for (const DirectoryRead &read : reads)
     {
         if (read.header && !read.key.empty())
         {
-            keep.push_back({read.key, read.size, read.written, *read.header, read.files});
+            ++holding;
             changed = changed || !read.kept;
         }
     }
-    // Written again when an archive was read, or one kept has gone.
-    if (changed || keep.size() != keptBefore)
+    if (!changed && holding == keptBefore)
     {
-        SaveKept(options_.cache, keep);
+        return;
     }
+    std::vector<KeptDirectory> keep;
+    keep.reserve(holding);
+    for (const DirectoryRead &read : reads)
+    {
+        if (read.header && !read.key.empty())
+        {
+            keep.push_back({read.key, read.size, read.written, *read.header, read.files});
+        }
+    }
+    SaveKept(options_.cache, keep);
 }
 
 void Index::AddArchive(const Pending &pending, DirectoryRead &read)
@@ -425,7 +447,7 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
     Source &source = sources_[pending.source];
     ArchiveRecord record;
     record.source = pending.source;
-    record.path = Relative(pending.path, Folder(source.base));
+    record.path = pending.relative;
     record.header = *read.header;
     record.files = read.files.size();
     const auto index = static_cast<std::uint32_t>(archives_.size());
@@ -483,19 +505,43 @@ void Index::AddArchive(const Pending &pending, DirectoryRead &read)
     }
 }
 
-// Into the map in one pass: sorted by name, stably so that each name's copies keep the walk's
-// order, and each name put in at the map's end. Half a million copies one at a time into the map
-// took longer than reading every archive's directory (DAOLib #144).
+// Into the map in one pass: sorted by name, each name's copies in the walk's order, and each name
+// put in at the map's end. Half a million copies one at a time into the map took longer than
+// reading every archive's directory (DAOLib #144). The sort is of views of the names with the
+// copy's place in the walk, on every processor, and the names are moved into the map after
+// (DAOLib #207).
 void Index::GatherResources()
 {
-    std::ranges::stable_sort(gathered_, {}, &std::pair<std::string, Copy>::first);
-    for (auto &[name, copy] : gathered_)
+    struct Ref
     {
-        if (resources_.empty() || std::prev(resources_.end())->first != name)
+        std::string_view name;
+        std::size_t walked;
+    };
+    std::vector<Ref> refs;
+    refs.reserve(gathered_.size());
+    for (std::size_t i = 0; i < gathered_.size(); ++i)
+    {
+        refs.push_back({gathered_[i].first, i});
+    }
+    std::sort(std::execution::par, refs.begin(), refs.end(), [](const Ref &a, const Ref &b) {
+        const int order = a.name.compare(b.name);
+        return order != 0 ? order < 0 : a.walked < b.walked;
+    });
+    for (std::size_t at = 0; at < refs.size();)
+    {
+        std::size_t end = at + 1;
+        while (end < refs.size() && refs[end].name == refs[at].name)
         {
-            resources_.emplace_hint(resources_.end(), std::move(name), std::vector<Copy>{});
+            ++end;
         }
-        std::prev(resources_.end())->second.push_back(copy);
+        std::vector<Copy> copies;
+        copies.reserve(end - at);
+        for (std::size_t i = at; i < end; ++i)
+        {
+            copies.push_back(gathered_[refs[i].walked].second);
+        }
+        resources_.emplace_hint(resources_.end(), std::move(gathered_[refs[at].walked].first), std::move(copies));
+        at = end;
     }
     gathered_.clear();
     gathered_.shrink_to_fit();
@@ -1159,18 +1205,20 @@ Key KeyOf(const Index &index, const Copy &copy)
     return {kind, std::move(where)};
 }
 
+// A key that is another's name, so that a copy of an archive borrows the archive's.
+struct KeyView
+{
+    std::uint8_t kind;
+    std::string_view name;
+};
+
 // The places of copies in the order the game meets them: those it has first, then as the
 // resource manager sorts its sources (priority, kind, name, the later first), then, of one
 // source's files, by their names (`names`, where given): a source lists its own files by name,
 // whether an archive or a folder (seen in play 2026-10-13, dev/FILES.md).
-std::vector<std::size_t> GameOrder(const Index &index, std::span<const Copy> copies, std::span<const std::string> names)
+std::vector<std::size_t> GameOrder(std::span<const Copy> copies, std::span<const KeyView> keys,
+                                   std::span<const std::string> names)
 {
-    std::vector<Key> keys;
-    keys.reserve(copies.size());
-    for (const Copy &copy : copies)
-    {
-        keys.push_back(KeyOf(index, copy));
-    }
     std::vector<std::size_t> order(copies.size());
     for (std::size_t i = 0; i < order.size(); ++i)
     {
@@ -1200,17 +1248,35 @@ std::vector<std::size_t> GameOrder(const Index &index, std::span<const Copy> cop
     return order;
 }
 
+std::vector<std::size_t> GameOrder(const Index &index, std::span<const Copy> copies, std::span<const std::string> names)
+{
+    std::vector<Key> owned;
+    owned.reserve(copies.size());
+    std::vector<KeyView> keys;
+    keys.reserve(copies.size());
+    for (const Copy &copy : copies)
+    {
+        owned.push_back(KeyOf(index, copy));
+        keys.push_back({owned.back().kind, owned.back().name});
+    }
+    return GameOrder(copies, keys, names);
+}
+
+template <class T> void Permute(std::vector<T> &items, const std::vector<std::size_t> &order)
+{
+    std::vector<T> sorted;
+    sorted.reserve(items.size());
+    for (const std::size_t i : order)
+    {
+        sorted.push_back(std::move(items[i]));
+    }
+    items = std::move(sorted);
+}
+
 // A resource's copies sorted into the order the game meets them.
 void Sort(const Index &index, std::vector<Copy> &copies)
 {
-    const std::vector<std::size_t> order = GameOrder(index, copies, {});
-    std::vector<Copy> sorted;
-    sorted.reserve(copies.size());
-    for (const std::size_t i : order)
-    {
-        sorted.push_back(copies[i]);
-    }
-    copies = std::move(sorted);
+    Permute(copies, GameOrder(index, copies, {}));
 }
 
 } // namespace
@@ -1231,14 +1297,7 @@ void Index::SortFiles(std::vector<NamedCopy> &files) const
         copies.push_back(file.copy);
         names.push_back(Lower(file.name));
     }
-    const std::vector<std::size_t> order = GameOrder(*this, copies, names);
-    std::vector<NamedCopy> sorted;
-    sorted.reserve(files.size());
-    for (const std::size_t i : order)
-    {
-        sorted.push_back(std::move(files[i]));
-    }
-    files = std::move(sorted);
+    Permute(files, GameOrder(*this, copies, names));
 }
 
 std::string Index::EngineSource(const Copy &copy) const
@@ -1248,20 +1307,51 @@ std::string Index::EngineSource(const Copy &copy) const
     return BaseName(sources_[copy.source].base) + ":" + KeyOf(*this, copy).name;
 }
 
+// A copy's place and key depend on the archive it is in, not on its entry: worked out once for
+// each archive, and for each loose file by its own path (DAOLib #207).
 void Index::Order()
 {
     const Placer placer(*this);
+    struct Whole
+    {
+        Placed placed;
+        Key key;
+    };
+    std::vector<Whole> ofArchive;
+    ofArchive.reserve(archives_.size());
+    for (std::uint32_t a = 0; a < archives_.size(); ++a)
+    {
+        const Copy any{archives_[a].source, a, 0, 0};
+        ofArchive.push_back({placer.Of(any), KeyOf(*this, any)});
+    }
+    std::vector<Key> looseKeys;
+    std::vector<KeyView> keys;
     for (auto &[name, copies] : resources_)
     {
         const bool otherLanguage = IsOtherLanguage(name, options_.language);
+        looseKeys.clear();
+        keys.clear();
+        for (const Copy &copy : copies)
+        {
+            if (copy.archive == kLoose)
+            {
+                looseKeys.push_back(KeyOf(*this, copy));
+            }
+        }
+        std::size_t loose = 0;
         for (Copy &copy : copies)
         {
-            const Placed placed = placer.Of(copy);
+            const Placed placed = copy.archive == kLoose ? placer.Of(copy) : ofArchive[copy.archive].placed;
             copy.priority = placed.place.priority;
             copy.unused = placed.place.unused == Unused::No && otherLanguage ? Unused::Language : placed.place.unused;
             copy.settled = placed.settled;
+            const Key &key = copy.archive == kLoose ? looseKeys[loose++] : ofArchive[copy.archive].key;
+            keys.push_back({key.kind, key.name});
         }
-        Sort(*this, copies);
+        if (copies.size() > 1)
+        {
+            Permute(copies, GameOrder(copies, keys, {}));
+        }
     }
 }
 

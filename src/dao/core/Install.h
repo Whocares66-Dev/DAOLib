@@ -268,6 +268,7 @@ class Index
     {
         std::uint32_t source;
         std::filesystem::path path;
+        std::string relative; // its place in its base, in the form Where() gives
         // Its size and last-write time as the walk listed them, if they read.
         bool stamped = false;
         std::uint64_t size = 0;
