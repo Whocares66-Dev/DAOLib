@@ -57,6 +57,8 @@ add_executable(
     test_picture.cpp
     test_plot.cpp
     test_range.cpp
+    test_readat.cpp
+    test_readat.cpp
     test_relocate.cpp
     test_savemeta.cpp
     test_sky.cpp

@@ -6,12 +6,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace archive = dao::core::erf;
@@ -328,4 +330,43 @@ TEST_CASE("an archive is not written with no files, a name too long or not ASCII
     CHECK(archive::Write(accented).empty());
     const std::vector<archive::Item> twice{{L"a.gda", one}, {L"A.GDA", one}};
     CHECK(archive::Write(twice).empty());
+}
+
+TEST_CASE("many threads read different files of one archive at once, each its own bytes", "[erf]")
+{
+    std::vector<File> files;
+    files.reserve(40);
+    for (int i = 0; i < 40; ++i)
+    {
+        files.push_back({"f" + std::to_string(i),
+                         std::string(static_cast<std::size_t>(500 + (i * 37)), static_cast<char>('A' + (i % 26)))});
+    }
+    const TempFile file(Build(true, files));
+    for (const bool held : {true, false})
+    {
+        const auto opened = archive::Archive::Open(file.path, held);
+        REQUIRE(opened);
+        std::atomic<int> wrong = 0;
+        std::vector<std::thread> threads;
+        threads.reserve(16);
+        for (int t = 0; t < 16; ++t)
+        {
+            threads.emplace_back([&, t] {
+                for (int round = 0; round < 50; ++round)
+                {
+                    const auto &want = files[static_cast<std::size_t>((t + (round * 7)) % 40)];
+                    const auto got = opened->Read(std::wstring(want.name.begin(), want.name.end()));
+                    if (!got || Text(*got) != want.bytes)
+                    {
+                        ++wrong;
+                    }
+                }
+            });
+        }
+        for (auto &thread : threads)
+        {
+            thread.join();
+        }
+        CHECK(wrong == 0);
+    }
 }

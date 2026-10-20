@@ -4,6 +4,7 @@
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/SafeRead.h"
+#include "dao/core/ReadAt.h"
 
 #include <Windows.h>
 
@@ -140,26 +141,6 @@ using ReadFileFn = std::uint32_t(__fastcall *)(std::byte *file, int edx, void *b
                                                std::uint32_t count);
 dao::Detour<ReadFileFn> g_readFile;
 
-// A read at an offset: on a handle not opened for overlapped reads, done
-// when ReadFile returns.
-std::uint32_t ReadAt(HANDLE handle, void *buffer, std::uint32_t bytes, std::uint64_t offset)
-{
-    OVERLAPPED overlapped{};
-    overlapped.Offset = static_cast<DWORD>(offset);
-    overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
-    DWORD read = 0;
-    if (ReadFile(handle, buffer, bytes, &read, &overlapped) == FALSE)
-    {
-        // Pending only on a handle opened for overlapped reads, which the
-        // archives' are not: waited for, as ReadFile with no OVERLAPPED would.
-        if (GetLastError() != ERROR_IO_PENDING || GetOverlappedResult(handle, &overlapped, &read, TRUE) == FALSE)
-        {
-            return 0;
-        }
-    }
-    return read;
-}
-
 std::uint32_t __fastcall ReadFromFile(std::byte *file, int edx, void *buffer, std::uint32_t size, std::uint32_t count)
 {
     if (t_inRun == 0 || t_seek.file != file)
@@ -171,7 +152,8 @@ std::uint32_t __fastcall ReadFromFile(std::byte *file, int edx, void *buffer, st
     {
         return g_readFile.Original()(file, edx, buffer, size, count);
     }
-    const std::uint32_t read = ReadAt(reinterpret_cast<HANDLE>(*handle), buffer, size * count, t_seek.offset);
+    const std::uint32_t read =
+        dao::core::ReadAt(reinterpret_cast<HANDLE>(*handle), buffer, size * count, t_seek.offset);
     if (!g_saidFirst.exchange(true))
     {
         // Once a session: the fix is in the path the engine takes.

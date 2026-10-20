@@ -195,6 +195,8 @@ add_library(
     src/dao/core/Picture.cpp
     src/dao/core/Plot.cpp
     src/dao/core/RayCast.cpp
+    src/dao/core/ReadAt.cpp
+    src/dao/core/ReadAt.cpp
     src/dao/core/Rtti.cpp
     src/dao/core/SaveMeta.cpp
     src/dao/core/ScriptValue.cpp

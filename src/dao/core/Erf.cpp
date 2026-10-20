@@ -28,12 +28,13 @@
 #include "dao/core/Erf.h"
 
 #include "dao/core/Bytes.h"
+#include "dao/core/ReadAt.h"
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstring>
 #include <fstream>
-#include <mutex>
 
 namespace dao::core::erf
 {
@@ -149,10 +150,57 @@ std::vector<Entry> Entries(std::span<const std::byte> start)
     return entries;
 }
 
+// A file handle opened for reading and shared with other readers, closed once.
+// Read at offsets (ReadAt), so many threads read it with no lock; the lock
+// guards only the first open.
+namespace
+{
+
+HANDLE OpenForReading(const std::filesystem::path &path)
+{
+    return CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                       nullptr);
+}
+
+} // namespace
+
+// A held archive's file, opened at its first read and shared by every thread after: a read at an
+// offset shares no position, so no lock (DAOLib #210). An open that fails is tried again at the next
+// read, as the stream before it was; of two threads opening at once, the second closes its own.
 struct Archive::Stream
 {
-    std::mutex lock;
-    std::ifstream file;
+    std::atomic<HANDLE> handle{INVALID_HANDLE_VALUE};
+
+    Stream() = default;
+    Stream(const Stream &) = delete;
+    Stream &operator=(const Stream &) = delete;
+    ~Stream()
+    {
+        if (HANDLE open = handle.load(); open != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(open);
+        }
+    }
+
+    HANDLE Get(const std::filesystem::path &path)
+    {
+        HANDLE open = handle.load(std::memory_order_acquire);
+        if (open != INVALID_HANDLE_VALUE)
+        {
+            return open;
+        }
+        HANDLE mine = OpenForReading(path);
+        if (mine == INVALID_HANDLE_VALUE)
+        {
+            return mine;
+        }
+        if (handle.compare_exchange_strong(open, mine, std::memory_order_acq_rel))
+        {
+            return mine;
+        }
+        CloseHandle(mine);
+        return open;
+    }
 };
 
 std::optional<Archive> Archive::Open(const std::filesystem::path &path, bool held)
@@ -214,28 +262,13 @@ std::optional<std::vector<std::byte>> Archive::Read(const Entry &entry) const
         return std::nullopt;
     }
     std::vector<std::byte> bytes(entry.size);
-    const auto read = [&](std::ifstream &file) {
-        if (!file.is_open())
-        {
-            file.open(path_, std::ios::binary);
-        }
-        file.clear();
-        file.seekg(entry.offset);
-        return static_cast<bool>(
-            file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())));
-    };
-    bool whole = false;
-    if (stream_ != nullptr)
+    Stream own;
+    HANDLE handle = (stream_ != nullptr ? *stream_ : own).Get(path_);
+    if (handle == INVALID_HANDLE_VALUE)
     {
-        const std::scoped_lock guard(stream_->lock);
-        whole = read(stream_->file);
+        return std::nullopt;
     }
-    else
-    {
-        std::ifstream file;
-        whole = read(file);
-    }
-    if (!whole)
+    if (ReadAt(handle, bytes.data(), entry.size, entry.offset) != entry.size)
     {
         return std::nullopt;
     }
