@@ -365,3 +365,49 @@ Read in the GOG exe (daoexe.py disassembly) and the game's files (ghilana) by li
 - The engine's GFx scale mode for the game's movies, and what a negative letterbox height draws.
 
 Core reads the `.stg` as `dao/core/Stage.h` (`stage::StageOf`: the places, and the cameras with FOV 11003, LookingFrom 11006 and LookingAt 11007 to 11009; `FindPlace` and `FindCamera` by tag, for `JumpToPlace` and `JumpToCamera`; DAOLib #196), and `cutscene::Stage` is the transform they are placed by.
+
+## A movie (.bik) as the engine plays it (read 2026-10-19 by lib-agent-2)
+
+Read in GOG's exe for DAOParagonEngine's video playback. Checked where an address is given, else inferred. Not seen in play, except where Eluvian's play check is cited.
+
+### Finding the file
+
+- **The name carries its extension.** The scripts' `PlayMovie`, the movie queue and the start-up list pass the name as given (the one script use is `R"bwlogo.bik"`, `pre100pt_light_beacon.nss:631`, a file this install lacks). Only a cut's `ActionPlayMovie` (APBM, type 42) appends `.bik` when its name (field 5740) has no '.' (0x007DCFB0–0x007DCFDE, the string at 0x00B235F8).
+- **`ECResMan::ResolveFilePath`** (0x004C5950) lowercases the name and takes the first **folder** source, in the manager's order (`dev/FILES.md`), that has a file of that name, rewriting the name as the source's folder plus the name. It skips ERF and RIM sources, so a movie in an archive is never found; every `.bik` in the GOG install is loose. A `data\movies\` folder is a source of its own, made by the folder scan from the subdirectory (0x004CF885–0x004CF96B); that it inherits its parent's priority is inferred. A name with a ':' (an alias such as `OVERRIDE:`) skips the lookup for `ECFileAccess::Aliases::Path` (0x004CA780).
+- **So the order is the resources' own:** override and add-ins win; in each tier the current language's `locale\<lang>\` beats `data\movies\` (the campaign's 50003 over 50004, the core's 100001 over 100005), and only the current language counts. In this install, with en-us, the data copy is taken for every movie; `betrayal`, `charge`, the `mnp100cs_loghain_event3` movies and `prelude_map` have locale copies.
+- **Opening:** the one `BinkOpen` call is at 0x00468B6C, in 0x00468A90: it changes the current directory to the file's folder, calls `BinkOpen(file, 0x400)` (0x400 inferred to be BINKNOFRAMEBUFFERS, the engine supplying the frame buffers), and changes back. The player is `Renderer::MoviePlayerInternal` (vftable 0x00AE7DFC), one per renderer, at `[0xC31650]+0xC0`, and it keeps the open movies by path.
+
+### The movie mode (10)
+
+- **Mode 10 is `GameModeMovie`** (vftable 0x00B11604). `ScriptBackend::ForScript_PlayMovie` (0x006DC680) is its method, on `*(*(app+0x114)+0x58)+0x28`. Its slots 10, 12, 18 and 19 are the false stub (0x005C5E80): not a base mode, not interruptible, no world pass and no perception, as cutscene mode. Nothing pauses the game, but with no world pass the world stands still for the movie and queued script events wait.
+- **The queue** is a vector of strings at mode+0x88. `PlayMovie` queues a non-empty name (0x006DC660), asks for mode 10, starts the `OnMovie` duck and sets +0x84. Each update (0x006DC200), when the player is not playing, the head of the queue is started (0x006DBEF0); with the queue empty, `Finish` (0x006DC040) stops the duck and clears +0x84, which ends the mode (slot 11, 0x006DC3A0). So several calls play in order.
+- **Skipping** (`SkipMovieMessage`, 0x006DC130, the only message of the input context "GameModeMovie") ends the current movie, not the queue: the next starts a frame later. **It is refused while the ini's `[Movies] FirstRun` is 1** (the byte at `[0xC32938]+0x540`). The physical key was not read.
+- **The start-up list** (0x005DD5A0, 0x006DC730) queues `[Movies] 0..9` of `DragonAge.ini` unless `DisableIntroMovies` is set, and un-pauses the game when it ends (+0x98).
+- **The no-movies byte** (+0x99, which makes `PlayMovie` do nothing) comes from the options at construction; that it is `DisableMovies` (0xB14C80) is inferred.
+
+### A cut's movie (APBM)
+
+- Its constructor (0x007DCF20) resolves the name and preloads it unless the cut player's state (+0x94) is 5 (inferred: the skip's fast state). Its update (0x007CE740) plays it on the step that crosses the action's start, and starts `OnMovie`; its end (0x007CE880) stops both.
+- **The cut's clock runs it:** the cut's other actions, its voice lines and its FMOD sounds play on, and the action hands the player the time since its start each update (slot 9, 0x004689F0), with which the player skips frames when behind; Bink's own clock still keeps it from running ahead.
+- **It has no stop time of its own.** An action stop before the movie's end cuts it off; otherwise the movie ends at its last frame, which is drawn once, and then only black shows. `game_intro.cut` plays `game_intro_head` (21.73 s) then `game_introduction` from 21.7333 s, both with stop 1e10, and is black for its last 4.9 s.
+- A cut skipped past a movie's start never starts it, and the skip's reset stops a movie playing. Only one cut, `credits_placeholder`, names a cut-level animatic (5008), played as a script movie in the cut's place.
+
+### Its sound and picture
+
+- **Audio is Bink's own, through DirectSound, outside FMOD,** at full volume (32768), and muted only when the SFX option is off or its volume is 0, not scaled by it (0x00468270; the mute set by the sound options, 0x005DDA30, at the next movie). Each `.bik` has one audio track (eight headers read), so there are no language tracks: a localized movie is a localized file. `OnMovie` ducks nothing (`dev/AUDIO.md`), and mode 10 leaves the area's music playing; in a cut, `OnCutscene` stays on.
+- **No subtitles:** no table, no Bink text track, and `GameModeMovie` never reads `SubtitlesLevel`. A cut's spoken lines still go to the cutscene screen's subtitle box; whether that draws over the movie was not read.
+- **Drawing:** each frame the viewport (vtable 0xAE7564, slot 3, 0x00459B90) advances the player, clears to (0,0,0,1) and draws one quad of the frame, centred and fitted to the screen's aspect, letterboxed or pillarboxed, never stretched (0x004687A0, the fit at 0x0046915F–0x004692C6). The 3D view is not drawn in that pass.
+- **The frame rate** is the file's own: 30.00003 for most, 29.97 for `dragon_age_main`, all 1280 × 720.
+
+### A movie that is missing or will not open
+
+- **Missing, from a script or the queue:** `Start` returns false with nothing logged and no dialog, and the mode ends within a frame or two. Eluvian saw a movie play and be skipped that way (`DAOEluvianMCP/dev/TESTING.md:273`).
+- **Found, but `BinkOpen` fails:** `Play` still marks the player playing with no handle, and `Stop` clears that only with a handle, so mode 10 waits for a skip (read in the code, not seen). Inferred: the next movie is held up too.
+- **In a cut:** nothing is checked. A missing file leaves the bare name, `BinkOpen` fails, and the action ends at its stop time.
+
+### Not read
+
+- The physical keys bound to `SkipMovieMessage`; the Flash GUI's draw order against the movie (so whether a cut's subtitles show over it); the player's +0x44 (a cover mode, inferred unused) and +0x47.
+- The writer of the no-movies byte; the flags at `settings+0x1E8`, `+0x209` and `+0x259` that the start-up list and the animatic test; the controller's pop of the mode after +0x84 clears.
+- Each folder source's recursion flag (+0xC0) and the subfolder's priority; the alias table's contents; what is passed to Bink as the sound device (inferred FMOD's DirectSound output).
+- How many shipped cuts have an APBM (only `game_intro.cut` was read); Steam's and EA's builds.

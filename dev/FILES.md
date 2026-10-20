@@ -51,6 +51,8 @@ Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and
 
 **Sources that come and go.** The campaign's are added when a campaign loads and the level's `ENV:` RIMs while the level is loaded; neither is there at the main menu. A plugin's folders come with the plugin.
 
+**Movies.** A `.bik` is found by name in the same order, among the folder sources alone: never in an ERF or RIM, and the current language's `locale\<lang>\` before `data\movies\` in each tier (`dev/CUTSCENES.md`, "A movie (.bik) as the engine plays it").
+
 ## Merged tables
 
 A data table the game merges (an M2DA: abilities, items, portraits, most of what the scripts' `TABLE_*` name) is not one winning file but the rows of many: the core's `abi_base.gda`, an add-in's `abi_cp1.gda`, a mod's `abi_mymod.gda`. Read in the exe 2026-10-13 (`dao/core/M2da.cpp` has the addresses) and seen in play:

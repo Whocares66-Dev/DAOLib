@@ -16,9 +16,9 @@ Read 2026-10-18 by lib-agent-2 in the GOG exe; not seen in play. Each section po
 
 ### PlayMovie (173)
 - **Handler:** 0x0065ECB0 (own handler, registered 0x00678DBA); calls `ScriptBackend::ForScript_PlayMovie` 0x006DC680 on the object at `*(*(app+0x114)+0x58)+0x28` (checked).
-- **Described in:** `dev/CUTSCENES.md` (names the game mode and GUI only; the movie itself is not described elsewhere on master).
-- **Does:** pops the movie's resource name (the name as given, no '.' cut) and passes it to the script backend, which, if its byte +0x99 is 0, queues the name (0x006DC660, when the string is nonempty), asks the game mode controller for mode 10 and sets its +0x84 to 1 (checked outline; mode 10's meaning, and what 0x005B9020/0x005BC7F0 do with the string at 0xB11538 (the address of a string; the string itself not read), not read).
+- **Described in:** `dev/CUTSCENES.md`, "A movie (.bik) as the engine plays it" (read 2026-10-19 by lib-agent-2).
+- **Does:** pops the movie's resource name (the name as given, no '.' cut) and passes it to the script backend, which, if its byte +0x99 is 0, queues the name (0x006DC660, when the string is nonempty), asks the game mode controller for mode 10, `GameModeMovie`, starts the duck `audio_categories/ducking/OnMovie` (0x005B9020, 0x005BC7F0, the string at 0xB11538) and sets its +0x84 to 1 (checked; read 2026-10-19 by lib-agent-2). The backend is `GameModeMovie` itself, and 0x006DC660 pushes the name onto its queue at +0x88.
 - **Edge cases:** failed pop -639 (checked); void command, returns 0 otherwise. When the backend's +0x99 byte is set (what sets it: inferred a no-movies switch) it does nothing and does not fail the script (checked). A name that is not a movie is not tested in the handler (checked).
 
 ## Not read
-- The body of 0x006DC660 and what mode 10 is.
+- Nothing left of this command: 0x006DC660 and mode 10 are read (`dev/CUTSCENES.md`, "A movie (.bik) as the engine plays it").
