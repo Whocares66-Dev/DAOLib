@@ -164,6 +164,28 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **`urn200ar_ruined_temple`** (layout `lak401d`): the "World Map" `wmt_wow_generic` (appearance 159, "Area Transition, Invisible, Wide") stamps `plc_invisowide_01_0_159.pwk`, kind 8 in both its states, across the whole 6 m entrance corridor. No path either way, answer 1.
 - These explain DAOTurnBased's DAOLIB_NEEDS item 6 cases. A port matching vanilla stamps the patches into the fine grid and leaves the coarse level as baked.
 
+### 10. The second coarse level: an entrance's parent, and the search over it (read 2026-10-20 by lib-agent-2, DAOLib #215)
+
+[C] read in the GOG exe's disassembly or checked over the game's layouts; [I] inferred. Node = `block << 16 | entrance` on both levels.
+
+#### An entrance's parent [C]
+
+- **The sector's offset** (0x00A49DC0(grid, block)) is the 16-bit word of the sector's dword at grid +0x14, plus 0x10000 when `block >= grid+0xC`. The loader sets the wrap index +0xC to 0x7FFFFFFF (0x00A4A79D), then to the first sector whose word is below the one before (0x00A4A7B0–0x00A4A819): the single wrap core's `SectorsOf` applies. The place (0x00A4A840), the entrance's end of edges (0x00A4A190, 0x00A4A1D0) and the edges (0x00A4AB80) all read from this base.
+- **The parent byte** (0x00A49F00(grid, block, k)) is `memory[offset − k − 1]`, bounds-checked: −1 for block −1, or when the sector count is `columns × rows` (one level; 0x00A49F04–0x00A49F28, 0x00A49F5D). So each first-level sector of n entrances is preceded by exactly n bytes, entrance k's the k-th back; second-level sectors have none.
+- **Checked over the 213 layouts the game takes:** the 204 with a second level hold 71,518 parent bytes, every one a valid index into its parent block's second-level entrances, and 0xFF (none to the engine) in none [C]; the 0xFF test is for a grid built at run time [I]. The 8 with one level (block size 16: arena2, brc201d, combat2, lak519d, orz703d, rmtst, rmtst01, rmtst03) have none, and den510c has no grid.
+- **The parent block** (0x00A49D10(grid, block)) is `(col >> 1) + ((columns + 1) / 2) × (row >> 1)`, col = block % columns, row = block / columns, −1 with one level (0x00A49D34–0x00A49D63). It matches core's second level, which has `(columns + 1) / 2` columns.
+- **In core:** `grid::Entrance::parent` (DAOLib #215), the parent block's entrance index, −1 on the second level or with one level.
+
+#### The search over the second level [C unless marked]
+
+- **Its environment** is `MapSuperAbstractionSearchEnvironment` (vtable 0xB592CC): slot 1 the successor (0x00A45D10), slot 2 the cost and h in one function (0x00A45670), slot 3 a stub returning false. The A* (0x00A53440) is the first level's, and found means the popped node is the goal. Setup (0x00A4D8E0) makes the start's and goal's super nodes from their parents, and skips the super search when both are the same node.
+- **Successors** (0x00A45D10 → 0x00A4AD70): the entrance's stored edges in stored order, the direction (an edge byte's top 3 bits) mapping to the neighbouring parent block: 0 N −pc, 1 E +1, 2 S +pc, 3 W −1, 4 NE −pc+1, 5 SE +pc+1, 6 SW +pc−1, 7 NW −pc−1, with pc = (columns + 1) / 2 (the jump table at 0x00A4AF34). No filter, mask or bounds check.
+- **Cost:** the octile distance `(max − min) + √2 · min` in cells (the double 0xB55040, not the fine level's 1.5) between the two entrances' places (0x00A49F70: side = 2 × blockCells, x = side × col16 / 16 + side × parent column, y likewise, col16 and row16 the place byte's nibbles). Unless b is the goal or the distance is 0, it adds 2 × side if b's cell has the placeable counter (bits 4–5), and 2 × side again if its kind is ≥ 8 or 6, or the creature ring (bits 6–7) is set.
+- **h** is the same call with b the goal, so it takes no penalty, and the A* weights it: **f = g + 1.2 · h** (0x00A53394, the double 0xAFEBC0). The fine A* has no weight (section 7's f = g + h stands).
+- **A route of more than 5 nodes** sets a mask (0x00A464D0): `mask[block] |= 1 << entrance` per route node. The first level's successor (0x00A45F20) then keeps a neighbour only if `mask[parent block] & (1 << parent entrance)`, confining the fine search to the corridor the super route passed through. With 5 nodes or fewer nothing is dropped.
+- **A route of 26 nodes or more** plans the first level to its midpoint node, route[n / 2]: 0x00A4A080 looks for a first-level entrance under it in the child blocks TL, BL, TR, BR in that order (only the left two when the columns are odd and the block is in the last column), and finding none answers 5.
+- Not read: 0x00A4A8E0 (how the start and goal cells join the second level, called at 0x00A4DB31 and 0x00A4DB4C), what follows 0x00A4DC9C (the plan to the midpoint and the rest), the run-time builder's writing of the parent bytes (0x00A4A690), the heap's order among equal f (0x00A536A0), 0x00A45CD0, and whether any level's odd columns make 0x00A4A080's two-candidate case happen.
+
 ### What a port should copy (summary)
 
 1. Keep the grid's cell kinds as the file's 4-bit kinds, with the counters; implement `IsFree` as in section 2 (cells blocked at >= 8 / == 7, but only by centre distance <= max(r, cell)), not "the cell under the point is blocked".
