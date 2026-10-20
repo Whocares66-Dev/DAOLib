@@ -223,6 +223,9 @@ TEST_CASE("a helmet hides the hair, a full-face one all but the eyes", "[charact
     const auto open = character::Resolve(Human(1, {{5, "helmet"}}), Items(), tables.Of());
     REQUIRE(open);
     CHECK(open->head.helmet == L"hm_hlm_meda");
+    REQUIRE(open->head.helmetItem);
+    CHECK(open->head.helmetItem->baseItem == 45);
+    CHECK(open->head.helmetItem->variation == 1);
     CHECK_FALSE(open->head.hair);
     CHECK(open->head.face);
     CHECK(open->head.beard);
@@ -236,6 +239,7 @@ TEST_CASE("a helmet hides the hair, a full-face one all but the eyes", "[charact
     const auto none = character::Resolve(Human(1, {}), Items(), tables.Of());
     REQUIRE(none);
     CHECK(none->head.helmet.empty());
+    CHECK_FALSE(none->head.helmetItem);
     CHECK(none->head.hair);
     CHECK(character::FullFaceEyes(L"cn_eye_glka") == L"cn_eye_glk2a");
 }

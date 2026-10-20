@@ -219,6 +219,9 @@ Head HeadOf(const Context &context, const Template &creature, const ItemOfName &
     {
         return head;
     }
+    // Its item, for its material and tint, as a body part carries its own (DAOLib #214: the
+    // basement's sentinels drew a white helmet where the game's is bronze).
+    head.helmetItem = helmet;
     const Variation variation = VariationOf(context, *helmet);
     if (const auto name = NameOf(variation.worksheet, variation.row); !name.empty())
     {

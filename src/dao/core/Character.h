@@ -131,7 +131,9 @@ struct Head
     // apr_base's Neck_Model with the prefix; empty for none. Always drawn, skin-tinted like the
     // face, under the head and collar: its cap shows only where the head is gone.
     std::wstring neck;
-    std::wstring helmet;   // empty for none
+    std::wstring helmet; // empty for none
+    std::optional<Item>
+        helmetItem;        // the helmet's item, for its material and tint as a body part's; none with no helmet
     bool fullFace = false; // the helmet's worksheet row's FullFace: only the eyes are drawn
     bool face = true;
     bool hair = true; // false under any helmet
