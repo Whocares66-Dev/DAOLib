@@ -706,7 +706,13 @@ Other overlay trees (apr_base column values): `bowoverlay`, `cbowoverlay`, `staf
   - else if +0x2C (override) is set: to the override list at +0x218 (0x00814B84-0x00814BEE);
   - else it is a normal clip of the blend group, and per group the weights are divided by their sum (0x0054D6C1..0x0054D70E: `w[+0x24] /= total`) so normal weights sum to 1.
   - `AnimationIgnoreScale` (+0x2F = 1) makes the entry's scale (1,1,1) instead of the tree's.
-- Never read: the sampler that consumes the three lists. So "additive = delta rotation applied on top, scaled by weight" and "override = replace the keyed bones' base pose, weighted" are inferred from the data: additive look clips have key 0 and the centre key equal to identity and are 181 keys of linear rotation about one axis; override clips key only the bones they replace and their first/last keys are poses, not deltas. Keys are in the usual Clip.h encodings (target 4 = 64-bit, 2 = 32-bit smallest-three).
+- **The sampler** (read 2026-10-20 by lib-agent-2; checked unless said) is Object slot 51 (0x00549E30), and it settles what was inferred here:
+  - normal clips blend into the base by their weights, as above;
+  - overrides: W is the sum of their weights. W ≥ 1 replaces the base, and 0 < W < 1 lerps (translation) or slerps (rotation) toward their weighted average, on the bones they key alone. The average does not depend on their order, and their priority is never read;
+  - additive clips last: v · w added to a translation, slerp(identity, q, w) multiplied onto a rotation (the multiplication's order inferred). Weights are used raw, not divided by a sum.
+- **The flinch** (row 103) starts through `PlayAdditiveAnimation` (0x00659300 → 0x00696B50) with a blend rate of 5.0 (0xAE7308) toward weight 1, so 0.20 s to full. No fade-out was found [open].
+- **The overlay draw (108) and sheathe (109)** are gated by 0x00694E20, which requires rows 100 and 109 (or 101 and 108) at weight 0.
+- **Row 99, bodyoverlay:** no code that starts it was found.
 - Override priority (4013) is 0 in every overlay clip read, so ordering among overrides was not needed.
 
 #### 2. Blinking
