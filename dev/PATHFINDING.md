@@ -214,12 +214,20 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
   - Smooth runs inside each leg (0x00A4D1F0), over [0, n − 1] and then over [the old last, the new last]. Between legs the driver (0x00A4E1B0) picks a 10-point window slid along (0x00A4C4A0 and its helpers), a corner pass or a collapse of the tail, by the slice's parity and P +0x88 (the follower's next index). P +0x8C (a large mover near its goal) turns the between-leg passes off; the in-leg Smooth runs regardless. P +0x8D (wide) affects only which cells the fine search takes. The last leg appends the exact goal after its Smooth (0x00A4D888); its goal cell V[0] is never appended (cut 0). done does not end the search: the driver keeps running its passes until 0x00A4C4A0 sees the window and the corner pass at the end, so the goal is inside the window's Smooth (0x00A4CE40) and the tail's Collapse (0x00A4CEE0 → 0x00A4C5E0), unless P+0x8C is set.
   - There is no snapping or pass for points in a line. Cells become positions through 0x00A49B70, in 0x00A4C630.
 - **The corner tests,** used by the setup alone [C]: 0x00A4C140 is "sharp" when |u2 − u1|² ≥ 1.0 for the two unit directions, a turn of 60° or more; 0x00A4BAA0 is the integer test for an obtuse angle.
+- **A leg that ends on a kind-7 cell answers 6** [C]: after the fine A* (0x00A4D6E7):
+  - The leg tests the kind of V[0]: the cell where the fine path ends, which is the leg's goal or the kept node of a failed search.
+  - If V[0] is kind 7, the leg clears the search's active byte and stores that cell's world position at P+0x84 (the barred position). It appends nothing and returns 6.
+  - The driver and RequestPath pass 6 through (0x0073EE76).
+  - A path that only crosses kind-7 cells inside a leg is not barred, so "a shut door ends as 6" holds only when the leg ends on the door's patch.
+  - The walk command's move update (0x007A92F8, RequestPath's only direct caller) stops the creature (0x006A9430(0)) and fails the command with −9, PATH_ACTION_REQUIRED. It does not open the door.
+  - At the command's completion (status −9, 0x00743EC3), `CCCreature::PathBlocker` 0x006A7E10 returns the first object of the creature's list +0x690 within 5 m of P+0x84 whose footprint test (0x0074DC40, not read) holds, else −1. The approach command then retries from the door's ring spot when the blocker is its own target (TURN_BASED.md:402).
+- **The corner pass settles** [C for the test; I for the counts] when W.3C − W.44 > 5 or W.3C == W.30 (0x00A4BA70). Each step (0x00A4D110) advances W.3C by 5: after one call if it changed nothing, or after 11 calls if it keeps cutting. So the first window takes 2 to 22 driver calls, and a straight path about 2.
 - **The time budget** [C]:
   - The search object at world +4 has a stopwatch at +0xCC (made at the world's construction, kept at world +0xE0 and copied in at each step by 0x00A467A0) and the limit in seconds at +0xD0, the step's one argument. RequestPath (from 0x0073EDEA) passes 0.003 × (AI level ≤ 3 ? 1 : 2) (0xB1B7E0 = 0.003).
   - Each A* call restarts the clock and stops when the limit is below the time elapsed, with no resume. The super and first levels then answer 5; a fine leg counts as failed (path +0x48 += 1), and two in a row answer 1 (section 8). There is no cap on a whole search's time, nodes or length.
   - So vanilla's give-up on a long route depends on the machine's speed. A port wanting vanilla's results without that can replace the clock with a fixed expansion count large enough never to trip, and keep the two-failed-legs rule [I].
 - **The penalties' switch,** the fine environment's +8 [C]: it gates every penalty term of the step cost (0x00A45AA0); the base distance (so h) and the push's turn cost are not affected. With it clear, and b not the goal and the distance not 0: +7 for a kind-5 cell when the mover's stamps stop it, else +7 for kind 6 and +3 for each creature ring on the cell; +8 for kind 7; +1 for each of the four diagonal neighbours of kind 8 or more, and +1 once if any is kind 7; +2 for a placeable's counter on the cell. The leg sets the switch (0x00A4D3F3) when path +0x48 > 0, so a retry after a failed leg runs without penalties and without the wide filter, until a leg succeeds and +0x48 goes back to 0.
-- Not read: the corner pass's fallback cut as run; the rounding of Collapse's point count (0x008E34F0); the append helper's length sum (0x00A4C630); the long-route tail at the 10th call (0x00A4DDA0); whether the 3 or 6 ms clock trips on a normal machine at 290 to 370 m; the leg's return-6 branch (the reached end's cell of kind 7, 0x00A4D6E7..0x00A4D740).
+- Not read: the corner pass's fallback cut as run; the rounding of Collapse's point count (0x008E34F0); the append helper's length sum (0x00A4C630); the long-route tail at the 10th call (0x00A4DDA0); whether the 3 or 6 ms clock trips on a normal machine at 290 to 370 m; 0x0074DC40 (the blocker's footprint test) and what fills creature +0x690.
 
 ### 12. A creature's stamp: when, its footprint, who reads it (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine #130; C checked, I inferred)
 
@@ -246,7 +254,6 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **Place always lifts first** (0x00A629F0 → 0x00A627D0), so the stamp follows the creature.
 - **Every position change**: `CCCreature::SetPosition` 0x006B5EF0's tail lifts (0x006B609C) and places (0x006B60A3) while the creature is in an area. The walk moves through it, so a walker re-stamps each frame it moves (a soft stamp).
 - **The end of a walk**: the stop 0x006A9430 (from the move update 0x007A9130) sets state 3 or 0 and places a hard stamp.
-  - A command cancelled mid-walk may leave the soft stamp until the next move [I].
 - **AddToArea** (0x006B3070) places when state 0 and active, and lifts when inactive.
 - **SetActive** (0x006B5D90) places when on and lifts when off, except an active-party follower's deactivation, which returns early.
 - **SetGhost** (0x006BBFC0) lifts, flips +0xC90 and places again.
@@ -255,7 +262,18 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **Death**: the health handler (0x006BC4B0, health falling to ≤ 0) calls slot 0x78 = 0x006B3620, which lifts. The exception is a creature whose appearance's DecayBehaviour is 2 (0x006A3A80: Broodmother, High Dragon): its corpse keeps the stamp until its position next changes, since the IsDead gate then refuses the new one.
   - A revive (0x006B3690) places it again.
   - So the dead do not block.
-- **Destroy and RemoveFromArea never lift.** RemoveFromArea (0x006B6E60) even re-places an active creature in state 0 (0x006B6ED2). A living creature destroyed in a kept area therefore leaves its stamp in the live grid [I: from no lift being called; not seen in play].
+- **Destroy and RemoveFromArea leave a stale stamp** [C: RemoveFromArea 0x006B6E60 and 0x006B3070 read in full; the obstacle's destructors 0x00A63020, 0x00A62880, 0x00A62590 and 0x00A484C0 only free buffers].
+  - RemoveFromArea runs ClearAllCommands (0x0073C930), then 0x006B3070 (0x006B6ED2).
+  - A creature standing still (state 0) is re-placed there, so it leaves a hard kind-6 stamp.
+  - A walking one has been put in state 3 by the clear, so it is skipped and leaves its soft stamp (counters).
+  - The stamp goes only when the area's grid is freed (the area's destructor 0x00684760 → 0x0067C130), or when the creature is added to another area: the place's lift uses the record's own area.
+  - So in an area that stays loaded, a destroyed living creature's cells stay stamped. That is a vanilla fault, not seen in play [I for its effect].
+- **A command cancelled mid-walk** [C]: ClearAllCommands → the shared end 0x00746900 → 0x00A63AC0 (state 1 or 2 → 3). StopMovement 0x006A9430 is not called, so the stamp stays soft (counters only) until the creature next moves.
+  - SetState 0x00A63800 does no stamp work.
+  - Attack set-up and "movement cleared" also set state 0 without a place.
+- **SetRadius 0x006A2A40 on a placed stamp** [C]: AddToArea and creature set-up (which `SetAppearance` reaches on a live creature) can run it while a stamp is placed. When the new radius needs a bigger record, the record is freed without a lift and refilled with 0xFF. The next lift then undoes every cell of the old circle, other creatures' kind-6 cells among them.
+  - A smaller radius changes nothing: the lift uses the copy at +0x44.
+  - The two other callers (0x0065B011, 0x0065B1B1) are stack temporaries, never placed.
 
 **Who blocks whom** [C]:
 - `+0xC90` is the ghost flag, written only by the constructor, `SetGhost` (from `SetObjectProperty` case 0x283, COMMAND_SETCREATUREISGHOST) and the save's loader.
@@ -288,10 +306,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 6. Leave IsFree and the coarse regions alone.
 
 **Not read**:
-- The first half of 0x006B3070.
-- The cancel path of 0x007A9130.
-- Whether SetRadius (0x006A2A40) frees the record while a stamp is placed (it does not lift first).
-- The two radius setters at 0x0065B011 and 0x0065B1B1 (a temporary probe radius) [I].
+- Nothing left open from this reading.
 
 ### What a port should copy (summary)
 
