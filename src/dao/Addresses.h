@@ -320,6 +320,10 @@ DAO_ADDRESS(kCooldownManager_Tick, 16532)
 // the ability being cast already (395779). One failing path (0x0071CF69)
 // gives 0 for the reason. The name is ours.
 DAO_ADDRESS(kCCCreatureStats_CanUseAbility, 16539)
+// CCCreature's vtable slot 44 (+0xB0), __thiscall (anim_base row, float speed, float blend, byte
+// flag), `ret 0x10`, no return value (every caller overwrites eax), read 2026-10-21 (dev/ANIMATION.md). It plays an
+// animation on the base layer through 0x0069B3D0. Only CCCreature's vtable holds it.
+DAO_ADDRESS(kCCCreature_Play, 14670)
 DAO_ADDRESS(kCCCreature_Movement, 14455)
 // A creature's animations (dao/Animation.h), read 2026-10-02: its
 // animation set (+0x154) answers whether it has an animation and how long

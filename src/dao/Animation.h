@@ -9,6 +9,7 @@
 #include "dao/Structures.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 namespace dao::animation
@@ -126,5 +127,20 @@ bool SetRate(ObjectId creature, float rate);
 // Returns the speed of one creature's animation, as Pause and SetRate leave it.
 // @return nullopt if the creature is not loaded
 std::optional<float> Rate(ObjectId creature);
+
+// Calls `observer` each time a creature is told to play an animation, after the engine has taken
+// the order.
+// @param observer receives the creature, the animation (a row of anim_base), the speed, the blend
+// and the flag the engine was given
+//
+// This is the engine's own play call, the one a command's animation step, a conversation line and
+// the idle all use, so it sees every creature's base-layer animation. It does not see walking and
+// running, which are not played through it, nor a clip the animation set starts on its own, such as
+// a one-shot returning to the idle. The blend is a rate
+// in weight per second, or a code when it is -1 (instant) or -2 (fade over a fifth of the clip).
+// The observer runs on the game thread and often, so keep it short and do not play animations from
+// it. The creature's tag is the script command GetTag (dao/generated/ScriptApi.h) on the id.
+void OnPlayed(
+    std::function<void(ObjectId creature, std::int32_t animation, float speed, float blend, bool flag)> observer);
 
 } // namespace dao::animation

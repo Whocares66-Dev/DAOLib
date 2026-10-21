@@ -86,11 +86,17 @@
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Gda.h"
+#include "dao/Guard.h"
+#include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 
 #include <cstddef>
+#include <memory>
+#include <mutex>
+#include <utility>
+#include <vector>
 
 namespace dao::animation
 {
@@ -102,6 +108,31 @@ constexpr std::size_t kCombat = 0xC60;  // the creature's combat record
 constexpr std::size_t kAimMs = 0x60;    // SetAimLoopDuration's milliseconds
 constexpr std::size_t kAttackMs = 0x64; // SetAttackDuration's milliseconds
 constexpr float kMillisecond = 0.001F;
+
+// Observers of a creature's play call, a list replaced whole on each add so that the hook, which
+// runs for every animation, takes a pointer under the lock and walks the list without one.
+using PlayedObserver = std::function<void(ObjectId, std::int32_t, float, float, bool)>;
+std::mutex g_playedLock;
+std::shared_ptr<const std::vector<PlayedObserver>> g_played = std::make_shared<const std::vector<PlayedObserver>>();
+
+// CCCreature slot 44: __thiscall (animation, speed, blend, flag), `ret 0x10`, returns nothing.
+using PlayFn = void(__fastcall *)(CCCreature *, int, std::int32_t, float, float, std::uint8_t);
+Detour<PlayFn> g_play;
+
+void __fastcall Play(CCCreature *self, int edx, std::int32_t animation, float speed, float blend, std::uint8_t flag)
+{
+    g_play.Original()(self, edx, animation, speed, blend, flag);
+    std::shared_ptr<const std::vector<PlayedObserver>> observers;
+    {
+        const std::lock_guard lock(g_playedLock);
+        observers = g_played;
+    }
+    const ObjectId id = self != nullptr ? self->Id() : kInvalidObject;
+    for (const auto &observer : *observers)
+    {
+        detail::Guard("an animation played callback", [&] { observer(id, animation, speed, blend, flag != 0); });
+    }
+}
 
 CCCreature *CreatureOf(ObjectId creature)
 {
@@ -360,6 +391,17 @@ std::optional<float> Rate(ObjectId creature)
         return std::nullopt;
     }
     return TryRead<float>(model + kModelRate);
+}
+
+void OnPlayed(
+    std::function<void(ObjectId creature, std::int32_t animation, float speed, float blend, bool flag)> observer)
+{
+    static std::once_flag once;
+    std::call_once(once, [] { g_play.Attach(addr::kCCCreature_Play, &Play); });
+    const std::lock_guard lock(g_playedLock);
+    auto next = std::make_shared<std::vector<PlayedObserver>>(*g_played);
+    next->push_back(std::move(observer));
+    g_played = std::move(next);
 }
 
 } // namespace dao::animation

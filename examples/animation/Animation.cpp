@@ -8,6 +8,9 @@
 // whether the library's figures are the engine's. A time-based turn bar
 // costs actions with them (the turn-based mod's).
 //
+// It also logs each animation the controlled creature is told to play
+// (OnPlayed), with its speed and blend.
+//
 // What it sees goes to example_animation.log.
 #include "dao/Animation.h"
 #include "dao/Abilities.h"
@@ -15,6 +18,7 @@
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 #include "dao/String.h"
+#include "dao/generated/ScriptApi.h"
 
 #include <spdlog/spdlog.h>
 
@@ -96,5 +100,12 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     }
     dao::commands::OnStart(&Started);
     dao::commands::OnEnd(&Ended);
+    dao::animation::OnPlayed([](dao::ObjectId who, std::int32_t animation, float speed, float blend, bool flag) {
+        if (who == dao::script::api::GetMainControlled())
+        {
+            spdlog::info("0x{:x} plays animation {} at speed {:.2f}, blend {:.2f}, flag {}", who, animation, speed,
+                         blend, flag);
+        }
+    });
     return true;
 }
