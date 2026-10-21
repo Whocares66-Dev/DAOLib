@@ -1403,12 +1403,79 @@ So a hit's reaction starts at the impact event, and a miss's evade starts at eve
 
 #### Not read
 
-- The deathblow command's row choice (which of several table-102 rows is taken, and the start handler's entry address; I read only its key inputs and the final `0x00A3A510` random pick), and which clip a deathblow command plays on a creature without the CastAnim row.
+- The deathblow command's row choice: read 2026-10-20, "The deathblow" below.
 - The key-set construction in `0x00A3B240` (I took the subset semantics from its loops' shape).
 - `0x007B51E0`'s object; `0x006A3A30` (gate of event 30); QueueCommand's event 0x5e payload and its type-0x19 branch; the command's word (+8) and the block's int 7; that an idle target never evades in play.
 - Ranged shots' impact event times (`bw_fire` etc.) and the staff's basic-attack path (the staff tree maps attk_ to the tw_atk clips; whether the staff attacks as ranged in play was not checked).
-- Creatures with their own trees (spiders, dogs, ogres, dragons): their attk_/miss_/evade/bdmg nodes were not dumped.
+- Creatures with their own trees: the wolf's, spider's and ogre's read 2026-10-20, "Monsters' attack trees" below; dragons' and the rest not.
 - Not seen in play.
+
+### Effects' animations, the deathblow, and monsters' attack trees (read 2026-10-20 by lib-agent-2, for DAOParagonEngine #33; checked unless marked)
+
+Nothing here was run in the game. The knockdown's times agree with what DAOTurnBased measured in play.
+
+#### Effects' animations: knockdown, slip, knockback, stun, sleep, paralysis
+
+- **No knockdown flag, and the scripts play nothing.** Each condition is its own effect type, and the engine takes its animation and priority from `effects.gda` (table 136), columns `Animation` and `Priority` (hashes 0x43C8D895, 0x76E5BBCB), copied onto the effect when it is made (the CGameEffect constructor 0x00A650C0: +0x34 animation, +0x38 priority, +0x3C flags, for types 12 and up; the native types 1–11 set theirs in their handlers). Rows spot-checked: 8, 1014, 1027, 1033, 1037.
+
+  | Condition | Effect type | Priority | Row | Humanoid clip |
+  |---|---|---|---|---|
+  | Knockdown | KNOCKDOWN 1014 | 981 | 148 `talent_chargereaction` | `mh_c.rct_kbck_v1`, 1.367 s, one-shot, TransitionTo 151 |
+  | Slip | SLIP 1051 | 6 | 284 `slip` | `mh_c.rct_slp`, 3.767 s, the fall and the rise in one clip |
+  | Knockback | KNOCKBACK 1057 | 4 | 273 `knockback` | `mh_c.rct_kbck`, 1.2 s |
+  | Stun | STUN 1027 | 1 | 271 `dazed` | `shared.dazed`, 4.967 s, a loop |
+  | Sleep (the spell) | SLEEP 1033 | 2 | 271 `dazed` | the same loop, standing |
+  | Sleep (plot, `ForceSleepStart`) | SLEEP_PLOT 1037 | 2 | 250 `die` | `mh_c.sw_die_v1` 2.1 s, then `dieloop`, lying |
+  | Paralysis | PARALYZE 8 (native) | 998 (its handler) | none | no clip: the animation controller is paused |
+  | Root | ROOT 1003 | 980 | 286 `root` | `mh_c.rct_root`, 4.867 s |
+  | Heavy impact | HEAVY_IMPACT 1032 | 990 | 141 `hvyDam` | `mh_c.rct_hdmg_f`, 1.3 s |
+  | Fear | FEAR 1036 | 995 | 287 `horror` | `mh_c.rct_horr`, 4.933 s |
+  | Death, feign death | 7 / 1041 | 999 / 997 | 250 | die, dieloop |
+
+- **ExecuteEffect (command 32), sub-action 51 (0x007AAC10).** Adding an effect whose priority (0x00A65380: 999 for duration type 6, 0 for an animation of 0 and type 12 or more, else +0x38) is above 0 queues command 32 at the front, clearing the queue (0x006977C0 → 0x00695F20 → 0x0073D000). Each tick the sub-action takes the creature's top-priority effect (creature +0x158, 0x004621C0) and shows its animation, and it ends when no effect is left to show.
+  - A one-shot start clip is played with a blend of 2.5 (a 0.4 s fade), and the step lasts its length. A loop (anim_base Type bit 0) is played with −2.0 (20 % of the step) and no timer.
+  - When the effect ends, the sub-action plays the current animation's TransitionTo (0x005CA6B0) through 0x007A5E80, which grows the step by that clip's length; a loop ends in a crossfade into `pause`.
+  - **Knockdown on a humanoid:** 148 (1.367 s) → by its TransitionTo, 151 `talent_charge_react_loop` (`mh_c.rct_kdwn_lp_v1`, one frame looped) while the effect stands → on removal 152 `talent_charge_react_getup` (`mh_c.rct_kdwn_up_v1`, 2.133 s) → pause. The step is 1,366 ms while the effect stands and 3,499 ms with the get-up, as DAOTurnBased saw in play ("51 (1366 of 3499 ms)").
+  - **Stun and the sleep spell** hold the `dazed` loop for the effect's whole time, then crossfade into `pause` (about 2 s of `pause`'s 9.97 s step) with no get-up clip. **Plot sleep** is die → dieloop, then 263 `diegetup` (`mh_c.sw_diegup_v1`, 2.4 s).
+  - **Paralysis plays no clip.** Its apply (0x007A05B0) sets priority 998, plays its effect's visual and queues command 32. The sub-action calls the creature's slot 0x4C(1), `CCreatureAnimController::Pause` (0x006C9E60), freezing it in whatever pose it has; on removal slot 0x4C(0) (0x006CAB00) resumes it. Paralysis (998) outranks a knockdown (981).
+- **Other creatures' trees** have the same rows by AnimName: bear, dragon, golem and deep stalker have `kd_enter`, `kd_lp` and `kd_exit` (the getting-up times of 1.5–3.8 s DAOTurnBased saw); bronto, brood mother and high dragon have no knockdown nodes. Their lengths were not read.
+- Not read: the bodies of 0x007A5E80, 0x007A4D50 and 0x007A6DA0 (the get-up's blend, a one-shot's timer through 0x007A7290); what 0x00695700 and 0x00696060 return for the start clip; what plays when a higher-priority effect goes while a lower one stands (inferred: the lower one's start clip again); the cause of the dragon's fall and rise after a knockback (by the table, likely a second effect on the same blow); RECURRING_KNOCKDOWN (2001, not in `effects.gda`); add-ins' effects rows.
+
+#### The deathblow
+
+- **The start handler is 0x00745E10** (ID 17720, `ret 8`), slot 38 of the first handler table 0x00747480 fills; its end is 0x00747360 (cited from DAOTurnBased: it takes the striker out of the slow-motion set).
+- **The row:** if the script's deathblow type is not 0 it is table 102's row itself, with no lookup (19–23 the five positional rows, `Position` = type − 0x12; 5 BEAST_SW_DBLOW_V1). Type 0 ("auto") looks the row up by an **exact match** on five columns, then takes one of the matches by `rand() % n` (0x00A3A510 → 0x00A3A4A0, the CRT's `rand`, only for n > 1; no weights, nothing against repeats):
+  - `WeaponWield`: the attacker's weapon style (combat record +0x5C: 1 one-handed or weapon and shield, 2 dual, 3 two-handed), 0 for a positional row.
+  - `PiercingType`: from the attacker's weapon's base item (table 6, column 0x97F088C1): 1 (blades, bows) gives the table's 1, 2 (blunt weapons, creature weapons) its 0; any other value means no sync kill.
+  - `Partsbased`: 1 only when a gore option byte is set (0x00838210 on `[0xC32938]+0x88`, which option is not identified) **and** the target's apr_base `Neck_Model` (0xDC9C928D) is not empty (the human, elf, dwarf, hurlock and genlock heads have one).
+  - `Appearance` and `Position`: 0 for a humanoid target. Otherwise apr_base's `ValidDeathBlows` (0x8A442AFE): −1 no deathblow; 0 the humanoid rows; 1 the beast rows; 2 `Appearance` 1 and a positional row, `Position` = max(0x006A3780, 1), the best of tables 118–122 ("Sync Large Creatures 1..5") for the target's appearance.
+  - **What follows** [I, from the code and the data, not played]: a humanoid killed with a blunt weapon gets V1 or V2 at random; with a blade, always V3, or with gore and a neck always the decapitation row; a blunt weapon with gore and a neck matches no row and falls back. A beast's kill is fixed by weapon style and blade or blunt. Ogres have `ValidDeathBlows` 1 (the beast rows); the positional ones (2) are the brood mother, Wild Sylvan, high dragon, pride demon, archdemon and Grand Oak.
+- **No row, or no valid victim:** the attacker plays anim 107, and the target gets table 103's row 1 (SIMPLE_DEATH_V2, React 250) as a plain death.
+- **The two sides:** the target is given a command of type 7 whose handler (0x007A12E0 with 0x005CA740) plays the row's `React`, or table 103's for the fallback. The attacker plays the row's `CastAnim` through sub-action 37 (0x007A5FC0 → `AddCommand(0x25)`) with a placement record, and is added to the slow-motion set (0x00745DF0).
+- **The placement** (0x007A5A30): **the target is not moved or turned.** The attacker slides over **0.15 s** (0x0074639D) to the point on the line between them at PersonalSpaces(target, attacker) + 1.2 m from the target (0x00695320; 1.2 at 0x00AFEBC0), or, for a large creature with a row in tables 118–122, to that row's spot in the target's frame (Percentage, Distance, AngleATK, AngleTarg). No walk-grid or collision test was seen. The vector's maths is [I].
+- Not read: the gore option byte; the guards 0x0073C5F0 (a target's current command of type 0x20), 0x0079F4A0, 0x006956B0 → 0x005CA710, 0x006A51C0, the second `AddCommand(…, 5, …)` at 0x007462C7 and 0x007EED00 (when `Position` is set); 0x006A3780's numbers; whether sub-action 37's move is cut by the grid; no row choice was played.
+
+#### Monsters' attack trees: the wolf, spider and ogre
+
+- **Their trees** (apr_base): wolves, the mabari and the party dog use `C_DOGa_*` (clips `c_dog.*`); the giant, corrupted and poisonous spiders `C_SPIDERa_*`; Ogre A `c_DSOgre_*`. The model tree holds idle, death and ambient clips; the combat tree the attacks, talents, stun, knockdown and deathblow reactions; the overlay tree only `bdmg`; the override tree a humanoid's clips played against this monster (its deathblows, the victim's side of a grab) [I, from the node names].
+- **No monster swing has event 2** (none of the wolf's, spider's or ogre's `atk_v1`–`v3`), so **a monster's miss makes the target play no evade**; only event 1 lands the blow. A miss plays the same clip as a hit.
+
+  | Rows | Wolf | Spider | Ogre |
+  |---|---|---|---|
+  | 107, 139, 105 (attk_v1, v4, miss_v1) | atk_v1 2.300 s, event 1 at 0.70 | atk_v1 1.833, 0.57 | atk_v1 2.967, 1.23 |
+  | 106, 140, 182, 192 (attk_v2, v5, miss_v2, v4) | atk_v2 2.300, 0.97 | atk_v2 1.900, 0.77 | atk_v2 2.967, 1.10 |
+  | 138, 102, 191 (attk_v3, v6, miss_v3) | atk_v3 1.600, 0.50 | atk_v3 1.400, 0.70 | atk_v3 2.967, 0.97 |
+
+  `c_dsogre.atk_v1.evt` spot-checked by lib-agent-2: event 1 at 1.23 s, no event 2.
+- **A player's miss against them:** only the spider has `evade_v1` (`c_spidera.ev_v1`, 1.533 s); on the wolf and the ogre, rows 181 and 176 fall through their Replacement to `pause`, no visible evade [I, from Anb.h's rule].
+- **Reactions:** `bdmg` (wolf 0.667 s, spider 0.500, ogre 0.467), `hvyDam` (1.167, 0.833, 1.467), knockback (1.333, 1.200, 1.400), `dazed` (3.000, 2.267, 3.300). Knockdown: the wolf (`kd_enter` 0.933, `kd_lp`, `kd_exit` 1.500) and the spider (0.767, 0.967, 1.667) have rows 148, 151 and 152; **the ogre's tree has no such nodes** (its `kd_enter` 2.600 and `kd_exit` 3.800 are named by no row), so how an ogre's knockdown reaches them is not read.
+- **Death** (row 250): wolf `die_v1` 1.300 s, spider 2.800, ogre 3.300, each with a bodyfall event. Deathblow reactions on a monster: the ogre's bladed one `dblw_dmg_v1` 12.500 s (the 12.5 s DAOTurnBased measured), its blunt one 4.633; the wolf's 2.400 or 3.567; the spider's 3.667.
+- **Talents** (abi_base `CastAnim` → anim row → node; event 7 the impact, 9 and 10 a projectile's load and launch):
+  - Ogre: Hurl (row 2007) `tal_hurl` 5.233 s, 9 at 1.1 and 10 at 4.1; Ram (147) `tal_ram` 4.633, 7 at 1.63; Stomp (2016) 4.133, 7 at 1.73; Sweep (2014) 4.633, 7 at 1.5; Roar (2023) 3.500, no impact; the four large positional swings (rows 183–186, abilities 90062–90065) 2.967 s with event 7, not 1.
+  - Ogre Grab (90036, scripted): the grabber plays 2009 `tal_grb` 2.100 → 2010 loop → 2011 exit; the first loop's event 7 applies GRABBED, each later one is a punch. The victim (a humanoid, from the override tree) plays `mh_c.cr_ogr_ent` → loop → exit.
+  - Wolf: Charge (147) `c_dog.charge` 1.833, 7 at 0.67 and 1 at 0.73; Shred (2020) 3.333, 7 at 1.0; Lunge (149) 3.467, 7 at 0.23; Overpower (scripted, 2019 → 2053 → 2054), the victim playing `mh_c.h_ovlm_*_do` with event 30 at each blow.
+  - Spider: Overwhelm (scripted, 2019 `tal_ovlm_en` 4.100 → loop → exit), victim `mh_c.h_ovlm_*_sp`; Web (2021) `tal_dbuf` 2.433, 9 at 1.13 and 10 at 1.23; Poison Spit (2007) `tal_spit` 1.867, 9 at 0.6 and 10 at 0.63.
+- Not read: how the ogre's knockdown reaches `kd_enter`/`kd_exit`; the Stone Prisoner add-in's own wolf tree and howl (enciphered); the swing speed for monsters (their `SetAttackDuration`); which of a creature's trees the engine searches first; each creature template's abilities; the projectiles table; deep stalkers and other trees.
 
 ### Conversation gestures on a line with no cut (anim2talk), read 2026-10-18 by lib-agent-2
 

@@ -154,6 +154,8 @@ So the order for one melee swing:
 
 Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" means seen in the code; "inferred" means not followed to the end. DAOLib already has an effect's ageing (`Addresses.h`, `kEffectsHolder_AgeEffect` and kin; `dao/Effects.h`, `dao/Clock.h`) and the CDataArrays parameters an effect and an event share.
 
+What an effect makes a creature play (the knockdown's fall, loop and get-up, stun, sleep, paralysis's pause) is in `dev/ANIMATION.md`, "Effects' animations".
+
 ### Applying an effect
 
 - `Engine_ApplyEffectOnObject` (command 597, `0x0065ca20`) pops the duration type (int), the effect (engine structure 3), the target (object), the duration (float), the creator (object) and, with more than five arguments, an ability id (int). Read.
