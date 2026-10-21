@@ -143,6 +143,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 |---|---|---|
 | Read, keep or change a queued command | `creature->CurrentCommand()`, `CommandAt(i)`, `CommandQueueSize()`; in an `AddCommand` intercept, `call.Command(1)`; `dao::script::Copy(*command)` to keep one | `dao/Objects.h`, `dao/Script.h`, `dao/ScriptHooks.h` |
 | Hear an object start and finish a command, and how it ended | `dao::commands::OnStart`, `OnEnd` | `dao/CommandEvents.h` |
+| Hear the game start a sound event: its path, place and time | `dao::audio::OnEventStart` | `dao/Audio.h` |
 | Give orders as the player's clicks do | `dao::orders::Attack`, `UseObject`, `UseAbility`, `MoveTo` | `dao/Orders.h` |
 | Know how long a command still holds a creature | `dao::commands::SubActions`, `HeldFor` | `dao/SubActions.h` |
 | Know whether an attacker, or an ability's user, is in reach, where its approach walks, and how it turns to face | `dao::attack::IsRanged`, `ApproachOf`, `Walk` (each with or without an ability), `TurnTo`, `FaceExactly`; `dao::commands::RunningSubAction` | `dao/Attack.h`, `dao/Conjure.h` |

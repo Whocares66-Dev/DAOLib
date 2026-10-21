@@ -265,6 +265,7 @@ add_library(
     src/dao/Damage.cpp
     src/dao/Vfx.cpp
     src/dao/CommandEvents.cpp
+    src/dao/Audio.cpp
     src/dao/Equipment.cpp
     src/dao/Conjure.cpp
     src/dao/Strings.cpp
