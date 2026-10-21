@@ -167,12 +167,12 @@ struct Tints
 
 struct Character
 {
-    // True for a humanoid built from parts (apr_base's ModelType starting with P); false for a
-    // creature of one model.
+    // True for a humanoid whose body is built from parts (apr_base's ModelType starting with P);
+    // false for a body of one model: H (which has a head of parts), S or W.
     bool parts = false;
-    std::wstring model;     // a creature of one model's: apr_base's ModelName
-    std::wstring prefix;    // race and gender letters before a part's name: "hm"
-    std::vector<Part> body; // chest, gloves and boots, as many as are drawn
+    std::wstring model;     // a body of one model's: apr_base's ModelName
+    std::wstring prefix;    // race and gender letters before a part's name: "hm"; for P and H
+    std::vector<Part> body; // chest, gloves and boots, as many as are drawn; P only
     std::vector<Weapon> weapons;
     Head head;
     std::string headMorph; // the template's

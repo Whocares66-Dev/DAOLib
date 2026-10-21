@@ -22,7 +22,17 @@ The head's parts are another enum (`0x00748160`): 0 `FaceM1`, 1 `EyesM1`, 2 `Hai
 
 `0x00749200` names a part's model from a row of a variation worksheet: `ModelType`, then `_` and `ModelSubType` if it has one, then `ModelVariation`, all after a two-letter prefix `%hc%hc_`, the first letter of `apr_base`'s `ModelRace` and the first of `ModelGenderOverride` if the row has one, else the gender's letter. `hm_arm_nuda` is a human male's bare torso; the level of detail's `_0` follows when the model is loaded. An item's worksheet is `bitm_base`'s `Variation_Worksheet` of its base type and the row its variation (`0x00748550`).
 
-How a creature is built depends on the first letter of `apr_base`'s `ModelType` (`0x007490d0`, `0x006c0de0`): `p` is a humanoid built from parts, as below; the others (`h`, `s`, `w`) take `apr_base`'s `ModelName` whole.
+How a creature is built depends on the first letter of `apr_base`'s `ModelType` (`0x007490d0` maps it to a kind, `0x006c0de0` switches on the kind): `p` is a humanoid built from parts, as below; `s` and `w` take `apr_base`'s `ModelName` whole; `h` is a hybrid, see the next section.
+
+## H: a body model whole, a head of parts (read 2026-10-20, DAOLib #216)
+
+The darkspawn (the genlock and hurlock rows of `apr_base` are `H`, as are 43 rows of the 91 in all; 10 are `P`) have a body of one model and a head of parts. The kinds `0x007490d0` returns, from `ModelType`'s first letter (column hash `0x5d092182`): `s` 1, `w` 2, `h` 4, `p` 8, any other 0. `0x006c0de0` switches on it, and the cases differ in what they ask for:
+
+- Kind 8, `p` (`0x006c11bd`): `0x0074b010` (the head), then `0x0074b7e0` (chest, gloves, boots), then the models are loaded (`0x006a1180`).
+- Kind 4, `h` (`0x006c10e5`): `0x0074b010` (the head) and the hair's and beard's (parts 2 and 3) models added, then one `0x0074ab40(out, 0xff, 0, 1)` for the body, then `0x006a1180`. `0x0074b7e0` is not called: no chest, gloves or boots part. `0x0074ab40` switches on the same first letter (jump table `0x0074afe8`, bytes `0x0074aff8`): for `h` with its mode argument 0 it answers `ModelName` (column hash `0xfd8403d5`) whole, with a mode of 1 (the head's parts) it goes by the worksheet and the template's PartList rows as for `p`. `0x0074b010` asks for the head's parts with mode 1, so an `h` creature's face, eyes, hair and beard are the `Head_Worksheet`, `Eyes_Worksheet`, `Hair_Worksheet` and `Beard_Worksheet` rows its template's `PartList` names, named `%hc%hc_` (`cn_` for a darkspawn: `ModelRace` C, `ModelGenderOverride` N) as a human's are, and the neck is `Neck_Model` (`cn_hed_dgla`).
+- Kinds 1 and 2, `s` and `w` (`0x006c102d`): `0x0074ab40` for the body, `ModelName` whole, and no head.
+
+The helmet is for `p` alone: `0x0074b010` tests the ModelType's first letter against `0x70` ('p', `0x0074b31b`) before it asks for the helmet's model, so an `h` creature draws none (its `FullFace` is never set). Armour on an `h` creature is stats only: the chest's, gloves' and boots' models are never asked for. Weapons are hung whatever the kind: `0x007e3980` (after the model is built, slots 3 and 4) and `0x006b1a52` (an item equipped) call `0x006a6940` with no look at the kind. So `pre200cr_genlock_archer.utc` (appearance 50, ModelName `CN_BDY_glka`, PartList rows 1 and 11) is the body `cn_bdy_glka`, a head of parts and its dagger on `Prop10`, and `pre200cr_hurlock_alpha.utc` (appearance 17) `cn_bdy_hlkb` and a head. Before this the core resolved every non-`p` creature as its ModelName alone, with no head and no weapons. Not seen in play.
 
 ## The bare body
 

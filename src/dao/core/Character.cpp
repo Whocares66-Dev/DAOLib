@@ -191,8 +191,12 @@ std::vector<Part> BodyOf(const Context &context, const Template &creature, const
     return body;
 }
 
-// The neck and the helmet, and what the helmet leaves (0x0074B010).
-Head HeadOf(const Context &context, const Template &creature, const ItemOfName &itemOf, const std::wstring &prefix)
+// The neck and the helmet, and what the helmet leaves (0x0074B010). A helmet is drawn only for a
+// humanoid of parts: 0x0074B010 takes the helmet only where the ModelType is P (0x0074B31B,
+// `cmp word ptr [eax], 0x70`), and asked for an H creature's slot 5 the name builder answers its
+// ModelName whole.
+Head HeadOf(const Context &context, const Template &creature, const ItemOfName &itemOf, const std::wstring &prefix,
+            bool helmeted)
 {
     Head head;
     if (const auto neck = Text(context.appearances, context.appearance, "Neck_Model"); !neck.empty())
@@ -214,7 +218,7 @@ Head HeadOf(const Context &context, const Template &creature, const ItemOfName &
     head.eyesModel = partOf(1, "Eyes_Worksheet");
     head.hairModel = partOf(2, "Hair_Worksheet");
     head.beardModel = partOf(3, "Beard_Worksheet");
-    const auto helmet = EquippedIn(creature, itemOf, Slot::Helmet);
+    const auto helmet = helmeted ? EquippedIn(creature, itemOf, Slot::Helmet) : std::nullopt;
     if (!helmet)
     {
         return head;
@@ -450,9 +454,14 @@ Tints TintsOf(const Template &creature, const TableOf &tableOf)
 
 } // namespace
 
-// How a creature is built goes by the first letter of apr_base's ModelType
-// (0x007490D0, 0x006C0DE0): P is a humanoid of parts; the rest are
-// apr_base's ModelName whole.
+// How a creature is built goes by the first letter of apr_base's ModelType (0x007490D0, whose
+// answer 0x006C0DE0 switches on): P is a humanoid of parts, its head's and its body's (kind 8,
+// 0x006C11BD: 0x0074B010 and 0x0074B7E0); H is a body model of ModelName whole with a head of
+// parts (kind 4, 0x006C10E5: 0x0074B010, then 0x0074AB40 for the body, which for H asks for
+// ModelName, and no 0x0074B7E0, so no chest, gloves or boots, and no helmet); S and W are
+// ModelName whole (kinds 1 and 2). A weapon is hung whatever the kind: 0x007E3980 and 0x006B1A52
+// call 0x006A6940 for the slots with no look at the kind (read 2026-10-20, DAOLib #216: the
+// genlocks and hurlocks are H, the old code took only P for a head).
 std::optional<Character> Resolve(const Template &creature, const ItemOfName &itemOf, const TableOf &tableOf)
 {
     Context context{.tableOf = tableOf, .items = tableOf(kItems), .appearances = tableOf(kAppearances)};
@@ -465,15 +474,21 @@ std::optional<Character> Resolve(const Template &creature, const ItemOfName &ite
     character.headMorph = creature.headMorph;
     character.tints = TintsOf(creature, tableOf);
     const auto type = Text(context.appearances, context.appearance, "ModelType");
-    character.parts = !type.empty() && std::towlower(type[0]) == L'p';
+    const wchar_t kind = type.empty() ? L'\0' : static_cast<wchar_t>(std::towlower(type[0]));
+    character.parts = kind == L'p';
     if (!character.parts)
     {
         character.model = Lower(Text(context.appearances, context.appearance, "ModelName"));
-        return character;
     }
-    character.prefix = PrefixOf(context, creature.gender);
-    character.body = BodyOf(context, creature, itemOf, character.prefix);
-    character.head = HeadOf(context, creature, itemOf, character.prefix);
+    if (character.parts || kind == L'h')
+    {
+        character.prefix = PrefixOf(context, creature.gender);
+        character.head = HeadOf(context, creature, itemOf, character.prefix, character.parts);
+    }
+    if (character.parts)
+    {
+        character.body = BodyOf(context, creature, itemOf, character.prefix);
+    }
     character.weapons = WeaponsOf(context, creature, itemOf);
     return character;
 }

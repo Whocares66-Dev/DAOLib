@@ -72,7 +72,8 @@ struct Tables
         {2, Table({"ID", "ModelType", "ModelRace", "ModelName", "ModelGenderOverride", "WeaponOffset", "Neck_Model",
                    "Head_Worksheet", "Hair_Worksheet"},
                   {{15, {I(15), S(L"P"), S(L"H"), S(L""), S(L""), F(0), S(L"HED_DCPa"), I(79), I(74)}},
-                   {40, {I(40), S(L"S"), S(L"O"), S(L"c_ogre"), S(L""), F(0), S(L""), I(0), I(0)}}})},
+                   {40, {I(40), S(L"S"), S(L"O"), S(L"c_ogre"), S(L""), F(0), S(L""), I(0), I(0)}},
+                   {50, {I(50), S(L"H"), S(L"C"), S(L"CN_BDY_glka"), S(L"N"), F(0), S(L"HED_DGLa"), I(79), I(0)}}})},
         {74,
          Table({"ID", "ModelType", "ModelSubType", "ModelVariation"}, {{1, {I(1), S(L"har"), S(L"bld"), S(L"a")}}})},
         {79,
@@ -359,6 +360,34 @@ TEST_CASE("a creature not built from parts is its one model", "[character]")
     CHECK_FALSE(character::SlotOf(9)); // a ring is not drawn
 }
 
+TEST_CASE("an H creature is its body model whole with a head of parts, weapons hung, no armour or helmet",
+          "[character]")
+{
+    const Tables tables;
+    character::Template genlock;
+    genlock.appearance = 50;
+    genlock.gender = 1;
+    genlock.headRows[0] = 2;
+    genlock.equipment = {{.inventorySlot = character::kInventoryChest, .item = "chest"},
+                         {.inventorySlot = character::kInventoryGloves, .item = "gloves"},
+                         {.inventorySlot = character::kInventoryHead, .item = "visor"},
+                         {.inventorySlot = character::kInventoryMain, .item = "sword"}};
+    const auto resolved = character::Resolve(genlock, Items(), tables.Of());
+    REQUIRE(resolved);
+    CHECK_FALSE(resolved->parts);
+    CHECK(resolved->model == L"cn_bdy_glka"); // the body whole: no chest, gloves or boots parts
+    CHECK(resolved->body.empty());
+    CHECK(resolved->prefix == L"cn"); // ModelGenderOverride N over the gender's letter
+    CHECK(resolved->head.neck == L"cn_hed_dgla");
+    CHECK(resolved->head.faceModel == L"cn_uhm_basb");
+    CHECK(resolved->head.helmet.empty()); // 0x0074B010 takes a helmet for a P creature only
+    CHECK(resolved->head.hair);
+    CHECK(resolved->head.face);
+    REQUIRE(resolved->weapons.size() == 1);
+    CHECK(resolved->weapons[0].model == L"w_lsw_ls03a");
+    CHECK(resolved->weapons[0].sheathed == L"Prop10");
+}
+
 namespace
 {
 
@@ -369,6 +398,29 @@ std::vector<std::byte> FileBytes(const std::filesystem::path &path)
     std::vector<std::byte> bytes(chars.size());
     std::memcpy(bytes.data(), chars.data(), chars.size());
     return bytes;
+}
+
+// A darkspawn template of the folder resolved, its H checks made; nothing if the file is not there.
+std::optional<character::Character> ResolvedIn(const std::filesystem::path &folder, const char *name,
+                                               const character::ItemOfName &itemOf, const character::TableOf &tableOf)
+{
+    if (!std::filesystem::exists(folder / name))
+    {
+        return std::nullopt;
+    }
+    const auto bytes = FileBytes(folder / name);
+    const auto file = dao::core::gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto creature = character::TemplateOf(*file);
+    REQUIRE(creature);
+    auto resolved = character::Resolve(*creature, itemOf, tableOf);
+    REQUIRE(resolved);
+    CHECK_FALSE(resolved->parts);
+    CHECK(resolved->body.empty());
+    CHECK(resolved->prefix == L"cn");
+    CHECK_FALSE(resolved->head.neck.empty());
+    CHECK(resolved->head.helmet.empty());
+    return resolved;
 }
 
 } // namespace
@@ -472,4 +524,21 @@ TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent d
     CHECK(elf->tints.tattooMask.empty());
     CHECK(elf->tints.body.empty());
     CHECK(parts->tints.hair == L"Red.tnt"); // Alistair's HairColor 1, which his morph's tints stand over
+
+    // The Korcari Wilds' darkspawn (DAOLib #216) are ModelType H: their body is ModelName whole
+    // and their head is parts, the weapons hang, and no armour part or helmet is drawn.
+    if (const auto genlock = ResolvedIn(folder, "pre200cr_genlock_archer.utc", itemOf, tableOf))
+    {
+        if (tableOf(65) != nullptr) // genlock_heads.gda: PartList's face row 1 is HED_GLK1a
+        {
+            CHECK(genlock->head.faceModel == L"cn_hed_glk1a");
+        }
+        CHECK(genlock->model == L"cn_bdy_glka");
+        CHECK(genlock->head.neck == L"cn_hed_dgla");
+        CHECK_FALSE(genlock->weapons.empty());
+    }
+    if (const auto hurlock = ResolvedIn(folder, "pre200cr_hurlock_alpha.utc", itemOf, tableOf))
+    {
+        CHECK(hurlock->model == L"cn_bdy_hlkb");
+    }
 }

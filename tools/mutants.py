@@ -623,6 +623,18 @@ MUTANTS: list[Mutant] = [
         'head.hairModel = partOf(2, "Head_Worksheet");',
     ),
     Mutant(
+        "character-h-has-a-head: an H creature (a darkspawn) has a head of parts, as a P one does",
+        CHARACTER,
+        "if (character.parts || kind == L'h')",
+        "if (character.parts)",
+    ),
+    Mutant(
+        "character-h-no-helmet: only a P creature draws a helmet",
+        CHARACTER,
+        "HeadOf(context, creature, itemOf, character.prefix, character.parts)",
+        "HeadOf(context, creature, itemOf, character.prefix, true)",
+    ),
+    Mutant(
         "character-tint-table: SkinTint is a row of skin_tints, not of another tint table",
         CHARACTER,
         '.skin = file(kSkinTints, creature.skinTint, "TintFile"),',
