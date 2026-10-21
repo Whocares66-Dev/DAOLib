@@ -13,6 +13,16 @@ An object's active flag and the searches it limits, the party pool carried on an
 - **A follower in the active party is never deactivated through it.** `CCCreature`'s SetActive(false) only clears +0x421 when `IsFollower` (0x00631830, the active party +0x234) holds the creature (0x006B5D9C–0x006B5DC6, checked).
 - **What SetActive does besides the flag** (0x00698CD0): it clears +0x421 and calls slot +0x154 and +0x13C(active), which registers the object with the app (inferred: its presence in the world). A change runs `ObjectTimer::Update` on +0x2B8. Deactivating calls slot +0x8C, 0x007A0DC0 on the effects holder and `ClearAllCommands(1, 1)`.
 - **The commands:** `GetObjectActive` (141, the shared handler 0x00668A20) is the test. `SetObjectActive` (140, 0x006618B0) returns when already in the state asked; with an animation, deactivating queues it, sets +0x421 and leaves the flag for later; otherwise it calls +0x140.
+  - **Activating with an animation queues a Wait** (read 2026-10-21 by lib-agent-2, for DAOParagonEngine #144; C checked, I inferred) (`SetObjectActive` 140, 0x006618B0, activating with nAnimation ≠ 0) [C]:
+    1. The handler calls slot +0x140(1) to activate.
+    2. It plays the clip at once through slot 44 (0x006AA7E0) with an instant blend (−1.0 at 0x00AE2E00).
+    3. It queues a **static type-13 Wait command at the front** (0x00742090(0xD), [cmd+0xC] = 1, QueueCommand 0x0073CD10). The Wait lasts 80 % of the clip: AnimationLength (0x00694E50) − 0x00694FE0(len, −2.0).
+  - **The Wait holds the AI** [C, `ai_main_h_2.nss`:378–392]: `AI_DetermineCombatRound` returns while a command is current, so the creature's AI starts when the Wait ends.
+  - **The perception clear doesn't end it** [I]: `rules_core`'s `WR_ClearAllCommands` on the first APPEAR leaves static commands, so it should leave the Wait.
+  - **nVFX** (only with an animation) [C]: it is applied as an effect record of kind 2, with +0x2C = the animation's length (ctor 0x00A652A0, applied through 0x0079F410/0x007A1A20). It does not hold the creature.
+  - **The Harrowing**:
+    - The wisps: `bhm600pt_harrowing.nss`:316 → `_TeamAppearsWithVFX(team, 1533)` (`bhm_functions_h.nss`:33–42) → `WR_SetObjectActive(member, TRUE, 1, 1533)`. Animation 1 is `c_wisp.rdy.ani`, 3.30 s, so the Wait is 2.64 s; play shows 2.7 s.
+    - The demon: `bhm600tr_demon_talk_trigger.nss`:85 → `WR_SetObjectActive(oDemon, TRUE)`. `wrappers_h.nss`:112–139 picks 648 because apr_base row 27 has `BHasAppearAnim` = 1. Animation 648 is `c_ragedemon.appr.ani`, 4.1667 s, so the Wait is 3.33 s; play shows 3.4 s. The 60–70 ms over is inferred to be tick and event delivery.
 
 ## A search by tag finds inactive objects
 

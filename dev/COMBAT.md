@@ -142,6 +142,14 @@ For a deathblow, `SetAttackResult` is called and then the deathblow command is p
 
 Result constants (`script.ldf`): `COMBAT_RESULT_INVALID` 0, `HIT` 1, `CRITICALHIT` 2, `MISS` 3, `DEATHBLOW` 4, `BLOCKED` 5, `BACKSTAB` 9.
 
+**The hit roll** (read 2026-10-21 by lib-agent-2, for DAOParagonEngine #144; C checked, I inferred):
+- **The engine rolls nothing** [C, `combat_h.nss` `Combat_GetAttackResult`]: the scripts roll once per swing, `RandomFloat()·100 < fAttack − defense`.
+  - fAttack = attack rating + the weapon's ITEM_STAT_ATTACK + fBonus + `ATTACK_HIT_BIAS` + `Diff_GetRulesAttackBonus` + 50 + flanking − (distance − max(POINT_BLANK_RANGE, the weapon's optimum range), at least 0).
+  - Defense = the defense property + `Diff_GetRulesDefenseBonus`.
+- **The difficulty terms apply only to CREATURE_RANK_PLAYER** [C, `core_difficulty_h.nss`:54–75], from the difficulty table's `AttackBonus` and `DefenseBonus` by `GetGameDifficulty()`. Enemies get none.
+- **At impact** [C, `combat_h.nss`:1086–1115]: a hit becomes a miss on an invisible target, or for a melee attacker with PerSpace < 1 more than 5 m away.
+- **The rage demon against the Harrowing mage** [I: the demon's attributes inferred from the autoscale order; the mage's DEX and the difficulty were not read]: attack about 58 (MONSTER_SPIRIT, BaseAttack 55), mage defense about 45–47 on Normal. That predicts 63–67 % before flanking. Vanilla's 59 % (n = 41) is within noise of that.
+
 **The impact comes from the animation, not a fixed fraction** (`src/dao/Addresses.h`, `kCCCreature_OnAnimationEvent`, read and seen in play with the probe, DAOLib #88):
 - The swing's clip carries animation events (`events.gda`'s numbers). Event 1 is an attack's impact.
 - The creature's slot 46 gets it from the animation manager. `0x006A6230` takes the off hand's record if the event's name contains "Left", otherwise the main hand's, and calls `0x006A6080`.
@@ -232,6 +240,13 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 - In the scripts, `creature_core` hands unhandled events to `rules_core`. Its `EVENT_TYPE_APPLY_EFFECT` case calls `Effects_HandleApplyEffect` (`effects_h.nss`), which reads `GetCurrentEffect()`, switches on `GetEffectType` to the `effect_*_h` handlers, and ends with `SetIsCurrentEffectValid(nReturnValue)`. A dead target refuses everything except resurrection and death.
 - After the script, `0x007a0e30` checks the effect's invalid word (+0x48). If the script marked it invalid, the apply returns 3 and the effect is not added: `0x007a1920` sets +0x48 to 1. If still valid, the holder's slot 0x1C adds it to the target's list, and slots 0x70 and 0x34 follow. So the script runs first and the list changes after, only for a valid effect. Read in outline; the slots' bodies are not read.
 - `0x0079fc10`, after the event: when the effect's engine int 2 (+0x54's arrays, `EFFECT_INTEGER_VFX`, set by `SetEffectEngineInteger` or the visual-effect commands; `0x0079FC3D`–`0x0079FC44`) is above 0 and the effect is still valid (+0x48 = 0), it plays that visual effect. Read. A damage effect's `nImpactVfx` is its script int 2 (`EffectDamage`, `0x00662950`–`0x00662974`), which leaves the engine int unset and is played by the scripts (below), not here (corrected 2026-10-18 by lib-agent-2).
+- **An instant effect with an animation becomes temporary** (read 2026-10-21 by lib-agent-2, for DAOParagonEngine #144; C checked, I inferred):
+  - **What happens to it** [C, the apply 0x007A0E30 at 0x007A11DC..0x007A1225]: after the target's APPLY_EFFECT script has run, an effect with priority > 0 (0x00A65380; knockdown 981) and duration type 1 (INSTANT) is changed:
+    - its type becomes 2 (TEMPORARY);
+    - its duration (+0x2C) becomes the length of its animation in the target's own tree (`0x00A5F7A0`, in ms). The script's duration is ignored.
+  - **One already held** [C]: if the target already holds an effect of the same type (`0x0079F6C0`), the new one is marked invalid instead.
+  - **So an INSTANT knockdown lasts the length of row 148's clip in the target's tree** [C]: male human 1.367 s, wolf 0.933 s, spider 0.767 s. Which tree gives Eluvian's 1.166 s was not read [I: another race or gender].
+  - **effects.gda's `AllowInstant`, `AllowTemp` and `AllowPermanent` are read by nothing** [C]: their hashes (0x174ACBDD, 0x8FCACB84, 0x3920511E) are not in the exe. `effects_h.nss`'s `_VerifyDurationType` (:126–163) is never called, and asks for "AllowTemporary", which is not a column.
 
 ### The current effect
 
