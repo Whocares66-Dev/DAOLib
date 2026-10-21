@@ -1235,7 +1235,7 @@ Read in the GOG exe (base 0x400000) with `tools\daoexe.py --disasm`, a call scan
 1. **Normal swing (hit, crit, miss): the engine picks, in `CSSubActionHandler::Swing` 0x007A87C0, from table 104 `nosynccombatanims` (not `anim_combat`).** It takes the two hands' results the scripts left (`SetAttackResult`), folds them to one result, and asks the table manager at handler+0x60 (`0x00A3B0D0`) for a row of AttackerResult x WeaponWield-mask. Several rows fit: **random, but never the same row as the last pick of the same key by the same attacker** (`0x00A3AFE0`). Then `0x006A41A0` plays the row. 0x0069F530 is NOT the chooser: it only folds the two hands' results into one (below). All checked.
 2. **Rows of anim_combat**: hit variants v1..v6 = rows 107, 106, 138, 139, 140, 102; miss variants v1..v4 = rows 105, 182, 191, 192; backstab = 2006 (`talent_backstab`); a crit uses the hit rows (result 2 is folded to 1 in `0x006A40D0` and `0x0069F530`). A DW attack picks its pool by which hand landed (mask), so v4..v6/miss v3,v4 are the off-hand ("|Left") swings.
 3. **Reactions on the target**: a **miss** is the engine's: the attacker's swing clip carries event 2 (`AttackImpactReaction`), which runs `0x006AB040` -> `0x006AAE20` and adds a play-animation command (type 14) to the *target* with row **181** (Evade v1) or **176** (Evade v2), 50/50 by `rand()` parity, if conditions hold. This is **0.2-0.45 s before the impact event** in the attacker's clip. A **hit** is the scripts': `effect_damage_h.nss` calls `PlayAdditiveAnimation(oTarget, 103)` for a non-fatal blow of damage >= 3.0. Blocked/parry/deflect have no row of their own: the scripts turn BLOCKED into MISS (combat_h.nss:1073-1079), and the evade rows' clip is the target's weapon/shield block clip for its set. Rows 141-143 (`hvyDam`, `bdmg_v2`, `bdmg_v3`) and 104 (`cough`) are referenced by nothing I found (no engine immediate, no script).
-4. **Timing**: the result is applied at the swing clip's event 1 (`AttackImpact`) (all dw_ and sw_atk_v3..v7 clips, ua_atk_v1/2); times below. **Open anomaly: the two-handed clips `mh_c.tw_atk_v1..v3` (and `sw_atk_v1`, `v2`, unused) have NO event 1, only event 2.** How a two-hander's blow lands is not found (see Not read).
+4. **Timing**: the result is applied at the swing clip's event 1 (`AttackImpact`) in every attack clip, the two-handed ones included; times below. (Corrected 2026-10-20 by lib-agent-2: the earlier "the two-handed clips have no event 1" was a misread of their long event lists. `mh_c.tw_atk_v1`'s `.evt`, the copy the game takes in `global.rim`, has event 2 at 0.90 s and event 1 at 1.27 s, read by lib-agent-2; `v2`'s event 1 is at 1.20 s and `v3`'s at 1.07 s. No fallback is needed.)
 
 #### 1. Who picks the swing's row (checked)
 
@@ -1338,14 +1338,14 @@ A row the creature lacks (non-humanoids with their own trees) is not replaced by
 | mh_c.dw_atk_v6 | 1.467 | 0.43 | 0.53 | 0.73 |
 | mh_c.ua_atk_v1 (unarmed) | 1.500 | none | none | 0.63 |
 | mh_c.ua_atk_v2 | 1.533 | none | none | 0.60 |
-| mh_c.tw_atk_v1 | 2.300 | 0.90 | (a custom sound 0.93) | **none** |
-| mh_c.tw_atk_v2 | 2.433 | 0.83 | none | **none** |
-| mh_c.tw_atk_v3 | 2.500 | 0.73 | 0.30 | **none** |
+| mh_c.tw_atk_v1 | 2.300 | 0.90 | (a custom sound 0.93) | 1.27 |
+| mh_c.tw_atk_v2 | 2.433 | 0.83 | none | 1.20 |
+| mh_c.tw_atk_v3 | 2.500 | 0.73 | 0.30 | 1.07 |
 | mh_c.sw_tal_flnk (backstab, OW/WS) | 1.933 | none | 0.73 | 0.97 |
 | mh_c.tw_tal_flnk | 2.133 | none | none | 0.67 |
 | mh_c.dw_tal_flnk | 1.933 | none | 0.89 | 1.06 |
 
-(Unarmed clips have no event 2 at all, so an unarmed attacker's miss makes no evade reaction. sw_atk_v2 has event 2 twice, 0.80 and 0.87, and no event 1.) The impact is the engine's event 1 -> `CCCreature::OnAnimationEvent` 0x006C0BF0 (id -1 into a byte table at 0x006C0DB0 and a jump table at 0x006C0D70: id 1 -> 0x006A6230 -> 0x006A6080 -> ATTACK_IMPACT, id 2 -> 0x006AB040, ids 3-6 equip/unequip, 7 -> 0x006AF430 AbilityCast, 21 -> 0x006A5B70 WeaponBlocked, 28 -> 0x006AAC20 Decapitate, 29 -> 0x006A5C10, 30 -> 0x006A62F0, 31 -> 0x006AABB0, 32 -> 0x006BFC80, 34/37 -> 0x0069E5B0 attach point; the case mapping is checked, the handlers' purposes other than 1, 2, 30 are not read).
+(Unarmed clips have no event 2 at all, so an unarmed attacker's miss makes no evade reaction. sw_atk_v2 has event 2 twice, 0.80 and 0.87, and event 1 at 1.20; sw_atk_v1, also unused, 0.53 and 0.97.) The impact is the engine's event 1 -> `CCCreature::OnAnimationEvent` 0x006C0BF0 (id -1 into a byte table at 0x006C0DB0 and a jump table at 0x006C0D70: id 1 -> 0x006A6230 -> 0x006A6080 -> ATTACK_IMPACT, id 2 -> 0x006AB040, ids 3-6 equip/unequip, 7 -> 0x006AF430 AbilityCast, 21 -> 0x006A5B70 WeaponBlocked, 28 -> 0x006AAC20 Decapitate, 29 -> 0x006A5C10, 30 -> 0x006A62F0, 31 -> 0x006AABB0, 32 -> 0x006BFC80, 34/37 -> 0x0069E5B0 attach point; the case mapping is checked, the handlers' purposes other than 1, 2, 30 are not read).
 
 #### 3. Reactions on the target (checked unless marked)
 
@@ -1357,13 +1357,15 @@ Gates, in order (all must hold, else nothing plays):
 1. event and record non-null; `record.result == 3` (MISS). A hit, crit, backstab or block (5) plays nothing here.
 2. the target `esi = GetCreatureById(record.target)` exists (`0x005D58C0`) and `HasAnimation(0xB5 = 181)` is true (so a target without the Evade v1 row never evades; row 176 is then also reached through its Replacement 181).
 3. the target's own command state: `0x0073C600(target)` is the type of its head command (byte at +2; 0 = none) and `0x0073C7B0` another field of it.
-   - no command (0): require the attacker's `[attacker+0x2CC]` object's `+8` (`0x007B51E0`) to be 0 (not read further);
+   - no command (0): require the attacker's `[attacker+0x2CC]` object's `+8` (`0x007B51E0`) to be 0: the attacker's own command queue empty, which an attacker mid-attack seldom is, so an idle target seldom evades [inferred];
+   - `0x0073C7B0` is `CCCreature::ForScript_IsConjuring` (ID 17541): the type of the running sub-action of the target's current command, 0 with none (read 2026-10-20 by lib-agent-2). So `== 1` with an attack command means the target is in its Swing sub-action (COMBAT.md's sub-actions: 4 and 15 approach, 50 the attack, 39 turn to face, 1 the swing);
    - an attack command (type 1) with `0x0073C7B0 == 1`: require the target's combat data target (`[target+0xC60]+4`) to be the attacker's id, `0x006A2AD0(target)` == 0 (that function is true if the target's main-hand item's base item `Type` (bitm_base column hash 0x12A02374) is 5 or 6: a staff or ranged weapon), and the target's own hand results (`0x006A0160/0x006A0170`) each be 0 or 3;
    - any other command type: no evade.
 4. melee reach: `0x006A3DC0(attacker, target)` true: the target is a creature (`[target+0x14] == 6`) and the xy distance is within `0x00695320(a, t)` + 1.2 (constant 0x00AFEBC0) (so it never fires for ranged attacks, whose impact is a projectile anyway).
 5. facing: the angle (`0x004D4C90`, radians x 57.29582) between the target's facing (`target+0x130`) and the direction target -> attacker (positions at +0x120) is **<= 30 degrees** (constant 0x00AF7068 = 30.0). The target must be facing its attacker.
 
-If all hold: row = 181 (0xB5) normally; `call 0x008E6A8E` (rand), `eax & 0x80000001` then sign-fixup; if the result is 0 (even rand) the row becomes **176 (0xB0, Evade v2)**. So 50/50 (CRT rand parity). Then a parameter block `{ int0 = row, int7?(index 1) = 1, int 1 = 1, float 3 = 1.0 }` (ctor 0x0069F670) goes to **`0x0073D150(target, block, 1, 0, 2)`**, which builds a command of **type 14 (COMMAND_TYPE_PLAY_ANIMATION, the same as `CommandPlayAnimation`)** and adds it with `0x0073D000` to the target (AddCommand variant with flags (1, 0, 2); the meaning of the three flags was not read). So the evade runs as a normal queued command on the target (it queues behind or at the front depending on those flags; it is an ordinary PlayAnimation step, sub-action 37).
+If all hold: row = 181 (0xB5) normally; `call 0x008E6A8E` (rand), `eax & 0x80000001` then sign-fixup; if the result is 0 (even rand) the row becomes **176 (0xB0, Evade v2)**. So 50/50 (CRT rand parity). Then a parameter block `{ int0 = row, int7?(index 1) = 1, int 1 = 1, float 3 = 1.0 }` (ctor 0x0069F670) goes to **`0x0073D150(target, block, 1, 0, 2)`**, which builds a command of **type 14 (COMMAND_TYPE_PLAY_ANIMATION, the same as `CommandPlayAnimation`)** and adds it through `CCObject::QueueNewCommand` (0x0073D000, ID 17553) as (type 14, params, addToFront 1, static 0, playerIssued 0, override 2, word 1) (read 2026-10-20 by lib-agent-2): **at the front, not static, and override 2, a hard clear** (`ClearAllCommands(1, 0)`, 0x0073C930, before the add). So the target's running command, its own swing or move, ends with COMMAND_FAILED_COMMAND_CLEARED, its queue is dropped, and the evade, an ordinary PlayAnimation step (sub-action 37), is its only command.
+- **So a target evades** when its attacker's blow is a miss, it is within melee reach and faces the attacker within 30°, and it is either idle (with the attacker's queue empty) or **in the Swing sub-action of its own attack aimed at this attacker, with a melee weapon, and both its hands' results still none (0) or a miss (3).** It never evades while walking up to attack (sub-actions 4, 50, 39), using an ability, moving, or when its own swing is a hit (results are set before the swing plays). The evade's hard clear cancels its own swing.
 
 Rows (anim_combat): **181 `Evade v1`** (`evade_v1`, Replacement 1), **176 `Evade v2`** (`evade_v2`, Replacement 181). Clips by the target's set tree (OW/WS/TW/DW.anb replace the CombatModelTree; combat_humanoid.anb is the fallback for no set):
 
@@ -1401,12 +1403,10 @@ So a hit's reaction starts at the impact event, and a miss's evade starts at eve
 
 #### Not read
 
-- **How a two-hander's blow lands**: `mh_c.tw_atk_v1..v3` carry event 2 (0.90, 0.83, 0.73) but no event 1, yet the TW tree plays them for every normal attack. The only code that raises ATTACK_IMPACT for a melee swing is `0x006A6230` -> `0x006A6080` from event id 1 (checked: no other caller of either). I did not find a fallback (a time-based impact, the swing's end, or event 2 doing it); the event-2 path `0x006AAE20` does nothing but the evade and only for results of 3. To settle it: a probe that logs the time from the swing's start to ATTACK_IMPACT for a greatsword wielder (the DAOLib #88 probe did it for one-handed weapons).
 - The deathblow command's row choice (which of several table-102 rows is taken, and the start handler's entry address; I read only its key inputs and the final `0x00A3A510` random pick), and which clip a deathblow command plays on a creature without the CastAnim row.
 - The key-set construction in `0x00A3B240` (I took the subset semantics from its loops' shape).
-- The AddCommand variant `0x0073D000`'s flags (1, 0, 2): whether the evade queues at the front, interrupts or waits behind the target's current command.
-- `0x0073C600` / `0x0073C7B0` fields' names; `0x007B51E0`'s object; `0x006A3A30` (gate of event 30).
-- Ranged shots' impact event times (`bw_fire` etc.) and the staff's basic-attack path (the staff tree maps attk_ to the tw_atk clips, which have no event 1; whether the staff attacks as ranged in play was not checked).
+- `0x007B51E0`'s object; `0x006A3A30` (gate of event 30); QueueCommand's event 0x5e payload and its type-0x19 branch; the command's word (+8) and the block's int 7; that an idle target never evades in play.
+- Ranged shots' impact event times (`bw_fire` etc.) and the staff's basic-attack path (the staff tree maps attk_ to the tw_atk clips; whether the staff attacks as ranged in play was not checked).
 - Creatures with their own trees (spiders, dogs, ogres, dragons): their attk_/miss_/evade/bdmg nodes were not dumped.
 - Not seen in play.
 
