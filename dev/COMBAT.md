@@ -339,10 +339,13 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
 - Behaviour 3 calls 0x0069F360(1000): the corpse fades about a second after the bag spawns.
   - 0x0069F360 is the corpse's decay delay (the address library's `CCCreature::ForScript_SetItemDroppable` is a wrong name). `SetBodybagDecayDelay` calls it on the bag's creature.
   - It sets +0xC8C = 1 and moves the dead-time counter +0xC88.
-- The decay (0x006BC670):
-  - +0xC88 counts the time since death against `[0x00C021C4]`, 60000 ms by default, set by `SetCreaturesGlobalMaxTimeBeforeDecay`.
-  - The fade starts at `[0x00C021C8]` left; at `[0x00C021CC]` left the loot moves and the creature decays (0x006B98E0).
-  - Too many corpses cut the delay to 0.
+- The decay (read 2026-10-20 by lib-agent-2, for DAOParagonEngine #126; [C] checked in disassembly, [I] inferred):
+  - **Constants,** in ms, initialised data [C]: `[0x00C021C4]` = 60000, the time before decay, set by `SetCreaturesGlobalMaxTimeBeforeDecay` and saved as `SavegameCreatureTimeBeforeDecay` 16499 (written at 0x005FEF09, read at 0x005FFA64, 60000 when absent at 0x005FFA79); `[0x00C021C8]` = 2000, the fade's length; `[0x00C021CC]` = 1500, the time left at which the decay step runs.
+  - **The update** 0x006BC670 runs while the corpse may decay (0x006A3AD0, below) [C]. It adds dt to +0xC88, the time dead. At 60000 or more: SetFade(0, 0), Decay(1), the pooled creature's (+0xB60) slot 0x140(0), and it leaves the pending list. Otherwise, with left = 60000 − dead: under 2000 left, SetFade(left / 2000, 1) (0x00695060: +0x190 alpha, +0x1A4 flag) and it leaves the pending list, and at 1500 or less left, Decay(0), once; else it adds itself to the pending list (0x0076B540, unique).
+  - **Too many corpses** [C]: the pending list (a vector at 0x00C3552C) holds the decayable corpses not yet fading. When its size is above `CorpseLimit` (0x007C4BD0), the corpse being updated gets SetDecayDelay(0) (0x0069F360). `CorpseLimit` is by `GraphicsDetailLevel` (ClientOptions `[0x00C32938]` +0x4F0): 0 to 3 give 5, 10, 15 and 20, and the default is 3, so 20. Which corpses are cut follows the update order, not their age [I].
+  - **SetDecayDelay(ms)** (0x0069F360) [C] sets dead = 60000 − 2000 − ms − 1 when at least 2000 is left, so the fade starts ms + 1 later, and sets +0xC8C = 1.
+  - **The decay step** 0x006B98E0(atEnd) runs once (+0x794) [C]. It does nothing with no bag (+0x790 = −1) before 15000 ms dead, when the corpse may not decay, or for a pooled creature (+0xB60). Otherwise it calls DestroyObject(atEnd ? 0 : 1500) through vtable slot 0x198 (0x00696A60), so the creature goes at the fade's end and the bag stays; it moves the loot into the bag (0x006B9620), places the bag at the creature (0x007526F0) and calls 0x0069B900 on the bag.
+  - **The fade** [C]: 0x00695080 multiplies +0x190 by +0x198 and passes it to the model (AnimBase at +0x154, slot 8 → 0x00A61280). That sets `mml_fOpacityMultiplier` on each mesh (0x004F4900, mode 4), switches the material to its blended render class (0xB→1, 0xC→5, 0xD→6), and sets mesh flag 0x10 (0x80000 with the flag) and model flag 0x4000. No effect is started: no particles, no vfx row. Where the "dark smoke" comes from is not found [I].
 - Whether a corpse may decay (0x006A3AD0) is decided in this order:
   1. Yes if a delay was set.
   2. No if a decay-blocking effect (type 4) is on it, or for a party member (inferred), or for the +0xBD4, +0xBD8 or +0xB60 cases.
