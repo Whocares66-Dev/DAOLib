@@ -287,6 +287,7 @@ add_library(
     src/dao/Gui.cpp
     src/dao/Input.cpp
     src/dao/Options.cpp
+    src/dao/Patch.cpp
     src/dao/Log.cpp
     src/dao/Messages.cpp
     src/dao/Saves.cpp

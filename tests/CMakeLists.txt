@@ -79,7 +79,13 @@ endif()
 
 # dao_tests: what of daolib can be checked in a test process with no game,
 # the address library's files and reads that fault among it.
-add_executable(dao_tests crt_reports.cpp test_fingerprint.cpp test_saferead.cpp)
+add_executable(
+    dao_tests
+    crt_reports.cpp
+    test_fingerprint.cpp
+    test_patch.cpp
+    test_saferead.cpp
+)
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)
 # The address library's files, as its build packs them: the tests read them

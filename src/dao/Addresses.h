@@ -2593,4 +2593,17 @@ DAO_ADDRESS(kObjectNodeLight_Color, 7605)
 // #65: examples/graphics learns by it which level the player has come into.
 DAO_ADDRESS(kResMan_MakeSource, 4641)
 
+// What Full Detail LOD (a Nexus mod, mods/7058) patches in the exe file, for
+// a plugin to change in memory with dao::Patch (DAOLib #220, examples/patch).
+// The order a model's levels of detail are tried in: 16 ints, a row of four
+// for each level asked for, read by 0x00617020 (the row for a level, -1
+// taken as 0): 0,1,2,3 / 1,0,2,3 / 2,1,0,3 / 3,2,1,0. The inventory's and
+// the character record's OnShow (their vtables' slot 5) each make the preview their character is
+// drawn into, `push 0x1CB; push 0x10E; mov ecx,eax; call 0x007BFE10`: 270 by
+// 459, its height pushed first, at +0x6E and +0x140. Read 2026-10-21; EA's
+// build has the table and both pushes at the same offsets. The names are ours.
+DAO_DATA(kModelLodOrder, 65393)
+DAO_ADDRESS(kGUIInventory_OnShow, 17210)
+DAO_ADDRESS(kGUICharacterRecord_OnShow, 17530)
+
 } // namespace dao::addr

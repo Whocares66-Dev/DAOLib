@@ -76,6 +76,7 @@ add_daolib_plugin(myplugin SOURCES src/Plugin.cpp)
 | What | When | How to wait for it |
 |---|---|---|
 | Detours on engine functions | at load | place them in `DAOLib_Load` |
+| Patches of the exe's bytes | at load | apply them in `DAOLib_Load`, before any thread reads the bytes |
 | The application, `CClientExoApp::Get()` | a moment after load | null until then |
 | The script command table | early in start-up | `dao::script::OnCommandsReady(callback)`; `InterceptCommand` waits by itself |
 | The game mode controller, `CClientExoApp::GameModes()` | after the command table | null until then |
@@ -202,6 +203,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Hook an engine message handler | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
 | Send an engine message | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h` |
 | Hook any engine function | `dao::Detour<Fn>` on an ID from `dao/Addresses.h` | `dao/Hook.h` |
+| Change a table or an operand in the exe, as an exe mod would | `dao::Patch::Apply({id, offset}, vanilla, replacement)`: written only where the bytes are vanilla's, put back by `Revert` | `dao/Patch.h` |
 | Know what an object is | `dao::TypeName(ptr)`, from its RTTI | `dao/TypeName.h` |
 | Read memory that might not be there | `dao::TryRead<T>(address)` | `dao/SafeRead.h` |
 

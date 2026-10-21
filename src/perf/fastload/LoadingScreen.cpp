@@ -5,6 +5,7 @@
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
+#include "dao/Patch.h"
 #include "dao/SafeRead.h"
 #include "dao/core/GfxMovie.h"
 
@@ -13,9 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <optional>
 #include <span>
 #include <vector>
@@ -28,7 +29,6 @@ namespace
 
 constexpr DWORD kEngineSleepMs = 66;            // the task's own turn
 constexpr std::uint32_t kStepRead = 0x3D872B02; // 0.066F, the GUI's step as the engine has it
-constexpr float kEngineStep = 0.066F;
 constexpr std::int64_t kLeastPaceMs = 4;
 
 // How long after the loading mode's last update a frame is still a loading screen's: a frame of
@@ -51,7 +51,8 @@ constexpr std::size_t kDoorTimes = 4;
 std::int64_t g_paceMs = 16;     // the task's turn; 0 for the engine's own
 std::int64_t g_intervalMs = 66; // between two presents of a loading screen; 0 for every frame
 std::int64_t g_fadeTimes = 8;   // how many times as fast the cover fades; 1 for the movie's own
-std::uintptr_t g_step = 0;      // where the GUI's step is, once it is found as read
+bool g_stepFound = false;       // the GUI's step is as read
+dao::Patch g_step;              // the GUI's step, made the pace's while fast load is on
 // The update is the game's thread's; the task and its sleep are the render thread's; a present
 // is whichever thread's draws the frame.
 std::atomic<std::int64_t> g_lastUpdate{0};
@@ -189,7 +190,7 @@ void AttachPace()
                      stepNow.value_or(0));
         return;
     }
-    g_step = step;
+    g_stepFound = true;
     spdlog::info("fast load: the loading screen's task takes a turn every {} ms, not every 66, so a loading's steps "
                  "do not wait on it",
                  g_paceMs);
@@ -300,17 +301,19 @@ void Attach()
 
 void Apply()
 {
-    if (g_step == 0)
+    if (!g_stepFound)
     {
         return;
     }
     // The step is a constant among the exe's read-only data, which nothing else reads.
-    const float seconds = On() ? static_cast<float>(g_paceMs) / 1000.0F : kEngineStep;
-    DWORD was = 0;
-    if (VirtualProtect(reinterpret_cast<void *>(g_step), sizeof seconds, PAGE_READWRITE, &was) != FALSE)
+    if (On() && !g_step.IsApplied())
     {
-        std::memcpy(reinterpret_cast<void *>(g_step), &seconds, sizeof seconds);
-        VirtualProtect(reinterpret_cast<void *>(g_step), sizeof seconds, was, &was);
+        const float seconds = static_cast<float>(g_paceMs) / 1000.0F;
+        g_step.Apply({dao::addr::kLoadingGUITask_Step, 0}, kStepRead, std::bit_cast<std::uint32_t>(seconds));
+    }
+    else if (!On())
+    {
+        g_step.Revert();
     }
 }
 

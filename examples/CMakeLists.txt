@@ -77,3 +77,6 @@ dao_apply_warnings(example_resources)
 
 add_daolib_plugin(example_objectids SOURCES objectids/ObjectIds.cpp)
 dao_apply_warnings(example_objectids)
+
+add_daolib_plugin(example_patch SOURCES patch/Patch.cpp)
+dao_apply_warnings(example_patch)

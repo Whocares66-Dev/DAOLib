@@ -42,7 +42,7 @@ src/perf/       what makes the game faster and corrects no fault, built into din
                 leaves kept, an area's rooms kept and the indoor ones beside it loaded ahead, the loading screen at a
                 turn of 16 ms and presented fifteen times a second. Fast load is off until the player ticks its switch on the
                 options screen's Game tab, kept in daolib.ini beside the logs; DAOLIB_FAST_LOAD=0 leaves it out
-src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h,
+src/dao/        daolib, what plugins link: Addresses.h, Module.h, Hook.h (Detours), TypeName.h (RTTI), Log.h, Plugin.h, a few of the exe's bytes changed in place (Patch.h),
                 the engine's classes (ClientExoApp.h, Objects.h), the command table and VM stack (Script.h), calling a command by name (ScriptCall.h), the player's orders (Orders.h), abilities' names (Abilities.h), drawing in the world (Vfx.h), commands starting and ending (CommandEvents.h), the game's sound events starting (Audio.h), a plugin's own text (Strings.h), the party's selection and who is controlled (Party.h), equipment going on and coming off (Equipment.h),
                 the script's value types (Structures.h, String.h), intercepting commands (ScriptHooks.h),
                 the engine's messages (Messages.h), the game's modes (GameModes.h), a callback per frame
