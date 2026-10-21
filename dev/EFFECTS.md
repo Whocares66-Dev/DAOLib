@@ -43,7 +43,7 @@ An emitter's structs:
 
 - `amap`, its age map (in every emitter): MMHNodeAgeMapCount and its keys, `amel` structs, each MMHNodeAgeMapElementPercentLifeElapsed (0 at birth, 1 at death, rising), ScaleX, ScaleY and Color, a particle's size and colour at that share of its life. 13,868 keys. The wisp's glow: 0.6 by 0.5 and transparent at birth, 0.56 by 0.47 and opaque at 0.1, 0.2 by 0.15 and transparent at death, blue (0.4, 0.7, 1).
 - `spnv`, its spawn volume (1,145): MMHNodeSpawnVolumeType 0 a mesh (20), 1 a sphere (200, its radius), 2 a cylinder (608, its radius, length and axis), 3 a box (317, its corners); the fields of the other shapes are NaN. With SpawnWithinVolume, InvertSpawnVolumeNorms and NormalsAsDirection. A mesh volume holds two `data` structs: the points (MMHDataIsIndexStream 0, a Vector3fList) and the indices into them (1, a Uint16List), as many as MMHDataCount says (20 to 384), by the look of it a triangle list.
-- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, in 66 models; 4 in 32, in 5), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. The particles are born on the owner's `.phy` shapes, not its visible mesh: type 1 the owner's physics nodes, type 4 the physics actor reached through the effect's first dependency record, not settled (read 2026-10-20, below).
+- `emas`, its attachments (185), each an `emat`: MMHEmitterEmitterAttachmentType (1 in 153, in 66 models; 4 in 32, in 5), Name (empty in all), SpawnOnSurface, UseNormalForVelocity. The particles are born on the owner's `.phy` shapes, not its visible mesh: type 1 the owner's physics nodes, type 4 the physics actor of the node its owner hangs from: on an item in hand, the wrist bone's (read 2026-10-20, below).
 - `spla`, its splat (7, the blood pools): a material, a size, samples, an orientation range, a life, a flipbook, HoldLastFrame, a colour multiplier, and an age map of its own.
 
 A list of Vector3 keeps each element in 16 bytes, the fourth float junk (`2.28e-38` in `fxa_lit_cone_c.mmh`): the 384th point of that file's lists is a point at that stride and not at 12. `tools/gff4.py --dump` reads such a list at 12 and shows it garbled; `dao::core::gff4::Struct::ListBytes` reads it at 16.
@@ -68,7 +68,7 @@ A clip's events (`<clip>.evt`, `clip::EventsOf`) are a list (AnimationEventList,
 
 ## What is not read
 
-- What the files hold that the runtime section does not explain: the target groups (`emtg`) and `nemg`'s own material. The attachments and the remote material are read below (2026-10-20); attachment type 4's source and types 2 and 3 (by Name, which no file uses) are not.
+- What the files hold that the runtime section does not explain: the target groups (`emtg`) and `nemg`'s own material. The attachments and the remote material are read below (2026-10-20); types 2 and 3 (by Name, which no file uses) are not.
 - What Type `T` and `C`, Tint, LoadGlobal and Priority do.
 - No tree of the game's has a `vfxcast` node, the runtime's first phase; one has `vfx` (`.cust.ani` in two), which the phases do not name.
 - Where the two readings differ: the runtime section reads WorldAxisAcceleration as a vec4, where the files' field is a Vector3 (type 10) in every emitter.
@@ -361,7 +361,7 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
 - **Loaded** by the emitter blueprint's loader (0x0058E9A0 to 0x0058EB18) into 0x24-byte records at the blueprint's +0x270: AttachmentType (6246), SpawnOnSurface (6342), UseNormalForVelocity (6343), Name (6247). The blueprint's +0x130 bit 1 says it has any.
 - **Bound once, at the effect's attach** (0x0054DD80, the owner's slot 0xD4, from the attach chain above), for each emitter with records:
   - type 1: every node of the owner that has a physics actor (the owner's list at +0xB0, filled by `PhysicsNodeFunctor`);
-  - type 4 (0x00548A70, called at 0x0054DF0C): not a global manager. 0x0053F290 is a vector's operator[] on the effect's +0x1F8, its list of dependency records, taken at 0. Through the first record's object, the first attached entry whose slot 0x18 answers true gives `[+8][+0x170]`'s interface as the source, a physics actor bound by the same 0x005420F0. Which object that is for a crust on a creature is not settled. Five models use it: fxa_fire_crust_c, fxa_stealth_c, fxc_sylvan_fire_c, fxa_ice_imp_c and fxc_ashwraith_c; the ghost's are both type 1 [C for the code];
+  - type 4 (0x00548A70, called at 0x0054DF0C; settled 2026-10-20 by lib-agent-2): it takes record 0 of the effect's +0x1F8 (0x0053F290, a vector's operator[]), the effect's ObjectAttachDependency to its owner Q. Only Object slot 0xF0 (0x0054D860) makes such records: the crust attach 0x00543BD0, 0x005427B0, 0x0054BD53, AttachWeaponToNode. Then Q's own first ObjectAttachDependency E, E's node's parent (ObjectNode +0x170), and that node's physics actor (+0x15C), bound as type 1 is (0x005420F0). So on an item in hand it is the wrist bone's actor, which has a shape only where the gloves give one; on a sheathed item (a PropNN node) or a creature itself there is none, and the emitters emit as if unattached. All five models that use it are crust rows: fxa_fire_crust_c, fxa_stealth_c, fxc_sylvan_fire_c, fxa_ice_imp_c and fxc_ashwraith_c; the ghost's are both type 1 [C];
   - types 2 and 3 match by Name, which no file sets.
   - Bound by 0x005420F0, a record per shape of the actor whose `MMHShapeAllowEmitterSpawn` (6244) is set, its weight `MMHShapeVolume` (6240) [inferred, from the shape reader 0x00589DB0].
   - With nothing bound, the emitter emits as an unattached one. Detached by 0x0054E0C0.
@@ -395,7 +395,7 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
 #### Not read
 
 - Who calls the slots 79 and 80, and exactly which event lays the material (attach or each frame); the effect object's +0x2D4.
-- Attachment type 4's source object (which object the effect's first dependency is registered on; the crust bind's dependency, 0x00543BD0); where the blueprint's +0x130 bit 1 is set.
+- Where the blueprint's +0x130 bit 1 is set. (Attachment type 4's source is settled above.)
 - Whether a physics actor follows its animated bone each frame; the PhysX getters' slots (identified by layout); the parts' merge order; why the sword's capsule has a volume of 6.257.
 - VFX.mat's `ContactSheetAddv` states; the add-in's White.dds pixels; the render-class override pairs' meaning; mode 5's owner; b5's writer; stealth's look.
 
