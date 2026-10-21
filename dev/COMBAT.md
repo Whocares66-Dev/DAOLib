@@ -184,6 +184,22 @@ So the order for one melee swing:
 6. When the swing's time is up, `COMMAND_COMPLETE` (status 1).
 7. The AI queues the next command.
 
+### A shot's projectile (read 2026-10-21 by lib-agent-2, for DAOParagonEngine; C checked, I inferred)
+
+- **The row comes from the ammunition slot, not the weapon** [C, 0x006B6FF1..0x006B709B]. For an attack (command 1), or an ability whose `abi_base` `Flags` bit 0 is set (the archers' shots, 0x006B71B8):
+  1. The item in RANGEDAMMO (slot 2, `0x007F4EA0(2)` on the creature's equipment) gives the row: `bitm_base` `Projectile` (0x015032BB) of **the ammo item's base item**.
+  2. The main-hand item's (slot 0) local int `PROJECTILE_OVERRIDE` (well-known variable id 14, read by `0x00702E90` on item +0x2E0) replaces it when non-zero. It is a local variable, not an item property. It is read only when there is an ammo item.
+  3. The main hand's own `bitm_base` `Projectile` is never read.
+  4. No ammo item, or a row of 0, makes no projectile (0x006B70A4 → 0x006B731A).
+- **The ammo item is the engine's own** [C, 0x006A6810..0x006A6882]: when RANGEDAMMO is empty and the main hand's `bitm_base` `Ammo` (0xE6203B7E) is non-zero, the engine makes an item of that base item (`0x006A0750`: a new `CCItem`, 0x700 bytes) and equips it there. So a longbow (Ammo 27) shoots base item 27's `Projectile` (row 1, Arrow) and a staff (Ammo 101) base item 101's (row 6). An equipped ammo item must match the weapon's `Ammo` (ITEMS.md:334). Crossbows take the same path: nothing in the maker tests the weapon's type.
+- **Also taken from the items** [C]:
+  - +0x4AC, the effect attached to the projectile: the ammo item's local int `ITEM_CRUST` (variable id 10).
+  - +0x4B0: the ammo item's base item.
+  - +0x4F0: the main hand's `bitm_base` `ProjectileOffset` (0xFA66B18D, f32), for an attack only; the ability path jumps past it, so 0.
+  - +0x4BA = 1 on the weapon path, 0 for an ability's own projectile.
+- **An ability without `Flags` bit 0** takes `abi_base` `Projectile` and `Crust_ID` (+0x4B4); with no projectile it goes straight to its impact (ABILITIES.md:91).
+- **The scripts read the same override** [C]: `combat_h.nss`:827 takes `prj_base` `DamageType` of the weapon's `PROJECTILE_OVERRIDE` row for a ranged attack, and `core_h.nss`:2807 a staff's `DamageBonus` from it. Neither column is read by the exe (EFFECTS.md:476).
+
 ## Effects
 
 Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" means seen in the code; "inferred" means not followed to the end. DAOLib already has an effect's ageing (`Addresses.h`, `kEffectsHolder_AgeEffect` and kin; `dao/Effects.h`, `dao/Clock.h`) and the CDataArrays parameters an effect and an event share.
