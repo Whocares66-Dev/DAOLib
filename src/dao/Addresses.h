@@ -2581,6 +2581,21 @@ DAO_ADDRESS(kLightState_Fill, 2848)
 DAO_ADDRESS(kLightManager_ChooseForLevel, 2693)
 DAO_ADDRESS(kObjectNodeLight_Color, 7605)
 
+// A point light's node, as the light colour above is handed it (dao/Lights.h,
+// OnPointLight; DAOLib #223, read 2026-10-21). Its vftable tells it from an
+// ambient light (ObjectNodeAmbientLight's vftable, 0x00AF7CAC). ObjectNode's
+// constructor (0x0055ED20) keeps its owner at +0x154 and its blueprint at
+// +0x174; the blueprint's +0xC0 is a std::wstring (0x004C0DB0 tears it down
+// with the one at +0xDC), which its slot 10 (0x0055D760, 0x00571510) hands
+// out: the node's name. The owner's +0x14 is its model's name (seen in play,
+// dao/Lights.cpp). The light's ILight is at +0x180, and its +0xC (the node's
+// +0x18C, 0 from the constructor at 0x0053CAF0) is what AddLights
+// (0x00464E30, through the ILight's slot 5, 0x0053CC40) sends to the lists
+// of what moves when 1 and to the level pieces' otherwise; the blueprint's
+// byte +0x15C (0x0053C8D0) picks the first list of either pair. Every light
+// seen in Redcliffe had 0 and 1 there, the portraits' rig among them.
+DAO_DATA(kObjectNodePointLight_vftable, 63928)
+
 // The resource manager making a source of files of one kind without putting
 // it in its list (ECResMan::ResMan::AddSource does that): __thiscall, the
 // source's path as a std::wstring in the engine's own names for its folders

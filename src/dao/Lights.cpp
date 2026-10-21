@@ -30,12 +30,29 @@
 // level, the figures and the sky not. Of every 20,000 calls about 13,460
 // were ForLevel and 6,540 ForMoving, none Unknown (the callback added at
 // load).
+// OnPointLight (DAOLib #223, read 2026-10-21; dao/Addresses.h at
+// kObjectNodePointLight_vftable) detours the light colour Fill takes each
+// point and ambient light's colour from, before the flicker is multiplied in,
+// and hands the callbacks a point light's: so the scaled colour is the one
+// drawn that frame, and nothing is left in the light.
+//
+// Seen in play 2026-10-21, vanilla Redcliffe village by night: every light
+// the engine took was in the level pieces' lists, the party portraits' rig as
+// well, so the node says nothing of whose a light is; its owner's model's name
+// does. The owner (a GraphicsStructures::Object) has it at +0x14, found by a
+// scan of the owners for the engine's strings: lak100n_3_4_1_ll's fire_RT_0
+// and fire_bounce_RT_0, lak100n_4_2_1_lc's char_11, portrait_lightrig's KEY_C,
+// RIM_C, FILL_C, KEY_L, RIM_L and FILL_L (one rig to each portrait), and
+// oth999d_0_ll's and oth999d_0_lc's. With every point light's colour set to 0 by a
+// callback, against vanilla from the same paused view, the party's portraits
+// went black and the figures darker: the colour returned is the one drawn.
 #include "dao/Lights.h"
 
 #include "dao/Addresses.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/core/Msvc8.h"
 
 #include <cstddef>
 #include <cstring>
@@ -57,10 +74,18 @@ constexpr std::size_t kNodeOfReference = 0x18; // in what an entry points to: th
 constexpr std::size_t kStateOfNode = 0x68 / 4; // in the node's vtable: its light state
 constexpr std::size_t kMostAmbientLights = 64; // more than any state was seen with (one)
 
+constexpr std::size_t kOwnColor = 0x1A0;  // in a light's node: four floats
+constexpr std::size_t kBlueprint = 0x174; // in a node
+constexpr std::size_t kName = 0xC0;       // in a node's blueprint: a std::wstring
+constexpr std::size_t kOwner = 0x154;     // in a node: the GraphicsStructures::Object it is part of
+constexpr std::size_t kModelName = 0x14;  // in an Object: its model's name, a std::wstring
+
 using Callbacks = std::vector<std::function<void(Ambient &)>>;
+using PointCallbacks = std::vector<std::function<void(PointLight &)>>;
 
 std::mutex g_mutex;
-std::shared_ptr<const Callbacks> g_callbacks; // replaced whole, never changed in place
+std::shared_ptr<const Callbacks> g_callbacks;           // replaced whole, never changed in place
+std::shared_ptr<const PointCallbacks> g_pointCallbacks; // the same
 std::unordered_map<std::uintptr_t, Chosen> g_chosen;
 
 using FillFn = void(__fastcall *)(void *state, int edx, const float *base);
@@ -71,6 +96,7 @@ using ChooseForMovingFn = void(__fastcall *)(void *manager, int edx, void **node
 using LightColorFn = void(__fastcall *)(const void *node, int edx, float *color);
 
 Detour<FillFn> g_fill;
+Detour<LightColorFn> g_color;
 Detour<ChooseForLevelFn> g_chooseForLevel;
 Detour<ChooseForMovingFn> g_chooseForMoving;
 
@@ -112,6 +138,7 @@ std::size_t ReadLights(std::uintptr_t state, std::array<Color, kMostAmbientLight
 {
     auto *const begin = *reinterpret_cast<void ***>(state + kAmbientLights);
     auto *const end = *reinterpret_cast<void ***>(state + kAmbientLights + 4);
+    // Through OnPointLight's detour, if it is attached: it leaves an ambient light's colour as it is.
     const auto color = reinterpret_cast<LightColorFn>(Module::Address(addr::kObjectNodeLight_Color));
     std::size_t count = 0;
     for (void **entry = begin; begin != nullptr && entry < end && count < out.size(); ++entry)
@@ -153,7 +180,52 @@ void __fastcall Fill(void *state, int edx, const float *base)
     std::memcpy(reinterpret_cast<float *>(address + kAmbient), ambient.color.data(), sizeof(Color));
 }
 
+void __fastcall LightColor(const void *node, int edx, float *color)
+{
+    g_color.Original()(node, edx, color);
+    const auto address = reinterpret_cast<std::uintptr_t>(node);
+    if (*reinterpret_cast<const std::uintptr_t *>(address) != Module::Address(addr::kObjectNodePointLight_vftable))
+    {
+        return;
+    }
+    std::shared_ptr<const PointCallbacks> callbacks;
+    {
+        const std::lock_guard lock(g_mutex);
+        callbacks = g_pointCallbacks;
+    }
+    PointLight light;
+    std::memcpy(light.color.data(), color, sizeof(Color));
+    std::memcpy(light.own.data(), reinterpret_cast<const float *>(address + kOwnColor), sizeof(Color));
+    if (const auto blueprint = *reinterpret_cast<const std::uintptr_t *>(address + kBlueprint); blueprint != 0)
+    {
+        light.name = reinterpret_cast<const core::WStringRep *>(blueprint + kName)->View();
+    }
+    if (const auto owner = *reinterpret_cast<const std::uintptr_t *>(address + kOwner); owner != 0)
+    {
+        light.model = reinterpret_cast<const core::WStringRep *>(owner + kModelName)->View();
+    }
+    light.node = address;
+    for (const auto &callback : *callbacks)
+    {
+        detail::Guard("a point light callback", [&] { callback(light); });
+    }
+    std::memcpy(color, light.color.data(), sizeof(Color));
+}
+
 } // namespace
+
+void OnPointLight(std::function<void(PointLight &)> callback)
+{
+    const std::lock_guard lock(g_mutex);
+    auto callbacks =
+        g_pointCallbacks ? std::make_shared<PointCallbacks>(*g_pointCallbacks) : std::make_shared<PointCallbacks>();
+    callbacks->push_back(std::move(callback));
+    g_pointCallbacks = std::move(callbacks);
+    if (!g_color.IsAttached() && Module::IsKnownExecutable())
+    {
+        g_color.Attach(addr::kObjectNodeLight_Color, &LightColor);
+    }
+}
 
 void OnAmbient(std::function<void(Ambient &)> callback)
 {
