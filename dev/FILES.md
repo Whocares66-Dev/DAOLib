@@ -84,6 +84,43 @@ GOG's game from `game\gogrun`, `examples/resources` with a `where.txt`, 2026-10-
 
 The same at the main menu and with the save loaded. The game's own: `rules_core.ncs` from `DATA:designerscripts.rim` (100004), `2da_base.gda` from `PATCH:patch003.erf` (100000).
 
+## What the engine keeps of what it loads (read 2026-10-20 by lib-agent-2, DAOLib #207)
+
+Read in GOG's exe, not run in the game. [C] checked, [I] inferred.
+
+### Data tables: every one built at start, kept for the session
+
+- **Eager, whole.** `GdaStore::Load` (0x004E0BF0) lists every GDA file once, merges `m2da_base` (every file starting `M2DA_`), then builds each of its rows' tables from the files whose names start with the row's worksheet: about 426 tables and 20,000 rows on the base game. `FindTable` (0x004DF580) only indexes that array; its path for an empty slot reads the row's worksheet and returns the slot still null, so a table is there from `Load` or never [C].
+- **Rebuilt wholesale, never per table.** `Load` runs at start (the resources' set-up, 0x0060358C), at every change of the add-in list (0x005F4610, at 0x005F5A58), when the campaign's sources are set (0x005FCE80, at 0x005FDF23), and in a `CCModule` method (0x005FC140) that deletes the store and makes a new one (0x00A2CC25; caller 0x005FC7CB). It clears every table first (0x004DF940). No release or reload on a language change or an area load was seen [C]. The store's keeper (12 bytes at 0xC1D090) lives from the application's start (0x005DBC3F) to its teardown (0x005D72E3).
+- **A held table pointer dangles across a rebuild:** the old tables are deleted. The engine's own getters find the table again on each call ([0xC1D090] → +4 → `FindTable`), so they are safe [C].
+- **One merged object per table.** An M2DA keeps its G2DA parts (+0x30) and one row vector sorted by ID (+0x20/+0x24, 16 bytes a row), merged at load, the first file's row of an ID kept. A row is found by binary search by ID (0x004EC130, through 0x004EC910). A column is found by a linear scan of the first part's column list (0x004ED160) on every get. There is no hash map, and no row or cell cache [C].
+- **The raw file is kept, nothing parsed into cells.** A G2DA (0x34 bytes, `Load` 0x004ED340) checks `GFF V4.0`, takes its row and column counts, and keeps a pointer and size to the file image at +0x28 for its life; every get walks those bytes again [C]. About 2.5 to 3 MB for the base game: 2da.erf's 2 MB of GDAs, plus about 320 KB of row entries [I].
+- The level's own `ENV:` GDA files are a separate, unmerged list kept by name (0x004E0EA0), built at start and in the store's set-up, not on an area load in anything read [C].
+- **Not read:** whether a rebuild frees the old merged `m2da_base` (`Load` overwrites +0x30 without deleting it, so it may leak); whether a G2DA's image is the resource manager's buffer or a copy; what 0x004C0B00 compares exactly; why 0x004E0EA0 runs both at start and in the set-up; the time `Load` takes in play.
+
+### Resources and templates: no byte cache, a template never kept
+
+- **No cache in the LRU or budget sense.** A resource's record (name, source, offset, size) lives with its source for the source's life; only its buffer comes and goes. A buffer is held only while a handle to it is: the handle is copy-counted (a 16-bit count at +0x38), and at the last release (`Resources::Release` 0x004D5860 → 0x004C5450 → 0x004BF010) `FreeWhenUnused` (0x004BEDE0) frees it at once and sets the state back to not loaded, unless the buffer is the caller's (+0x3C). The next find reads the file from the archive again [C]. No size limit, setting or memory test was found in the find, the release or the free, and no list of resources kept loaded [C for the paths read, I for the absence elsewhere].
+- **A template is read again for every object made from it.** For a creature (slot 117, 0x006A27B0): a new `CExoGFF` (0xD8 bytes, constructor 0x00A388F0) takes a handle to the template's file; its loader (0x00A37AB0) checks the header and points its section views into the file's bytes, with no parse and no copy; the creature reads its fields; the `CExoGFF` is deleted (0x006A28CA), which releases the handle and frees the buffer. The next creature of the same template reads the archive again; two share the buffer only while their handles overlap [C for the creature; other template kinds assumed alike, I].
+- **What the engine does keep is built structures, by name:** the GDA store above, and caches named in its RTTI: `AppearanceCache`, `VisualEffectCache`, `ProjectileCache`, `TwoDimArrayCache`, glyph caches, and the module's `Mod_CacheNSSList`. A model's file is held while it is parsed, and the graphics manager keeps the built model, not the bytes [I; their contents and eviction not read].
+- **Not read:** when a source is released mid-game (a module or add-in change); `Mod_CacheNSSList` and the module's resource manager; the model and animation caches' keys and when they drop; the named caches' contents; the other template kinds' opens.
+
+### Textures: one per name, shared, released at the last user
+
+- **No file bytes kept.** Textures are made in D3DPOOL_MANAGED; the system-memory copy is D3D9's, not the engine's [C for the pool, I that no bytes are kept: nothing holds a data pointer, and a reload reads the file again]. A DDS is parsed by the engine itself (0x0084BFA0: the magic, a 0x7C header; then 0x0084B800 and its variants create the texture, lock each mip and copy). D3DX's in-memory loader (driver slot +0xC0, 0x00869200) is for other image types [I].
+- **One texture per name, shared and counted.** `TextureManager` (vftable 0xB2B2B8) keeps a name map whose entries are weak handles: the insert (0x00845D00) stores the handle and drops one strong count (0x004FA0E0). So a texture is destroyed at once when its last strong user lets go (a material's texture parameter, an `img://` image), and the name stays in the map as an empty handle that a lookup skips. A texture an area uses that the next does not is destroyed on leaving and read again on return [C for the pieces, I for the whole]. `ReloadAll` (0x00846E50) reloads every live texture in place.
+- **A recycle pool of device textures** by shape (width, height, mips, format, flags; 0x00849980 at `TextureManager` +0xA0, lookup 0x00847830, a free list per shape 0x00847BE0): a freed texture of the same shape can serve the next load [C for the structure; when one is returned to it, I].
+- **No LRU and no byte budget.** A texture is halved, its top mip dropped, while it is larger than the device's maximum (0x0084B8A3–0x0084B8EB) [C]. `ForceTextureMemoryLimit` and `EnableDefaultPoolTextures` are settings the options read and write (+0x1E0, +0x1F0); what uses them is not read.
+- **Texture quality** (`SetTextureQuality`, 0x00459060) sets a mip skip (0x00844F70: the top mip of every texture dropped when the option is 0, none otherwise) and reloads every live texture; the same chain picks the folder, `packages\core\textures\medium` or `high` [C for the code; which option number the menu calls Low, Medium or High is not read, and the folder strings were not spot-checked by the reader].
+- **Synchronous on the caller's thread,** except an `img://…?Async=1` image (the GUI's): then `TextureManager::Load` (0x00845D80) returns an empty placeholder at once and queues a `TextureLoadTask` (0x0084A930) that fills it on a worker [C].
+- **Not read:** the menu's names for the quality values; who uses the two settings above; when a texture goes back to the recycle pool; the scheduler's threads; what an area unload does to its materials; cube and volume textures.
+
+### Against core's own (dao/core/Install.h)
+
+- **Tables:** `Index::Table` and `Index::Worksheet` keep tables for the index's life, as the engine keeps its whole store for the session. Core builds a table when it is first asked for, not all at start; core keeps parsed cells where the engine re-walks the file's bytes on each get.
+- **Bytes and templates:** like the engine, core keeps no file bytes and reads a template again each time it is asked for. A `gff3::Struct` is a list of field views into the bytes, as the engine's `CExoGFF` points its views into them.
+- **Textures:** core keeps none. Keeping them is the caller's, as the engine keeps its GPU textures by name while they are used.
+
 ## Not settled
 
 - **A disabled add-in, or one with no folder**: whether it takes a place in the game's count of add-ins (`install::Index` marks the order unsettled where there is one).
