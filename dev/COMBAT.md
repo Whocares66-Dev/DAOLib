@@ -191,7 +191,23 @@ So the order for one melee swing:
   2. The main-hand item's (slot 0) local int `PROJECTILE_OVERRIDE` (well-known variable id 14, read by `0x00702E90` on item +0x2E0) replaces it when non-zero. It is a local variable, not an item property. It is read only when there is an ammo item.
   3. The main hand's own `bitm_base` `Projectile` is never read.
   4. No ammo item, or a row of 0, makes no projectile (0x006B70A4 → 0x006B731A).
-- **The ammo item is the engine's own** [C, 0x006A6810..0x006A6882]: when RANGEDAMMO is empty and the main hand's `bitm_base` `Ammo` (0xE6203B7E) is non-zero, the engine makes an item of that base item (`0x006A0750`: a new `CCItem`, 0x700 bytes) and equips it there. So a longbow (Ammo 27) shoots base item 27's `Projectile` (row 1, Arrow) and a staff (Ammo 101) base item 101's (row 6). An equipped ammo item must match the weapon's `Ammo` (ITEMS.md:334). Crossbows take the same path: nothing in the maker tests the weapon's type.
+- **The engine's made ammunition** (`0x006A0750(ammo base item, launcher, set)`) [C]: a new `CCItem` of the launcher's `bitm_base` `Ammo` base item, with its bool attribute at item +0x5D0 set (slot 21 of the attribute, called with 1 at 0x006A07EE). It is then equipped into RANGEDAMMO of that weapon set (`0x006BC7F0(item, 2, set)`). Nothing is made while bit 0x200 of the global flags 0xC371B4 is set; only the equipment's clear-all 0x007977D0 sets that bit (with 0x2).
+- **+0x5D0 marks it transient** [C]. It is the flag the item notes call "being destroyed" (ITEMS.md:144, SAVE_WRITER.md:294):
+  - the item raises no ADDED or REMOVED event;
+  - the save writer skips it, so a save never holds made ammo;
+  - a shot never uses it up.
+- **Where it is made** [C unless marked]:
+  - **An item added to the equipment** (`Equipment` vtable slot 21, 0x00797D10): when the added item's `bitm_base` `Ammo` is non-zero, and that set's RANGEDAMMO is empty or holds another base item, the ammo is made for that set. Every add goes through here, equipping included. Load and template spawn add the same way [I: their adds were not traced]. Since made ammo is never saved, a load makes it again [I].
+  - **A real ammo item taken off** (the unequip 0x006B7690, item Type 7): the item goes to the backpack, and ammo is made from the main hand's `Ammo` (0x006B77F8..0x006B781A).
+  - **After each weapon shot** (`CCCreature` slot 61, 0x006A6740), at the clip's "Projectile Fire" event (0x006AFA40 → 0x006985A0, only when the projectile's +0x4BA is set, the weapon path):
+    - a real ammo item with a `Projectile` loses one (`0x00762100`, count 1) and is deleted when its stack runs out; made ammo is skipped;
+    - then, if RANGEDAMMO is empty and the main hand's `Ammo` is non-zero, ammo is made.
+  - Not before a shot: the projectile maker makes none, and with no ammo it makes no projectile.
+- **Where it goes** [C unless marked]:
+  - **Taken off directly**: the unequip 0x006B7690 tests +0x5D0 first. Made ammo goes to `0x006A5CD0(set)`, which removes it from that set's RANGEDAMMO and destroys it (vtable +0x198 with 0). It never reaches the backpack.
+  - **The launcher taken off**: `Equipment` slot 22 (0x00797E20, an item removed) destroys that set's made ammo through `0x006A5CD0` when the removed item's `Ammo` is non-zero. Equipping a melee weapon over the bow therefore destroys it.
+  - **Other ammo equipped**: the old item is taken off first, so made ammo is destroyed [I: the equip's own unequip not traced].
+  - **A weapon-set switch**: nothing is added or removed, so each set keeps its own made ammo [I: the switch not read].
 - **Also taken from the items** [C]:
   - +0x4AC, the effect attached to the projectile: the ammo item's local int `ITEM_CRUST` (variable id 10).
   - +0x4B0: the ammo item's base item.
