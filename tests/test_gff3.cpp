@@ -69,6 +69,15 @@ TEST_CASE("a GFF3 template's fields by their labels, of their own types", "[gff3
     CHECK(items[0].ResRef("InventoryRes") == "gen_im_wep_axe");
     CHECK(root->Find("Nothing") == nullptr);
     CHECK(root->List("Tag").empty());
+    // An entry alone, as a path into the list reads it (DAOLib #207).
+    CHECK(root->ListSize("Items") == 1);
+    const auto first = root->ListItem("Items", 0);
+    REQUIRE(first);
+    CHECK(first->Id() == 7);
+    CHECK(first->ResRef("InventoryRes") == "gen_im_wep_axe");
+    CHECK_FALSE(root->ListItem("Items", 1));
+    CHECK(root->ListSize("Tag") == 0);
+    CHECK_FALSE(root->ListItem("Tag", 0));
 }
 
 TEST_CASE("a GFF3 field whose value runs out of the field data gives nothing", "[gff3]")
@@ -84,6 +93,8 @@ TEST_CASE("a GFF3 field whose value runs out of the field data gives nothing", "
     CHECK_FALSE(root->Get<std::uint64_t>("Big"));
     CHECK_FALSE(root->Child("Self")); // a struct past the file's
     CHECK(root->List("L").empty());
+    CHECK(root->ListSize("L") == 0);
+    CHECK_FALSE(root->ListItem("L", 0));
 }
 
 TEST_CASE("what is no GFF3, or whose sections lie past its end, is refused", "[gff3]")

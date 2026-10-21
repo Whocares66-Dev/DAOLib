@@ -106,10 +106,17 @@ class Struct
     std::optional<Struct> Child(std::string_view label) const;
     // Returns a List field's structs; none for a field of another type or a list out of the file.
     std::vector<Struct> List(std::string_view label) const;
+    // Returns how many entries a List field has, as written; 0 for a field of another type.
+    std::size_t ListSize(std::string_view label) const;
+    // Returns a List field's entry alone, without the others: for a path such as VarTable[3]/Name.
+    // @return nothing past the list's end, or for an entry that names no struct of the file
+    std::optional<Struct> ListItem(std::string_view label, std::size_t index) const;
 
   private:
     // Where a field's value is in the field data, if `size` bytes of it are there.
     std::optional<std::size_t> Data(std::string_view label, Type type, std::size_t size) const;
+    // Where a List field's entries start in the file and how many there are, if they are all there.
+    std::optional<std::pair<std::size_t, std::uint32_t>> Entries(std::string_view label) const;
 
     const File *file_;
     std::uint32_t index_ = 0;

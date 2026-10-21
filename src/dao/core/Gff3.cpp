@@ -347,36 +347,70 @@ std::optional<Struct> Struct::Child(std::string_view label) const
     return Struct(*file_, field->data);
 }
 
-std::vector<Struct> Struct::List(std::string_view label) const
+std::optional<std::pair<std::size_t, std::uint32_t>> Struct::Entries(std::string_view label) const
 {
-    std::vector<Struct> out;
     const Field *field = Find(label);
     if (field == nullptr || field->type != Type::List)
     {
-        return out;
+        return std::nullopt;
     }
     const auto &h = file_->Sections();
     const std::size_t p = std::size_t{h.lists} + field->data;
     const std::size_t end = std::size_t{h.lists} + h.listsSize;
     if (p + 4 > end)
     {
-        return out;
+        return std::nullopt;
     }
     const std::uint32_t count = ReadAt<std::uint32_t>(file_->Bytes(), p).value_or(0);
     if (count > (end - p - 4) / 4)
     {
+        return std::nullopt;
+    }
+    return std::pair{p + 4, count};
+}
+
+std::vector<Struct> Struct::List(std::string_view label) const
+{
+    std::vector<Struct> out;
+    const auto entries = Entries(label);
+    if (!entries)
+    {
         return out;
     }
+    const auto [at, count] = *entries;
     out.reserve(count);
     for (std::uint32_t i = 0; i < count; ++i)
     {
-        const std::uint32_t index = ReadAt<std::uint32_t>(file_->Bytes(), p + 4 + (std::size_t{4} * i)).value_or(kNull);
-        if (index < h.structCount)
+        const std::uint32_t index = ReadAt<std::uint32_t>(file_->Bytes(), at + (std::size_t{4} * i)).value_or(kNull);
+        if (index < file_->Sections().structCount)
         {
             out.emplace_back(*file_, index);
         }
     }
     return out;
+}
+
+std::size_t Struct::ListSize(std::string_view label) const
+{
+    const auto entries = Entries(label);
+    return entries ? entries->second : 0;
+}
+
+// One entry read alone (DAOLib #207): a path into a list (Paragon's VarTable[7]/Name, four fields an
+// entry) built the whole list again for each field it read, 0.55 s for 96 creatures' templates.
+std::optional<Struct> Struct::ListItem(std::string_view label, std::size_t index) const
+{
+    const auto entries = Entries(label);
+    if (!entries || index >= entries->second)
+    {
+        return std::nullopt;
+    }
+    const std::uint32_t item = ReadAt<std::uint32_t>(file_->Bytes(), entries->first + (4 * index)).value_or(kNull);
+    if (item >= file_->Sections().structCount)
+    {
+        return std::nullopt;
+    }
+    return Struct(*file_, item);
 }
 
 } // namespace dao::core::gff3
