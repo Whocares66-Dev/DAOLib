@@ -6,12 +6,14 @@
 // air, the clouds, the fog, the moon) and the level's sunlight (the light
 // on the ground and the creatures, and the way their shadows fall). The
 // night is made on the spot: the game's own night table for the sky, and
-// the area's sun where it stands, in moonlight's colour. Ten times a
-// second the plugin sets the blend of the two that the clock asks for.
+// the area's sun in moonlight's colour, turned once about the sky over the
+// round at the height it had. Ten times a second the plugin sets the blend
+// of the two that the clock asks for.
 //
 // What to look for in play, outdoors: the sky darkening to the night
 // table's purple and the ground going moonlit blue over a minute, then
-// back; the log has the share of night every ten seconds, and a line when
+// back; the sun's disc, its glow and the shadows going round the sky
+// together (DAOLib #222); the log has the share of night every ten seconds, and a line when
 // the area has its own look again. The trees darken and go blue with the
 // sunlight; grass and buildings keep the light their level was made with
 // (dev/TODO.md). At the start the log has the trees' light beside the
@@ -55,13 +57,23 @@ float NightAt(Clock::duration sinceNoon)
     return 0.5F - (0.5F * std::cos(rounds * 2 * std::numbers::pi_v<float>));
 }
 
+// The sun's way turned about the vertical by a share of a whole turn, at the height it had.
+std::array<float, 4> Turned(const std::array<float, 4> &way, float turns)
+{
+    const float angle = turns * 2 * std::numbers::pi_v<float>;
+    const float c = std::cos(angle);
+    const float s = std::sin(angle);
+    return {(c * way[0]) - (s * way[1]), (s * way[0]) + (c * way[1]), way[2], way[3]};
+}
+
 void Frame()
 {
     static Clock::time_point last;
     static Clock::time_point logged;
     const Clock::time_point now = Clock::now();
+    const auto mode = dao::CClientExoApp::CurrentMode();
     if (g_over || now - last < std::chrono::milliseconds(100) ||
-        dao::CClientExoApp::CurrentMode() != dao::GameMode::Explore)
+        (mode != dao::GameMode::Explore && mode != dao::GameMode::Combat))
     {
         return;
     }
@@ -100,12 +112,16 @@ void Frame()
 
     const float share = NightAt(now - *g_noon);
     SetSky(dao::core::Blend(*day, night, share));
-    SetSunlight(dao::core::Blend(*sun, moon, share));
+    Sunlight light = dao::core::Blend(*sun, moon, share);
+    light.direction = Turned(sun->direction, std::chrono::duration<float>(now - *g_noon) / kRound);
+    SetSunlight(light);
     if (now - logged >= std::chrono::seconds(10))
     {
         logged = now;
-        spdlog::info("night {:.2f}: the sun's intensity {:.2f} of the area's {:.2f}", share,
-                     CurrentSky().value_or(*day).sunIntensity, day->sunIntensity);
+        spdlog::info("night {:.2f}: the sun's intensity {:.2f} of the area's {:.2f}, its light travelling {:.3f} "
+                     "{:.3f} {:.3f}",
+                     share, CurrentSky().value_or(*day).sunIntensity, day->sunIntensity, light.direction[0],
+                     light.direction[1], light.direction[2]);
     }
 }
 

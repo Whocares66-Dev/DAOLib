@@ -40,6 +40,9 @@ The pixel shader reads c0–c4 and the vertex shader c5–c8, of the one array.
 - L = normalize(−sun direction (layout +0xE0)), R = normalize((0,0,1) × L), U = normalize(L × R), s = 1 / `moonScale`.
 - The rows are (R·s, 0.5), (U·s, 0.5), (L′·s, 0) and (0, 0, 0, 1), multiplied by a rotation about L by the block's +0x7C angle.
 - So the disc is projected on the plane facing the light, with border addressing (`sky.sta.xml`, border colour 0).
+- There is one disc, the sun's or the moon's as the sky material's CelestialBody texture has it (DefaultSun.dds in the day village's sky box). Its brightness is `moonAlpha` alone and its size `moonScale`.
+- It is drawn twice: o3.w is the vertex's w (1) and nothing tests L·view, so the view opposite the light lands on the same uv. Vanilla's second disc is below the horizon; a sun moved low can bring it into view (elgara-agent saw it as a "moon" opposite the sun, 2026-10-21).
+- The matrix is worked out again only on a frame the block is flagged (+0x84) or t moves (above), so a direction written alone left the disc where the last flagged frame put it, seen in play 2026-10-21 (DAOLib #222). `dao::atmosphere::SetSunlight` sets the flag.
 
 ### The shaders, in short (for the port)
 

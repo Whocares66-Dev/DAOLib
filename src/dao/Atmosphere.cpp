@@ -42,6 +42,15 @@
 // turned the sun's round; TreeLight's is the way the light travels, as the
 // sunlight's is. SetSunlight sets them as the load would.
 //
+// The sky's disc (DAOLib #222, read 2026-10-21; dev/SKY.md) is placed by
+// this same direction, but the scene's sky update (0x00538FA0) works the
+// disc's matrix out again (0x0055BFA0, the direction read at 0x0055C4E2)
+// only when the live block's +0x84 is set, as SetAtmosphere sets it, or the
+// camera's t moves. With the direction alone written, the disc kept the one
+// the last flagged frame saw: seen in play by elgara-agent in Redcliffe's
+// day village, the light moved and the disc stayed. So SetSunlight sets the
+// flag too.
+//
 // The presets are the game's atmosphere, clouds and fog tables, four rows
 // each (default, battle, night, lightning), as core_h.nss's
 // SetAtmosphericConditions, SetCloudConditions and SetFogConditions apply
@@ -74,6 +83,7 @@ constexpr std::size_t kAreaOwn = 0x2A0;               // in the layout: the bloc
 constexpr std::size_t kSunlightColor = 0xB4;          // in the layout: four floats
 constexpr std::size_t kSunlightCharacterColor = 0xC4; // four more
 constexpr std::size_t kSunlightDirection = 0xE0;      // four, aligned
+constexpr std::size_t kChanged = 0x84;                // in a block: set, the scene works it out again
 constexpr float kLeftOut = -9999.0F;                  // ATM_ATMOSPHERE_INVALID_VALUE: at or below it, not a value
 
 // The layout of the controlled creature's area, or 0 with no game or nobody controlled.
@@ -200,6 +210,9 @@ bool SetSunlight(const Sunlight &light)
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightCharacterColor), light.characterColor.data(),
                 sizeof light.characterColor);
     std::memcpy(reinterpret_cast<void *>(layout + kSunlightDirection), light.direction.data(), sizeof light.direction);
+    // The sky's disc is placed by the direction only when the block is worked out again (DAOLib #222).
+    const std::int32_t changed = 1;
+    std::memcpy(reinterpret_cast<void *>(layout + kLive + kChanged), &changed, sizeof changed);
     SetTreeLight({.direction = light.direction, .diffuse = light.color});
     return true;
 }

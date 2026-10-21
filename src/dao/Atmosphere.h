@@ -18,7 +18,9 @@
 // Both are the area's: a new area comes with its own. A sunlight that was set stays in its
 // area for as long as the game keeps that area loaded, so the party may come back to it;
 // AreaOwnSunlight answers the area's own there all the same. A change shows in the next frame. The sky is what is drawn
-// above and the haze in the distance, and lights nothing. The trees are lit by a light of their own, which the
+// above and the haze in the distance, and lights nothing. Its one disc, the sun's or the moon's as the
+// sky's texture has it, stands where the sunlight comes from, and is drawn again opposite: its size is
+// moonScale, its brightness moonAlpha. The trees are lit by a light of their own, which the
 // sunlight sets and which can be set apart from it. Grass and buildings keep the light their level was made with,
 // whatever the sunlight, and lights placed in the level (torches, windows) are not part of either.
 #pragma once
@@ -72,7 +74,7 @@ std::optional<Sunlight> CurrentSunlight();
 // @return nullopt as for CurrentSky
 std::optional<Sunlight> AreaOwnSunlight();
 
-// Sets the sunlight, and the trees' light with it (ResetTreeLight).
+// Sets the sunlight, the trees' light with it (ResetTreeLight), and the place of the sky's disc.
 // @return false, with nothing changed, where CurrentSky would return nullopt
 bool SetSunlight(const Sunlight &light);
 
