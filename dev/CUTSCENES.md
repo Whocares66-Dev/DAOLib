@@ -285,7 +285,7 @@ Read in the GOG exe (daoexe.py disassembly) and the game's files (ghilana) by li
 - A request is taken only while the current mode (+0x74) answers true to slot 10 (+0x28, base mode) or slot 11 (+0x2C, finished), or to slot 12 (+0x30, interruptible) with the stack not empty.
 - `GameModeCutscene` (vftable 0x00B0E76C): slot 10 = 0x005C5E80 (`xor al,al`), slot 12 = 0x005C5E80, slot 11 = 0x006922D0 (`mov al,[ecx+0xCC]`). **So nothing is taken while a cutscene plays; it waits until the cutscene's +0xCC is set.**
 - +0xCC is set only by 0x00691F40, called from the mode's update (slot 8, 0x00692C60) when the player's update (0x007E3D30) answers false: the cut ended, naturally or by skipping past the last marker. 0x00691F40 also restores the camera (0x006C45F0/0x006C4EC0/0x006C4B20).
-- The stack is taken first, last in first out (0x00640330 empty, 0x00640AB0 back, pop at 0x00640D0F); the base slot (+0x8C) only when the stack is empty. **The base slot isn't cleared when taken**: it is the standing base mode (explore), which is why a finished stack mode falls back to it.
+- The stack is taken first, first in first out: a request is inserted at the front (0x00641220 with index 0, insert 0x00601580), and the take reads back() (0x00640AB0) and pops the back (0x00640D0F); 0x00640330 tests empty; the base slot (+0x8C) only when the stack is empty. **The base slot isn't cleared when taken**: it is the standing base mode (explore), which is why a finished stack mode falls back to it.
 
 **The switch (0x00641D30, checked):**
 1. Take a request (0x00640C60). At the cutscene's end the stack is empty, so it is the base slot's explore (0).

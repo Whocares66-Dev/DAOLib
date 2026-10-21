@@ -482,7 +482,7 @@ Read in the GOG exe and the scripts by lib-agent-2 (with subagents) for DAOParag
 - This corrects `src/dao/GameModes.cpp`'s comment that slot 10 is asked "whether to refuse".
 
 **The controller takes a request on its update (0x00640C60).** It takes one only while the current mode is a base mode, is finished (+0x2C), or can be interrupted (+0x30).
-- The stack is taken last in, first out; the base slot only when the stack is empty.
+- The stack is taken first in, first out (a new request is inserted at the front, the back is taken); the base slot only when the stack is empty.
 - Dialog and Cutscene can't be interrupted, so requests wait until they end.
 - The new mode can refuse there (+0x24, then slot 5 +0x14; dialogue's ambient start is such a refusal).
 - **A request for the current mode with force 0 is dropped**: no switch, no event. The script's `SetGameMode` (530) passes force 0. Dialogue, cutscenes and explore after a load pass 1.
@@ -534,6 +534,8 @@ A cutscene and the mode controller (requests refused during a cutscene, Cutscene
 **So a hostile outside the conversation keeps attacking the frozen hero, in vanilla as in Paragon.** Ambient barks stop (slot 21 +0x54 false in Dialog).
 
 **`BeginConversation` answers 1 when the request is queued, not when the conversation starts.** It checks only that the object exists and isn't dead. The 2026-09-30 sighting in a fight (1 answered, nothing started) wasn't found on this path; the likely cause is that no start line's condition passed, which plays as an empty ambient conversation and refuses the mode.
+
+**A second conversation waits for the first, and is tested again then** (read 2026-10-21 by lib-agent-2 for DAOParagonEngine's Harrowing). Neither `BeginConversation` (0x006976B0: object +0x2C5 set, not dead) nor `UT_Talk` tests for a conversation already pending or playing, and `SetGameMode`'s replace-in-place case is for loading (mode 9) alone. So a second request is queued behind the first. Dialog is neither a base mode nor interruptible, so the request is taken only when the first conversation has finished. Force 1 escapes the same-mode drop. Dialogue's check (slot 5, 0x0068FDA0) then calls `Conversation::Start` (0x007F2210), which picks the start line at that moment. With no passing line, the request is refused and dropped silently, with no switch and no event 60, and the controller takes the next request in the same update (0x00640DD3–0x00640DEC). Otherwise the second conversation plays after the first. In vanilla Sloth's surrender asks only once: `bhm600cr_sloth.utc` has `SURR_INIT_CONVERSATION` = 0, so `creature_core`'s COMBAT_END (:549–594) only sets `SLOTH_SURRENDERS` (flag 2), and that flag's SET case in `bhm600pt_harrowing.nss` (:169–177) makes the one `UT_Talk`.
 
 ### A soft ClearAllCommands mid-swing: the blow lands
 
