@@ -15,7 +15,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <string_view>
 
 namespace dao::vfx
 {
@@ -88,5 +90,29 @@ void SetPickable(ObjectId effect, bool pickable);
 
 // Returns false if SetPickable excluded the effect from the cursor's pick, otherwise true.
 bool IsPickable(ObjectId effect);
+
+// One sprite emitter's colour, as the engine is about to draw its particles for a frame.
+struct EmitterColor
+{
+    // What every particle's colour is multiplied by: the emitter's own until a callback sets it.
+    Tint color;
+    // The emitter's name in its model, or empty; lasts the call alone.
+    std::wstring_view name;
+    // The name of the model the emitter is part of (fxe_waterfall_redcliffe), or empty; lasts the call alone.
+    std::wstring_view model;
+    // Whether that model has a point light of its own: a fire or a spell's glow, not a waterfall or a mist.
+    bool modelHasLight = false;
+    // The emitter's node, the same each frame for the same emitter; for telling emitters apart.
+    std::uintptr_t node = 0;
+};
+
+// Adds a callback to run each time the engine draws a sprite emitter's particles, once a frame
+// for each emitter in view: plain sprites and ribbons, not mesh particles.
+// @param callback may change `color`; the rest is for reading
+//
+// Nothing is kept: the emitter's own colour is put back after the draw, so a callback that stops
+// changing it leaves the emitter as vanilla has it. Callbacks run on the engine's worker threads,
+// several at once, so keep them short and make what they share safe across threads.
+void OnEmitterColor(std::function<void(EmitterColor &)> callback);
 
 } // namespace dao::vfx

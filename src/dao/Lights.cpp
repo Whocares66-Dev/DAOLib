@@ -39,8 +39,9 @@
 // Seen in play 2026-10-21, vanilla Redcliffe village by night: every light
 // the engine took was in the level pieces' lists, the party portraits' rig as
 // well, so the node says nothing of whose a light is; its owner's model's name
-// does. The owner (a GraphicsStructures::Object) has it at +0x14, found by a
-// scan of the owners for the engine's strings: lak100n_3_4_1_ll's fire_RT_0
+// does (dao/GraphicsNodes.h, the model's blueprint's; the owner's own +0x14,
+// found first by a scan of the owners for the engine's strings, has the same
+// names for these and none for a placed effect): lak100n_3_4_1_ll's fire_RT_0
 // and fire_bounce_RT_0, lak100n_4_2_1_lc's char_11, portrait_lightrig's KEY_C,
 // RIM_C, FILL_C, KEY_L, RIM_L and FILL_L (one rig to each portrait), and
 // oth999d_0_ll's and oth999d_0_lc's. With every point light's colour set to 0 by a
@@ -49,10 +50,10 @@
 #include "dao/Lights.h"
 
 #include "dao/Addresses.h"
+#include "dao/GraphicsNodes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
-#include "dao/core/Msvc8.h"
 
 #include <cstddef>
 #include <cstring>
@@ -74,11 +75,7 @@ constexpr std::size_t kNodeOfReference = 0x18; // in what an entry points to: th
 constexpr std::size_t kStateOfNode = 0x68 / 4; // in the node's vtable: its light state
 constexpr std::size_t kMostAmbientLights = 64; // more than any state was seen with (one)
 
-constexpr std::size_t kOwnColor = 0x1A0;  // in a light's node: four floats
-constexpr std::size_t kBlueprint = 0x174; // in a node
-constexpr std::size_t kName = 0xC0;       // in a node's blueprint: a std::wstring
-constexpr std::size_t kOwner = 0x154;     // in a node: the GraphicsStructures::Object it is part of
-constexpr std::size_t kModelName = 0x14;  // in an Object: its model's name, a std::wstring
+constexpr std::size_t kOwnColor = 0x1A0; // in a light's node: four floats
 
 using Callbacks = std::vector<std::function<void(Ambient &)>>;
 using PointCallbacks = std::vector<std::function<void(PointLight &)>>;
@@ -196,14 +193,8 @@ void __fastcall LightColor(const void *node, int edx, float *color)
     PointLight light;
     std::memcpy(light.color.data(), color, sizeof(Color));
     std::memcpy(light.own.data(), reinterpret_cast<const float *>(address + kOwnColor), sizeof(Color));
-    if (const auto blueprint = *reinterpret_cast<const std::uintptr_t *>(address + kBlueprint); blueprint != 0)
-    {
-        light.name = reinterpret_cast<const core::WStringRep *>(blueprint + kName)->View();
-    }
-    if (const auto owner = *reinterpret_cast<const std::uintptr_t *>(address + kOwner); owner != 0)
-    {
-        light.model = reinterpret_cast<const core::WStringRep *>(owner + kModelName)->View();
-    }
+    light.name = detail::NodeName(address);
+    light.model = detail::ModelName(address);
     light.node = address;
     for (const auto &callback : *callbacks)
     {

@@ -21,10 +21,24 @@
 // area is unloaded; a plugin removes its own. Seen in play 2026-09-30: a
 // ring placed and moved after the cursor, 22 placed and removed in a few
 // minutes, none left behind.
+//
+// OnEmitterColor (DAOLib #224, read 2026-10-21; dao/Addresses.h at
+// kEmitterSprite_Fill) detours each sprite emitter's fill for a frame, the
+// emitter's slot +0xAC, and for the call alone puts the callbacks' colour in
+// the emitter's live colour multiplier (+0x39C), which the fill multiplies
+// every particle's age-map colour by; then puts the emitter's own back. The
+// multiplier is animatable: a clip that keys it writes it on the game
+// thread, and a write that came during the fill would be lost to the colour
+// put back after it, for one frame. Seen in play 2026-10-21 (a crash in a
+// trial callback): the fill is called from the emitters' update task
+// (GraphicsStructures::EmitterUpdateTask) on the engine's task group's
+// threads, so callbacks run on several threads at once.
 #include "dao/Vfx.h"
 
 #include "dao/Addresses.h"
 #include "dao/GameModes.h"
+#include "dao/GraphicsNodes.h"
+#include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
@@ -33,7 +47,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <functional>
+#include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 namespace dao::vfx
@@ -330,6 +348,79 @@ void Remove(ObjectId effect)
     SetPickable(effect, true);
     using Fn = void(__fastcall *)(void *, int, ObjectId, std::int32_t);
     reinterpret_cast<Fn>(Module::Address(addr::kVfxManager_Remove))(Manager(), 0, effect, 0);
+}
+
+namespace
+{
+
+constexpr std::size_t kColorMultiplier = 0x39C; // in an emitter: four floats, rgba
+static_assert(sizeof(Tint) == 4 * sizeof(float), "a Tint is the multiplier's four floats");
+
+using EmitterCallbacks = std::vector<std::function<void(EmitterColor &)>>;
+std::mutex g_emitterMutex;
+std::shared_ptr<const EmitterCallbacks> g_emitterCallbacks; // replaced whole, never changed in place
+
+using FillFn = void(__fastcall *)(void *emitter, int edx);
+Detour<FillFn> g_spriteFill;
+Detour<FillFn> g_ribbonFill;
+Detour<FillFn> g_ribbonPhysicsFill;
+
+// Runs the callbacks over the emitter's colour, the fill with what they set, and puts its own back.
+void FillWith(const Detour<FillFn> &fill, void *emitter, int edx)
+{
+    std::shared_ptr<const EmitterCallbacks> callbacks;
+    {
+        const std::lock_guard lock(g_emitterMutex);
+        callbacks = g_emitterCallbacks;
+    }
+    const auto address = reinterpret_cast<std::uintptr_t>(emitter);
+    auto *const multiplier = reinterpret_cast<float *>(address + kColorMultiplier);
+    EmitterColor color;
+    std::memcpy(&color.color, multiplier, sizeof(Tint));
+    const Tint own = color.color;
+    color.name = detail::NodeName(address);
+    color.model = detail::ModelName(address);
+    color.modelHasLight = detail::ModelHasPointLight(address);
+    color.node = address;
+    for (const auto &callback : *callbacks)
+    {
+        detail::Guard("an emitter colour callback", [&] { callback(color); });
+    }
+    std::memcpy(multiplier, &color.color, sizeof(Tint));
+    fill.Original()(emitter, edx);
+    std::memcpy(multiplier, &own, sizeof(Tint));
+}
+
+void __fastcall SpriteFill(void *emitter, int edx)
+{
+    FillWith(g_spriteFill, emitter, edx);
+}
+
+void __fastcall RibbonFill(void *emitter, int edx)
+{
+    FillWith(g_ribbonFill, emitter, edx);
+}
+
+void __fastcall RibbonPhysicsFill(void *emitter, int edx)
+{
+    FillWith(g_ribbonPhysicsFill, emitter, edx);
+}
+
+} // namespace
+
+void OnEmitterColor(std::function<void(EmitterColor &)> callback)
+{
+    const std::lock_guard lock(g_emitterMutex);
+    auto callbacks = g_emitterCallbacks ? std::make_shared<EmitterCallbacks>(*g_emitterCallbacks)
+                                        : std::make_shared<EmitterCallbacks>();
+    callbacks->push_back(std::move(callback));
+    g_emitterCallbacks = std::move(callbacks);
+    if (!g_spriteFill.IsAttached() && Module::IsKnownExecutable())
+    {
+        g_spriteFill.Attach(addr::kEmitterSprite_Fill, &SpriteFill);
+        g_ribbonFill.Attach(addr::kEmitterRibbon_Fill, &RibbonFill);
+        g_ribbonPhysicsFill.Attach(addr::kEmitterRibbonPhysics_Fill, &RibbonPhysicsFill);
+    }
 }
 
 } // namespace dao::vfx

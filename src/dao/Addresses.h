@@ -2587,14 +2587,15 @@ DAO_ADDRESS(kObjectNodeLight_Color, 7605)
 // constructor (0x0055ED20) keeps its owner at +0x154 and its blueprint at
 // +0x174; the blueprint's +0xC0 is a std::wstring (0x004C0DB0 tears it down
 // with the one at +0xDC), which its slot 10 (0x0055D760, 0x00571510) hands
-// out: the node's name. The owner's +0x14 is its model's name (seen in play,
-// dao/Lights.cpp). The light's ILight is at +0x180, and its +0xC (the node's
+// out: the node's name. The owner's model's name is dao/GraphicsNodes.h's
+// (seen in play, dao/Lights.cpp). The light's ILight is at +0x180, and its +0xC (the node's
 // +0x18C, 0 from the constructor at 0x0053CAF0) is what AddLights
 // (0x00464E30, through the ILight's slot 5, 0x0053CC40) sends to the lists
 // of what moves when 1 and to the level pieces' otherwise; the blueprint's
 // byte +0x15C (0x0053C8D0) picks the first list of either pair. Every light
 // seen in Redcliffe had 0 and 1 there, the portraits' rig among them.
 DAO_DATA(kObjectNodePointLight_vftable, 63928)
+DAO_DATA(kObjectNodePointLight_ILight_vftable, 63924) // its ILight's, at the node's +0x180
 
 // The resource manager making a source of files of one kind without putting
 // it in its list (ECResMan::ResMan::AddSource does that): __thiscall, the
@@ -2621,4 +2622,20 @@ DAO_DATA(kModelLodOrder, 65393)
 DAO_ADDRESS(kGUIInventory_OnShow, 17210)
 DAO_ADDRESS(kGUICharacterRecord_OnShow, 17530)
 
+// What fills a sprite emitter's particles for a frame, the emitter's slot +0xAC
+// (DAOLib #224, read 2026-10-21; dao/Vfx.h, OnEmitterColor): __thiscall, no
+// arguments, `ret`. A plain sprite's (Sprite<SpriteParticle> and
+// Sprite<PhysicsSpriteParticle> both) goes on, if its opacity (+0x4E0) is above
+// 0, to the fill of 32-byte vertices (slot +0xB0: 0x00550860, 0x00551450) or of
+// 68-byte ones (+0xB4: 0x00550D80, 0x00551990) by its +0x510; a linked sprite,
+// a ribbon, has its own (0x005850E0 for SpriteParticle, 0x00585940 for
+// PhysicsSpriteParticle; the plain sprites' one function serves both of their
+// vtables, and is named for the first). Each multiplies every particle's age-map colour by the
+// emitter's live colour multiplier, +0x39C (rgba; dev/EFFECTS.md): of every read
+// of +0x39C in the exe, these six fills are the only ones at draw. A mesh
+// emitter has no such multiplier and none of these. dao/GraphicsNodes.h reads
+// an emitter's model.
+DAO_ADDRESS(kEmitterSprite_Fill, 8074)
+DAO_ADDRESS(kEmitterRibbon_Fill, 9125)
+DAO_ADDRESS(kEmitterRibbonPhysics_Fill, 9127)
 } // namespace dao::addr
