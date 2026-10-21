@@ -1,5 +1,5 @@
-// The ambient light the engine gives what it draws, and the colour of each point light, read and
-// set. Level meshes, terrain and
+// The ambient light the engine gives what it draws, the colour of each point light and the light
+// probe's irradiance it hands each object, read and set. Level meshes, terrain and
 // props take it as g_vLightParams[4], added to the light of the lamps and the sun; it is the
 // sum of the ambient lights of the room (the lights in each room's _ll.mmh) that the engine
 // chose for the object. Figures take their ambient light from a light probe instead and are
@@ -79,5 +79,32 @@ struct PointLight
 // Nothing is kept: a callback that stops changing the colour leaves the light as vanilla has it.
 // Callbacks run on the render thread, many times a frame, so keep them short.
 void OnPointLight(std::function<void(PointLight &)> callback);
+
+// One light state's light probe, as the engine has just handed it the probe's irradiance.
+struct ProbeLight
+{
+    // The probe's irradiance, three 4x4 matrices for red, green and blue, as the shaders are handed
+    // them (g_mLightParams). A callback may change them; the engine copies them from the probe afresh
+    // for each fill while any OnProbe callback is added, so a change lasts this fill alone.
+    std::span<float, 48> irradiance;
+    // The name of the model the probe is part of: a room's <level>_<x>_<y>_<d>_ll, or a figure rig's
+    // (outside_day_rig). Lasts the call alone.
+    std::wstring_view model;
+    // Which chooser last chose the state's lights.
+    Chosen chosen = Chosen::Unknown;
+    // The probe's node, the same each frame for the same probe.
+    std::uintptr_t probe = 0;
+    // The light state, the same each frame for the same object; for telling objects apart.
+    std::uintptr_t state = 0;
+};
+
+// Adds a callback to run each time the engine hands an object its light probe's irradiance, at most
+// once per object and frame, after the engine's copy and before the object is drawn. Objects with
+// no probe chosen are not passed.
+// @param callback may change `irradiance`; the rest is for reading
+//
+// Call it when the plugin loads or later. Callbacks run on the render thread, many times a frame,
+// so keep them short and call no script commands from them.
+void OnProbe(std::function<void(ProbeLight &)> callback);
 
 } // namespace dao::lights

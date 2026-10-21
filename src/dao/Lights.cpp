@@ -30,6 +30,22 @@
 // level, the figures and the sky not. Of every 20,000 calls about 13,460
 // were ForLevel and 6,540 ForMoving, none Unknown (the callback added at
 // load).
+// OnProbe (DAOLib #225, read 2026-10-21): Fill takes the state's first
+// chosen probe (its list at +0x24, an entry's +0x18 the node, as for the
+// ambient lights) and copies the probe's cube map to +0x114 and its three
+// irradiance matrices (0x0053C8F0, 0x0053C900, 0x0053C910) to +0x130, +0x170
+// and +0x1B0, 48 floats in a row, only when the probe is not the one it kept
+// at +0x110 (unless the byte at 0x00C1F370 is 0, when it copies every time);
+// it then keeps the probe there. So a change made to the matrices would stay
+// and be made again on the next. OnProbe clears +0x110 before Fill for a state
+// that has a probe chosen, and the engine copies afresh; for one with none,
+// Fill's own reset to the default matrices (0x004D33C0) is left as it is.
+// Seen in play 2026-10-21, vanilla Redcliffe village by night: the probes
+// handed out were the level's (lak100n_ll) and the portraits' rig's
+// (outside_day); a callback zeroing the level's, against vanilla from the
+// same paused view, left the hills as they were (within 0.4 of 255) and the
+// figures darker (56, 48, 63 to 44, 36, 47 on average over them).
+//
 // OnPointLight (DAOLib #223, read 2026-10-21; dao/Addresses.h at
 // kObjectNodePointLight_vftable) detours the light colour Fill takes each
 // point and ambient light's colour from, before the flicker is multiplied in,
@@ -75,14 +91,19 @@ constexpr std::size_t kNodeOfReference = 0x18; // in what an entry points to: th
 constexpr std::size_t kStateOfNode = 0x68 / 4; // in the node's vtable: its light state
 constexpr std::size_t kMostAmbientLights = 64; // more than any state was seen with (one)
 
-constexpr std::size_t kOwnColor = 0x1A0; // in a light's node: four floats
+constexpr std::size_t kOwnColor = 0x1A0;   // in a light's node: four floats
+constexpr std::size_t kProbes = 0x24;      // in the state: begin and end of the chosen probes
+constexpr std::size_t kKeptProbe = 0x110;  // in the state: the probe whose irradiance it holds
+constexpr std::size_t kIrradiance = 0x130; // in the state: three 4x4 matrices of floats
 
 using Callbacks = std::vector<std::function<void(Ambient &)>>;
 using PointCallbacks = std::vector<std::function<void(PointLight &)>>;
+using ProbeCallbacks = std::vector<std::function<void(ProbeLight &)>>;
 
 std::mutex g_mutex;
 std::shared_ptr<const Callbacks> g_callbacks;           // replaced whole, never changed in place
 std::shared_ptr<const PointCallbacks> g_pointCallbacks; // the same
+std::shared_ptr<const ProbeCallbacks> g_probeCallbacks; // the same
 std::unordered_map<std::uintptr_t, Chosen> g_chosen;
 
 using FillFn = void(__fastcall *)(void *state, int edx, const float *base);
@@ -149,32 +170,78 @@ std::size_t ReadLights(std::uintptr_t state, std::array<Color, kMostAmbientLight
     return count;
 }
 
+// Hands the ambient light callbacks what Fill made of the state's ambient light, and sets what they set.
+void RunAmbient(std::uintptr_t state, const float *base, Chosen chosen, const Callbacks &callbacks)
+{
+    std::array<Color, kMostAmbientLights> lights{};
+    Ambient ambient;
+    std::memcpy(ambient.color.data(), reinterpret_cast<const float *>(state + kAmbient), sizeof(Color));
+    std::memcpy(ambient.base.data(), base, sizeof(Color));
+    ambient.lights = std::span<const Color>(lights.data(), ReadLights(state, lights));
+    ambient.chosen = chosen;
+    ambient.state = state;
+    for (const auto &callback : callbacks)
+    {
+        detail::Guard("an ambient light callback", [&] { callback(ambient); });
+    }
+    std::memcpy(reinterpret_cast<float *>(state + kAmbient), ambient.color.data(), sizeof(Color));
+}
+
+// Whether the chooser chose a probe for the state.
+bool HasProbe(std::uintptr_t state)
+{
+    const std::uintptr_t begin = detail::Field(state + kProbes);
+    return begin != 0 && begin != detail::Field(state + kProbes + 4);
+}
+
+// Hands the probe callbacks the irradiance Fill has just copied, in place.
+void RunProbe(std::uintptr_t state, Chosen chosen, const ProbeCallbacks &callbacks)
+{
+    const std::uintptr_t node = detail::Field(state + kKeptProbe);
+    if (node == 0)
+    {
+        return;
+    }
+    ProbeLight probe{.irradiance = std::span<float, 48>(reinterpret_cast<float *>(state + kIrradiance), 48),
+                     .model = detail::ModelName(node),
+                     .chosen = chosen,
+                     .probe = node,
+                     .state = state};
+    for (const auto &callback : callbacks)
+    {
+        detail::Guard("a light probe callback", [&] { callback(probe); });
+    }
+}
+
 void __fastcall Fill(void *state, int edx, const float *base)
 {
-    g_fill.Original()(state, edx, base);
-    std::shared_ptr<const Callbacks> callbacks;
-    Chosen chosen = Chosen::Unknown;
     const auto address = reinterpret_cast<std::uintptr_t>(state);
+    std::shared_ptr<const Callbacks> ambientCallbacks;
+    std::shared_ptr<const ProbeCallbacks> probeCallbacks;
+    Chosen chosen = Chosen::Unknown;
     {
         const std::lock_guard lock(g_mutex);
-        callbacks = g_callbacks;
+        ambientCallbacks = g_callbacks;
+        probeCallbacks = g_probeCallbacks;
         if (const auto found = g_chosen.find(address); found != g_chosen.end())
         {
             chosen = found->second;
         }
     }
-    std::array<Color, kMostAmbientLights> lights{};
-    Ambient ambient;
-    std::memcpy(ambient.color.data(), reinterpret_cast<const float *>(address + kAmbient), sizeof(Color));
-    std::memcpy(ambient.base.data(), base, sizeof(Color));
-    ambient.lights = std::span<const Color>(lights.data(), ReadLights(address, lights));
-    ambient.chosen = chosen;
-    ambient.state = address;
-    for (const auto &callback : *callbacks)
+    if (probeCallbacks && HasProbe(address))
     {
-        detail::Guard("an ambient light callback", [&] { callback(ambient); });
+        // The engine copies the probe's irradiance afresh, so a callback's change is never made again on it.
+        *reinterpret_cast<std::uintptr_t *>(address + kKeptProbe) = 0;
     }
-    std::memcpy(reinterpret_cast<float *>(address + kAmbient), ambient.color.data(), sizeof(Color));
+    g_fill.Original()(state, edx, base);
+    if (ambientCallbacks)
+    {
+        RunAmbient(address, base, chosen, *ambientCallbacks);
+    }
+    if (probeCallbacks)
+    {
+        RunProbe(address, chosen, *probeCallbacks);
+    }
 }
 
 void __fastcall LightColor(const void *node, int edx, float *color)
@@ -203,6 +270,17 @@ void __fastcall LightColor(const void *node, int edx, float *color)
     std::memcpy(color, light.color.data(), sizeof(Color));
 }
 
+// Detours Fill and the choosers, once, for OnAmbient and OnProbe; under g_mutex.
+void AttachFill()
+{
+    if (!g_fill.IsAttached() && Module::IsKnownExecutable())
+    {
+        g_chooseForLevel.Attach(addr::kLightManager_ChooseForLevel, &ChooseForLevel);
+        g_chooseForMoving.Attach(addr::kLightManager_ChooseForMoving, &ChooseForMoving);
+        g_fill.Attach(addr::kLightState_Fill, &Fill);
+    }
+}
+
 } // namespace
 
 void OnPointLight(std::function<void(PointLight &)> callback)
@@ -224,12 +302,17 @@ void OnAmbient(std::function<void(Ambient &)> callback)
     auto callbacks = g_callbacks ? std::make_shared<Callbacks>(*g_callbacks) : std::make_shared<Callbacks>();
     callbacks->push_back(std::move(callback));
     g_callbacks = std::move(callbacks);
-    if (!g_fill.IsAttached() && Module::IsKnownExecutable())
-    {
-        g_chooseForLevel.Attach(addr::kLightManager_ChooseForLevel, &ChooseForLevel);
-        g_chooseForMoving.Attach(addr::kLightManager_ChooseForMoving, &ChooseForMoving);
-        g_fill.Attach(addr::kLightState_Fill, &Fill);
-    }
+    AttachFill();
+}
+
+void OnProbe(std::function<void(ProbeLight &)> callback)
+{
+    const std::lock_guard lock(g_mutex);
+    auto callbacks =
+        g_probeCallbacks ? std::make_shared<ProbeCallbacks>(*g_probeCallbacks) : std::make_shared<ProbeCallbacks>();
+    callbacks->push_back(std::move(callback));
+    g_probeCallbacks = std::move(callbacks);
+    AttachFill();
 }
 
 } // namespace dao::lights

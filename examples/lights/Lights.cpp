@@ -1,4 +1,5 @@
-// Example: a sky's light in the shade, and the level's lamps dimmed (dao/Lights.h).
+// Example: a sky's light in the shade, the level's lamps dimmed and its light probes halved
+// (dao/Lights.h).
 //
 // The level's pieces (its meshes, its terrain, its props) are given an
 // ambient light of a faint blue on top of vanilla's, which is nothing for
@@ -7,7 +8,8 @@
 // light probe and they are given none here. The level's own point lights
 // (its rooms' layout lights, the lamps and the warm "Hotspots" a day level
 // is made with, each room's in its <level>_<x>_<y>_<d>_ll model) are dimmed
-// to a quarter, and every other light left as it is.
+// to a quarter, and every other light left as it is. The irradiance of the
+// level's own light probes, which light the figures, is halved.
 //
 // What to look for in play, outdoors at day: shade, under eaves and on the
 // sides of walls away from the sun, lifted from near black to a dim blue.
@@ -16,7 +18,9 @@
 // brightest vanilla gave. Each point light is logged the first time it is
 // taken, with its name, its model's and its own colour: by night in
 // Redcliffe's village, the glow of the level's fires on the walls about them
-// fainter, the party's portraits as bright as ever.
+// fainter, the party's portraits as bright as ever; the figures darker than
+// vanilla's in the same light. Each probe's model is logged the first time
+// it is handed out.
 //
 // What it does goes to example_lights.log.
 #include "dao/Lights.h"
@@ -42,6 +46,7 @@ using Clock = std::chrono::steady_clock;
 
 constexpr Color kSky{0.05F, 0.07F, 0.10F, 0.0F}; // added to a level piece's ambient
 constexpr float kLevelLamps = 0.25F;             // what is left of a level's own point light
+constexpr float kLevelProbes = 0.5F;             // what is left of a level's own probe's irradiance
 
 // Counted on the render thread, read and reset on the game thread.
 std::atomic<unsigned> g_level{0};
@@ -101,6 +106,27 @@ void Lamp(PointLight &light)
     }
 }
 
+std::unordered_set<std::uintptr_t> g_seenProbes; // the probes logged, under g_seenMutex
+
+void Probe(ProbeLight &probe)
+{
+    {
+        const std::lock_guard lock(g_seenMutex);
+        if (g_seenProbes.insert(probe.probe).second)
+        {
+            spdlog::info("light probe {} of {}, chosen {}", g_seenProbes.size(), dao::Utf8(probe.model),
+                         probe.chosen == Chosen::ForLevel ? "for a level piece" : "for something that moves");
+        }
+    }
+    if (probe.model.ends_with(L"_ll"))
+    {
+        for (float &value : probe.irradiance)
+        {
+            value *= kLevelProbes;
+        }
+    }
+}
+
 void Frame()
 {
     static Clock::time_point logged = Clock::now();
@@ -127,6 +153,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     }
     OnAmbient(&Lit);
     OnPointLight(&Lamp);
+    OnProbe(&Probe);
     dao::OnFrame(&Frame);
     return true;
 }
