@@ -50,7 +50,14 @@ Read in the GOG exe's disassembly, every loader's field list checked against rea
 The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x006C8EF0):
 
 - step 3: the module unloads, which clears the old game's event queue;
-- step 5: the save is parsed, then the world database (16500, three id pools, each taken only when in range), the world timer (`WorldTimer::Load` 0x00A36010: day 16701, ms 16702) and the effect counter (`SavegameEffectStartingID` 16626, 1 when absent);
+- step 5: the save is parsed, then the world database (16500, three id pools, each taken only when in range), the world timer (`WorldTimer::Load` 0x00A36010: day 16701, ms 16702; below) and the effect counter (`SavegameEffectStartingID` 16626, 1 when absent);
+  - **The world timer** [C]:
+    - It calls SetTime(day, ms, 0) (0x00A35A80), then Update (0x00A35A10) twice.
+    - The running total (an int64 of microseconds at +0x28) is not touched. SetTime sets offsets, +0x40 the day and +0x44 the ms, so that WorldTime (0x00A35AF0) answers the loaded values. WorldTime adds the total's days and remainder to the offsets and carries ms into days by +0x4C.
+    - The save (vtable slot 9, 0x00A35FD0) writes WorldTime's day and ms, nothing else.
+    - **A day is 7,200,000 ms (+0x4C) or 7,200 s (+0x50), 2 hours of world time at scale 1.** It is set only by the constructor 0x00A35F30, through 0x00A35E50(5): 5 × 1,440,000 ms. Nothing else, no script and no module field, changes it.
+    - So a saved ms is always below 7.2e6.
+    - The day number is a calendar: day = year·336 + (month − 1)·28 + (dayOfMonth − 1) [C for the 336-day year in the code; I for the reading of the saves' dates, e.g. 450,166 = year 1339, month 10, day 11]. The constructor's default is 450,381 (year 1340). What sets a new game's earlier start day was not read.
 - step 7: the module made with MODU's ObjectID; step 8: the hero's gender for the talk table, then the campaign (below);
 - step 10: the party object made with PRTY's ObjectID; step 11: the hero (PLYR);
 - steps 13–15: the area list's files; step 16: the party (`CCParty::Load` 0x00637D50); step 17: the areas and their objects, a slice a frame (0x006FABB0); step 18: the event queue (`AIMaster::Load` 0x0064AAD0);
@@ -82,6 +89,13 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
 - **Item lists** (0x007626C0, the same loader for every container): only when the list field is present, it clears and destroys the container's items first; each item is rebuilt from its ObjectID and TemplateResRef (0x00758340), and an entry with an empty ResRef is skipped.
 - **Effects** (16623, GME1 with its DTA1 arrays): added by the common read, before stats, not cleared first, and not applied by the load; defaults in the file (priority 999 for duration type 6).
 - **Commands** (16721 CMD1, 16740 CAQ1, SAC1): restored only on a saved game's load. `SavegameCommandID` 16723 is never read: commands get fresh ids.
+- **A restored command resumes; it is not started again** [C]. The objects' commands are restored by 0x00698ED0, only when the loading state's byte +0x68 is set (a saved game's load).
+  - `CommandPool::New` 0x007468C0 gives each command the pool's next sequence number, since 16723 is written but never read.
+  - 0x00744DF0 reads one CMD1: type 16722, static 16724, data 16725, and player-issued 16726 if the field is there.
+  - The CMD1 list (16721) is appended to the queue in order.
+  - 0x00747100 reads the CAQ1 (16740): the current command (16720) goes to the current slot, then its sub-action list (16730) is put back raw. Each SAC1 keeps its type, flag, interruptible byte, TimeIndex (the elapsed ms), LastTimeIndex, Length (ms), StartTime (a delay in ms) and data, with nothing rebased or reset.
+  - The command's start handler is not called, so COMMAND_PENDING is not raised again, unless sub-action 50 is still in the saved list.
+- **The saved queue never holds the current command** [C]. The writer (0x00698150, when byte +0x70 is set) writes the queue at object +0x2CC as CMD1s (16721), and the current command, kept apart at [object +0x2DC], alone as the CAQ1 (16740).
 - **Tactics** (16821, 16822, PTT1/PTL1/PTE1): the table is read only when `SavegameTacticsHasTable` is not 0, and its rules replace the template's, not merge.
 - **Dead creatures:** `TimeSinceDeath` 16481 goes raw into +0xC88, which the decay tick adds to; the corpse decays at the global decay time (60000 ms by default) and the body bag step runs at 1500 ms left. The bag's id (16600, +0x790) is saved but its made flag (+0x794) is not, so that step can run again after a load. Dead is the saved health (0) and the saved death effect, not a field of its own.
 
@@ -103,7 +117,7 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
 
 ### Not read
 
-- The CMD1/CAQ1 restore's detail (0x007468C0, 0x00744DF0, 0x00747100); the item's template load (vtable +0x1C0) and whether equipping on a load fires events or applies item stats; the step after stats (0x0079F4A0 on the effects holder); what 16020's filter means; the backpack's y (item +0x600), ITL1 16237 (a byte at item +0x46C), and 0x00C371B4's bits 0x2 and 0x40.
+- The item's template load (vtable +0x1C0) and whether equipping on a load fires events or applies item stats; the step after stats (0x0079F4A0 on the effects holder); what 16020's filter means; the backpack's y (item +0x600), ITL1 16237 (a byte at item +0x46C), and 0x00C371B4's bits 0x2 and 0x40.
 - Steps 2, 4 and 19's calls; what 0x005FE960 tests before MODULE_LOAD; the plot manager's derivation after its load (0x0075E5F6 on); the DTA1 loaders for vectors, quaternions and strings; whether an area transition sets the +0x68 byte.
 
 ### The typed reader
