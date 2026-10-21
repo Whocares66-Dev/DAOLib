@@ -17,6 +17,8 @@ Then **`Savegame::Write`** through the Editor, so Paragon's saves can be the gam
 
 ## What an object's load reads (0x006882C0, asked)
 
+Answered 2026-10-20 by lib-agent-2's reading: `dev/SAVES.md`, "How the game loads a save" (the order, template first, each struct's loader, dead creatures, never-active creatures, saved commands and the events sent).
+
 The engine keeps this same tree in memory while the game runs (`dev/LOAD_EVENTS.md`, "Area lists"): leaving an area writes its struct, returning rebuilds from it, and a save is that tree on disk. Paragon needs the object load's shape: which saved field sets which part of a creature, a placeable, a trigger, and in what order (the creature's `0x006BCC30` items, effects before or after properties, when `SavegameObjectActive` and the commands are read), so that its restore does what the engine's does. The first things to answer: what a creature's `SavegameCreatureTimeSinceDeath` and body bag mean for a dead one, whether the saved command list is restored or dropped, what `SavegameCreatureStats = None` (a creature never active) leaves its properties at, and the events a load sends to a restored object (none for SPAWN: `dev/LOAD_EVENTS.md`).
 
 ## Seen in the saves (2026-10-19)
