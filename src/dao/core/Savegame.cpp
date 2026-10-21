@@ -232,20 +232,24 @@ template <class T> bool Take(const Struct &s, std::uint32_t label, std::optional
     return true;
 }
 
-// A talk-table string's reference.
-void TakeStrref(const Struct &s, std::uint32_t label, std::optional<std::uint32_t> &out)
+// A talk-table string: its reference, and the text of its own that the field may carry (the hero's
+// typed name). Nothing is set for a field the template lacks.
+void TakeStrref(const Struct &s, std::uint32_t label, std::optional<std::uint32_t> &out,
+                std::optional<std::wstring> &text)
 {
     if (const auto v = s.Tlk(label))
     {
         out = v->strref;
+        text = s.TlkText(label);
     }
 }
 
-void TakeStrref(const Struct &s, std::uint32_t label, std::uint32_t &out)
+void TakeStrref(const Struct &s, std::uint32_t label, std::uint32_t &out, std::wstring &text)
 {
     if (const auto v = s.Tlk(label))
     {
         out = v->strref;
+        text = s.TlkText(label).value_or(std::wstring());
     }
 }
 
@@ -729,7 +733,7 @@ void Fill(const Struct &s, Creature &out)
     TakeNumbers(s, L::kCraftingRecipes, out.craftingRecipes);
     Take(s, L::kObjectPlot, out.plot);
     Take(s, L::kObjectTreasureGroup, out.treasureGroup);
-    TakeStrref(s, L::kObjectName, out.nameStrref);
+    TakeStrref(s, L::kObjectName, out.nameStrref, out.nameText);
     Take(s, L::kLoopingAnimation, out.loopingAnimation);
     Take(s, L::kInteractionRadius, out.interactionRadius);
     Take(s, L::kImportance, out.importance);
@@ -795,7 +799,7 @@ void Fill(const Struct &s, Placeable &out)
     Take(s, L::kObjectMaxHealth, out.maxHealth);
     Take(s, L::kObjectRank, out.rank);
     Take(s, L::kObjectTreasureGroup, out.treasureGroup);
-    TakeStrref(s, L::kObjectName, out.nameStrref);
+    TakeStrref(s, L::kObjectName, out.nameStrref, out.nameText);
     Take(s, L::kLootableAppearance, out.lootableCreatureAppearanceType);
     Take(s, L::kObjectPickLock, out.pickLock);
     Take(s, L::kTrapDetected, out.trapDetected);
@@ -915,7 +919,7 @@ void Fill(const Struct &s, Waypoint &out)
     Take(s, L::kWpEnabled, out.mapNoteEnabled);
     Take(s, L::kWpText, out.mapNoteText);
     Take(s, L::kWpType, out.mapNoteType);
-    TakeStrref(s, L::kWpLocText, out.mapNoteTextStrref);
+    TakeStrref(s, L::kWpLocText, out.mapNoteTextStrref, out.mapNoteTextOwn);
 }
 
 // An STO1 [exe 0x007EC0B0, listed by 0x0067AC00]: the ObjectID is not read (a store gets a new id); the
@@ -964,8 +968,8 @@ void Fill(const Struct &s, Area &out)
 
 void Fill(const Struct &s, Quest &out)
 {
-    TakeStrref(s, L::kQTitle, out.titleStrref);
-    TakeStrref(s, L::kQText, out.textStrref);
+    TakeStrref(s, L::kQTitle, out.titleStrref, out.titleText);
+    TakeStrref(s, L::kQText, out.textStrref, out.text);
     Take(s, L::kQParent, out.parentPlot);
     Take(s, L::kJResRef, out.resRef);
     Take(s, L::kQAreaTag, out.areaTag);
@@ -985,7 +989,7 @@ void Fill(const Struct &s, Journal &out)
     List(s, L::kJComplete, out.completed);
     List(s, L::kJOrphans, out.orphans);
     Take(s, L::kJResRef, out.activeResRef);
-    TakeStrref(s, L::kJStoryText, out.storyTextStrref);
+    TakeStrref(s, L::kJStoryText, out.storyTextStrref, out.storyText);
     for (const Struct &d : s.Structs(L::kJPlotDestinations))
     {
         PlotDestination destination;
@@ -1051,7 +1055,7 @@ void Fill(const Struct &s, WorldMap &out)
             Take(p, L::kWmPinRecent, pin.recentlyActivated);
             Take(p, L::kWmPinPrevious, pin.activatedPreviously);
             Take(p, L::kWmPinLast, pin.lastState);
-            TakeStrref(p, L::kWmPinName, pin.nameStrref);
+            TakeStrref(p, L::kWmPinName, pin.nameStrref, pin.nameText);
             map.pins.push_back(std::move(pin));
         }
         map.travelPathBefore = TravelPath(m, L::kWmPathBefore);
@@ -1072,6 +1076,8 @@ void Fill(const Struct &s, PlotActions &out)
         PlotAction action;
         Take(a, L::kPaId, action.id);
         Take(a, L::kPaState, action.state);
+        // Absent: the loader (0x006FD0B0) reads it through a getter whose default is 0 and stores that, so the engine
+        // itself cannot tell absent from 0; the absence is kept here (Paragon used -1).
         Take(a, L::kPaCount, action.count);
         Take(a, L::kPaUpdated, action.updated);
         out.list.push_back(action);
@@ -1146,7 +1152,7 @@ void Fill(const Struct &s, Party &out)
         Approval approval;
         Take(a, L::kApprovalId, approval.id);
         Take(a, L::kApprovalLevel, approval.level);
-        TakeStrref(a, L::kApprovalDesc, approval.descStrref);
+        TakeStrref(a, L::kApprovalDesc, approval.descStrref, approval.descText);
         out.approvals.push_back(approval);
     }
     Take(s, L::kLeader, out.leader);
@@ -1287,9 +1293,19 @@ const PlotEntry *Party::FindPlot(std::wstring_view guid) const
     return it == plots.end() ? nullptr : &*it;
 }
 
+// CSAreaList::FindArea [exe 0x006FA910, read 2026-10-21, DAOLib #219] upper-cases the wanted tag and each
+// listed area's (String::ToUpper 0x004C3800: only 'a' to 'z' change) and compares them as wide strings, so a
+// tag matches whatever its case. (It first strips the wanted tag to letters, digits and '_', 63 at most,
+// through 0x004C3BC0; a real area tag is that already.)
+static bool SameTag(std::wstring_view a, std::wstring_view b)
+{
+    const auto upper = [](wchar_t c) { return c >= L'a' && c <= L'z' ? static_cast<wchar_t>(c - 0x20) : c; };
+    return std::ranges::equal(a, b, {}, upper, upper);
+}
+
 const Area *Save::FindArea(std::wstring_view tag) const
 {
-    const auto it = std::ranges::find_if(areas, [&](const Area &a) { return a.tag == tag; });
+    const auto it = std::ranges::find_if(areas, [&](const Area &a) { return SameTag(a.tag, tag); });
     return it == areas.end() ? nullptr : &*it;
 }
 

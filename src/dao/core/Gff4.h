@@ -107,6 +107,8 @@ class Struct
     template <class T> std::optional<T> Get(std::uint32_t label) const;
     std::optional<std::wstring> String(std::uint32_t label) const;
     std::optional<TlkString> Tlk(std::uint32_t label) const;
+    // A talk-table string field's own text, the string its second word points to; empty where it has none.
+    std::optional<std::wstring> TlkText(std::uint32_t label) const;
 
     // A struct field, held in place or by reference, or a generic field holding a struct.
     std::optional<Struct> Child(std::uint32_t label) const;

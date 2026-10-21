@@ -117,8 +117,10 @@ struct Effect
     std::int32_t id = 0;
     std::int32_t type = 0;
     std::int32_t durationType = 0;
-    std::int32_t duration = 0;
-    std::int32_t timeIndex = 0;
+    std::int32_t duration =
+        0; // milliseconds: AgeEffect adds the update's milliseconds to the elapsed time, capped at this (dev/COMBAT.md)
+    std::int32_t timeIndex =
+        0; // milliseconds, the elapsed time against that clock (a saved 599000 is just under ten minutes)
     std::int32_t animation = 0;
     Opt<std::int32_t> priority; // as saved; Priority() is what the engine ends with
     std::uint32_t creator = kNoObject;
@@ -366,6 +368,7 @@ struct Creature
     Opt<std::uint8_t> plot;
     Opt<std::int32_t> treasureGroup;
     Opt<std::uint32_t> nameStrref; // CRP1, CRL1
+    Opt<std::wstring> nameText;    // the name's own text, the hero's typed name; null where the field is absent
     Opt<std::uint32_t> loopingAnimation;
     Opt<float> interactionRadius;
     Opt<std::int32_t> importance;
@@ -431,6 +434,7 @@ struct Placeable
     Opt<std::int32_t> rank;
     Opt<std::int32_t> treasureGroup;
     Opt<std::uint32_t> nameStrref;
+    Opt<std::wstring> nameText; // the name's own text, the hero's typed name; null where the field is absent
     Opt<std::uint16_t> lootableCreatureAppearanceType;
     Opt<std::int32_t> pickLock;
     Opt<std::uint8_t> trapDetected;
@@ -559,6 +563,7 @@ struct Waypoint
     Opt<std::wstring> mapNoteText;
     Opt<std::uint32_t> mapNoteType;
     Opt<std::uint32_t> mapNoteTextStrref;
+    Opt<std::wstring> mapNoteTextOwn;
 };
 
 // An STO1.
@@ -632,7 +637,9 @@ struct Group
 struct Quest
 {
     std::uint32_t titleStrref = kNoStrref;
+    std::wstring titleText;
     std::uint32_t textStrref = kNoStrref;
+    std::wstring text;
     std::wstring parentPlot;
     std::wstring resRef;
     std::wstring areaTag;
@@ -671,6 +678,7 @@ struct Journal
     std::vector<Quest> orphans;
     std::wstring activeResRef; // SavegameJournalResRef, 16510: the quest marked active, empty for none
     std::uint32_t storyTextStrref = kNoStrref;
+    std::wstring storyText;
     std::vector<PlotDestination> plotDestinations;
     std::vector<std::vector<ConversationLine>> conversations;
     std::vector<JournalGroup> groups;
@@ -685,6 +693,7 @@ struct WorldMapPin
     std::int8_t activatedPreviously = 0;
     std::int8_t lastState = 0;
     std::uint32_t nameStrref = kNoStrref;
+    std::wstring nameText;
 };
 
 struct WorldMapMap
@@ -710,7 +719,7 @@ struct PlotAction
 {
     std::uint16_t id = 0;
     std::uint16_t state = 0;
-    std::int32_t count = 0;
+    Opt<std::int32_t> count;
     std::int8_t updated = 0;
 };
 
@@ -762,6 +771,7 @@ struct Approval
     std::uint32_t id = 0;
     std::int32_t level = 0;
     std::uint32_t descStrref = kNoStrref;
+    std::wstring descText;
 };
 
 // A PTIT.
@@ -896,6 +906,7 @@ struct Save
     std::vector<IdPool> idPools; // SavegameWorldDatabase, 16500
 
     // The area of that tag, or null.
+    // The area of that tag, as the engine's area list finds it: the case of the tag does not matter.
     const Area *FindArea(std::wstring_view tag) const;
     // The creature of that id: the hero, a pool member, or one an area keeps; null if none.
     const Creature *FindCreature(std::uint32_t id) const;

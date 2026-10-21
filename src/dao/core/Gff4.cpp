@@ -370,6 +370,12 @@ std::optional<TlkString> Struct::Tlk(std::uint32_t label) const
     return TlkString{*strref, *text};
 }
 
+std::optional<std::wstring> Struct::TlkText(std::uint32_t label) const
+{
+    const auto slot = Slot(label, Type::TlkString);
+    return slot ? file_->StringAt(*slot + 4) : std::nullopt;
+}
+
 std::optional<Struct> Struct::Child(std::uint32_t label) const
 {
     const Field *field = Shape().Find(label);

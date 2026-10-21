@@ -77,6 +77,9 @@ enum Tpl : std::uint16_t
     kEbas,
     kWldt,
     kVers,
+    kPtaa,
+    kPtai,
+    kPtaj,
 };
 
 std::vector<TemplateSpec> Templates()
@@ -99,7 +102,8 @@ std::vector<TemplateSpec> Templates()
           {17000, 0xFFFF, kGenList, 16},
           {17101, kStr, 0, 20},
           {17102, kVec3, 0, 24},
-          {16780, kWrld, kS, 36}}},
+          {16780, kWrld, kS, 36},
+          {16840, kPtaa, kS, 40}}},
         {"GMG1", 8, {{16451, kU32, 0, 0}, {16452, kU32, kL, 4}}},
         {"JRNL", 16, {{16505, kQest, kSL, 0}, {16506, kQest, kSL, 4}, {16510, kStr, 0, 8}, {16513, kPdst, kSL, 12}}},
         {"QEST",
@@ -156,8 +160,13 @@ std::vector<TemplateSpec> Templates()
          {{3, kStr, 0, 0}, {23, kS32, 0, 4}, {16101, kVec3, kL, 8}, {16110, kS32, 0, 12}, {16112, kS32, 0, 16}}},
         {"PLYR", 8, {{16208, kCrp1, kS, 0}, {16298, kS32, 0, 4}}},
         {"CRP1",
-         20,
-         {{3, kStr, 0, 0}, {23, kS32, 0, 4}, {16203, kS8, 0, 8}, {16209, kCps1, kS, 12}, {16950, kU8, kL, 16}}},
+         28,
+         {{3, kStr, 0, 0},
+          {23, kS32, 0, 4},
+          {16203, kS8, 0, 8},
+          {16209, kCps1, kS, 12},
+          {16950, kU8, kL, 16},
+          {16255, kTlk, 0, 20}}},
         {"CPS1", 8, {{16305, kU32, kL, 0}, {16308, kCqs1, kSL, 4}}},
         {"CQS1", 8, {{16311, kU32, 0, 0}, {16331, kS8, 0, 4}}},
         {"PRTY",
@@ -179,6 +188,9 @@ std::vector<TemplateSpec> Templates()
          {{16631, kU32, 0, 0}, {16632, kU32, 0, 4}, {16633, kU32, 0, 8}, {16634, kU32, 0, 12}, {16635, kU32, 0, 16}}},
         {"WLDT", 8, {{16701, kS32, 0, 0}, {16702, kS32, 0, 4}}},
         {"VERS", 8, {{16007, kU8, 0, 0}, {16770, kS32, 0, 4}}},
+        {"PTAA", 4, {{16843, 0xFFFF, kGenList, 0}}},
+        {"PTAI", 8, {{16844, kU16, 0, 0}, {16845, kU16, 0, 2}, {16846, kS32, 0, 4}}},
+        {"PTAJ", 4, {{16844, kU16, 0, 0}, {16845, kU16, 0, 2}}}, // no count field
     };
 }
 
@@ -237,7 +249,7 @@ std::vector<std::byte> MakeSave(const char *type = "SAVE")
     const std::size_t top = New(b, 24);
 
     // The campaign
-    const std::size_t modu = New(b, 40);
+    const std::size_t modu = New(b, 44);
     b.U32(modu, 77);
     Str(b, modu + 4, u"campaign");
     std::size_t first = 0;
@@ -279,6 +291,14 @@ std::vector<std::byte> MakeSave(const char *type = "SAVE")
     const std::size_t wrld = New(b, 4);
     Str(b, wrld, u"world_map");
     b.U32(modu + 36, Rel(b, wrld));
+    const std::size_t ptaa = New(b, 4);
+    b.U32(modu + 40, Rel(b, ptaa));
+    const std::size_t counted = New(b, 8);
+    b.U8(counted, 7);
+    b.U32(counted + 4, 5);
+    const std::size_t uncounted = New(b, 4);
+    b.U8(uncounted, 8);
+    b.U32(ptaa, dao::test::Children(b, {{kPtai, counted}, {kPtaj, uncounted}}));
     b.U32(top, Rel(b, modu));
 
     // An area: a placeable with an item, a creature with stats, a trigger of two kinds, a waypoint, a map
@@ -342,15 +362,18 @@ std::vector<std::byte> MakeSave(const char *type = "SAVE")
     b.U8(wpt + 32, 1);
     b.U8(wpt + 33, 1);
     b.U32(wpt + 36, 4444);
+    Str(b, wpt + 40, u"a note");
     b.U32(area + 24, dao::test::Bytes(b, {0x01, 0x80, 0x00}));
     b.U32(area + 28, Numbers(b, {3, 4}));
     b.U32(top + 4, dao::test::Children(b, {{kAre1, area}}));
 
     // The hero
     const std::size_t plyr = New(b, 8);
-    const std::size_t crp = New(b, 20);
+    const std::size_t crp = New(b, 28);
     Str(b, crp, u"hero");
     b.U32(crp + 4, 1);
+    b.U32(crp + 20, 5);
+    Str(b, crp + 24, u"Aria"); // a TlkString's text is its second word
     b.U8(crp + 8, 1);
     b.U32(crp + 16, dao::test::Bytes(b, {'G', 'F', 'F'}));
     const std::size_t cps = New(b, 8);
@@ -517,6 +540,7 @@ TEST_CASE("an area's objects, stats, items, map and rooms are mapped", "[savegam
     CHECK(area->waypoints[0].mapNoteEnabled == 1);
     CHECK(area->waypoints[0].id == 800);
     CHECK(area->waypoints[0].mapNoteTextStrref == 4444);
+    CHECK(area->waypoints[0].mapNoteTextOwn == L"a note");
     CHECK_FALSE(area->waypoints[0].tag); // no field: the template's
 
     CHECK(area->roomsViewed == std::vector<std::int32_t>{3, 4});
@@ -542,6 +566,8 @@ TEST_CASE("the hero, the party and the game's state are mapped", "[savegame]")
     CHECK(save->hero->kind == sg::Creature::Kind::Hero);
     CHECK(save->hero->templateResRef == L"hero");
     CHECK(save->hero->partyMembers == 1);
+    CHECK(save->hero->nameStrref == 5);
+    CHECK(save->hero->nameText == L"Aria"); // the typed name, the string's own text
     REQUIRE(save->hero->stats);
     CHECK(save->hero->stats->hasQuickbar);
     CHECK(save->hero->stats->quickslots[0].size() == 1);
@@ -741,6 +767,30 @@ TEST_CASE("the engine drops an event by its handler id: 10 and 24 are script, se
         }
         CHECK(event.KindOf() == want);
     }
+}
+
+TEST_CASE("an area is found by its tag whatever the case, as the engine's area list finds it", "[savegame]")
+{
+    const auto bytes = MakeSave();
+    const auto save = sg::Read(bytes);
+    REQUIRE(save);
+    CHECK(save->FindArea(L"AR_AREA") == save->FindArea(L"ar_area"));
+    CHECK(save->FindArea(L"Ar_Area") != nullptr);
+    CHECK(save->FindArea(L"ar_are") == nullptr);
+}
+
+TEST_CASE("a plot action's count is null where the save lacks it", "[savegame]")
+{
+    const auto bytes = MakeSave();
+    const auto save = sg::Read(bytes);
+    REQUIRE(save);
+    const auto &list = save->campaign.plotActions.list;
+    REQUIRE(list.size() == 2);
+    CHECK(list[0].id == 7);
+    REQUIRE(list[0].count);
+    CHECK(*list[0].count == 5);
+    CHECK(list[1].id == 8);
+    CHECK_FALSE(list[1].count);
 }
 
 TEST_CASE("a file of another type is no save, and so are bytes that are no GFF4", "[savegame]")
