@@ -95,7 +95,7 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
   - The CMD1 list (16721) is appended to the queue in order.
   - 0x00747100 reads the CAQ1 (16740): the current command (16720) goes to the current slot, then its sub-action list (16730) is put back raw. Each SAC1 keeps its type, flag, interruptible byte, TimeIndex (the elapsed ms), LastTimeIndex, Length (ms), StartTime (a delay in ms) and data, with nothing rebased or reset.
   - The command's start handler is not called, so COMMAND_PENDING is not raised again, unless sub-action 50 is still in the saved list.
-- **The saved queue never holds the current command** [C]. The writer (0x00698150, when byte +0x70 is set) writes the queue at object +0x2CC as CMD1s (16721), and the current command, kept apart at [object +0x2DC], alone as the CAQ1 (16740).
+- **The saved queue never holds the current command** [C]. The object writer (CCObject vtable slot 21, 0x00697EE0, its Name/Tag step at 0x00698150; the commands when byte +0x70 is set) writes the queue at object +0x2CC as CMD1s (16721), and the current command, kept apart at [object +0x2DC], alone as the CAQ1 (16740).
 - **Tactics** (16821, 16822, PTT1/PTL1/PTE1): the table is read only when `SavegameTacticsHasTable` is not 0, and its rules replace the template's, not merge.
 - **Dead creatures:** `TimeSinceDeath` 16481 goes raw into +0xC88, which the decay tick adds to; the corpse decays at the global decay time (60000 ms by default) and the body bag step runs at 1500 ms left. The bag's id (16600, +0x790) is saved but its made flag (+0x794) is not, so that step can run again after a load. Dead is the saved health (0) and the saved death effect, not a field of its own.
 
@@ -123,6 +123,59 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
 ### The typed reader
 
 `src/dao/core/Savegame.h` (`dao::core::savegame::Read`, DAOLib #202) reads the save into plain structs: the campaign, the areas and their objects, the hero, the party and the game's state. Its header says what a caller does with the objects (the engine lays a saved object over its template, so a field the save lacks is none, not 0), and `Savegame.cpp` marks each part by the loader in the exe it was checked against, or as seen only in saves, or as kept raw. `tests/test_savegame.cpp` holds a save built by hand and, when `game/saves` has copies of the player's saves, their counts against this file's dump.
+
+## The engine's writer (read 2026-10-21 by lib-agent-2 with three subagents, for DAOLib #221; C checked, I inferred)
+
+The per-field tables (field id, name, GFF4 type, source offset, condition, in write order) are in `dev/SAVE_WRITER.md`.
+
+- **Writers fill a struct whose template already exists, and the template decides what is saved** [C].
+  - Every step is `Has(id)` and then a typed setter.
+  - A setter silently does nothing when the template lacks the field, has it as another type, or has it as a list, struct or reference.
+  - The helpers: u8 0x00478340, u16 0x006EB250, u32 0x00478420, s32 0x004783B0, f32 0x0062F610, vec3 0x005FE630, quaternion 0x006968E0, string 0x004799E0, tlkstring 0x00630810.
+  - So a new struct must have the full vanilla template (PARAGON_SAVES.md), with each field's exact type. Some types are not what one would guess: u16 for a placeable's state 16100; u32 for ItemAbilityID 1011, an effect's Creator 16621 and LootableObjectID 16602; s32 for AOECreator.
+  - A field the template has but nothing writes stays at the template's default, all 0xFF (16456 SavegameCanLevelUp reads −1 in every save).
+- **The slots** [C]: every kind writes through slot 21 and loads through slot 34, and each kind's writer first calls the base writer.
+
+  | kind | writer | loader |
+  |---|---|---|
+  | base CCObject | 0x00697EE0 | 0x00698ED0 |
+  | CCCreature | 0x006B2470 | 0x006BE980 |
+  | CCPlaceable | 0x0074D600 | 0x0074FE30 |
+  | CCItem | 0x00754020 | 0x00758340 |
+  | CCTrigger | 0x00799E10 | 0x0079A7E0 |
+  | Store | 0x007EB510 | 0x007EC0B0 |
+
+  - Nested writers: the effects list 0x00A64E20 and one effect 0x00A65490 (GME1); an item list 0x00761D10; the data arrays (DTA1) 0x00A5AA60; the creature's stats 0x0071BA40 (CRS1, or CPS1 for the hero), appearance 0x00748E90, equipment 0x00797700 and inventory 0x0073FC70; the variable table 0x00705A70; tactics 0x007ADF40.
+- **The base writer's order** [C]: ObjectID 23 (s32) → Position 4 → Orientation 5 → ObjectLoopingAnimation 16256 → SavegameEffectList 16623 → Active 16201 → Immortal 16220 → Plot 16250 → TemplateResRef 3 → ScriptVarTable 17000 → EventScript 16221 → Name 16255 → Tag 16222 → the commands 16721 and 16740.
+  - Active is written as `active && !(+0x421)`: an object whose deactivation is pending is saved inactive.
+  - The Tag is written as "" when it equals the TemplateResRef; the loader maps "" back.
+  - EventScript is written only if +0x288 is set.
+  - Orientation is the animation controller's node quaternion, else it is built from the facing at +0x130.
+  - TeamID 16453 and InteractionRadius 16262 are read by the base loader but written by the kind's writer.
+- **The area** (`CCArea` 0x00683C80) [C]:
+  - The area-list step 0x006FB3A0 removes the current list's areas from 16001 (a generic list of ARE1, element template `[0xC34BD0]`), then appends a fresh struct per area in list order, with only Tag (1) set.
+  - The area writer then fills it, in this order:
+    1. the effects (16623);
+    2. ObjectID 23 (u32);
+    3. the variables (17000);
+    4. 16020;
+    5. the lists, each sized first and then filled in the order of the area's object vector (+0x694): creatures 16011, triggers 16012, sounds 16019, placeables 16010, AOEs 16013, waypoints 16015, stores 16017;
+    6. the map 16016 (one u8 per byte) and the rooms viewed 16018.
+  - Each object goes into one list, chosen by its cast. Not written at all: party-pool creatures, items lying in the area, visual effects and projectiles.
+  - A pannable sound is written only inside its sounds-region trigger (TRAV 16111).
+  - Effects with +0x48 == 1 are skipped.
+  - The party's current area and position are in MODU 17100–17103 (written by 0x005FEC00), not in the area list.
+- **Writer and loader differ** [C]:
+  - A container writes MaxItems after its item list, and the loader reads it before. A container overwrites each item's Position with its cell (index, item +0x600, 0), or (slot, weapon set, 0) for equipment, after the item's own fields.
+  - Trigger geometry is written as each point minus the trigger's Position.
+  - The sound writer always writes WOrientation as 1.0.
+  - A waypoint with a LocText field writes NoteText as "".
+  - Written but never read: the trap and transition fields 16103–16107 and 16110, a store's ObjectID, and the second word of a tlkstring (a literal name); the loader reads only the strref.
+  - The store's will-not-buy and will-only-buy lists are appended on load with no duplicate test, so each save-and-load round trip doubles them (a vanilla fault).
+  - An effect's started flag (+0x50) is neither saved nor loaded, so the first AgeEffect after a load starts it again and re-runs its visual effect's start.
+  - Sub-items are saved as resrefs alone and remade on load.
+  - A party-pool creature saves an empty Backpack: the party's Inventory is shared.
+- **Not read** (the three files' own lists): the creature's property, quickslot and tactics writers in detail, the hero's PlayerMorph writer, the variable writer's match rules, the Equipment/Backpack/PlotItems own writers beyond the shared item list, and how the top struct is put on disk after the area steps.
 
 ## The metadata (`.das.met`)
 
