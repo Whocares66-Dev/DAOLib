@@ -56,7 +56,7 @@ A failure skips the candidate, except in a stealth-detection case. Once perceive
 
 - Candidates are what the area's query returns; the perceiver itself and anyone already in the set (`0x008704D0`) are skipped. Read. No group filter beyond hostility.
 - Hostility: `0x006A2B80(other)` is `IsObjectHostile(perceiver, other)` (when the client app's +0x1B0 is set). Read.
-- A hostile candidate whose +0x7F0 is non-zero (stealthed, inferred from rules_core's "bStealthed") is not added to the set: when in range and in sight it restarts the countdown (`0x006A3690`) and an APPEAR is raised only when +0xC3C is set (or for the controlled creature without party flag 0x10, read). The stealth detection term (the candidate's +0xB94, a rounded value against party+0x414+0x14, and a class 7 with party flag 0x20) is read but not understood. +0xB94 is the creature's trackable flag: `SetCreatureCanBeTracked` (764) writes it at `0x0066BFF7` (read 2026-10-18 by lib-agent-2; inferred: loaded from the template's Trackable).
+- A hostile candidate whose +0x7F0 is non-zero (stealthed) is not added to the set. When in range and in sight it re-arms the countdown (+0xC38, `0x006A3690`, 6000 ms from globals.gda row 11 STEALTH_CHECK_INTERVAL_MS). +0xC3C means 'the countdown ran out this update'. APPEAR is raised with bStealthed = 1 when +0xC3C is set (or for the controlled creature without party flag 0x10). The engine itself rolls nothing against stealth; the roll is the scripts' (the stealth section below). The term with +0xB94 and party +0x414 is the party's Survival tracking (the tracking section below), not stealth detection. (+0xB94 is the creature's trackable flag: `SetCreatureCanBeTracked` (764) writes it at `0x0066BFF7`, read 2026-10-18 by lib-agent-2.)
 - Otherwise a candidate in range is added to the set and APPEAR raised at once (`0x006B3240`: `0x006B1120` inserts the id, then `0x006AFCF0(other, 0, 0)`); one in the party's range but not the creature's own is added with no event. Read.
 
 ### The events
@@ -75,6 +75,40 @@ Read 2026-10-18 in the GOG exe and the game's files (ghilana) by lib-agent-2 (a 
 - The usual value: of the 2,486 `.utc` the game takes (ghilana; 112 in enciphered add-ins not searched), 2,266 have `PerceptionClass` 9, so 30 m; 81 have 10 (40 m), 66 have 8 (10 m), 38 have 14 (5 m, crowds), 21 have 12 (35 m, the player's and the default heroes', `default_hm_noble` among them), 6 have 11, 5 have 15, 2 have 13. So a humanoid NPC sees 30 m, the player 35 m.
 - The pace: the manager `CCCreature::Update` asks is the current game mode. `*(client app+0x114)` is the game mode controller (`dao/GameModes.h`) and its +0x74 is the current mode's object, set from the modes table at +0x58 when the mode changes (`0x00641E7B`; +0x78 is the mode's number). Its slot 0x4C answers true (`0x004137C0`, `mov al, 1`) only for `GameModeExplore` and `GameModeCombat`; every other mode (dialog, cutscene, GUI, loading, dead, chargen, movie, party picker, fly cam, fixed, pregame) answers false (`0x005C5E80`). Read.
 - So the perception update runs on every creature update while the game is in explore or combat mode, and not at all in a conversation, a cutscene or a menu. Nothing in the call throttles it; how often `CCCreature::Update` itself runs (each frame for each creature, inferred) is the only pace. Read for the gate; the per-frame cadence is inferred.
+
+### Stealth (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine; C checked, I inferred)
+
+- **The flag** [C]: creature +0x7F0. It is written only by 0x006A2400, which is reached from `SetStealthEnabled` (758), the save's load, the template's load (`StealthMode`) and a setter of property 0x77. The engine never clears it on its own: not for an attack, a hit, an ability, running or combat.
+- **What the engine does with it** [C, 0x006B8540]: a stealthed hostile is never added to a perceiver's set. If it is in the perceiver's own range and passes the room walk and the ray, the engine raises APPEAR (int 1 bStealthed = 1) once the 6 s countdown has run out, and re-arms the countdown. So a stealther in sight is re-announced every 6 s, and nothing else happens in the engine.
+- **The detection roll is the scripts', and only against followers** [C, rules_core's APPEAR handler]:
+  - `Stealth_CheckSuccess` compares the stealther's stealth rank with the perceiver's rank, taken from the `autoscale` table's `NStealthRank` (rows 0–8: 0, 1, 1, 1, 1, 2, 3, 4, 0) by creature rank. It applies only when the stealther is a follower and in combat; out of combat it always passes.
+  - A failure calls DropStealth.
+  - Either way the handler returns early, so no combat starts from it. There is no random roll.
+- **Entering** [C, `skill_stealth.nss`]: the modal skill 100075 (cooldown 10, no duration) applies EFFECT_TYPE_STEALTH, crust vfx 90284 and a movement-speed effect of 0.6, plus 0.2 each for 310030 and 310032.
+  - Out of combat it is always allowed.
+  - In combat, ranks 1–2 need no hostile within 30 m (`STEALTH_COMBAT_DISTANCE_DETECTION`).
+  - Combat Stealth and Master Stealth need a stealth rank above that of every perceived creature within 30 m.
+- **What breaks it** [C, the scripts]:
+  - Any ability use. Items are spared 90 % of the time at rank 2 and up, and Stealing never breaks it.
+  - Non-physical damage only. Combat Stealth and Master Stealth keep stealth with a chance of level × 0.01 or × 0.02, at most 0.8.
+  - An effect type with `BDropStealth` = 1 (23 rows of effects.gda: damage over time, placeable use).
+  - A forced perception.
+  - An attack from stealth threatens a critical hit, and a hit on a stealthed target becomes a miss. Whether a plain attack breaks stealth was not read.
+- **Templates and monsters** [C]: `StealthMode`, `StealthRadius` and `Trackable` are read only by the engine's template load (0x006C06F0). Of 7,235 readable .utc files, only `aluviandarkstar.utc` has `StealthMode` (0), and none has the other two.
+  - A creature with the talent that is hostile to the party spawns stealthed (`creature_core.nss`:504).
+  - The AI refuses stealth in combat without Combat Stealth, when no ally is alive, or when an ally is already stealthed.
+  - Jarvia stealths by script.
+
+### The party's tracking (Survival) (read 2026-10-21 by lib-agent-2)
+
+- **The party's 0x00631F30** [C] recomputes party +0x414 from the best active member's Survival rank (abilities 100051–100054) and sets flag 0x20 when a member has Sense Darkspawn (4050). It runs only on a party add or remove, an area change and an ability's add or remove, so a level-up does not refresh it [I].
+- **Who is tracked:**
+  - Survival 1 to 3 track a creature with Trackable (+0xB94, default 1; `SetCreatureCanBeTracked` 764) whose level is at most the best member's level − 2, the level, or the level + 2 respectively. Survival 4 tracks any creature [C for the structure; I for the level mapping].
+  - Flag 0x20 tracks darkspawn: race 7 is DARKSPAWN.
+  - A tracked creature enters the leader's perceived set silently, past range and sight.
+- **Range:** Survival also widens the leader's perception range to 42.6, 51.1, 60.4 and 71 m.
+- **Flag 0x10** (Survival 4) makes APPEAR fire on every update.
+- **Not read:** the identity of the creature's +0x4F8 flag (it looks like "party side"), and the property 0x77 setter's callers.
 
 ## The attack command
 
