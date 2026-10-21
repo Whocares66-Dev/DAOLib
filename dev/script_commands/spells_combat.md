@@ -76,7 +76,13 @@ Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, ba
 ### GetAttackTarget (522)
 - **Handler:** 0x00655000, shared with `GetArea` (223); the case is `cmp edi,0x20A` at 0x00655061. It calls `GetObjectById`, then the object's cast slot +0x10 (creature).
 - **Described in:** `dev/script_commands/objects.md`, "GetArea (223)" for the shared handler; its use in `dev/TURN_BASED.md` ("Commands that ran only in combat") and `dev/PARTY.md` ("The AI and the controlled creature").
-- **Does:** pushes the object id at combat data +4. (checked) Who writes combat +4 was not read.
+- **Does:** pushes the object id at combat data +4. (checked)
+- **Who writes it** (read 2026-10-21 by lib-agent-2, a sweep of .text; checked): [creature+0xC60]+4 is an object id, −1 for none, and no script command sets it.
+  - The attack step 0x00742FD0 (0x00743038) writes the attack's target.
+  - The UseAbility step 0x00743F50 (0x00744204) writes the ability's target (command object 0), or −1 for a ground target. A self-cast keeps the old value. It is written once the command's checks pass, before the approach and conjure.
+  - The party's group-attack click (0x00712C05) and the cursor-target sender (0x00712DE0, 0x00712ED4) write the clicked target into each selected member.
+  - −1 comes from the constructor (0x007C37FB), from leaving combat (0x006ABC1C), from `CCCreature::Update`'s check 0x007C3490 (target gone or dead), and from UseAbility's end (0x00746D32) for a creature with +0xC95 set that is out of combat.
+  - A hit received, death, ClearAllCommands, an attack's end and an area change do not touch it. The handler 0x00655000 does not test for a dead target. Not read: Update's guard bytes +0xC94 and +0xBD4; whether a save keeps it.
 - **Edge cases:** an invalid id, a non-creature (not a creature by the cast) and a creature with no combat data all push OBJECT_INVALID (-1, the default in esi). (checked) A creature whose +4 was never set pushes whatever it holds (-1 for none is inferred). Push failure -638.
 
 ### GetAttackImpactDamageEffect (695)
