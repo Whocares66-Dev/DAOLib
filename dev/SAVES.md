@@ -25,6 +25,16 @@ GFF4, type `SAVE`, version 1.1, 78 struct templates. Its top struct:
 - **`SavegameStorySoFar`**: the story events and level-ups.
 - **`SavegameWorldDatabase`**: id ranges per group.
 
+### The journal's active quest (read 2026-10-20 by lib-agent-2, for DAOParagonEngine #19; checked unless said)
+
+- **Held** at the journal's +0xD8, `ActivePlot` (an attribute of a `JournalEntry *`): an entry of `PlotList` (+0x58), never of `CompletedPlots`; null for none. `dao::journal`'s `Active()` reads it (`src/dao/Journal.cpp`).
+- **Set** by:
+  - the journal screen's "Make Active", which sends `Journal.SetActiveQuest` with the plot's ResRef. Its handler (0x006F4FB0) calls `SetActivePlot` (0x006F4080): it clears the pointer, finds the entry by its ResRef (entry +0x58), rebuilds the plot destinations (0x006F20E0) and notifies. The movie hides the button while PlotAssist is off; the engine does not check;
+  - `AddPlot` (0x006F5040), which makes a new entry active only when none is (0x006F522D–0x006F5243);
+  - and it is cleared by `CompletePlot` (0x006F5380) when the entry completed is the active one (0x006F5643–0x006F5675). No other is picked then [inferred: none seen]. No script command sets it.
+- **Saved** as `SavegameCampaign` > `SavegameJournal` (`JRNL`) > `SavegameJournalResRef` (16510), a string: the active plot's ResRef, or empty for none. The writer is 0x006ED770 (its tail 0x006EE255–0x006EE2CF). The loader (0x006F7290) reads the quest lists first, then calls `SetActivePlot` with the saved ResRef (0x006F81F5). Real saves agree: `gwb000pt_sideplot`, `lel000pt_main`, `shl000pt_main`, and empty in a save with no quests.
+- **After a load** the saved quest is active if its ResRef is among the loaded `PlotList`'s, else none: the engine picks nothing else.
+
 ## The metadata (`.das.met`)
 
 GFF4, type `SVMT`: what the load screen shows without opening the save. The area's name, the time played, the level, class, gender, race and background, the character's and the save's names, the journal's story text. Two fields xoreos does not name, 16809 and 16810, hold `single player;` and `SP;`.
