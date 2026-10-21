@@ -105,15 +105,15 @@ So: a blocked cell counts only when its centre is within max(r, cell) of the poi
 | field | meaning |
 |---|---|
 | kind 0-4 | walkable everywhere |
-| kind 5 | a creature stamp, written for a creature with `+0xC90 != 0` (PlaceObstacle passes class = that); blocks/penalises movers of that same class only |
-| kind 6 | a creature stamp, class byte 0; same, for movers with class byte 0 |
+| kind 5 | a creature stamp of a ghost (`+0xC90`, set only by `SetCreatureIsGhost` or the save's `SavegameCreatureIsGhost` 16467); seen only by ghost movers (section 12) |
+| kind 6 | a creature stamp of every other creature (party, hostile and neutral alike); seen by every non-ghost mover (section 12) |
 | kind 7 | placeable/door state: not an end, blocks a straight walk and diagonals; the fine search steps onto it at +8 cost; the coarse level passes it |
 | kind 8 | like 7 but the fine search cannot step onto it; IsFree blocks (>= 8) |
 | kind 9+ | wall band / outside / off-grid: not passable at any level |
 | bits 4-5 | placeable counter, written by 0x00A46E60 (a walk patch with +1/-1 via 0x00A490B0/0x00A49110, max 3). Read by 0x00A49160. Direct fails on a non-zero sample cell; the fine search costs +2.0; IsFree ignores unless flagB |
-| bits 6-7 | creature crowding ring, written by 0x00A469C0 via 0x00A491A0/0x00A491F0 (max 3). Read by 0x00A49240 (returns 0 or 1). Fine search: +3.0, and a wide mover will not step there. Not read by Direct or IsFree |
+| bits 6-7 | creature crowding ring, written by 0x00A469C0 via 0x00A491A0/0x00A491F0 (max 3). Read by 0x00A49240 (returns 0 or 1). Fine search: +3.0, and a wide mover will not step there. Not read by Direct; IsFree reads it only with flagA. The fine search's ring term is skipped for a ghost mover (0x00A45B65) |
 
-How a creature stamps (0x00A469C0 via CCCreature::PlaceObstacle 0x006A3BC0 -> controller 0x00A629F0): args (remove, pos, radius = params[+4], classFlag = creature.+0xC90 != 0, soft = creature.+0xB20 in {1,2}, record of cells). Only if the creature's vslot 0x1D0 answers 0 and its byte +0x2C5 is set. Cells whose centre is within the radius (the box is radius + one cell) become kind 6 (classFlag 0) or 5 (classFlag set), skipping cells that are kind >= 7 or already 6; a "soft" creature (state 1 or 2) does not change kinds, only counters. Cells in the band between the radius and radius + one cell (only for classFlag 0, and where the cell's squared distance is >= r^2 + cell^2/2) get the bits 6-7 counter +1 (not past 3). Every cell touched is recorded in a bit record. LiftObstacle (0x00A627D0) undoes exactly that record: stamped cells that are still 5 or 6 go back to **1**, ring cells' counters go down; it only does it if the controller's "placed" flag (+0x40 of the parameters) is set. So "the mover's own obstacle lifted" = unstamp its recorded cells, and the walk-to target's likewise, for the search; both are stamped again at the end of RequestPath whatever the answer.
+How a creature stamps, when, and who reads it: section 12.
 
 The mover's size: IsFree's r (radius * 0.5); the straight-walk test's `wide` flag (size > cell size) turning any blocked neighbour into failure; the fine search's wide-mover exclusion of crowd cells. Clearance (AreaGridClearance 2.1) was not seen in any of these.
 
@@ -219,7 +219,79 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
   - Each A* call restarts the clock and stops when the limit is below the time elapsed, with no resume. The super and first levels then answer 5; a fine leg counts as failed (path +0x48 += 1), and two in a row answer 1 (section 8). There is no cap on a whole search's time, nodes or length.
   - So vanilla's give-up on a long route depends on the machine's speed. A port wanting vanilla's results without that can replace the clock with a fixed expansion count large enough never to trip, and keep the two-failed-legs rule [I].
 - **The penalties' switch,** the fine environment's +8 [C]: it gates every penalty term of the step cost (0x00A45AA0); the base distance (so h) and the push's turn cost are not affected. With it clear, and b not the goal and the distance not 0: +7 for a kind-5 cell when the mover's stamps stop it, else +7 for kind 6 and +3 for each creature ring on the cell; +8 for kind 7; +1 for each of the four diagonal neighbours of kind 8 or more, and +1 once if any is kind 7; +2 for a placeable's counter on the cell. The leg sets the switch (0x00A4D3F3) when path +0x48 > 0, so a retry after a failed leg runs without penalties and without the wide filter, until a leg succeeds and +0x48 goes back to 0.
-- Not read: the corner pass's fallback cut as run; the rounding of Collapse's point count (0x008E34F0); the append helper's length sum (0x00A4C630); the long-route tail at the 10th call (0x00A4DDA0); whether the 3 or 6 ms clock trips on a normal machine at 290 to 370 m; the leg's return-6 branch (the reached end's cell of kind 7, 0x00A4D6E7..0x00A4D740); where the path's +0x8D (wide) is set.
+- Not read: the corner pass's fallback cut as run; the rounding of Collapse's point count (0x008E34F0); the append helper's length sum (0x00A4C630); the long-route tail at the 10th call (0x00A4DDA0); whether the 3 or 6 ms clock trips on a normal machine at 290 to 370 m; the leg's return-6 branch (the reached end's cell of kind 7, 0x00A4D6E7..0x00A4D740).
+
+### 12. A creature's stamp: when, its footprint, who reads it (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine #130; C checked, I inferred)
+
+**The footprint** [C, 0x00A469C0]:
+- **The radius** is r = max(0.6 × PersonalSpace, 0.1). PersonalSpace is apr_base `PerSpace` ([[creature+0x7B0]+0x60]); the doubles are 0.6 at 0xB0F500 and 0.1 at 0xAE7D70.
+  - It is set by 0x006A2A40 at creature set-up and AddToArea, and stored at params +4 by 0x00A62730.
+  - A human (0.35) gets 0.21, a wolf or Mabari (0.45) 0.27, a bear (1.0) 0.6.
+- **The core**: cells whose centre has d² ≤ r² + cell²/2. That is 0.41 m for a human and 0.45 m for a wolf: one to four cells of a 0.5 m grid.
+  - A hard stamp writes kind 6, or kind 5 for a ghost (`sete al; add al,5`).
+  - It skips cells of kind ≥ 7 and cells already 6. Kind 5 is overwritten.
+- **The ring**: non-ghosts only. Cells outside the core within r + 1.0 m (r + 0.5 m for a soft stamp) get the bits 6–7 counter +1. The counter is capped at 3 in the writer (0x00A491A0); the stamper's own "≥ 3" skip never fires, since 0x00A49240 answers 0 or 1.
+- **The record**: every cell the stamp touched is kept in a bit record (params +0x48, its size at +0x4C).
+- **The lift** (0x00A627D0) replays the record at the recorded position, radius, class and soft flag:
+  - core cells still 5 or 6 go back to **kind 1**, whatever the file had (0, 2, 3 or 4);
+  - ring cells (and a soft core) get −1.
+  - A cell another creature had already stamped was not recorded by the second creature. So lifting the first one clears it while the second still stands there [C for the rule, I for its effect in play].
+- **Soft** = state +0xB20 is 1 (walk) or 2 (run) [C, 0x006A3BDA]. A soft stamp writes no kind: its core cells get the counter, and its band is 0.5 m. So **a walking creature blocks no straight walk**; it costs +3 and keeps wide movers off.
+
+**When** [C unless marked]:
+- **Gates** (`CCCreature::PlaceObstacle` 0x006A3BC0):
+  - vslot 0x1D0 = 0x006A3660, IsDead (no stats object, or health ≤ 0), must answer 0;
+  - +0x2C5 (active) must be set.
+  - A failed gate returns without lifting.
+- **Place always lifts first** (0x00A629F0 → 0x00A627D0), so the stamp follows the creature.
+- **Every position change**: `CCCreature::SetPosition` 0x006B5EF0's tail lifts (0x006B609C) and places (0x006B60A3) while the creature is in an area. The walk moves through it, so a walker re-stamps each frame it moves (a soft stamp).
+- **The end of a walk**: the stop 0x006A9430 (from the move update 0x007A9130) sets state 3 or 0 and places a hard stamp.
+  - A command cancelled mid-walk may leave the soft stamp until the next move [I].
+- **AddToArea** (0x006B3070) places when state 0 and active, and lifts when inactive.
+- **SetActive** (0x006B5D90) places when on and lifts when off, except an active-party follower's deactivation, which returns early.
+- **SetGhost** (0x006BBFC0) lifts, flips +0xC90 and places again.
+- **RequestPath** lifts the mover and its walk-to target, then places both at the end (section 1).
+- **The melee ring's spot** (0x006A8F30/0x006A8F81), the walk-goal chooser 0x007A5450, sub-action 16 (0x007A8F74) and the approach update (0x007A8DD8, 0x007A553C) also lift and place.
+- **Death**: the health handler (0x006BC4B0, health falling to ≤ 0) calls slot 0x78 = 0x006B3620, which lifts. The exception is a creature whose appearance's DecayBehaviour is 2 (0x006A3A80: Broodmother, High Dragon): its corpse keeps the stamp until its position next changes, since the IsDead gate then refuses the new one.
+  - A revive (0x006B3690) places it again.
+  - So the dead do not block.
+- **Destroy and RemoveFromArea never lift.** RemoveFromArea (0x006B6E60) even re-places an active creature in state 0 (0x006B6ED2). A living creature destroyed in a kept area therefore leaves its stamp in the live grid [I: from no lift being called; not seen in play].
+
+**Who blocks whom** [C]:
+- `+0xC90` is the ghost flag, written only by the constructor, `SetGhost` (from `SetObjectProperty` case 0x283, COMMAND_SETCREATUREISGHOST) and the save's loader.
+  - The shipped scripts set it for the Fade's spirits, wisps, the Harrowing's spirits and Hespith (arl300pt_fade, bhm600cr_wisp, cir320cr_darkspawn_sp, den960cr_eerie_girl, orz550cr_hespith).
+- **Everyone else is class 0 and stamps kind 6**. There is no test of team or faction: party members block each other, hostiles block the party, and the party blocks hostiles.
+- Ghosts see only ghosts' kind 5.
+- World +0xC4 (class) and +0xC8 (size) are written only by RequestPath, so other callers of the tests read the last requester's values.
+
+**The readers** [C]:
+
+| test | stamps |
+|---|---|
+| IsFree 0x00A46FC0 | ignores kinds 5 and 6, except with flagA = 1 (one caller, 0x007CB15E, a melee stand-point probe). flagB is the placeable counter |
+| straight walk 0x00A4BB80 | a sample's 3×3 cell blocks on kind 6 (non-ghost mover) or kind 5 (ghost mover) when flagA = 0. `wide` there is the full PersonalSpace > cell (World +0xC8). RequestPath's Direct, Collapse, the corner pass and the driver pass (0, 0). flagA = 1 only in formation (0x00760766), 0x007A2D84 and the look-ahead 0x00A62C90 |
+| fine search, cost 0x00A45AA0 | with the penalties on (env+8 = 0): +7 for the mover's own class kind, +3 for a ring (non-ghost movers only). A stamped cell is never refused |
+| fine search, step | a wide mover drops ring cells. Wide (path +0x8D → env+4) is set in `Step` 0x00A62640 (0x00A626B2) when params +4 > cell, i.e. 0.6 × PS > 0.5, PS > 0.83: bears, drakes, bronto; not humans, wolves or Mabari. It is never cleared there |
+| coarse levels (0x00A457E0, 0x00A45670) | only at the destination entrance's cell: +2 × sectorSize for kind 6 (any class) or a ring. The regions are baked; a stamp never changes them |
+
+**While walking** [C by enumerating every direct caller of 0x00A4BB80, 0x00A46710, 0x00A46760, 0x00A46FC0, 0x00A62A90 and 0x00A626F0; I for indirect calls]:
+- Nothing re-tests a walking creature's path against stamps.
+- A blocked walker is caught only by the stuck counter (1000 ms, answer −4; TURN_BASED.md).
+- The melee approach's look-ahead (0x00A62C90) uses flags (1, 1), so it ignores stamps.
+
+**For a port** [I]:
+1. Stamp at every position change, with lift-then-place.
+2. Write counters only while walking or running, and a hard kind 6 once stopped.
+3. Write no stamp for the dead or the inactive.
+4. Lift the mover and its target during its own search.
+5. Make the straight walk refuse kind 6, and the fine search add +7 and +3 for them.
+6. Leave IsFree and the coarse regions alone.
+
+**Not read**:
+- The first half of 0x006B3070.
+- The cancel path of 0x007A9130.
+- Whether SetRadius (0x006A2A40) frees the record while a stamp is placed (it does not lift first).
+- The two radius setters at 0x0065B011 and 0x0065B1B1 (a temporary probe radius) [I].
 
 ### What a port should copy (summary)
 
@@ -299,7 +371,7 @@ The extra call `0x0067CFA0(this, pos, candidate, mc, 1)` (flag 1 -> mask 0x20111
 
 ### A creature's stamp
 
-`CCCreature::PlaceObstacle` 0x006A3BC0 -> controller 0x00A629F0 -> grid 0x00A469C0 (the cells in the circle of the creature's size, radius^2 * 0.5 as a test, cells found by corner indices). Called from SetPosition's tail (0x006B60A3, every position change), from 0x006B3070 (AddToArea's helper, 0x006B3206 / 0x006B36A4), and from several others. For each cell it skips kind >= 7 and kind 6, and where the crowd count is already 3; it records the cell's index in a bit list and writes kind 6 (kind 5 if the flag at +0xC90 is non-zero) (`sete al; add al,5`), and raises the counters (0x00A491A0) of the cells within about a metre. LiftObstacle undoes exactly the recorded cells. There is no check against other creatures and no separation: three wolves on one point stamp once, the others find the cells already 6 (checked). IsFree ignores stamps by design, so stacked creatures remain a legal spot for each other.
+Section 12 has the stamp: its footprint, when it is placed and lifted, and who reads it. The ring is written for non-ghosts only, and a walking creature's stamp is counters only. There is no check against other creatures and no separation: three wolves on one point stamp once, the others find the cells already 6 (checked). IsFree ignores stamps by design, so stacked creatures remain a legal spot for each other.
 
 ### For the port
 
