@@ -200,6 +200,7 @@ add_library(
     src/dao/core/Rtti.cpp
     src/dao/core/SaveMeta.cpp
     src/dao/core/Savegame.cpp
+    src/dao/core/SavegameWrite.cpp
     src/dao/core/ScriptValue.cpp
     src/dao/core/StackText.cpp
     src/dao/core/TalkTable.cpp

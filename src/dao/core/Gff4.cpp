@@ -651,6 +651,21 @@ bool Editor::SetFloats(const Struct &in, std::uint32_t label, std::span<const fl
     return true;
 }
 
+std::uint32_t Editor::AppendString(std::wstring_view text)
+{
+    // Its count of UTF-16 units with the NUL, the units, the NUL; never written over an old string, which
+    // another field may share.
+    std::vector<std::byte> data(4 + ((text.size() + 1) * 2));
+    const auto count = static_cast<std::uint32_t>(text.size() + 1);
+    std::memcpy(data.data(), &count, 4);
+    for (std::size_t i = 0; i < text.size(); ++i)
+    {
+        const auto unit = static_cast<std::uint16_t>(text[i]);
+        std::memcpy(data.data() + 4 + (i * 2), &unit, 2);
+    }
+    return Append(data);
+}
+
 bool Editor::SetString(const Struct &in, std::uint32_t label, std::wstring_view text)
 {
     const Field *field = in.Shape().Find(label);
@@ -660,17 +675,7 @@ bool Editor::SetString(const Struct &in, std::uint32_t label, std::wstring_view 
     {
         return false;
     }
-    // Its count of UTF-16 units with the NUL, the units, the NUL; never written over an old
-    // string, which another field may share.
-    std::vector<std::byte> data(4 + ((text.size() + 1) * 2));
-    const auto count = static_cast<std::uint32_t>(text.size() + 1);
-    std::memcpy(data.data(), &count, 4);
-    for (std::size_t i = 0; i < text.size(); ++i)
-    {
-        const auto unit = static_cast<std::uint16_t>(text[i]);
-        std::memcpy(data.data() + 4 + (i * 2), &unit, 2);
-    }
-    const std::uint32_t offset = Append(data);
+    const std::uint32_t offset = AppendString(text);
     std::memcpy(bytes_.data() + *at, &offset, 4);
     return true;
 }
@@ -792,6 +797,162 @@ std::optional<Struct> Editor::Add(const Struct &like)
                                       bytes_.begin() + static_cast<std::ptrdiff_t>(like.Offset() + size));
     const std::uint32_t offset = Append(copy);
     return Struct(*file_, like.Index(), data_ + offset);
+}
+
+void Editor::Blank(std::size_t at, std::size_t templateIndex, int depth)
+{
+    const Template &shape = file_->Templates()[templateIndex];
+    if (depth > 8 || at + shape.size > bytes_.size())
+    {
+        return;
+    }
+    for (const Field &field : shape.fields)
+    {
+        const std::size_t slot = at + field.offset;
+        if (slot + 4 > bytes_.size())
+        {
+            continue;
+        }
+        const bool inPlaceStruct = (field.flags & kStruct) != 0 && (field.flags & (kList | kReference)) == 0;
+        if (inPlaceStruct)
+        {
+            if (field.type < file_->Templates().size())
+            {
+                Blank(slot, field.type, depth + 1);
+            }
+        }
+        else if ((field.flags & (kList | kReference)) != 0 || field.type == static_cast<std::uint16_t>(Type::String) ||
+                 field.type == static_cast<std::uint16_t>(Type::TlkString))
+        {
+            std::memcpy(bytes_.data() + slot, &kNull, 4); // a talk-table string's text word stays 0
+        }
+    }
+}
+
+std::optional<Struct> Editor::New(std::size_t templateIndex)
+{
+    if (templateIndex >= file_->Templates().size())
+    {
+        return std::nullopt;
+    }
+    const std::vector<std::byte> zero(file_->Templates()[templateIndex].size);
+    const std::uint32_t offset = Append(zero);
+    Blank(data_ + offset, templateIndex, 0);
+    return Struct(*file_, templateIndex, data_ + offset);
+}
+
+bool Editor::SetChild(const Struct &in, std::uint32_t label, const Struct *to)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || (field->flags & (kList | kStruct | kReference)) != (kStruct | kReference))
+    {
+        return false;
+    }
+    std::uint32_t offset = kNull;
+    if (to != nullptr)
+    {
+        if (to->Index() != type || to->Offset() < data_ || to->Offset() >= bytes_.size())
+        {
+            return false;
+        }
+        offset = static_cast<std::uint32_t>(to->Offset() - data_);
+    }
+    std::memcpy(bytes_.data() + *at, &offset, 4);
+    return true;
+}
+
+bool Editor::SetStructs(const Struct &in, std::uint32_t label, std::span<const Struct> elements)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || (field->flags & (kList | kReference)) != (kList | kReference))
+    {
+        return false;
+    }
+    const bool generic = type == static_cast<std::uint16_t>(Type::Generic) && (field->flags & kStruct) == 0;
+    const bool typed = (field->flags & kStruct) != 0 && type < file_->Templates().size();
+    if (!generic && !typed)
+    {
+        return false;
+    }
+    const std::size_t each = generic ? kGenericSize : 4;
+    std::vector<std::byte> data(4 + (elements.size() * each));
+    const auto count = static_cast<std::uint32_t>(elements.size());
+    std::memcpy(data.data(), &count, 4);
+    for (std::size_t i = 0; i < elements.size(); ++i)
+    {
+        const Struct &one = elements[i];
+        if ((typed && one.Index() != type) || one.Offset() < data_ || one.Offset() >= bytes_.size())
+        {
+            return false;
+        }
+        const auto offset = static_cast<std::uint32_t>(one.Offset() - data_);
+        std::byte *to = data.data() + 4 + (i * each);
+        if (generic)
+        {
+            // The element's template and the struct flag; the reference is the field's.
+            const std::uint32_t word = static_cast<std::uint32_t>(one.Index()) | (std::uint32_t{kStruct} << 16);
+            std::memcpy(to, &word, 4);
+            to += 4;
+        }
+        std::memcpy(to, &offset, 4);
+    }
+    const std::uint32_t list = Append(data);
+    std::memcpy(bytes_.data() + *at, &list, 4);
+    return true;
+}
+
+bool Editor::SetTlk(const Struct &in, std::uint32_t label, std::uint32_t strref, std::optional<std::wstring_view> text)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || type != static_cast<std::uint16_t>(Type::TlkString) ||
+        (field->flags & (kList | kStruct | kReference)) != 0 || *at + 8 > bytes_.size())
+    {
+        return false;
+    }
+    std::memcpy(bytes_.data() + *at, &strref, 4);
+    if (text)
+    {
+        const std::uint32_t offset = text->empty() ? 0 : AppendString(*text);
+        std::memcpy(bytes_.data() + *at + 4, &offset, 4);
+    }
+    return true;
+}
+
+bool Editor::SetStrings(const Struct &in, std::uint32_t label, std::span<const std::wstring> texts)
+{
+    const Field *field = in.Shape().Find(label);
+    std::uint16_t type = 0;
+    const auto at = Slot(in, label, type);
+    if (!at || type != static_cast<std::uint16_t>(Type::String) || (field->flags & (kList | kStruct)) != kList)
+    {
+        return false;
+    }
+    std::vector<std::byte> data(4 + (texts.size() * 4));
+    const auto count = static_cast<std::uint32_t>(texts.size());
+    std::memcpy(data.data(), &count, 4);
+    for (std::size_t i = 0; i < texts.size(); ++i)
+    {
+        // Each string is appended before the list is, so the list's own offset comes last.
+        const std::uint32_t offset = AppendString(texts[i]);
+        std::memcpy(data.data() + 4 + (i * 4), &offset, 4);
+    }
+    const std::uint32_t list = Append(data);
+    std::memcpy(bytes_.data() + *at, &list, 4);
+    return true;
+}
+
+void Editor::Truncate(std::size_t size)
+{
+    if (size >= data_ && size <= bytes_.size())
+    {
+        bytes_.resize(size);
+    }
 }
 
 } // namespace dao::core::gff4

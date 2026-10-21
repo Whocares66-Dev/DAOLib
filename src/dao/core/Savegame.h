@@ -32,7 +32,11 @@
 // by the creature's restore. A trigger's or a store's ObjectID is written and not read.
 //
 // Not read: the add-ins list (16006) and the story so far (16008), which the load path has no reader for.
-// The writer is not here.
+//
+// Write (DAOLib #221, below) takes the original file's bytes and a Save changed after Read, and gives the new
+// bytes through Gff4's Editor; SavegameWrite.cpp marks what each part of it rests on. Not written: the two
+// lists just named (they ride along untouched), a field a struct's template lacks, and the removal of a
+// field or a child struct.
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -52,6 +56,9 @@ namespace dao::core::savegame
 
 inline constexpr std::uint32_t kNoObject = 0xFFFFFFFF;
 inline constexpr std::uint32_t kNoStrref = 0xFFFFFFFF;
+// A list's element made by a caller has no source. One Read made has the offset in the file of the struct it
+// was read from (`source`), which is how Write pairs it with that struct whatever place it now holds in its list.
+inline constexpr std::uint32_t kNoSource = 0xFFFFFFFF;
 
 // A field the save may lack. See the note on the objects below.
 template <class T> using Opt = std::optional<T>;
@@ -93,6 +100,7 @@ struct Variable
 {
     std::wstring name;
     VariableValue value;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // -- Effects, commands and the data arrays they carry
@@ -145,6 +153,7 @@ struct Effect
         }
         return 0;
     }
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A CMD1.
@@ -155,6 +164,7 @@ struct Command
     std::uint8_t isStatic = 0;
     DataArrays data;
     std::uint8_t playerIssued = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A SAC1.
@@ -168,6 +178,7 @@ struct Subaction
     std::int32_t length = 0;
     std::int32_t startTime = 0;
     DataArrays data;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A CAQ1: a creature's or placeable's command in progress and its sub-actions.
@@ -219,6 +230,7 @@ struct Item
     {
         return position ? static_cast<int>(position->y) : 0;
     }
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // -- Creatures
@@ -242,6 +254,7 @@ struct Stat
     Opt<float> current;
     Opt<std::int32_t> combatRegen;
     Opt<std::int32_t> regen;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A CQS1.
@@ -251,6 +264,7 @@ struct Quickslot
     std::wstring itemTag;
     std::wstring templateResRef;
     std::int8_t number = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A creature's CRS1 (an ordinary creature's) or CPS1 (a party member's, with the quick bar): its spells,
@@ -292,6 +306,7 @@ struct ClassRank
 {
     std::uint32_t classId = 0;
     std::uint32_t rank = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A PTE1.
@@ -306,6 +321,7 @@ struct TacticEntry
     std::int32_t commandParam = 0;
     std::wstring commandItemTag;
     std::wstring commandItemResRef;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A PTT1.
@@ -409,6 +425,7 @@ struct Creature
     Opt<std::wstring> playerSoundSet;
     Opt<std::wstring> defaultSoundSet;
     std::vector<Variable> variables;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // -- The objects left in an area
@@ -449,6 +466,7 @@ struct Placeable
     std::vector<Command> commands;
     std::optional<ActionQueue> actionQueue;
     std::vector<Variable> variables;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A SND1.
@@ -472,6 +490,7 @@ struct Sound
     float coneVolume = 0;
     std::int32_t priority = 0;
     std::int32_t occludable = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A trigger of any of its six templates: TRGR a plain trigger, TRTP a trap, TRAT a transition to another
@@ -526,6 +545,7 @@ struct Trigger
     Opt<std::int32_t> musicExitState;
     Opt<float> musicEnterDelay;
     Opt<float> musicExitDelay;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // An AOE1.
@@ -548,6 +568,7 @@ struct AreaOfEffect
     Opt<std::int32_t> abilityId;
     Opt<std::int32_t> flags;
     Opt<std::uint8_t> stationary;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A WPT1, with its map note (16710 to 16714) when it has one.
@@ -564,6 +585,7 @@ struct Waypoint
     Opt<std::uint32_t> mapNoteType;
     Opt<std::uint32_t> mapNoteTextStrref;
     Opt<std::wstring> mapNoteTextOwn;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // An STO1.
@@ -582,6 +604,7 @@ struct Store
     Opt<std::wstring> eventScript;
     Opt<std::wstring> tag;
     Opt<std::int32_t> maxItems;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // The explored cells of an area's map (16016): one bit a cell, bit y * width + x of the bytes, least
@@ -623,6 +646,7 @@ struct Area
     std::int32_t minCreatureImportance = 0;
     std::vector<Effect> effects;
     std::vector<Variable> variables;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // -- The campaign
@@ -631,6 +655,7 @@ struct Group
 {
     std::uint32_t id = 0;
     std::vector<std::uint32_t> hostiles;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A QEST.
@@ -647,12 +672,14 @@ struct Quest
     std::wstring group;
     std::uint8_t updated = 0;
     std::wstring offerId;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct PlotDestination
 {
     std::wstring tag;
-    std::vector<std::wstring> guids; // 16513 to 16515
+    std::vector<std::wstring> guids;  // 16513 to 16515
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct ConversationLine
@@ -668,6 +695,7 @@ struct JournalGroup
     std::uint8_t openInCurrent = 0;
     std::uint8_t openInCompleted = 0;
     std::uint16_t priority = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A JRNL.
@@ -694,6 +722,7 @@ struct WorldMapPin
     std::int8_t lastState = 0;
     std::uint32_t nameStrref = kNoStrref;
     std::wstring nameText;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct WorldMapMap
@@ -704,6 +733,7 @@ struct WorldMapMap
     std::vector<WorldMapPin> pins;
     std::vector<std::pair<float, float>> travelPathBefore;
     std::vector<std::pair<float, float>> travelPathAfter;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct WorldMap
@@ -721,6 +751,7 @@ struct PlotAction
     std::uint16_t state = 0;
     Opt<std::int32_t> count;
     std::int8_t updated = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct PlotActions
@@ -736,6 +767,7 @@ struct AmbientDialog
     std::uint32_t speaker = 0;
     std::wstring resRef;
     std::uint32_t line = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A MODU.
@@ -764,6 +796,7 @@ struct PlotEntry
 {
     std::wstring guid;
     std::array<std::uint32_t, 4> flags{};
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct Approval
@@ -772,6 +805,7 @@ struct Approval
     std::int32_t level = 0;
     std::uint32_t descStrref = kNoStrref;
     std::wstring descText;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A PTIT.
@@ -781,6 +815,7 @@ struct StoredItem
     std::uint32_t owner = 0;
     std::uint32_t slot = 0;
     std::uint32_t weaponSet = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A PRTY.
@@ -864,6 +899,7 @@ struct QueuedEvent
     std::uint32_t target = kNoObject;
     std::uint32_t id = 0;
     std::optional<ScriptEvent> script;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 // A GMST.
@@ -890,6 +926,7 @@ struct IdPool
 {
     std::uint32_t group = 0xFFFFFFFF;
     std::uint32_t lastId = 0;
+    std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
 struct Save
@@ -910,11 +947,70 @@ struct Save
     const Area *FindArea(std::wstring_view tag) const;
     // The creature of that id: the hero, a pool member, or one an area keeps; null if none.
     const Creature *FindCreature(std::uint32_t id) const;
+    // The object ids that more than one object of the save holds, each once, in order: the hero, the pool and
+    // the areas' creatures, placeables, waypoints, sounds and AOEs, the areas themselves, and every item in a
+    // backpack, an equipment list, a container or the party's. The engine keeps one object to an id, so a
+    // creature copied with its items, or an item given the id of another, is two objects of one id, and the
+    // second does not stand in the world (seen 2026-10-21: a copied genlock with its items' ids unchanged, and
+    // the area list's teardown freed an item twice and crashed). A trigger's and a store's id is not read by
+    // the engine and not counted; -1 (kNoObject) is no id.
+    std::vector<std::uint32_t> DuplicateIds() const;
 };
 
 // The save in a file already parsed, or nothing if it is not a GFF4 "SAVE" with a top struct.
 std::optional<Save> Read(const gff4::File &das);
 // The save in a .das's bytes.
 std::optional<Save> Read(std::span<const std::byte> bytes);
+
+// A member Write could not put in the file, and why, with how many times it came to that.
+struct Unwritten
+{
+    std::string structLabel; // the template of the struct it was for, such as "CRE1"
+    std::uint32_t field = 0; // the field's label (dev/gff4_fields.csv)
+    std::string reason;
+    std::size_t count = 0;
+};
+
+// What Write made: the new file's bytes, and what it could not write.
+struct Written
+{
+    std::vector<std::byte> bytes;
+    std::vector<Unwritten> unwritten;
+    // The object ids the Save holds more than once (Save::DuplicateIds); written all the same.
+    std::vector<std::uint32_t> duplicateIds;
+};
+
+// The .das's bytes with a Save's changes written into them. `original` is the file `save` was read from
+// (Read, then edited): the result is a copy of it in which what differs is set, so everything Read does not
+// model (the add-ins list, the story so far, the junk words of a vector list) goes through untouched, and a
+// Save read and written back unchanged gives the same bytes. Nothing in the file moves: a list that grows,
+// shrinks or is reordered is written afresh at the end and its field pointed at it, and the old one stays
+// as dead bytes.
+//
+// Lists. An element of a list that Read made is the struct it was read from, whatever its place in the list
+// now (its `source`): so one taken out of the middle, moved, or edited keeps what the file holds of it that
+// the Save does not. An element a caller made, or one copied from another (the same source twice, or from
+// another list), is a new struct built from its members alone. A list shorter or longer than the file's
+// has its elements removed or added so. A struct that has to be new takes the template of the list's field
+// or, for a generic list, of the kind of the element (a variable's type, a stat's kind, a trigger's type
+// or label, an event's label). Its object id is -1 until a member sets it (the engine ignores such an
+// object, so a caller gives a new one its id).
+//
+// Members. An Opt member that is none is left as the file has it; it never removes a field. A member
+// the struct's template has no field for, or whose field is another type, cannot be written (a save's
+// templates are fixed; adding a field would move every struct of the template), and a plain member
+// is left as the file has it without a word, while an Opt that is set or a list that is not empty is told in
+// `unwritten`. A child struct the file lacks (a null reference) is made when its member is set, or, for the
+// campaign's, the party's and the game state's own structs, when the Save has something in it. A child
+// struct is never taken out.
+//
+// A campaign variable the save adds is loaded by the game only if its name and type are declared (by the
+// campaign's CIF, the module's IFO or the template: the loader creates no names, dev/SAVES.md), so one added
+// under a new name is written and then ignored; change a declared one's value. An object's id is one to an object
+// (DuplicateIds), and the caller's.
+//
+// Nothing is checked against the game's rules: the values are the caller's, and the id pools, a creature's
+// id in the party, an area's id and the like are not made to agree. Nothing for a file that is not a SAVE.
+std::optional<Written> Write(std::span<const std::byte> original, const Save &save);
 
 } // namespace dao::core::savegame

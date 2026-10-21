@@ -1,5 +1,5 @@
 // dao/core/Savegame.h over a small save made here, laid out as the game's are (tools/gff4.py --templates
-// on one), and over the player's saves in game/saves when there (DAOLib #202).
+// on one), and over the player's saves in game/saves when there (DAOLib #202), and its writer (DAOLib #221).
 #include "dao/core/Savegame.h"
 #include "gff4_builder.h"
 
@@ -12,7 +12,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -893,5 +896,1025 @@ TEST_CASE("the player's saves in game/saves, when there, read with the counts to
         CHECK(save->hero->stats->stats.size() > 32);
         CHECK(save->party.plots.size() == 994);
         CHECK(save->version.buildNumber == 13263);
+    }
+}
+
+// -- The writer (DAOLib #221)
+
+namespace
+{
+
+// The ranges of bytes that differ between a file and the file written from it, over the length of the first.
+std::vector<std::pair<std::size_t, std::size_t>> Changes(const std::vector<std::byte> &a,
+                                                         const std::vector<std::byte> &b)
+{
+    std::vector<std::pair<std::size_t, std::size_t>> out;
+    for (std::size_t i = 0; i < a.size() && i < b.size(); ++i)
+    {
+        if (a[i] == b[i])
+        {
+            continue;
+        }
+        if (!out.empty() && out.back().second == i)
+        {
+            ++out.back().second;
+        }
+        else
+        {
+            out.emplace_back(i, i + 1);
+        }
+    }
+    return out;
+}
+
+std::size_t ChangedBytes(const std::vector<std::byte> &a, const std::vector<std::byte> &b)
+{
+    std::size_t total = 0;
+    for (const auto &[from, to] : Changes(a, b))
+    {
+        total += to - from;
+    }
+    return total;
+}
+
+struct Rewritten
+{
+    std::vector<std::byte> bytes;
+    sg::Save save;
+    std::vector<sg::Unwritten> unwritten;
+};
+
+// The write of a save, and the read of what was written.
+Rewritten Rewrite(const std::vector<std::byte> &original, const sg::Save &save)
+{
+    const auto out = sg::Write(original, save);
+    REQUIRE(out);
+    const auto back = sg::Read(out->bytes);
+    REQUIRE(back);
+    return {out->bytes, *back, out->unwritten};
+}
+
+sg::Save ReadOf(const std::vector<std::byte> &bytes)
+{
+    const auto save = sg::Read(bytes);
+    REQUIRE(save);
+    return *save;
+}
+
+} // namespace
+
+TEST_CASE("a save read and written back unchanged is the same bytes and writes everything", "[savegame][write]")
+{
+    for (const auto &bytes : {MakeSave(), MakeEngineSave()})
+    {
+        const auto out = sg::Write(bytes, ReadOf(bytes));
+        REQUIRE(out);
+        CHECK(out->bytes == bytes);
+        CHECK(out->unwritten.empty());
+    }
+}
+
+TEST_CASE("a file that is no save is not written", "[savegame][write]")
+{
+    const sg::Save save;
+    CHECK_FALSE(sg::Write(MakeSave("SVMT"), save));
+    CHECK_FALSE(sg::Write(std::vector<std::byte>(64, std::byte{0x41}), save));
+    CHECK_FALSE(sg::Write(std::vector<std::byte>{}, save));
+}
+
+TEST_CASE("numbers, floats and flags changed read back changed, and nothing else moved", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    save.areas[0].creatures[0].position = sg::Vec3{5, 6, 7};
+    save.areas[0].creatures[0].active = 0;
+    save.campaign.variables[0].value = std::int32_t{99};
+    save.party.plots[0].flags[0] = 0xF0;
+    save.party.money = 5;
+    save.timePlayedSeconds = 777;
+    save.state.worldTimeMs = 1;
+
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    CHECK(out.bytes.size() == bytes.size()); // everything was set in place
+    CHECK(ChangedBytes(bytes, out.bytes) <= 12 + 1 + 4 + 1 + 4 + 4 + 4);
+    const auto &wolf = out.save.areas[0].creatures[0];
+    CHECK(wolf.position == sg::Vec3{5, 6, 7});
+    CHECK(wolf.active == 0);
+    CHECK(wolf.id == 600);
+    REQUIRE(wolf.stats);
+    CHECK(wolf.stats->spells == std::vector<std::uint32_t>{10, 20, 30});
+    CHECK(std::get<std::int32_t>(out.save.campaign.variables[0].value) == 99);
+    CHECK(out.save.campaign.variables[0].name == L"COUNT");
+    CHECK(out.save.party.plots[0].flags[0] == 0xF0);
+    CHECK(out.save.party.plots[0].flags[3] == 4);
+    CHECK(out.save.party.money == 5);
+    CHECK(out.save.timePlayedSeconds == 777);
+    CHECK(out.save.state.worldTimeMs == 1);
+    CHECK(out.save.state.worldDay == 3);
+    CHECK(out.save.version.buildNumber == 13263);
+}
+
+TEST_CASE("strings and a talk-table string changed are appended and read back", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    save.areas[0].tag = L"ar_renamed";
+    save.campaign.variables[1].value = std::wstring(L"a longer value than before");
+    save.hero->nameText = L"Zed";
+    save.campaign.journal.active[0].titleStrref = 4321;
+
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    CHECK(out.save.areas[0].tag == L"ar_renamed");
+    CHECK(out.save.FindArea(L"AR_RENAMED"));
+    CHECK(std::get<std::wstring>(out.save.campaign.variables[1].value) == L"a longer value than before");
+    CHECK(out.save.hero->nameText == L"Zed");
+    CHECK(out.save.hero->nameStrref == 5);
+    CHECK(out.save.campaign.journal.active[0].titleStrref == 4321);
+    CHECK(out.save.campaign.journal.active[1].titleStrref == 222);
+    CHECK(out.save.campaign.journal.active[0].resRef == L"quest_a");
+    // Nothing already in the file moved: the old bytes differ only at the slots that now point on.
+    CHECK(out.bytes.size() > bytes.size());
+    CHECK(ChangedBytes(bytes, out.bytes) <= 4 + 4 + 4 + 4);
+}
+
+TEST_CASE("an Opt that is none leaves the field as the file has it", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    save.areas[0].creatures[0].equipment.reset();
+    save.areas[0].placeables[0].plotGiver.reset();
+    save.areas[0].creatures[0].stats->stats.clear(); // a plain list is written, though
+    save.hero->nameStrref.reset();
+    save.hero->nameText.reset();
+
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas[0].creatures[0].equipment);
+    CHECK(out.save.areas[0].creatures[0].equipment->size() == 2);
+    CHECK(out.save.areas[0].placeables[0].plotGiver == 1);
+    CHECK(out.save.areas[0].creatures[0].stats->stats.empty());
+    CHECK(out.save.hero->nameStrref == 5);
+    CHECK(out.save.hero->nameText == L"Aria");
+}
+
+TEST_CASE("items in a list: added", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+
+    auto save = original;
+    sg::Item helm;
+    helm.templateResRef = L"helm";
+    helm.position = sg::Vec3{1, 0, 0};
+    helm.id = 77;
+    helm.stackSize = 2;
+    save.areas[0].creatures[0].equipment->push_back(helm);
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    const auto &items = *out.save.areas[0].creatures[0].equipment;
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].templateResRef == L"sword");
+    CHECK(items[0].Slot() == 3);
+    CHECK(items[1].templateResRef == L"shield");
+    CHECK(items[1].Slot() == 4);
+    CHECK(items[2].templateResRef == L"helm");
+    CHECK(items[2].Slot() == 1);
+    CHECK(items[2].id == 77);
+    CHECK(items[2].stackSize == 2);
+    // The rest of the creature is as it was.
+    CHECK(out.save.areas[0].creatures[0].stats->spells == std::vector<std::uint32_t>{10, 20, 30});
+    CHECK(out.save.areas[0].creatures[0].stats->stats.size() == 2);
+    CHECK(out.save.areas[0].placeables[0].items.size() == 1);
+}
+
+TEST_CASE("items in a list: taken out", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+
+    auto save = original;
+    auto &items = *save.areas[0].creatures[0].equipment;
+    items.erase(items.begin());
+    const auto out = Rewrite(bytes, save);
+    const auto &back = *out.save.areas[0].creatures[0].equipment;
+    REQUIRE(back.size() == 1);
+    CHECK(back[0].templateResRef == L"shield");
+    CHECK(back[0].Slot() == 4);
+    CHECK(back[0].WeaponSet() == 0);
+}
+
+TEST_CASE("items in a list: all taken out", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+
+    auto save = original;
+    save.areas[0].creatures[0].equipment->clear();
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas[0].creatures[0].equipment);
+    CHECK(out.save.areas[0].creatures[0].equipment->empty());
+}
+
+TEST_CASE("items in a list: reordered", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+
+    auto save = original;
+    auto &items = *save.areas[0].creatures[0].equipment;
+    std::swap(items[0], items[1]);
+    const auto out = Rewrite(bytes, save);
+    const auto &back = *out.save.areas[0].creatures[0].equipment;
+    REQUIRE(back.size() == 2);
+    CHECK(back[0].templateResRef == L"shield");
+    CHECK(back[0].Slot() == 4);
+    CHECK(back[1].templateResRef == L"sword");
+    CHECK(back[1].Slot() == 3);
+}
+
+TEST_CASE("items in a list: an item in a placeable, with a field changed as well", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+
+    auto save = original;
+    auto &items = save.areas[0].placeables[0].items;
+    items[0].stackSize = 9;
+    items.push_back(items[0]); // a copy
+    items[1].id = 502;
+    const auto out = Rewrite(bytes, save);
+    const auto &back = out.save.areas[0].placeables[0].items;
+    REQUIRE(back.size() == 2);
+    CHECK(back[0].id == 501);
+    CHECK(back[0].stackSize == 9);
+    CHECK(back[1].id == 502);
+    CHECK(back[1].stackSize == 9);
+    CHECK(back[1].templateResRef == L"gift");
+}
+
+namespace
+{
+
+sg::Area AreaToAdd()
+{
+    sg::Area added;
+    added.tag = L"ar_new";
+    added.id = 9100;
+    sg::Placeable barrel;
+    barrel.templateResRef = L"barrel";
+    barrel.position = sg::Vec3{1, 1, 1};
+    barrel.orientation = sg::Quat{0, 0, 0, 1};
+    barrel.id = 9101;
+    barrel.plotGiver = 1;
+    added.placeables.push_back(barrel);
+    sg::Creature rat;
+    rat.templateResRef = L"rat";
+    rat.id = 9102;
+    rat.active = 1;
+    rat.equipment = std::vector<sg::Item>{};
+    added.creatures.push_back(rat);
+    added.roomsViewed = {7, 8, 9};
+    added.map.bits = {0xFF, 0x01, 0x02};
+    sg::Trigger trigger;
+    trigger.type = 1; // a transition: its label follows
+    trigger.id = 9103;
+    trigger.geometry = {{0, 0, 0}, {1, 0, 0}, {1, 1, 0}};
+    trigger.loadScreen = 12;
+    added.triggers.push_back(trigger);
+    sg::Waypoint waypoint;
+    waypoint.id = 9104;
+    waypoint.mapNote = 1;
+    waypoint.mapNoteTextOwn = L"here";
+    waypoint.mapNoteTextStrref = 12;
+    added.waypoints.push_back(waypoint);
+    return added;
+}
+
+} // namespace
+
+TEST_CASE("areas in the area list: added", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+    const sg::Area added = AreaToAdd();
+
+    auto save = original;
+    save.areas.push_back(added);
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.areas.size() == 2);
+    CHECK(out.save.areas[0].tag == L"ar_area");
+    CHECK(out.save.areas[0].creatures[0].id == 600);
+    CHECK(out.save.areas[0].triggers.size() == 2);
+    const sg::Area *area = out.save.FindArea(L"AR_NEW");
+    REQUIRE(area);
+    CHECK(area->id == 9100);
+    CHECK(area->Used());
+    REQUIRE(area->placeables.size() == 1);
+    CHECK(area->placeables[0].templateResRef == L"barrel");
+    CHECK(area->placeables[0].position == sg::Vec3{1, 1, 1});
+    CHECK(area->placeables[0].id == 9101);
+    CHECK(area->placeables[0].plotGiver == 1);
+    CHECK(area->placeables[0].items.empty());
+    REQUIRE(area->creatures.size() == 1);
+    CHECK(area->creatures[0].templateResRef == L"rat");
+    CHECK(area->creatures[0].id == 9102);
+    REQUIRE(area->creatures[0].equipment);
+    CHECK(area->creatures[0].equipment->empty());
+    CHECK_FALSE(area->creatures[0].stats); // a blank's references are null
+    REQUIRE(area->triggers.size() == 1);
+    CHECK(area->triggers[0].label == "TRAT");
+    CHECK(area->triggers[0].KindOf() == sg::Trigger::Kind::Transition);
+    CHECK(area->triggers[0].geometry.size() == 3);
+    CHECK(area->triggers[0].loadScreen == 12);
+    REQUIRE(area->waypoints.size() == 1);
+    CHECK(area->waypoints[0].mapNoteTextOwn == L"here");
+    CHECK(area->waypoints[0].mapNoteTextStrref == 12);
+    CHECK(area->roomsViewed == std::vector<std::int32_t>{7, 8, 9});
+    CHECK(area->map.bits == std::vector<std::uint8_t>{0xFF, 0x01, 0x02});
+    // Written again unchanged, the grown file is itself.
+    const auto again = sg::Write(out.bytes, out.save);
+    REQUIRE(again);
+    CHECK(again->bytes == out.bytes);
+}
+
+TEST_CASE("areas in the area list: taken out", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+    const sg::Area added = AreaToAdd();
+
+    auto save = original;
+    save.areas.clear();
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.save.areas.empty());
+    CHECK(out.save.hero);
+    CHECK(out.save.campaign.resource == L"campaign");
+}
+
+TEST_CASE("areas in the area list: taken out of the front and another added", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+    const sg::Area added = AreaToAdd();
+
+    auto save = original;
+    save.areas.erase(save.areas.begin());
+    save.areas.push_back(added);
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas.size() == 1);
+    CHECK(out.save.areas[0].tag == L"ar_new");
+}
+
+TEST_CASE("areas in the area list: reordered", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto original = ReadOf(bytes);
+    const sg::Area added = AreaToAdd();
+
+    auto save = original;
+    save.areas.push_back(added);
+    std::swap(save.areas[0], save.areas[1]);
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas.size() == 2);
+    CHECK(out.save.areas[0].tag == L"ar_new");
+    CHECK(out.save.areas[1].tag == L"ar_area");
+    CHECK(out.save.areas[1].creatures[0].id == 600);
+    REQUIRE(out.save.areas[1].creatures[0].stats);
+    CHECK(out.save.areas[1].creatures[0].stats->stats.size() == 2);
+}
+
+TEST_CASE("a creature copied is built from its members, a new one from what is set", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+
+    sg::Creature copy = save.areas[0].creatures[0];
+    copy.id = 601;
+    save.areas[0].creatures.push_back(copy);
+
+    sg::Creature fresh;
+    fresh.templateResRef = L"fresh";
+    fresh.id = 602;
+    fresh.position = sg::Vec3{9, 8, 7};
+    fresh.stats = sg::Stats{};
+    fresh.stats->spells = {5, 6};
+    sg::Stat attr;
+    attr.kind = sg::Stat::Kind::Attribute;
+    attr.index = 11;
+    attr.base = 4.0F;
+    attr.modifier = 1.0F;
+    fresh.stats->stats.push_back(attr);
+    sg::Item blade;
+    blade.templateResRef = L"blade";
+    blade.position = sg::Vec3{3, 0, 0};
+    fresh.equipment = std::vector<sg::Item>{blade};
+    save.areas[0].creatures.push_back(fresh);
+
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    const auto &creatures = out.save.areas[0].creatures;
+    REQUIRE(creatures.size() == 3);
+    for (const std::size_t i : {std::size_t{0}, std::size_t{1}})
+    {
+        CHECK(creatures[i].templateResRef == L"wolf");
+        CHECK(creatures[i].id == (i == 0 ? 600U : 601U));
+        REQUIRE(creatures[i].stats);
+        CHECK(creatures[i].stats->spells == std::vector<std::uint32_t>{10, 20, 30});
+        REQUIRE(creatures[i].stats->stats.size() == 2);
+        CHECK(creatures[i].stats->stats[1].kind == sg::Stat::Kind::Depletable);
+        CHECK(*creatures[i].stats->stats[1].current == Approx(80));
+        REQUIRE(creatures[i].equipment);
+        CHECK(creatures[i].equipment->size() == 2);
+    }
+    CHECK(creatures[2].templateResRef == L"fresh");
+    CHECK(creatures[2].id == 602);
+    CHECK(creatures[2].position == sg::Vec3{9, 8, 7});
+    REQUIRE(creatures[2].stats);
+    CHECK(creatures[2].stats->spells == std::vector<std::uint32_t>{5, 6});
+    REQUIRE(creatures[2].stats->stats.size() == 1);
+    CHECK(creatures[2].stats->stats[0].kind == sg::Stat::Kind::Attribute);
+    CHECK(creatures[2].stats->stats[0].index == 11);
+    CHECK(*creatures[2].stats->stats[0].modifier == Approx(1));
+    REQUIRE(creatures[2].equipment);
+    REQUIRE(creatures[2].equipment->size() == 1);
+    CHECK((*creatures[2].equipment)[0].templateResRef == L"blade");
+    CHECK((*creatures[2].equipment)[0].Slot() == 3);
+}
+
+TEST_CASE("variables are added, taken out and changed in type, each in the template of its type", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    auto &vars = save.campaign.variables;
+    REQUIRE(vars.size() == 3);
+
+    vars.erase(vars.begin());         // COUNT
+    vars[0].value = std::int32_t{12}; // NAME was a string, now an int
+    vars.push_back({.name = L"LATER", .value = sg::ObjectId{777}});
+    vars.push_back({.name = L"FLOATY", .value = 1.5F});          // the file has no SVF1 template
+    vars.push_back({.name = L"RES", .value = sg::ResRef{L"x"}}); // nor SVR1
+
+    const auto out = Rewrite(bytes, save);
+    const auto &back = out.save.campaign.variables;
+    REQUIRE(back.size() == 3);
+    CHECK(back[0].name == L"NAME");
+    CHECK(std::get<std::int32_t>(back[0].value) == 12);
+    CHECK(back[1].name == L"WHO");
+    CHECK(std::get<sg::ObjectId>(back[1].value).id == 4242);
+    CHECK(back[2].name == L"LATER");
+    CHECK(std::get<sg::ObjectId>(back[2].value).id == 777);
+    REQUIRE(out.unwritten.size() == 1);
+    CHECK(out.unwritten[0].structLabel == "MODU");
+    CHECK(out.unwritten[0].field == 17000);
+    CHECK(out.unwritten[0].count == 2);
+}
+
+TEST_CASE("a member the template has no field for is told, and the file keeps what it has", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    auto &wolf = save.areas[0].creatures[0];
+    wolf.nameStrref = 4;                               // CRE1 has no name
+    wolf.backpack = std::vector<sg::Item>{sg::Item{}}; // nor a backpack
+    wolf.tag = L"x";                                   // nor a tag
+    const auto out = Rewrite(bytes, save);
+    std::vector<std::uint32_t> fields;
+    for (const auto &u : out.unwritten)
+    {
+        CHECK(u.structLabel == "CRE1");
+        CHECK(u.count == 1);
+        fields.push_back(u.field);
+    }
+    CHECK(fields == std::vector<std::uint32_t>{16210, 16222, 16255});
+    CHECK_FALSE(out.save.areas[0].creatures[0].nameStrref);
+    CHECK_FALSE(out.save.areas[0].creatures[0].backpack);
+    CHECK(out.save.areas[0].creatures[0].id == 600);
+    CHECK(out.bytes == bytes); // nothing else was asked
+}
+
+TEST_CASE("a child struct the file lacks is made when it is set, and not for defaults", "[savegame][write]")
+{
+    auto bytes = MakeSave();
+    // The campaign's world map is a null reference (MODU + 36).
+    {
+        const auto file = gff4::File::Parse(bytes);
+        REQUIRE(file);
+        const auto top = file->Root();
+        REQUIRE(top);
+        const auto modu = top->Child(16000);
+        REQUIRE(modu);
+        const std::uint32_t none = 0xFFFFFFFF;
+        std::memcpy(bytes.data() + modu->Offset() + 36, &none, 4);
+    }
+
+    auto save = ReadOf(bytes);
+    CHECK(save.campaign.worldMap.primaryMap.empty());
+    const auto same = sg::Write(bytes, save);
+    REQUIRE(same);
+    CHECK(same->bytes == bytes); // defaults make no struct
+
+    save.campaign.worldMap.primaryMap = L"the map";
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.save.campaign.worldMap.primaryMap == L"the map");
+    CHECK(out.save.campaign.entryArea == L"ar_area");
+}
+
+TEST_CASE("the game state's event queue and a plot action list grow", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    REQUIRE(save.campaign.plotActions.list.size() == 2);
+    save.state.eventQueue.push_back(save.state.eventQueue[0]);
+    save.state.eventQueue.back().id = 6;
+    sg::QueuedEvent plain;
+    plain.id = 10;
+    plain.day = 9;
+    save.state.eventQueue.push_back(plain);
+    auto &actions = save.campaign.plotActions.list;
+    actions[0].count = 11;
+    actions.push_back(actions[0]);
+    actions.back().id = 21;
+
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.state.eventQueue.size() == 3);
+    CHECK(out.save.state.eventQueue[0].id == 12);
+    CHECK(out.save.state.eventQueue[1].id == 6);
+    CHECK(out.save.state.eventQueue[1].caller == 600);
+    CHECK(out.save.state.eventQueue[2].id == 10);
+    CHECK(out.save.state.eventQueue[2].day == 9);
+    const auto &back = out.save.campaign.plotActions.list;
+    REQUIRE(back.size() == 3);
+    CHECK(back[0].count == 11);
+    CHECK_FALSE(back[1].count); // the second is the PTAJ, with no count field
+    CHECK(back[2].id == 21);
+    CHECK(back[2].count == 11);
+}
+
+TEST_CASE("a damaged save the writer is given is written as far as it reads and never faults", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    const auto save = ReadOf(bytes);
+    std::size_t written = 0;
+    for (std::size_t length = 64; length < bytes.size(); length += 11)
+    {
+        const std::vector<std::byte> cut(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(length));
+        if (sg::Write(cut, save))
+        {
+            ++written;
+        }
+    }
+    CHECK(written > 0);
+}
+
+TEST_CASE("an editor makes blank structs, points at them, and sets talk-table strings and string lists", "[gff4]")
+{
+    const auto bytes = MakeSave();
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    const auto top = file->Root();
+    REQUIRE(top);
+    gff4::Editor ed(*file);
+    CHECK(ed.Bytes() == bytes);
+    const std::size_t mark = ed.Size();
+
+    const auto wpt = ed.New(kWpt1);
+    REQUIRE(wpt);
+    CHECK_FALSE(ed.New(999));
+    const auto modu = ed.New(kModu);
+    REQUIRE(modu);
+    REQUIRE(ed.SetChild(*top, 16000, &*modu));
+    CHECK_FALSE(ed.SetChild(*top, 16000, &*wpt));  // another template
+    CHECK_FALSE(ed.SetChild(*top, 16001, &*modu)); // a list is no child
+    REQUIRE(ed.SetTlk(*wpt, 16714, 321, std::wstring_view(L"own text")));
+    REQUIRE(ed.SetNumber(*wpt, 23, 5));
+    CHECK_FALSE(ed.SetTlk(*wpt, 16710, 1, std::nullopt));
+    const std::vector<std::wstring> guids{L"A", L"BB", L""};
+    const auto pdst = ed.New(kPdst);
+    REQUIRE(pdst);
+    REQUIRE(ed.SetStrings(*pdst, 16515, guids));
+    CHECK_FALSE(ed.SetStrings(*pdst, 16514, guids)); // not a list
+
+    const auto after = gff4::File::Parse(ed.Bytes());
+    REQUIRE(after);
+    const auto top2 = after->Root();
+    REQUIRE(top2);
+    const auto blank = top2->Child(16000);
+    REQUIRE(blank);
+    CHECK(blank->Offset() == modu->Offset());
+    CHECK_FALSE(blank->Child(16504)); // a blank's reference is null
+    CHECK(blank->Structs(16450).empty());
+    CHECK(blank->String(16014) == L"");
+    const gff4::Struct wpt2(*after, kWpt1, wpt->Offset());
+    CHECK(wpt2.Tlk(16714)->strref == 321);
+    CHECK(wpt2.TlkText(16714) == L"own text");
+    CHECK(wpt2.Get<std::int32_t>(23) == 5);
+    CHECK(wpt2.Get<std::uint8_t>(16710) == 0);
+    const gff4::Struct pdst2(*after, kPdst, pdst->Offset());
+    CHECK(pdst2.Strings(16515) == guids);
+    CHECK(pdst2.String(16514) == L""); // null
+
+    CHECK(ed.SetChild(*top, 16000, nullptr)); // none
+    CHECK_FALSE(gff4::File::Parse(ed.Bytes())->Root()->Child(16000));
+
+    ed.Truncate(mark);
+    CHECK(ed.Bytes().size() == bytes.size());
+}
+
+TEST_CASE("an editor sets a generic list to structs of the file and new ones", "[gff4]")
+{
+    const auto bytes = MakeSave();
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    const auto top = file->Root();
+    REQUIRE(top);
+    const auto areas = top->Structs(16001);
+    REQUIRE(areas.size() == 1);
+    gff4::Editor ed(*file);
+    const auto added = ed.New(kAre1);
+    REQUIRE(added);
+    const std::vector<gff4::Struct> list{*added, areas[0]};
+    REQUIRE(ed.SetStructs(*top, 16001, list));
+    const auto plc = ed.New(kPlc1);
+    REQUIRE(plc);
+    const std::vector<gff4::Struct> wrong{*plc};
+    CHECK_FALSE(ed.SetStructs(*top, 16010, wrong));   // no such field in the top struct
+    CHECK_FALSE(ed.SetStructs(*added, 16010, wrong)); // a list held in place is not a list of references
+
+    const auto after = gff4::File::Parse(ed.Bytes());
+    REQUIRE(after);
+    const auto back = after->Root()->Structs(16001);
+    REQUIRE(back.size() == 2);
+    CHECK(back[0].Offset() == added->Offset());
+    CHECK(back[0].Label() == "ARE1");
+    CHECK(back[0].String(1) == L"");
+    CHECK(back[0].Structs(16010).empty());
+    CHECK(back[1].Offset() == areas[0].Offset());
+    CHECK(back[1].String(1) == L"ar_area");
+}
+
+TEST_CASE("a blank struct holds a struct held in place blank in turn", "[gff4]")
+{
+    // A top struct of 12 bytes that holds an inner one of 8 in place, then a string.
+    std::vector<TemplateSpec> templates = {
+        {"TOP", 12, {{100, 1, gff4::kStruct, 0}, {103, kStr, 0, 8}}},
+        {"INNR", 8, {{101, kStr, 0, 0}, {102, kU32, kL, 4}}},
+    };
+    Builder b = dao::test::Start("TEST", templates);
+    New(b, 12);
+    const auto file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    gff4::Editor ed(*file);
+    const auto blank = ed.New(0);
+    REQUIRE(blank);
+    const auto after = gff4::File::Parse(ed.Bytes());
+    REQUIRE(after);
+    const gff4::Struct top(*after, 0, blank->Offset());
+    const auto inner = top.Child(100);
+    REQUIRE(inner);
+    CHECK(inner->Offset() == blank->Offset());
+    CHECK(inner->String(101) == L"");
+    CHECK(inner->Numbers(102).empty());
+    CHECK(top.String(103) == L"");
+    std::uint32_t word = 0;
+    std::memcpy(&word, ed.Bytes().data() + blank->Offset() + 4, 4);
+    CHECK(word == 0xFFFFFFFF); // the inner list is null
+    std::memcpy(&word, ed.Bytes().data() + blank->Offset() + 8, 4);
+    CHECK(word == 0xFFFFFFFF); // so is the string
+}
+
+TEST_CASE("an id a save holds twice is found, as a creature copied with its items holds them", "[savegame]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    // The hand-made items have no ids of their own (0 in both); give each one.
+    auto &wolf = save.areas[0].creatures[0];
+    (*wolf.equipment)[0].id = 1000;
+    (*wolf.equipment)[1].id = 1001;
+    save.areas[0].placeables[0].items[0].id = 1002;
+    CHECK(save.DuplicateIds().empty());
+
+    // The copy of a creature is a creature of another id with the first one's items: seen to crash the game's
+    // area list when it is torn down (2026-10-21, DAOLib #221).
+    sg::Creature copy = wolf;
+    copy.id = 601;
+    save.areas[0].creatures.push_back(copy);
+    CHECK(save.DuplicateIds() == std::vector<std::uint32_t>{1000, 1001});
+    const auto written = sg::Write(bytes, save);
+    REQUIRE(written);
+    CHECK(written->duplicateIds == std::vector<std::uint32_t>{1000, 1001});
+
+    (*save.areas[0].creatures[1].equipment)[0].id = 1003;
+    (*save.areas[0].creatures[1].equipment)[1].id = 1004;
+    CHECK(save.DuplicateIds().empty());
+
+    // The same id on a creature and an item, the hero's and the area's, and no id at all.
+    save.areas[0].placeables[0].id = 601;
+    save.hero->id = sg::kNoObject;
+    save.areas[0].waypoints[0].id = sg::kNoObject;
+    CHECK(save.DuplicateIds() == std::vector<std::uint32_t>{601});
+}
+
+TEST_CASE("an element taken out before another leaves the other with what the file holds of it", "[savegame][write]")
+{
+    // The second trigger, a transition, gets a geometry of its own whose point has a junk fourth float, which
+    // the reader drops. Taking the first trigger out moves the second to its place; paired by place it would
+    // be matched with a struct of another template and built afresh, with the junk lost.
+    auto bytes = MakeSave();
+    float junk = 9.0F;
+    {
+        const auto file = gff4::File::Parse(bytes);
+        REQUIRE(file);
+        const auto triggers = file->Root()->Structs(16001)[0].Structs(16012);
+        REQUIRE(triggers.size() == 2);
+        const std::size_t list = bytes.size();
+        const std::uint32_t one = 1;
+        const float point[4] = {1, 2, 3, junk};
+        bytes.resize(list + 4 + sizeof point);
+        std::memcpy(bytes.data() + list, &one, 4);
+        std::memcpy(bytes.data() + list + 4, point, sizeof point);
+        const auto offset = static_cast<std::uint32_t>(list - file->DataOffset());
+        std::memcpy(bytes.data() + triggers[1].Offset() + 8, &offset, 4);
+    }
+    auto save = ReadOf(bytes);
+    REQUIRE(save.areas[0].triggers.size() == 2);
+    REQUIRE(save.areas[0].triggers[1].geometry.size() == 1);
+    save.areas[0].triggers.erase(save.areas[0].triggers.begin());
+
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas[0].triggers.size() == 1);
+    CHECK(out.save.areas[0].triggers[0].label == "TRAT");
+    CHECK(out.save.areas[0].triggers[0].loadScreen == 9);
+    const auto file = gff4::File::Parse(out.bytes);
+    REQUIRE(file);
+    const auto kept = file->Root()->Structs(16001)[0].Structs(16012);
+    REQUIRE(kept.size() == 1);
+    const auto points = kept[0].ListBytes(16101, gff4::Type::Vector3);
+    REQUIRE(points.size() == 16);
+    float fourth = 0;
+    std::memcpy(&fourth, points.data() + 12, 4);
+    CHECK(fourth == junk);
+}
+
+TEST_CASE("a number is not written into a field of another width", "[savegame][write]")
+{
+    // An area whose object id is one byte in its template, where the model has four.
+    const std::vector<TemplateSpec> templates = {{"", 4, {{16001, 0xFFFF, kGenList, 0}}},
+                                                 {"ARE1", 8, {{1, kStr, 0, 0}, {23, kU8, 0, 4}}}};
+    Builder b = dao::test::Start("SAVE", templates);
+    const std::size_t top = New(b, 4);
+    const std::size_t area = New(b, 8);
+    Str(b, area, u"a");
+    b.U8(area + 4, 7);
+    b.U32(top, dao::test::Children(b, {{1, area}}));
+
+    auto save = ReadOf(b.bytes);
+    REQUIRE(save.areas.size() == 1);
+    CHECK(save.areas[0].id == sg::kNoObject); // not read either
+    save.areas[0].id = 0x1234;
+    const auto out = sg::Write(b.bytes, save);
+    REQUIRE(out);
+    CHECK(out->bytes == b.bytes);
+}
+
+TEST_CASE("the fourth float of a vector list, which the reader drops, rides along", "[savegame][write]")
+{
+    auto bytes = MakeSave();
+    {
+        const auto file = gff4::File::Parse(bytes);
+        REQUIRE(file);
+        const auto trigger = file->Root()->Structs(16001)[0].Structs(16012)[0];
+        const auto points = trigger.ListBytes(16101, gff4::Type::Vector3);
+        REQUIRE(points.size() == 48);
+        const float junk = 9.0F;
+        std::memcpy(bytes.data() + (points.data() - file->Bytes().data()) + 12, &junk, 4);
+    }
+    auto save = ReadOf(bytes);
+    const auto same = sg::Write(bytes, save);
+    REQUIRE(same);
+    CHECK(same->bytes == bytes);
+
+    save.areas[0].triggers[0].geometry[1] = sg::Vec3{4, 5, 6};
+    const auto out = Rewrite(bytes, save);
+    REQUIRE(out.save.areas[0].triggers[0].geometry.size() == 3);
+    CHECK(out.save.areas[0].triggers[0].geometry[0] == sg::Vec3{0, 0, 0});
+    CHECK(out.save.areas[0].triggers[0].geometry[1] == sg::Vec3{4, 5, 6});
+    CHECK(out.save.areas[0].triggers[0].geometry[2] == sg::Vec3{1, 1, 0});
+}
+
+TEST_CASE("a creature copied does not share its items with the one it was copied from", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    sg::Creature copy = save.areas[0].creatures[0];
+    copy.id = 601;
+    (*copy.equipment)[0].position = sg::Vec3{8, 1, 0}; // an item changed in place, the list as long as it was
+    (*copy.equipment)[1].stackSize = 12;
+    save.areas[0].creatures.push_back(copy);
+    sg::Creature bare;
+    bare.templateResRef = L"bare";
+    save.areas[0].creatures.push_back(bare);
+
+    const auto out = Rewrite(bytes, save);
+    const auto &creatures = out.save.areas[0].creatures;
+    REQUIRE(creatures.size() == 3);
+    CHECK((*creatures[0].equipment)[0].Slot() == 3);
+    CHECK((*creatures[0].equipment)[1].stackSize == 0);
+    CHECK((*creatures[1].equipment)[0].Slot() == 8);
+    CHECK((*creatures[1].equipment)[1].stackSize == 12);
+    CHECK(creatures[2].id == sg::kNoObject); // the engine's default for an object id, which a caller replaces
+}
+
+namespace
+{
+
+// What an object holds that a copy of it must hold too, as one line: for comparing an area written afresh from
+// its members with the one the file had.
+std::string Line(const sg::Item &i)
+{
+    std::string s = "item";
+    s += i.templateResRef ? " r" + std::to_string(i.templateResRef->size()) : "";
+    s += i.position ? " p" + std::to_string(i.position->x) + "," + std::to_string(i.position->y) : "";
+    s += i.id ? " i" + std::to_string(*i.id) : "";
+    s += i.stackSize ? " s" + std::to_string(*i.stackSize) : "";
+    s += " e" + std::to_string(i.effects.size()) + " v" + std::to_string(i.variables.size()) + " p" +
+         std::to_string(i.properties.size());
+    return s;
+}
+
+std::string Count(std::size_t n)
+{
+    return std::to_string(n) + " ";
+}
+
+std::string Digest(const sg::Creature &c)
+{
+    std::string s =
+        "cre " + std::to_string(c.id.value_or(0)) + " " + std::to_string(c.position ? c.position->x : 0) + " ";
+    s += c.stats ? Count(c.stats->stats.size()) + Count(c.stats->spells.size()) : "99 99 ";
+    s += c.equipment ? Count(c.equipment->size()) : "99 ";
+    s += c.backpack ? Count(c.backpack->size()) : "99 ";
+    s += Count(c.effects.size()) + Count(c.commands.size()) + Count(c.variables.size());
+    s += c.actionQueue ? Count(c.actionQueue->subactions.size()) : "99 ";
+    s += c.tactics ? Count(c.tactics->entries.size()) : "99 ";
+    s += "\n";
+    if (c.stats)
+    {
+        for (const auto &st : c.stats->stats)
+        {
+            s += "  stat " + std::to_string(st.index) + " " + std::to_string(st.base.value_or(-1)) + " " +
+                 std::to_string(st.current.value_or(-1)) + "\n";
+        }
+    }
+    for (const auto &i : c.equipment.value_or(std::vector<sg::Item>()))
+    {
+        s += "  " + Line(i) + "\n";
+    }
+    return s;
+}
+
+std::string Digest(const sg::Placeable &p)
+{
+    std::string s = "plc " + std::to_string(p.id.value_or(0)) + " " + std::to_string(p.state.value_or(0)) + " " +
+                    std::to_string(p.health.value_or(0)) + " " + std::to_string(p.position ? p.position->x : 0) + "\n";
+    for (const auto &i : p.items)
+    {
+        s += "  " + Line(i) + "\n";
+    }
+    return s;
+}
+
+std::string Digest(const sg::Area &a)
+{
+    std::string s = "area " + std::to_string(a.id) + " " + Count(a.placeables.size()) + Count(a.creatures.size()) +
+                    Count(a.triggers.size()) + Count(a.aoes.size()) + Count(a.waypoints.size()) +
+                    Count(a.stores.size()) + Count(a.sounds.size()) + Count(a.map.bits.size()) +
+                    Count(a.roomsViewed.size()) + std::to_string(a.minCreatureImportance) + " " +
+                    Count(a.effects.size()) + Count(a.variables.size()) + "\n";
+    for (const auto &p : a.placeables)
+    {
+        s += Digest(p);
+    }
+    for (const auto &c : a.creatures)
+    {
+        s += Digest(c);
+    }
+    for (const auto &t : a.triggers)
+    {
+        s += "trg " + t.label + " " + Count(t.geometry.size()) + std::to_string(t.type.value_or(-1)) + " " +
+             Count(t.sounds.size()) + "\n";
+    }
+    for (const auto &w : a.waypoints)
+    {
+        s += "wpt " + std::to_string(w.id.value_or(0)) + " " + std::to_string(w.mapNote.value_or(0)) + "\n";
+    }
+    for (const auto &st : a.stores)
+    {
+        s += "sto " + Count(st.items.size()) + std::to_string(st.gold.value_or(0)) + "\n";
+    }
+    for (const auto &v : a.variables)
+    {
+        s += "var " + Count(v.name.size()) + std::to_string(v.value.index()) + "\n";
+    }
+    return s;
+}
+
+} // namespace
+
+TEST_CASE("the player's saves in game/saves, when there, are written back unchanged and changed",
+          "[savegame][write][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "saves";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/saves (a copy of a save's .das)");
+    }
+    std::size_t seen = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    {
+        if (entry.path().extension() != ".das")
+        {
+            continue;
+        }
+        INFO(entry.path().filename().string());
+        const auto bytes = FileBytes(entry.path());
+        const auto save = sg::Read(bytes);
+        REQUIRE(save);
+        ++seen;
+
+        // Unchanged: the same bytes, and nothing the writer could not write.
+        const auto same = sg::Write(bytes, *save);
+        REQUIRE(same);
+        CHECK(same->bytes == bytes);
+        CHECK(save->DuplicateIds().empty());
+        for (const auto &u : same->unwritten)
+        {
+            INFO(u.structLabel << " " << u.field << " " << u.reason << " x" << u.count);
+            CHECK(false);
+        }
+
+        // Changed: a variable and a plot flag set, an item and a creature added, an area copied and one taken out.
+        auto changed = *save;
+        const std::size_t variables = changed.campaign.variables.size();
+        changed.campaign.variables.push_back({.name = L"DAOLIB_WRITE_TEST", .value = std::int32_t{4}});
+        REQUIRE_FALSE(changed.party.plots.empty());
+        changed.party.plots[0].flags[1] = 0x1234;
+        REQUIRE_FALSE(changed.areas.empty());
+        changed.areas.push_back(changed.areas[0]);
+        changed.areas.back().tag = L"daolib_write_copy";
+        const std::size_t creatures = changed.areas[0].creatures.size();
+        if (!changed.areas[0].creatures.empty())
+        {
+            sg::Creature extra = changed.areas[0].creatures[0];
+            extra.id = 0x7FFF0001;
+            changed.areas[0].creatures.push_back(extra);
+        }
+        if (changed.areas.size() > 2)
+        {
+            changed.areas.erase(changed.areas.begin() + 1);
+        }
+        const auto out = sg::Write(bytes, changed);
+        REQUIRE(out);
+        const auto back = sg::Read(out->bytes);
+        REQUIRE(back);
+        CHECK(back->campaign.variables.size() == variables + 1);
+        CHECK(std::get<std::int32_t>(back->campaign.variables.back().value) == 4);
+        CHECK(back->party.plots.size() == save->party.plots.size());
+        CHECK(back->party.plots[0].flags[1] == 0x1234);
+        CHECK(back->party.plots[0].guid == save->party.plots[0].guid);
+        CHECK(back->areas.size() == changed.areas.size());
+        CHECK(back->areas[0].creatures.size() == creatures + (creatures != 0 ? 1 : 0));
+        CHECK(back->hero.has_value() == save->hero.has_value());
+        CHECK(back->party.pool.size() == save->party.pool.size());
+        CHECK(back->state.eventQueue.size() == save->state.eventQueue.size());
+        CHECK(back->version.buildNumber == save->version.buildNumber);
+        // The area written afresh is the area it was copied from.
+        const sg::Area *copy = back->FindArea(L"daolib_write_copy");
+        REQUIRE(copy);
+        if (creatures != 0)
+        {
+            CHECK(Digest(*copy) == Digest(save->areas[0]));
+        }
+        // The areas that were carried over are as they were.
+        for (std::size_t i = 1; i < back->areas.size(); ++i)
+        {
+            if (back->areas[i].tag != L"daolib_write_copy")
+            {
+                const sg::Area *was = save->FindArea(back->areas[i].tag);
+                REQUIRE(was);
+                CHECK(Digest(back->areas[i]) == Digest(*was));
+            }
+        }
+        // And what was written is stable: written again, it is itself.
+        const auto again = sg::Write(out->bytes, *back);
+        REQUIRE(again);
+        CHECK(again->bytes == out->bytes);
+        CHECK(again->unwritten.empty());
+    }
+    if (seen == 0)
+    {
+        SKIP("no .das in game/saves");
     }
 }

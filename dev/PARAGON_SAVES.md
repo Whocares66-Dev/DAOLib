@@ -13,7 +13,7 @@ A note from `C:\project\DAOParagonEngine` (the saves worker, 2026-10-19; Paragon
 - **Party** (`PRTY`): the pool, the one backpack, plot items, money, recipes, the selected character, the leader, approval, hold positions, run in drive mode, the plot manager (`PLEN`: a GUID and four words of flags), the lines seen.
 - **Game state** (`GMST`): the effect counter (`SavegameEffectStartingID`), the event queue, the world timer (day, ms).
 
-Then **`Savegame::Write`** through the Editor, so Paragon's saves can be the game's own form: a copy of a save's bytes with the changed fields set, and the area lists grown. Not before the reader.
+Then **`Savegame::Write`** through the Editor, so Paragon's saves can be the game's own form: a copy of a save's bytes with the changed fields set, and the area lists grown. Not before the reader. *Done 2026-10-21 (DAOLib #221): `dao::core::savegame::Write(original, save)`, `dev/SAVES.md` "The writer".*
 
 ## What an object's load reads (0x006882C0, asked)
 

@@ -239,6 +239,32 @@ class Editor
     // the data, and returns the copies, for this Editor's Set calls. Nothing
     // for a field that is no such list, or a struct of another template.
     std::optional<std::vector<Struct>> CopyList(const Struct &in, std::uint32_t label, std::span<const Struct> like);
+    // Appends a blank struct of the template at `templateIndex`, as the game's own blanks are: every list,
+    // string and reference null (0xFFFFFFFF), a talk-table string's reference null and its text 0, a struct
+    // held in place blank in turn, every other byte 0. Returns it for this Editor's Set calls. Nothing for an
+    // index the file lacks. DAOLib #221.
+    std::optional<Struct> New(std::size_t templateIndex);
+    // Points a struct field held by reference at a struct of the field's template (as Add and New return),
+    // or at none with `to` null. False for a field that is no such reference.
+    bool SetChild(const Struct &in, std::uint32_t label, const Struct *to);
+    // Sets a list of structs held by reference to `elements`, structs already in the data (as the File's, Add's
+    // and New's): a generic list gets each one's template in its element, a typed list needs them of its
+    // template. The whole list is appended and the field pointed at it. False for another kind of field or a
+    // struct that is not in the data.
+    bool SetStructs(const Struct &in, std::uint32_t label, std::span<const Struct> elements);
+    // Writes a talk-table string field: its reference, and if `text` has a value the string of its own that
+    // the second word points to, an empty one as 0 (where the game's files leave it). False for another type.
+    bool SetTlk(const Struct &in, std::uint32_t label, std::uint32_t strref, std::optional<std::wstring_view> text);
+    // Sets a list of strings: each appended, and the list of their offsets. False for another kind of field.
+    bool SetStrings(const Struct &in, std::uint32_t label, std::span<const std::wstring> texts);
+    // The size of the bytes so far, and cutting them back to a size taken earlier. For a caller that builds a
+    // struct to see whether anything was written into it and takes it back if not; nothing taken from a
+    // File may be used after, and a struct New or Add returned past the size is gone.
+    std::size_t Size() const
+    {
+        return bytes_.size();
+    }
+    void Truncate(std::size_t size);
     // Returns a struct's offset from the start of the data, which a
     // reference to it holds.
     std::uint32_t Reference(const Struct &to) const
@@ -254,6 +280,8 @@ class Editor
   private:
     std::optional<std::size_t> Slot(const Struct &in, std::uint32_t label, std::uint16_t &type) const;
     std::uint32_t Append(std::span<const std::byte> data);
+    std::uint32_t AppendString(std::wstring_view text);
+    void Blank(std::size_t at, std::size_t templateIndex, int depth);
 
     const File *file_;
     std::size_t data_;

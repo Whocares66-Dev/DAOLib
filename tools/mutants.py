@@ -150,6 +150,7 @@ ADDINORDER = "src/dao/core/AddInOrder.h"
 FSB = "src/dao/core/Fsb.cpp"
 SAVEGAME = "src/dao/core/Savegame.cpp"
 SAVEGAME_H = "src/dao/core/Savegame.h"
+SAVEGAME_WRITE = "src/dao/core/SavegameWrite.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -1624,6 +1625,104 @@ MUTANTS: list[Mutant] = [
         SAVEGAME_H,
         "effectStartingId = 1;",
         "effectStartingId = 0;",
+    ),
+    # The saved game's writer (#221): what a save written back must keep of the file, and what it may not share.
+    Mutant(
+        "savegame-write-pair-source: a list's element is paired with the struct it was read from, not the one at its place",
+        SAVEGAME_WRITE,
+        "const auto it = values[i].source == kNoSource ? bySource.end() : bySource.find(values[i].source);\n"
+        "                at = it == bySource.end() ? old.size() : it->second;",
+        "at = i < old.size() ? i : old.size();",
+    ),
+    Mutant(
+        "savegame-write-source-once: a struct of the file is carried over for one element only, a copy is built",
+        SAVEGAME_WRITE,
+        "if (at < old.size() && !used[at] && labelOf(values[i], &old[at]))",
+        "if (at < old.size() && labelOf(values[i], &old[at]))",
+    ),
+    Mutant(
+        "savegame-write-opt-none: an Opt that is none leaves the field as the file has it",
+        SAVEGAME_WRITE,
+        "if (value && !Set(n, label, *value))",
+        "if (!Set(n, label, value.value_or(T{})))",
+    ),
+    Mutant(
+        "savegame-write-item-ability: an item's property lists are written only where they are read, behind its ability",
+        SAVEGAME_WRITE,
+        "if (Writer::Has(n, L::kItemAbilityId))",
+        "if (true)",
+    ),
+    Mutant(
+        "savegame-write-aoe-flags: an AOE's flags are not news where the field is absent and the member is its ability",
+        SAVEGAME_WRITE,
+        "if (Writer::Has(n, L::kAoeFlags) || v.flags != v.abilityId)",
+        "if (true)",
+    ),
+    Mutant(
+        "savegame-write-string-same: a string equal to the file's is not appended again",
+        SAVEGAME_WRITE,
+        "return (now && *now == value) || ed_.SetString(n.edit, label, value);",
+        "static_cast<void>(now);\n        return ed_.SetString(n.edit, label, value);",
+    ),
+    Mutant(
+        "savegame-write-numbers-same: a list of numbers equal to the file's is not written again",
+        SAVEGAME_WRITE,
+        "n.old->Numbers(label) : std::vector<std::uint32_t>()) == bits)",
+        "n.old->Numbers(label) : std::vector<std::uint32_t>()) != bits)",
+    ),
+    Mutant(
+        "savegame-write-vector-junk: a vector list whose points are the file's keeps the junk word of each",
+        SAVEGAME_WRITE,
+        "const bool same = n.old && SameBits(Decoded(*n.old, label, Type::Vector3), Decoded(flat));",
+        "const bool same = false;",
+    ),
+    Mutant(
+        "savegame-write-list-same: a list of the file's size and order is edited in place, not written again",
+        SAVEGAME_WRITE,
+        "bool same = values.size() == plan.old.size();",
+        "bool same = false;",
+    ),
+    Mutant(
+        "savegame-write-variable-kind: a variable of an object is made in the template of an object",
+        SAVEGAME_WRITE,
+        'case 3:\n        return "SVO1";',
+        'case 3:\n        return "SVI1";',
+    ),
+    Mutant(
+        "savegame-write-trigger-kind: a trigger of type 1 is made in the template of a transition",
+        SAVEGAME_WRITE,
+        'case Trigger::Kind::Transition:\n        return "TRAT";',
+        'case Trigger::Kind::Transition:\n        return "TRGR";',
+    ),
+    Mutant(
+        "savegame-write-plain-child: a child struct the file lacks is made only if something is written into it",
+        SAVEGAME_WRITE,
+        "if (ed_.Size() == end && Slice(blank->Offset(), pristine.size()) == pristine)",
+        "if (static_cast<void>(end), static_cast<void>(pristine), false)",
+    ),
+    Mutant(
+        "savegame-write-blank-id: a new struct's object id is -1, the engine's default",
+        SAVEGAME_WRITE,
+        "ed_.SetNumber(*blank, L::kObjectId, -1);",
+        "ed_.SetNumber(*blank, L::kObjectId, 0);",
+    ),
+    Mutant(
+        "savegame-write-width: a number is written only into a field of the member's width",
+        SAVEGAME_WRITE,
+        "return WidthOf(f->type) == sizeof(T) && ed_.SetNumber(",
+        "return WidthOf(f->type) != 0 && ed_.SetNumber(",
+    ),
+    Mutant(
+        "gff4-blank-null: a blank struct's lists, strings and references are null, not 0",
+        GFF4,
+        "std::memcpy(bytes_.data() + slot, &kNull, 4); // a talk-table string's text word stays 0",
+        "static_cast<void>(slot); // a talk-table string's text word stays 0",
+    ),
+    Mutant(
+        "gff4-structs-flag: a generic list's element names its template and says it is a struct",
+        GFF4,
+        "const std::uint32_t word = static_cast<std::uint32_t>(one.Index()) | (std::uint32_t{kStruct} << 16);",
+        "const std::uint32_t word = static_cast<std::uint32_t>(one.Index());",
     ),
     Mutant(
         "fev-sample-index: a wave's sample index is the number the file has, the sample in its bank",

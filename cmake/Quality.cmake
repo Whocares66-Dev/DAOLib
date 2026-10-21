@@ -162,13 +162,23 @@ set(DAO_FORMAT_COMMANDS "")
 set(DAO_FORMAT_CHECK_COMMANDS "")
 if(DAO_CLANG_FORMAT)
     message(STATUS "clang-format: ${DAO_CLANG_FORMAT}")
+    # The commands run in the source directory, so the files are named from it:
+    # in a checkout whose path is long (a worktree under .claude/worktrees/)
+    # the absolute names put one command line past Windows' 32,767 characters,
+    # and "The system cannot execute the specified program" is all it says.
+    string(
+        REPLACE "${CMAKE_SOURCE_DIR}/"
+        ""
+        DAO_FORMAT_SOURCES
+        "${DAO_SOURCES}"
+    )
     list(
         APPEND DAO_FORMAT_COMMANDS
         COMMAND
         "${DAO_CLANG_FORMAT}"
         -i
         --style=file
-        ${DAO_SOURCES}
+        ${DAO_FORMAT_SOURCES}
     )
     # -Werror turns "would reformat" into a non-zero exit, which is what makes
     # this usable as a gate rather than a report.
@@ -179,7 +189,7 @@ if(DAO_CLANG_FORMAT)
         --dry-run
         -Werror
         --style=file
-        ${DAO_SOURCES}
+        ${DAO_FORMAT_SOURCES}
     )
 else()
     message(STATUS "clang-format: NOT FOUND -- C++ is not formatted")
