@@ -106,6 +106,10 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
 - The CMD1/CAQ1 restore's detail (0x007468C0, 0x00744DF0, 0x00747100); the item's template load (vtable +0x1C0) and whether equipping on a load fires events or applies item stats; the step after stats (0x0079F4A0 on the effects holder); what 16020's filter means; the backpack's y (item +0x600), ITL1 16237 (a byte at item +0x46C), and 0x00C371B4's bits 0x2 and 0x40.
 - Steps 2, 4 and 19's calls; what 0x005FE960 tests before MODULE_LOAD; the plot manager's derivation after its load (0x0075E5F6 on); the DTA1 loaders for vectors, quaternions and strings; whether an area transition sets the +0x68 byte.
 
+### The typed reader
+
+`src/dao/core/Savegame.h` (`dao::core::savegame::Read`, DAOLib #202) reads the save into plain structs: the campaign, the areas and their objects, the hero, the party and the game's state. Its header says what a caller does with the objects (the engine lays a saved object over its template, so a field the save lacks is none, not 0), and `Savegame.cpp` marks each part by the loader in the exe it was checked against, or as seen only in saves, or as kept raw. `tests/test_savegame.cpp` holds a save built by hand and, when `game/saves` has copies of the player's saves, their counts against this file's dump.
+
 ## The metadata (`.das.met`)
 
 GFF4, type `SVMT`: what the load screen shows without opening the save. The area's name, the time played, the level, class, gender, race and background, the character's and the save's names, the journal's story text. Two fields xoreos does not name, 16809 and 16810, hold `single player;` and `SP;`.

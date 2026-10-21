@@ -199,6 +199,7 @@ add_library(
     src/dao/core/ReadAt.cpp
     src/dao/core/Rtti.cpp
     src/dao/core/SaveMeta.cpp
+    src/dao/core/Savegame.cpp
     src/dao/core/ScriptValue.cpp
     src/dao/core/StackText.cpp
     src/dao/core/TalkTable.cpp

@@ -327,6 +327,7 @@ std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) 
     // at that stride, read 2026-10-18 (DAOLib #181).
     case Type::Vector3:
     case Type::Vector4:
+    case Type::Quaternion: // a saved effect's rotations (DAOLib #202)
         size = 16;
         break;
     default:

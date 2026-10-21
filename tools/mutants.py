@@ -148,6 +148,8 @@ INSTALL = "src/dao/core/Install.cpp"
 ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
 FSB = "src/dao/core/Fsb.cpp"
+SAVEGAME = "src/dao/core/Savegame.cpp"
+SAVEGAME_H = "src/dao/core/Savegame.h"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -1567,6 +1569,49 @@ MUTANTS: list[Mutant] = [
         FSB,
         "sample = std::clamp((nibble & 8) != 0 ? sample - delta : sample + delta, -32768, 32767);",
         "sample = (nibble & 8) != 0 ? sample - delta : sample + delta;",
+    ),
+    # The saved game's reader (#202): where the engine's reader differs from a plain one.
+    Mutant(
+        "savegame-list-absent: a list the template lacks is none, not an empty list that clears the creature's own",
+        SAVEGAME,
+        "    if (Has(s, label))\n    {\n        std::vector<T> v;\n        List(s, label, v);",
+        "    if (true)\n    {\n        std::vector<T> v;\n        List(s, label, v);",
+    ),
+    Mutant(
+        "savegame-item-ability: an item's property lists are read only when its ability is present",
+        SAVEGAME,
+        "    if (Has(s, L::kItemAbilityId))",
+        "    if (true)",
+    ),
+    Mutant(
+        "savegame-aoe-flags: an AOE with no flags takes its ability",
+        SAVEGAME,
+        "        out.flags = out.abilityId;\n",
+        "",
+    ),
+    Mutant(
+        "savegame-effect-priority: an effect of duration type 6 with no saved priority has 999",
+        SAVEGAME_H,
+        "            return 999;",
+        "            return 0;",
+    ),
+    Mutant(
+        "savegame-event-script: the event ids 10 and 24 are script events",
+        SAVEGAME_H,
+        "        case 24:",
+        "        case 25:",
+    ),
+    Mutant(
+        "savegame-event-plain: the event id 27 is a plain event",
+        SAVEGAME_H,
+        "        case 27:",
+        "        case 28:",
+    ),
+    Mutant(
+        "savegame-effect-counter: a save with no game state starts the effect counter at 1",
+        SAVEGAME_H,
+        "effectStartingId = 1;",
+        "effectStartingId = 0;",
     ),
     Mutant(
         "fev-sample-index: a wave's sample index is the number the file has, the sample in its bank",
