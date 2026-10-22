@@ -244,7 +244,7 @@ Order the callee reads them: `OverlapCapsule(this = scene, p0*, p1*, radius, mas
 | radius (`[ebp+0x10]`) | float `r`, written into the pushed slot by `fstp [esp]` | 0x006B173F-0x006B1743 |
 | mask (`[ebp+0x14]`) | `0x2011134` | `push 0x2011134` 0x006B1725 |
 | `[ebp+0x18]` | 0 | `push 0` 0x006B1723 (its use not found; the callee copies it to a local at 0x0082EC6A) |
-| out (`[ebp+0x1C]`) | an empty `std::vector` of 4-byte entries (the report's dedupe/output list) | `push ecx` 0x006B171B; destroyed after the call with `0x0046C760` |
+| exclude (`[ebp+0x1C]`) | a `std::vector` of ids holding the creature's own (an exclusion list: below) | `push ecx` 0x006B171B; destroyed after the call with `0x0046C760` |
 
 `OverlapCapsule` copies p0/p1 to the 28-byte **NxCapsule {p0 = bottom (3 floats), p1 = top (3 floats), radius}** with `0x00837A40` (a plain 3-float copy) and passes it unchanged to the PhysX call [C 0x0082ECA4-0x0082ED5D]. It does not shrink or grow the capsule before the query.
 
@@ -260,7 +260,12 @@ Order the callee reads them: `OverlapCapsule(this = scene, p0*, p1*, radius, mas
 
 - `OverlapCapsule` returns `count > 0` (`setg bl`, `mov al,bl` [C 0x0082F06A-0x0082F0B2]). `count` increments once per shape the report collected whose type is not 6 (NX_SHAPE_MESH), and for a mesh shape only if a further per-shape call (shape vtable +0xAC with args `(ptr, 3, ptr)`, unidentified) answers true [C 0x0082EF16-0x0082EF3C]. So the mesh shapes (the level's triangle meshes) get a second, exact test and boxes, capsules and spheres count on the PhysX answer [I for the meaning of the second call].
 - **true = the capsule overlaps something in the mask**; the creature function returns that `al` unchanged [C 0x006B1753-0x006B175A]. This is PATHFINDING.md:976's "true = overlap" reading, now confirmed by the callee's `count > 0`.
-- The out vector gets one entry per distinct hit object (the report's slot 2 maps a shape to its actor and `0x0081C970` to a key; a duplicate key is dropped, `0x008276B0` [C 0x00827701-0x00827748]; I for what the key is). The creature function discards it.
+- **The last argument is an exclusion list holding the mover's own id** (corrected 2026-10-22, read 2026-10-22 by lib-agent-2; this said it was an output list and that nothing was excluded):
+  - **The list** [C]: before the call, `0x006B1600` takes its own id (`0x0053CC40` on `this+4`, 0x006B16AF..0x006B16BB) and push_backs it (`0x006F1340`, a `std::vector<uint32>` push_back) into the vector at `[esp+0x44]` (0x006B16C8). That is the vector passed as OverlapCapsule's last argument (0x006B171B).
+  - **The report** [C]: `OverlapCapsule` (0x0082EC20) hands that pointer to the report's constructor `0x00827690` (0x0082EC94..0x0082EC9F), which keeps it at report `+0x14`. The report's own result vector is at `+4` (0x0040D610).
+  - **The filter** [C]: for each shape, the report's callback `0x008276B0` takes a key through its slot 2 (`0x00820FC0` → shape slot +4 → `Physics::GetActorObjectId` 0x0081C970, ID 22199). It walks the list at `+0x14` (0x00827701..0x00827746). A shape whose key is in the list is skipped (0x00827755). Every other shape is appended to `+4` (0x0082777D..0x008277A3). Nothing dedupes the result.
+  - **The controller's key is the creature's id** [C for the calls, I for the link]: after building the controller, the creature passes itself to the controller's slot +0x50 (0x006B2172, its user object). `GetActorObjectId` returns `[[x+4]+4]`'s id (0x0081C98E) for an actor of kind 4, and `[[x+4]]` otherwise.
+  - **So the mover never overlaps itself**, wherever its controller still is [C for the exclusion, I that its controller's actor reports kind 4 with the creature as its object]. Other creatures' controllers (0x10) still count.
 - What the snap does with it (PATHFINDING.md:885, :975) [C there]: false jumps straight to the final `capsule.SetPosition(p.x, p.y, p.z + 0x784)` at `0x006B1979`; true runs the safe-spot search first (`NearestFree` 0x0073E7F0 for a moving creature, else `GetSafeLocation` 0x0073E370, radius 10.0) and re-positions with `SetPosition(out, 0)` if it finds one. With the flag argument 1 the test is skipped and the search always runs (PATHFINDING.md:939).
 
 ### 5. The mask 0x2011134
@@ -283,6 +288,6 @@ It is the **same mask the creature's movement uses**: `0x006B6880` pushes 0x2011
 
 ### Not read / caveats
 
-- Whether the creature's own controller shape can hit itself: its bits0 is 0x10, which the mask contains, and `OverlapCapsule` excludes nothing (no self or object argument is used) [C: no exclusion in 0x0082EC20-0x0082F0C9 or the report 0x008276B0]. In the snap the capsule is still at the old spot when the new one (a different one: the snap runs only when it is more than 0.05 m away) is tested, so a short move within the capsule's own radius could count itself [I; not seen in play]. Other creatures standing there also make it true.
+- The creature's own controller does not count: its id is in the exclusion list (above). Other creatures' controllers (0x10) standing there do make it true [C for the mask; not seen in play].
 - The per-mesh call (shape vtable +0xAC) and what the report's key is were not identified.
 - The PhysX side (`overlapCapsuleShapes` in the NxScene's implementation, and whether `accurateCollision` changes capsule-vs-box results) was not followed.
