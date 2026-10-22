@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <map>
@@ -994,6 +995,122 @@ std::uint32_t MaskOf(std::span<const Shape> shapes)
         mask |= shape.mask;
     }
     return mask;
+}
+
+// The overlap query (DAOLib #233), read 2026-10-22 (dev/COLLISION.md,
+// section 5). SetPosition's snap (0x006B1790) asks 0x006B1600 whether the
+// creature's controller capsule, stood at the new place, overlaps anything:
+// `Physics::PhysicsScene::OverlapCapsule` (0x0082EC20) hands PhysX's
+// overlapCapsuleShapes a capsule from (x, y, c - h/2) to (x, y, c + h/2),
+// c the feet's z plus the creature's +0x784, h and the radius the
+// controller's (its slots +0x6C and +0x64), with every shape type, no group
+// left out and the filter of the rays: a shape is met when its bits0 and the
+// mask 0x2011134 share a bit. It answers true for any shape met. A mesh
+// shape counts only after a second test of its own (the shape's slot +0xAC,
+// not identified; taken here as its triangles touched). Not here: the
+// creatures' controllers, which carry bits0 0x10 and are in the mask, the
+// creature's own among them.
+Pose PoseOf(const std::array<float, 4> &rotation, const Point &position)
+{
+    Pose pose;
+    pose.translation = position;
+    const float length = std::sqrt((rotation[0] * rotation[0]) + (rotation[1] * rotation[1]) +
+                                   (rotation[2] * rotation[2]) + (rotation[3] * rotation[3]));
+    if (length < 1e-6F)
+    {
+        return pose;
+    }
+    const float x = rotation[0] / length;
+    const float y = rotation[1] / length;
+    const float z = rotation[2] / length;
+    const float w = rotation[3] / length;
+    pose.rotation = {1 - (2 * ((y * y) + (z * z))), 2 * ((x * y) - (z * w)),       2 * ((x * z) + (y * w)),
+                     2 * ((x * y) + (z * w)),       1 - (2 * ((x * x) + (z * z))), 2 * ((y * z) - (x * w)),
+                     2 * ((x * z) - (y * w)),       2 * ((y * z) + (x * w)),       1 - (2 * ((x * x) + (y * y)))};
+    return pose;
+}
+
+Capsule CreatureCapsule(const Point &feet, float radius, float height, float centreAbove)
+{
+    const float centre = feet[2] + centreAbove;
+    return Capsule{{feet[0], feet[1], centre - (height * 0.5F)}, {feet[0], feet[1], centre + (height * 0.5F)}, radius};
+}
+
+namespace
+{
+
+// A point of the level in a pose's own space: the turn's transpose, a turn's inverse.
+Point Unapply(const Pose &pose, const Point &point)
+{
+    const Point d{point[0] - pose.translation[0], point[1] - pose.translation[1], point[2] - pose.translation[2]};
+    Point out{};
+    for (std::size_t column = 0; column < 3; ++column)
+    {
+        out[column] =
+            (pose.rotation[column] * d[0]) + (pose.rotation[3 + column] * d[1]) + (pose.rotation[6 + column] * d[2]);
+    }
+    return out;
+}
+
+bool MeshOverlaps(const Capsule &capsule, const TriangleMesh &mesh, const Pose &pose)
+{
+    const Capsule local{Unapply(pose, capsule.p0), Unapply(pose, capsule.p1), capsule.radius};
+    return std::ranges::any_of(mesh.triangles, [&](const std::array<std::uint32_t, 3> &indices) {
+        return indices[0] < mesh.points.size() && indices[1] < mesh.points.size() && indices[2] < mesh.points.size() &&
+               core::Overlaps(local,
+                              Triangle{mesh.points[indices[0]], mesh.points[indices[1]], mesh.points[indices[2]]});
+    });
+}
+
+} // namespace
+
+bool Overlaps(const Capsule &capsule, Kind kind, const Point &dimensions, float radius, float height, const Pose &pose)
+{
+    switch (kind)
+    {
+    case Kind::Sphere:
+        return core::Overlaps(capsule, Capsule{pose.translation, pose.translation, radius});
+    case Kind::Capsule:
+        return core::Overlaps(capsule,
+                              Capsule{Apply(pose, {0, -height * 0.5F, 0}), Apply(pose, {0, height * 0.5F, 0}), radius});
+    case Kind::Box:
+        return core::Overlaps(Capsule{Unapply(pose, capsule.p0), Unapply(pose, capsule.p1), capsule.radius},
+                              dimensions);
+    default:
+        return false;
+    }
+}
+
+bool Overlaps(const StaticPhysics &physics, const Capsule &capsule, std::uint32_t mask)
+{
+    for (const auto &actor : physics.actors)
+    {
+        for (const auto &shape : actor.shapes)
+        {
+            if (!Meets(shape.groupsMask[0], mask))
+            {
+                continue;
+            }
+            const Pose pose = Compose(actor.globalPose, shape.localPose);
+            const bool met = shape.kind == Kind::Mesh
+                                 ? shape.mesh >= 0 && static_cast<std::size_t>(shape.mesh) < physics.meshes.size() &&
+                                       MeshOverlaps(capsule, physics.meshes[static_cast<std::size_t>(shape.mesh)], pose)
+                                 : Overlaps(capsule, shape.kind, shape.dimensions, shape.radius, shape.height, pose);
+            if (met)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Overlaps(std::span<const Shape> shapes, const Pose &placed, const Capsule &capsule, std::uint32_t mask)
+{
+    return std::ranges::any_of(shapes, [&](const Shape &shape) {
+        return Meets(shape.mask, mask) && Overlaps(capsule, shape.kind, shape.dimensions, shape.radius, shape.height,
+                                                   Compose(placed, PoseOf(shape.rotation, shape.position)));
+    });
 }
 
 } // namespace dao::core::collision

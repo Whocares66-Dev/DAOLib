@@ -23,6 +23,11 @@
 //
 // A shape meets a ray when (its bits0 & the ray's mask) != 0: the eye-to-eye
 // ray's mask is 0x24, the ray down that finds a creature's room 0x20.
+//
+// The engine's overlap query, which SetPosition's snap asks before it looks
+// for a free spot (0x006B1600, DAOLib #233), is a capsule against the same
+// shapes by the same test of bits0; Overlaps answers it for a level's shapes
+// and a placeable's.
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -57,6 +62,9 @@ inline constexpr std::uint32_t kAll = 0xFFFFFFFF;
 inline constexpr std::uint32_t kSightMask = kPlaceables | kStaticGeometry;
 // The mask of the ray cast down from above a creature to find its room.
 inline constexpr std::uint32_t kRoomMask = kStaticGeometry;
+// The mask of the overlap query SetPosition's snap asks (0x006B1600), the one a creature's movement collides with:
+// placeables, creatures' controllers (0x10), static geometry, water, trees (0x1000), terrain walls and walkable ground.
+inline constexpr std::uint32_t kPlacementMask = 0x02011134;
 
 // Returns whether a shape of mask `bits0` meets a ray of mask `rayMask`, as the engine's filter tests it.
 constexpr bool Meets(std::uint32_t bits0, std::uint32_t rayMask)
@@ -183,5 +191,32 @@ std::uint32_t MaskOf(std::span<const Shape> shapes);
 
 // Returns the mask the engine builds from a .phy shape's MMHShapeCollisionMask* flags (0x00589DB0).
 std::uint32_t MaskOf(const gff4::Struct &shap);
+
+// Returns the pose of a turn and a place: a .phy shape's MMHShapeRotation and MMHShapePosition, or a placed object's.
+// @param rotation a quaternion, x, y, z, w; it need not be of length 1
+Pose PoseOf(const std::array<float, 4> &rotation, const Point &position);
+
+// Returns a creature's capsule stood at a place, as the engine makes it for its overlap query (0x006B1600).
+// @param feet where the creature stands
+// @param radius the capsule's radius, the creature's controller's
+// @param height between the caps' centres, the controller's
+// @param centreAbove how far above the feet the capsule's centre is (the creature's +0x784)
+Capsule CreatureCapsule(const Point &feet, float radius, float height, float centreAbove);
+
+// Returns whether a capsule shares a point with a solid sphere, box or capsule placed by a pose.
+// @param dimensions a box's half extents
+// @param height a capsule's, between its caps' centres along its y
+// @return false for a mesh or a convex shape, which Overlaps over the level takes by its triangles
+bool Overlaps(const Capsule &capsule, Kind kind, const Point &dimensions, float radius, float height, const Pose &pose);
+
+// Returns whether a capsule overlaps a level's static shapes that a mask meets, as the engine's overlap query asks.
+// @param mask the query's, kPlacementMask for SetPosition's
+//
+// A mesh shape is met by its triangles, so a capsule wholly inside a closed mesh does not overlap it.
+bool Overlaps(const StaticPhysics &physics, const Capsule &capsule, std::uint32_t mask);
+
+// Returns whether a capsule overlaps a placeable's shapes that a mask meets.
+// @param placed where the placeable stands and how it is turned (PoseOf its position and orientation)
+bool Overlaps(std::span<const Shape> shapes, const Pose &placed, const Capsule &capsule, std::uint32_t mask);
 
 } // namespace dao::core::collision

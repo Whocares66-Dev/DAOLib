@@ -1,5 +1,6 @@
-// Rays against triangles, quickly: a tree of boxes over a set of triangles,
-// and the nearest triangle a ray meets. What bakes a level's light probes
+// Rays and capsules against triangles, quickly: a tree of boxes over a set of
+// triangles, the nearest triangle a ray meets, and whether a capsule touches
+// any (the engine's overlap query, dao/core/Collision.h; DAOLib #233). What bakes a level's light probes
 // from its geometry in a second or two (DAOLib #65): a room and the rooms
 // seen from it are half a million triangles, and a ray tried against each
 // took a second a probe.
@@ -30,6 +31,26 @@ struct Triangle
     Point c{};
 };
 
+// A capsule: the points within `radius` of the segment from p0 to p1. A sphere is one whose ends are the same point.
+struct Capsule
+{
+    Point p0{};
+    Point p1{};
+    float radius = 0;
+};
+
+// Returns whether a capsule touches a triangle: some point of the triangle is within its radius of its segment.
+bool Overlaps(const Capsule &capsule, const Triangle &triangle);
+
+// Returns whether two capsules share a point.
+bool Overlaps(const Capsule &capsule, const Capsule &other);
+
+// Returns whether a capsule touches a solid box centred on the origin along the axes.
+// @param halfExtents the box's half sizes along x, y and z
+//
+// The box is solid: a capsule wholly inside it overlaps it. Move the capsule into the box's space first.
+bool Overlaps(const Capsule &capsule, const Point &halfExtents);
+
 // Where a ray met a triangle.
 struct RayHit
 {
@@ -53,6 +74,9 @@ class TriangleTree
     // @return nullopt if it meets none
     std::optional<RayHit> Cast(const Point &origin, const Point &direction, float least = 1e-3F,
                                float most = std::numeric_limits<float>::infinity()) const;
+
+    // Returns whether a capsule touches any of the triangles.
+    bool Overlaps(const Capsule &capsule) const;
 
     std::size_t Size() const
     {

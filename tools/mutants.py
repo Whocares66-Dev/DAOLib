@@ -97,6 +97,7 @@ LEVEL = "src/dao/core/Level.cpp"
 WALKPATCH = "src/dao/core/WalkPatch.cpp"
 COLLISION = "src/dao/core/Collision.cpp"
 COLLISION_H = "src/dao/core/Collision.h"
+RAYCAST = "src/dao/core/RayCast.cpp"
 AREA = "src/dao/core/Area.cpp"
 PLOT = "src/dao/core/Plot.cpp"
 CUTSCENE = "src/dao/core/Cutscene.cpp"
@@ -1500,6 +1501,57 @@ MUTANTS: list[Mutant] = [
         COLLISION,
         "Walk(child, own ? *own : name, type, out);",
         "Walk(child, name, type, out);",
+    ),
+    # The overlap query (#233): a capsule through a triangle, a box as a solid and its edges, the tree's bounds by
+    # the radius, a point in a pose's own space by the turn's transpose, a level's mesh shapes, the snap's mask, and a
+    # creature's capsule about its centre.
+    Mutant(
+        "overlap-pierce: a capsule passing through a triangle touches it, its ends far",
+        RAYCAST,
+        "if (Meets(triangle, capsule.p0, direction, 0, 1))",
+        "if (Meets(triangle, capsule.p0, direction, 2, 3))",
+    ),
+    Mutant(
+        "overlap-box-through: a capsule through a box, its ends outside it, overlaps it",
+        RAYCAST,
+        "    if (SegmentMeetsBox(capsule.p0, capsule.p1, low, high))",
+        "    if (SegmentMeetsBox(capsule.p0, capsule.p0, high, high))",
+    ),
+    Mutant(
+        "overlap-box-edges: a capsule beside a box's edge, its ends far, overlaps it",
+        RAYCAST,
+        "            if ((i & bit) == 0 && SegmentsSquared(",
+        "            if ((i & bit) == 8 && SegmentsSquared(",
+    ),
+    Mutant(
+        "overlap-tree-bounds: the tree's nodes are met by the capsule's bounds grown by its radius",
+        RAYCAST,
+        "std::min(capsule.p0[axis], capsule.p1[axis]) - capsule.radius > high[axis]",
+        "std::min(capsule.p0[axis], capsule.p1[axis]) > high[axis]",
+    ),
+    Mutant(
+        "overlap-unapply: a point in a pose's space is turned by the turn's transpose",
+        COLLISION,
+        "(pose.rotation[3 + column] * d[1])",
+        "(pose.rotation[(column * 3) + 1] * d[1])",
+    ),
+    Mutant(
+        "overlap-level-mesh: a level's mesh shapes are overlapped by their triangles",
+        COLLISION,
+        "MeshOverlaps(capsule, physics.meshes[static_cast<std::size_t>(shape.mesh)], pose)",
+        "false",
+    ),
+    Mutant(
+        "overlap-placement-mask: the snap's mask meets terrain walls",
+        COLLISION_H,
+        "kPlacementMask = 0x02011134;",
+        "kPlacementMask = 0x02001134;",
+    ),
+    Mutant(
+        "overlap-creature-capsule: a creature's capsule runs half its height each way from its centre",
+        COLLISION,
+        "centre - (height * 0.5F)",
+        "centre - height",
     ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
