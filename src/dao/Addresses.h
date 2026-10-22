@@ -1039,6 +1039,28 @@ DAO_DATA(kErfSource_Vftable, 63047)
 DAO_DATA(kDirectorySource_Vftable, 63048)
 DAO_DATA(kRimSource_Vftable, 63045)
 DAO_DATA(kFileAccess_Vftable, 62906)
+// A texture made from a .dds (dao/Resources.h, DAOLib #228), read 2026-10-21.
+// The processor's slot 1 (TexManager::DDSResourceHelper, 0x00847670,
+// __thiscall (bytes, size, out buffer, out size, ?), `ret 0x14`) asks the
+// texture manager (0x008472C0, its singleton) to make the texture
+// (0x008456D0), which calls MakeTexture, __cdecl (bytes, size, the driver's
+// slot 7, a flag the processor sets from the byte at +0xC8 of 0x00C31650),
+// answering the texture or null: it checks "DDS " and a header of 0x7C
+// bytes, then makes a 2D, cube or volume texture through the driver,
+// D3DDriver::D3DTexture2D, D3DTextureCubeMap or D3DTextureVolume, whose
+// IDirect3D*Texture9 is at +0x4C, +0x40 and +0x48 (each destructor's
+// Release, slot 2, of it). So a texture is made within ReadOnFirstUse, on
+// the thread that first reads its file, under its source's lock. A
+// texture's D3DResetable (the 2D one's at +0x38) releases its +0x4C and
+// makes it again on a device reset, unless the object's +0x5C is 1. The
+// function's name is ours; the classes' are the game's.
+DAO_ADDRESS(kTexManager_MakeTexture, 23042)
+DAO_ADDRESS(kD3DTexture2D_Destructor, 23915)
+DAO_ADDRESS(kD3DTextureCubeMap_Destructor, 23910)
+DAO_ADDRESS(kD3DTextureVolume_Destructor, 23923)
+DAO_DATA(kD3DTexture2D_Vftable, 70050)
+DAO_DATA(kD3DTextureCubeMap_Vftable, 70046)
+DAO_DATA(kD3DTextureVolume_Vftable, 70054)
 // A RIM's file (dao/Resources.h, DAOLib #102), read 2026-10-12. A RIMSource
 // holds no open file once it has loaded: its task (0x004CE970) reads
 // everything after the directory into one block (0x004CE5B0: a seek to the

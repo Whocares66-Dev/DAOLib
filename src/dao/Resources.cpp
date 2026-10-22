@@ -108,6 +108,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 namespace dao::resources
@@ -849,6 +850,129 @@ void PatchRead(std::uintptr_t resource, const std::wstring &name)
     g_patchedLengths.emplace_back(resource, name, *length);
 }
 
+// A texture made from a .dds within its file's first read (dao/Addresses.h, kTexManager_MakeTexture):
+// the read's name is the thread's while the read runs, and MakeTexture, inside it, reports what it
+// makes by that name.
+std::mutex g_textureMutex;
+std::vector<std::pair<TextureEvent, TextureEvent>> g_textureEvents;
+// The textures reported and not yet released, by the engine's object.
+std::unordered_map<std::uintptr_t, std::pair<IDirect3DBaseTexture9 *, std::wstring>> g_textures;
+thread_local const std::wstring *t_textureRead = nullptr;
+
+// The engine's three kinds of texture, and where each keeps its Direct3D texture.
+struct TextureKind
+{
+    AddressId vftable;
+    std::size_t direct3d;
+};
+constexpr std::array kTextureKinds{
+    TextureKind{addr::kD3DTexture2D_Vftable, 0x4C},
+    TextureKind{addr::kD3DTextureCubeMap_Vftable, 0x40},
+    TextureKind{addr::kD3DTextureVolume_Vftable, 0x48},
+};
+
+std::vector<TextureEvent> TextureEvents(bool made)
+{
+    const std::lock_guard lock(g_textureMutex);
+    std::vector<TextureEvent> events;
+    for (const auto &[onMade, onReleased] : g_textureEvents)
+    {
+        if (const TextureEvent &event = made ? onMade : onReleased)
+        {
+            events.push_back(event);
+        }
+    }
+    return events;
+}
+
+void RunTextureEvents(bool made, const Texture &texture)
+{
+    for (const TextureEvent &event : TextureEvents(made))
+    {
+        detail::Guard("a texture's callback", [&] { event(texture); });
+    }
+}
+
+// Reports a texture MakeTexture answered. A file read again can be answered with the texture the
+// engine already has for it (seen 2026-10-21, a level's sky and lightmaps on a second load of the
+// level: the same object and Direct3D texture, not freed between), which is not reported twice; an
+// object known with another texture is reported released first.
+void TextureMade(std::uintptr_t engine, const std::wstring &name)
+{
+    const std::uintptr_t vftable = TryRead<std::uintptr_t>(engine).value_or(0);
+    const auto kind = std::ranges::find_if(
+        kTextureKinds, [&](const TextureKind &each) { return Module::Address(each.vftable) == vftable; });
+    if (kind == kTextureKinds.end())
+    {
+        return;
+    }
+    auto *const direct3d =
+        reinterpret_cast<IDirect3DBaseTexture9 *>(TryRead<std::uintptr_t>(engine + kind->direct3d).value_or(0));
+    if (direct3d == nullptr)
+    {
+        return;
+    }
+    std::optional<std::pair<IDirect3DBaseTexture9 *, std::wstring>> replaced;
+    {
+        const std::lock_guard lock(g_textureMutex);
+        const auto [it, added] = g_textures.try_emplace(engine, direct3d, name);
+        if (!added)
+        {
+            if (it->second.first == direct3d && it->second.second == name)
+            {
+                return;
+            }
+            replaced = std::exchange(it->second, std::pair{direct3d, name});
+        }
+    }
+    if (replaced)
+    {
+        RunTextureEvents(false, Texture{.name = replaced->second, .texture = replaced->first});
+    }
+    RunTextureEvents(true, Texture{.name = name, .texture = direct3d});
+}
+
+void TextureFreed(std::uintptr_t engine)
+{
+    std::optional<std::pair<IDirect3DBaseTexture9 *, std::wstring>> freed;
+    {
+        const std::lock_guard lock(g_textureMutex);
+        if (const auto it = g_textures.find(engine); it != g_textures.end())
+        {
+            freed = std::move(it->second);
+            g_textures.erase(it);
+        }
+    }
+    if (freed)
+    {
+        RunTextureEvents(false, Texture{.name = freed->second, .texture = freed->first});
+    }
+}
+
+// MakeTexture, __cdecl (bytes, size, driver, flag), answering the texture or null.
+using MakeTextureFn = void *(__cdecl *)(const void *bytes, std::uint32_t size, void *driver, std::int32_t flag);
+Detour<MakeTextureFn> g_makeTexture;
+
+void *__cdecl MakeTexture(const void *bytes, std::uint32_t size, void *driver, std::int32_t flag)
+{
+    void *const made = g_makeTexture.Original()(bytes, size, driver, flag);
+    if (made != nullptr && t_textureRead != nullptr)
+    {
+        TextureMade(reinterpret_cast<std::uintptr_t>(made), *t_textureRead);
+    }
+    return made;
+}
+
+// The three textures' destructors, __thiscall with no arguments.
+using TextureDestructorFn = void(__fastcall *)(void *texture, int edx);
+std::array<Detour<TextureDestructorFn>, kTextureKinds.size()> g_textureDestructors;
+
+template <std::size_t Kind> void __fastcall TextureDestructor(void *texture, int edx)
+{
+    TextureFreed(reinterpret_cast<std::uintptr_t>(texture));
+    g_textureDestructors[Kind].Original()(texture, edx);
+}
+
 // ReadOnFirstUse, __thiscall on the resource, a plain `ret`. Both its callers, Resources::Data and
 // ReplaceBuffer, hold the resource's source's lock around it, so the patch and the swap after it
 // are under that lock too.
@@ -862,7 +986,10 @@ void __fastcall ReadOnFirstUse(void *resource, int edx)
         *name = Lower(*name);
         GiveBackLength(at, *name);
     }
+    const std::wstring *const outer = t_textureRead;
+    t_textureRead = name && IsProcessed(*name) ? &*name : nullptr;
     g_readOnFirstUse.Original()(resource, edx);
+    t_textureRead = outer;
     if (name && TryRead<std::uint8_t>(at + kResourceRead) == 1 && !IsProcessed(*name))
     {
         PatchRead(at, *name);
@@ -904,6 +1031,16 @@ std::uint32_t __fastcall Size(void *handle, int edx)
     return g_size.Original()(handle, edx);
 }
 
+// Detours a file's first read, once, for patches and textures both; under g_loadMutex.
+void AttachReads()
+{
+    if (g_readOnFirstUse.Original() == nullptr)
+    {
+        g_readOnFirstUse.Attach(addr::kResource_ReadOnFirstUse, &ReadOnFirstUse);
+        g_size.Attach(addr::kResources_Size, &Size);
+    }
+}
+
 } // namespace
 
 // Read 2026-10-14 for DAOLib #124 (DAOElgaraShaders #19): the material loader (0x004F72D0) finds
@@ -924,11 +1061,33 @@ void OnLoad(std::wstring_view extension, ResourcePatch patch)
     }
     const std::lock_guard lock(g_loadMutex);
     g_loadPatches.emplace_back(std::move(type), std::move(patch));
-    if (g_readOnFirstUse.Original() == nullptr)
+    AttachReads();
+}
+
+// Read 2026-10-21 for DAOLib #228 (DAOElgaraShaders: a level's day lightmaps swapped for its
+// night's at draw time): a .dds's texture is made inside its file's first read, by MakeTexture
+// (dao/Addresses.h, kTexManager_MakeTexture), and freed by its kind's destructor, which releases
+// the Direct3D texture.
+void OnTexture(TextureEvent made, TextureEvent released)
+{
+    if (!made && !released)
     {
-        g_readOnFirstUse.Attach(addr::kResource_ReadOnFirstUse, &ReadOnFirstUse);
-        g_size.Attach(addr::kResources_Size, &Size);
+        return;
     }
+    {
+        const std::lock_guard lock(g_textureMutex);
+        g_textureEvents.emplace_back(std::move(made), std::move(released));
+        if (g_makeTexture.Original() != nullptr)
+        {
+            return;
+        }
+        g_makeTexture.Attach(addr::kTexManager_MakeTexture, &MakeTexture);
+        g_textureDestructors[0].Attach(addr::kD3DTexture2D_Destructor, &TextureDestructor<0>);
+        g_textureDestructors[1].Attach(addr::kD3DTextureCubeMap_Destructor, &TextureDestructor<1>);
+        g_textureDestructors[2].Attach(addr::kD3DTextureVolume_Destructor, &TextureDestructor<2>);
+    }
+    const std::lock_guard lock(g_loadMutex);
+    AttachReads();
 }
 
 } // namespace dao::resources

@@ -70,6 +70,9 @@ dao_apply_warnings(example_lights)
 add_daolib_plugin(example_emitters SOURCES emitters/Emitters.cpp)
 dao_apply_warnings(example_emitters)
 
+add_daolib_plugin(example_textures SOURCES textures/Textures.cpp)
+dao_apply_warnings(example_textures)
+
 add_daolib_plugin(
     example_resources
     SOURCES resources/Resources.cpp

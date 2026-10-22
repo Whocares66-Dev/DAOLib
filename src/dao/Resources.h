@@ -22,6 +22,9 @@
 #include <string_view>
 #include <vector>
 
+// d3d9.h's COM interface, named without its header; Release is how it is freed, not a destructor.
+struct IDirect3DBaseTexture9; // NOLINT(cppcoreguidelines-virtual-class-destructor)
+
 namespace dao::resources
 {
 
@@ -148,5 +151,30 @@ using ResourcePatch =
 // before the game reads anything. Textures (.dds) are not patched: the game turns their bytes into
 // its own form within the read. Nothing is written to disk.
 void OnLoad(std::wstring_view extension, ResourcePatch patch);
+
+// A Direct3D texture the engine has made from a .dds file.
+struct Texture
+{
+    // The file's name in lower case with its extension, L"lak100d_1_4_100.dds".
+    std::wstring_view name;
+    // What the game binds to draw with it: an IDirect3DTexture9, IDirect3DCubeTexture9 or
+    // IDirect3DVolumeTexture9.
+    IDirect3DBaseTexture9 *texture = nullptr;
+};
+
+// What OnTexture hands a texture to.
+using TextureEvent = std::function<void(const Texture &texture)>;
+
+// Calls back when the engine makes a Direct3D texture from a .dds file, whichever copy of it, and
+// again when it frees that texture, so that a plugin can tell what it draws with.
+// @param made runs once the texture is made, with every mip the texture quality keeps; once per
+//  texture, though a file read again may be given the texture the engine already has for it
+// @param released runs with the same name and pointer just before the engine releases it, after
+//  which the pointer may be another texture's
+//
+// Both run on the thread that made or frees the texture, any of the game's, so they must not call
+// the game; while made runs, other reads from the file's archive wait for it. Call it at plugin
+// load, before the game reads anything: a texture made before is not reported.
+void OnTexture(TextureEvent made, TextureEvent released);
 
 } // namespace dao::resources
