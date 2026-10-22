@@ -17,7 +17,9 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::vfx
 {
@@ -102,6 +104,8 @@ struct EmitterColor
     std::wstring_view model;
     // Whether that model has a point light of its own: a fire or a spell's glow, not a waterfall or a mist.
     bool modelHasLight = false;
+    // Where the emitter is in the world.
+    Vector position;
     // The emitter's node, the same each frame for the same emitter; for telling emitters apart.
     std::uintptr_t node = 0;
 };
@@ -114,5 +118,29 @@ struct EmitterColor
 // changing it leaves the emitter as vanilla has it. Callbacks run on the engine's worker threads,
 // several at once, so keep them short and make what they share safe across threads.
 void OnEmitterColor(std::function<void(EmitterColor &)> callback);
+
+// One visual effect the area has running.
+struct RunningEffect
+{
+    // The effect's id, as Place returns one.
+    ObjectId id = kInvalidObject;
+    // Its row of the visual effects table (vfx_base).
+    std::int32_t vfx = 0;
+    // The object it is on, or kInvalidObject for one placed at a point.
+    ObjectId owner = kInvalidObject;
+    // Where it is: its own place, or its owner's for one on an object; none for one on an item,
+    // such as a weapon's enchantment, since a held item has no place of its own.
+    std::optional<Vector> position;
+    // The name of its model (fxe_fire_m_ns_p), or empty while it has none loaded.
+    std::wstring model;
+    // Whether that model has a point light of its own.
+    bool modelHasLight = false;
+};
+
+// Returns every visual effect the area has running, off screen as well as in view: those a script,
+// an ability or a plugin made. Effects that are part of a room's own models are not among them.
+//
+// Call it on the game thread.
+std::vector<RunningEffect> RunningEffects();
 
 } // namespace dao::vfx

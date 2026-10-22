@@ -50,27 +50,37 @@ inline std::wstring_view NodeName(std::uintptr_t node)
     return blueprint != 0 ? StringAt(blueprint + kNodeName) : std::wstring_view();
 }
 
+// The name of an Object's model, or empty.
+inline std::wstring_view ObjectModelName(std::uintptr_t object)
+{
+    const std::uintptr_t blueprint = object != 0 ? Field(object + kObjectBlueprint) : 0;
+    return blueprint != 0 ? StringAt(blueprint + kModelName) : std::wstring_view();
+}
+
 // The name of the model the node is part of, or empty.
 inline std::wstring_view ModelName(std::uintptr_t node)
 {
-    const std::uintptr_t owner = Field(node + kNodeOwner);
-    const std::uintptr_t blueprint = owner != 0 ? Field(owner + kObjectBlueprint) : 0;
-    return blueprint != 0 ? StringAt(blueprint + kModelName) : std::wstring_view();
+    return ObjectModelName(Field(node + kNodeOwner));
+}
+
+// Whether an Object's model has a point light of its own.
+inline bool ObjectHasPointLight(std::uintptr_t object)
+{
+    if (object == 0)
+    {
+        return false;
+    }
+    const auto *begin = reinterpret_cast<const std::uintptr_t *const *>(Field(object + kObjectLights));
+    const auto *end = reinterpret_cast<const std::uintptr_t *const *>(Field(object + kObjectLights + 4));
+    const std::uintptr_t pointLight = Module::Address(addr::kObjectNodePointLight_ILight_vftable);
+    return begin != nullptr &&
+           std::any_of(begin, end, [pointLight](const std::uintptr_t *l) { return l != nullptr && *l == pointLight; });
 }
 
 // Whether the model the node is part of has a point light of its own.
 inline bool ModelHasPointLight(std::uintptr_t node)
 {
-    const std::uintptr_t owner = Field(node + kNodeOwner);
-    if (owner == 0)
-    {
-        return false;
-    }
-    const auto *begin = reinterpret_cast<const std::uintptr_t *const *>(Field(owner + kObjectLights));
-    const auto *end = reinterpret_cast<const std::uintptr_t *const *>(Field(owner + kObjectLights + 4));
-    const std::uintptr_t pointLight = Module::Address(addr::kObjectNodePointLight_ILight_vftable);
-    return begin != nullptr &&
-           std::any_of(begin, end, [pointLight](const std::uintptr_t *l) { return l != nullptr && *l == pointLight; });
+    return ObjectHasPointLight(Field(node + kNodeOwner));
 }
 
 } // namespace dao::detail

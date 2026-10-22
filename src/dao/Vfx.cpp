@@ -33,9 +33,40 @@
 // trial callback): the fill is called from the emitters' update task
 // (GraphicsStructures::EmitterUpdateTask) on the engine's task group's
 // threads, so callbacks run on several threads at once.
+//
+// RunningEffects and EmitterColor's position (DAOLib #231, read
+// 2026-10-22). The visual effect manager keeps its effects in a vector of
+// pointers at +0x48 (begin) and +0x4C (end), which Find (0x0079D780) and
+// Update (0x0079EE20) walk, skipping a null entry and one whose phase
+// (+0x444) is 0. Each is a CCVisualEffect, a CCObject: its id at +0x10, its
+// place at +0x120, its vfx_base row at +0x44C, the object it is on at
+// +0x450 and its crust's target at +0x454. The manager adds to the vector
+// only on the game's thread (Place posts a task from any other, 0x0079D360),
+// and Update has no test of what is in view, so an effect off screen is
+// there too. An effect on an object with a model is a child of the
+// object's root node and its own place is not kept up (0x0079D580 copies
+// the owner's only for an owner with none), so the owner's is taken. Its
+// model: the effect's +0x154 (its +0x70 base's slot 24, 0x0069A000), whose
+// +0x18's +4 is the GraphicsStructures::Object's base at +8 (the vftable
+// whose slot 43 is SetScale, 0x00545330, and slot 69 SetTint, as
+// kVfxObject_SetScale calls them, 0x007E9C40). A room's own effect models
+// (its .rml's fxe_*) are scene models and not the manager's. An emitter's
+// node keeps its world matrix at +0x60, its translation in the fourth
+// column, as a light's position is read (ILight slot 2, 0x0053CA70).
+//
+// Seen in play 2026-10-22, GOG, Redcliffe by night in the siege: 57 to 71
+// effects running, the poison clouds (row 92028, fxa_gas_aoe_p) placed at
+// points about the hillside with their area's id at +0x450, the party's
+// talents' and the reticles' (fxa_tal_demoral_c, sr_pty) on the party at
+// their places, and a weapon's enchantment (row 1069, fxa_lit_swrd_c, with
+// its light) on the item. The emitters of the effects on creatures were at
+// their owners' x and y, about 1.4 m above. The model's emitter vector
+// (+0x64) does not hold the nodes themselves: read as nodes, their matrices
+// were garbage.
 #include "dao/Vfx.h"
 
 #include "dao/Addresses.h"
+#include "dao/ClientExoApp.h"
 #include "dao/GameModes.h"
 #include "dao/GraphicsNodes.h"
 #include "dao/Guard.h"
@@ -354,6 +385,15 @@ namespace
 {
 
 constexpr std::size_t kColorMultiplier = 0x39C; // in an emitter: four floats, rgba
+constexpr std::size_t kNodeWorld = 0x60;        // in a node: its world matrix, 16 floats, row by row
+
+// Where the node is in the world: its matrix's fourth column.
+Vector NodePosition(std::uintptr_t node)
+{
+    const auto *m = reinterpret_cast<const float *>(node + kNodeWorld);
+    const float w = m[15] != 0.0F ? m[15] : 1.0F;
+    return {m[3] / w, m[7] / w, m[11] / w};
+}
 static_assert(sizeof(Tint) == 4 * sizeof(float), "a Tint is the multiplier's four floats");
 
 using EmitterCallbacks = std::vector<std::function<void(EmitterColor &)>>;
@@ -381,6 +421,7 @@ void FillWith(const Detour<FillFn> &fill, void *emitter, int edx)
     color.name = detail::NodeName(address);
     color.model = detail::ModelName(address);
     color.modelHasLight = detail::ModelHasPointLight(address);
+    color.position = NodePosition(address);
     color.node = address;
     for (const auto &callback : *callbacks)
     {
@@ -421,6 +462,72 @@ void OnEmitterColor(std::function<void(EmitterColor &)> callback)
         g_ribbonFill.Attach(addr::kEmitterRibbon_Fill, &RibbonFill);
         g_ribbonPhysicsFill.Attach(addr::kEmitterRibbonPhysics_Fill, &RibbonPhysicsFill);
     }
+}
+
+namespace
+{
+
+constexpr std::size_t kEffects = 0x48;     // in the manager: begin and end of its effects
+constexpr std::size_t kPhase = 0x444;      // in an effect: 0 when it is gone
+constexpr std::size_t kRow = 0x44C;        // in an effect: its vfx_base row
+constexpr std::size_t kOwner = 0x450;      // in an effect: the object it is on
+constexpr std::size_t kAnimation = 0x154;  // in an effect: what holds its model
+constexpr std::size_t kModelHolder = 0x18; // in that: what holds the Object's base below at +4
+constexpr std::size_t kObjectBase = 8;     // in a GraphicsStructures::Object: the base handed out
+
+// The GraphicsStructures::Object of the effect's model, or 0 while it has none.
+std::uintptr_t ModelObject(std::uintptr_t effect)
+{
+    const std::uintptr_t animation = detail::Field(effect + kAnimation);
+    const std::uintptr_t holder = animation != 0 ? detail::Field(animation + kModelHolder) : 0;
+    const std::uintptr_t base = holder != 0 ? detail::Field(holder + 4) : 0;
+    return base != 0 ? base - kObjectBase : 0;
+}
+
+RunningEffect Running(std::uintptr_t address)
+{
+    const auto *effect = reinterpret_cast<const CCObject *>(address);
+    RunningEffect running;
+    running.id = effect->Id();
+    running.vfx = *reinterpret_cast<const std::int32_t *>(address + kRow);
+    running.position = effect->Position();
+    // A located effect's +0x450 is its area's id, which names no object here.
+    const ObjectId on = *reinterpret_cast<const ObjectId *>(address + kOwner);
+    if (CCObject *owner = on != kInvalidObject ? CClientExoApp::Get()->GetObjectById(on) : nullptr)
+    {
+        running.owner = on;
+        running.position = owner->AsItem() == nullptr ? std::optional(owner->Position()) : std::nullopt;
+    }
+    const std::uintptr_t object = ModelObject(address);
+    running.model = detail::ObjectModelName(object);
+    running.modelHasLight = detail::ObjectHasPointLight(object);
+    return running;
+}
+
+} // namespace
+
+std::vector<RunningEffect> RunningEffects()
+{
+    std::vector<RunningEffect> effects;
+    if (!Module::IsKnownExecutable() || CClientExoApp::Get() == nullptr)
+    {
+        return effects;
+    }
+    const auto manager = reinterpret_cast<std::uintptr_t>(Manager());
+    if (manager == 0)
+    {
+        return effects;
+    }
+    const auto *begin = reinterpret_cast<const std::uintptr_t *>(detail::Field(manager + kEffects));
+    const auto *end = reinterpret_cast<const std::uintptr_t *>(detail::Field(manager + kEffects + 4));
+    for (const auto *entry = begin; begin != nullptr && entry < end; ++entry)
+    {
+        if (*entry != 0 && detail::Field(*entry + kPhase) != 0)
+        {
+            effects.push_back(Running(*entry));
+        }
+    }
+    return effects;
 }
 
 } // namespace dao::vfx
