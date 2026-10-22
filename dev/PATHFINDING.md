@@ -258,7 +258,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **SetActive** (0x006B5D90) places when on and lifts when off, except an active-party follower's deactivation, which returns early.
 - **SetGhost** (0x006BBFC0) lifts, flips +0xC90 and places again.
 - **RequestPath** lifts the mover and its walk-to target, then places both at the end (section 1).
-- **The melee ring's spot** (0x006A8F30/0x006A8F81), the walk-goal chooser 0x007A5450, sub-action 16 (0x007A8F74) and the approach update (0x007A8DD8, 0x007A553C) also lift and place.
+- **The melee ring's spot** (0x006A8F30/0x006A8F81), the away-goal chooser 0x007A5450 ("The away goal" below), sub-action 16 (0x007A8F74) and the approach update (0x007A8DD8, 0x007A553C) also lift and place.
 - **Death**: the health handler (0x006BC4B0, health falling to ≤ 0) calls slot 0x78 = 0x006B3620, which lifts. The exception is a creature whose appearance's DecayBehaviour is 2 (0x006A3A80: Broodmother, High Dragon): its corpse keeps the stamp until its position next changes, since the IsDead gate then refuses the new one.
   - A revive (0x006B3690) places it again.
   - So the dead do not block.
@@ -323,6 +323,20 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - 0x00685920's body past the first calls (the physics walk test); 0x0073D780; 0x0067CFA0.
 - Which creatures have `+0xC90 != 0` (the class byte) and what states `+0xB20` 1 and 2 are.
 - That ost100d is the area the wolves were in (it fits the coordinates, grid extent and the height, not confirmed by area name).
+
+## The away goal: `CommandMoveAwayFromObject` (read 2026-10-22 by lib-agent-2 with a subagent, for DAOParagonEngine #144)
+
+- **The command** (561, 0x0066F430; `script_commands/commands.md`:145) makes a type-21 command with object 0 the target, float 0 = 0.5, float 1 = 0, float 4 = the distance and flag 5 = 1 [C]. A creature target runs sub-action 15 (`ApproachRanged`, 0x007AA200); a placeable takes sub-action 4 and ignores float 4.
+- **The chooser** 0x007A6CA0 calls 0x007A5450 (ID 19843, no name in the address library) when float 4 is not 0 (0x007A6D63), and 0x007A31C0 (the plain approach goal) when it is [C]. Flag 5 keeps the goal from being chosen again on later updates [C]. With float 4 set, ApproachRanged's "already in range" exit is off [C].
+- **0x007A5450** (handler, mover, centre = the target's position, distance, out) [C unless marked]:
+  - The base direction is centre → mover in x and y. Only when the mover is within 1 mm of the centre is it a random angle.
+  - The mover's own stamp is lifted while it searches and put back after (PATHFINDING.md, "Every position change").
+  - Candidates are `centre + distance × Rz(base ± off)`: off starts at `rand % 20 − 10` degrees and grows by a step clamped to 10..90 degrees (from the mover's vtable +0x9C and the distance; what +0x9C is was not read [I]) while off < 171. +off is tried first, −off only when off > 5. The first candidate accepted wins.
+  - **Every candidate is at the full distance from the target.** None is shortened or clamped to the last reachable cell.
+  - **The tests are the grid's:** `IsFree` at the goal, `Direct(0, 1)` from the mover to it, then `IsFree` with flag 1. One that passes the first two but not the third is kept once as a fallback. No physics shape is asked.
+  - With no candidate, it answers 0, and sub-action 15 fails with −4.
+- **The walk ends** within float 2 = 0.5 m of the goal (0x007A9130), or by the stuck counter, a failed path or a timeout (TURN_BASED.md, "What ends an approach otherwise") [C]. The AI adds its moves with `AI_COMMAND_TIMER` (10 s; `ai_main_h_2.nss`:469, 557, 586, 856). `WR_AddCommand` (`wrappers_h.nss`:227–235) cuts a non-follower's first timed command in combat to 1.0 s (`CREATURE_HAS_TIMER_ATTACK`) [C].
+  - **The Harrowing's wisps** walked about 3.4 m in vanilla on a 13 m `CommandMoveAwayFromObject` from the bear. The goal is 13 m from the bear, about 9.7 m from the wisp, so the walk was cut short, most likely by that 1 s timeout [I].
 
 ## The spawn: is a creature on a blocked spot moved? (lib-agent-2, 2026-10-18, GOG exe, addresses GOG's)
 
