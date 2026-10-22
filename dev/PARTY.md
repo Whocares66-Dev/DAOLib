@@ -418,7 +418,14 @@ C = read in the disassembly or script source, I = inferred. Addresses are GOG's 
   - state 1 (ACTIVE, picked) with slot `entry+0x24` in 0..3: builds event 0x42 = 66 with object 0 = id and keeps it in a local array indexed by slot (0x00766EE9-0x00766F35). No SetFollowerState and no active flag here. (C)
   - state 7: nothing (falls to the loop's next entry). (C)
   - After the loop the 66s are sent in slot order 0..3 (0x00766FBD-0x00766FE5), then event 0x47 = 71 (`PARTYPICKER_CLOSED`) at 0x00767014. So the order is 67s (in entry order), 66s (in slot order), 71. (C)
-- **Joining the active party is not done by the picker either.** `SetFollowerState(…, 1)` is what puts a member in CCParty+0x234 (`dev/PARTY.md`:143-165), and the picker never calls it with 1. The picked member is already in the pool; "in the party" for the picker is only `entry+8 == 1`. I could not find in Submit anything that adds a picked AVAILABLE member to +0x234; what the scripts do for 66 is the active flag and the plot flag only. **Not resolved:** whether the engine's party-ing of the picked ones is elsewhere (e.g. the CCParty handler of `ApplyPartyPickerChangesMessage`, 0x00636F50, below). (I)
+- **A picked member becomes ACTIVE through the party plot's script** (read 2026-10-21 by lib-agent-2) [C]. The engine never sets it, and neither does `module_core` itself.
+  - **The engine:** `SetFollowerState` (0x0063B9A0) holds the only writers of the state map at CCParty+0x2A8 (0x0063A020) and of the active list at +0x234 (0x00637560). None of its seven callers is the click, Submit's picked branch (0x00766ED5..0x00766F9B builds only the 66 event), the picker's teardown, or the CCParty apply handler.
+  - **The scripts:**
+    1. Event 66 goes to `module_core.nss`:484. It calls `WR_SetObjectActive(f, TRUE)`, then `WR_SetPlotFlag(PLT_GEN00PT_PARTY, GEN_<X>_IN_PARTY, TRUE, TRUE)`; the last TRUE runs the plot's script.
+    2. That script is `gen00pt_party.nss`. Its `GEN_<X>_IN_PARTY` case (for example :206–210) calls `SetFollowerInParty` (:53–60).
+    3. `SetFollowerInParty` clears `GEN_<X>_IN_CAMP`, calls `WR_SetObjectActive(TRUE)` and **`WR_SetFollowerState(f, FOLLOWER_STATE_ACTIVE, TRUE)`**, then queues `CommandJumpToObject(GetPartyLeader())`.
+  - **A dropped member:** the engine sets it to AVAILABLE first (0x00766E64). Event 67's `GEN_<X>_IN_CAMP` case then calls `Party_SetFollowerInCamp` (`party_h.nss`:293–299). That clears IN_PARTY, sets AVAILABLE again and deactivates the object.
+  - **The order** [C for the queue, I for the run order]: the 67s are queued before the 66s, so a dropped member leaves the active party before a picked one joins. The 4-member cap is not exceeded.
 - **A second path does the same with different data:** `CCParty` handler of `ApplyPartyPickerChangesMessage`, 0x00636F50, walks the party's own list at +0x270 and compares each member's state with a stored previous one (map at +0x2A8, default `+0x2D4`): previous 2 -> now 1 queues 66 (0x00637109-0x00637120), previous 1 -> now 2 queues 67 (0x00637168), then 0x00636090 and a final 71 (0x006371D6). Message class 0x00B1E7E4; constructors seen at 0x007768F5 and 0x0077DC89 (GUI side, not traced). So the GUI/party-side path that applies a change also ends in 66/67/71 for scripts. (C for the code, I for who sends it)
 - **Script side** (C): `module_core.nss`:484-520 as above. `sp_module.nss`:240 sends event 71 to `sp_module_ppicker_closed.nss` (read-only status returns; else per-area plot flags or `OpenPrimaryWorldMap` in a camp, `GEN` flags in the Landsmeet and the Climax); `module_core.nss`:531 `WM_SetPartyPickerGuiStatus()` (world_maps_h.nss:222: sets USE or NO_USE from the area's `PARTY_PICKER_ENABLED`).
 - `SetFollowerState` 7 and 1 are the only ones the scripts use to lock a member (`sp_module_travel.nss`:338-368: Alistair and Morrigan LOCKEDACTIVE until Lothering; Alistair at the Landsmeet). (C)
@@ -447,7 +454,10 @@ C = read in the disassembly or script source, I = inferred. Addresses are GOG's 
 ### Not read
 
 - Who builds `ApplyPartyPickerChangesMessage` (0x007768F5 / 0x0077DC89) and what GUI action calls it.
-- What puts an AVAILABLE member picked in the picker into CCParty+0x234 (nothing found in Submit or the 66 handler); the 3D stage's own code (0x00767830, 0x007672C0, 0x0076AE90); the meaning of creature+0x610 (picker skips it).
+- The 3D stage's own code (0x00767830, 0x007672C0, 0x0076AE90); the meaning of creature+0x610 (picker skips it).
+- The party picker movie sends only `GameModeController.SubmitPartyChanges` and `ClearPartyPicker` (`PartyPicker.as`:28, :37).
+- `ClearPartyPicker` (0x00767230) runs Unselect for slots 0–3, with no event and no state change.
+- The +0x270 list that 0x00636F50 compares is filled from the +0x2A8 map at 0x00638640..0x00638992, apparently for a GUI data tree. It is not the picker's entries.
 - The Escape key's path to the Exit message; the `LockedPartyMembers` count's source for the movie.
 - The 104 timing caveat above in play. Nothing here was run.
 
