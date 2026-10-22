@@ -20,6 +20,7 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
   - With every op AND and both constants the ray's mask, PhysX's equation `(G0 op K0) op (G1 op K1) == true` reduces to that test.
   - That PhysX puts the shape's mask on one side and the ray's on the other is from its documentation (inferred). With these ops the order does not matter.
   - The shapes' NxCollisionGroup plays no part: statics are group 5, creatures group 4.
+- **No margin on the rays** (read 2026-10-22 by lib-agent-2 with a subagent): `NxShapeDesc`'s constructor leaves `skinWidth` at −1, the scene's default (0x0082B0F0, 0x0081F40E) [C, read by the subagent, not re-checked]. No call changing the scene's skin width was found [I: not searched exhaustively], and a PhysX 2.x raycast does not inflate shapes by it [I: SDK behaviour]. 0x0067C530 is a closest-shape ray with group mask 0x24 (placeables and static) through the scene's slot 4 (0x0082DEB0) [C]. The only tolerance the exe adds is the 0.1 m "hit within 0.1 m of the target" (COMBAT.md:124). Which mask `LineOfSight` 0x0067C3F0 passes was not read.
 
 ### Where the static shapes come from (checked)
 
@@ -51,7 +52,7 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
   - `ColNW*` (not walkable, bits0 0x81002020): a wall slab (box 4 × 0.08 × 2.75).
   - `ColWmesh` / `ColNWmesh`: triangle meshes.
   - Props (`prp_*.GOB`) carry `Box*`, `Capsule*` and `Sphere*` shapes, or meshes for rubble piles.
-- **Each actor's place:** `globalPose` is a 3×3 matrix (rows), then the translation. Each shape's `localPose` is the same form. A box's `dimensions` are half-extents (inferred). A capsule is NxCapsule radius and height.
+- **Each actor's place:** `globalPose` is a 3×3 matrix (rows), then the translation. Each shape's `localPose` is the same form. A box's `dimensions` are half-extents (checked 2026-10-22, section 2). A capsule is NxCapsule radius and height.
 - **oth000d.opf** (326 actors):
   - 28 terrain triangle-mesh shapes (`oth000d_14_0`) at 0x80002020; these block.
   - 23 terrain mesh shapes at 0x80010000 (TerrainWall alone); these do not block the ray.
@@ -95,7 +96,8 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
 - **The tree:** node `GOB` → (`mshh`, doors) → `cobj` → `shap`.
   - `cobj` fields: `MMHNodeCollisionObjType` 1, `MMHNodeCollisionObjDensity` 10, `MMHCollisionGroup` (6245) 0.
   - `shap` fields: `MMHShapeType` (2 box, 3 capsule), `MMHShapePosition`, `MMHShapeRotation` (a quaternion), `MMHShapeName`, `MMHCollisionGroup` 0, `MMHShapeFadeable`, `MMHShapeAllowEmitterSpawn`, `MMHShapeVolume`, and the `MMHShapeCollisionMask*` flags (0/1 each).
-  - The size is in `MMHShapeTypeStruct`: `boxs` has `MMHShapeBoxDim` (half-extents, inferred); `caps` has `MMHShapeRadius` and `MMHShapeHeight`.
+  - The size is in `MMHShapeTypeStruct`: `boxs` has `MMHShapeBoxDim` (half-extents, checked 2026-10-22); `caps` has `MMHShapeRadius` and `MMHShapeHeight`.
+    - **Half-extents, read 2026-10-22 by lib-agent-2 with a subagent** [C]: the loader reads `MMHShapeBoxDim` (field 6071, push at 0x0058A321) into the box prototype (+0xE0) and copies the three floats as they are (0x00837A40) into `NxBoxShapeDesc.dimensions` (+0x6C..+0x74, 0x0081F4A5..0x0081F4D6), with no factor; PhysX takes them as half-extents. The file's `MMHShapeVolume` is the plain product of the three numbers (`prp_4wcart01_0.phy`: 0.826 × 0.2247 × 0.5170 = 0.0959868), not 8× it, so it is no evidence for full dimensions. The boxes' centres (z 0.5166 for a z of 0.517) put them on the ground as half-extents.
 - **Examples:**
   - The door's `Box21` has dims (1.358, 0.1255, 1.970) at (1.386, 0, 1.994).
   - The crate's `Box12` has dims (0.567, 0.390, 0.326) at z 0.326.
