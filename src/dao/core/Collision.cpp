@@ -1008,8 +1008,10 @@ std::uint32_t MaskOf(std::span<const Shape> shapes)
 // mask 0x2011134 share a bit. It answers true for any shape met. A mesh
 // shape counts only after a second test of its own (the shape's slot +0xAC,
 // not identified; taken here as its triangles touched). Not here: the
-// creatures' controllers, which carry bits0 0x10 and are in the mask, the
-// creature's own among them.
+// creatures' controllers, which carry bits0 0x10 and are in the mask; the
+// engine leaves out the mover's own, whose id it puts in the query's
+// exclusion list (dev/COLLISION.md, section 5; corrected 2026-10-22 by
+// lib-agent-2), so a caller adds the others' and not the mover's.
 Pose PoseOf(const std::array<float, 4> &rotation, const Point &position)
 {
     Pose pose;
