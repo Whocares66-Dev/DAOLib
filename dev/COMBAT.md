@@ -173,7 +173,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
 **The swing** (`CSSubActionHandler::Swing`, `0x007A87C0`, read):
 
 1. It fails with −7 (`COMMAND_FAILED_TARGET_DESTROYED`) if the target (the command's object 0) is gone or dead.
-2. It waits while the target is out of striking reach, more than 60° of elevation away, or out of line of sight (`Combat::LineOfSight`).
+2. On its first run it fails the command at once with −1 (`or eax, -1` at 0x007A8965) when the target is out of striking reach (`InStrikingReach` 0x006A3DC0, 0x007A88A9), more than 60° of elevation away (`|0x004EE5A0|` over the double 60.0 at 0x00B03BF8, 0x007A88FE), or out of line of sight (`Combat::LineOfSight` 0x0067C750, 0x007A8913). Before those, the attacker's slot 0x1D0 answering 1 gives −1 (0x007A8820) and its flags' disabled bit (`0x00A64740` & 4) −8 (0x007A8832). None of them waits: the wait before a swing is the approach's arrival (sub-actions 4 and 39), and a later run (0x007A8BB0) only waits out the swing's time (step 6). Corrected 2026-10-22 (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169); this said it waits.
 3. For an ordinary attack (the command's int 2 is 0), it calls `CCCreature::SignalAttackPending(target)` (read below). For a deathblow, the command's int 2 is the result and 3 is used for the other hand.
 4. It reads the results the scripts left (`0x006A40D0`): the main hand's and the off hand's records in the attacker's combat record (`0x006A0160`, `0x006A0170`). It goes on only if at least one is set (not 0) and neither is 4 (deathblow; the scripts then queue the deathblow command themselves). A critical hit (2) counts as a hit (1) here.
 5. It picks the swing's animation from `anim_combat` (table 104) by the two hands' results (`0x0069F530`), so a miss swings differently from a hit. It plays it through `0x006A41A0` and keeps its length in milliseconds at the sub-action's +0x14. The length is the scripts' `SetAttackDuration` for a humanoid with a weapon, else the clip's own less a fifth (`src/dao/Animation.cpp`, seen in play).
@@ -454,7 +454,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - for one with no loot and no bag yet (+0x790 = -1);
   - for one from the area's pool of reused creatures (+0xB60 ≠ 0, inferred).
 - With `bForce`, all three are skipped. No bag at all for a creature with no area. There is no party-member test.
-- "Loot" (0x006A90D0) is money above 0, or a droppable item (0x006A4440: the item's +0x4B0, `IsItemDroppable`'s byte) equipped or in the backpack.
+- **"Loot"** (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; `CCCreature::HasLootableItems` 0x006A90D0): true if the money count is above 0 (the creature's +0xBF0 object → its +0x28 → +0x90, three `0x0053CC40` pointer derefs, `jle`), else if the count of items with a non-zero `0x006A4440` (item +0x4B0 byte, `IsItemDroppable`'s) in the equipment object (creature +0xBE0, counted by `0x0069FA00`) is above 0, else the same count in the +0xBF0 object (the inventory/backpack). So both lists are tested with the droppable byte and money is the purse of the +0xBF0 object.
 - An existing bag (+0x790 ≠ -1) is found and placed again, not made again.
 - A new bag is placeable template `gen_ip_bodybag`, with the appearance's `CorpseModel` or `PLC_BonePile_01_0`.
   - Links: creature +0x790 = the bag; the bag's +0x664 = the creature (`LootableObjectId`); the bag's +0x600 = 1 (`IsBodyBag`).

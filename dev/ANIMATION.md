@@ -57,7 +57,7 @@ So **the scripts are the only source of a change** (checked).
 
 #### Leaving combat, 0x006ABBF0 (checked)
 
-It first sets combat data +4 = -1 (inferred: the attack target). Then:
+It first sets combat data +4 = -1 (checked: the attack target, which `GetAttackTarget` 0x00655000 reads at 0x00655063; script_commands/spells_combat.md, "Who writes it"). Then:
 
 1. **Not a humanoid:**
    - With no current command, it queues **type 14 PlayAnimation of row 101 `exit`**, front and static as above.
