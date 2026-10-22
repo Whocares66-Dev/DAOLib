@@ -87,6 +87,11 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
     - when the current target is unseen, dead or dying.
   - **The wounded-target keep**: a creature at 10–20 % health is kept with a 50 % chance, and one under 10 % with a 90 % chance (`AI_Threat_KeepWoundedTarget`).
   - **Who uses it**: an enemy's default attack takes it (`AI_ExecuteDefaultAction` → `_AI_Condition_GetMostHatedEnemy`, `ai_main_h_2.nss`:910), and so do the tactics' `AI_TARGET_TYPE_MOST_HATED` and `MOST_HATED_ENEMY`. The light AI (`AI_DetermineCombatRound_Light`, :784–786) picks a random entry instead. Followers take their selected or nearest target, not threat.
+- **An enemy can be hated and targeted without being perceived** (read 2026-10-21 by lib-agent-2):
+  - **No perception test on threat** [C]: damage, a hostile ability landing, being attacked, and the abilities' own threat (for example a shapeshifted party member's Bear Slam, +300) all reach `AI_Threat_UpdateCreatureThreat`. That function tests only hostility and death, never `IsPerceiving`.
+  - **The forced perception has a sight test** [C for the code, I for what 0x006A2BB0 tests]: `WR_TriggerPerception` (from ATTACKED and CAST_AT) is `TriggerPerception` (166, 0x0065A7B0 → 0x006B32A0), which adds to the perceived set only if 0x006A2BB0 passes, likely a sight test. So an attacker behind a sight blocker can be in the table and never in `GetPerceivedCreatureList`.
+  - **The target stays unperceived** [C, `ai_threat_h.nss`:208–226]: `AI_Threat_GetThreatTarget` returns the stored `AI_THREAT_TARGET` even when it is not perceived. Its re-update's result is not read back. A switch re-picks `GetThreatEnemy(0)`, again without a perception test.
+  - **Seen in play** (DAOParagonEngine, the Harrowing): two wisps that never perceived Mouse as the bear (a scarecrow placeable blocks the ray) held the bear in their tables within about 7 s and attacked it 70–96 % of the time.
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
