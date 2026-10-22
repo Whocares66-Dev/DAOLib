@@ -55,7 +55,7 @@ Shared facts (checked):
 ### GetTime (705)
 - **Handler:** 0x00653C50 (not shared). It calls the world timer's vtable +0x14 (0x004CB250, `fld qword [ecx+0x18]`), then `_ftol2` (0x008E34F0).
 - **Does:** pushes the world clock's total, in seconds, truncated to an int. The clock is `EC::WorldTimer` at app+0xD4 (`Addresses.h`, kWorldTimer). (checked)
-- **State:** +0x18 is a double. Each update (slot 6, 0x00A358F0) adds `min(real seconds since the last update, 0.1) * scale(+0x54)`, and nothing while it is paused (+0x58). So it runs with the game's speed, stops while the timer is paused, and falls behind real time when frames are slower than 10 a second. (checked) Whether a load resets or restores it was not read.
+- **State:** +0x18 is a double. Each update (slot 6, 0x00A358F0) adds `min(real seconds since the last update, 0.1) * scale(+0x54)`, and nothing while it is paused (+0x58). So it runs with the game's speed, stops while the timer is paused, and falls behind real time when frames are slower than 10 a second. (checked) **A load neither restores nor resets it** (read 2026-10-22, DAOLib #232): the timer is made once, at the application's start (0x00A35F30, called at 0x005DB83D), and no slot of it writes +0x18 but the update. The load (slot 8, 0x00A36010) only sets the offsets that `WorldTime` (0x00A35AF0) adds, so GetTime counts the world seconds since the game was started, carried across loads and new games, and not the save's time. The save's clock is `WorldTime`'s day and ms, `dao::clock::Now()`. (checked)
 - **Edge cases:** pushes 0 when there is no app or no timer. Truncation is toward zero. (checked)
 
 ### GetLowResTimer (176)

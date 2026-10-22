@@ -13,6 +13,9 @@
 
 #include "dao/ObjectId.h"
 
+#include <cstdint>
+#include <optional>
+
 namespace dao::clock
 {
 
@@ -68,5 +71,21 @@ bool SetSpeed(float scale, float seconds = 0.0F);
 
 // Returns the speed last set, or 1 if none has been set.
 float Speed();
+
+// The world's clock at a moment: the game's calendar day and the time into it.
+struct WorldTime
+{
+    std::uint32_t day = 0;       // the calendar's day number, as a save keeps it
+    std::uint32_t ms = 0;        // milliseconds into the day, below a day's length
+    double seconds = 0;          // day and ms together, in seconds
+    std::uint32_t dayLength = 0; // a day's length in seconds, 7200 in vanilla
+};
+
+// Returns the world's clock now, the one a save writes and a load restores, or nullopt before the
+// game is up.
+//
+// It runs at the game's speed (SetSpeed), and a load sets it to the save's time. Call it on the
+// game thread.
+std::optional<WorldTime> Now();
 
 } // namespace dao::clock

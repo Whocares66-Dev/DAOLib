@@ -48,6 +48,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/Clock.h"
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
@@ -78,11 +79,7 @@ namespace
 
 // The queue's id for a script event, its data a CScriptEvent (dao/Events.cpp).
 constexpr std::int32_t kScriptEvent = 10;
-// The world timer at the application's +0xD4, the day's length in seconds
-// at the timer's +0x50, and the event queue's list at its +0x64
-// (dao/Addresses.h).
-constexpr std::uintptr_t kAppWorldTimer = 0xD4;
-constexpr std::uintptr_t kTimerDayLength = 0x50;
+// The event queue's list at its +0x64 (dao/Addresses.h).
 constexpr std::uintptr_t kQueueList = 0x64;
 // A CScriptEvent's EVENT_TYPE_* (dao/Structures.h, CScriptEvent::Type).
 constexpr std::uintptr_t kScriptEventType = 0x20;
@@ -159,18 +156,10 @@ bool IsHeld(std::int32_t id, std::uint32_t data, double delay)
     return type && g_rule.Holds(*type, delay);
 }
 
-std::uintptr_t WorldTimer()
+// A day's length in seconds, 0 before the game is up.
+std::uint32_t DayLength()
 {
-    CClientExoApp *app = CClientExoApp::Get();
-    const auto timer =
-        app != nullptr ? TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(app) + kAppWorldTimer) : std::nullopt;
-    return timer ? *timer : 0;
-}
-
-std::uint32_t DayLength(std::uintptr_t timer)
-{
-    const auto length = timer != 0 ? TryRead<std::int32_t>(timer + kTimerDayLength) : std::nullopt;
-    return length && *length > 0 ? static_cast<std::uint32_t>(*length) : 0;
+    return clock::Now().value_or(clock::WorldTime{}).dayLength;
 }
 
 // --- The trace -------------------------------------------------------------
@@ -190,29 +179,6 @@ std::unordered_map<std::uint32_t, Sent> g_sent;
 // As many as are remembered: an event dropped without being delivered (an
 // area's going) is forgotten past this.
 constexpr std::size_t kMostSent = 10000;
-
-// The world clock now, as its day and milliseconds and in seconds.
-struct WorldNow
-{
-    std::uint32_t day = 0;
-    std::uint32_t ms = 0;
-    double seconds = 0;
-};
-
-WorldNow ReadWorldNow()
-{
-    WorldNow now;
-    const std::uintptr_t timer = WorldTimer();
-    if (timer == 0)
-    {
-        return now;
-    }
-    // EC::WorldTimer::WorldTime: __thiscall (day *, ms *), `ret 8`.
-    using WorldTimeFn = void(__fastcall *)(std::uintptr_t timer, int edx, std::uint32_t *day, std::uint32_t *ms);
-    reinterpret_cast<WorldTimeFn>(Module::Address(addr::kWorldTimer_WorldTime))(timer, 0, &now.day, &now.ms);
-    now.seconds = (static_cast<double>(now.day) * DayLength(timer)) + (now.ms / 1000.0);
-    return now;
-}
 
 // An object as a trace names it: its id, and its tag where a script command
 // may be called (on the scripts' thread, dao/ScriptHooks.h).
@@ -240,8 +206,8 @@ void TraceSent(std::uint32_t days, std::uint32_t ms, std::uint32_t caller, std::
     {
         return;
     }
-    const WorldNow now = ReadWorldNow();
-    const double delay = (static_cast<double>(days) * DayLength(WorldTimer())) + (ms / 1000.0);
+    const clock::WorldTime now = clock::Now().value_or(clock::WorldTime{});
+    const double delay = (static_cast<double>(days) * DayLength()) + (ms / 1000.0);
     spdlog::info("timers: event {} sent to {} by {}, in {:.3f} s, world {}:{:08}{}", TypeName(*type), Named(target),
                  Named(caller), delay, now.day, now.ms, heldHere ? ", held on the plugin's clock" : "");
     const std::lock_guard lock(g_sentLock);
@@ -265,7 +231,7 @@ void TraceDelivered(std::uint32_t data, const char *how)
         sent = found->second;
         g_sent.erase(found);
     }
-    const WorldNow now = ReadWorldNow();
+    const clock::WorldTime now = clock::Now().value_or(clock::WorldTime{});
     spdlog::info("timers: event {} delivered to {}{}, {:.3f} s of the world's clock after it was sent, world {}:{:08}",
                  TypeName(sent.type), Named(sent.target), how, now.seconds - sent.at, now.day, now.ms);
 }
@@ -282,8 +248,7 @@ std::int32_t __fastcall AddEventDeltaTime(void *queue, int edx, std::uint32_t da
                                           std::uint32_t data)
 {
     const bool traced = g_tracing.load(std::memory_order_relaxed) && (days != 0 || ms != 0);
-    const double delay =
-        days != 0 || ms != 0 ? (static_cast<double>(days) * DayLength(WorldTimer())) + (ms / 1000.0) : 0;
+    const double delay = days != 0 || ms != 0 ? (static_cast<double>(days) * DayLength()) + (ms / 1000.0) : 0;
     if (g_holding.load(std::memory_order_relaxed) && (days != 0 || ms != 0) && IsHeld(id, data, delay))
     {
         bool heldHere = false;
@@ -395,18 +360,12 @@ struct Queued
 std::vector<Queued> ReadQueue(std::uintptr_t queue)
 {
     std::vector<Queued> found;
-    const std::uintptr_t timer = WorldTimer();
+    const auto now = clock::Now();
     const auto list = TryRead<std::uint32_t>(queue + kQueueList);
-    if (timer == 0 || !list || *list == 0)
+    if (!now || !list || *list == 0)
     {
         return found;
     }
-    // EC::WorldTimer::WorldTime: __thiscall (day *, ms *), `ret 8`.
-    using WorldTimeFn = void(__fastcall *)(std::uintptr_t timer, int edx, std::uint32_t *day, std::uint32_t *ms);
-    std::uint32_t day = 0;
-    std::uint32_t ms = 0;
-    reinterpret_cast<WorldTimeFn>(Module::Address(addr::kWorldTimer_WorldTime))(timer, 0, &day, &ms);
-    const std::uint32_t dayLength = DayLength(timer);
     auto position = TryRead<std::uint32_t>(*list + 4);
     for (int i = 0; i < kMostNodes && position && *position != 0; ++i)
     {
@@ -414,7 +373,7 @@ std::vector<Queued> ReadQueue(std::uintptr_t queue)
         Node node{};
         if (event && *event != 0 && TryCopy(&node, *event, sizeof node))
         {
-            const double left = core::WorldSeconds(day, ms, node.day, node.time, dayLength);
+            const double left = core::WorldSeconds(now->day, now->ms, node.day, node.time, now->dayLength);
             if (IsHeld(node.id, node.data, left))
             {
                 found.push_back(Queued{*event, node.target, left});
@@ -453,7 +412,7 @@ void BeforeUpdate(void *queue)
     }
     if (!released.empty())
     {
-        const std::uint32_t dayLength = DayLength(WorldTimer());
+        const std::uint32_t dayLength = DayLength();
         for (const auto &[target, left, event] : released)
         {
             const core::WorldDelay delay = core::ToWorldDelay(left, dayLength);

@@ -120,6 +120,10 @@ void Attach()
 // The game's time scale: the application's +0x2C8, which its frame update
 // hands on each frame (dao/Clock.h).
 constexpr std::size_t kTimeScale = 0x2C8;
+// The world timer at the application's +0xD4, and the day's length in
+// seconds at the timer's +0x50 (dao/Addresses.h).
+constexpr std::uintptr_t kAppWorldTimer = 0xD4;
+constexpr std::uintptr_t kTimerDayLength = 0x50;
 
 } // namespace
 
@@ -159,6 +163,41 @@ float Speed()
         app != nullptr ? TryRead<float>(reinterpret_cast<std::uintptr_t>(app) + kTimeScale) : std::nullopt;
     // Below 0 is the engine's "none set", which its update leaves alone.
     return scale && *scale >= 0 ? *scale : 1.0F;
+}
+
+// The world's clock, read 2026-10-22 for Eluvian's snapshot (DAOLib #232).
+// EC::WorldTimer is made once, in the application's start-up (0x00A35F30,
+// called at 0x005DB83D, stored at the application's +0xD4). Its update
+// (0x00A35A10) runs slot 6 (0x00A358F0), which adds the frame's seconds,
+// at most 0.1 and times the scale (+0x54), to the double at +0x18, nothing
+// while +0x58 is set; it then keeps that double as microseconds at +0x28.
+// WorldTime (0x00A35AF0) gives the day and ms of +0x28 over the day's
+// length (+0x4C ms) plus the offsets at +0x40 (day) and +0x44 (ms),
+// carrying ms into days; while +0x58 is set, the day and ms it froze at
+// (+0x38, +0x3C). A save writes WorldTime's two (slot 9, 0x00A35FD0). A
+// load (slot 8, 0x00A36010) calls SetTime(day, ms, 0) (0x00A35A80), which
+// sets the offsets so that WorldTime answers the saved values, then the
+// update twice: it does not touch +0x18 or +0x28. No slot of the timer
+// resets them, so +0x18, which GetTime (705) reads, counts the seconds of
+// world time since the game was started, and is neither restored nor
+// reset by a load. WorldTime is the clock a save keeps.
+std::optional<WorldTime> Now()
+{
+    const CClientExoApp *app = CClientExoApp::Get();
+    const auto timer =
+        app != nullptr ? TryRead<std::uint32_t>(reinterpret_cast<std::uintptr_t>(app) + kAppWorldTimer) : std::nullopt;
+    const auto length = timer && *timer != 0 ? TryRead<std::int32_t>(*timer + kTimerDayLength) : std::nullopt;
+    if (!length)
+    {
+        return std::nullopt;
+    }
+    WorldTime now;
+    now.dayLength = *length > 0 ? static_cast<std::uint32_t>(*length) : 0;
+    // EC::WorldTimer::WorldTime: __thiscall (day *, ms *), `ret 8`.
+    using WorldTimeFn = void(__fastcall *)(std::uintptr_t timer, int edx, std::uint32_t *day, std::uint32_t *ms);
+    reinterpret_cast<WorldTimeFn>(Module::Address(addr::kWorldTimer_WorldTime))(*timer, 0, &now.day, &now.ms);
+    now.seconds = (static_cast<double>(now.day) * now.dayLength) + (now.ms / 1000.0);
+    return now;
 }
 
 void Hold(bool held)

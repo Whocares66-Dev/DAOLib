@@ -12,7 +12,7 @@
 // The plugin holds the clock and moves it on itself, each frame, by the
 // frame's wall time at the game's speed, nothing while the game is paused:
 // the shared clock by all of it, the creature's own by half. Once a second
-// it logs the timers waiting, the creature's among them, and the time left
+// it logs the world's clock (dao::clock::Now), the timers waiting, the creature's among them, and the time left
 // on each of the creature's temporary effects. To see it: stand the
 // creature in a poison or a burning area in a fight, or let a spider poison
 // it; the log's ticks for it come half as often as for anyone else, and
@@ -75,8 +75,10 @@ void Log()
                                    effect.duration);
         }
     }
-    spdlog::info("timers waiting: {}, {} of them the creature's; its effects:{}", dao::timers::Waiting(),
-                 dao::timers::WaitingFor(g_creature), effects.empty() ? std::string(" none timed") : effects);
+    const auto world = dao::clock::Now().value_or(dao::clock::WorldTime{});
+    spdlog::info("world {}:{:07} ({:.3f} s); timers waiting: {}, {} of them the creature's; its effects:{}", world.day,
+                 world.ms, world.seconds, dao::timers::Waiting(), dao::timers::WaitingFor(g_creature),
+                 effects.empty() ? std::string(" none timed") : effects);
 }
 
 void Frame()
