@@ -184,7 +184,10 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Handler:** 0x0066B900 (own) → `ForScript_SetAutoLevelUp` 0x00719B10.
 - **Does:** sets party data +0x30 to the int as given (Set, notifies). Checked.
 - **State:** party data +0x30.
-- **Edge cases:** no range check (checked). No party data → nothing, so it does not stick on a creature never in the party (checked; on joining, party +0x84 decides unless 2, but the data is made after that copy, 0x0063A11C, so a first join takes the creator's defaults, inferred).
+- **Edge cases:** no range check (checked). No party data → nothing, so it does not stick on a creature never in the party (checked; on joining, party +0x84 decides unless 2, but the data is made after that copy, 0x0063A11C, so on a creature with no party data the copy does nothing, checked 2026-10-22).
+  - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) The party data is made by CCCreatureStats::EnsurePartyData (0x0071CCD0): when the stats object's +0x1B4 is null it allocates the 0x1B4-byte record (0x0062E460) and fills the four cooldown groups. ForScript_SetAutoLevelUp (0x00719B10) does nothing when +0x1B4 is null; CCCreatureStats::GetAutoLevelUp (0x0071A1F0) returns 0 then.
+  - [C] The pool-join function (0x0063A020) copies the join record's byte +0x84 through SetAutoLevelUp (the call at 0x0063A0C1) when the creature's current auto-level value is not 2, and reaches EnsurePartyData only later (the call at 0x0063A11C). So on a creature with no party data the copy does nothing, and "the data is made on joining the pool" is read, not inferred.
+  - [I] What the data's defaults are for auto-level (the 0x0062E460 constructor) was not read.
 
 ### GetMaxLevel (840)
 - **Handler:** 0x00662F00 (own).

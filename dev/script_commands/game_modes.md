@@ -15,6 +15,9 @@ Shared facts: handlers are `__thiscall (commandId, paramCount)`, `ret 8`. A fail
 
 ### ShowStartMenu (362)
 - **Handler:** 0x0066A5A0 (not shared). Calls 0x005DD310 on the client app, the same routine the engine runs at start-up to reach the main menu: it is the `SetPaused(false,false)` caller at 0x005DD34F that CLAUDE.md records. (checked)
+  - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) 0x005DD310 (arg 2 = bShowCredits): SetPaused(false, false); when a config field at +0x1E8 is set it restarts the LCD base object (0x005DCD00); when a config field at +0x104 is set it asks 0x005D95C0 and, if that returns 1, skips the switch altogether; with credits it builds module and GUI strings; it then makes a GameModePregameData with +4 = (-(credits != 0) & 0x3F) - 1, that is 62 for credits and -1 for none, and +8 = 0, and calls GameModeController::SetGameMode(data, 8).
+  - [C] Entering GM_PREGAME (GameModePregame vfunction7, 0x0064CB50): when a module exists it first calls 0x005D6A50, the module's teardown: the GUI system's slot 0x28, the module's deleting destructor (slot 0, argument 1), the controlled-creature id +0x2B8 = -1, AIMaster::ClearEvents, the party object at +0x1B0 deleted, the area manager at +0x14C deleted (unless a config byte +0x68 says otherwise), then the transient state reset. So the switch unloads the module. It then sets the input mode "GameModePregame", starts the music event "music/_menu", and from the data pushes the credits' scene (62) as a full-screen GUI (0x00610CE0).
+  - [I] What the config fields +0x1E8, +0x104 and +0x68 stand for was not read.
 - **Does:** pops bShowCredits only when an argument was passed (default 0). (checked)
   - If the sound manager (0x005B9020) has a current music object (+0x120), it sets that object's byte +0x94 to bShowCredits. (checked; what the byte does was not read)
   - 0x005DD310(bShowCredits) unpauses (`CClientExoApp::SetPaused` 0x005D6740, (0,0)). (checked)
@@ -22,7 +25,7 @@ Shared facts: handlers are `__thiscall (commandId, paramCount)`, `ret 8`. A fail
   - With credits, it gives GUI scene 62 (+0xF8) a name: "dao", or a name the module supplies through 0x0051B370 when that is not empty. (checked; what the name selects is inferred)
 - **Bypass:** if `g_eclipseGame` (0x00C1D0A0) holds a pending module name (+0xF0, its length at +0x104), it is loaded instead (0x005D95C0) and cleared. When that load answers 1, no PREGAME is requested. (checked; what sets the name was not read)
 - **Telemetry, with credits only:** it sends `ScriptBackend::ForScript_SendOnlineTelemetry` (0x0047D4D0) twice: "GAME"/"GMNY" with the hero's money (`+0xBF0` inventory → money location → +0x90, as `%d`) and "GAME"/"CASQ" with a float from GUI scene 0's +0xC4 (`%.2f`). Both are sent only if `g_eclipseGame` exists. (checked; the codes are the four-character constants pushed)
-- **Edge cases:** the module is unloaded by the switch to PREGAME, not by the handler (inferred from script.ldf's description). Only `epipt_main.nss`:99/105 calls it (credits, then the main menu). Returns 0. (checked)
+- **Edge cases:** the module is unloaded by the switch to PREGAME, not by the handler (read 2026-10-22, above). Only `epipt_main.nss`:99/105 calls it (credits, then the main menu). Returns 0. (checked)
 
 ### GetAutoPauseCombatStatus (189)
 - **Handler:** 0x0065E520 (not shared). Calls 0x00838210 (`mov al,[ecx+0xC]`). (checked)

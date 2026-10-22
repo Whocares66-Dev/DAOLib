@@ -110,7 +110,11 @@ The loop returns 0 for success (`ABORTSCRIPT`, or the program counter set to -1)
 **Writing** (`CPSPTOAL`/`CPBPTOAL`, 0x30/0x31; 0x00A2EC20):
 - The same 1024 cap (0x00A2EC7A) fails the script with -649.
 - An index past the end **grows the array** to index + 1 and stores the element.
-- The gap is filled with 0 (inferred): object id 0, not OBJECT_INVALID; null strings.
+- The gap is filled with 0 (read 2026-10-22, below): object id 0, not OBJECT_INVALID; null strings.
+  - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) The array store function 0x00A2EC20 (behind CPSPTOAL): it returns 0 (a failed run) for an index above 0x400 (1024) and for a store whose element type differs from the array's (the tag mapped by 0x00A2D010). With a valid index it grows the element vector when its size is not above the index, by the resize helper with size index + 1, then writes the element.
+  - [C] For the string (5), object (6), resource (0x60) and engine-structure (0x10-0x19) arrays the helper is 0x0063D330, which is 0x005D26E0(n, 0): a std::vector resize with the fill value 0. So the gap elements of an object array are 0 (object id 0), and those of the string, resource and structure arrays are 0 (a null pointer, no string object), not OBJECT_INVALID.
+  - [C] The element written for a string, resource or structure array is a new copy (0x004C2510, 0x0069BBD0, the structure manager's slot 0x20); a non-null old element is destroyed first.
+  - [I] The int (3) and float (4) arrays use other resize helpers (0x005AE960 and 0x00534B10), not read; by their callers' shape they are the same resize with a 0 fill.
 
 Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
 

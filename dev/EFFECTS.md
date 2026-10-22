@@ -466,7 +466,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
 | Column (hash) | Where read | Use |
 |---|---|---|
 | ModelName 0xFD8403D5 | row +0x0C (row loader 0x007E68C0) | the projectile's model; its tree is the `.anb` of the same name (e.g. `fxa_arc_bolt_p.anb`) [I by name] |
-| Acceleration 0xFD480C46, MinSpeed 0xDB26D384, TopSpeed 0xFD919690 | +0x28, +0x2C, +0x30 | flight speed (0x007E9170) |
+| Acceleration 0xFD480C46, MinSpeed 0xDB26D384, TopSpeed 0xFD919690 | +0x28, +0x2C, +0x30 | flight speed (0x007E9170; "Flight integration" below) |
 | ImpactTimeout 0x0796E13B | +0x34 | how long it stays after arrival, and whether it sticks in the target |
 | StaticCollisions 0x73E07C85, DynamicCollisions 0x97CA5911 | +0x38, +0x39 | swept collision in flight (0x007E8C10) |
 | Simulation 0xA2166177 | +0x3A | ballistic flight path |
@@ -491,6 +491,14 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
     - the step was under 1e-6 m (0x00B23A64);
     - (when not `Simulation`) it ends within 0.01 m (0x00B23A4C) of its destination.
   - At over 1000 m travelled (`+0x468` > 1000.0, 0x00AEBC00) it goes straight to removal (0x007E6B40) **with no impact event**.
+  - **Flight integration:**
+    - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169; the update 0x007E9630 = CProjectile slot 113; state +0x448: 2 flying 0x007E9170, 3 the timer 0x007E6C60, 4 0x007E6CB0) Launch (0x007E80E0, the first update after release, +0x440 = 0): reads Mass (0x90FC93BB) into +0x460 and InitialSpeed (0x883650AA) into +0x464; sets the velocity (+0x450..+0x458) = InitialSpeed x the unit launch direction (0x007E6D80); no movement on that update.
+    - [C] Each later update with dt (0x007E9170), for a projectile with Simulation (row +0x3A) 0: destination = 0x007E7120 (the stored point at +0x4E0; with a target id at +0x4C0, a position taken from the target's model hook if there is one, else the target object's position at +0x120); dir = normalise(destination - position); v = |velocity| + Acceleration x dt (row +0x28); v = max(v, MinSpeed) (row +0x2C); v = min(v, TopSpeed) (row +0x30); the velocity = dir x v. It is re-aimed at the destination every frame. The speed is integrated from the running velocity: the MinSpeed floor lifts it, and the acceleration is added on top of the floored speed frame by frame (Arcane Bolt: 15 on the first frame, then 15 + 10 t, not max(15, 5 + 10 t)).
+    - [C] New position = position + velocity x dt; when the distance remaining to the destination (before the step) is less than the step's length, the position is set to the destination. The swept collision (0x007E8C10) runs between the old and new positions and a hit moves the position to the hit point. Distance travelled (+0x468) accumulates the step lengths; over 1000.0 it goes to removal.
+    - [C] With Simulation 1 the speed rules are not used: the velocity gains Mass x (the three float constants at 0x00C11840, 0x00C11844, 0x00C11848) x dt (a ballistic path), and the 0.01 m arrival test is skipped. The constants' values were not read.
+    - [C] The flight ends (0x007E90B0) on a collision, a step shorter than 1e-6, or (not Simulation) a remaining distance under 0.01 m; otherwise the model is turned along the velocity.
+    - [C] State 3 (0x007E6C60): the timer +0x474 grows by dt and past ImpactTimeout (row +0x34) the projectile goes to removal (0x007E6B40).
+    - [I] Which prj_base rows have Simulation set was not read here.
 - **The arrival, 0x007E90B0, in this order:**
   1. **The impact event** (0x007E89F0):
      - If a prepared event is held at `+0x4F4`, that is posted.
