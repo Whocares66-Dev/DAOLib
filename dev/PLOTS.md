@@ -19,6 +19,30 @@ The event (`0x0075bea0`) is run at once on the plot's script, with the hero as `
 
 The answer is `GetRunScriptReturnValue` not 0, a script that returns nothing (-1) counting as true.
 
+## A tutorial plot's flag and the tutorial box (read 2026-10-22 by lib-agent-2 with a subagent, for DAOParagonEngine #162)
+
+- **The engine adds the tutorial when the flag is set; no script does** [C]:
+  - **The scripts don't.** `plot_core.nss` reads `IsTutorial` and `IsCodex` into locals and never uses them. `ShowTutorial` (command 310, 0x00651780) does nothing. The `tutorials` table (four placeholder rows) is not used on this path: its NextID, TutorialStrRef, Image, X and Y play no part.
+  - **The engine's check.** In `SetPlotFlag` (0x0075F7E0), when the value set is non-zero, the tail at 0x0076014A reads `plottypes[entry type].IsTutorial` (0x0075BCF0, hash 0x12E4743C). Types 13 (IsCodex 1) and 15 (IsCodex 0) have IsTutorial 1.
+  - **The gate.** When IsTutorial is set and `ShowTutorials` (`ClientOptions` +0x98, read by 0x00838210, at 0x00760156) is on, it calls `TutorialControl::AddTutorial` (0x00693F10) on the module's +0x498.
+  - **The entry's fields come from the plot's file:** the title is the plot's `PlotName` (13008), the text the flag's `PlotFlagJournal` (13004), and `CodexResRef` the plot's resref. `PlotAllowPausing` (13023) decides the pause.
+  - **The next page.** Whether or not ShowTutorials is on, it then sets flag + 1 to 1 (`SetPlotFlag` again, 0x007601C5) while the plot has that flag (0x0075F640) [C for the call, I for 0x0075F640's meaning]. So each flag is one page, and setting the first flag adds all the plot's pages in one go.
+  - **Where an entry goes:** before the first entry with another `CodexResRef`, or at the end [I]. There is no check for duplicates and no record of what was seen.
+  - **After the add** it opens the PopupLayer (scene 0x1E) [I for the exact call], and pauses when `AllowPausing` is set and the mode is explore or combat.
+- **`Tutorials.ConsumeTutorial`** (the handler 0x00693630) [C]:
+  - 0 removes and deletes the list's head; 1 clears the whole list (the loop repeats while the message's byte at +4 is non-zero).
+  - When the list is then empty and the control's +0x84 (paused by it) is set, it unpauses.
+  - It marks nothing seen, adds no codex entry (that came with the flag) and does not follow `NextID`.
+- **The gates** [C]:
+  - **ShowTutorials** gates only the adding. Turning it off clears nothing.
+  - **`Tutorials.Enabled`** is the control's +0x74, 0 from the constructor, set by `SetEnabled` (0x00692E60):
+    - 1 on entering explore (0x0070E820), and combat's enter calls it too;
+    - 0 on leaving explore (0x00711480), except into the GUI mode (3), or into loading (9) under a further test;
+    - 0 on leaving the GUI mode (0x007188C0), whatever comes next, and on the main menu's slot 5 (0x0072E130).
+    - So Enabled is 1 only after explore or combat has been entered. The scripts' `TUTORIAL_ENABLED` module int is unrelated.
+  - **The movie** shows a box while the list has members and Enabled is non-zero (`PopupLayer.as`:190–195).
+- **The control's layout** [C]: the list +0x58, Enabled +0x74, paused +0x84, the training step +0x8C. A tutorial: title +0x58, text +0x8C, `CodexResRef` +0xC0.
+
 ## A conversation line
 
 A line's check is `0x007f0d30`, its action `0x007f0560`.
