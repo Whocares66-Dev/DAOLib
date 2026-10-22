@@ -9,6 +9,10 @@ A flag of 0 to 127 is stored, in the plot's four 32-bit words; one of 128 and up
 - `GetPlotFlag` (`0x0075ea60`) runs the plot's script with `EVENT_TYPE_GET_PLOT` (28), and for a stored flag ignores its answer.
 - `SetPlotFlag` (`0x0075f7e0`) runs it with `EVENT_TYPE_SET_PLOT` (27) before storing the value, and the script cannot veto.
 - The caller's `nCallScript` governs only the stored flags, 0 to 127: with it 0 neither runs the script. For a defined flag both run the plot's script whenever the plot has one, whatever `nCallScript` says; with no script a defined flag reads FALSE, and setting one stores nothing. Conversations always pass 1.
+- **`WR_SetPlotFlag` asks before it sets, so a defined flag's script runs twice: `EVENT_TYPE_GET_PLOT`, then `EVENT_TYPE_SET_PLOT`** (read 2026-10-22 by lib-agent-2, for DAOParagonEngine #164) [C]:
+  - `WR_SetPlotFlag` (`wrappers_h.nss`:86) first reads the current value with `GetPartyPlotFlag(oParty, strPlot, nFlag, nCallScript)` (for its log line), then calls `SetPartyPlotFlag`. For a defined flag the get runs the plot's script with GET_PLOT whatever `nCallScript` is (above), so the script's GET branch runs on every `WR_SetPlotFlag` of a defined flag.
+  - The engine's `SetPlotFlag` (0x0075F7E0) runs the script with event 27 (SET_PLOT) for a defined flag (`cmp edi, 0x7f` at 0x0075F944, the run at 0x0075F9B7..0x0075F9C1) and stores nothing. The GET comes from the wrapper, not from the engine's set. What the engine passes as int 3 (the old value) for a defined flag was not read.
+  - **Example:** `bhm200ip_to_level_3.nss` sets `bhm000pt_main` `DOOR_TO_THIRD` (defined) with `WR_SetPlotFlag`. The templar's conversation is in the plot script's GET branch (`bhm000pt_main.nss`:251, `UT_Talk` with the second floor's door guard), and the SET branch has no case for the flag. So in vanilla the stair's use starts that conversation through the wrapper's read. A direct `SetPartyPlotFlag` call would not [I: the shipped scripts' other callers not surveyed].
 
 The event (`0x0075bea0`) is run at once on the plot's script, with the hero as `OBJECT_SELF` (`0x00697310` called on the hero's creature):
 
