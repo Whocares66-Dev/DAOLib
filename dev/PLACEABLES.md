@@ -30,6 +30,13 @@ The spot is the placeable's melee-ring spot (`CCPlaceable` slot 38, 0x0074F240 �
 - **Fallbacks.** Spots in front of and behind the placeable along its facing, then a safe location nearby.
   - Each spot must be free (`MovementController::IsFree`); a door's also needs line of sight.
   - If none is found: -5 (`COMMAND_FAILED_NO_SPACE_IN_MELEE_RING`).
+- **The spot function** (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169; 0x0074F240, CCPlaceable slot 38; it calls 0x0074DFB0 for the rectangle and the line spot) [C]: its two calls of `CCArea::GetSafeLocation` (0x0073E370, `(pos, maxRadius, controller, reachable, out, snapToGround, creatureCheck, minRadius)`) pass:
+  - **After a spot is accepted** (0x0074F591): pos = the spot, maxRadius = 1.5 for a door (`this[0x638] == 1`), else 3.0, **reachable = 0**, out = the spot, **snapToGround = 1**, creatureCheck = 0, minRadius = 0.0.
+  - **The last resort** (0x0074F618): pos = the placeable's position (+0x120), maxRadius = max(sqrt(…), 1.0) + 0.5 + the argument (the user's PersonalSpace) + the value of 0x006953D0, reachable = 0, snapToGround = 0, creatureCheck = 0, minRadius = 0.0. The square root is `_CIsqrt` of a value computed just before ([I]: the patch's half diagonal; the operands were not traced).
+  - In both the pushes were read right to left; the virtual call at +0x10 of the user between the pushes is taken as a call with no stack arguments ([I]; the decompiler also reads reachable 0 and snapToGround 1 in the first call).
+  - So neither call sets the `reachable` flag (the ray 0x0067CFA0 inside IsLocationSafe, 0x0073DE70, is made whatever the flag). The door's own line-of-sight test (`Combat::LineOfSight`) is made by 0x0074F240 itself on the spot before the first call, with z from 0x0073DE20.
+  - When 0x0074DFB0 answers 0 (no patch): the radius is `param_3 × 4.0` when the placeable's +0x664 is −1, else `0x0074CC30(0) + 0.5 + [0x00C0CBC4] + param_3`; the spot is the user's position when within that radius (squared distance, 0x0045B080) of the placeable's, else the point at that radius from the placeable's position toward the user.
+- `IsLocationSafe` in these calls is the full test (IsFree, the ray, and with creatureCheck 0 not the box test): see PATHFINDING.md, section 1, the `IsLocationSafe` (0x0073DE70) note.
 - **With no patch,** the radius is 4 × PersonalSpace (or from the body bag's creature's `PerSpace`).
 - **Arrival** (slot 33, 0x0074D0A0) is any of: within 1.0 of the centre, no farther from the centre than the spot is, or on the spot. The walk itself ends within 0.05 of the spot.
 
