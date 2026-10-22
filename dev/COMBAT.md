@@ -161,18 +161,14 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
   - **No facing or stance test** [C]: none in the flight, and `Combat_GetAttackResult` (`combat_h.nss`:361) never returns BLOCKED.
   - **In the scripts** [C]: `ATTACK_IMPACT` (`rules_core.nss`:509) goes to `Combat_HandleAttackImpact` (`combat_h.nss`:1062–1079), which turns 5 into MISS and shows `UI_MESSAGE_BLOCKED`, the floating "Blocked". There is no damage, sound, VFX or animation of its own; the later BLOCKED branch (:1272) is empty. The engine skips the on-hit events for results 0, 3 and 5 (0x007E87C0).
   - **The arrow sticks** [C]: at arrival (0x007E90B0) the new target exists and `ImpactTimeout` is 3, so the arrow is made a child of the hit object's model at the hit point (0x007E79D0) and plays its material sound. It stays 3 s, then fades (`AlphaFade`).
-  - **Not settled: what a shield bearer's arrows hit.**
-    - **Seen with a watch on the sweep** (DAOLib #229, 2026-10-22, DAOParagonEngine, Ishal floor 1; probe.log `projectile sweep hit`): two archers shooting at the hero, who held no shield, made 13 BLOCKED impacts, and all 17 blocked sweep steps were walls (kind 1, no id), at z 0.9–1.6 about 1–2 m past the archer. Walls near the archer do make BLOCKEDs. A shield bearer as the target is not yet watched.
-    - In play (DAOParagonEngine, Ishal floor 1) 12 of 28 impacts on shield bearers were BLOCKED, against 4 of 50 with the shields unequipped.
+  - **What a shield bearer's arrows hit: walls near the archer, not the shield** (settled 2026-10-22 with a watch on the sweep, DAOLib #229; DAOParagonEngine, Ishal floor 1; probe.log `projectile sweep hit`).
+    - **The hero as the target, no shield:** two archers made 13 BLOCKED impacts, and all 17 blocked sweep steps were walls (kind 1, no id) at z 0.9–1.6, about 1–2 m past the archer.
+    - **Alistair as the target, with the Templar kite shield equipped** (`gen_im_arm_shd_kit_tmp`), out in the open: five archers made 30 impacts in 25 s, HIT 16, MISS 14 and BLOCKED 0. All 20 blocked sweep steps were walls and none an object; the 3 on Alistair were rolls already missed, at walls near the archers.
+    - So a shield is never struck. The earlier run's 12 BLOCKED of 28 impacts on shield bearers, against 4 of 50 with the shields unequipped, came from walls near where the archers stood [I: the positions of that run were not logged].
     - Nothing read makes a shield hittable [C]:
       - every vanilla shield `.phy` (`w_shd_kita_0`, `w_shd_srda_0`, the others of the same 2,026 bytes) is a lone GOB with no shapes;
       - `w_shd_kita_0.mmh` has a bbox, one mesh and a `CrustHook1`, with no collision node;
       - a humanoid's body capsules are Creatures | Nonwalkable (0x2 | 0x01000000), and its controller is groupsMask 0x10, neither within 0x1024.
-    - Walls (the defect above) fit the 4 of 50 but would not rise with shields [I].
-    - **Two leads not read:**
-      - Whether a held item's `CrustHook1` enters the wearer's crust map (0x00562E00, 0x00544CB0). If it does and comes first, the aim moves from the chest to the shield, and the ray crosses other geometry [I].
-      - Who calls `PhysicsActor` slots 22–24 (0x0081E5F0 rewrites every shape's mask) for creatures or items.
-    - **The test that decides it:** at 0x007E94AB, log the hit's kind and id (the hit record's +0x10 and +0x14), the aim from 0x007E7120 and the target's `+0x120`. Kind 1 means a wall; kind 2 names the object.
 
 **The swing** (`CSSubActionHandler::Swing`, `0x007A87C0`, read):
 
