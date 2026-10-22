@@ -404,6 +404,59 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
   - `HasItemProperty` (302) and `Get/SetLocalItemProperty` (93/94) have no handler, and there is no `IsItemPropertyValid`.
 - **Not read**: what 0x00757B90's filter matches on; how a loaded save restores worn items' effects; who receives the queued on-hit event.
 
+## An item's value (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
+
+Read 2026-10-21 by lib-agent-2 (subagent), GOG `game\DAOrigins.exe` (base 0x400000), `tools\daoexe.py --disasm`, ghilana (uti 3000-cost glove), and store.gfx decompiled with FFDec 26.3 (`java -jar ffdec.jar -cli -export script`; scratch `%TEMP%\lib-agent-2-ui-store\out\scripts\__Packages`, made from the CFX->CWS-renamed `lib-agent-2-guigfx-x\store.gfx`; inventory/popuplayer from `lib-agent-2-guiext-as`). C = read in code/data, I = inferred. Not seen in play.
+
+### Short answers
+
+1. **Item value** (the attribute at item+0x5A8; ItemCost 1001 in saves; what `GetItemValue` 291 pushes and the GUI token `<item>.Cost`), computed by one function, `0x00755430` (ID 18005, no name), in this order (C):
+   `v = trunc( Cost * materialrules.CostMultiplier[ materialtypes.Material[MaterialType] ] )`
+   `v += sum over item properties of itemprps.BaseCost[propertyId] * power` (only when the id list +0x680 and the power list +0x69C have the same length)
+   `if base item Type == 7 (ammunition) and v > 0: v = max(1, trunc(v * 0.33))`
+   `v += value (+0x5A8) of each rune item in the list at +0x4BC`
+   `Cost` is the .uti's `Cost` field (read into +0x5B8, the "BaseCost" 1021 in saves). The stack size (+0x5F0) is **not** in it: +0x5A8 is a per-unit value. No base item column enters except `Type` (ammunition) and, in the callers, `RuneCount`; there is **no** `SetItemValue` script command and no script writer (the only value commands are `GetItemValue` 291 and the stack-size ones).
+2. **The store screen computes its own price display**; it does not call 0x007EB6F0/0x007EB770. The Flash movie reads `<item>.Cost` (= +0x5A8) and `Store.MarkUp`/`Store.MarkDown` and applies `Math.floor(Cost * pct / 100)` itself, with the same rules (flag 1/2) as the native functions; the native pair (0x007EB6F0 pay, 0x007EB770 charge) is called only by the sell/buy message handlers, which move the money. The two agree, so the display equals the transaction. Inventory has no price display; the sell value appears only in the store's and the popup's own code.
+
+### 1. The formula, with addresses
+
+- **Single function:** `0x00755430` (this = item). Callers, all four (C, direct-call scan): 0x007566DC (`SetItemMaterialType` 0x00756540), 0x0075795C (template load 0x007572D0), 0x00759BF3 and 0x00759DCE (rune attach / detach). So the value is recomputed on template load, material change and rune change; **not** by `AddItemProperty`/`RemoveItemProperty` as far as the callers show (no other direct caller), nor by stack changes (C for the callers; whether properties added by script call 0x00755430 by another route, e.g. a virtual call, was not searched).
+- **Step 1, cost x material** (0x00755430-0x007554D1, C): `materialtypes` (table 0x59 = 89) row `MaterialType` (item+0x4FC), column `Material` (hash 0x56BCE3D9) gives a row of `materialrules` (table 0x9F = 159); its `CostMultiplier` (hash 0x74E8EA95) is a float, **default 1.0** (fld1 at 0x00755433; a missing row leaves 1.0). `fild [item+0x5B8]` x multiplier, converted by the CRT float-to-int 0x008E34F0 (truncation, `cvttsd2si`), stored through the attribute's vtable +0x54 into +0x5A8.
+- **Step 2, properties** (0x007554D3-0x007555E1, C): the two vectors at +0x680 (property ids) and +0x69C (powers), element size 16 (SmartData). If their sizes are equal, for each i: `itemprps` (table 0x6B = 107) row id, column `BaseCost` (hash 0xB28DB889) x power, added to +0x5A8 with 0x00621ED0 (value += arg). Unequal sizes: skipped.
+- **Step 3, ammunition** (0x007555E3-0x00755642, C): `0x00752C70` (base item `Type`, per arrays.md; the test is `== 7`). If the value is above 0: `trunc(value * 0.33)` (double 0.33 at 0x00B1C4D8); if that is above 1 it is set to `trunc(value * 0.33)`, else to 1. This is applied to cost x material **plus properties**.
+- **Step 4, runes** (0x00755644-0x007556C6, C): for each id in the vector at +0x4BC (not -1), `GetObjectById` (0x005D5870), add that item's own +0x5A8. A rune's own value is the same computation on the rune item.
+- **Writers of +0x5A8** (scan for displacement 0x5A8 in code, then read each; C): 0x00755430 (above); the default/clear routine 0x00752FC8 (sets +0x5A8 and +0x5B8, +0x6D8 to 0 / 0x30D40...; ctor-like reset); the constructor/copy registration 0x00756BDC / 0x00756F4B (attribute init); the **savegame loader 0x007586B0**, which reads field 1001 straight into +0x5A8 (and 1021 into +0x5B8 if present), so **a loaded save keeps the saved value; it is not recomputed** (nothing at that point calls 0x00755430; C for this function, a save's items are not re-valued unless a recompute caller above runs later; I). Readers: the save writer 0x007544B1 (1001), the token/attribute-name table 0x007546F0 (ID 18003: names "Cost" -> +0x5A8 at 0x00754CE6 and "StoreFlag" -> +0x5C0 at 0x00754D4D, which is how the movies' `<item>.Cost` / `.StoreFlag` resolve), a comparison 0x007F845F (sorting by value, I), the store functions 0x007EB6F9 / 0x007EB779, GetItemValue 0x0066BD35.
+- **Template load** 0x007572D0 (C): reads "Cost" (string 0x00B1C7F8, `Field` helper 0x00A37050) into +0x5B8 at 0x007578E3-0x007578FF; the properties list is read earlier in the same function (0x0075767x-0x00757808 region, I); then 0x007546F0 (attribute table) and 0x00755430 at 0x0075795C.
+- **Check against data (real item):** `gen_im_arm_glv_lgt_ap5.uti` (ghilana): Cost 3000, Material 32, one property id 1504 power 5. `materialtypes` row 32: Material 21; `materialrules` row 21 "Drakeskin": CostMultiplier 18; `itemprps` 1504 BaseCost 2500. Formula: 3000 x 18 + 2500 x 5 = **66500** copper. I could not read the live value (no game); not compared. The save-derived data point in `SAVE_WRITER.md:328` (34 arrows: ItemCost 1320, BaseCost 1) fits the formula and shows the stack is not a factor: 1320 = 4000 x 0.33 (properties of 4000 summed before the 0.33; C for the arithmetic, I that those arrows carry such a property).
+- **Not read:** whether `AddItemProperty`/`RemoveItemProperty` (script commands) reach 0x00755430 or leave +0x5A8 stale; the base-item `Type` hash at 0x00752C70 in this pass (taken from arrays.md); rune value use of `RuneCount`; the enciphered add-in tables (`itemprps_*`, `materialtypes_gwb`) that add rows.
+
+### 2. Who prices what
+
+#### Native (C, `stores.md:19-24` confirmed)
+- 0x007EB6F0 (pays): `trunc( (double)pct / 100.0 * (double)value )` then `* max(n,1)`, pct = MarkUp (store+0x454) when the item's +0x5C0 state is 1, else MarkDown (+0x464). Disassembly shows `fild pct; fdiv [0xAED110]; fimul value; call 0x008E34F0`: a double divide by 100.0, truncation toward zero. 0x007EB770 (charges): the mirror, MarkDown when state is 2.
+- Callers (direct-call scan, C): 0x007EB6F0 from 0x007EBD6D (will-buy check 0x007EBD00) and 0x007EC358 (sell, inside 0x007EC2C0); 0x007EB770 from 0x007ECB7F and 0x007ECF64 (buy, inside 0x007ECF00). 0x007EBD00 from 0x007EC329. **No GUI or movie path calls them**; nothing else reads the markups for display.
+
+#### The store movie (C, store.gfx decompiled)
+- `Store.as:58-60` (`__Packages/Store.as`): when it opens, `Store.m_nMarkDown = Number(GetValue("Store.MarkDown"))`, `Store.m_nMarkUp = Number(GetValue("Store.MarkUp"))`, and `ItemUtils.ms_nStoreMarkDown = Store.m_nMarkDown`. (The tokens' binding to store+0x464 / +0x454 is I, from the "Store" token binding in OpenStore; the native name hashing was not read.)
+- Each list entry (`SharedLibrary/StoreItemEntry.as`, `GetCost`), with `Cost = GetValue(<item>.Cost)` (+0x5A8) and `StoreFlag` (+0x5C0, `STORE_FLAG_JUST_BOUGHT = 1`, `JUST_SOLD = 2` in `ItemUtils.as:6-7`):
+  - store-owned entry: `JUST_SOLD` -> `floor(Cost * (MarkDown/100))`, else `floor(Cost * (MarkUp/100))`;
+  - player's entry: `JUST_BOUGHT` -> `floor(Cost * (MarkUp/100))`, else `floor(Cost * (MarkDown/100))`.
+  Identical to the native rules. It is shown per unit through `ItemUtils.FormatMoneyString` (100 copper = 1 silver, 100 silver = 1 gold; `ItemUtils.as:3-5,16-40`, the silver-per-gold constant on line 4 is not shown above, I from `COPPERS_PER_GOLD = 100 x SILVERS_PER_GOLD`) and is **not multiplied by the stack size** in the list. A store entry is greyed ("red") if `GetCost() > Party.Money.Total` (`IsTooExpensive`, store-owned entries only; unit price vs purse, so a stack's total is not checked there).
+- The split popup (`popuplayer`, `PopupLayer.as:646-681`): on `GUIPopupLayer.ItemSplitAmount` it reads `GUIPopupLayer.ItemStack.Cost`, `.StoreFlag`, `Store.MarkUp`, `Store.MarkDown`, `Party.Money.Total`, and shows `amount x floor(Cost x pct/100)` with the same flag rules (Buy label: JUST_SOLD -> MarkDown else MarkUp; Sell: JUST_BOUGHT -> MarkUp else MarkDown), disabling Buy when the total exceeds the purse. That is the same as the native `unit_trunc x n`.
+- Transactions: `Store.as:246-280` sends `Store.BuyItem(buyer, item, qty)` / `Store.SellItem(seller, item, qty)` (`SendMessageArgs`) and judges success by comparing `Party.Money.Total` before and after (sound only); the money moved is the native price, not a number the movie sends.
+- **The tooltip's "Sells for"** (`ItemUtils.SellValue`, `ItemUtils.as:516-527`, used by the item tooltips in the inventory movie's shared code): `if ms_nStoreMarkDown > 0: floor(Cost * ms_nStoreMarkDown / 100)`; this ignores `StoreFlag`, so a just-bought item's tooltip says MarkDown while the native sale-back pays MarkUp. `ms_nStoreMarkDown` is set only by `Store.as:60`, and is 0 in the inventory movie, so the inventory screen has no value line (no one else assigns it: grep of inventory/popuplayer/store AS, C).
+
+#### Inventory and selling elsewhere
+- The inventory movie reads `<item>.Cost` into its `Item` (`SharedLibrary/Item.as:98`) but `ItemEntry.GetCost()` returns it unmodified and `InitMoney` runs only for entries with a money clip (store entries). Outside a store the player's screens show no price (C for the AS; the inventory scene's use of `InitMoney` is not traced to a movie clip, I).
+- Selling uses the native handler 0x007EC2C0 (price from 0x007EB6F0; will-buy check includes the same price vs `MaxBuyPrice`/store money, `stores.md:22`); buying 0x007ECF00 (price from 0x007EB770).
+
+### Not read
+- Whether script-side `AddItemProperty`/`RemoveItemProperty` recompute +0x5A8 (all four direct callers of 0x00755430 are material, load and runes).
+- The item `Type` read at 0x00752C70 and the properties-list read in the template loader, in this pass.
+- The native binding of the tokens "Store.MarkUp" / "Store.MarkDown" (inferred).
+- A live comparison of the 66500 figure, or of any item's displayed price, in play.
+- The enciphered add-ins' `itemprps_*` / `materialtypes_gwb` rows.
+
 ## The weapon style, and GetWeaponStrengthModifier
 
 Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm/--refs`, a scratch rel32 call scan, and `bitm_base` from `packages\core\data\2da.erf` (`tools\gda.py --dump bitm_base`; base table, add-ins' M2DA rows not merged). No Ghidra, no game. **Checked** = read in the disassembly or the table; **inferred** = a reading of purpose.

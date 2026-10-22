@@ -75,8 +75,9 @@ Shared facts, all checked:
 - **Does:** pops nothing; builds `SetFullScreenGUIMessage("ItemUpgrade")` (0x00605DB0, vftable 0x00B022B8) and sends it to the GUI system (app+0x158): the full-screen GUI `ItemUpgrade` (the rune screen), as the shared fact in `dev/script_commands/inventory.md`. (checked)
 - **Edge cases:** no arguments, always returns 0. Which item or creature the screen shows is the GUI's own choice (not read). Called by `gen00pt_generic_actions.nss` and the debug `zz_upgrade.nss`. (checked)
 
+An item's value and the prices the store screen shows: see ITEMS.md, "An item's value".
+
 ## Not read
-- Where an item's value (+0x5A8) is computed (base cost, material, stack), and whether the GUI's shown price uses 0x007EB6F0/0x007EB770 or its own copy.
 - 0x005C6650's meaning (the "Store" token binding), `GUI::GUIStore`'s handlers, `CloseStoreMessage`, and what closing does to the token.
 - Whether `SetFullScreenGUIMessage` refuses while another full-screen GUI or a conversation is up.
 - The `WillNotBuy`/`WillOnlyBuy` container's class (0x0086BEE0, 0x008663A0); the buying loop's branch for n > 1 non-stacking items (0x007ED4A0) in detail.

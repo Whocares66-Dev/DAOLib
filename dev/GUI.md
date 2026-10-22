@@ -230,6 +230,56 @@ Notes (checked): the movie list in the install (68 .gfx) has no skills.gfx, cont
 - Whether `contextmenu`, `skills`, `mainui` exist in DLC archives.
 - Scripts' exact use of every GUI command above (names from the command table only).
 
+## The Chanter's board (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
+
+Read-only. C = read in code or data this session; I = inferred. Exe disassembly with `tools/daoexe.py`; tables with ghilana; the movie's ActionScript at `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chanters\scripts\__Packages\Chanters.as`. Prior notes: `dev/script_commands/inventory.md:195-199` (ShowChantersGUI, already had tables 115/116 and the accept handler), `dev/GUI.md:142` (movie record), `dev/gui_data_paths.csv:167-175`, `dev/message_handlers.csv:276-277`, `dev/PLOTS.md:5-16` (Get/SetPlotFlag). New here: the per-entry rules, what fills each field, what Accept does, and the Clear handler (the csv has function_va 0 for it; it exists).
+
+### Short answers
+
+1. `ShowChantersGUI(n)` (0x00662F40) calls `Journal::BuildChanterBoard(boardId)` at 0x006F46A0, then opens the full-screen `Chanters` scene. The board is a new `ChanterBoard` object (0xD0 bytes) held in the journal's attribute at Journal+0xE8, with a vector of entries (0x124 bytes each) at board+0x58. The board comes from table 115 `jobboards` row ID = n (Texture, HeaderStrID, Label); entries come from table 116 `jobboardplots` rows, in table row order, whose `BoardID` = n, subject to three tests per row (below). Per entry: PlotResRef = the row's `PlotRef`; PlotName = the plot file's PlotName text (field 13008 via 0x0075C430); JournalText = the text of the plot flag number `VisibleFlag` (its PlotFlagJournal, field 13004 via 0x0075C720, through 0x0075F520); Accepted = whether that PlotRef is already in the journal's first plot list (0x006EBB70). Not read: the row's `OfferID` (no reference; every shipped row has 0).
+2. `AcceptChantersQuestMessage` (0x006EB850, message field +4 = entry index): bounds-checks the index against the board's entry count (false if out of range), sets the entry's Accepted attribute to 1 at once, then calls `SetPlotFlag(plotGuid, entry.AcceptedFlag, 1, 1, X)` (0x0075F7E0). That runs the plot's script with EVENT_TYPE_SET_PLOT (27) before storing the flag (dev/PLOTS.md:9-10). It does not raise another event and does not refresh the board; the movie reads `Accepted` straight afterwards. Returns true.
+3. `ClearChanterBoardMessage` handler is at 0x006F3BC0 (the csv shows 0): `call 0x006F2580; mov al,1; ret 4`. 0x006F2580 empties the entry vector (0x0068F840 deletes each entry), deletes the board object, sets Journal+0xE8 to null and notifies the attribute. The movie sends it from `Chanters.FinishScene` (`SendMessage "Journal.ClearChanterBoard"`). 0x006F46A0 also calls 0x006F2580 first, so a stale board never survives to the next open.
+4. Reacting to acceptance: whatever the plot's script (the `.ncs` named by the plot file) does on EVENT_TYPE_SET_PLOT for the AcceptedFlag; typically it sets a journal update and spawns the quest. Nothing in the engine or the other game scripts reads the board. Only the movie's seal animation reacts (Accepted==1 -> AcceptedSeal_mc plays, Accept button disabled).
+
+### ShowChantersGUI callers (C, grep of the .nss)
+
+Board IDs by caller: Lothering board `lot100ip_chantry_board.nss:56` -> 3 (on PLACEABLE_ACTION_EXAMINE); Denerim `den200ip_chanter_board.nss:55` -> 5; Redcliffe `arl100ip_chantry_board.nss:36` -> 13; Light Content boxes: `litip_blackstone_box.nss:41/45/49` -> 6/7/8 (fighter boxes), `liteip_rogue_box.nss:41` and `lite_rogue_box.nss:58` -> 9, `litip_mage_bag.nss:41/45/49` -> 10/11/12. Lake Calenhad (4) and boards 1, 2, 20 have table rows but no shipped caller seen (board 20 has no table-115 row at all).
+
+### 0x006F46A0 in order (C unless marked)
+
+`this` = the journal. It clears any old board (0x006F2580), allocates a 0xD0-byte ChanterBoard (ctor 0x006F3070) and stores it at Journal+0xE8, then:
+
+1. Table 115 (`GetTable(0x73)`, 0x004DF580) row `nBoardID`; reads three columns by GDA hash: `Texture` 0xDD5E6F00 (string), `Label` 0xB49CA166 (string), `HeaderStrID` 0x46E25C69 (int) (hashes checked with `tools/gda.py` column_hash). If any of the three reads fails, or table 116 is missing, the board stays empty (the movie then shows "no quests", `LOC_CHANTERS_NO_QUESTS`).
+2. Header: board+0x74 (token path `Journal.ChanterBoard.Header`) = HeaderStrID as a talk-table string if non-zero; if zero, a string built by 0x004C35F0 from a format at 0x00AEC7B4 and the Label (not read further, I). Board+0xA8 = Texture.
+3. Board+0x58 vector is cleared again, then table 116 (`GetTable(0x74)`) is walked row by row from 0 to GetRowCount (vtable +0x14, rows by +0x38). A row is used when: (a) `BoardID` 0xE24463FF == nBoardID; (b) the columns `VisibleFlag` 0x9623699D, `AcceptedFlag` 0x861798A2 (ints) and `PlotRef` 0x67CF4C46 (string) all read; (c) `Journal::0x006EBBF0(PlotRef)` is false, i.e. the plot is not in the journal's second plot list, which by the ctor order (+0x58 then +0x74 registered after PlotList, CompletedPlots; the Journal class lists are PlotList and CompletedPlots, dao/Journal.cpp:11) I read as CompletedPlots (I for which list is which: the offsets +0x58/+0x74 are C, the names are I). So a quest already completed leaves the board.
+4. Then the entry is created by 0x006F3370(plotRef, visibleFlag, acceptedFlag, accepted) (C):
+   - `GetPlotGUID(PlotRef)` (0x0075CB30, the plot manager is `[[app+0xD0]+0x58]+0x210`) must succeed, and `GetPlotFlag(plot, VisibleFlag, 0, -1)` (0x0075EA60) must return true. So **an entry is shown only when the plot's flag number `VisibleFlag` is currently set** (plot flag, stored 0-127 in the plot's words). Both can drop the row silently.
+   - Entry (ctor 0x006ECC40, attribute names read at 0xB14070.. as wide strings): `PlotName` (+0x58) = 0x0075ED50(plot guid) = the plot's PlotName (13008 via 0x0075C430, text resolved as a LocString); `JournalText` (+0x8C) = 0x0075F520(plot guid, VisibleFlag) = the PlotFlagJournal (13004, via 0x0075C720) of flag number VisibleFlag, as text; `PlotResRef` (+0xD0) = the row's PlotRef; `Accepted` (+0xC0) = the boolean result of 0x006EBB70(PlotRef) i.e. "PlotRef is in the journal's first plot list" (already accepted, I for the list's name); entry+0xF8 = AcceptedFlag (raw int, not exposed to the movie).
+   - The entry is appended to board+0x58.
+5. Row order is table order (ghilana merges as the game does); there is no sort and no de-duplication; a PlotRef listed under two rows of the same board would appear twice.
+
+Table 116 columns, as ghilana reads it: ID, PlotRef, BoardID, VisibleFlag, AcceptedFlag, OfferID (69 rows). Examples (C): board 3 (Lothering) has lot100pt_bears (Visible 3, Accepted 2), wrd100pt_south_threat (6, 0), wrd100pt_far_afield (6, 2), wrd100pt_merchants_loss (5, 1), wrd100pt_missing_prospe (7, 0), wrd100pt_last_rites (3, 0), lot100pt_bandits2 (5, 0), lot100pt_last_keepsake (3, 0). Light-content rows are Visible 0, Accepted 1. Table 115: 13 rows, all Texture `default_board.tga`; HeaderStrID 337587 (3, Lothering), 337589 (5, Denerim), 392140 (13, Redcliffe Chantry); HeaderTintIndex (columns ShowDonationButton, DonationScript `donate.ncs`, DonationMsgStrID, HeaderTintIndex) are not read by 0x006F46A0 (no hash use seen; the donation/tint columns are probably read elsewhere or unused, not read).
+
+### AcceptChantersQuest in detail (0x006EB850, C)
+
+- Message layout (dev/messages.csv:2): 8 bytes, vtable 0x00B1E784, int at +4 = the entry index; the movie sends `Journal.AcceptChantersQuest <nPlotIndex>` (`Chanters.as`: `SendMessageArgs("Journal.AcceptChantersQuest", Chanters.nPlotIndex)`). Created by the generic text-command path (the factory at 0x0077DA90 copies it).
+- Steps: board = `Journal+0xE8` attribute (0x0053CC40); entry vector = board+0x58; if `index >= count` -> return false. entry = vector[index]; if null -> return true without doing anything. `entry+0xC0.Set(true)` (vtable +0x54, arg 1): Accepted = 1 (observers/data path update at once). App `[0x00C327EC]`, plot manager = `[[app+0xD0]+0x58]+0x210` (0x005D57C0 then +0x210); if null, return true. Convert `entry.PlotResRef` (+0xD0) to the plot GUID with 0x0075CB30; if that succeeds, `SetPlotFlag(mgr, guid, entry.AcceptedFlag (+0xF8), 1, 1, [[app+0xD0]+0x5C])` (0x0075F7E0; the last argument comes from 0x005D5CA0, a value in the same object, probably the hero's object id, I). Return true.
+- So the "acceptance" is **only the plot flag `AcceptedFlag` set to 1 with the plot script run** plus the in-memory Accepted attribute. The quest's journal entry is produced by the plot (the flag's PlotFlagJournal, handled by the plot system, I), not by this handler. The tick can be repeated: Accept is not blocked by the engine if Accepted is already 1 (the movie disables the button, `Chanters.as` RefreshPlotInfo).
+- Movie side (C, Chanters.as): after sending it reads `.Accepted == 1`; if so, plays the seal on the list item and the page and disables the button. On open the button is hidden if there are no entries. Sounds: ST_JOB_BOARD_OPEN/ACCEPT_QUEST/SELECT_QUEST. On close (`FinishScene`) it sends `Journal.ClearChanterBoard`; the close button sends `GUI.HideFullScreenGUI`.
+
+### What reacts to acceptance (scripts)
+
+- The AcceptedFlag numbers come from table 116 and are flags of the board's plot (`<plotref>.plo`, `plt_*.nss` constants); the plot script is run on EVENT_TYPE_SET_PLOT (27) with the hero as OBJECT_SELF, string 0 = plot GUID (dev/PLOTS.md:14-20). The scripts that react are therefore each plot's own (`lot100pt_bears`, `wrd100pt_*`, `lite_*` plot scripts under `toolset\extract\scripts\`, e.g. `Light Content\Plot Scripts\Rogue Board\lite_rogue_box.nss`), plus area scripts that read the plot flags later (e.g. `arl100ar_redcliffe_village.nss:112-113, 274-279` activates the Redcliffe chanter and board and tests `ChanterTurnInPossible()`). I did not read each plot script (not read).
+- The VisibleFlag on those plots is set by the area/plot scripts as quests become available (and cleared from the board once the plot reaches CompletedPlots).
+
+### Not read
+
+- Which of Journal +0x58 / +0x74 is PlotList vs CompletedPlots (offsets C, names I); the exact contents of 0x006EBB70 beyond "string compare of element+0x58 with PlotRef".
+- The Label/format fallback for a zero HeaderStrID (0x00AEC7B4 string); HeaderTintIndex, ShowDonationButton, DonationScript, DonationMsgStrID, ModuleRef readers (donation UI not in the AS I read).
+- Each plot script's reaction to SET_PLOT for the AcceptedFlag; the PlotFlagJournal-to-journal path.
+- Why board 4, 20 and 1/2 have no caller; whether `ModuleRef` filters rows (no use seen).
+- The type of the last argument of SetPlotFlag (0x005D5CA0).
+
 ## Part (a): the 67 fscommands and 17 ExternalInterface calls (GOG exe, address library 9eae06b names)
 
 Read 2026-10-18 by lib-agent-2 (for DAOParagonEngine #19).

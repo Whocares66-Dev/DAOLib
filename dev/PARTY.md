@@ -400,6 +400,59 @@ When is a follower unperceived? The perception rules are `dev/COMBAT.md`'s:
 
 `0x0067A000`'s distance is 2D: x and y, the third term `fldz; fmul st0,st0` (checked `0x0067A02D`). So the 60 m "stays perceived" test is horizontal. `dev/COMBAT.md` had it "3D inferred", corrected the same day.
 
+## The party picker (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
+
+C = read in the disassembly or script source, I = inferred. Addresses are GOG's (base 0x400000). Script paths are under `toolset\extract\scripts\`.
+
+### Short answers
+
+1. **A newly chosen follower becomes ACTIVE (object active flag) in a script, not in the engine's picker.** Submit queues `EVENT_TYPE_PARTYMEMBER_ADDED` (66) for each member that is in the party, and `module_core.nss` (`Core Scripts\module_core.nss`:484-503) runs `WR_SetObjectActive(oFollower, TRUE)` and sets the plot flag `GEN_<TAG>_IN_PARTY`. Event 67 (`DROPPED`) sets `GEN_<TAG>_IN_CAMP` and the same file's `:506-520` ends with `WR_SetObjectActive(oFollower, FALSE)`. The select path 0x00766040 activates nothing (it sets the entry to state 1, refreshes the portrait, fills a slot and plays a sound set: 0x006B5740 is `ScriptBackend::ForScript_PlaySoundSet`, not activation). The only engine-side state change in Submit is `SetFollowerState(id, 2)` for the dropped. (C)
+2. **Entries.** The list is the party pool (CCParty+0x244, the pool's insertion order), each a 0x34-byte record, built once in `GameModePartyPicker` 0x0076C170, then sorted by `entry+0xC`, the `ID` column of the `partypicker` table (default 0x7FFFFFFF, so members without a row go last). The hero is an entry, always selected and never toggled. **The byte at +0x10 is "this is the hero" (id == party+0x1E8), not a lock from a script, a plot flag or SetPartyPickerGUIStatus.** The scripts' lock is the follower state 7, LOCKEDACTIVE, kept in `entry+8`. (C)
+3. **Exit and Escape (cancel) raise no event at all, 71 included.** 71 is raised only by Submit. 104 (`PARTYPICKER_INIT`) is raised by the engine, on showing the screen, not by a script. (C)
+
+### Q1: activation in detail
+
+- **Accept = `SubmitPartyChangesMessage`, 0x00767060** (ignored while the mode's +0xA0 or +0xA1 byte is set, i.e. while showing or leaving). It calls 0x00766C10, then Exit (0x00765960). (C)
+- **0x00766C10 per entry** (walks vector at mode+0x88, stride 0x34, `entry+8` = state):
+  - state 2 (AVAILABLE, dropped): if the party's `0x0062F250` is false and the creature exists, 0x0069F470 (frees a pointer at creature+0x78C, returns 1); `SetFollowerState(party, id, 2)` (0x0063B9A0, 0x00766E64); then queues event 0x43 = 67 at once (alloc 0x50, `ev+0x20 = 0x43`, `ev+0x24 = module id`, object 0 = id; delivered through `AIMaster::AddEventDeltaTime` 0x0064ACE0, 0x00766EC7). (C)
+  - state 1 (ACTIVE, picked) with slot `entry+0x24` in 0..3: builds event 0x42 = 66 with object 0 = id and keeps it in a local array indexed by slot (0x00766EE9-0x00766F35). No SetFollowerState and no active flag here. (C)
+  - state 7: nothing (falls to the loop's next entry). (C)
+  - After the loop the 66s are sent in slot order 0..3 (0x00766FBD-0x00766FE5), then event 0x47 = 71 (`PARTYPICKER_CLOSED`) at 0x00767014. So the order is 67s (in entry order), 66s (in slot order), 71. (C)
+- **Joining the active party is not done by the picker either.** `SetFollowerState(…, 1)` is what puts a member in CCParty+0x234 (`dev/PARTY.md`:143-165), and the picker never calls it with 1. The picked member is already in the pool; "in the party" for the picker is only `entry+8 == 1`. I could not find in Submit anything that adds a picked AVAILABLE member to +0x234; what the scripts do for 66 is the active flag and the plot flag only. **Not resolved:** whether the engine's party-ing of the picked ones is elsewhere (e.g. the CCParty handler of `ApplyPartyPickerChangesMessage`, 0x00636F50, below). (I)
+- **A second path does the same with different data:** `CCParty` handler of `ApplyPartyPickerChangesMessage`, 0x00636F50, walks the party's own list at +0x270 and compares each member's state with a stored previous one (map at +0x2A8, default `+0x2D4`): previous 2 -> now 1 queues 66 (0x00637109-0x00637120), previous 1 -> now 2 queues 67 (0x00637168), then 0x00636090 and a final 71 (0x006371D6). Message class 0x00B1E7E4; constructors seen at 0x007768F5 and 0x0077DC89 (GUI side, not traced). So the GUI/party-side path that applies a change also ends in 66/67/71 for scripts. (C for the code, I for who sends it)
+- **Script side** (C): `module_core.nss`:484-520 as above. `sp_module.nss`:240 sends event 71 to `sp_module_ppicker_closed.nss` (read-only status returns; else per-area plot flags or `OpenPrimaryWorldMap` in a camp, `GEN` flags in the Landsmeet and the Climax); `module_core.nss`:531 `WM_SetPartyPickerGuiStatus()` (world_maps_h.nss:222: sets USE or NO_USE from the area's `PARTY_PICKER_ENABLED`).
+- `SetFollowerState` 7 and 1 are the only ones the scripts use to lock a member (`sp_module_travel.nss`:338-368: Alistair and Morrigan LOCKEDACTIVE until Lothering; Alistair at the Landsmeet). (C)
+
+### Q2: the entries
+
+- **Build: 0x0076C170**, called once from the show step 0x0076C82E (after fade scene 0x22). For each id in the pool list (party+0x244, count from 0x0062F9B0): creature = `GetCreature(id)`; skipped when the byte at creature+0x610 (`0x00838210` on creature+0x604) is true (the destroying/hidden flag, name not read); state = `GetFollowerState` (0x00632810); `isHero = (party+0x1E8 == id)`. (C)
+- **The `partypicker` table** (module's name, default `partypicker`, `SetPartyPickerStage` 858 changes it; `dev/script_commands/plotman.md`:28) is searched for the row whose `Tag` (0x88578372) equals the creature's tag (creature+0xB8). Columns read (hashes from `tools/gda.py`): `ID` 0x66FBC936 -> entry+0xC (default 0x7FFFFFFF), `Stature` 0xF495CE71 -> entry+0x28 (default 1), `BlendTree` 0x70F463FA (string), `VFX` 0x9512145E -> entry+0x2C (default 0). Table columns per `dev/gda_tables.csv`:392: `ID Label Tag BlendTree AddAnimation RemoveAnimation AddSound RemoveSound Stature VFX`. These drive the 3D stage (the figures that appear), not the list. (C for reads; the column-to-field mapping of the constructor arguments is a careful stack count, so I)
+- **Entry layout** (ctor 0x00765390; stride 0x34): +0 creature id, +4 the stage's clone creature (made by 0x007662A0), +8 state (1 picked, 2 available, 3 unavailable, 5, 7 locked), +0xC sort key (table ID), +0x10 byte isHero, +0x14/+0x18 = 1 (visual flags), +0x24 slot index (-1 not in the party; 0..3 filled), +0x28 stature, +0x2C VFX, +0x30 a scene/effect handle (-1). (C)
+- **Order:** the pool's order, then a sort by +0xC (0x0076AE90 -> 0x0076ABD0 -> introsort 0x00769F60, whose compare is `A.+0xC < B.+0xC`, 0x00767F81-0x00767F9E). The hero comes with its own row's ID like any other. (C for the compare, I for it being the only key)
+- **Auto-selection:** after the entries are built the second loop (0x0076C47F-0x0076C5D6) puts every entry with `state == 1` or `state == 7` or `+0x10 != 0` into the next free slot (max 4; `mode+0x124` is the slot vector of ids, `mode+0xA2` the count) and sets `entry+0x24`. Locked state 7 members and the hero therefore always occupy slots. The hero is always a party member, so the picker never lists it unselected. (C)
+- **Toggle rules** (click `SelectPartyMemberUnderCursor`, 0x00768AE0; and `Unselect` 0x00767100, which skips entries with +0x10 or state != 1):
+  - works only while `GetPartyPickerGUIStatus` (party+0x74) == 2 (USE), not while the mode is showing/leaving (+0xA0/+0xA1) and not while GUI-scene slot +0x11C says busy;
+  - entry with `+0x10 != 0` (the hero): ignored;
+  - state 1: deselect (0x007661B0, needs mode+0xA2 > 0); state 2: select (0x00766040, needs mode+0xA2 < 4); **any other state (3 UNAVAILABLE, 5, 7 LOCKED) is only highlighted, never toggled**. (C)
+- **The "locked byte at +0x10" is the hero, not a script lock.** The scripts' lock exists only as the state value 7 in `entry+8` (from `WR_SetFollowerState(oX, FOLLOWER_STATE_LOCKEDACTIVE)`). The GUI movie's `PartyPicker.LockedPartyMembers` list (`dev/gui_data_paths.csv`:2205) is presumably entries with state 7 or +0x10; not traced. (C for the byte; I for the movie)
+- **Caveat (I, matters for a port):** event 104 is queued (AIMaster 0x0064AD80, due now) at 0x0076C827, *before* the entries are built (0x0076C82E). The queue drains later, so the INIT script's `LOCKEDACTIVE` states arrive after the entries copied the states (Alistair and Morrigan in a camp would show as state 1 and be toggleable). The built list is never rebuilt (the build has one caller). I did not see this in play; the scripts' comment "just before it opens" suggests the author expected it earlier. Verify in play before copying.
+
+### Q3: cancel, 104
+
+- **Exit** (`ExitPartyPickerMessage`, 0x00765960): `GUI.slot 0x34(0x22)` (fade scene), `mode+0xD4 = 0`, `mode+0xA1 = 1`. No event, no state change. Submit reaches it too (0x007670BC). (C)
+- Escape is the same message (0x00779815 builds the Exit message; its trigger, the screen's Cancel/Escape, not traced). The reset of entries to their opening state on cancel is 0x00766AB0 (it reapplies each entry's original slot visuals), which runs once at show (0x0076C859), not on cancel. So **cancel leaves the pool and states untouched (nothing was applied) and raises no 71**, hence `sp_module_ppicker_closed` never runs and a camp's world map is **not** opened by cancel (`module_core` WORLD_MAP_CLOSED/`Camp_PlaceFollowersInCamp` is the world map's own cancel). (C for the code, I for the effect)
+- **104 comes from the engine**, queued in the show step 0x0076C7C4-0x0076C827 (`ev+0x20 = 0x68`, target = the module id, `AddEventNow`), once, when the fade ends (flag +0xA0 cleared at 0x0076C8A2). `dev/script_commands/inventory.md`:217-221 has it. Handlers: `sp_module.nss`:104 -> `module_core_travel` (`sp_module_travel.nss`:338 locks followers) and `module_core.nss`:602 (`RW_CatchUpToPlayer` for every pool member: follower XP catches up to the hero). (C)
+- 71 (`PARTYPICKER_CLOSED`) is only raised by Submit (0x00767014) and by the CCParty apply path (0x006371D6). (C)
+
+### Not read
+
+- Who builds `ApplyPartyPickerChangesMessage` (0x007768F5 / 0x0077DC89) and what GUI action calls it.
+- What puts an AVAILABLE member picked in the picker into CCParty+0x234 (nothing found in Submit or the 66 handler); the 3D stage's own code (0x00767830, 0x007672C0, 0x0076AE90); the meaning of creature+0x610 (picker skips it).
+- The Escape key's path to the Exit message; the `LockedPartyMembers` count's source for the movie.
+- The 104 timing caveat above in play. Nothing here was run.
+
+Prior work used: `dev/script_commands/inventory.md`:217-232, `dev/script_commands/plotman.md`:28-34, `dev/PARTY.md`:143-165 and :461, `dev/gda_tables.csv`:391-392, `dev/AUDIO.md`:1445, `dev/CUTSCENES.md`:344 (party+0x1E8 = hero), `dev/LOAD_EVENTS.md`:150-156 (AddEventDeltaTime / AddEventNow). New here: Submit's per-entry order, the entry layout and what +0x10 is, the sort key, the toggle rules, activation by script, the 104 queue-order caveat.
+
 ## Control and selection, as the engine runs it
 
 Read 2026-10-18 by lib-agent-2 (with a forked subagent for part 2) in GOG's `DAOrigins.exe` 1.05 (capstone disassembly through `tools\daoexe.py` and a scratch caller scan) and the toolset's scripts. Not seen in play. **Checked** = read in the disassembly; **inferred** = from names, shapes or scripts, not traced to the end. Builds on the sections above, `dev/script_commands/Party.md`, `dev/script_commands/spells_combat.md`, `src/dao/Party.cpp` and `Addresses.h`'s `Party::Select` row.
