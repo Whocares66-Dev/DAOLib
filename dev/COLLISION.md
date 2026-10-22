@@ -216,3 +216,73 @@ SDK 272 is the 132 levels with an `.opf`; SDK 281 is the 18 core levels without 
 - All 205 levels with a stream (every `.arl` the index reads: core's 158 and the add-ins' 55, 8 of them with no physics) read to the end, with 113,613 actors, 175,019 shapes and 4,875,044 triangles. Each level's actors are as many as its actor records and its shapes as many as its shape records.
 - For the 132 with an `.opf`, the two readings are the same in every field: ids, names, kinds, sizes, poses, groups, masks, records, rooms and meshes (points and triangles). The one difference in kind is the XML's rounding: it writes a number with nine decimals (0.00000182 for 1.82e-6, and halves rounded away from zero), which loses the small turns (the floats of about 325,000 groups of numbers differ this way) and is the same as printing the binary's float that way and reading it back. The binary stream is the exact one.
 - 73 of the 81 levels without an `.opf` have shapes now; the other 8 have no physics.
+
+## 5. The creature's overlap test: 0x006B1600 (read 2026-10-22 by lib-agent with a subagent, DAOLib #233, for DAOParagonEngine #144)
+
+Read in the GOG exe. [C] = read in the disassembly, [I] = inferred. Builds on PATHFINDING.md:885-891 and :976 (the snap 0x006B1790 and its call) and COLLISION.md section 1 (the ray's filter, the bits0 table).
+
+### What it is
+
+`bool __thiscall Creature::OverlapsPhysics(const float4* footPos /* or null */)`, `ret 4` [C 0x006B176E]. It returns false (al = 0) at once when the creature has no controller (`[this+0x770] == 0`), no area (`this->vtable+0xA0` returns 0), no physics world (`area+0x62C`) or no scene [C 0x006B1634-0x006B1667, 0x006B1771].
+
+### 1. The call at 0x006B174D
+
+- `ecx` is **not an NxScene**. It is the `Physics::PhysicsScene` wrapper: `0x00537D60(0)` is `mov eax,[ecx+0xCC]` [C], the same object COLLISION.md section 1 reaches for the ray (`Physics::PhysicsScene`, whose NxScene is at `[PhysicsScene+0x24]` [C 0x0082EDA8]).
+- Its vtable slot 0x34 (index 13) is `0x0082EC20`, `Physics::PhysicsScene::OverlapCapsule` (address library ID 22526) [C: the vtable word is what the call reads; the name is the library's, and the function body matches it]. Its sibling `0x0082F0D0` is `OverlapBox` (ID 22527), and the ray's slot 4 is `RaycastClosestSegment` (`0x0082DEB0`, ID 22520).
+- `OverlapCapsule` does the PhysX call: `mov edx,[NxScene.vtable+0x1D0]` at `0x0082EDAD`, called at `0x0082EDD5` with eight pushed arguments in the order of PhysX 2.8's `NxScene::overlapCapsuleShapes(const NxCapsule& worldCapsule, NxShapesType shapeType, NxU32 nbShapes, NxShape** shapes, NxUserEntityReport<NxShape*>* callback, NxU32 activeGroups, const NxGroupsMask* groupsMask, bool accurateCollision)` [C for the eight arguments; I for the SDK name]. Evidence the slot is the capsule's and not the OBB's: the object passed is 28 bytes (7 floats, radius last) [C 0x0082ED08-0x0082ED5D], and `OverlapBox` calls slot 0x1CC [C 0x0082F43D], the slot before it, which is the SDK's order (overlapOBBShapes, then overlapCapsuleShapes). Confidence: high. The NxScene's code is PhysX's (not followed into it).
+- Arguments of that call [C]: `shapeType = 3` (NX_ALL_SHAPES: static and dynamic, `push 3` at 0x0082EDCB); `nbShapes` = the capacity of the report's vector (`[esp+0x14]`, from `0x0082ED87-0x0082EDA4`); `shapes = 0`; `callback` = a `PhysicsEntityReport<NxShape*>` (vtable 0x00B2711C, ctor `0x00827690`) that collects the shapes into a vector; `activeGroups = -1` (`push -1` at 0x0082EDBA, so **no shape group index is excluded**); `groupsMask` = a local NxGroupsMask `{bits0 = 0x2011134, 0, 0, 0}` [C 0x0082ED0C, 0x0082ED17-0x0082ED2A zero the rest]; `accurateCollision = 1` (`push 1` at 0x0082EDB3).
+- Before the call `OverlapCapsule` does what the ray does [C 0x0082ED69-0x0082ED82]: `0x0082D900(1, &m, &m)` (`PushFilter`: `setFilterBool(true)`, both filter constants = the mask) and `0x0082A150(0,0,0)` (`setFilterOps(AND, AND, AND)`). So a shape is a hit when `(shape.bits0 & 0x2011134) != 0` (same reduction as COLLISION.md:19) [I for PhysX's equation, as there].
+
+### 2. The arguments the creature function pushes (0x006B171B-0x006B174A)
+
+Order the callee reads them: `OverlapCapsule(this = scene, p0*, p1*, radius, mask, 0, outVector*)`, `ret 0x18` [C 0x0082F0C9]. The creature function passes:
+
+| Callee arg | Value | Where |
+|---|---|---|
+| p0 (`[ebp+8]`) | pointer to the capsule's **bottom** point (x, y, centreZ - h/2) | `lea ecx,[esp+0x44]` 0x006B1737, z by `fsubr` 0x006B1733 |
+| p1 (`[ebp+0xC]`) | pointer to the **top** point (x, y, centreZ + h/2) | `lea edx` 0x006B172F, z `fadd st(1)` 0x006B171C |
+| radius (`[ebp+0x10]`) | float `r`, written into the pushed slot by `fstp [esp]` | 0x006B173F-0x006B1743 |
+| mask (`[ebp+0x14]`) | `0x2011134` | `push 0x2011134` 0x006B1725 |
+| `[ebp+0x18]` | 0 | `push 0` 0x006B1723 (its use not found; the callee copies it to a local at 0x0082EC6A) |
+| out (`[ebp+0x1C]`) | an empty `std::vector` of 4-byte entries (the report's dedupe/output list) | `push ecx` 0x006B171B; destroyed after the call with `0x0046C760` |
+
+`OverlapCapsule` copies p0/p1 to the 28-byte **NxCapsule {p0 = bottom (3 floats), p1 = top (3 floats), radius}** with `0x00837A40` (a plain 3-float copy) and passes it unchanged to the PhysX call [C 0x0082ECA4-0x0082ED5D]. It does not shrink or grow the capsule before the query.
+
+### 3. How the shape is built
+
+- `r` = `controller->vtable+0x64` = `PhysicsControllerCapsule::GetRadius` (ID 22684, `0x00837E50`); `h` = `vtable+0x6C` = `GetHeight` (ID 22686, `0x00837F00`) [C 0x006B166D-0x006B1683; slots read from the vtable 0x00B2766C]. The controller is `creature+0x770` (PATHFINDING.md:489).
+- Centre: with the argument given, `(x, y, z + [this+0x784])` of the 16-byte vector it points to (`movaps xmm0,[eax]`, `fld [edi+0x784]`, `fadd [esp+0x2c]` [C 0x006B16D4-0x006B16E6]). So the argument is the **feet** position and `+0x784` the centre height above the feet. With no argument, the centre is the controller's own position from its vtable `+0x20` (`0x00838380`, the PhysX position, which is already the centre), with **no** `+0x784` added [C 0x006B16EC-0x006B16FD]. The snap calls it with an argument (`0x006B17E4`, PATHFINDING.md:975).
+- `0x00AE70F8` is the double **0.5** [C: read as 0.5 from the file]; `h * 0.5` (`fmul qword [0xAE70F8]` at 0x006B170B) is added to and subtracted from the centre z to make p1 and p0.
+- So the shape is a **vertical capsule**: a segment from (x, y, c - h/2) to (x, y, c + h/2) with radius r. With PATHFINDING.md:530-531 (creature+0x780 is the cylinder height `ch = max(h_body - 2cr - 0.2, cr + 0.1)`, centre `co = cr + ch/2 + 0.1` above the feet), and `GetHeight` being PhysX's capsule controller height (the cylinder between the sphere centres), the capsule's lowest point is 0.1 m above the feet and its top is `ch + 2cr + 0.1` above them [I: that GetHeight returns the cylinder height, as the controller's setter is given `ch`; not re-read]. So a walkable floor (bits0 includes 0x20) does not touch it at the feet's height.
+- It is the same capsule as the creature's controller shape (same radius, height and centre), moved to the position tested.
+
+### 4. The return value
+
+- `OverlapCapsule` returns `count > 0` (`setg bl`, `mov al,bl` [C 0x0082F06A-0x0082F0B2]). `count` increments once per shape the report collected whose type is not 6 (NX_SHAPE_MESH), and for a mesh shape only if a further per-shape call (shape vtable +0xAC with args `(ptr, 3, ptr)`, unidentified) answers true [C 0x0082EF16-0x0082EF3C]. So the mesh shapes (the level's triangle meshes) get a second, exact test and boxes, capsules and spheres count on the PhysX answer [I for the meaning of the second call].
+- **true = the capsule overlaps something in the mask**; the creature function returns that `al` unchanged [C 0x006B1753-0x006B175A]. This is PATHFINDING.md:976's "true = overlap" reading, now confirmed by the callee's `count > 0`.
+- The out vector gets one entry per distinct hit object (the report's slot 2 maps a shape to its actor and `0x0081C970` to a key; a duplicate key is dropped, `0x008276B0` [C 0x00827701-0x00827748]; I for what the key is). The creature function discards it.
+- What the snap does with it (PATHFINDING.md:885, :975) [C there]: false jumps straight to the final `capsule.SetPosition(p.x, p.y, p.z + 0x784)` at `0x006B1979`; true runs the safe-spot search first (`NearestFree` 0x0073E7F0 for a moving creature, else `GetSafeLocation` 0x0073E370, radius 10.0) and re-positions with `SetPosition(out, 0)` if it finds one. With the flag argument 1 the test is skipped and the search always runs (PATHFINDING.md:939).
+
+### 5. The mask 0x2011134
+
+It is a `NxGroupsMask.bits0` test against each shape's own `bits0` (the filter above, `activeGroups = -1`), **not** a set of shape group indices: group indices (statics 5, creatures 4, COLLISION.md:22, :41, :86) play no part, exactly as in the ray [C]. The bits, in COLLISION.md's table (:62-76):
+
+| Bit | Flag | Shapes that carry it |
+|---|---|---|
+| 0x4 | Placeables | placeables' `.phy` shapes |
+| 0x10 | (creatures' own mask, COLLISION.md:86; the `.phy` flag 0x2 "Creatures" is a different bit) | creature controllers' shapes (`groupsMask {0x10,0,0,0}`, 0x006B2160-0x006B21A0) |
+| 0x20 | StaticGeometry | the level's static shapes (e.g. 0x81002020) |
+| 0x100 | Water | water volumes |
+| 0x1000 | trees (inferred "tree", COLLISION.md:84) | SpeedTree collision capsules, 0x01001020 (`0x0053167B`) |
+| 0x10000 | TerrainWall | terrain walls (e.g. 0x80010000, 0x81012020) |
+| 0x02000000 | Walkable | walkable statics (0x82002020) |
+
+(0x2011134 = 0x2000000 + 0x10000 + 0x1000 + 0x100 + 0x20 + 0x10 + 0x4. Not in it: 0x1 Items, 0x2 Creatures-in-.phy, 0x8 Triggers, 0x01000000 Nonwalkable on its own, 0x80000000, 0x2000.) A level static with bits0 0x81002020 (Nonwalkable) still matches through 0x20.
+
+It is the **same mask the creature's movement uses**: `0x006B6880` pushes 0x2011134 for the controller's move at 0x006B6A4B and 0x006B6A84 (PATHFINDING.md:972), so this test asks "would the controller's capsule be in something its own movement collides with". The ray's mask 0x24 (COLLISION.md:19) is the subset {placeables, static}.
+
+### Not read / caveats
+
+- Whether the creature's own controller shape can hit itself: its bits0 is 0x10, which the mask contains, and `OverlapCapsule` excludes nothing (no self or object argument is used) [C: no exclusion in 0x0082EC20-0x0082F0C9 or the report 0x008276B0]. In the snap the capsule is still at the old spot when the new one (a different one: the snap runs only when it is more than 0.05 m away) is tested, so a short move within the capsule's own radius could count itself [I; not seen in play]. Other creatures standing there also make it true.
+- The per-mesh call (shape vtable +0xAC) and what the report's key is were not identified.
+- The PhysX side (`overlapCapsuleShapes` in the NxScene's implementation, and whether `accurateCollision` changes capsule-vs-box results) was not followed.
