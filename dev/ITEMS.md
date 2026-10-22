@@ -457,6 +457,35 @@ Read 2026-10-21 by lib-agent-2 (subagent), GOG `game\DAOrigins.exe` (base 0x4000
 - A live comparison of the 66500 figure, or of any item's displayed price, in play.
 - The enciphered add-ins' `itemprps_*` / `materialtypes_gwb` rows.
 
+## The store's and inventory's tab filters (read 2026-10-21 by lib-agent-2, for DAOParagonEngine)
+
+Read 2026-10-21 by lib-agent-2, for DAOParagonEngine. Vanilla filters by `bitm_base.EquippableSlots` (a mask of 1 << `INVENTORY_SLOT_*`), not by `StorePanel`, and crafting by the item's name.
+
+- **The message** [C]:
+  - `GUIStore` `SetItemListFilterMessage` (0x00729A00) sets the filter on both of its lists (+0xC0, +0xD0); `GUIInventory`'s (0x00731B10) sets it on its list (+0x1FC) and keeps the value at +0x1F4.
+  - Each list's `FilteredGroupedItemView` looks the value up in its map at +0x74 (0x007FBBD0), stores the filter at +0x5C (0x007FBBB0) and rebuilds the list (0x007FB570).
+  - The rebuild skips each item whose filter's slot 1 returns false. It also skips a crafting recipe (the item's base item 0x6C, 108) that the party's list at +0x20C+0x38 already holds (0x0073FD60) [C for the test, I that this means "already learned"].
+- **The map**, filled at 0x007FAF5C..0x007FB0ED [C]:
+
+| Value | Class (vtable) | An item passes when |
+|---|---|---|
+| 0 | `ItemFilterAll` (0xB248F4) | always (0x00722AE0) |
+| 1 | `ItemFilterWeapons` (0xB24900) | `EquippableSlots & 0x10005`: main hand, ammunition, Shale's right arm (0x0080E010) |
+| 2 | `ItemFilterArmour` (0xB2490C) | `EquippableSlots & 0xC80F0` (chest, head, boots, gloves, Shale's chest, the dog's warpaint and collar), or `EquippableSlots == 2`, off hand only, so shields (0x0080E030) |
+| 3 | `ItemFilterAccessories` (0xB24918) | `EquippableSlots & 0x1E00`: the rings, the amulet, the belt (0x0080E070) |
+| 4 | `ItemFilterOther` (0xB24924) | `EquippableSlots & 0xD9EF7` is 0 and the item is not crafting (0x0080E0C0) |
+| 5 | `ItemFilterCrafting` (0xB24948) | the item's tag (+0xB8) has `_im_cft` first at character 3 (string 0xB26568; 0x0080E090) |
+| 6 | `ItemFilterPlot` (0xB24930) | the byte at item+0x2C4 (the plot flag) (0x0080E100) |
+| 7 | `ItemFilterBuybackSellback` (0xB2493C) | the value at item+0x5C0 is non-zero (0x0080E120) |
+
+- **What that gives with vanilla's `bitm_base`** [C for the table's values, read with ghilana]:
+  - Weapons: every weapon (main-hand mask 1 or 3), arrows, bolts and staff projectiles (4), and Shale's right arm (65536). Shale's left arm (131072) is not a weapon.
+  - Armour: body armour and clothing (16), helmets (32), boots of every weight (64), gloves (128), shields (2), Shale's chest (32768), and the dog's collar and warpaint. Shale's body (16384) is not armour.
+  - Accessories: rings (1536), amulets (2048) and belts (4096).
+  - Crafting: the tags `gen_im_cft_*` and `gxa_im_cft_*`, both the recipes (base item 108) and the reagents, herbs, poisons, traps and Awakening's runes. The `StorePanel` of the recipes' base item (4) plays no part [I that item tags match their template names, as all 210 such templates do].
+  - Other: what has none of those slots and is not crafting: gems, keys, gifts, quick items, codex items, and also Shale's body and left arm, the creature weapons (8192) and the ballista bolts (0).
+- **A value not in the map** [I]: the lookup is the map's `operator[]` (0x004DFE40), which yields a null filter, and a null filter skips no item, as 0 does.
+
 ## The weapon style, and GetWeaponStrengthModifier
 
 Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm/--refs`, a scratch rel32 call scan, and `bitm_base` from `packages\core\data\2da.erf` (`tools\gda.py --dump bitm_base`; base table, add-ins' M2DA rows not merged). No Ghidra, no game. **Checked** = read in the disassembly or the table; **inferred** = a reading of purpose.
