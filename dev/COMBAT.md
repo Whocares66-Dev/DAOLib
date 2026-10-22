@@ -133,6 +133,17 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
     - Once it has a target it shoots from wherever it is, up to the weapon's 45 m.
     - Play (DAOParagonEngine, staged spawns): shots at 29.0 and 33.3 m; an archer placed at 37.8 m walked in and had not shot after 15 s. This fits acquisition at about 30 m plus staging slack [I].
   - **Being shot makes the target perceive the shooter** [C]. At an attack's impact `rules_core.nss`:556 signals `EVENT_TYPE_ATTACKED` (1001) to the target (`SendEventOnAttacked`, `events_h.nss`:410–423). Its handler (:625–) calls `WR_TriggerPerception` both ways unless the target is stealthed. `TriggerPerception` (166, 0x0065A7B0 → 0x006B32A0) adds the other to the perceived set without a sight test, when it is in the same area, alive, active and under 60 m on the ground (0x006A2BB0, the double 60.0 at 0x00B03BF8). A follower struck while idle then runs `AI_DetermineCombatRound` (`dev/PARTY.md`:525). So a party shot from beyond its own perception range still answers.
+  - **What walks an enemy archer in** (read 2026-10-21 by lib-agent-2 with a subagent):
+    - **Not its tactics** [C]: the hurlock archer's AI package 10065 (`aip_ds_archer`) has no "move closer" and no plain attack row. Its only moves (rows 3–6) back away 13 m from an enemy within 12 m (`AI_RANGE_MEDIUM`; short is 3.5 m, long 80 m), so the archer ends in the default action, a plain `CommandAttack`.
+    - **Not the AI's ranged branch** [C]: `_AI_ExecuteAttack` gives no distance and does not switch to the dagger at range.
+    - **The allies' help on perception** [C, `rules_core.nss`:1000–1062, `PERCEPTION_APPEAR`]:
+      - When a creature perceives a hostile, each ally from `_AI_GetAllies` (within `AI_RANGE_MAX_ALLY_HELP`, 15 m) that is not yet in combat is moved, if it is a non-follower, not stationary (`AI_FLAG_STATIONARY` 0) and not in a climax army.
+      - The move is `CommandMoveToObject(enemy, run)` after `WR_ClearAllCommands`.
+      - Only while the perceiver's own `AI_HELP_TEAM_STATUS` is 0 or 1. The first such ally sets it to 4, so one ally is moved per perceiver [C for the code, I for the effect].
+      - The moved ally keeps walking until it perceives the enemy itself, at its 30 m, and its own APPEAR starts its combat [I for where the walk ends].
+    - **The first shot's delay** [C, :962–990]: a non-follower that first perceives a hostile more than 25 m away, with a non-melee weapon and not from a hostility change, queues `CommandWait(0–2 s)` (`AI_TRIGGER_DELAY_RANDOM_MAX` 2.0) instead of its combat round.
+    - **The stationary flag is per placed instance**, in the area's `.are` [C]: the template `pre200cr_hurlock_archer` has `AI_FLAG_STATIONARY` 0, but placed archers often carry 1 (the Korcari Wilds instance; two of five `hurlock_lbow_axe` on Ishal's first level). A stationary archer is never moved by the help and shoots only within `GetItemRange` (45 m) and its line of sight.
+    - **Not explained**: a staged archer at 37.8 m walking to 33.7 m and not shooting in 15 s. Candidates [I]: the help move from an ally that perceived first; or an attack command whose approach cuts its stop distance by 1 m per update without sight (`dev/TURN_BASED.md`:184).
 
 **The swing** (`CSSubActionHandler::Swing`, `0x007A87C0`, read):
 
