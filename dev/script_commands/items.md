@@ -55,8 +55,8 @@ Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x4000
 
 ### SetItemAbilityId (191)
 - **Handler:** 0x0065E330 → `ScriptBackend::ForScript_SetItemAbilityId` (0x00752D80).
-- **Does:** pops the item and `nAbilityId` only; sets item+0x660 (attribute vtable +0x54), then, if the item has a holder (+0x4E8), the holder's vtable +0x28(item) (inferred: "item changed"; a no-op `ret 4` in `Inventory`), then item vtable +0x64 (not read). Checked.
-- **Edge cases:** **`nPower` is never popped**, and the VM's ACTION opcode (0x00A30962) does not clean the stack after a command, so a three-argument call leaves an int behind (checked; no shipped script calls 191). An equipped item's granted ability is not re-applied (inferred; `script.ldf`: "Do not use on equipped items"). No item: nothing. Checked.
+- **Does:** pops the item and `nAbilityId` only; sets item+0x660 (attribute vtable +0x54), then, if the item has a holder (+0x4E8), the holder's vtable +0x28(item) (inferred: "item changed"; a no-op `ret 4` in `Inventory`), then item vtable +0x64 (0x005BDCF0, a bare ret). Checked.
+- **Edge cases:** **`nPower` is never popped**, and the VM's ACTION opcode (0x00A30962) does not clean the stack after a command, so a three-argument call leaves an int behind (checked; no shipped script calls 191). An equipped item's granted ability is not re-applied: the tail call, item vtable +0x64, is CCItem's empty slot (the dword at 0x00B1C680 of vtable 0x00B1C61C, 0x005BDCF0, a bare `ret`), as `script.ldf` warns ("Do not use on equipped items"; read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169). The same no-op ends AddItemProperty (item_prop.md) and the indestructible setter. No item: nothing. Checked.
 
 ## Not read
 
