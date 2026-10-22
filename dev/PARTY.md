@@ -958,3 +958,16 @@ No shipped script is known to use the client VM (I).
 - **Validate `SetTacticEntry`** with the same FollowerAI/ValidForTarget/UseType rules the list builders use.
 - **Run event 83 synchronously** from `SetTacticPresetID` after resetting the rows.
 - **Leave all evaluation** to `ai_main_h_2`/`ai_conditions_h`.
+
+## Hiding a party alert (read 2026-10-22 by lib-agent-2)
+
+- **`HideAlertMessage`** (`CCParty` 0x0062F220) [C]:
+  - **The argument** is one int at message +4 (`messages.csv`: an 8-byte message), the alert's `Type`.
+  - **0x00628970** (`this` = party +0x330) calls 0x00628500, which walks the `Party.Alerts` list (+0x68) from index 0 and returns the first alert whose attribute at +0x58 (its `Type`) equals the argument, or −1.
+  - **A found alert** is handed to 0x00628650 with the list at +0xA0, erased from +0x68 (0x004A62E0), and the list notified (its attribute slot 0x24). What +0xA0 keeps (the hidden alerts) is [I].
+  - **None of that type:** nothing. One alert per message.
+- **The caller is the notifications movie, not an engine timer** [C, `Alert.as`]. It sends `Party.HideAlert <this.Type>` in two places:
+  - in `Hide()` (:205), when its fade-out animation ends. The fade starts after the movie's own delay (`TriggerFadeoutDelay`, a `setInterval`), which stops while the mouse is over a non-sticky alert;
+  - on a click (`OnButtonAction`, :236–253), after `GUI.GoToQuest`, `GoToCodex`, `GoToItem`, the tactics screen or the ability screen.
+  - So of two alerts of one type, the first in the list goes, whichever of them faded or was clicked [I for the effect].
+- **`HideUberAlertMessage`** (0x0062F240, no argument) calls 0x00629E50 on the same object; not read.
