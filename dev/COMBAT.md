@@ -144,6 +144,33 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
     - **The first shot's delay** [C, :962–990]: a non-follower that first perceives a hostile more than 25 m away, with a non-melee weapon and not from a hostility change, queues `CommandWait(0–2 s)` (`AI_TRIGGER_DELAY_RANDOM_MAX` 2.0) instead of its combat round.
     - **The stationary flag is per placed instance**, in the area's `.are` [C]: the template `pre200cr_hurlock_archer` has `AI_FLAG_STATIONARY` 0, but placed archers often carry 1 (the Korcari Wilds instance; two of five `hurlock_lbow_axe` on Ishal's first level). A stationary archer is never moved by the help and shoots only within `GetItemRange` (45 m) and its line of sight.
     - **Not explained**: a staged archer at 37.8 m walking to 33.7 m and not shooting in 15 s. Candidates [I]: the help move from an ally that perceived first; or an attack command whose approach cuts its stop distance by 1 m per update without sight (`dev/TURN_BASED.md`:184).
+- **An arrow's flight, and where BLOCKED comes from** (read 2026-10-22 by lib-agent-2 with subagents, for DAOParagonEngine #163). It builds on `EFFECTS.md`, "5. A projectile at impact".
+  - **The path** [C]:
+    - **Launch:** a plain attack keeps `Crust_ID` 0 (the maker 0x006B6F60, 0x006B6FAB), so the arrow is held at `Prop01`, the right hand, the hand that draws the string; the bow (`WieldR` 15) is in the left. The release (0x007E80E0) reads that node's world position.
+    - **Aim:** the destination is re-read every update (0x007E7120). With a target it is the target's crust hook `+0x4A8` (0x007E6F00; that hook is absent, so the projectile sets `+0x4A8` = 1 at 0x007E6F4A), looked up in the target's crust map (slot 0x7C, 0x00547D20). On a humanoid, `CrustHook1` hangs under `Chest1` at (0.068, 0, 0) (`hm_arm_nuda_0.mmh`): the upper chest. Only without a graphics object or hook does it use the target's position `+0x120`, the feet.
+    - **Arc:** `prj_base` rows 1 (arrow) and 3 (bolt) have `Simulation` 0, `InitialSpeed`, `MinSpeed` and `TopSpeed` 60, `Acceleration` 0, `StaticCollisions` 1, `DynamicCollisions` 0 and `ImpactTimeout` 3. A `Simulation` 0 row flies straight at 60 m/s toward the re-read destination, so it homes. The gravity (0, 0, −9.81) at 0x00C11840 is only for `Simulation` 1 rows (ballista, catapult, traps).
+  - **The sweep** (0x007E8C10, called at 0x007E946F with the step's old and new position) [C]:
+    - **The static test** runs when `StaticCollisions` is set, once the projectile has flown further than the caster's height plus a constant (0x007E6A10). It is a closest-shape ray (0x00648C60), no radius, with mask **0x1024** under the AND filter (`COLLISION.md` §1). A shape is hit when `bits0 & 0x1024`: Placeables 0x4, StaticGeometry 0x20, or 0x1000.
+    - **The classifier** (0x00648B70) splits the hit by the shape's bits0. `& 3`, 0x20000 or 0x4, with an actor id other than −1, is an object (kind 2, the actor's user-data id). 0x20 or 0x8 is static (kind 1). Under 0x1024 only a Placeables shape can be an object.
+    - **The dynamic test** runs only with `DynamicCollisions` (not for arrows or bolts). It uses mask 0x20002, three rays ±`+0x470`, and new objects other than the caster and target. Its hits only raise the impact event with their ids (0x007E89F0); they never end the flight or set result 5.
+  - **What a hit does** (0x007E9474..0x007E94AB) [C]:
+    - On a static or object hit the caller stores the out-id in the target `+0x4C0` and sets the attack result (`+0x488`, 0x007E68A0) to **5 unless it is 3**, then puts the projectile at the hit point. So a roll of MISS stays a miss, and only a would-be hit becomes BLOCKED. This is the only writer of result 5 (0x007E7BF1, 0x007E821E and 0x00679B63 only read it).
+    - An object hit is taken only when its id is neither the target's nor the caster's (0x007E8CF9, 0x007E8D01).
+    - **A defect:** a static hit (a wall) returns without writing the out-id (0x007E8CC5..0x007E8CEA, after the surface's sound, 0x007E67F0). The caller then stores `[esp+0x14]`, which at that point holds the float bits of the step's length (0x007E941F..0x007E942C), as the new target. The result is still 5.
+  - **No facing or stance test** [C]: none in the flight, and `Combat_GetAttackResult` (`combat_h.nss`:361) never returns BLOCKED.
+  - **In the scripts** [C]: `ATTACK_IMPACT` (`rules_core.nss`:509) goes to `Combat_HandleAttackImpact` (`combat_h.nss`:1062–1079), which turns 5 into MISS and shows `UI_MESSAGE_BLOCKED`, the floating "Blocked". There is no damage, sound, VFX or animation of its own; the later BLOCKED branch (:1272) is empty. The engine skips the on-hit events for results 0, 3 and 5 (0x007E87C0).
+  - **The arrow sticks** [C]: at arrival (0x007E90B0) the new target exists and `ImpactTimeout` is 3, so the arrow is made a child of the hit object's model at the hit point (0x007E79D0) and plays its material sound. It stays 3 s, then fades (`AlphaFade`).
+  - **Not settled: what a shield bearer's arrows hit.**
+    - In play (DAOParagonEngine, Ishal floor 1) 12 of 28 impacts on shield bearers were BLOCKED, against 4 of 50 with the shields unequipped.
+    - Nothing read makes a shield hittable [C]:
+      - every vanilla shield `.phy` (`w_shd_kita_0`, `w_shd_srda_0`, the others of the same 2,026 bytes) is a lone GOB with no shapes;
+      - `w_shd_kita_0.mmh` has a bbox, one mesh and a `CrustHook1`, with no collision node;
+      - a humanoid's body capsules are Creatures | Nonwalkable (0x2 | 0x01000000), and its controller is groupsMask 0x10, neither within 0x1024.
+    - Walls (the defect above) fit the 4 of 50 but would not rise with shields [I].
+    - **Two leads not read:**
+      - Whether a held item's `CrustHook1` enters the wearer's crust map (0x00562E00, 0x00544CB0). If it does and comes first, the aim moves from the chest to the shield, and the ray crosses other geometry [I].
+      - Who calls `PhysicsActor` slots 22–24 (0x0081E5F0 rewrites every shape's mask) for creatures or items.
+    - **The test that decides it:** at 0x007E94AB, log the hit's kind and id (the hit record's +0x10 and +0x14), the aim from 0x007E7120 and the target's `+0x120`. Kind 1 means a wall; kind 2 names the object.
 
 **The swing** (`CSSubActionHandler::Swing`, `0x007A87C0`, read):
 
