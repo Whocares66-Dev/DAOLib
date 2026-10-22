@@ -304,7 +304,7 @@ inline constexpr AddressId GameModePartyPicker_UnselectPartyMemberMessage{18323}
 inline constexpr AddressId GameModePregame_RefreshCreditEntriesMessage{12828}; // 0x0064d7a0
 inline constexpr AddressId GameModePregame_ShowCreditsMessage{12807}; // 0x0064d050
 inline constexpr AddressId Journal_AcceptChantersQuestMessage{15503}; // 0x006eb850
-inline constexpr AddressId Journal_ClearChanterBoardMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId Journal_ClearChanterBoardMessage{15730}; // 0x006f3bc0
 inline constexpr AddressId Journal_MarkAllCodexAsReadMessage{0}; // 0x00000000, not confirmed
 inline constexpr AddressId Journal_MarkCodexAsReadMessage{15561}; // 0x006eea50
 inline constexpr AddressId Journal_SetActiveQuestMessage{15748}; // 0x006f4fb0
@@ -622,7 +622,7 @@ inline constexpr Handler kHandlers[] = {
     {"GameModePregame", "RefreshCreditEntriesMessage", AddressId{12828}, 0x0064d7a0, 0, false, true},
     {"GameModePregame", "ShowCreditsMessage", AddressId{12807}, 0x0064d050, 0, false, true},
     {"Journal", "AcceptChantersQuestMessage", AddressId{15503}, 0x006eb850, 0, false, true},
-    {"Journal", "ClearChanterBoardMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"Journal", "ClearChanterBoardMessage", AddressId{15730}, 0x006f3bc0, 0, false, true},
     {"Journal", "MarkAllCodexAsReadMessage", AddressId{0}, 0x00000000, 0, false, false},
     {"Journal", "MarkCodexAsReadMessage", AddressId{15561}, 0x006eea50, 0, false, true},
     {"Journal", "SetActiveQuestMessage", AddressId{15748}, 0x006f4fb0, 0, false, true},

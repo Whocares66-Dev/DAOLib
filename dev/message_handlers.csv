@@ -274,7 +274,7 @@ GameModePartyPicker,UnselectPartyMemberMessage,HandleMessage,0x00767100,0,0x00b1
 GameModePregame,RefreshCreditEntriesMessage,HandleMessage,0x0064d7a0,0,0x00b06c48,0x0064dabb,0
 GameModePregame,ShowCreditsMessage,HandleMessage,0x0064d050,0,0x00b06c54,0x0064d10b,0
 Journal,AcceptChantersQuestMessage,HandleMessage,0x006eb850,0,0x00b13c8c,0x006ed39a,0
-Journal,ClearChanterBoardMessage,HandleMessage,0x00000000,0,0x00b13c98,0x00000000,0
+Journal,ClearChanterBoardMessage,HandleMessage,0x006f3bc0,0,0x00b13c98,0x00000000,0
 Journal,MarkAllCodexAsReadMessage,HandleMessage,0x00000000,0,0x00b13cb0,0x00000000,0
 Journal,MarkCodexAsReadMessage,HandleMessage,0x006eea50,0,0x00b13ca4,0x006ef35a,0
 Journal,SetActiveQuestMessage,HandleMessage,0x006f4fb0,0,0x00b13c80,0x006f5d3a,0
