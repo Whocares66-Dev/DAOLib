@@ -119,3 +119,24 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
 
 ## Not read
 - 0x00A2DB80 inside (taken as the size from its use here and the command's purpose).
+
+## A journey as the engine runs it (read 2026-10-22 by lib-agent-2 with a subagent, for DAOParagonEngine #112)
+
+- **`EVENT_TYPE_WORLDMAP_POSTTRANSITION` (103)** [C]:
+  - **Where it is raised:** its only raiser is 0x007008D0, with one caller (0x006C8FE1), case 2 of the area-load machine 0x006C8EF0 (`LOAD_EVENTS.md`, step 2). That is early in the arrived area's load, before `AREALOAD_SPECIAL`, so despite its name it comes before the area's own load events.
+  - **When:** only when the loading screen's id (+0x14C) is 0x10, the world map, and the world map's +0x100 is set. The PreTransition handler 0x00700B90 sets +0x100 at its start, and only `WorldMapClosed` (0x00700610) clears it.
+  - **So** it is raised on every area load made while travelling, not only at the destination: on the encounter area's too [I], then at the destination.
+  - **To whom:** the module only, with no arguments, delivered at once (0x005FF850 → 0x005FEB00). `EVENT_TYPE_WORLDMAP_PRETRANSITION` (92) is also delivered at once to the module (`AIMaster::DeliverNow`, 0x0064AD80).
+  - **The scripts:** vanilla's handler is `WM_HandleCutscenesWOW`, which plays plot cutscenes (Redcliffe, Loghain's).
+- **The GUI status (+0x98)** [C]:
+  - **The engine** reads it in one place, `SetFullScreenGUIMessage` (0x0060B260, at 0x0060B292): for scene 0x10 a status of 0 refuses to open the map.
+  - **The movie** reads `WorldMap.GUIStatus` once, at the scene's start. 2 allows travel; 0 or 1 makes the map read-only. It also turns read-only once the travel status is non-zero.
+  - **The click gate is the movie's:** `MapPinIcon.PinClicked` sends `GameModeController.AreaTransition` only for an ACTIVE pin on a map that is not read-only. The engine's handler (0x007180E0 → 0x00700CA0 → `BEGIN_TRAVEL`) does not read +0x98.
+- **The route's animation and the wait** [C]:
+  - **No wait before the pre-transition:** when the travel status changes, the movie's `AnimatePathStart` sends `WorldMapPreTransition` at once, then animates. So the area's load runs while the route is drawn.
+  - **The animation's length:** the movie runs at 30 fps. Each trail point takes frames 1–16 (0.5 s), one point per path node; an encounter's point takes frames 1–150 (about 5 s), on the encounter's leg only.
+  - **The engine's wait** is load step 7 (0x006C91A0..0x006C9238), before `POSTLOADEXIT`. It polls `GUIWorldMap` 0x0072EDC0, which asks the movie's `GetTravelling` and `GetAnimating`, then invokes `AreaLoadedNotify`. The game is paused (`SetPaused(1, 0)`) through it, so no game time passes.
+  - **So** the journey's time on screen depends on the route's length, about 0.5 s per path node plus about 5 s for an encounter, or the load's time if that is longer [I for the "longer"].
+- **Swapping the maps** [C]: `WorldMapSwapMapsMessage` (0x00701240) calls 0x00700E00. When both +0x68 and +0x78 are set, it calls `SetPrimary`(the secondary's id) (0x00700D80), then `SetSecondary`(the old primary's id) (0x00700DB0), the ordinary setters with their refresh. With either map null it does nothing.
+- **A pin's "activated once" flag (+0x1B8)** [C]: the save's field 16792 (`SavegameWorldmapMapPinActivatedPreviously`, 0x4198) sets it at load (the pin's loader 0x007F7090, at 0x007F7200..0x007F7216: `pin+0x1B8 = value != 0`), and the saver 0x007F6B60 writes it back. A plain byte store, so a loaded pin does not flash.
+- **Not read:** whether the movie's message reaches the engine in the same frame; field 16793.
