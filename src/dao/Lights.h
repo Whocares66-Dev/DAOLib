@@ -1,5 +1,5 @@
-// The ambient light the engine gives what it draws, the colour of each point light and the light
-// probe's irradiance it hands each object, read and set. Level meshes, terrain and
+// The ambient light the engine gives what it draws, the colour of each point light, the light
+// probe's irradiance and the share of the sun it hands each object, read and set. Level meshes, terrain and
 // props take it as g_vLightParams[4], added to the light of the lamps and the sun; it is the
 // sum of the ambient lights of the room (the lights in each room's _ll.mmh) that the engine
 // chose for the object. Figures take their ambient light from a light probe instead and are
@@ -106,5 +106,26 @@ struct ProbeLight
 // Call it when the plugin loads or later. Callbacks run on the render thread, many times a frame,
 // so keep them short and call no script commands from them.
 void OnProbe(std::function<void(ProbeLight &)> callback);
+
+// One object's share of the sun, as the engine chooses its lights.
+struct SunShare
+{
+    // The share the object's sun eases toward, which scales the sun's colour for it. Vanilla's until a
+    // callback sets it: 1, or 0.1 where the level's walk grid has the object's cell out of the sun.
+    float share = 1.0F;
+    // Which chooser is choosing the object's lights.
+    Chosen chosen = Chosen::Unknown;
+    // The object's light state, as OnAmbient and OnProbe have it.
+    std::uintptr_t state = 0;
+};
+
+// Adds a callback to run each time the engine chooses an object's lights and sets the share of the sun
+// it eases the object toward: about once a frame for each object drawn, paused or not.
+// @param callback may change `share`
+//
+// The object's sun reaches a changed share over a moment, as vanilla's does. Call it when the plugin
+// loads or later. Callbacks run on the render thread, so keep them short
+// and call no script commands from them.
+void OnSunShare(std::function<void(SunShare &)> callback);
 
 } // namespace dao::lights

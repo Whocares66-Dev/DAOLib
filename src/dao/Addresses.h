@@ -2619,6 +2619,22 @@ DAO_ADDRESS(kObjectNodeLight_Color, 7605)
 DAO_DATA(kObjectNodePointLight_vftable, 63928)
 DAO_DATA(kObjectNodePointLight_ILight_vftable, 63924) // its ILight's, at the node's +0x180
 
+// An object's light state easing its share of the sun toward a target
+// (dao/Lights.h, OnSunShare; DAOLib #230, read 2026-10-22): __thiscall on
+// the state, the target as a float and a char, `ret 8`. With the char 0 the
+// state's +0x200 moves toward the target by at most the frame's time
+// (*0x00C31650 + 0x3C) times a rate (0x00BF29AC); with it set, or once there,
+// it is the target. Its one caller (0x00462470, __thiscall on the light
+// manager: the state, the walk grid's sun subset for the object, the sun's
+// direction and colour, and the char, `ret 0x14`; called from both choosers)
+// passes 1.0, or 0.1 (0x00AE7BD8) when the manager's byte +0x120 is set and
+// the subset's first entry is not -1; the subset is 0x004622C0's (the
+// manager's +0x124's +0x4A0, eight bytes an entry, at the object's +0x28;
+// src/dao/core/Grid.h). It then hands the state the sun's direction and its
+// colour times +0x200 (0x0046BB80, to +0x60 and +0x70). The char is the
+// chooser's: set when the state's +0x214 is not the manager's +0xD4.
+DAO_ADDRESS(kLightState_EaseSun, 2824)
+
 // The resource manager making a source of files of one kind without putting
 // it in its list (ECResMan::ResMan::AddSource does that): __thiscall, the
 // source's path as a std::wstring in the engine's own names for its folders

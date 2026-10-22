@@ -1,5 +1,5 @@
-// Example: a sky's light in the shade, the level's lamps dimmed and its light probes halved
-// (dao/Lights.h).
+// Example: a sky's light in the shade, the level's lamps dimmed, its light probes halved and
+// the whole sun on everything (dao/Lights.h).
 //
 // The level's pieces (its meshes, its terrain, its props) are given an
 // ambient light of a faint blue on top of vanilla's, which is nothing for
@@ -9,7 +9,9 @@
 // (its rooms' layout lights, the lamps and the warm "Hotspots" a day level
 // is made with, each room's in its <level>_<x>_<y>_<d>_ll model) are dimmed
 // to a quarter, and every other light left as it is. The irradiance of the
-// level's own light probes, which light the figures, is halved.
+// level's own light probes, which light the figures, is halved. Every object
+// takes the whole sun, where vanilla gives a tenth of it to one standing in a
+// cell of the walk grid that the level's sun does not reach.
 //
 // What to look for in play, outdoors at day: shade, under eaves and on the
 // sides of walls away from the sun, lifted from near black to a dim blue.
@@ -20,7 +22,10 @@
 // Redcliffe's village, the glow of the level's fires on the walls about them
 // fainter, the party's portraits as bright as ever; the figures darker than
 // vanilla's in the same light. Each probe's model is logged the first time
-// it is handed out.
+// it is handed out. Every ten seconds the log has how many objects' share of
+// the sun was set, by chooser, and how many of them vanilla had in the shade;
+// a figure walked under a cliff or into a house's shadow in daylight stays
+// lit by the sun there.
 //
 // What it does goes to example_lights.log.
 #include "dao/Lights.h"
@@ -54,6 +59,9 @@ std::atomic<unsigned> g_moving{0};
 std::atomic<unsigned> g_unknown{0};
 std::atomic<unsigned> g_withLights{0};
 std::atomic<float> g_brightest{0};
+std::atomic<unsigned> g_sunLevel{0};
+std::atomic<unsigned> g_sunMoving{0};
+std::atomic<unsigned> g_sunShaded{0};
 
 void Lit(Ambient &ambient)
 {
@@ -127,6 +135,16 @@ void Probe(ProbeLight &probe)
     }
 }
 
+void Sun(SunShare &sun)
+{
+    ++(sun.chosen == Chosen::ForMoving ? g_sunMoving : g_sunLevel);
+    if (sun.share < 1.0F)
+    {
+        ++g_sunShaded;
+    }
+    sun.share = 1.0F;
+}
+
 void Frame()
 {
     static Clock::time_point logged = Clock::now();
@@ -139,6 +157,8 @@ void Frame()
                  "brightest {:.3f}",
                  g_level.exchange(0), g_moving.exchange(0), g_unknown.exchange(0), g_withLights.exchange(0),
                  g_brightest.exchange(0));
+    spdlog::info("sun share set in 10 s: {} level pieces, {} moving; {} in vanilla's shade", g_sunLevel.exchange(0),
+                 g_sunMoving.exchange(0), g_sunShaded.exchange(0));
 }
 
 } // namespace
@@ -154,6 +174,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     OnAmbient(&Lit);
     OnPointLight(&Lamp);
     OnProbe(&Probe);
+    OnSunShare(&Sun);
     dao::OnFrame(&Frame);
     return true;
 }

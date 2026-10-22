@@ -63,6 +63,23 @@
 // oth999d_0_ll's and oth999d_0_lc's. With every point light's colour set to 0 by a
 // callback, against vanilla from the same paused view, the party's portraits
 // went black and the figures darker: the colour returned is the one drawn.
+//
+// OnSunShare (DAOLib #230, read 2026-10-22; dao/Addresses.h at
+// kLightState_EaseSun) detours the easing of a state's share of the sun,
+// whose one caller hands it the target from the walk grid's sun subset, and
+// hands the callbacks that target: so the engine's easing, and the sun's
+// colour it scales, stay its own. Which chooser is choosing is known from
+// the choosers' detours, which the easing runs inside.
+//
+// Seen in play 2026-10-22, GOG: in the Denerim market by day, 22,098 level
+// pieces' shares set in ten seconds against as many ambient lights worked
+// out, so the choosers run about once a frame for each object; none in
+// vanilla's shade there. In Redcliffe village by night, paused in a fight,
+// 39 to 855 in ten seconds were in vanilla's shade; the example's callback
+// setting every share to 1, switched off and on again by a file it read
+// each frame, made one figure under the hill darker (red, green, blue
+// 109.8 92.0 117.5 to 103.6 86.0 110.1 over it) and as it was again within
+// four seconds, nothing else in the frame changing.
 #include "dao/Lights.h"
 
 #include "dao/Addresses.h"
@@ -99,11 +116,13 @@ constexpr std::size_t kIrradiance = 0x130; // in the state: three 4x4 matrices o
 using Callbacks = std::vector<std::function<void(Ambient &)>>;
 using PointCallbacks = std::vector<std::function<void(PointLight &)>>;
 using ProbeCallbacks = std::vector<std::function<void(ProbeLight &)>>;
+using SunCallbacks = std::vector<std::function<void(SunShare &)>>;
 
 std::mutex g_mutex;
 std::shared_ptr<const Callbacks> g_callbacks;           // replaced whole, never changed in place
 std::shared_ptr<const PointCallbacks> g_pointCallbacks; // the same
 std::shared_ptr<const ProbeCallbacks> g_probeCallbacks; // the same
+std::shared_ptr<const SunCallbacks> g_sunCallbacks;     // the same
 std::unordered_map<std::uintptr_t, Chosen> g_chosen;
 
 using FillFn = void(__fastcall *)(void *state, int edx, const float *base);
@@ -112,11 +131,15 @@ using ChooseForLevelFn = void(__fastcall *)(void *manager, int edx, void **node,
 using ChooseForMovingFn = void(__fastcall *)(void *manager, int edx, void **node, const void *sunDirection,
                                              const void *other, char ambientLights);
 using LightColorFn = void(__fastcall *)(const void *node, int edx, float *color);
+using EaseSunFn = void(__fastcall *)(void *state, int edx, float target, char immediate);
 
 Detour<FillFn> g_fill;
 Detour<LightColorFn> g_color;
 Detour<ChooseForLevelFn> g_chooseForLevel;
 Detour<ChooseForMovingFn> g_chooseForMoving;
+Detour<EaseSunFn> g_easeSun;
+
+thread_local Chosen t_choosing = Chosen::Unknown; // the chooser running on this thread
 
 // The light state of a node, as the choosers find it.
 std::uintptr_t StateOf(void **node)
@@ -140,14 +163,18 @@ void Record(void **node, Chosen chosen)
 void __fastcall ChooseForLevel(void *manager, int edx, void **node, const void *sunDirection, const void *sunColor,
                                char ambientLights, char other)
 {
+    t_choosing = Chosen::ForLevel;
     g_chooseForLevel.Original()(manager, edx, node, sunDirection, sunColor, ambientLights, other);
+    t_choosing = Chosen::Unknown;
     Record(node, Chosen::ForLevel);
 }
 
 void __fastcall ChooseForMoving(void *manager, int edx, void **node, const void *sunDirection, const void *other,
                                 char ambientLights)
 {
+    t_choosing = Chosen::ForMoving;
     g_chooseForMoving.Original()(manager, edx, node, sunDirection, other, ambientLights);
+    t_choosing = Chosen::Unknown;
     Record(node, Chosen::ForMoving);
 }
 
@@ -270,13 +297,37 @@ void __fastcall LightColor(const void *node, int edx, float *color)
     std::memcpy(color, light.color.data(), sizeof(Color));
 }
 
-// Detours Fill and the choosers, once, for OnAmbient and OnProbe; under g_mutex.
-void AttachFill()
+void __fastcall EaseSun(void *state, int edx, float target, char immediate)
 {
-    if (!g_fill.IsAttached() && Module::IsKnownExecutable())
+    std::shared_ptr<const SunCallbacks> callbacks;
+    {
+        const std::lock_guard lock(g_mutex);
+        callbacks = g_sunCallbacks;
+    }
+    SunShare sun{.share = target, .chosen = t_choosing, .state = reinterpret_cast<std::uintptr_t>(state)};
+    for (const auto &callback : *callbacks)
+    {
+        detail::Guard("a sun share callback", [&] { callback(sun); });
+    }
+    g_easeSun.Original()(state, edx, sun.share, immediate);
+}
+
+// Detours the choosers, once; under g_mutex.
+void AttachChoosers()
+{
+    if (!g_chooseForLevel.IsAttached() && Module::IsKnownExecutable())
     {
         g_chooseForLevel.Attach(addr::kLightManager_ChooseForLevel, &ChooseForLevel);
         g_chooseForMoving.Attach(addr::kLightManager_ChooseForMoving, &ChooseForMoving);
+    }
+}
+
+// Detours Fill and the choosers, once, for OnAmbient and OnProbe; under g_mutex.
+void AttachFill()
+{
+    AttachChoosers();
+    if (!g_fill.IsAttached() && Module::IsKnownExecutable())
+    {
         g_fill.Attach(addr::kLightState_Fill, &Fill);
     }
 }
@@ -313,6 +364,20 @@ void OnProbe(std::function<void(ProbeLight &)> callback)
     callbacks->push_back(std::move(callback));
     g_probeCallbacks = std::move(callbacks);
     AttachFill();
+}
+
+void OnSunShare(std::function<void(SunShare &)> callback)
+{
+    const std::lock_guard lock(g_mutex);
+    auto callbacks =
+        g_sunCallbacks ? std::make_shared<SunCallbacks>(*g_sunCallbacks) : std::make_shared<SunCallbacks>();
+    callbacks->push_back(std::move(callback));
+    g_sunCallbacks = std::move(callbacks);
+    AttachChoosers();
+    if (!g_easeSun.IsAttached() && Module::IsKnownExecutable())
+    {
+        g_easeSun.Attach(addr::kLightState_EaseSun, &EaseSun);
+    }
 }
 
 } // namespace dao::lights
