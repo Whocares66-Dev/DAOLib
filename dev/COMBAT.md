@@ -161,6 +161,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
   - **In the scripts** [C]: `ATTACK_IMPACT` (`rules_core.nss`:509) goes to `Combat_HandleAttackImpact` (`combat_h.nss`:1062–1079), which turns 5 into MISS and shows `UI_MESSAGE_BLOCKED`, the floating "Blocked". There is no damage, sound, VFX or animation of its own; the later BLOCKED branch (:1272) is empty. The engine skips the on-hit events for results 0, 3 and 5 (0x007E87C0).
   - **The arrow sticks** [C]: at arrival (0x007E90B0) the new target exists and `ImpactTimeout` is 3, so the arrow is made a child of the hit object's model at the hit point (0x007E79D0) and plays its material sound. It stays 3 s, then fades (`AlphaFade`).
   - **Not settled: what a shield bearer's arrows hit.**
+    - **Seen with a watch on the sweep** (DAOLib #229, 2026-10-22, DAOParagonEngine, Ishal floor 1; probe.log `projectile sweep hit`): two archers shooting at the hero, who held no shield, made 13 BLOCKED impacts, and all 17 blocked sweep steps were walls (kind 1, no id), at z 0.9–1.6 about 1–2 m past the archer. Walls near the archer do make BLOCKEDs. A shield bearer as the target is not yet watched.
     - In play (DAOParagonEngine, Ishal floor 1) 12 of 28 impacts on shield bearers were BLOCKED, against 4 of 50 with the shields unequipped.
     - Nothing read makes a shield hittable [C]:
       - every vanilla shield `.phy` (`w_shd_kita_0`, `w_shd_srda_0`, the others of the same 2,026 bytes) is a lone GOB with no shapes;
