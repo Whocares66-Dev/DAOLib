@@ -457,7 +457,7 @@ Read 2026-10-21 by lib-agent-2 (subagent), GOG `game\DAOrigins.exe` (base 0x4000
 - A live comparison of the 66500 figure, or of any item's displayed price, in play.
 - The enciphered add-ins' `itemprps_*` / `materialtypes_gwb` rows.
 
-## The store's and inventory's tab filters (read 2026-10-21 by lib-agent-2, for DAOParagonEngine)
+## The store's and inventory's tab filters
 
 Read 2026-10-21 by lib-agent-2, for DAOParagonEngine. Vanilla filters by `bitm_base.EquippableSlots` (a mask of 1 << `INVENTORY_SLOT_*`), not by `StorePanel`, and crafting by the item's name.
 
