@@ -1014,6 +1014,50 @@ The ActionScript of the 56 non-font movies was scanned for the data-tree paths i
 - Heaviest screens by distinct read templates: chargen 162, inventory 124, quickbar 112, levelup 111, journal 97, characterrecord 96, store 89, saveload 84. The heaviest observers are portraits, inventory, quickbar and characterrecord.
 - A path is resolved by `SmartData::TokenManager::Get()` and `Find(path)`; a missing path gives the shared null attribute, answered as a null string or 0.
 
+## A creature's `Attributes.<id>.<field>` tokens: Base, Current, Total, Modifier (read 2026-10-22 by lib-agent with a subagent, for DAOParagonEngine #174)
+
+Read in the GOG exe (`tools\daoexe.py --disasm`; names from the address library). [C] = read in the disassembly, [I] = inferred. Builds on `dev/PROPERTIES.md` (the store, the four getters) and `dev/GUI.md` (the data tree).
+
+**Summary.** `.Modifier` is the property's own modifier field (the store's +0x54), not total minus base: it excludes the EngineLink formula. `.Base` is +0x4C, `.Total` is base + modifier + formula, clamped, `.Current` is a depletable's +0x5C. Each is a float copied into a mirror object per property id, and which of the four are filled depends on the property's kind. [C]
+
+**The mirror object.** `CCreatureAttribute` (vftable `0x00B0F970`; also `0x00B0F960` at +8, `0x00B0F904` at +0x1C, `0x00B0F8F0` at +0x20; 0x98 bytes; bases `SmartData::SmartObject` and a named-member `SmartData::Attribute<ECHashMap<uint,IAttribute*>>` at +0x1C). Its constructor is `0x006A96C0` (ID 14637, unnamed) [C]. It registers four float attributes by name, each constructed with 0.0 (`0x005DDB90`) and added to the named-member map (slot +0xC, then +0x14):
+
+| name (narrow string) | at | member |
+|---|---|---|
+| `Base` (`0x00B0F8E0`, pushed at `0x006A9768`) | +0x58 | float attribute |
+| `Current` (`0x00B0F8D0`, `0x006A97C7`) | +0x68 | float attribute |
+| `Total` (`0x00B0F8C4`, `0x006A9828`) | +0x78 | float attribute |
+| `Modifier` (`0x00B0F8B0`, `0x006A9884`) | +0x88 | float attribute |
+
+So `<creature>.Attributes.<id>` is element `<id>` of an `ECDynArray<CCreatureAttribute*>` (an `IndexedPointerMemberLookup`, RTTI `SmartData::Attribute<ECDynArray<CCreatureAttribute*>,IndexedPointerMemberLookup,...>`, vftable `0x00B0FC84`) and `.Base/.Current/.Total/.Modifier` its named members. The array is at creature+0x528 (index = property id < 1000). Two more arrays hold ids 1000+i at creature+0x560 and 2000+i at creature+0x57C. [C] (the three arrays are created and filled in `0x006B4070`, ID 14859, which runs `new 0x98` + the constructor once per property id for the +0x528 array, the count being the dword at `0x00C38958`; and in `0x0071E300`, below). That the token path walks this array by id and the member by name is [I]: the string lookup itself was not followed. (The other `Base`/`Modifier` pushes, `0x006436B0`-neighbour code at `0x00644D3D`/`0x007B9DBE`, are the character-generation and level-up screens' own tree of talk-table strings, `0x004251`..`0x00425E`, six attributes by hand, not these tokens.) [C]
+
+**The producer: `0x0071E300`** (ID 16562, unnamed; a method of `CCreatureStats`, `this`+0x190 is the property list, `this`+0x5C the creature, `this`+0x1B0 a dirty flag it clears at `0x0071E91D`). Five callers: `0x0060C830` (ID 11441, which calls it right after `0x71D4A0`/`0x719AB0` on the creature's stats), `0x0062FD60`, `0x006BD4D0`, `0x0076C170`, and `PartyTactics::HandleMessage_SetBehaviourMessage` `0x007AD120`; what raises each was not followed. [C] It returns at once if the dirty flag is clear. [C] For each property id `i` below the array's size it asks `ScriptBackend::ForScript_GetCreaturePropertyType` (`0x0066C770`) for the kind and writes floats with the attribute's setter (vtable slot +0x54):
+
+| kind (`0x0066C770`) | Base +0x58 | Current +0x68 | Total +0x78 | Modifier +0x88 |
+|---|---|---|---|---|
+| 1 ATTRIBUTE | `GetBase` `0x006436B0` | not written (0.0) | `GetTotal` `0x006435C0` | `GetModifier` `0x00643890` |
+| 3 DEPLETABLE | not written (0.0) | `GetCurrent` `0x006437A0` | `GetTotal` | `GetModifier` |
+| anything else (SIMPLE 2, DERIVED 4) | not written (0.0) | not written (0.0) | `GetTotal` | not written (0.0) |
+
+Code: kind 3 at `0x0071E40C`-`0x0071E4F3`; kind 1 at `0x0071E4FB`-`0x0071E539` joining the same tail (Total at `0x0071E492`, Modifier at `0x0071E4E5`); other kinds at `0x0071E555`-`0x0071E599`. [C] The ids 1000+i (`0x0071E5A8`-`0x0071E743`, array +0x560) and 2000+i (`0x0071E75B`-, array +0x57C) are written with Base (`GetBase`) and Total (`GetTotal`) only, which are then the only fields set. [C] Before the kind test, id 27 (0x1B) has a special step: it compares the new total (`GetTotal(0x1B)`) with the value read from the attribute at `0x00478290` and, if the rounded integer differs, calls `0x00719FC0` and `0x0071A070` with the total; not followed (likely a change notification) [I].
+
+**What each getter returns** (the property store; `dev/PROPERTIES.md`, vtable slots total +0xC, base +0x14, modifier +0x18, current +0x24; the three read at `0x006435C0`, `0x006436B0`, `0x006437A0`, `0x00643890`, all pick the object by id from the list at stats+4 and call the slot) [C]:
+
+| token | value | for ATTRIBUTE | for DEPLETABLE |
+|---|---|---|---|
+| `.Base` | store +0x4C | the base | not filled by the mirror: 0 |
+| `.Modifier` | store +0x54 | the modifier (0 unless a script or effect set it) | the modifier |
+| `.Total` | slot 3 | clamp(base + modifier + EngineLink formula, Min, Max) | the same (health: base + modifier + max(0, CON-10) x 5) |
+| `.Current` | slot 9 | not filled: 0 (the getter would say -1) | store +0x5C |
+
+So `.Modifier` is not Total - Base: Total - Base also holds the EngineLink formula (health, mana and stamina, attack, defense, spellpower, resistances) and the clamp. A stat the inventory colours green or red by `.Modifier` is coloured only for what effects and scripts put into the modifier field. The engine-link formula is in `.Total` and not in `.Modifier`. [C] (that the movie reads `.Modifier` for the colour: from your question, not rechecked in the ActionScript).
+
+**Consequences for a port.**
+- An attribute (ids 1-6) answers Base, Modifier, Total; Current is 0, not -1.
+- A depletable (health 7, mana/stamina 8, ...) answers Current, Modifier, Total; Base is 0 (not its stored base).
+- Every other property (SIMPLE: armor, experience 19, level, ...) answers only Total; Base, Current, Modifier are 0.
+- Values are floats, copied when `0x0071E300` runs (dirty flag at stats+0x1B0), so they are as stale as the last run; the tree's delivered string form (rounding or decimals) is the data tree's and was not read here [I].
+
 ## gui3a: the stage at creation, and ResolutionWidth (lib-agent-2, read 2026-10-18)
 
 ### Short answers
