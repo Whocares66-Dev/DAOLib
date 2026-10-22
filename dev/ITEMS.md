@@ -361,7 +361,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - `ScriptCommand::GETITEMSTAT` (`0x00665670`) pops the item and the stat type and pushes `ScriptBackend::ForScript_GetItemStat(item, type)` (0.0 for no item). Read.
 - `ForScript_GetItemStat`: the stat type is a row of `itemstatdefines.gda` (table 109), whose `Label` names a column (`0x007530A0` reads it and hashes it). The value is `itemstats.gda` (table 110) at the item's base item row, that column, times `materialrules.gda` (table 159) at the material's row, the same column; the material's row is `materialtypes.gda`'s `Material` for the item's MaterialType (`0x00753C90`). A multiplier of 0 or less, or a missing column, counts as 1. Read. So: stat = itemstats[base item][stat] × materialrules[materialtypes[MaterialType].Material][stat].
 - The stat types (`itemstatdefines`): 1 Armor, 2 Damage, 3 Defense, 4 Attack, 5 CritChanceModifier, 6 ArmorPenetration, 7 AbilityCostModifier, 8 MissileDeflection, 9 OptimumRange, 10 Spellpower, 11 RngdPenalty, 12 AttributeMod. `itemstats` has these as columns (and DamageRange, DSpeed, BaseAimDelay, Attribute0/1); a longsword's row: Damage 7, DamageRange 1.5, ArmorPenetration 2, CritChanceModifier 2, DSpeed −0.1. `materialrules` scales Damage, Armor, CritChanceModifier, ArmorPenetration and others: Iron 1.0, Grey Iron 1.1/1.2/1.1/1.15, Steel 1.2/1.4/1.2/1.3, Veridium 1.3/1.6/1.3/1.45.
-- Not counted: the item's own properties (the .uti's PropertiesList); `GetItemStat` reads only the base item's row and the material. What item properties add is not read here (inferred: the scripts' item property handling, as effects).
+- Not counted: the item's own properties (the .uti's PropertiesList); `GetItemStat` reads only the base item's row and the material. Item properties: see "An item's own properties" below.
 - The scripts' use: `combat_h` attack rating adds `GetItemStat(weapon, ATTACK)`; critical chance `CRIT_CHANCE_MODIFIER`; ranged penalty distance `OPTIMUM_RANGE`; `core_h`'s `DmgGetWeaponBaseDamage` is `GetItemStat(weapon, DAMAGE)` (unarmed `COMBAT_DEFAULT_UNARMED_DAMAGE`), its max damage that times `itemstats`' DamageRange; the attribute factor `ATTRIBUTE_MOD`; `combat_damage_h`'s armour penetration `GetItemStat(weapon, ARMOR_PENETRATION) + GetCreatureProperty(attacker, PROPERTY_ATTRIBUTE_AP)`. Read in the scripts.
 
 ### The armour value, and stats that become creature properties
@@ -375,6 +375,34 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - `GetWeaponAttackRating` (693), `GetWeaponBaseDamage` (699), `GetWeaponStrengthModifier` (701) and `GetWeaponArmorPenetration` (703) share `0x0066A3B0`, which switches on the command. Each pops the attacker and an int (`nRightHandWeapon`, 1 the main hand, otherwise the off hand; 703 also pops the target first), takes the hand's weapon from the creature's equipment (`0x006A2B40`: its slot-0 and slot-1 item), and reads one `bitm_base` column at the weapon's base item: 693 `CombatRating` (float, `0x006A8680`), 699 `BaseDamage` (int, `0x006A86F0`), 701 would read `StrengthModifier` (`0x006A8770`) but never reaches it: its case (`0x0066A4B6`) looks up a target handle it never pops (−1, always null) and so always pushes the default −0.1f (`0x00B0839C`; corrected 2026-10-18 by lib-agent-2, "The weapon style" below), 703 `ArmourPenetration` (`0x006A87E0`, British spelling). No material, no attributes. Read.
 - `bitm_base` has `CombatRating`, `StrengthModifier` and `BaseDamage`, but no `ArmourPenetration` column, so 703 answers 0.0 for every weapon (read: the table's columns; the read fails and the default 0 stays). The target 703 pops is not used.
 - The shipped scripts barely use these four: `rules_h`'s `Rules_GetWeaponAttackRating`, `Rules_GetWeaponArmorPenetration` and `Rules_GetWeaponBaseDamage` wrap them, and nothing calls those wrappers (grep of the toolset's scripts). Combat goes through `GetItemStat` and the creature properties above.
+
+## An item's own properties (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine)
+
+- **Where they are** [C]: the item's +0x680 holds the property ids (`itemprps.gda` rows) and +0x69C their powers. They come from the .uti's PropertiesList and from `AddItemProperty` (`dev/script_commands/item_prop.md`). A rune's properties are under the item's +0x4BC.
+- **On equip, each IPType-1 property becomes an effect on the wearer** [C]:
+  - Who: the item-equipped handler 0x006C16E0 calls the item's 0x00759A40 at 0x006C17ED, after the base stats (0x0071B3C0), and only while creature +0xC58 is 0. 0x00759A40 also does the runes'.
+  - The effect, made by 0x00759190 per entry:
+    - its type is `itemprps.Effect`: 1012 `EFFECT_TYPE_MODIFY_PROPERTY` for the attribute, resistance and armour rows;
+    - int 0 is `Int0`, the properties.gda id;
+    - the float that `ScalingVector` names (`Float0` or `Float1`) is multiplied by the entry's power;
+    - the creator is the item, and the duration type is 4 (not a script constant).
+  - It goes on the creature's effect list (+0x70), and the scripts' `ApplyEffectModifyProperty` adds it to the property's modifier. Scripts see it in the effect list and in `GetCreatureProperty`'s total.
+- **On unequip they are removed** [C for the call, I for the match]: 0x006C19F0 calls 0x00757B90 at 0x006C1A3E, which takes off the effects the item created. `RemoveItemProperty` on a worn item takes one off through 0x00757CF0.
+- **Example, the Apprentice Robes** [C from data]: `gen_im_cth_mag_app.uti` has PropertiesList [{1002, power 1}]. Row 1002 "Increase Willpower" is Effect 1012, Int0 3, Float0 1, ScalingVector Float0. So the robes give +1 Willpower, and max mana rises by 5 (5 per point of Willpower).
+- **IPType 2 is on-hit; the engine only raises an event** [C]:
+  - **The event**: one `EVENT_TYPE_ITEM_ONHIT` (65) per landed blow and per IPType-2 id (0x00757FC0, queued by 0x00758180, runes included). Int 0 is the id, int 1 the power, object 0 the attacker and object 1 the item.
+  - **Melee** (0x006A6080): from the attacker's weapon (slot 13 bite, else main hand, or off hand when the swing's animation name has `|Left`), and from the target's chest slot (4).
+  - **Ranged**: built from the RANGEDAMMO item at the shot (0x006B6F60) and sent at impact (0x007E87C0).
+  - **The scripts do the rest** (`rules_core.nss`:241–283, only in GM_COMBAT): they roll `itemprps.ProcChance` and call `ItemProp_DoEffect` (`sys_itemprps_h.nss`:89–466).
+  - **The damage rows** deal `Float0` × power of damage type `Int0`. Elemental damage is further multiplied by 1 + property 55..59 / 100.
+- **IPTypes 3 and 4** (requirements and flags) apply no effect.
+- **The passive combat bonuses reach the scripts as creature properties** [C, the scripts]: flat damage 39 (`combat_damage_h.nss`:318, 359), armour penetration 53 (:143), critical damage 54 (:172), elemental percentages 55–59 (`effect_damage_h.nss`:256–290). Critical chance is 21 and 23, inside the native `GetCreatureCriticalHitModifier` [I: not read].
+- **The script commands** [C]:
+  - `GetItemProperties` (316, 0x00674260) returns the ids at +0x680, without duplicates, with the runes' when asked, and no powers.
+  - `GetItemPropertyPower` (784) is the only reader of a power.
+  - `GetItemStat` ignores properties.
+  - `HasItemProperty` (302) and `Get/SetLocalItemProperty` (93/94) have no handler, and there is no `IsItemPropertyValid`.
+- **Not read**: what 0x00757B90's filter matches on; how a loaded save restores worn items' effects; who receives the queued on-hit event.
 
 ## The weapon style, and GetWeaponStrengthModifier
 
