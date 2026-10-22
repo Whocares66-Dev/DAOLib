@@ -45,12 +45,14 @@ Shared facts, checked unless marked:
 ### SetEventFloat (116)
 - **Handler:** 0x006508F0. It calls `CDataArrays::SetFloat` (0x00A5B7D0).
 - **Does:** pops the event, nIndex, fValue; `SetFloat(nIndex, fValue)` on the copy; pushes it. (checked)
-- **Edge cases:** **no null test** (faults, checked that there is none). Negative indices as for SetEventInteger (inferred: SetFloat has the same shape).
+- **Edge cases:** **no null test** (faults, checked that there is none). Negative indices as for SetEventInteger.
+  - Negative index (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) [C]: `CDataArrays::SetFloat` (0x00A5B7D0, resize 0x00534B10 -> 0x00533920, dummy 0x00C31858) and `CDataArrays::SetObject` (0x00A5B950, list at CDataArrays+0x10, resize 0x0063D330, dummy 0x00C313C0) have the same body as SetInteger (0x00A5B710): unsigned compare with the size, resize(index+1), then a store to the list or, still out of range, to the dummy. SetEventFloat and SetEventObject have the same shape as SetEventInteger. The int and float resize is a plain `std::vector` resize (0x004A66D0 for ints, 0x00533920 for floats): an index of -1 resizes to 0 and erases the tail, so the list is emptied [C]. The object list's resize body (0x005D26E0) is [I], taken to be the same.
 
 ### SetEventObject (118)
 - **Handler:** 0x00650A10. It calls `CDataArrays::SetObject` (0x00A5B950).
 - **Does:** pops the event, nIndex, oValue; stores the id at nIndex of the copy's objects; pushes it. (checked)
 - **Edge cases:** the id is not looked up (OBJECT_INVALID is stored). **No null test** (checked). `GetEventObject` (117, 0x00650990, not this group) gives OBJECT_INVALID out of range (`Structures.h`) and also does not test for null (checked).
+  - Negative index: as for SetEventFloat above ([C] `CDataArrays::SetObject` 0x00A5B950, list at CDataArrays+0x10, resize 0x0063D330, dummy 0x00C313C0); the object list's resize body (0x005D26E0) is [I], taken to be the same.
 
 ### GetEventString (119)
 - **Handler:** 0x00650AB0. It calls `CDataArrays::GetString` (0x00A5A2E0).
@@ -60,7 +62,8 @@ Shared facts, checked unless marked:
 ### SetEventString (120)
 - **Handler:** 0x00650BC0. It calls `CDataArrays::SetString` (0x00A5BA10).
 - **Does:** pops the event, nIndex, sValue; stores the string at nIndex; pushes the copy. (checked)
-- **Edge cases:** **no null test** (checked). The list grows as needed (inferred from SetInteger's shape).
+- **Edge cases:** **no null test** (checked). The list grows as needed (checked 2026-10-22).
+  - Negative index (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) [C]: `CDataArrays::SetString` (0x00A5BA10, string list at CDataArrays+0x14, elements 0x1C bytes) grows with 0x00616F20(index+1) when the unsigned index is not below the size, then fetches the element with 0x004560F0, which returns the global dummy wstring at 0x00C1D23C for an index out of range, and assigns the string to it. Same shape as SetEventInteger. The growth and the dummy are [C]; that the resize to 0 empties the list, and what ~4G elements does (0x00616F20 -> 0x0040A320 unread), are [I].
 
 ### GetEventResource (735)
 - **Handler:** 0x00659090. It calls 0x0069C0F0 (the event's resource at an index, list +0x48) and the name check 0x004C55F0.
@@ -82,12 +85,14 @@ Shared facts, checked unless marked:
 - **Handler:** 0x006585F0. It calls `CDataArrays::SetVector` (0x00A5A9B0).
 - **Does:** pops the event, nIndex, the location (structure 1); stores **only the location's position** as vector nIndex; pushes the copy and frees the location. (checked)
 - **Edge cases:** the location's area and orientation are dropped (so `GetEventLocation` gives the creator's area and facing 0). **No null test for the event or the location** (checked). The slot is the event's vectors list (+0x18), shared with any vector parameter the engine put there. (checked)
+  - A negative index is NOT like SetEventInteger (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) [C]: `CDataArrays::SetVector` (0x00A5A9B0, the vector list at CDataArrays+0x18, 0x10-byte elements) calls 0x0053F400(index+1) when the unsigned size is not above the index, then stores the position through 0x005728B0(index) = data + index x 16, with no bounds check and no dummy. 0x0053F400(0) frees the storage and sets the data pointer to null, so index -1 stores at 0xFFFFFFF0, a fault; for -2 and below it asks for ~4G elements (0x0053F150 sizes the allocation as count x 16 with overflow clamped to -1, which fails), and the store at data + index x 16 faults as well. So the call crashes the game for any negative index [C by the arithmetic; the fault itself was not run]. For a positive index past the size, 0x0053F150 allocates, default-constructs elements with the constructor at 0x00451950 (unread) and copies the old ones [C]; that the new slots are zero is [I].
 
 ### HandleEvent_String (133)
 - **Handler:** 0x006588E0. It calls `CClientExoApp::GetGameObjectById` (0x005D5840) on OBJECT_SELF (`[this+8]`), then 0x006985F0 (CCObject), 0x0067BFB0 (area) or 0x005FE840 (module, with a third argument 1).
 - **Does:** pops the event, then sName; hands the event to OBJECT_SELF **at once (inline)**, with sName as the script, or the object's own script when sName is empty: CCObject +0x26C, area +0x38C, module +0x1F8. Ownership of the popped copy passes to the callee. (checked; that the area and module paths run it at once is inferred)
 - **State:** for a CCObject, 0x006985F0 as in the shared facts: the gate, +0x2A8 current event during the run, target set to self if -1, the listeners notified, the event deleted. (checked)
 - **Edge cases:** it skips `RunEventScript`, so `engineevents.gda` is not consulted. The event's +0x2C is never used (a copy has none anyway). An empty sName on an object with no script, or an event type in the object's disabled set, runs nothing and deletes the event (checked). An OBJECT_SELF that is neither a CCObject (cast slot +0x18), an area nor the module, or none: the event is freed, nothing runs (checked). There is no `.ncs` stripping here: sName is the script name as given (checked: no find on `.`). script.ldf has no comment for it; `HandleEvent` (121, 0x006586D0) is the resource form.
+  - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) no cut at '.' (stated above). With NCS.md ("The VM then appends .ncs itself"), a name given with ".ncs" is looked up as "x.ncs.ncs"; that no such resource is found is still [I] (`Resources::Find` on a double extension is unread, NCS.md "Not read").
 
 ### SetEventScript (122)
 - **Handler:** 0x00658AA0.

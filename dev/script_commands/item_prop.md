@@ -332,6 +332,14 @@ Shared facts (checked unless marked):
 - **Does:** walks the add-in list (`0x004028F0` → `0x00C32DC0`, records of 0x2A4 bytes, count `0x00474FB0`) for the record whose UID (+0x1C, `std::wstring`) equals the string exactly; pushes its +0x15D, cleared if +0x15E is set and +0x15F is not, or if +0x175 is set and +0x176 is not. Checked. The bytes' meanings are inferred (+0x15D enabled; the pairs "needs authorisation / authorised" and a second requirement / met, after `script.ldf`'s "installed, enabled and authorized").
 - **Edge cases:** no such add-in, or "": 0. Offers are not searched. Checked.
 
+### IsPackageLoaded (862)
+- [C] (read 2026-10-22 by lib-agent-2 with a subagent, for DAOParagonEngine #169) Handler 0x006657B0 (not in script.ldf): pops a string (0x00A2F4C0; a failed pop returns −639), calls 0x005FBC10 (ID 10999) on `[[0x00C327EC]+0xC0]`, and pushes the byte result as an integer (0x00A2D650; a failed push returns −638). With the application or its +0xC0 null the result is 0.
+- [C] `[app+0xC0]` is the **`ModuleResourceManager`** (vtable 0x00B00958, constructor 0x005DB6E0, 0x94 bytes, made at 0x005DBE78 in the application's start), not a script backend; the address library's name for 10999, `ScriptBackend::ForScript_ISPACKAGELOADED`, has the wrong class.
+- [C] 0x005FBC10 walks the `std::vector<std::wstring>` at +0x84 (begin +0x88, end +0x8C, 0x1C bytes an element) and answers 1 at the first name equal to the argument, both lower-cased first, so the compare ignores case; else 0.
+- [C] **The only writer** is `LoadModuleResources` (0x005FCE80): at 0x005FD8E1 it push_backs (0x0040AB40) each entry of the loaded campaign's `.cif` `CampaignCIFPackagesList` (struct 0x42E4), the same list whose `packages\<name>\` folders become the campaign's resource sources (FILES.md:35; core's `Campaign::packages`, Campaign.h:59). The unload (0x005FC140) walks it to release the sources and does not clear it [C]; whether a reload clears or rebuilds it was not read [I].
+- [C] It is not filled from AddIns.xml, offers.xml, the DLC's packages, module names or a scan of the packages folder, and it has nothing to do with the add-in records at 0x00C32DC0 that `GetPRCEnabled` (828) reads.
+- So `IsPackageLoaded(x)` is true when x is in the running campaign's `.cif` package list, whatever case: Single Player's lists none, so it answers 0 there; Awakening's lists `core_ep1` [I for the two campaigns' lists, from the files, not re-read here].
+
 ### GetPlayTime (830)
 - **Handler:** 0x00666B40 (not shared, no arguments). app+0xD0; `ScriptBackend::ForScript_GetPlayTime` (0x0069D340). Checked.
 - **Does:** reads the game clock (`g_eclipseGame`+0xB4, vtable +0x14, a float truncated to whole seconds), adds the change since the last sample (+0x84) to the total (+0x88), stores the sample and pushes the total. Checked. The play time accumulates only when asked for; that the clock is wall time and +0x88 is saved is inferred.

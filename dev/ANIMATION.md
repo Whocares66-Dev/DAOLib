@@ -389,7 +389,11 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
 ### End handler 0x00746E80 (checked)
 
 - For a creature with parameters: if the command's flag 5 = 1, it calls 0x0069EBB0(1). Scripts never set it.
-- Then it calls 0x007C1A30 on creature+0x744. That function calls 0x007C1690(-10.0) when a float at its +0xC differs from 1e-6 (inferred: it resets a blend or rate; **it does not stop the clip**, so a loop keeps looping after a LOOPING end).
+- Then it calls 0x007C1A30 on creature+0x744. That function calls 0x007C1690(-10.0) when a float at its +0xC differs from 1e-6; **it does not stop the clip** (corrected 2026-10-22: it was inferred to reset a blend or rate; read below). (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169)
+  - [C] 0x007C1A30 (called on creature+0x744) tests a pointer at its +0xC and a float at that record's +0xC: when the pointer is set and the float is above 1e-6 it calls 0x007C1690 with -10.0 (0xC1200000). Otherwise nothing.
+  - [C] 0x007C1690(x), for x = -10.0 (not within 1e-6 of 0): it fetches a record with 0x007C1570 and proceeds only if three of that record's pointers (+0, +4, +8) are set; else it writes 0 to the record's float +0xC. With them set and x below 0 it clears the record's byte +0x10, calls a virtual (vtable +0x60 of the object at +0x70 of its owner) and 0x00A661E0 on that object's +0x120/+0x130, then stores x (-10.0) in the record's float +0xC. For x above 99.0 it sets byte +0x10 to 1 and stores x. So the end handler leaves the record with +0xC = -10.0 and byte +0x10 = 0; it writes no animation id and calls no stop of the clip's playback.
+  - [C] The branch for |x| <= 1e-6 (not taken from here) is the real clearing one: it zeroes the record's +4, +8, +0xC and byte +0x10, sets the owner's +0x748 to -1 and three bytes (+0xE8..+0xEA) of the object at vtable +0x60 to 0.
+  - [I] What the record is (an animation layer's hold/release state, with 99 as a "hold" mark and a negative value as a release rate) and whether the clip then ends on its own are not read. "A loop keeps looping after a LOOPING end" therefore stays an inference from the absence of a stop call, not a seen result.
 - Then the shared end 0x00746900 runs, with COMMAND_COMPLETE.
 - After it, if the object's +0x421 (deactivation pending) is set, it calls the object's slot 80 (+0x140) with 0. That finishes `SetObjectActive(FALSE)` after its animation (`dev/PARTY.md`).
 
@@ -417,6 +421,18 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
   - on LOOPING, it returns and does nothing more (RUNNING stays set, so no further ambient beats);
   - on SUCCESSFUL, it clears RUNNING;
   - in every other case it calls `Ambient_DoSomething`.
+
+#### Which sub-actions a command's start handlers add, and their byte +4 (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169)
+
+- [C] `CCObject::AddSubAction` is 0x0073D4D0 (`__thiscall`, args: type, CDataArrays*, a3, byte, duration; the byte is stored at the new sub-action's +4). Every direct call site in the exe was scanned (73 calls). The byte is read by `ClearCurrentCommand` (0x0073C730): a soft clear leaves the running step alone when its byte is 1 (TURN_BASED.md, the melee attack section, and "How a newly queued command affects a running one" above).
+- [C] Start handlers (from the type tables filled at 0x00747480; start at +0x54 of the table, end at +0x58, entry = 4 x type) and the sub-actions they add, all with byte 0 (so a soft clear removes the command):
+  - type 1, attack (0x00742FD0): sub-action 4 and sub-action 50 (0x32), byte 0.
+  - type 13, wait (0x00742950): sub-action 36 (0x24), byte 0.
+  - type 20, move to location (0x00745630): sub-actions 36, 14 and 42 (0x24, 0xE, 0x2A), byte 0.
+  - type 21, move to object (0x00746F00): sub-action 4 or 15 (0xF), chosen by a virtual call (slot +0x24) on the object it resolves, byte 0.
+  - type 22, move to points (0x007457C0): sub-actions 52 (0x34) and 16 (0x10), byte 0.
+- [C] With byte 1: type 14 play animation (0x00744870) when its command flag 7 is 0, which is every script command (see "Start handler 0x00744870"); type 40, switch weapon sets (0x00743570): sub-actions 22 (0x16) and 48 (0x30), byte 1; and sub-actions added while a command runs: the melee swing, sub-action 1 (0x007A63ED, already in TURN_BASED.md), sub-action 13 (0x007A6450), the ability steps 7 and 8 (0x007A86BD, 0x007A871E), the cast sub-actions 37 (0x25) added at 0x007A2883, 0x007A295E, 0x007A3053, 0x007A36D5, 0x007A4EB6, 0x007A4F72 and 0x007A7693, sub-action 6 (0x007A4F25) and sub-action 48 (0x007A5092, a3 = 1).
+- [I] The other start handlers' sub-actions (types 8 to 12, 25, 31, 37 to 39, 41, 42) were listed by call site only; their byte is 0 at every call site found except those named above, but which handler owns each call site beyond the types named was not checked one by one.
 
 ### A missing animation (Q2)
 

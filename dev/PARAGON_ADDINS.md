@@ -17,12 +17,12 @@ What each level means should follow the install: an add-in folder under `Addins\
 
 1. **An extra source per add-in in `Index::build`:** for each add-in in the player's `AddIns.xml` that is enabled (core's `ReadAddIns`), if the folder has `<root>/<uid>/`, read its files as that add-in's copies, at the add-in's place in the order (`AddInOrder.h`: its priority among sources, its `core` versus `module` side, the campaign it extends), exactly where the unreadable archive's copies would have been. An add-in whose archives core can read already needs nothing new.
 2. **Answers unchanged otherwise:** a resource read by name is the copy the game takes, so a table merged from every `*_<suffix>.gda` (an M2DA) gets the add-ins' rows, a template or script in an add-in shadows core's as the game does, and talk tables, sound banks and movies come from the add-in's own folder.
-3. **Who has what:** a call that answers which add-ins are installed, enabled, and whose content core holds (from the folder or readable archives), for the scripts' `IsPackageLoaded` (command 862, not in script.ldf) and for a campaign list.
+3. **Who has what:** a call that answers which add-ins are installed, enabled, and whose content core holds (from the folder or readable archives), for a campaign list. (`IsPackageLoaded`, command 862, is not this: the exe answers it from the running campaign's `.cif` package list, script_commands/item_prop.md.)
 
 ## What Paragon will do with it
 
 - Pass the folder to `Index::build` through the shim when the player has set one.
-- Answer `IsPackageLoaded` from core's list instead of always 0 (crates/script functions.rs, command 862).
+- Answer `IsPackageLoaded` from the running campaign's `.cif` packages (core's `Campaign::packages`), case-insensitive, instead of always 0 (command 862; script_commands/item_prop.md).
 - Later: the add-in campaigns as modules (Paragon now runs only Single Player).
 
 ## Open

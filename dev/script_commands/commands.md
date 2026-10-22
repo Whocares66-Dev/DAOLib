@@ -81,7 +81,8 @@ Shared facts, all checked:
 ### SetCommandFloat (547)
 - **Handler:** 0x0066EE60 (not shared). It calls `CDataArrays::SetFloat` (0x00A5B7D0).
 - **Does:** pops the command, the float, then nIndex. It sets `floats[nIndex]` on the copy and **pushes that copy back** as the result, then frees its own. So unlike `SetCommandInt` it works, through the return value: `wrappers_h.nss` does `cCommand = SetCommandFloat(cCommand, fTimeout, 5)`. (checked)
-- **Edge cases:** a null command pushes a null command. An index at or past the size grows the float array to index+1. A negative index makes the resize argument 0 (inferred: the floats are cleared), and the write goes to a dummy global. (checked up to the resize call 0x00534B10, whose meaning is inferred)
+- **Edge cases:** a null command pushes a null command. An index at or past the size grows the float array to index+1. A negative index makes the resize argument 0 (the floats are cleared, checked 2026-10-22), and the write goes to a dummy global.
+  - [C] SetCommandFloat, a negative index (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169): `CDataArrays::SetFloat` (0x00A5B7D0) compares the index unsigned with the float list's size (list pointer at CDataArrays+8, begin +4, end +8) and, when the index is not below it, calls 0x00534B10(index+1), which is a `std::vector` resize(n) on a 4-byte element (0x00533920): growth appends zero-valued elements, a smaller n erases the tail. For index -1 the argument is 0, so the list is emptied. It then re-tests the index, finds it out of range and writes the value to the global dummy at 0x00C31858. So a negative index clears the floats and the value is lost, the resize's meaning is read (it was inferred). For -2 and below the argument is 0xFFFFFFFF or less (a request for ~4G elements): the growth path (0x00533920 into 0x005336C0) was not read, so "an allocation failure" stays [I].
 
 ### CommandMoveToLocation (559): bDeactivateAtEnd
 
