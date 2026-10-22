@@ -122,9 +122,9 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
   - **The engine's band is the weapon's Range** [C]: the attack step (0x00742FD0) reads only `bitm_base.Range` (0x00743095; 45 m for short bow, long bow, crossbow and staff), caps it at 60 m (0x0069F330) and hands it to sub-action 15 with the two personal spaces.
     - Nothing in the step, sub-action 15 or the shot reads `ranges.gda`'s `WeaponRng*` rows (10/30/35 m), the `PerceptionClass` or `IsPerceiving`.
     - The approach's and the shot's sight test 0x0067C750 → 0x0067C610 → `CCArea::LineOfSight` (0x0067C3F0) has no distance test. It only checks that the ray's hit is within 0.1 m of the target.
-  - **The scripts attack only what they perceive** [C]:
-    - An enemy's target is `AI_Threat_GetThreatTarget` (`threatsystem.md`, "Where threat comes from"), which drops a target that is not perceived (`ai_threat_h.nss`:213–214).
-    - The threat table is fed by `PERCEPTION_APPEAR`.
+  - **The scripts attack their threat target; perception is what usually puts an enemy there** [C]:
+    - An enemy's target is `AI_Threat_GetThreatTarget` (`threatsystem.md`, "Where threat comes from"). It returns the stored target even when that target is not perceived (`ai_threat_h.nss`:208–226).
+    - An enemy first enters the threat table through `PERCEPTION_APPEAR`, or through being hit by it (damage, a hostile ability, an attack). An archer that has not yet been perceived or struck has no entry, and so no target.
     - The AI gives no firing distance of its own. A ranged attacker gets a plain `CommandAttack` (`_AI_ExecuteAttack`, `ai_main_h_2.nss`:2548–2850).
     - Only a *stationary* creature tests the range itself: `GetItemRange` = `bitm_base.Range` (`2da_data_h.nss`:192), then `CheckLineOfSightObject` (`ai_main_h_2.nss`:2849–2895).
   - **So an archer engages at its perception range** [C for the ranges, I for the play figures]:
@@ -132,7 +132,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts (`rules_core.nss`, `com
     - It is kept until 60 m on the ground (this file's Perception section).
     - Once it has a target it shoots from wherever it is, up to the weapon's 45 m.
     - Play (DAOParagonEngine, staged spawns): shots at 29.0 and 33.3 m; an archer placed at 37.8 m walked in and had not shot after 15 s. This fits acquisition at about 30 m plus staging slack [I].
-  - **Being shot makes the target perceive the shooter** [C]. At an attack's impact `rules_core.nss`:556 signals `EVENT_TYPE_ATTACKED` (1001) to the target (`SendEventOnAttacked`, `events_h.nss`:410–423). Its handler (:625–) calls `WR_TriggerPerception` both ways unless the target is stealthed. A follower struck while idle then runs `AI_DetermineCombatRound` (`dev/PARTY.md`:525). So a party shot from beyond its own perception range still answers.
+  - **Being shot makes the target perceive the shooter** [C]. At an attack's impact `rules_core.nss`:556 signals `EVENT_TYPE_ATTACKED` (1001) to the target (`SendEventOnAttacked`, `events_h.nss`:410–423). Its handler (:625–) calls `WR_TriggerPerception` both ways unless the target is stealthed. `TriggerPerception` (166, 0x0065A7B0 → 0x006B32A0) adds the other to the perceived set without a sight test, when it is in the same area, alive, active and under 60 m on the ground (0x006A2BB0, the double 60.0 at 0x00B03BF8). A follower struck while idle then runs `AI_DetermineCombatRound` (`dev/PARTY.md`:525). So a party shot from beyond its own perception range still answers.
 
 **The swing** (`CSSubActionHandler::Swing`, `0x007A87C0`, read):
 
