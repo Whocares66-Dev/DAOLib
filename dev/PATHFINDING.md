@@ -399,7 +399,13 @@ test(c): c.z = grid height at (c.x,c.y)             // 0x73DE20 -> 0xA473A0 -> c
 found(c): *out = c with z = GroundHeight(c) (0x685430)  // always, even when snapToGround was false; return 1
 ```
 
-Order within a ring: left to right along the bottom (low y) and top at each x (bottom, then top), then the sides bottom to top (left, then right). The first success wins, so the nearest ring wins and ties go to the low-y row. The first ring is at half a cell (0.25 m for 0.5 m cells) and each ring adds half a cell; the ring's points are spaced half a cell too. Checked in disassembly for the loop shape (0x73E512-0x73E746); that the success exit z-snap runs unconditionally is read at 0x73E75B (checked).
+Order within a ring: left to right along the bottom (low y) and top at each x (bottom, then top), then the sides bottom to top (left, then right). The first success wins, so the nearest ring wins and ties go to the low-y row. The first ring is at half a cell (0.25 m for 0.5 m cells) and each ring adds half a cell; the ring's points are spaced half a cell too. That the success exit z-snap runs unconditionally is read at 0x73E75B (checked). The order checked in disassembly by lib-agent-2 on 2026-10-22, the coordinates too:
+
+  - Each ring is centred on the caller's `pos` (argument 1), not the ground-snapped copy.
+  - The x loop starts at `pos.x − r`. It tests `(x, pos.y − r)` (y loaded at 0x0073E56A) and then `(x, pos.y + r)` (0x0073E5C2), with x increasing.
+  - The side loop tests `(pos.x − r, y)` (0x0073E666) and then `(pos.x + r, y)` (0x0073E6B5), with y increasing.
+  - Nothing is random or tied to the creature's facing.
+  - So a ring's first point is its low-x, low-y corner. With 0.5 m cells, the first point of the third ring is (−0.75, −0.75) from `pos`, 1.06 m away.
 
 When nothing is found: the loop exits at 0x73E74C -> `xor eax,eax; ret 0x20` with `*out` NOT written (the callers pre-copy: 0x006C7664's caller keeps its spot, GETSAFELOCATION returns the input). The two earlier early exits (step <= 0 and the physics early-out at 0x73E48A) write `*out = p` and also return 0. (checked)
 
