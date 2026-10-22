@@ -108,7 +108,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 - **Handler:** 0x0066D600 → 0x007AFB70 (resize), 0x00629870 (notification) (checked).
 - **Does:** pops bSendNotification only when there are more than 2 arguments (default FALSE) (checked). It resizes the creature's current tactic list (tactics +0x6C) to nNumTactics, and every preset's entry list (16-byte records in the vector at tactics +0xA8..+0xAC) too, through 0x007AF2E0 (checked). Shrinking deletes the `PartyTacticEntry` objects past n. Growing makes new 0x160-byte entries (ctor 0x007AD310) (checked). If bSendNotification and n is above the old count, it queues a type-6 notification for the creature with (n − old) on party+0x330 (checked).
 - **State:** tactics +0x6C, +0xA8 (checked).
-- **Edge cases:** no clamp at all (checked). A negative n is taken as unsigned, so it means a huge resize (inferred: a fault). Not a creature → nothing (checked).
+- **Edge cases:** no clamp at all (checked). A negative n is taken as unsigned (checked, read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169): `0x007AFB70` passes n to `0x007AF2E0(vector, n)` as an unsigned: `cmp ebp, ebx; jae 0x7AF39D` (0x007AF31F-0x007AF323) skips the shrink for n >= old size (a negative n is >= every size), then `0x0063D330(vector, n)` (to `0x005D26E0(n, 0)`, a resize/reserve to n) and the growth loop up to n run. The outcome with n near 2^32 (an allocation failure or a C++ exception, since a 0x160-byte entry is made per slot) was not followed: keep "[I] a fault". Not a creature → nothing (checked).
 
 ### GetTacticTargetObject (372)
 - **Handler:** 0x0066AE10 → 0x007ADCF0 → 0x007ADA40 (entry by index) (checked).
