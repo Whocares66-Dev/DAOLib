@@ -96,7 +96,7 @@ Shared facts (checked):
 ### CheckLineOfSightVector (47)
 - **Handler:** 0x00655CA0 (not shared). It calls `GetGameObjectById`, `CCObject::Area` and `CCArea::LineOfSight` 0x0067C3F0. (checked)
 - **Does:** pops vSource, vTarget. Uses **OBJECT_SELF**'s (the VM's `[this+8]`) area, adds 1.8 to both z, and runs the same ray as `CheckLineOfSightObject` from source to target. (checked)
-- **Edge cases:** the positions are taken as ground points (eye height added), not eye points. OBJECT_SELF invalid or not in an area (a module script) → FALSE, as script.ldf's remark says. Positions outside the area are not checked. Same see-through-placeable and closest-hit rules as above. (checked apart from the closest-hit consequence)
+- **Edge cases:** the positions are taken as ground points (eye height added), not eye points. OBJECT_SELF invalid or not in an area (a module script) → FALSE, as script.ldf's remark says. Positions outside the area are not checked. Same see-through-placeable and closest-hit rules as above. (checked apart from the closest-hit consequence) Since both forms add 1.8 to z, the Vector form given eye points casts 1.8 m higher than the Object form for the same creatures. That would explain a caller seeing the Object form stricter at the same eye points [I].
 
 ## Not read
 - The trigger routines 0x006368F0 and 0x00636A90 in full: when a creature's +0xBA8 is updated (on its move, each frame, on the trigger's own check) and whether it is cleared on an area change or a save load.
