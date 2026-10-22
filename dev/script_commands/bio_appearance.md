@@ -32,6 +32,7 @@ Shared facts (checked unless marked):
 ### GetCreatureGoreLevel (719)
 - **Handler:** 0x0065D5D0 (not shared). `GetCreatureById`, then `CAppearance` 0x00748520 (checked).
 - **Does:** pushes the appearance's float at +0x180, or 0.0 when the global at 0x00C32938 exists and its +0x88 object's byte +0xC is 0 (checked; that this is the gore option being off is inferred).
+- **Which option byte** (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) [I, strong]: the global `0x00C32938` is the client options object (`SetPlotFlag`'s tutorial gate reads `ShowTutorials` at `[0x00C32938]+0x98`, `PLOTS.md`, and `0x0075F7E0` at `0x00760167` shows the same). The options' registration code names `ShowGore` (the wide string at `0x00B010A8`, referenced at `0x005E6C86`) with the id `0x4F7C9` and the very next option, `ShowTutorials` (`0x00B01448`), with the id `0x4F7CA` (`0x005E6C94` and `0x005E6CCA`, each through `0x005DEC10`). With `ShowTutorials` at +0x98 and the byte `GetCreatureGoreLevel` tests at +0x88 (a stride of 0x10 between attributes) the byte at +0x88 is the `ShowGore` option [I: the attributes' offsets were not read from the constructor]. When it is 0, `GetCreatureGoreLevel` answers 0.0; this also names the "gore option byte" that `ANIMATION.md` ("Partsbased", `0x00838210` on `[0xC32938]+0x88`) lists as not identified.
 - **Edge cases:** invalid, non-creature, or no appearance: 0.0 (checked).
 
 ### SetCreatureGoreLevel (720)
