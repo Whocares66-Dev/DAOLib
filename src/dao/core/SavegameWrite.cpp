@@ -692,7 +692,7 @@ class Writer
                 continue;
             }
             const std::optional<std::size_t> index =
-                generic ? IndexOf(plan.labels[i]) : std::optional<std::size_t>(f.type);
+                generic ? IndexOfKind(plan.labels[i]) : std::optional<std::size_t>(f.type);
             const auto blank = index ? BlankFor(inPlace, *index) : std::nullopt;
             if (!blank)
             {
@@ -724,6 +724,14 @@ class Writer
             placed.push_back({Node{elements[k], before[k]}, values[k]});
         }
         return placed;
+    }
+
+    // The template a new element of a generic list takes. A plain event of a file with no EBAS takes the ESCR
+    // (its script left null: the plain loader reads the five base fields and never the payload).
+    std::optional<std::size_t> IndexOfKind(std::string_view label) const
+    {
+        const auto index = IndexOf(label);
+        return index || label != "EBAS" ? index : IndexOf("ESCR");
     }
 
     std::optional<std::size_t> IndexOf(std::string_view label) const
@@ -1535,14 +1543,24 @@ void Write(Writer &w, const Node &n, const Party &v)
     w.Numbers(n, L::kSeenLines, v.seenLines);
 }
 
-// The template of a queued event: the label Read kept, else ESCR for one with a script event, else EBAS.
-std::string_view EventLabel(const QueuedEvent &e)
+// The template of a queued event, or nothing if a struct of the file's cannot stay one: the label Read kept,
+// else ESCR for one with a script event, else EBAS. The engine goes by SavegameEventID and not the template
+// (0x0079C0C0), and a plain event's loader reads the five base fields alone (0x0079BF60), so a plain event
+// is an EBAS or an ESCR the same. A script event whose payload was taken out cannot stay the file's struct,
+// which still holds the SCE1 (a child is never removed): it is written afresh, as an EBAS.
+std::optional<std::string_view> EventLabel(const QueuedEvent &e, const Struct *old)
 {
-    if (!e.label.empty())
+    if (old == nullptr)
     {
-        return e.label;
+        return e.script ? "ESCR" : "EBAS";
     }
-    return e.script ? "ESCR" : "EBAS";
+    const std::string_view fresh = e.script ? "ESCR" : "EBAS";
+    const std::string_view want = e.label.empty() ? fresh : std::string_view(e.label);
+    if (old->Label() != want || (!e.script && old->Child(L::kEventScript)))
+    {
+        return std::nullopt;
+    }
+    return want;
 }
 
 void Write(Writer &w, const Node &n, const ScriptEvent &v)
@@ -1559,21 +1577,15 @@ void Write(Writer &w, const Node &n, const GameState &v)
 {
     w.Put(n, L::kEffectStartingId, v.effectStartingId);
     w.PutPlain(n, L::kAiMaster, v.eventQueue, [&w](const Node &c, const std::vector<QueuedEvent> &events) {
-        w.List(
-            c, L::kEventQueue, events,
-            [](const QueuedEvent &e, const Struct *old) -> std::optional<std::string_view> {
-                const std::string_view want = EventLabel(e);
-                return old != nullptr && old->Label() != want ? std::nullopt : std::optional<std::string_view>(want);
-            },
-            [&w](const Node &e, const QueuedEvent &event) {
-                w.Put(e, L::kEventDay, event.day);
-                w.Put(e, L::kEventTime, event.time);
-                w.Put(e, L::kEventCaller, event.caller);
-                w.Put(e, L::kEventTarget, event.target);
-                w.Put(e, L::kEventId, event.id);
-                w.PutChild(e, L::kEventScript, event.script,
-                           [&w](const Node &s, const ScriptEvent &script) { Write(w, s, script); });
-            });
+        w.List(c, L::kEventQueue, events, EventLabel, [&w](const Node &e, const QueuedEvent &event) {
+            w.Put(e, L::kEventDay, event.day);
+            w.Put(e, L::kEventTime, event.time);
+            w.Put(e, L::kEventCaller, event.caller);
+            w.Put(e, L::kEventTarget, event.target);
+            w.Put(e, L::kEventId, event.id);
+            w.PutChild(e, L::kEventScript, event.script,
+                       [&w](const Node &s, const ScriptEvent &script) { Write(w, s, script); });
+        });
     });
     w.PutPlain(n, L::kWorldTimer, v, [&w](const Node &c, const GameState &s) {
         w.Put(c, L::kWorldDay, s.worldDay);

@@ -48,6 +48,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -892,7 +893,29 @@ struct QueuedEvent
             return Kind::Dropped;
         }
     }
-    std::string label; // EBAS or ESCR; the engine goes by the id
+    // A plain event of that handler id (QueuedEvent::Kind::Plain: 6, 7, 11, 12, 13, 16 or 27), to push onto
+    // GameState::eventQueue. Write makes it a struct of the EBAS template from these members, all the engine
+    // reads of a plain event (dev/SAVES.md); the ids are the caller's.
+    static QueuedEvent MakePlain(std::uint32_t id, std::uint32_t day, std::uint32_t time, std::uint32_t caller,
+                                 std::uint32_t target)
+    {
+        QueuedEvent e;
+        e.id = id;
+        e.day = day;
+        e.time = time;
+        e.caller = caller;
+        e.target = target;
+        return e;
+    }
+    // A script event (id 10 or 24) with its payload; the engine drops one without.
+    static QueuedEvent MakeScript(std::uint32_t id, std::uint32_t day, std::uint32_t time, std::uint32_t caller,
+                                  std::uint32_t target, ScriptEvent payload)
+    {
+        QueuedEvent e = MakePlain(id, day, time, caller, target);
+        e.script = std::move(payload);
+        return e;
+    }
+    std::string label; // EBAS or ESCR as Read found it; Write keeps it, else chooses by the script
     std::uint32_t day = 0;
     std::uint32_t time = 0;
     std::uint32_t caller = kNoObject;

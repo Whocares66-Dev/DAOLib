@@ -1,3 +1,4 @@
+#include "dao/core/Gff4.h"
 #include "dao/core/SaveMeta.h"
 #include "gff4_builder.h"
 
@@ -116,4 +117,102 @@ TEST_CASE("a slot's kind and number from its folder's name")
     CHECK_FALSE(SlotFolderName::Parse(L"Slot_1a"));
     CHECK_FALSE(SlotFolderName::Parse(L"Screenshots"));
     CHECK_FALSE(SlotFolderName::Parse(L"Slot_1234567890"));
+}
+
+TEST_CASE("a metadata file written unchanged is the same bytes", "[savemeta][write]")
+{
+    const auto bytes = MakeMeta();
+    const auto meta = SaveMeta::Parse(bytes);
+    REQUIRE(meta);
+    const auto out = SaveMeta::Write(bytes, *meta);
+    REQUIRE(out);
+    CHECK(out->bytes == bytes);
+    CHECK(out->unwritten.empty());
+}
+
+TEST_CASE("each changed field of the metadata reads back changed and nothing else moves", "[savemeta][write]")
+{
+    const auto bytes = MakeMeta();
+    const auto was = *SaveMeta::Parse(bytes);
+    const auto write = [&](auto change) {
+        auto meta = was;
+        change(meta);
+        const auto out = SaveMeta::Write(bytes, meta);
+        REQUIRE(out);
+        CHECK(out->unwritten.empty());
+        const auto back = SaveMeta::Parse(out->bytes);
+        REQUIRE(back);
+        return *back;
+    };
+    const auto same = [](const SaveMeta &a, const SaveMeta &b) {
+        return a.area == b.area && a.character == b.character && a.name == b.name && a.story == b.story &&
+               a.secondsPlayed == b.secondsPlayed && a.level == b.level && a.characterClass == b.characterClass &&
+               a.gender == b.gender && a.race == b.race && a.background == b.background;
+    };
+
+    auto got = write([](SaveMeta &m) { m.secondsPlayed = 99999; });
+    CHECK(got.secondsPlayed == 99999);
+    got.secondsPlayed = was.secondsPlayed;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) { m.level = 20; });
+    CHECK(got.level == 20);
+    got.level = was.level;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) { m.area = L"Denerim, the Alienage"; });
+    CHECK(got.area == L"Denerim, the Alienage");
+    got.area = was.area;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) { m.name = L"Before the Landsmeet"; });
+    CHECK(got.name == L"Before the Landsmeet");
+    got.name = was.name;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) { m.character = L"Lyna"; });
+    CHECK(got.character == L"Lyna");
+    got.character = was.character;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) { m.story = L""; });
+    CHECK(got.story.empty());
+    got.story = was.story;
+    CHECK(same(got, was));
+
+    got = write([](SaveMeta &m) {
+        m.characterClass = 3;
+        m.gender = 2;
+        m.race = 1;
+        m.background = 4;
+    });
+    CHECK(got.characterClass == 3);
+    CHECK(got.gender == 2);
+    CHECK(got.race == 1);
+    CHECK(got.background == 4);
+    CHECK(got.level == was.level);
+}
+
+TEST_CASE("the metadata's unnamed fields and its story ride along", "[savemeta][write]")
+{
+    const auto bytes = MakeMeta();
+    auto meta = *SaveMeta::Parse(bytes);
+    meta.level = 3;
+    meta.area = L"Somewhere else";
+    const auto out = SaveMeta::Write(bytes, meta);
+    REQUIRE(out);
+    const auto file = dao::core::gff4::File::Parse(out->bytes);
+    REQUIRE(file);
+    const auto root = file->Root();
+    REQUIRE(root);
+    CHECK(root->String(16809).value_or(L"") == L"single player;");
+    CHECK(root->String(16810).value_or(L"") == L"SP;");
+    CHECK(root->String(SaveMeta::kStory).value_or(L"") == meta.story);
+}
+
+TEST_CASE("only a save's metadata is written", "[savemeta][write]")
+{
+    const SaveMeta meta;
+    CHECK_FALSE(SaveMeta::Write(MakeMeta("TLK "), meta));
+    CHECK_FALSE(SaveMeta::Write({}, meta));
 }

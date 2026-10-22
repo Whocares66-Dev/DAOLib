@@ -21,6 +21,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::core
 {
@@ -44,6 +45,19 @@ struct SaveMeta
     // The metadata in `bytes`; nothing if they are not a save's metadata.
     // A field the file lacks is left empty or 0.
     static std::optional<SaveMeta> Parse(std::span<const std::byte> bytes);
+
+    // What Write made: the new file's bytes, and the labels of the changed fields the file has no field for.
+    struct Written
+    {
+        std::vector<std::byte> bytes;
+        std::vector<std::uint32_t> unwritten;
+    };
+
+    // A save's metadata file with `meta` written over `original`, the file `meta` was parsed from.
+    // Only the fields that differ from the original are set; the rest, the two fields the load screen needs
+    // among them, go through untouched, and an unchanged write is byte-identical. Nothing for bytes that are
+    // not a save's metadata. The screenshot is not in this file but beside the save.
+    static std::optional<Written> Write(std::span<const std::byte> original, const SaveMeta &meta);
 
     static constexpr std::uint32_t kStory = 16511;
     static constexpr std::uint32_t kArea = 16800;

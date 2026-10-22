@@ -767,6 +767,30 @@ MUTANTS: list[Mutant] = [
         "meta.level = root->Get<std::int32_t>(kLevel).value_or(0);",
         "meta.level = root->Get<std::int32_t>(kClass).value_or(0);",
     ),
+    Mutant(
+        "savemeta-write-level: the level is written to its own field",
+        SAVEMETA,
+        "    number(kLevel, meta.level);",
+        "    number(kLevel, meta.level + 1);",
+    ),
+    Mutant(
+        "savemeta-write-unchanged-string: a string that reads the same is not appended again",
+        SAVEMETA,
+        '    if (root.String(label).value_or(L"") == text)\n    {\n        return true;\n    }',
+        "    if (false)\n    {\n        return true;\n    }",
+    ),
+    Mutant(
+        "savegame-event-payload-removed: a script event made plain is written afresh, not kept with its payload",
+        SAVEGAME_WRITE,
+        "(!e.script && old->Child(L::kEventScript))",
+        "(false)",
+    ),
+    Mutant(
+        "savegame-event-plain-fallback: a plain event of a file with no EBAS takes the ESCR template",
+        SAVEGAME_WRITE,
+        'return index || label != "EBAS" ? index : IndexOf("ESCR");',
+        "return index;",
+    ),
     # A movie patched in memory: every size around inserted code grows, every
     # branch across it is fixed, placements land in the right sprite and frame;
     # and inflate, which unpacks the game's movies.

@@ -3,6 +3,7 @@
 #include "dao/core/Savegame.h"
 #include "gff4_builder.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -83,6 +84,8 @@ enum Tpl : std::uint16_t
     kPtaa,
     kPtai,
     kPtaj,
+    kEscr,
+    kSce1,
 };
 
 std::vector<TemplateSpec> Templates()
@@ -194,6 +197,15 @@ std::vector<TemplateSpec> Templates()
         {"PTAA", 4, {{16843, 0xFFFF, kGenList, 0}}},
         {"PTAI", 8, {{16844, kU16, 0, 0}, {16845, kU16, 0, 2}, {16846, kS32, 0, 4}}},
         {"PTAJ", 4, {{16844, kU16, 0, 0}, {16845, kU16, 0, 2}}}, // no count field
+        {"ESCR",
+         24,
+         {{16631, kU32, 0, 0},
+          {16632, kU32, 0, 4},
+          {16633, kU32, 0, 8},
+          {16634, kU32, 0, 12},
+          {16635, kU32, 0, 16},
+          {16650, kSce1, kS, 20}}},
+        {"SCE1", 16, {{16670, kS32, 0, 0}, {16671, kU32, 0, 4}, {16672, kU32, 0, 8}, {16674, kStr, 0, 12}}},
     };
 }
 
@@ -423,7 +435,19 @@ std::vector<std::byte> MakeSave(const char *type = "SAVE")
     b.U32(event + 8, 600);
     b.U32(event + 12, 700);
     b.U32(event + 16, 12);
-    b.U32(aims, dao::test::Children(b, {{kEbas, event}}));
+    const std::size_t sce = New(b, 16);
+    b.U32(sce, 4);
+    b.U32(sce + 4, 600);
+    b.U32(sce + 8, 700);
+    Str(b, sce + 12, u"script_a");
+    const std::size_t escr = New(b, 24);
+    b.U32(escr, 6);
+    b.U32(escr + 4, 2000);
+    b.U32(escr + 8, 600);
+    b.U32(escr + 12, 700);
+    b.U32(escr + 16, 10);
+    b.U32(escr + 20, Rel(b, sce));
+    b.U32(aims, dao::test::Children(b, {{kEbas, event}, {kEscr, escr}}));
     b.U32(gmst + 4, Rel(b, aims));
     const std::size_t wldt = New(b, 8);
     b.U32(wldt, 3);
@@ -595,7 +619,7 @@ TEST_CASE("the hero, the party and the game's state are mapped", "[savegame]")
     CHECK(save->version.buildNumber == 13263);
     CHECK(save->version.cheatUsed == 1);
     CHECK(save->state.effectStartingId == 40);
-    REQUIRE(save->state.eventQueue.size() == 1);
+    REQUIRE(save->state.eventQueue.size() == 2);
     CHECK(save->state.eventQueue[0].label == "EBAS");
     CHECK(save->state.eventQueue[0].KindOf() == sg::QueuedEvent::Kind::Plain); // id 12
     CHECK(save->state.eventQueue[0].day == 5);
@@ -603,6 +627,10 @@ TEST_CASE("the hero, the party and the game's state are mapped", "[savegame]")
     CHECK(save->state.eventQueue[0].caller == 600);
     CHECK(save->state.eventQueue[0].target == 700);
     CHECK(save->state.eventQueue[0].id == 12);
+    CHECK(save->state.eventQueue[1].label == "ESCR");
+    CHECK(save->state.eventQueue[1].id == 10);
+    REQUIRE(save->state.eventQueue[1].script);
+    CHECK(save->state.eventQueue[1].script->scriptName == L"script_a");
     CHECK(save->state.worldDay == 3);
     CHECK(save->state.worldTimeMs == 86400);
 
@@ -1439,12 +1467,13 @@ TEST_CASE("the game state's event queue and a plot action list grow", "[savegame
 
     const auto out = Rewrite(bytes, save);
     CHECK(out.unwritten.empty());
-    REQUIRE(out.save.state.eventQueue.size() == 3);
+    REQUIRE(out.save.state.eventQueue.size() == 4);
     CHECK(out.save.state.eventQueue[0].id == 12);
-    CHECK(out.save.state.eventQueue[1].id == 6);
-    CHECK(out.save.state.eventQueue[1].caller == 600);
-    CHECK(out.save.state.eventQueue[2].id == 10);
-    CHECK(out.save.state.eventQueue[2].day == 9);
+    CHECK(out.save.state.eventQueue[1].id == 10);
+    CHECK(out.save.state.eventQueue[2].id == 6);
+    CHECK(out.save.state.eventQueue[2].caller == 600);
+    CHECK(out.save.state.eventQueue[3].id == 10);
+    CHECK(out.save.state.eventQueue[3].day == 9);
     const auto &back = out.save.campaign.plotActions.list;
     REQUIRE(back.size() == 3);
     CHECK(back[0].count == 11);
@@ -1917,4 +1946,116 @@ TEST_CASE("the player's saves in game/saves, when there, are written back unchan
     {
         SKIP("no .das in game/saves");
     }
+}
+
+TEST_CASE("a plain event is taken out of the queue, and the rest stays as it was", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    REQUIRE(save.state.eventQueue.size() == 2);
+    std::erase_if(save.state.eventQueue,
+                  [](const sg::QueuedEvent &e) { return e.KindOf() == sg::QueuedEvent::Kind::Plain; });
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.state.eventQueue.size() == 1);
+    const auto &kept = out.save.state.eventQueue[0];
+    CHECK(kept.id == 10);
+    CHECK(kept.day == 6);
+    CHECK(kept.time == 2000);
+    CHECK(kept.label == "ESCR");
+    REQUIRE(kept.script);
+    CHECK(kept.script->scriptName == L"script_a");
+    CHECK(kept.script->type == 4);
+
+    save.state.eventQueue.clear();
+    CHECK(Rewrite(bytes, save).save.state.eventQueue.empty());
+}
+
+TEST_CASE("a plain event of each kind is built from its members", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    const std::uint32_t kinds[] = {6, 7, 11, 12, 13, 16, 27};
+    std::uint32_t n = 1;
+    for (const auto id : kinds)
+    {
+        save.state.eventQueue.push_back(sg::QueuedEvent::MakePlain(id, n, n * 10, n * 100, n * 1000));
+        ++n;
+    }
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.state.eventQueue.size() == 2 + std::size(kinds));
+    n = 1;
+    for (std::size_t i = 0; i < std::size(kinds); ++i, ++n)
+    {
+        const auto &e = out.save.state.eventQueue[2 + i];
+        CHECK(e.label == "EBAS");
+        CHECK(e.KindOf() == sg::QueuedEvent::Kind::Plain);
+        CHECK(e.id == kinds[i]);
+        CHECK(e.day == n);
+        CHECK(e.time == n * 10);
+        CHECK(e.caller == n * 100);
+        CHECK(e.target == n * 1000);
+        CHECK_FALSE(e.script);
+    }
+    // The file's own two are as they were.
+    CHECK(out.save.state.eventQueue[0].id == 12);
+    CHECK(out.save.state.eventQueue[1].script->scriptName == L"script_a");
+    // And a script event is built with its payload.
+    sg::ScriptEvent payload;
+    payload.type = 9;
+    payload.scriptName = L"script_b";
+    save.state.eventQueue.push_back(sg::QueuedEvent::MakeScript(24, 1, 2, 3, 4, payload));
+    const auto again = Rewrite(bytes, save);
+    const auto &made = again.save.state.eventQueue.back();
+    CHECK(made.label == "ESCR");
+    CHECK(made.id == 24);
+    REQUIRE(made.script);
+    CHECK(made.script->scriptName == L"script_b");
+    CHECK(made.script->type == 9);
+}
+
+TEST_CASE("a script event made plain and a plain one replaced lose no neighbour", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    // The script event's payload taken out and its id made a plain one's: it is written as a plain event.
+    save.state.eventQueue[1].script.reset();
+    save.state.eventQueue[1].id = 7;
+    // The plain event replaced by another at its place.
+    save.state.eventQueue[0] = sg::QueuedEvent::MakePlain(27, 8, 9, 10, 11);
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.state.eventQueue.size() == 2);
+    CHECK(out.save.state.eventQueue[0].id == 27);
+    CHECK(out.save.state.eventQueue[0].day == 8);
+    CHECK(out.save.state.eventQueue[0].target == 11);
+    CHECK(out.save.state.eventQueue[1].id == 7);
+    CHECK(out.save.state.eventQueue[1].label == "EBAS");
+    CHECK_FALSE(out.save.state.eventQueue[1].script);
+    CHECK(out.save.state.eventQueue[1].time == 2000);
+    CHECK(out.save.state.eventQueue[1].caller == 600);
+}
+
+TEST_CASE("a plain event goes on the script template when the file has no plain one", "[savegame][write]")
+{
+    auto bytes = MakeSave();
+    // The EBAS template's label renamed, so the file has none: a save of the engine always has both, and
+    // this is the writer's fallback.
+    const std::string_view label = "EBAS";
+    const auto at = std::search(bytes.begin(), bytes.end(), reinterpret_cast<const std::byte *>(label.data()),
+                                reinterpret_cast<const std::byte *>(label.data()) + label.size());
+    REQUIRE(at != bytes.end());
+    *at = static_cast<std::byte>('X');
+    auto save = ReadOf(bytes);
+    save.state.eventQueue.push_back(sg::QueuedEvent::MakePlain(16, 3, 4, 5, 6));
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    REQUIRE(out.save.state.eventQueue.size() == 3);
+    const auto &made = out.save.state.eventQueue[2];
+    CHECK(made.id == 16);
+    CHECK(made.day == 3);
+    CHECK(made.target == 6);
+    CHECK(made.label == "ESCR");
+    CHECK_FALSE(made.script);
 }

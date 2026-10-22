@@ -33,6 +33,74 @@ std::optional<SaveMeta> SaveMeta::Parse(std::span<const std::byte> bytes)
     return meta;
 }
 
+namespace
+{
+
+// Sets a string field to `text` unless the original reads the same; false if the file cannot take it.
+bool PutString(gff4::Editor &ed, const gff4::Struct &root, std::uint32_t label, const std::wstring &text)
+{
+    if (root.String(label).value_or(L"") == text)
+    {
+        return true;
+    }
+    return ed.SetString(root, label, text);
+}
+
+bool PutNumber(gff4::Editor &ed, const gff4::Struct &root, std::uint32_t label, std::int32_t value)
+{
+    if (root.Get<std::int32_t>(label).value_or(0) == value)
+    {
+        return true;
+    }
+    return ed.SetNumber(root, label, value);
+}
+
+} // namespace
+
+// Read 2026-10-21 for #226: the engine writes the metadata with the save (SaveGame::Write 0x00646280 appends
+// ".met" to the .das name, 0x00648110 fills it) and the save list reads it for every save, listing only one
+// whose file has 16809 ("single player;"; 16810 is "SP;"), so neither is touched here. A string that changes
+// is appended and its slot pointed at it; a number is written over its slot. dev/SAVES.md has the rest.
+std::optional<SaveMeta::Written> SaveMeta::Write(std::span<const std::byte> original, const SaveMeta &meta)
+{
+    const auto file = gff4::File::Parse(original);
+    if (!file || file->Type() != "SVMT")
+    {
+        return std::nullopt;
+    }
+    const auto root = file->Root();
+    if (!root)
+    {
+        return std::nullopt;
+    }
+    gff4::Editor ed(*file);
+    Written out;
+    const auto text = [&](std::uint32_t label, const std::wstring &value) {
+        if (!PutString(ed, *root, label, value))
+        {
+            out.unwritten.push_back(label);
+        }
+    };
+    const auto number = [&](std::uint32_t label, std::int32_t value) {
+        if (!PutNumber(ed, *root, label, value))
+        {
+            out.unwritten.push_back(label);
+        }
+    };
+    text(kStory, meta.story);
+    text(kArea, meta.area);
+    number(kTimePlayed, meta.secondsPlayed);
+    number(kLevel, meta.level);
+    number(kClass, meta.characterClass);
+    number(kGender, meta.gender);
+    number(kRace, meta.race);
+    number(kBackground, meta.background);
+    text(kCharacter, meta.character);
+    text(kName, meta.name);
+    out.bytes = ed.Bytes();
+    return out;
+}
+
 std::optional<SlotFolderName> SlotFolderName::Parse(std::wstring_view folder)
 {
     // The kinds' prefixes, by the engine's number for the kind.
