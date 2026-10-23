@@ -55,6 +55,10 @@ TYPES = {
 }
 GENERIC = 0xFFFF
 GENERIC_SIZE = 8
+# A Vector3 in a list takes 16 bytes, its fourth float junk, where one in a struct
+# takes 12: an effect's spawn volume's points are points only at that stride, as
+# core's Struct::ListBytes reads them (DAOLib #181, #185).
+LIST_SIZE = {10: 16}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NAMES = os.path.join(HERE, "..", "dev", "gff4_fields.csv")
@@ -243,7 +247,7 @@ class Gff4:
                     self._generic(p + i * GENERIC_SIZE, is_ref, depth)
                     for i in range(count)
                 ]
-            size = 4 if is_ref else self._size(t, is_struct)
+            size = 4 if is_ref else self._size(t, is_struct, listed=True)
             return [
                 self._one(t, is_struct, is_ref, p + i * size, depth)
                 for i in range(count)
@@ -252,9 +256,11 @@ class Gff4:
             return self._generic(at, is_ref, depth)
         return self._one(t, is_struct, is_ref, at, depth)
 
-    def _size(self, t, is_struct):
+    def _size(self, t, is_struct, listed=False):
         if is_struct:
             return self.templates[t][2]
+        if listed and t in LIST_SIZE:
+            return LIST_SIZE[t]
         return GENERIC_SIZE if t == GENERIC else TYPES.get(t, (None, None, 4))[2]
 
     def _one(self, t, is_struct, is_ref, at, depth):

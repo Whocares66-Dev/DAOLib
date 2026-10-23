@@ -16,14 +16,15 @@ def build():
         (4, 1, gff4.LIST | gff4.STRUCT, 20),  # a list of ELEM structs
         (5, 1, gff4.STRUCT | gff4.REFERENCE, 24),  # one ELEM by reference
         (6, gff4.GENERIC, gff4.LIST | gff4.REFERENCE, 28),  # a list of generics
+        (7, 10, gff4.LIST, 32),  # a list of vector3, 16 bytes each
     ]
     elem_fields = [(10, 5, 0, 0)]
-    templates = [(b"TOP ", top_fields, 32), (b"ELEM", elem_fields, 4)]
+    templates = [(b"TOP ", top_fields, 36), (b"ELEM", elem_fields, 4)]
 
     # The data block, offsets from its start.
-    s_off, l_off, r_off, g_off = 32, 44, 56, 60
-    x_off, y_off = 80, 84
-    top = struct.pack("<II3fIII", 7, s_off, 1.0, 2.0, 3.0, l_off, r_off, g_off)
+    s_off, l_off, r_off, g_off = 36, 48, 60, 64
+    x_off, y_off, v_off = 84, 88, 92
+    top = struct.pack("<II3fIIII", 7, s_off, 1.0, 2.0, 3.0, l_off, r_off, g_off, v_off)
     string = (
         struct.pack("<I", 3) + "hi\0".encode("utf-16-le") + b"\0\0"
     )  # 3 chars, padded to 12
@@ -32,10 +33,12 @@ def build():
     generics = struct.pack("<IIIII", 2, 4, x_off, 14, y_off)
     x = struct.pack("<I", 99)
     y = struct.pack("<I", s_off)  # a string element's slot: the string's offset
-    data = top + string + elements + referenced + generics + x + y
+    vectors = struct.pack("<I8f", 2, 1.0, 2.0, 3.0, 9.0, 4.0, 5.0, 6.0, 9.0)
+    data = top + string + elements + referenced + generics + x + y + vectors
     assert len(top + string) == l_off and len(top + string + elements) == r_off
     assert len(top + string + elements + referenced) == g_off
     assert len(top + string + elements + referenced + generics) == x_off
+    assert len(top + string + elements + referenced + generics + x + y) == v_off
 
     header = b"GFF V4.0PC  TESTV1.0" + struct.pack("<I", len(templates))
     table_at = len(header) + 4 + 16 * len(templates)
@@ -61,6 +64,7 @@ class Gff4Test(unittest.TestCase):
         self.assertEqual(top[4], [{"@": "ELEM", 10: -1}, {"@": "ELEM", 10: 5}])
         self.assertEqual(top[5], {"@": "ELEM", 10: 42})
         self.assertEqual(top[6], [99, "hi"])
+        self.assertEqual(top[7], [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
     def test_depth_limits_nesting(self):
         top = gff4.Gff4(build()).walk(depth=0)
