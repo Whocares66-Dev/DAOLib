@@ -72,9 +72,14 @@ DWORD g_threadId = 0;
 // empty file (DAOLib #56: Steam's game, which is not large-address-aware, at
 // 1,999 of 2,048 MiB with a largest free block of 3 MiB, 2026-10-10).
 // Reserved and not committed, so it costs no memory, and at the top, away
-// from where the game's own allocations grow.
+// from where the game's own allocations grow. The report needs about 2 MiB
+// of its own, and its symbols each module's PDB whole: with the space full
+// and 16 MiB the whole report was written, a plugin's frames without their
+// names (DAOLib #60, 2026-10-23).
 constexpr std::size_t kReserveBytes = 16 * 1024 * 1024;
 void *g_reserve = nullptr;
+// The reserve was held when the crash's address space was measured, and released after.
+bool g_reserveHeld = false;
 
 // The process's address space as the crash found it: measured in the filter
 // before the reserve is released, with nothing allocated.
@@ -92,6 +97,34 @@ struct AddressSpace
     }
 };
 AddressSpace g_addressSpace;
+
+AddressSpace MeasureAddressSpace()
+{
+    SYSTEM_INFO system{};
+    GetSystemInfo(&system);
+    const auto low = reinterpret_cast<std::uintptr_t>(system.lpMinimumApplicationAddress);
+    const auto high = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
+    AddressSpace space;
+    space.total = static_cast<std::uint64_t>(high - low) + 1;
+    MEMORY_BASIC_INFORMATION region{};
+    std::uintptr_t at = low;
+    while (at < high && VirtualQuery(reinterpret_cast<LPCVOID>(at), &region, sizeof region) != 0)
+    {
+        if (region.State == MEM_FREE)
+        {
+            space.free += region.RegionSize;
+            space.largestFree = std::max<std::uint64_t>(space.largestFree, region.RegionSize);
+        }
+        const std::uintptr_t next = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
+        if (next <= at)
+        {
+            break;
+        }
+        at = next;
+    }
+    return space;
+}
+
 // For an access violation: what the address space held at the address and just before its
 // page, asked as the crash came in. A fault a little past the end of memory that is there
 // reads differently from one in memory that never was (DAOLib #105).
@@ -291,6 +324,7 @@ class Report
         Modules(w);
         Plugins(w);
         LastLogLines(w);
+        ReportSpace(w);
         w.Flush();
         sample_ = nullptr;
     }
@@ -576,6 +610,30 @@ class Report
                    kReserveBytes >> 20);
             w.Line("\tloader had kept back for it.");
         }
+        w.Blank();
+    }
+
+    // What the report took of the address space, last, with its symbols and names still loaded:
+    // the space in use now against the crash's, less the reserve the crash still held. The
+    // game's other threads run on meanwhile, so it holds what they allocated too. Measured with
+    // the space full and the game paused (DAOLib #60, 2026-10-23): about 2 MiB of the report's
+    // own, and each PDB dbghelp read for a module on the stack, mapped whole (the loader's
+    // release one 11.7 MiB, a plugin's debug one 30).
+    static void ReportSpace(Writer &w)
+    {
+        if (g_addressSpace.total == 0)
+        {
+            return;
+        }
+        const AddressSpace now = MeasureAddressSpace();
+        constexpr double kMiB = 1024.0 * 1024.0;
+        const double before = static_cast<double>(g_addressSpace.total - g_addressSpace.free) -
+                              static_cast<double>(g_reserveHeld ? kReserveBytes : 0);
+        const auto after = static_cast<double>(now.total - now.free);
+        w.Line("THE REPORT'S OWN ADDRESS SPACE:");
+        w.Line("\t{:.1f} MiB: {:.0f} MiB in use now against {:.0f} at the crash without the reserve; largest free "
+               "block {:.1f} MiB",
+               (after - before) / kMiB, after / kMiB, before / kMiB, static_cast<double>(now.largestFree) / kMiB);
         w.Blank();
     }
 
@@ -1069,32 +1127,6 @@ void WriteLog()
 // Every free region between the lowest and highest addresses a process may
 // use, asked of Windows one region at a time: nothing is allocated, so it
 // runs in the filter with the address space as the crash left it.
-AddressSpace MeasureAddressSpace()
-{
-    SYSTEM_INFO system{};
-    GetSystemInfo(&system);
-    const auto low = reinterpret_cast<std::uintptr_t>(system.lpMinimumApplicationAddress);
-    const auto high = reinterpret_cast<std::uintptr_t>(system.lpMaximumApplicationAddress);
-    AddressSpace space;
-    space.total = static_cast<std::uint64_t>(high - low) + 1;
-    MEMORY_BASIC_INFORMATION region{};
-    std::uintptr_t at = low;
-    while (at < high && VirtualQuery(reinterpret_cast<LPCVOID>(at), &region, sizeof region) != 0)
-    {
-        if (region.State == MEM_FREE)
-        {
-            space.free += region.RegionSize;
-            space.largestFree = std::max<std::uint64_t>(space.largestFree, region.RegionSize);
-        }
-        const std::uintptr_t next = reinterpret_cast<std::uintptr_t>(region.BaseAddress) + region.RegionSize;
-        if (next <= at)
-        {
-            break;
-        }
-        at = next;
-    }
-    return space;
-}
 
 DWORD WINAPI WriterThread(LPVOID /*unused*/)
 {
@@ -1126,6 +1158,7 @@ LONG WINAPI Filter(EXCEPTION_POINTERS *pointers)
         {
             VirtualFree(g_reserve, 0, MEM_RELEASE);
             g_reserve = nullptr;
+            g_reserveHeld = true;
         }
         // The log is written on a thread of its own: this one may be out of
         // stack, and it is the one whose stack the log reads.

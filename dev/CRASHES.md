@@ -17,6 +17,7 @@ The loader (`src/loader/CrashLog.cpp`) installs a crash logger before anything e
 | ENGINE STRINGS IN THE STACK'S FRAMES | The engine's `std::wstring`s lying in the stack's first 64 KiB (`dao/core/StackText.h`): a function's own strings, the name of the file or object it is loading among them. Each text once, innermost first; some are left over from earlier calls. |
 | MODULES, DAOLIB PLUGINS | Everything loaded, with its range; our plugins |
 | LAST LINES OF ... | The last twelve lines of each log this game wrote in this run: `<name>.log` for the game that has the plain names, `<name>.<process id>.log` for one started beside it, and only a file written since the game started. The folder is shared with the games running beside it and keeps what earlier ones left, and a report used to quote them all (DAOLib #57: a crash log of 1,390 lines, most of them old sessions; with the rule, seen 2026-10-12 with the probe's deliberate crash, 359 lines quoting three logs of the folder's 24). No report (`crash-`, `hang-`, `exit-`) and no `.previous.log` is quoted. |
+| THE REPORT'S OWN ADDRESS SPACE | How much address space the report took, measured as it finishes: the space in use then against the crash's, less the 16 MiB reserve. It holds the report's own (about 2 MiB), each PDB dbghelp read for a frame, mapped whole, and what the game's other threads allocated meanwhile (DAOLib #60). |
 
 Names come from three places:
 - **Our DLLs:** their PDBs, which `tools\deploy.ps1` copies beside them.
@@ -84,6 +85,13 @@ With `DAOLIB_PROBE_CRASH_TEST=2` the probe fills the address space first: it res
 - **`2`, Steam's game**, the build the fix is for: a whole log, 1,066 lines. "2042 of 2048 MiB in use, largest free block 0.1 MiB", "All but full", the probe's frame named the same way.
 
 So 16 MiB is enough for the report with the loader's PDB and two plugins' (8 MiB each) to read. It was not tried with more plugins than that, nor with `functions.tsv` in Steam's folder.
+
+**Measured, 2026-10-23 (DAOLib #60).** The log now ends with THE REPORT'S OWN ADDRESS SPACE: the space in use as the report finishes, with its symbols and names still loaded, against the crash's less the reserve. The game's other threads run on meanwhile, so it holds what they allocated too. It was read in GOG's debug build with `DAOLIB_PROBE_CRASH_TEST=2`, crashing at a pause in the Denerim market (the probe's crash moved to a player's pause for the test), and per step of the report in a test build with a 128 MiB reserve:
+- **The report's own: about 2 MiB.** The function names took 0.2 MiB, the stack's section 1.2 MiB, and the rest of the sections nothing measurable.
+- **Its symbols: each PDB dbghelp reads, mapped whole**, for the modules on the crashing stack alone, not every plugin's. With 2 plugins or 29 the report took the same, 62.9 MiB with the debug loader's and the probe's PDBs (31 and 30 MiB). With the probe's and Eluvian's on the stack it took 93 MiB: 29.9 MiB at the exception's section (the probe's PDB) and 60.5 at the call stack (Eluvian's release PDB, 42 MiB, and the system's). dbghelp finds a PDB at the path written in its DLL as well as in the search path, so on the machine that built a plugin its PDB is read wherever the DLL is.
+- **With the space full and the 16 MiB reserve, the whole report was written.** The game's own frames kept their names from `functions.tsv`; the plugin's and the system's frames had none, their PDBs not mapped. The report used 15.8 of the 16 MiB in one run and 2.7 in another, the same build's: the second fitted no PDB, the first some of the smaller ones.
+
+A player's loader PDB is 11.7 MiB (the release package's). So 16 MiB holds the report and, at best, the loader's own symbols; a crash with a plugin on the stack, in a full space, is reported without that plugin's names. The reserve stays 16 MiB: a smaller one would lose the loader's names too, and a larger one costs Steam's game the headroom this is about.
 
 ## The crashes it has explained
 
