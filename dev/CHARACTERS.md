@@ -192,7 +192,7 @@ Not "drawn but skin-like": hidden by state. The band is invisible because the wh
 - What `0x00A1C71A` does exactly (visible flag on the node's listener); `0x00A5D070`/`vt+0x18` internals.
 - Whether event 28's animation clips include every decapitating kill; which death or finishing move plays them in play (ANIMATION.md lists 327/330 and dw/tw deathblows).
 - Whether the gore setters `0x006B1BC0`/`0x006B19B0` reach NeckM1 (moot while hidden), and the meaning of GFF `0x3FC6`.
-- The entry-by-entry mapping of the tint block onto `mml_vTintMaskColours`; the LOD2/LOD3 pixel shader (`Face2.psh`) and `SM2_Face0.psh`; the shader of EA's/Steam's builds; nothing seen in play.
+- The entry-by-entry mapping of the tint block onto `mml_vTintMaskColours`; `SM2_Face0.psh` (the LOD2/LOD3 pixel shader `Face2.psh` is read: "A model's level of detail"); the shader of EA's/Steam's builds; nothing seen in play.
 - Block index of the neck's tint (inferred 0).
 
 ## NeckM1 (hm_hed_dcpa_0): geometry, skinning and the draw (neck2b, 2026-10-18) (lib-agent-2)
@@ -255,8 +255,53 @@ GOG 1.05 addresses. [C] read in the code or the files, [I] inferred.
 - **The shaders** [C, vanilla `shaders.erf`, disassembled]:
   - `Ch2ArmTnt` is `Ch1`'s with the normal-map sampler dropped, so it uses the vertex normal (`nrm r1.xyz, v2`).
   - `Char2.vsh` drops the tangent and binormal inputs and skins by 2 bones, its weights over `v3.x + v3.y`. `Char1.vsh` skins by 4.
-  - Not read: the SM2 variants, `Face2.psh` and `Char2_VertexLit.vsh`.
+  - Not read: the SM2 variants and `Char2_VertexLit.vsh`.
+  - **Which shaders a head's lower levels use** (read 2026-10-23 by paragon-agent for its far heads, checked by lib-agent-2; the shaders and materials from vanilla's .erf archives, since DAOElgaraShaders overrides face0/face2/hair0/hair2 and hairalpha.mat.xml) [C, vanilla `.mat.xml`]:
+    - **The face:** `Face.mat` gives LOD2 and LOD3 as `Char2.vsh` with `Face2.psh`, under `Face.sta`.
+    - **The hair:** `HairAlpha.mat` gives LOD2 and LOD3 as `Hair2.vsh` with `Hair2.psh`, under `Character.sta`. The file says "The low-LOD hair only renders the opaque bits".
+    - **Opaque hair:** `Character.sta` has blending and the alpha test off, with z test and z write on. `Hair2.psh` has no texkill.
+  - **`Face2.psh` against `Face0.psh`** [C]:
+    - **No normal maps:** it drops the four normal maps (s2, s4, s9, s12) and takes the skinned vertex normal from `Char2.vsh`. The pixel shader does not normalise it.
+    - **No self-shadow:** `Face0` multiplies each light's diffuse and specular by a head-bone occlusion term, and `Face2` has neither.
+    - **The rim:**
+      - Its view factor is `max_sat(0.01, TEXCOORD0.w) × sat(1.5 − d)`, and `Char2.vsh` writes TEXCOORD0 as (u, v, 0, 0). So it is 0.01 × sat(1.5 − d).
+      - That is 0 beyond 1.5 m from the camera, so a head at level 2 or 3 has no rim.
+    - **Otherwise:** the colour terms, the highlight and the tail are `Face0`'s line for line, apart from register numbers. The one other change is that the brow and stubble sample loses `Face0`'s −1 bias.
+  - **`Hair2.psh`** [C]:
+    - It has no highlights.
+    - The lights are three point lights (c0, c5, c7) and the sun, each max(N·L × 0.75 + 0.25, 0). Each point light keeps `Hair0`'s sin² attenuation; the sun has none.
+    - The lights are added to the probe's ambient from the vertex shader's colour output.
+    - Then come `Hair0`'s tint (noise × c13 + c11 × G + c15 × (1 − G)), the remote material, the tint divide and the fog.
+    - `Hair2.vsh` skins by two bones, as `Char2.vsh` does, and takes no tangent.
+  - **A level-3 hair's missing textures** [C for the files, I for the engine's fallback]:
+    - `HairAlpha.mat.xml` gives `Default_Missing` as the default for `mml_tTintNoise` and `mml_tPackedTexture`. `Default_Missing` is a flat grey 32×32: every pixel is BGRA (0x80, 0x80, 0x80, 0xFF). It is not black.
+    - No `_l2` or `_l3` hair `.mao` names a tint noise.
+    - `uh_har_h01a_l3.mao` names no packed texture either. It names `mml_tTintMask`, which `HairAlpha.mat` does not have. `pn_har_all_l3.mao` does name a packed texture.
+    - That the engine takes the material's default for a parameter the `.mao` leaves out was not read in the exe [I].
+  - **The eyes and lashes have no lower levels** [C]:
+    - No eye (`uem`) or lash (`ulm`) mesh has a `_2` or `_3` file. `hf_uem_basa` and `hf_ulm_basa` exist only as `_0.mmh`.
+    - So by the file rule above they stay at level 0 at every band.
+    - Of the 52 `uem`/`ulm`/`uhm` `.mmh` names, only the `uhm` hair caps have lower levels. The heads have them too (`hf_hed_dcpa_2`/`_3.mmh`).
 - **What Paragon saw in play in the camp** (Lyna, Slot_489):
   - Morrigan at 11.6 and 14.6 m from the hero was drawn by `Char2.vsh` and Ch2 (robe `pf_rob_mora_0dl2`), her head by `Face2.psh` and her hair by `Hair2`.
   - The dog at 26 m was at level 2, and the emissaries at 29.4–30.8 m at level 3.
   - Shale's body was at level 0 while his head was at level 2 (not explained).
+- **A morph at the lower levels** (read 2026-10-23 by paragon-agent for its far heads, checked by lib-agent-2; the shaders and materials from vanilla's .erf archives, since DAOElgaraShaders overrides face0/face2/hair0/hair2 and hairalpha.mat.xml):
+  - **Loading the morph** [C]:
+    - The morph load 0x005895D0 (ID 9208) reads each node through 0x00588A60 (ID 9203).
+    - For each node it reads the vertex stream and count, then the lists of texture, vector and float parameters.
+  - **Applying it:** ObjectNodeMesh's vtable 0x00AF8F4C, entry +0x4C (slot 19 from 0), is 0x0055B540 (ID 8283) [C]. In order:
+    - **Bones:** it calls 0x0055EC80 unconditionally, for the bone rest plus the morph's Position. So a morph's bone offsets apply at every level.
+    - **The node:** it finds the morph's node by the mesh node's name.
+    - **Material parameters:** 0x005696E0 (ID 8631) sets the node's textures, vectors and floats. It is called in every mode, before any count test, and has no level condition. It returns early only on a null material or argument.
+    - **Vertices:** 0x0057D430 (ID 8999) replaces the vertices only when the morph node has a vertex stream (+0x10) and its count (+0x18) equals the mesh chunk's (`[+0x14C]+0x4C`) (0x0057D4F1..0x0057D509). Otherwise it jumps to 0x0057D6DC and silently skips the replacement. The buffer is then rebuilt from the mesh's own vertices.
+  - **So a head at level 2 or 3 keeps its base model's shape,** but takes the morph's textures, tints and bone offsets [C].
+    - For example, Morrigan's `hf_genfl_morrigan.mor` has FaceM1 at 2280 vertices, EyesM1 at 373 and LashesM1 at 271 [C].
+    - Her FaceM1 names uh_hed_fema_0d, uh_hed_kida_0d and uh_pmt_001_0t among its five textures [C].
+    - Her bone nodes have count 0 and only millimetre-scale Positions (:101–102) [C].
+    - The level-2 face's 594 vertices are as seen in play [S]; the `_2` mesh was not parsed.
+  - **Seen in the camp** (Lyna, Slot_489) [S]:
+    - Morrigan at 29 m and 13.3 m: her face was drawn by `Char2.vsh` and `Face2.psh` (1025 triangles, 594 vertices), her hair cap by `Face2`, and her hair (588 vertices) by `Hair2`, opaque with no alpha test. Her eyes were at level 0.
+    - At 13.3 m the face's smpDecal was uh_hed_fema_0d, the morph's full-size texture. The age diffuse uh_hed_kida_0d and the tattoo uh_pmt_001_0t were also the morph's.
+    - The tint mask, the emotion masks and the brow and stubble were the `_l2` `.mao`'s L2 textures.
+  - **Not read** [I]: whether a lower head's bone rest is the level-0 head's.
