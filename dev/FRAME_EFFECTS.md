@@ -13,7 +13,18 @@ How the engine runs an area's frame effects (`da_bloom`, `da_fade`, `da_hsvmatri
 
 **The files.** An effect is `<name>.ffx.xml` in `postprocesseffects.erf`, its materials `.mat.xml` in `materials.erf`, its states `.sta.xml` in `states.erf`, its shaders in `shaders.erf` (some overridden by `patch002.erf`).
 
-**The order:** by the effect's `layer`, ascending, all at the frame's end: `da_copybackbuffer` (1), `da_bloom` (10), `da_fade` (10), `da_hsvmatrix` (20). The sort is MSVC's `std::sort`, an insertion sort below 33 elements, so the tie keeps its order (inferred). Each effect ends by copying the back buffer to `BackBufferCopy` (BBC). LightMask and Downsampled16 are half size, A8R8G8B8.
+**The order:** by the effect's `layer`, ascending, all at the frame's end: `da_copybackbuffer` (1), `da_bloom` (10), `da_fade` (10), `da_hsvmatrix` (20). The sort is MSVC's `std::sort`, but the tie does not keep the order: it comes out reversed, `da_fade` before `da_bloom` (corrected 2026-10-23 by lib-agent-2; it was inferred to keep the `.arl` order), see "How the list is built" below. Each effect ends by copying the back buffer to `BackBufferCopy` (BBC). LightMask and Downsampled16 are half size, A8R8G8B8.
+- **How the list is built** (read 2026-10-23 by paragon-agent for DAOParagonEngine #206, checked by lib-agent-2) [C]:
+    - **Adding:** an effect is added by the manager's add 0x00457400(effect, sort). It pushes the pointer onto a plain vector (0x0049D170) and re-sorts the whole vector (0x00457250 → 0x00457060, MSVC 8's `std::sort`) only when `sort` is set.
+    - **A file's effects:** the loader 0x004582B0 reads a GFF `V4.0` file. A single effect (field 0xBCF) is added with a sort. A list (field 0xBD2) is added in the file's order with no sort (0x00458400), then sorted once (0x0045840E).
+    - **Draw time:** 0x00456C10 walks the vector forward, skipping a disabled effect (+0x88). There is no second ordering.
+  - **The sort's tie rule** [C]:
+    - At 32 elements or fewer, `std::sort` is the insertion sort 0x00456900, on the dword at effect +0x80 (the layer [I: that the field is `layer` was not read in the parser; the layers 1/10/10/20 fit]).
+    - **Ties come out reversed.** A new element not greater than the first goes to the front (`cmp; ja` at 0x0045692A). Otherwise it is moved back past every element it is not greater than (0x00456950–0x0045695C). So it lands in front of its equals.
+  - **So in the Fade** [C for the mechanism, I for the list it runs on]:
+    - The `.arl` lists `da_bloom`, `da_hsvmatrix`, `da_fade`. One sort puts `da_fade` in front of `da_bloom`, whether or not `da_copybackbuffer` is already in the vector.
+    - Each further sorted add to the same vector would reverse the pair again [I; which of the two managers, 0x00C1EAB0 or 0x00C1EAC4, holds the area's effects, and what else is added to it later, were not read].
+  - **Seen in play** (DAOParagonEngine #206; Eluvian's frame_capture of the Fade) [S]: `da_fade` (RadialBlur, then FadeDistortion) is drawn before `da_bloom`.
 
 **`da_bloom`** (`dabloom.mat.xml`):
 
@@ -248,7 +259,7 @@ Parameters (`da_blurdesaturate.ffx.xml`, no engine or area override; the exe set
 
 Targets (all A8R8G8B8, shared with bloom): BackBufferCopy (BBC) full size; LightMask and Downsampled16 half size (BACKBUFFER_WIDTH/2 x HEIGHT/2).
 
-Passes, in the stage `EndFrame`, effect layer 15 (after da_bloom/da_fade at 10, before da_hsvmatrix at 20; at medium or lower detail the SM2 material differs, see below):
+Passes, in the stage `EndFrame`, effect layer 15 (after da_fade/da_bloom at 10, before da_hsvmatrix at 20; at medium or lower detail the SM2 material differs, see below):
 
 | # | Material semantic | Shaders | Reads -> writes | State |
 |---|---|---|---|---|

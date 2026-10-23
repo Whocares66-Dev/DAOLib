@@ -1159,6 +1159,11 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
     - `ChooseForMoving` (0x00464560, ID 2694; figures, and anything flagged 0x4000) takes +0x84 → group +0, +0x6C → group +0x10, probes +0x3C → group +0x20, and the ambient +0x54 only if asked.
     - `ChooseForLevel` (0x00464310, ID 2693) takes +0x0C → group +0, +0x24 → group +0x10, +0x3C, and the ambient +0x54 only for objects whose flags hold 0x10000.
     - So **a domain-1 effect light lights figures only, and a domain-0/2 light lights level meshes and props only.** The wisp's two lights are one of each [C].
+  - **The ambient group** (read 2026-10-23 by paragon-agent for DAOParagonEngine #206, checked by lib-agent-2):
+    - **How the flag gets there:** `ChooseLightsOf` (0x004654E0) passes two flags, both set only when the owner's flags (vtable +0xA4) hold 0x10000 (0x00465533).
+    - **What ChooseForLevel does with them:** it fills the LightState's ambient group (+0x30) from the list +0x54 only under the first flag (0x004644EB). Under the second it scores them (0x00464520); otherwise it takes them all (0x0046452F).
+    - **Without 0x10000** a level draw has no ambient light from the lists. Who sets 0x10000 was not read [I].
+    - **Seen in play** (DAOParagonEngine #206, frame captures) [S]: terrain draws' `g_vLightParams` hold only a point light and the sun, in the Fade and in Redcliffe.
   - **Per light:**
     - A light with CanBeOccluded set and an MMHID missing from the passed sorted id list is skipped (inferred: the room's light visibility list).
     - For the "dynamic" lists, a light is skipped unless its owner Object's flags (vtable +0xA4, on owner+8) have bit 1. That bit is inferred to mean the effect's model is shown.
