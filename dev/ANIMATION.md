@@ -778,6 +778,12 @@ Each frame, with mode 1:
 - Globals rows 7 `MIN_DELAY_BEFORE_PLAYER_LOOKAT` (250) and 8 `MAX_DELAY_BEFORE_PLAYER_LOOKAT` (500) were not found used in this function (inferred: the delay before a creature turns when the player is selected / comes near); not traced.
 - Explicit targets: `SetLookAtTarget` stores the ids; conversation (ShowLine), cutscenes (0x007F108A clears slot 1) and 0x0070FE99 (slot 2, the id at `[esi+0x9c]`) feed the same slots.
 - Dialogue line effect is not separately read; dev/CUTSCENES.md says a cutscene's camera look-at is the separate camera behaviour (0x006C3010), not this.
+- **The creature's own look-at on a line with no cut** (0x006CAD80; read 2026-10-23 by paragon-agent's helper, checked by lib-agent):
+  - On a line with no cut, ShowLine (0x0068E250) gives the speaker and the controlled creature each other in slot 1, with no distance limit [C]. It is cleared at the conversation's end (0x007F108A) [C].
+  - Glances go to the controlled creature, not to the hero as such [C].
+  - A candidate counts only when it is in front of the creature: a dot product > 0 at 0x008D8B60, against the vector (0,1,0) [C].
+  - The multiplier is drawn when a target is acquired or lost [C].
+  - The controlled creature makes no glances, but still follows its slot 1 [C].
 
 ##### From target to angles (0x006CA250 recompute, checked)
 
@@ -797,6 +803,8 @@ mode 1 and has-target: `d = normalize(target - eyePos)`; yaw = 0x004EE5A0(d), pi
 - Yaw -> clip time: `u = (yaw - MinYaw)/(MaxYaw - MinYaw)` (0 at -45, 1 at +45), `time = u * L + 1/30` where `L = clipLength - 1/30` (field +0x20 = `length_ms*0.001 - 0.0333333` with the constants at 0x00AE7118 = 0.001 and 0x00B231B8 = 1/30; code 0x007F53C0). So the sampled time runs 1/30 s .. the clip's end; the clip's t=0 key is an identity placeholder never used. Centre of the sweep is 3.017 s of the 6.000 s clip.
 - Every frame it calls the host (the animation host at ctrl+0x18; creature animation set) `SetWeight(row, w)` (0xA5C840, host vtable +0x88) for the three rows and `SetTime(row, t)` (0xA5C980, vtable +0x78) with the same t for all three; the three clips are started once (0x007F5A20: host vtable +0x58 Play with vec4 (0,0,1,-1) for the centre row and (0,0,0,-1) for the up/down rows; first component 0 = does not advance on its own, last -1 = no end, inferred meanings), and `+0x1C` records that the host `HasAnimation` for all three (0xA5D920).
 - So the pose is: additive(centre clip at time t, weight 1-|p|) + additive(up or down clip at t, weight |p|), a pure pitch pose weight and a yaw sweep by time, per part.
+- **Additive keys are put on in the parent's frame** (read 2026-10-23 by paragon-agent's helper, checked by lib-agent): the sampler (0x00545020, then 0x008111E0) puts an additive clip's key on as `delta * pose`, the delta on the parent's side [C] (consistent with "Additive and override clips").
+  - The eye bones' rest is a turn of about 120°, so applying the delta on the other side (`pose * delta`) turns them about another axis: the eyes roll up and aside, showing white [S].
 - Checked in the clips: `headmid` head_rotation is identity at 3.0 s and rotates linearly about one local axis (about -32.8 deg at 0.05 s, 0 at 3.0 s, +26.1 deg at 5.97 s) while neck (-12.7 .. +16.1) and neck1 (-1.5 .. +2.0) add: total about -47.0 deg at the start and +44.2 deg at the end of the clip, i.e. the +/-45 deg of the table. `headhigh` adds head 28.1 deg, neck 16.9 deg, neck1 13.4 deg about the other axes at the centre; `headlow` head -20.1, neck -23.8, neck1 -7.2 (signed angles about z / y / z). Body: chest, chest1, chest2, lowerback.
 
 ##### Quaternion bone facts (checked)
@@ -806,6 +814,10 @@ The same three parts: Eyes - eye_left, eye_right; Head - head, neck, neck1; Body
 ##### Disabling (checked/inferred)
 
 anim_base/anim_combat column `DisableLookAt` (hash 0x07EF3CC0, read by the table loader at 0x005CA693): 1 on draw/sheathe (100, 101, 108, 109, 110, 111, 177, 178), `Damage` (103), deaths and most reactions; 0 on idle, walk, talk, most `amb*`. Where the engine consults it was not read; the effect is inferred (a clip with 1 stops the look-at while it plays).
+
+- **Open** (read 2026-10-23):
+  - The units of 0x004EE200 and 0x004EE310/0x004EE370 (yaw/pitch to a turn); Paragon composes Euler ZXY in their place [I].
+  - The eye height: 0x006A1BF0 takes the midpoint of the eye bones; Paragon takes 1.6 m above the feet [I].
 
 #### 4. Additive and partial clips
 
@@ -1718,7 +1730,7 @@ For a port: `Q = base`; for each additive clip (weight > 0) in order, `Q = slerp
 
 The Eyes controller (`PartLookAtController` vtable 0x00B0F388, at look-at object +0x10; dev/ANIMATION.md "Blending", `lib-agent-2-anim-layers.md` section 3 has the whole account). New here, from the order of the update:
 
-- **Order per frame** (`0x006CA990`, called with dt): `0x006CA250` recomputes the target quaternion (+0x15C) if dirty; then `0x006CA150` runs the controller update `0x007F53E0(dt, +0x15C)` for **Body (+0x98) first, then Head (+0x54), then Eyes (+0x10)**. All three get the **same** target quaternion (the direction to the target relative to the creature's facing, each yaw and pitch clamped to +-90 deg), and each limits it itself (Eyes' settings +0x1C/+0x20 = MaxAllowedYaw 20 deg, MaxAllowedPitch 10 deg, blended by how much of the rotation is about the vertical axis; head 45/10, body 45/30). The eyes do not subtract what the head has already turned, so with a target 30 deg away the head turns 30 and the eyes add 20 on top (inferred from the call arguments: no head quaternion is passed to the Eyes call).
+- **Order per frame** (`0x006CA990`, called with dt): `0x006CA250` recomputes the target quaternion (+0x15C) if dirty; then `0x006CA150` runs the controller update `0x007F53E0(dt, +0x15C)` for **Body (+0x98) first, then Head (+0x54), then Eyes (+0x10)**. All three get the **same** target quaternion (the direction to the target relative to the creature's facing, each yaw and pitch clamped to +-90 deg), and each limits it itself (Eyes' settings +0x1C/+0x20 = MaxAllowedYaw 20 deg, MaxAllowedPitch 10 deg, blended by how much of the rotation is about the vertical axis; head 45/10, body 45/30). Each part is handed the target with the part's own current turn taken out (corrected 2026-10-23, read by lib-agent; it was inferred that the eyes do not subtract what the head has turned): `Apply` 0x006CA990 passes one target quaternion (`[esp+0x10]`) to all three `ApplyPart` (0x006CA150) calls, Body +0x98, Head +0x54, Eyes +0x10, and `ApplyPart`, after the controller update 0x007F53E0, overwrites that target with the part's current turn (ctrl +0x24) conjugated out (0x004CBCB0, multiplied in by 0x004CB640). So the head gets what the body has not turned, and the eyes get what the head has not [C]. [S] Seen in the running game: with the eyes not subtracting, a port overshot the target by up to 20 deg; with the remainder, the irises in Greagoir's Harrowing line 122138_m sit as the game's.
 - **Speed:** Eyes `look_at` row 0: MinSpeed = MaxSpeed = 360 deg/s (flat), SlowAngle 10, FastAngle 25 (irrelevant when min = max), times the turn multiplier 0.75..1.0 on acquiring a target and 0.4..0.6 on losing it. A step above pi/2 or reaching the target snaps (0x007F53E0).
 - **Output:** the controller converts the limited quaternion to yaw and pitch, each clamped to the table's +-45 deg animation range (rows: Min/MaxAnimationYaw -45/45, Pitch -45/45), then every frame calls the host's `SetWeight` (0xA5C840) and `SetTime` (0xA5C980) on rows 12/13/14 (`lookeyescenter/up/down`): time = (yaw+45)/90 * (len - 1/30) + 1/30, up weight = pitch/45 (positive), down weight = pitch/-45, centre = 1 - that. With the clamp at 20/10 deg the eyes in play use only the clip time range 0.28..0.72 of the sweep and pitch weights up to 0.22. Clips mh_o.eyemid/eyehigh/eyelow.ani: additive, 6.0333 s, keys on `eye_left` and `eye_right` rotation only (182 keys).
 - **Clip angle per second of time** is not recomputed here; the 45 deg end-to-end sweep of the head clips is checked (anim-layers section 3), the eye clips' sweep is inferred to match the table's +-45.
