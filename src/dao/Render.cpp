@@ -252,12 +252,13 @@ void ReadShader(IDirect3DDevice9 *device, bool vertex, Shader &shader)
 // The frame thread does not draw: it records each batch's draw into the threaded driver's buffer,
 // inside a material instance's render that a node's render called with the node in the render
 // context's +0xE4. The render thread plays the buffer back one command at a time, in order, and a
-// played command's driver call (DrawBatch, 7 or 10) makes that record's draws. So a record's node and
-// names are noted at the record, queued with the record's number, and taken at the played call
-// with the same number. The frame thread also makes some draws at once, inside a material render;
-// those take the render's node directly. Numbers are counted always, so that a watch armed between
-// a record and its play does not pair one record's names with another's draw; the names are only
-// read and queued while a watch is armed. Read in dao/Addresses.h at kMaterialObjectInstance_Render.
+// played command's driver call (DrawBatch, DrawBatchRange or DrawBatchIndexedRange) makes that
+// record's draws. So a record's node and names are noted at the record, queued with the record's
+// number, and taken at the played call with the same number. The frame thread also makes some draws
+// at once, inside a material render; those take the render's node directly. Numbers are counted
+// always, so that a watch armed between a record and its play does not pair one record's names with
+// another's draw; the names are only read and queued while a watch is armed. Read in
+// dao/Addresses.h at kMaterialObjectInstance_Render.
 
 constexpr std::size_t kContextNode = 0xE4;   // in a render context: the node last rendered
 constexpr std::size_t kNodeMaterial = 0x150; // in a mesh's or cloth's node: its material instance
@@ -334,20 +335,21 @@ using MaterialPassesFn = std::uintptr_t(__fastcall *)(void *self, int edx, std::
                                                       std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
 using RecordFn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
                                               std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
-using Batch7Fn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
-                                              std::uintptr_t b, std::uintptr_t c, std::uintptr_t d, std::uintptr_t e,
-                                              std::uintptr_t f);
-using Batch10Fn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
-                                               std::uintptr_t b, std::uintptr_t c, std::uintptr_t d, std::uintptr_t e,
-                                               std::uintptr_t f, std::uintptr_t g, std::uintptr_t h, std::uintptr_t i);
+using BatchRangeFn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                                  std::uintptr_t b, std::uintptr_t c, std::uintptr_t d,
+                                                  std::uintptr_t e, std::uintptr_t f);
+using BatchIndexedRangeFn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                                         std::uintptr_t b, std::uintptr_t c, std::uintptr_t d,
+                                                         std::uintptr_t e, std::uintptr_t f, std::uintptr_t g,
+                                                         std::uintptr_t h, std::uintptr_t i);
 using PlayFn = std::uintptr_t(__fastcall *)(void *self, int edx, std::uintptr_t buffer);
 
 Detour<MaterialRenderFn> g_materialRender;
 Detour<MaterialPassesFn> g_materialPasses;
 Detour<RecordFn> g_record;
 Detour<RecordFn> g_batch;
-Detour<Batch7Fn> g_batch7;
-Detour<Batch10Fn> g_batch10;
+Detour<BatchRangeFn> g_batchRange;
+Detour<BatchIndexedRangeFn> g_batchIndexedRange;
 Detour<PlayFn> g_play;
 
 // Notes a material render's node and instance on its thread while it runs.
@@ -459,17 +461,17 @@ std::uintptr_t __fastcall Batch(void *driver, int edx, std::uintptr_t batch, std
     return DriverDraw([&] { return g_batch.Original()(driver, edx, batch, a, b, c, d); });
 }
 
-std::uintptr_t __fastcall Batch7(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
-                                 std::uintptr_t c, std::uintptr_t d, std::uintptr_t e, std::uintptr_t f)
+std::uintptr_t __fastcall BatchRange(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
+                                     std::uintptr_t c, std::uintptr_t d, std::uintptr_t e, std::uintptr_t f)
 {
-    return DriverDraw([&] { return g_batch7.Original()(driver, edx, batch, a, b, c, d, e, f); });
+    return DriverDraw([&] { return g_batchRange.Original()(driver, edx, batch, a, b, c, d, e, f); });
 }
 
-std::uintptr_t __fastcall Batch10(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
-                                  std::uintptr_t c, std::uintptr_t d, std::uintptr_t e, std::uintptr_t f,
-                                  std::uintptr_t g, std::uintptr_t h, std::uintptr_t i)
+std::uintptr_t __fastcall BatchIndexedRange(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                            std::uintptr_t b, std::uintptr_t c, std::uintptr_t d, std::uintptr_t e,
+                                            std::uintptr_t f, std::uintptr_t g, std::uintptr_t h, std::uintptr_t i)
 {
-    return DriverDraw([&] { return g_batch10.Original()(driver, edx, batch, a, b, c, d, e, f, g, h, i); });
+    return DriverDraw([&] { return g_batchIndexedRange.Original()(driver, edx, batch, a, b, c, d, e, f, g, h, i); });
 }
 
 void AttachOwners()
@@ -479,8 +481,8 @@ void AttachOwners()
                         g_record.Attach(addr::kThreadedGraphicsDriver_DrawBatch, &RecordBatch) &&
                         g_play.Attach(addr::kRenderer_PlayCommand, &Play) &&
                         g_batch.Attach(addr::kD3DGraphicsDriver_DrawBatch, &Batch) &&
-                        g_batch7.Attach(addr::kD3DGraphicsDriver_DrawBatch7, &Batch7) &&
-                        g_batch10.Attach(addr::kD3DGraphicsDriver_DrawBatch10, &Batch10);
+                        g_batchRange.Attach(addr::kD3DGraphicsDriver_DrawBatchRange, &BatchRange) &&
+                        g_batchIndexedRange.Attach(addr::kD3DGraphicsDriver_DrawBatchIndexedRange, &BatchIndexedRange);
     if (!placed)
     {
         spdlog::warn("render: not every detour for what a draw is placed; draws are handed without it");

@@ -1475,11 +1475,21 @@ DAO_ADDRESS(kThreadedGraphicsDriver_DrawBatch, 32259)
 // thread also calls those slots itself, at once, inside a material render
 // (from MaterialPass slot 3, 0x00506672). Seen in Redcliffe castle: 1,141,796
 // played commands, every one its record's in order. The names are ours.
+// What sets the three apart (read 2026-10-23): slot 28 draws the batch
+// through its own Draw, its vftable's slot 15, which for a D3DBatch
+// (0x00870D40) is a DrawPrimitive and for a D3DBatchIndex (0x00870DE0) a
+// DrawIndexedPrimitive, each over the range the batch keeps (+0x60 on).
+// Slot 29 calls D3DBatch::DrawRange (0x00870D90), a DrawPrimitive over the
+// vertex start and count its two last words give; slot 30 calls
+// D3DBatchIndex::DrawRange (0x00870E70), the index buffer set and a
+// DrawIndexedPrimitive over its five last words. The device's two draws are
+// 0x0086F440 (its +0x144, DrawPrimitive) and 0x0086F470 (+0x148,
+// DrawIndexedPrimitive), on the driver's +0x1AC.
 DAO_ADDRESS(kMaterialObjectInstance_Render, 5842)
 DAO_ADDRESS(kMaterialObjectInstance_RenderPasses, 5824)
 DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch, 23557)
-DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch7, 23558)
-DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch10, 23559)
+DAO_ADDRESS(kD3DGraphicsDriver_DrawBatchRange, 23558)
+DAO_ADDRESS(kD3DGraphicsDriver_DrawBatchIndexedRange, 23559)
 DAO_ADDRESS(kRenderer_PlayCommand, 32141)
 // The loading screen's task, read 2026-10-11 for DAOLib #71, after a profile
 // (#68) found a loading screen's time in waits, a frame at a time. While a
