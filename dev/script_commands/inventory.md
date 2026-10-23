@@ -340,7 +340,21 @@ Shared facts (checked): the VM stack object is `[0xC1D080]`; `0x00A2F6D0` pops a
 - **Handler:** 0x0065FA40 (sole; GUI::ShowContainerGUIMessage via `0x0064DC00`).
 - **Described in:** `dev/PLACEABLES.md` (a container opened): USE with action 11, then OPENED, then `OpenInventory(self, user)`.
 - **Does:** posts the container panel for oObject, opened by oPlayer, to the GUI.
-- **Edge cases:** pops the object, then the player, then bCanAddItems only if the argument count is above 2, else it stays 0 (checked). Either object not found (`GetObjectById`, `GetCreatureById`), no client app GUI object (`app+0xD0` null), or object virtuals at +0x34 and +0x24 failing: nothing is shown, returns 0 with no script failure (checked). The result of the +0x24 virtual sets the object's flag at +0x618 to `bCanAddItems == 0` (checked, meaning of the flag inferred: the panel is read-only). Pushes nothing.
+- **Edge cases:** pops the object, then the player, then bCanAddItems only if the argument count is above 2, else it stays 0 (checked). Either object not found (`GetObjectById`, `GetCreatureById`), no client app GUI object (`app+0xD0` null), or the object's virtual +0x34 answering null: nothing is shown, returns 0 with no script failure (checked; corrected 2026-10-23 by lib-agent-2: it said a failing +0x24 also stopped it, but a null +0x24 only skips the +0x618 store and the panel is still shown). A failed third pop (bCanAddItems, with more than 2 arguments) returns −639, as the first two pops do (0x0065FAC5) [C]. The result of the +0x24 virtual sets the object's flag at +0x618 to `bCanAddItems == 0` (checked, meaning of the flag inferred: the panel is read-only). Pushes nothing.
+- **What the two virtuals are** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **Slot +0x34** is 0x00750EC0, `this ? this + 0x440 : 0`, the object's item container. A scan of the image finds that pointer in exactly three vtables: CCCreature 0x00B10484, CCPlaceable 0x00B1C084 and Store 0x00B242D4. Every other class has 0x004137B0 (`xor eax, eax`) there, for example CCObject, CCItem and CCTrigger.
+  - So OpenInventory serves a creature, a placeable or a store, and does nothing on anything else.
+  - **Slot +0x24** is 0x0079AF30 (`mov eax, ecx`), AsPlaceable, in CCPlaceable only. Slot +0x10 is the same function in CCCreature only, AsCreature. So only a placeable gets the +0x618 flag (`bCanAddItems == 0`).
+- **The message** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - `ShowContainerGUIMessage::ForScript_OpenInventory` 0x0064DC00 builds {vftable 0x00B01FF8, object id at +4, canAdd byte at +8}. That is sent to the GUI system (app+0x158) through 0x004D20C0.
+  - `HandleMessage_ShowContainerGUIMessage` 0x0060C670 turns it into a `ShowInventoryGUIMessage` (vftable 0x00B01EF8) with the container byte (+4) set to 1, the id at +8 and canAdd at +0xC. It hands that to `HandleMessage_ShowInventoryGUIMessage` 0x0060C530 directly.
+- **`HandleMessage_ShowInventoryGUIMessage` 0x0060C530** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **Scene 8:** it gets scene 8 through GUI slot +0x60. When there is none, it skips straight to opening the screen.
+  - **With the container byte:** when the object is found (0x005D5BE0), it binds the token `Container` (0x00B03004) to the object's +0x18, through `SmartData::TokenManager::Get` 0x00455BF0 and then 0x00456540 (not read).
+    - Found or not, it then calls the scene's +0x22C member's vtable +0x54 with 1, and the +0x24C member's vtable +0x54 with canAdd.
+  - **Without it:** it calls the +0x22C member's vtable +0x54 with 0.
+  - **Then:** it builds `SetFullScreenGUIMessage("Inventory")` (0x00B02474, through 0x00605DB0) and handles it at once by calling 0x0060B260. It always returns true.
+  - [I]: that +0x22C is the container panel's shown flag and +0x24C its "can add" flag.
 
 ### SwitchWeaponSet (273)
 - **Handler:** 0x0065CCC0 (sole), calls `CCCreature::ForScript_SwitchWeaponSet` 0x006A8FA0.
