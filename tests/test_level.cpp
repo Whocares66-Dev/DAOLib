@@ -289,7 +289,8 @@ std::vector<std::byte> LevelLayoutFile()
 // A room at (100, 0, 0) that sees rooms 7 and 9 and opens onto 9 and 12, with the model "slab"
 // placed in it at (0, 0, 5), twice the size, its part "_a" in the atlas
 // "room.dds" at an offset of (0.5, 0.25) and a scale of (0.25, 0.5), and its user param "fire"
-// (1, 1, 1, 1), as the tower's fxe_fire_small_p are placed (DAOLib #212).
+// (1, 1, 1, 1), as the tower's fxe_fire_small_p are placed (DAOLib #212), with its cut-away
+// override 2, as most placed effects have it (DAOLib #241).
 std::vector<std::byte> RoomFile()
 {
     Builder b = Start("RML ", {{"ROOM",
@@ -301,13 +302,14 @@ std::vector<std::byte> RoomFile()
                                  {3099, 5, gff4::kList, 40}}},
                                {"LMAT", 24, {{3324, 12, 0, 0}, {3323, 14, 0, 16}, {3235, 14, 0, 20}}},
                                {"MDL ",
-                                48,
+                                52,
                                 {{4, 10, 0, 0},
                                  {5, 13, 0, 16},
                                  {3059, 8, 0, 32},
                                  {3063, 14, 0, 36},
                                  {3326, 1, gff4::kList | gff4::kStruct, 40},
-                                 {3506, 3, gff4::kList | gff4::kStruct, 44}}},
+                                 {3506, 3, gff4::kList | gff4::kStruct, 44},
+                                 {3109, 0, 0, 48}}},
                                {"UPRM", 20, {{3507, 14, 0, 0}, {3508, 12, 0, 4}}}});
     const std::size_t root = Struct(b, 44);
     Floats(b, root, {100, 0, 0});
@@ -316,8 +318,9 @@ std::vector<std::byte> RoomFile()
     b.U32(root + 40, b.Numbers({9, 12}));
     const std::size_t models = b.bytes.size();
     b.U32(models, 1);
-    const std::size_t model = Struct(b, 48);
+    const std::size_t model = Struct(b, 52);
     b.U32(root + 36, static_cast<std::uint32_t>(models - b.data));
+    b.U8(model + 48, 2);
     Floats(b, model, {0, 0, 5});
     Floats(b, model + 16, {0, 0, 0, 1});
     Float(b, model + 32, 2.0F);
@@ -580,6 +583,7 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
     REQUIRE(room->models.size() == 1);
     CHECK(room->models[0].file == L"slab");
     CHECK(room->models[0].scale == 2.0F);
+    CHECK(room->models[0].cutAwayOverride == 2);
     REQUIRE(room->models[0].userParams.size() == 1);
     CHECK(room->models[0].userParams[0].name == L"fire");
     CHECK(room->models[0].userParams[0].value == std::array<float, 4>{1, 1, 1, 1});

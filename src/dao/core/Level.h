@@ -270,6 +270,9 @@ struct Placed
     float scale = 1;
     std::vector<LightmapPart> parts;
     std::vector<UserParam> userParams; // in the file's order
+    // EnvModelCutAwayOverride: 0 for none (and where the file lacks it); 1 and 2 override its meshes'
+    // MMHMeshCutAway for the area's cutoff (dev/CAMERA.md, "The cutoff: what the roof fade fades").
+    std::uint8_t cutAwayOverride = 0;
 };
 
 // A SpeedTree tree or grass placed in a room, in the room's space.

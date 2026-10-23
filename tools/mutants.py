@@ -1648,6 +1648,13 @@ MUTANTS: list[Mutant] = [
         ".cutAway = Number(from, kMeshCutAway).value_or(0) != 0",
         ".cutAway = false",
     ),
+    # A room model's cut-away override (#241), which decides an effect's part in the area's cutoff.
+    Mutant(
+        "level-cut-away-override: a room model's override is its own EnvModelCutAwayOverride",
+        LEVEL,
+        "placed.cutAwayOverride = model.Get<std::uint8_t>(kModelCutAwayOverride).value_or(0);",
+        "placed.cutAwayOverride = 0;",
+    ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
     Mutant(
