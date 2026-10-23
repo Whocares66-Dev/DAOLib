@@ -175,7 +175,7 @@ TEST_CASE("hm_cps_p01.mop in game/heads, when there, is the human male's first p
 
 TEST_CASE("every preset in game/heads, when there, has six parts, twelve tints, and each mesh's base weighed against "
           "its targets",
-          "[preset]")
+          "[preset][folder]")
 {
     if (!std::filesystem::exists(Heads()))
     {

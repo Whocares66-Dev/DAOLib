@@ -43,7 +43,7 @@ std::size_t Areas(const campaign::Node &node)
 
 } // namespace
 
-TEST_CASE("the single player campaign's script, entry, variables and areas", "[campaign][game]")
+TEST_CASE("the single player campaign's script, entry, variables and areas", "[campaign][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "campaigns";
     if (!std::filesystem::exists(folder / "singleplayer.cif"))

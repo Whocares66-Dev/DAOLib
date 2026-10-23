@@ -203,7 +203,7 @@ TEST_CASE("a table whose name runs past its end, or with more constants than it 
     CHECK_FALSE(ctab::Read(Shader(table)));
 }
 
-TEST_CASE("the game's shaders in game/shaders, when there, each read", "[ctab][game]")
+TEST_CASE("the game's shaders in game/shaders, when there, each read", "[ctab][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "shaders";
     if (!std::filesystem::is_directory(folder))

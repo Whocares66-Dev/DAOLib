@@ -271,7 +271,7 @@ TEST_CASE("a GFF3 file of another type is no area", "[area]")
     CHECK_FALSE(area::AreaOf(*file));
 }
 
-TEST_CASE("the game's areas in game/areas, when there, read whole with an AREA_ID each", "[area][game]")
+TEST_CASE("the game's areas in game/areas, when there, read whole with an AREA_ID each", "[area][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "areas";
     if (!std::filesystem::is_directory(folder))

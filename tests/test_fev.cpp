@@ -461,7 +461,7 @@ TEST_CASE("an event of a type that is neither simple nor complex is none", "[fev
     CHECK_FALSE(fev::ProjectOf(bytes));
 }
 
-TEST_CASE("the game's projects in game/audio, when there, read whole", "[fev][game]")
+TEST_CASE("the game's projects in game/audio, when there, read whole", "[fev][game][folder]")
 {
     const auto folder = AudioFolder();
     if (!std::filesystem::exists(folder))

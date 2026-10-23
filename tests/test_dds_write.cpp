@@ -135,7 +135,8 @@ TEST_CASE("a normal map is kept x in alpha and y in green, and read back to x, y
     CHECK(Near(normals.rgba, lean.rgba, 3));
 }
 
-TEST_CASE("the game's textures in game/textures, when there, are written again with their header and size", "[dds]")
+TEST_CASE("the game's textures in game/textures, when there, are written again with their header and size",
+          "[dds][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "textures";
@@ -219,7 +220,7 @@ TEST_CASE("a cube map's six faces in their order, each with its pictures down to
     CHECK_FALSE(dds::DecodeCube(cube));
 }
 
-TEST_CASE("the probe cubes in game/cubes, when there, are six faces of nine pictures", "[dds][game]")
+TEST_CASE("the probe cubes in game/cubes, when there, are six faces of nine pictures", "[dds][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cubes";
     if (!std::filesystem::is_directory(folder))

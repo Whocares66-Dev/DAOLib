@@ -73,7 +73,11 @@ dao_apply_warnings(dao_core_tests)
 target_link_libraries(dao_core_tests PRIVATE daolib_core Catch2::Catch2WithMain)
 
 include(Catch)
-catch_discover_tests(dao_core_tests)
+# Each test's tags are its labels too: the debug-asan preset leaves out
+# "folder", the tests over every file of a folder of the game's, which took
+# over an hour of an ASan gate while the debug run reads the same files
+# (DAOLib #194).
+catch_discover_tests(dao_core_tests ADD_TAGS_AS_LABELS)
 
 # The rest is the library over the running game: x86 only.
 if(DAO_CORE_ONLY)

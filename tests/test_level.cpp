@@ -662,7 +662,7 @@ TEST_CASE("a room's tree whose file has no draw distance is drawn at step 0", "[
 }
 
 TEST_CASE("the game's rooms in game/rooms, when there, read with every tree turned, scaled and drawn as the files say",
-          "[level]")
+          "[level][folder]")
 {
     const std::filesystem::path folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "rooms";
     if (!std::filesystem::exists(folder))
@@ -710,7 +710,8 @@ TEST_CASE("the game's rooms in game/rooms, when there, read with every tree turn
     CHECK(connected > 0);
 }
 
-TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp lit and every probe named", "[level]")
+TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp lit and every probe named",
+          "[level][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "layouts";
@@ -764,7 +765,8 @@ TEST_CASE("the game's layouts in game/layouts, when there, read with every lamp 
     }
 }
 
-TEST_CASE("the game's level layouts in game/levels, when there, read with their rooms, effects and sky", "[level]")
+TEST_CASE("the game's level layouts in game/levels, when there, read with their rooms, effects and sky",
+          "[level][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "levels";

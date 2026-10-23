@@ -193,7 +193,7 @@ TEST_CASE("a file that is no clip is none", "[clip]")
     CHECK(!clip::ClipOf(*file).has_value());
 }
 
-TEST_CASE("the game's clips in game/animations, when there, read whole, every rotation of length 1", "[clip]")
+TEST_CASE("the game's clips in game/animations, when there, read whole, every rotation of length 1", "[clip][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "animations";

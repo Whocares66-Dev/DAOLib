@@ -139,7 +139,7 @@ TEST_CASE("text with no material is no definition", "[mat]")
     CHECK(!mat::Read(""));
 }
 
-TEST_CASE("the game's definitions in game/materials, when there, read whole", "[mat]")
+TEST_CASE("the game's definitions in game/materials, when there, read whole", "[mat][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "materials";

@@ -389,7 +389,7 @@ TEST_CASE("a clip's events, each its time, id, target and what it names", "[effe
     CHECK_FALSE(clip::EventsOf(*modelFile));
 }
 
-TEST_CASE("the game's effects in game/effects, when there, read whole", "[effect][game]")
+TEST_CASE("the game's effects in game/effects, when there, read whole", "[effect][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "effects";
     if (!std::filesystem::exists(folder))
@@ -498,7 +498,7 @@ TEST_CASE("an event id is named by events.gda, with what the equip events mean",
 }
 
 TEST_CASE("every animation event of the game's in game/animations, when there, is a row of events.gda",
-          "[effect][game]")
+          "[effect][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "animations";
     const auto tablePath = folder / "events.gda";

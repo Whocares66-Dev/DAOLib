@@ -71,7 +71,13 @@
     "testPresets": [
         { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
         { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
-        { "name": "debug-asan", "configurePreset": "debug-asan", "output": { "outputOnFailure": true } },
+        {
+            "name": "debug-asan",
+            "configurePreset": "debug-asan",
+            "description": "The tests under AddressSanitizer, but those over every file of a game folder ([folder]), which the debug preset runs (DAOLib #194)",
+            "output": { "outputOnFailure": true },
+            "filter": { "exclude": { "label": "^folder$" } }
+        },
         { "name": "debug-analyze", "configurePreset": "debug-analyze", "output": { "outputOnFailure": true } },
         { "name": "core-x64", "configurePreset": "core-x64", "output": { "outputOnFailure": true } }
     ]

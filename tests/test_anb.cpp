@@ -166,7 +166,8 @@ TEST_CASE("an animation's clip by its AnimName in the first tree with it, else i
     CHECK(anb::FemaleTree(L"movement.anb") == L"movement_fem.anb");
 }
 
-TEST_CASE("the game's trees in game/trees, when there, each a root last holding children in a row", "[anb][game]")
+TEST_CASE("the game's trees in game/trees, when there, each a root last holding children in a row",
+          "[anb][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "trees";
     if (!std::filesystem::is_directory(folder))

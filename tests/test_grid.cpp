@@ -234,7 +234,7 @@ void Tally(const navigation::Grid &grid, Counts &counts)
 } // namespace
 
 TEST_CASE("the game's walk grids in game/levels, when there, have whole lists and entrances on walkable cells",
-          "[grid]")
+          "[grid][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "levels";

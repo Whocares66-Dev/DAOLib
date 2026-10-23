@@ -283,7 +283,8 @@ void CheckDoor(const std::vector<navigation::Grid> &door)
 
 } // namespace
 
-TEST_CASE("the game's patches in game/patches, when there, read whole, and the small door's states", "[walkpatch]")
+TEST_CASE("the game's patches in game/patches, when there, read whole, and the small door's states",
+          "[walkpatch][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "patches";

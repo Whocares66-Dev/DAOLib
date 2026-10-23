@@ -113,7 +113,7 @@ TEST_CASE("a file of another type is no wind", "[wind]")
     CHECK_FALSE(wind::WindOf(*file));
 }
 
-TEST_CASE("the game's winds in game/wind, when there, each read, the Fade's as it is", "[wind][game]")
+TEST_CASE("the game's winds in game/wind, when there, each read, the Fade's as it is", "[wind][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "wind";
     if (!std::filesystem::is_directory(folder))

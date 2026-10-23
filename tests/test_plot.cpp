@@ -100,7 +100,7 @@ TEST_CASE("a plot's GUID, script, stored state and flags, stored and defined", "
     CHECK_FALSE(read->Stored(256));
 }
 
-TEST_CASE("the game's plots in game/plots, when there, each a GUID and flags stored or defined", "[plot][game]")
+TEST_CASE("the game's plots in game/plots, when there, each a GUID and flags stored or defined", "[plot][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "plots";
     if (!std::filesystem::is_directory(folder))

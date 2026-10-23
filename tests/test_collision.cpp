@@ -587,7 +587,7 @@ TEST_CASE("lak302d and oth000d in game/collision, when there, read whole, the .a
 }
 
 TEST_CASE("the game's .phy in game/collision, when there, the door's, crate's and statue's masks 0x81000004",
-          "[collision][game]")
+          "[collision][game][folder]")
 {
     if (!std::filesystem::exists(GameFolder() / "plc_lrgwddrr_01_0.phy"))
     {

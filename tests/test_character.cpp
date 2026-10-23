@@ -425,7 +425,8 @@ std::optional<character::Character> ResolvedIn(const std::filesystem::path &fold
 
 } // namespace
 
-TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent drew him with", "[character][game]")
+TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent drew him with",
+          "[character][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "characters";
     if (!std::filesystem::exists(folder / "gen00fl_alistair.utc") || !std::filesystem::exists(folder / "m2da_base.gda"))

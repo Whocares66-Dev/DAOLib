@@ -324,7 +324,8 @@ TEST_CASE("an animation whose key counts do not cut its pool is refused", "[face
     CHECK_FALSE(facefx::ReadAnimSet(fxe));
 }
 
-TEST_CASE("the game's .fxe files in game/facefx, when there, each read and its curves sampled", "[facefx][game]")
+TEST_CASE("the game's .fxe files in game/facefx, when there, each read and its curves sampled",
+          "[facefx][game][folder]")
 {
     if (!std::filesystem::is_directory(Samples()))
     {

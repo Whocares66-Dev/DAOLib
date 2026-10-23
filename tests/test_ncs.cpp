@@ -132,7 +132,7 @@ TEST_CASE("a script stops where an instruction is unknown or runs past its end",
     CHECK_FALSE(ncs::ScriptOf(other));
 }
 
-TEST_CASE("the game's scripts in game/scripts, when there, each decode to their last byte", "[ncs][game]")
+TEST_CASE("the game's scripts in game/scripts, when there, each decode to their last byte", "[ncs][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "scripts";
     if (!std::filesystem::is_directory(folder))

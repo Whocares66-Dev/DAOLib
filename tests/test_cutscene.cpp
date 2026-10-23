@@ -361,7 +361,8 @@ struct Counts
 
 } // namespace
 
-TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with its actors' actions", "[cutscene][game]")
+TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with its actors' actions",
+          "[cutscene][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cutscenes";
     if (!std::filesystem::is_directory(folder))

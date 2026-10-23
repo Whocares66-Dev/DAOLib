@@ -145,7 +145,7 @@ TEST_CASE("a file of another type is no stage", "[stage]")
     CHECK_FALSE(stage::StageOf(*file));
 }
 
-TEST_CASE("the game's stages in game/stages, when there, each read, jowan_attack as it is", "[stage][game]")
+TEST_CASE("the game's stages in game/stages, when there, each read, jowan_attack as it is", "[stage][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "stages";
     if (!std::filesystem::is_directory(folder))

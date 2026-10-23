@@ -399,7 +399,7 @@ std::optional<LineSwitch::Switch> SwitchOf(const ConversationLine &line, std::ws
 } // namespace
 
 TEST_CASE("the game's conversations in game/conversations, when there, each line read with its switches",
-          "[conversation][game]")
+          "[conversation][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "conversations";
     if (!std::filesystem::is_directory(folder))

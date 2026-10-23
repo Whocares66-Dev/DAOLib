@@ -1872,7 +1872,7 @@ std::string Digest(const sg::Area &a)
 } // namespace
 
 TEST_CASE("the player's saves in game/saves, when there, are written back unchanged and changed",
-          "[savegame][write][game]")
+          "[savegame][write][game][folder]")
 {
     const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "saves";
     if (!std::filesystem::is_directory(folder))

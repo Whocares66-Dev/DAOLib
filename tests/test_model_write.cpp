@@ -570,7 +570,7 @@ TEST_CASE("the ogre in game/models, when there, takes a second body as a new chu
     CHECK(withBone->nodes[static_cast<std::size_t>(extra)].name == L"Extra");
 }
 
-TEST_CASE("the game's meshes in game/models, when there, come back the same bytes as read", "[model]")
+TEST_CASE("the game's meshes in game/models, when there, come back the same bytes as read", "[model][folder]")
 {
     const std::filesystem::path folder =
         std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "models";
