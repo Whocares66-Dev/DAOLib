@@ -135,7 +135,7 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
 - **The route's animation and the wait** [C]:
   - **No wait before the pre-transition:** when the travel status changes, the movie's `AnimatePathStart` sends `WorldMapPreTransition` at once, then animates. So the area's load runs while the route is drawn.
   - **The animation's length:** the movie runs at 30 fps. Each trail point takes frames 1–16 (0.5 s), one point per path node; an encounter's point takes frames 1–150 (about 5 s), on the encounter's leg only.
-  - **The engine's wait** is load step 7 (0x006C91A0..0x006C9238), before `POSTLOADEXIT`. It polls `GUIWorldMap` 0x0072EDC0, which asks the movie's `GetTravelling` and `GetAnimating`, then invokes `AreaLoadedNotify`. The game is paused (`SetPaused(1, 0)`) through it, so no game time passes.
+  - **The engine's wait** is load step 7 (0x006C91A0..0x006C9238), before `POSTLOADEXIT`. It polls `GUI::GUIWorldMap::PollTravelDone` 0x0072EDC0, which asks the movie's `GetTravelling` and `GetAnimating`, then invokes `AreaLoadedNotify`. The game is paused (`SetPaused(1, 0)`) through it, so no game time passes.
   - **So** the journey's time on screen depends on the route's length, about 0.5 s per path node plus about 5 s for an encounter, or the load's time if that is longer [I for the "longer"].
 - **Swapping the maps** [C]: `WorldMapSwapMapsMessage` (0x00701240) calls 0x00700E00. When both +0x68 and +0x78 are set, it calls `SetPrimary`(the secondary's id) (0x00700D80), then `SetSecondary`(the old primary's id) (0x00700DB0), the ordinary setters with their refresh. With either map null it does nothing.
 - **A pin's "activated once" flag (+0x1B8)** [C]: the save's field 16792 (`SavegameWorldmapMapPinActivatedPreviously`, 0x4198) sets it at load (the pin's loader 0x007F7090, at 0x007F7200..0x007F7216: `pin+0x1B8 = value != 0`), and the saver 0x007F6B60 writes it back. A plain byte store, so a loaded pin does not flash.
@@ -162,7 +162,7 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
   - So outside mode 3 the click reaches no handler, and no `BEGIN_TRAVEL` follows.
   - In mode 3 the handler needs only the module's WorldMap (0x005D57E0) and always returns true. 0x00700CA0 does nothing without a primary map, and sends nothing without a destination pin. It does not test that scene 0x10 is up.
 - **The map's close** [C]:
-  - **The scene:** `GUIWorldMap` (constructor 0x0072ECE0) is `GUIScene("WorldMap", "WorldMap", 3, 8, 0x10)`. Its hide (vtable +0x18 = 0x0072EF40) calls `GUIScene::OnHide` 0x00A55910, then 0x00716A00(0) on scene 0x3B (the book background, not read).
+  - **The scene:** `GUIWorldMap` (constructor 0x0072ECE0) is `GUIScene("WorldMap", "WorldMap", 3, 8, 0x10)`. Its hide (vtable +0x18 = `GUIWorldMap::Close` 0x0072EF40; slot 6 is Close, slot 7 Hide) calls `GUIScene::OnHide` 0x00A55910, then 0x00716A00(0) on scene 0x3B (the book background, not read).
   - **OnHide** tests the mask at +0xA0:
     - it returns at once when the name (+0x58) is empty;
     - bit 1 calls `[0xC31650]` slot 0x98(1);
@@ -174,10 +174,10 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
     - `m_bClosedByTravel` is a static (WorldMap.as:36). It is set true by a pin's click, but only for an ACTIVE pin on a map that is not read-only (MapPinIcon.as:134). It is set false by the close button (WorldMap.as:69).
     - Nothing resets it at the scene's start, so it stays true until the movie is unloaded [I: that dropping the record unloads it].
   - **The engine's handler:** `WorldMap::HandleMessage_WorldMapClosedMessage` 0x00700610 clears +0x100, sets the state +0xA8 to 0 and notifies, then raises `EVENT_TYPE_WORLD_MAP_CLOSED` (75) with the message's int, delivered at once (0x0064AD80).
-  - **Who hides the scene:** GUI slot 0x38 (0x00606650) calls the hide when the scene's +0xBC or +0xBD is set. Its callers here are:
+  - **Who hides the scene:** `DragonAgeGUISystem::CloseScene` (GUI slot 0x38, 0x00606650) calls the hide when the scene's +0xBC or +0xBD is set. Its callers here are:
     - `HideGUIScreenMessage` 0x0060FAF0 → 0x0060FAC0, which also erases the id from the full-screen stack and, when that empties, calls 0x00717BA0 (not read);
-    - the loading mode's leave 0x006C5A00;
-    - GameModeGUI's leave 0x007188C0: with +0x95 set, slot 0x40 (0x0060F240) pops the stack +0x1E4 one id at a time through 0x0060F1E0.
+    - the loading mode's leave `GameModeLoading::Leave` 0x006C5A00;
+    - `GameModeGUI::Leave` 0x007188C0: with +0x95 set, slot 0x40 (0x0060F240) pops the stack +0x1E4 one id at a time through 0x0060F1E0.
   - **So** the travel state and +0x100 do not outlive the scene through any of these hides [C]. Toggling the screen's visibility (HideScreen) is not a hide [I], and whether the shutdown unload (0x005151F0) sends WorldMapClosed was not read.
 - **WorldMapStartTravelling opens the map** through scene 0x10, fetched by GUI slot 0x60 (0x00700A37), with no null test on the scene (0x00700A3E reads its +0xBC directly) [C].
 - **Not read** (more):

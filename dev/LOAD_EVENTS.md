@@ -22,8 +22,8 @@ The area's load is a machine of steps (`0x006c8ef0`, steps 1 to 8):
 - **Step 7, before it** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x006C91A0–0x006C9247]:
   - Step 7 first polls a module count (`[module+0x658]`, through 0x005CA1B0/0x005C84D0). Above 0 it pauses (SetPaused(1, 0)) and stays in step 7. What the count is was not read.
   - Otherwise it unpauses (0x006C91E4) and tests the loading screen (+0x14C). When that is not 0x10 it goes to step 8.
-  - When it is 0x10, the load holds, paused, while all of these hold: scene 0x10's +0xBC is set, and 0x0072EDC0 answers "not done". Otherwise it unpauses again (0x006C9238) and goes to step 8.
-  - 0x0072EDC0 finds the "WorldMap" movie; with none it is done. It invokes `GetTravelling` and `GetAnimating`, and when the map is travelling and not animating it invokes `AreaLoadedNotify`. It is done only when the map is not travelling. Nothing is stored: the movie is asked at every poll.
+  - When it is 0x10, the load holds, paused, while all of these hold: scene 0x10's +0xBC is set, and `GUI::GUIWorldMap::PollTravelDone` (0x0072EDC0) answers "not done". Otherwise it unpauses again (0x006C9238) and goes to step 8.
+  - `GUIWorldMap::PollTravelDone` (0x0072EDC0) finds the "WorldMap" movie; with none it is done. It invokes `GetTravelling` and `GetAnimating`, and when the map is travelling and not animating it invokes `AreaLoadedNotify`. It is done only when the map is not travelling. Nothing is stored: the movie is asked at every poll.
 
 Before them, at step 3, `EVENT_TYPE_AREALOAD_SPECIAL` (40, or 41 from a save) is run on the area's script at once, not queued (below). A saved game's load is told by the loading state's byte +0x68 (`0x006c90b8`), set only by load requests of kind 2 and 8. 37 and 80 are never raised.
 
@@ -209,8 +209,8 @@ Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address
 - **A door's transition** (kind 7):
   1. The request's own call shows nothing, unless the world map is up (WorldMap 0x10, 0x006C6060).
   2. State 7 (0x006C7380 to 0x006C7080) finds the area and calls slot 14 with **5** if it is in the area list in memory (LightLoading 0x21, `load_light`) or **4** if not (Loading 0x0E, `load_town`), each with the same world-map exception (the pushes at 0x006C72AE, 0x006C72FA, 0x006C7300, 0x006C7318 and 0x006C732C). A failure calls slot 14 with 1 (nothing) or the load-failure routine.
-  3. State 6 (0x006C8EF0) calls slot 14 with 6, the fade (0x006C60F0), which shows nothing new: the screen of step 2 stays until the mode's leave (0x006C5A00) hides it.
-  - **The loading mode's leave (0x006C5A00)** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  3. State 6 (0x006C8EF0) calls slot 14 with 6, the fade (0x006C60F0), which shows nothing new: the screen of step 2 stays until the mode's leave (`GameModeLoading::Leave`, 0x006C5A00) hides it.
+  - **The loading mode's leave (`GameModeLoading::Leave`, 0x006C5A00)** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
     - The leave first calls `[0x00C31650]`'s slot 0xF0 with 0, then 0x008472C0 → 0x00844F60 (not read).
     - It then hides the screen +0x14C through GUI slot 0x38 and sets +0x14C to −1.
     - Finally it calls 0x006945A0, the base leave.
