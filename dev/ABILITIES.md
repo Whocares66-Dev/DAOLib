@@ -160,7 +160,23 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, b
 - All of it is native: **0x0071B600** `CCCreatureStats::ApplyPassive(ability, condition, bApply)` (ID 16516, `ret 0xC`):
   - factor = 1 if `Conditional == 0`; else 1 if the `condition` argument is a single bit present in `Conditional` (switch at 0x0071B6C1 over condition−1, bytes 0x0071B960: 1→bit 1, 2→bit 2, 4→bit 4, 8→bit 8, 16→bit 0x10; any other value, 0xFF included → 0).
   - `bApply == 0` multiplies the factor by −1.0 (double at 0x00AF0E48).
-  - for i = 1..3 (`Prop%d`/`Modifier%d`, 0x00B17620/0x00B17608): if `Prop_i != 0`, `0x0071B2D0(Prop_i, factor × Modifier_i, 1)`: **adds to the property's MODIFIER** (+0x54, keeping the current, PROPERTIES.md). On apply, if Prop is 7 (Health) and the creature was at full health (current, truncated, == the old max), the current is raised by the same amount so it stays full (0x0071B87D..0x0071B8C3).
+  - for i = 1..3 (`Prop%d`/`Modifier%d`, 0x00B17620/0x00B17608): if `Prop_i != 0`, `0x0071B2D0(Prop_i, factor × Modifier_i, 1)`: **adds to the property's MODIFIER** (+0x54, keeping the current, PROPERTIES.md). On apply, health's current is raised only under the test below (corrected 2026-10-23 by lib-agent-2: it had the test on the current before the modifier, and no test that the maximum changed; read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2).
+- **The health top-up** [C, 0x0071B802–0x0071B8C3]:
+  - **Before:** for each i, it takes the old maximum, `old = creature->vtable[+0x128]()`, or −1 with no creature (stats+0x5C).
+  - **The add:** it then calls 0x0071B2D0(Prop_i, factor × Modifier_i, 1).
+  - **After:** it reads `cur = GetCurrent(Prop_i)` (0x006437A0 on stats+0x190), then the new maximum `new = vtable[+0x128]()` again.
+  - **The test:** only when all of these hold:
+    - bApply != 0;
+    - Prop_i == 7;
+    - old != new;
+    - the truncated `cur` (0x008E34F0) == old.
+  - **Then** it calls `SetCurrent(7, GetCurrent(7) + Modifier_i, 0)` (0x0071B320).
+  - The amount added is the table's raw Modifier_i, not factor × Modifier_i. That only matters when a conditional passive's factor is 0, and then the maximum has not changed, so no top-up happens.
+- **What slot +0x128 returns:** CCCreature's vtable slot +0x128 is 0x006AB530 (ID 14689). It returns health's total (property 7's slot +0xC), truncated, or 0 with no stats [C].
+- **So** a top-up happens only when the maximum moved and the current, after the add, still equals the old maximum.
+  - A penalty that cannot lower the maximum takes nothing more from the current. An example is TRAIT_FRAGILE's −20 on a creature whose health total is already clamped at its minimum 1 [C for the rule].
+  - That a template creature's health is 0 base at that point, before AS_InitCreature scales it, is [I], from a play test in DAOParagonEngine, not read in the game.
+- **TRAIT_FRAGILE** [C, data]: abi_base 150001 has Passive_ID 1001. passive_abilities 1001 is Prop1 7 (Health) −20, Prop2 10 (Defense) −10, Prop3 33 −5, Conditional 0.
 - No script applies passive property modifiers (grep of the toolset scripts: none). The scripts only add extras on top by `HasAbility` (e.g. `ability_h.nss:1342`, Dual-Weapon Expert's bleed on hit).
 
 ### Who calls ApplyPassive (all 8 calls found by scanning `.text`, checked)
