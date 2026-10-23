@@ -291,3 +291,87 @@ It is the **same mask the creature's movement uses**: `0x006B6880` pushes 0x2011
 - The creature's own controller does not count: its id is in the exclusion list (above). Other creatures' controllers (0x10) standing there do make it true [C for the mask; not seen in play].
 - The per-mesh call (shape vtable +0xAC) and what the report's key is were not identified.
 - The PhysX side (`overlapCapsuleShapes` in the NxScene's implementation, and whether `accurateCollision` changes capsule-vs-box results) was not followed.
+
+## 6. The capsule sweep: `Physics::PhysicsScene::SweepCapsule` 0x0082F600 (ID 22528; read 2026-10-22 by lib-agent with a subagent, DAOLib #238, for DAOParagonEngine #151)
+
+Read in the GOG exe. [C] = read in the disassembly, [I] = inferred. Same wrapper object as section 5 (`Physics::PhysicsScene`, vtable 0x00B272D4, NxScene at `[this+0x24]` [C 0x0082F7E5]). Its slot 15 (+0x3C) is `SweepCapsule`, slot 16 (+0x40) is `SweepBox` 0x0082FA20 (ID 22529), next to OverlapCapsule (slot 13, +0x34) [C: the vtable words].
+
+### 1. Signature
+
+`bool __thiscall PhysicsScene::SweepCapsule(Vec& out, const float4* p0, const float4* p1, float radius, uint32 mask, const std::vector<uint32>* exclude)`, `ret 0x18` [C 0x0082FA1C]; six stack args, `ecx` = the wrapper.
+
+| Arg | Read as | Evidence |
+|---|---|---|
+| `[ebp+8]` out | pointer to a `std::vector` of 0x40-byte hit records, filled by push_back (`0x00539F50`) | 0x0082F632, 0x0082F99E; the return value counts it as `(end-begin)>>6` |
+| `[ebp+0xC]` p0 | start point, 16-byte aligned float4 (`movaps`), the capsule's place before the move | 0x0082F635, 0x0082F682 |
+| `[ebp+0x10]` p1 | end point (not a vector): the motion is `p1 - p0` (`subps`) | 0x0082F63A, 0x0082F7DF-0x0082F7F2 |
+| `[ebp+0x14]` radius | float | `fld`/`fstp` into the capsule's last float, 0x0082F76A-0x0082F76D |
+| `[ebp+0x18]` mask | 32 bits, becomes `NxGroupsMask.bits0` (bits1-3 zeroed) and is copied into every hit record at +0x20 | 0x0082F632 area: 0x0082F6EE-0x0082F705, 0x0082F71E-0x0082F737, 0x0082F94F |
+| `[ebp+0x1C]` exclude | the exclusion vector kept by the report (`0x008278C0` stores it at report +0x14), as in OverlapCapsule (section 5); 0 = nothing excluded | 0x0082F670 |
+
+Returns `true` if the out vector holds at least one record (`seta bl` after the loop, 0x0082F9D4-0x0082F9DB, `mov al,bl`), else false. The scene lock, report and filter are the same as OverlapCapsule's: `0x004C4D00(this+4,0)` / `0x004C4D50(-1)` / `0x004CB2B0(-1)` before, `0x004CB300` after [C]; `0x00819550` (an engine singleton) vtable +8 `(1)` before and +0xC after [C, meaning unknown].
+
+### 2. The PhysX call
+
+At 0x0082F83A: `NxScene vtable +0x1E0` (slot 120; the overlap capsule is +0x1D0) [C]. Nine pushed arguments in the order of PhysX 2.8's `NxScene::linearCapsuleSweep(const NxCapsule& worldCapsule, const NxVec3& motion, NxU32 flags, void* userData, NxU32 nbShapeDescriptors, NxSweepQueryHit* shapes, NxUserEntityReport<NxSweepQueryHit>* callback, NxU32 activeGroups, const NxGroupsMask* groupsMask)` [C for the nine; I for the SDK name]. The values [C 0x0082F7E8-0x0082F83A]:
+
+- `worldCapsule`: a 28-byte local at the stack, built below.
+- `motion`: `p1 - p0` copied (`0x00837A40`, a plain 3-float copy) into a temporary; the w lane is dropped.
+- `flags = 0xB` (`push 0xb`, 0x0082F80C) = NX_SF_STATICS (1) | NX_SF_DYNAMICS (2) | NX_SF_ALL_HITS (8) [I for the SDK's bit values]. Not async.
+- `userData = 0`, `shapes = 0`.
+- `nbShapeDescriptors` = the report's result vector's size in 0x30-byte elements, computed at 0x0082F7B6-0x0082F7D9 after the report was reset by `0x008277D0(0)` (0x0082F774); in practice 0 [I: not run; the result goes by the callback].
+- `callback` = a `PhysicsEntityReport<NxSweepQueryHit>` (vtable 0x00B27144, ctor `0x008278C0`, ID in the address library's table), which holds the exclude list at +0x14 and collects the hits as 0x30-byte `NxSweepQueryHit`s in its vector.
+- `activeGroups = -1` (`push -1`): no group index excluded.
+- `groupsMask` = a local `{bits0 = mask, 0, 0, 0}` (0x0082F705, 0x0082F71E-0x0082F737).
+
+The filter before it is the ray's and OverlapCapsule's (section 5): `0x0082D900(1, &m, &m)` (PushFilter: `setFilterBool(true)`, both constants = the mask) and `0x0082A150(0,0,0)` (setFilterOps AND, AND, AND) [C 0x0082F79C-0x0082F7B1]. So a shape is hit when `(shape.bits0 & mask) != 0` [I for PhysX's equation]. The mask is the caller's; group indices play no part.
+
+### 3. The swept shape
+
+Built at 0x0082F680-0x0082F76D [C], on the stack at the NxCapsule {p0, p1, radius}:
+
+- capsule `p0` = the start point (x, y, z);
+- capsule `p1` = start + (0, 0, **0.1**) (`0x00AE7BD8` read as the float 0.1 from the file; added with `addps` at 0x0082F6AE);
+- radius = arg `[ebp+0x14]`.
+
+So the "sphere" is a capsule 0.1 m tall in z, its lower sphere's centre at the start, not a point-sized sphere; it is moved along `p1 - p0` as a whole. (The camera's 0.25 m sphere is thus a capsule with segment 0.1 m.)
+
+### 4. What it reports
+
+The result is not a fraction or a distance. The PhysX hit's `t` ([hit+0]) is **not** read [C: the loop at 0x0082F883-0x0082F9AD touches only [hit+4], [hit+0x18], [hit+0x24] of each 0x30-byte hit]. For each hit the wrapper builds a 0x40-byte record (default vtable 0x00AF7820, the same default shape as the ray's record at 0x00648DEB) and pushes it:
+
+| Record offset | Content | Where |
+|---|---|---|
+| +0x00 | vtable 0x00AF7820 | 0x0082F89A |
+| +0x04 | flags: `|=1` point, `|=2` normal, `|=4`, `|=0x10`, and 8 if the hit shape's object (`0x0081C4C0`, then its vtable +0x48) exists | 0x0082F90F-0x0082F978 |
+| +0x08..+0x10 | **hit point** = `NxSweepQueryHit.point` ([hit+0x18]) | 0x0082F913-0x0082F943 |
+| +0x14..+0x1C | **hit normal** = `NxSweepQueryHit.normal` ([hit+0x24]) | 0x0082F93F-0x0082F967 |
+| +0x20 | the **query's mask** (arg +0x18), not the shape's own bits | 0x0082F94F-0x0082F96B |
+| +0x24 | the object's value from vtable +0x48 (0 if none) | 0x0082F90B |
+| +0x28 | `Physics::GetActorObjectId(shape)` `0x0081C970` | 0x0082F973-0x0082F97C |
+| +0x34, +0x38 | `0x0081C560(shape)`, `0x0081C4F0(shape)`, default -1 (meaning not read) | 0x0082F984-0x0082F997 |
+
+[hit+4] is the hit `NxShape*` and its vtable slot +4 gives the owner passed on; hits whose shape has no owner (`[[hit+4]+4] == 0`) are skipped [C 0x0082F883-0x0082F891, 0x0082F9AA]. The records come in the order the report collected them; the wrapper **does not sort**, and does not carry t or the swept-capsule position. The caller works out the distance from the hit point (below). Excluded ids are dropped by the report's callback as in section 5 [I: the same class of report; its sweep callback was not read].
+
+**"The hit point plus the normal times r" is not what SweepCapsule returns** [C]: it returns point and normal separately, and the point is PhysX's contact point on the hit shape's surface. The camera's wrapper `0x006490B0` (below) does the sum: `out = point + normal * radius` (0x0064931F-0x00649364: `[esp+0x74]` + `[esp+0x70..0x78]*r`, stored with `movaps [edi]`) [C for the arithmetic; I that `[esp+0x74]`/`[esp+0x64]` are the copied point and normal (4d4580 copies of record +8 and +0x14)]. That sum is the sphere's centre at the touch exactly for a contact on the sphere cap with the normal pointing out of the hit surface; for a contact on the capsule's 0.1 m side it is off by up to 0.1 m in z [I].
+
+### 5. A shape that overlaps at the start
+
+The wrapper does nothing about it [C]: no overlap test, no `t == 0` check, no special record; whatever the NxScene returns in the callback is converted. What PhysX 2.8 does for an initial overlap (a hit with t = 0 and some point, or no hit) was not followed [not read; PhysX's own code]. The camera's use avoids the question by starting at the unclipped orbit place, which is meant to be clear (a held start is tested again every frame, section 6).
+
+### 6. Callers
+
+No direct call (the 32-bit E8 scan of .text finds none): the only way in is the vtable, slot 15 [C: scanned .text for `call rel32` to 0x0082F600 and the vtable words]. A call of `[reg+0x3C]` right after a scene lookup was found at only one place:
+
+- **`0x006490B0`**, the explore camera's wrapper (ID 12710, `ret 0x18`): `bool __thiscall(float4* outPos, const float4* p0, const float4* p1, float r, uint32 mask, int mode)`. It gets the scene from `World::CurrentScene` `0x00648B30` (`app +0x10C`'s module -> area `+0x62C` -> `0x00537D60(0)`) [C 0x00648B30-0x00648B58], and calls slot +0x3C at 0x00649133 with `(vec, p0, p1, r, mask, exclude = 0)` [C 0x00649118-0x00649133]. It then takes the nearest (mode 0) or the farthest (mode 1) record by the distance from the hit point to **p0** (`0x004519D0`, `sqrt`; first record seeded from index 0, then a loop from index 1 with `fcomp`) [C 0x00649138-0x0064929F]; the empty vector, or NaN in the point or normal, returns false (0x006492F6, 0x00649310). Out: `*outPos = point + normal * r` (above), and a flag byte at `out+0x18`: `!((record+0x20) >> 24 & 1)`, i.e. bit 0x01000000 of the query mask clear [C 0x0064936C-0x0064937B; with the camera's mask 0x1024 it is always 1].
+- **The camera's callers** (`dev/CAMERA.md`, "Collision: a pull-in", whose 0x006490B0 is this): `0x006C3710` calls it at `0x006C3774` and `0x006C35A0` (the release) at `0x006C36AC`; `0x006C3180` (mode 3) was not followed to a call here.
+  - **radius** `0.25` (`0x00AFF3E8` read as the float 0.25 from the file), so the "0.25 m sphere" is this capsule 0.1 m tall (above); **mask `0x1024`** (placeables 0x4, static 0x20, trees 0x1000) [C 0x006C3758, 0x006C3693]; **mode 0** (nearest to p0); **exclude 0** (nothing excluded: the leader's own capsule, if it is in the mask, is not removed; the mask 0x1024 does not carry the creatures' 0x10, so it is not hit [I]).
+  - **Pull-in** (`0x006C3774`): the arguments are `(out, p0 = the camera's unclipped place from 0x006C2950, p1 = the pivot at [ctl+0x80])`, so the sweep runs from the orbit place toward the pivot and the hit is the first surface in the way as seen from the orbit place [C for the pushes 0x006C3756-0x006C3772; I that `[esp+0x10]` is the place]. On a hit it calls `0x006C32C0(&out, r)` with the centre `point + normal * 0.25`; there `|hit - pivot|` and the pull are worked out as CAMERA.md says (`want = min(|hit - raw|, ...)`).
+  - **Release** (`0x006C36AC`): `p0 = ctl+0x70` (the current place), `p1 = pivot + dir * (the new pull)` (`0x008D8B00`, then `[esi+0x80] +`, 0x006C3656-0x006C3677); the same 0.25 / 0x1024 / mode 0; a hit zeroes the speed (`[esi+0x38] = 0`, the pull is held), no hit lets the pull release [C for the arguments; I for the reading].
+- Only one call into the wrapper family from the rest of the exe was found by the scan for `+0x3C` calls near a scene lookup; a call of the slot through a scene pointer kept in another object (not through `World::CurrentScene` or `0x00537D60`'s callers) would not be found by that scan.
+
+### Not read
+
+- The report's sweep callback (vtable 0x00B27144 slot 2, `0x00820FE0`) and how it applies the exclude list for `NxSweepQueryHit`.
+- PhysX's `linearCapsuleSweep` itself: the order of hits, `t` units, the initial-overlap case, and the meaning of NX_SF_ALL_HITS.
+- `0x00819550`'s vtable +8 / +0xC calls around the sweep, and what `0x0081C560` / `0x0081C4F0` / the object's vtable +0x48 return.
