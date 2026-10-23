@@ -126,6 +126,17 @@ Read 2026-10-18 in the GOG exe by lib-agent-2. GUI::GUICharGen's handlers mostly
 - `CharGenSaveInfoMessage` (`0x007371c0`) writes the hero as a `.chr` file under `PLAYERS`, named from the hero's name (or `Hero`). Read.
 - `UpdateHeroAppearanceMessage` (`0x00738550`) applies an entry of a list of saved heroes (the screen's +0x150, each with a name at +0x7C and a morph at +0x98) to the hero through `0x006d1850`, refreshes the hero (`0x007b8470(hero, 0, 1)`) and republishes `CharGenCreature`. That the list is the `.chr` files is inferred.
 
+### CharCreatorRunning and the end of creation (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #172 and #171; also seen in the running game through Eluvian (a human male noble warrior))
+
+- `GUICharGen.CharCreatorRunning` is GUICharGen's `Attribute<bool>` at +0xD8 (its value at +0xE4: the attribute's constructor 0x00478190 keeps the bool at +0xC) [C]. The constructor 0x0073B460 makes it false (0x0073B50B, from a zeroed byte) and registers it under the name at 0x00B1B634, "CharCreatorRunning" (0x0073B67F) [C]. Nothing in GUICharGen's own code (0x00730000..0x00740000) writes it again [C for that range; a writer elsewhere through the attribute's virtual setter was not searched].
+- [I]: it is the stand-alone character creator's flag; DebugOptions has an attribute named "CharCreatorCharGen" (0x006F9304, the string at 0x00B14D70, DebugOptions +0xE8, made with the value 0), not followed to GUICharGen.
+- Seen in play: the game answers 0 in a new game (Eluvian `data`).
+- The movie (chargen.gfx) with 0 [C in the ActionScript]: the appearance page's button is Quick Play (AppearanceSoundSetScene.as `play_mc_init`) and runs CompleteAppearance(true) → CharGen.PromptDifficulty(CHARGEN_EXIT_BASIC); Next goes on to Attributes (Specialization in Awakening); the spells page's last button is Play (SpellsTalentsScene.as) → PromptDifficulty(CHARGEN_EXIT_ADVANCED). With 1: Done and Exit; Done is CompleteChargen(BASIC) and the Review page; the spells page's Done is CompleteChargen(ADVANCED) and Review; the Review's Exit hides the screen.
+- PromptDifficulty (CharGen.as:161) [C]: a popup with a picker (`GUIPopupLayer.PickerList`, `PickerDescriptions`, `PickerDefault` the current `ClientOptions.GameOptions.DifficultyLevel`, `PickerResult`; `GUI.ShowDialogBox`); OK sends `ClientOptions.SetClientOptionMessage GameOptions.DifficultyLevel <picked>`, `ClientOptions.CommitOptions`, CompleteChargen(exit point), `GUI.HideFullScreenGUI`.
+- CompleteChargen (CharGen.as:177) [C]: for BASIC first `GUICharGen.CharGenSelectAppearanceAndSoundSet <id> 0 <sound set>`; then `GUICharGen.TempCharName` and `GUICharGen.CharGenSelectName <id>`; nExitPoint; bUserExit = true.
+- The end [C in the AS; the engine's side I]: the screen hidden, the movie is told through `_root.FinishSceneFromGame` (frame 1) → GUISystem.FinishSceneFromGame → SceneManager.EndMovie → the scene class's FinishScene → CharGen.FinishScene, which, with bUserExit set, sends the telemetry and `GUICharGen.CharGenEnd <id> 0 <nExitPoint>`, the message that ends creation (CharGenEndMessage 0x007FCA90, existing reading). That the engine calls FinishSceneFromGame as it closes the screen is I (the movie's own entry (seen: Quick Play's OK gave `CharGenEnd 1 0 1` and the origin started).
+- Not read: a writer of `CharCreatorRunning` outside GUICharGen, through the attribute's virtual setter (the range 0x00730000..0x00740000 was read).
+
 ### What the engine shows behind the chargen movies (lib-agent-2, 2026-10-19, cgstage-scene)
 
 Marks: [C] checked in the exe's code or in the game's files, [I] inferred. Addresses are GOG's. Prior work cited as file:line; the rest is new.
@@ -439,9 +450,162 @@ In `hm_cps_p01.mop` each mesh's base model carries minus the sum of its targets'
 ### How the engine makes the head (read, except where marked)
 
 - The editor (the appearance scene's slider object; its recipe at +0x1E4, laid out as a `.mop`: targets at +0x24 (12-byte entries, weight at +8), MAT at +0x34 (0x40 each), MAT4 at +0x44 (0x4C), TEX at +0x54 (0x54)) loads a preset at `0x00809F50`: MorphParts (23000) and MorphTintFileNames (23001) into the recipe; each MorphModelParams entry through `0x00807D10(name, weight)`, which finds the target by name (`0x007FF570`), adds it if the model resource exists (resource manager slots 0x94/0x9C), sets its weight (or adds to it), and drops a target whose weight returns within ±0.001 of 0 (`0x00807AE0`); MAT, MAT4 and TEX entries through `0x00800820`, `0x008008B0`, `0x00800950`; then `0x00804390` rebuilds the target set by race and gender (a fixed list per race/gender through `0x008009F0`, and chargenmorphcfg's entries, four per entry), and for an elf or dwarf pairing `0x008039B0(1.0)`.
-- Each slider moves a target's weight through `0x00807D10` (inferred: what each slider id names is not read).
+- Each slider moves its targets' weights through `0x00807F10` (corrected 2026-10-22: it was inferred to be `0x00807D10`, and what each slider id names was not read; both are read below, "The sliders' targets").
 - Applying (`GUI::GUIPaperdoll::CommandCreateMorph`, `0x007C11D0`): it fills a `GUI::ComposeMorphTask` from the editor (`0x00809980`: resets a set of exclusive targets, `UH_SHP_*`, `UH_CHM_*`, `UH_JAW_*` and kin, to the editor's choices) and runs it. The task (`0x00802E60`): `0x00800670` (re)loads the head's part models when the parts changed (resource manager slot 0x2C); the head model, with the targets' weights on it, is then written out as a whole morph and registered as an in-memory resource named `Head_Morph` plus a running counter (`DAT_00C3930C`; resource manager slot 0x40), and applied to the head model (its slot 0xE4).
 - The writer of a morph (`GraphicsStructures::Morph`, `0x0056FA20`) makes an ordinary `.mor`: GFF4 `MORP V0.1`, struct `morp` with MorphParts (23000), MorphTintFileNames (23001) and the nodes (0x59DA) with their vertices. So **the result is a whole morph, drawable as any `.mor`** (core's `Morph`: parts, vertices, bones, tints), not a base plus targets at draw time. Inferred: the hero's appearance's HeadMorph (CAppearance +0x1C8) names that `Head_Morph<N>` resource, and a save keeps the hero's morph (`SavegamePlayerMorph`, 16950, and `SavegameAppearanceMorphName`, 16328); not read.
+
+The appearance editor in detail (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #172 and #171; also seen in the running game through Eluvian (a human male noble warrior)). [C] read in the code, [I] inferred.
+
+Ids below are the slider ids of "The appearance sliders and chargenmorphcfg.xml" (0 to 0x39); "rg" is the race and gender index of 0x007FDCA0: 0 human male, 1 human female, 2 dwarf male, 3 dwarf female, 4 elf male, 5 elf female (racial type 1 dwarf gives 2 + female, racial type 2 elf gives 4 + female, any other race female only; female is `0x006A3650() != 1`) [C]. 0x007FDCF0 is 0x007FDCA0 on the paperdoll's hero (+0x58) [C].
+
+#### Loading a preset: 0x0080AC50(this = paperdoll, preset index, refresh, queue)
+
+- If arg 3 is 0 and arg 2 is set: the hero's model is told something through its vtable +0xCC (not followed) [C].
+- Calls 0x00808040 (the editor reset, below) [C].
+- Stores the preset index (the Preset slider's value) at +0x298 (slider 0x28's slot) [C].
+- Takes the race and gender's `heads` list of the config (0x008042D0's global; the list at +0x14 + 0x10 × rg, as the existing reading has it) and its entry at round(+0x298); an index past the end gives the empty string [C].
+- 0x0080AB80(name): finds the resource (Resources::Find), checks the GFF magic "GFF V4.0" (0x20464647, 0x302E3456) and size > 0x1C, and loads it with 0x00809F50(file, 1) [C].
+- 0x00805F20: the sliders read back from the recipe (below) [C].
+- 0x0080AB30: the sliders' own targets taken out of the recipe and what is left kept (below) [C].
+- With arg 2 set: arg 3 clear → 0x00809D50(1) (a synchronous head build: 0x00809980 on a fresh recipe, the result loaded and registered as "Head_Morph", applied to the hero's model); arg 3 set → 0x00802BF0 (queue CommandCreateMorph and CommandApplyMorph) [C]. The Preset slider's setter calls it as (1, 1) (existing reading) [C].
+- Finally the paperdoll's listener at +0x2D0, if any, is told through its vtable +4 [C]; that it is the screen's slider refresh is [I].
+
+#### The editor reset: 0x00808040(this = paperdoll)
+
+- Deletes the recipe at +0x1E4 (0x007BC080 then delete) and makes a new one (0x60 bytes, 0x007BFD80) [C].
+- Sizes two of its lists to 6 and 12 (0x00616F20(6), 0x00616F20(0xC)): the six parts and the twelve tint slots [I from the counts].
+- Zeroes the 50 slider values (+0x1F8, 200 bytes) [C], then sets +0x21C (id 9, eye shadow intensity), +0x2B4 (0x2F, blush intensity), +0x2BC (0x31, lip intensity) and +0x288 (0x24, tattoo intensity) to 1.0, and +0x28C (0x25, eyebrows) and +0x294 (0x27) to -1.0 (0xAE2E00) [C].
+- With +0xD8 = 1 (the "building" flag that stops 0x00802BF0 from queueing) calls 0x00804F60(0), the tattoo colour setter (0x23 at +0x284: the tattoo colour list's entry into three tint slots), then clears +0xD8 [C].
+- Puts the three bases into the target list with weight 0 added (`0x00807D10(name, 0, add 1)`: present, weight unchanged): UH_UEM_BASa_0, UH_ULM_BASa_0, UH_UHM_BASa_0 [C for the names and the arguments; that the call is there to make the bases present is I].
+- Writes FaceM1 `mml_vTattooParameters` vectors 1, 2, 3, 4 = (1, 1, 1, 1) (0x00802AB0, a material vector override) [C], FaceM1 `g_vFacialHairColour` vector 0 = (0.08, 0.04, 0.05, 1.0) (constants 0xB26070, 0xB26074, 0xAF88AC) [C], and FaceM1 `g_vFacialHairWeights` component 4 = 0 (0x008029A0) [C].
+
+#### The preset's load: 0x00809F50(this = paperdoll, file, apply race rule)
+
+- MorphParts (23000) into the recipe's part names, MorphTintFileNames (0x59D9) into its tints, a tint taken only where the file's string is not empty [C].
+- Each MorphModelParams (0x59EA) entry: MorphModelName (0x59E8) and MorphModelValue (0x59E9) through 0x00807D10(name, value, 0) (set) [C].
+- MorphMatParams (0x59E6): node 0x59E1, parameter 0x59E2, index 0x59E3, value 0x59E4 through 0x00800820 [C]; MorphMatVecParams (0x59E7): node, parameter, index and the Vector4 0x59E5 through 0x008008B0 [C]; MorphTextures (0x59EE): node 0x59EB, parameter 0x59EC, texture 0x59ED through 0x00800950 [C].
+- 0x00804390(this + 0x2C0): builds the paperdoll's tattoo list (+0x2C4, 0x20-byte entries, a name and at +0x1C a component) [C for the call and the list's shape; that it is made from chargenmorphcfg's `tattoos` is I].
+- With arg 3 set: if the hero's background (attribute at hero +0x7C4, read by 0x0071AFB0) is 1 and its racial type 2 (a Dalish elf), or 2 and racial type 1 (a dwarf commoner), then with +0xD8 = 1 calls 0x008039B0(1.0) [C]; that this gives those two origins their default tattoo is [I] (0x008039B0 works on +0x154 and was not followed).
+
+#### Target weights: 0x00807D10(this, name, weight, add)
+
+- Finds the target by name (0x007FF570, an index or < 0) [C]. If absent, asks the resource manager for the model (slots 0x94, then 0x9C) and, only if it exists, appends it to the recipe's target list (+0x24, 12-byte entries: name and weight at +8) [C].
+- add = 0 sets the weight, add ≠ 0 adds to it [C]. Then, if the entry's weight lies between −0.001 and 0.001 (0xAFF304, 0xB24D7C), the target is removed (0x00807AE0) [C].
+- 0x007FF610(name) answers the target's weight (0 for none) [C; the decompiler types its return as a pointer, the callers use it as the x87 float].
+
+#### One slider target: 0x00807F10(name, value, side, mesh, keep)
+
+- side 0 (the negative half): weight = -value if value ≤ 0, else 0; side 1 (the positive half): weight = value if value ≥ 0, else 0 [C].
+- The mesh's base: mesh 1 UH_UEM_BASa_0, mesh 2 UH_ULM_BASa_0, else UH_UHM_BASa_0 [C].
+- keep = 0: the target's old weight is first given back to the base (base += old) [C]. Then base += -weight and the target's weight is set to weight [C]. So the base always holds minus the sum of its mesh's targets, as the .mop files have it [C for the bookkeeping; that the bases' weights matter to the blend is I, core's ComposeHead ignores them and gives the same vertices].
+
+#### The sliders' targets: 0x00808510(this = paperdoll, values, keep)
+
+values is a 50-float array laid out as the sliders' storage (+0x1F8), each a weight already scaled (0x007FEBB0, below) [C]. With keep set the recipe's targets are first replaced by the kept ones at +0x1E8 (0x00807BA0 is a vector assignment, `recipe.targets = this->kept`) [C]. Then, through 0x00807F10 (side 0 the negative half, side 1 the positive) [C]:
+
+| id | label | side 0 (negative) | side 1 (positive) | meshes |
+|---|---|---|---|---|
+| 0 | Mouth Height | UH_MTH_05a_0 | UH_MTH_14a_0 | face |
+| 1 | Lip Size | UH_MTH_08a_0 | UH_MTH_07a_0 | face |
+| 2 | Mouth Width | UH_MTH_11a_0 | UH_MTH_17a_0 | face |
+| 3 | Overbite / Underbite | UH_MTH_12a_0 | UH_MTH_13a_0 | face |
+| 4 | Eye Spacing | UHM_EYE_03a_0, UEM_EYE_03a_0, ULM_EYE_03a_0 | UHM_EYE_08a_0, UEM_EYE_08a_0, ULM_EYE_08a_0 | face, eyes, lashes |
+| 5 | Eye Height | UHM_EYE_19a_0, UEM_EYE_19a_0, ULM_EYE_19a_0 | UHM_EYE_20a_0, UEM_EYE_20a_0, ULM_EYE_20a_0 | face, eyes, lashes |
+| 6 | Eye Size | UHM_EYE_09a_0, UEM_EYE_09a_0, ULM_EYE_09a_0 | UHM_EYE_06a_0, UEM_EYE_06a_0, ULM_EYE_06a_0 | face, eyes, lashes |
+| 0xA | Eye Shape | (a shape, below) | | face, lashes |
+| 0xB | Cheekbone Depth | UH_CHK_01a_0 | UH_CHK_06a_0 | face |
+| 0xC | Cheekbone Width | UH_CHK_02a_0 | UH_CHK_03a_0 | face |
+| 0xD | Cheek Shallow / Full | (none) | UH_CHK_07a_0 | face |
+| 0xE | Cheekbone Height | UH_CHK_13a_0 | UH_CHK_08a_0 | face |
+| 0xF | Cheek Width | (none) | UH_CHK_04a_0 | face |
+| 0x10 | Brow Depth | UH_BRW_02a_0 | UH_BRW_01a_0 | face |
+| 0x11 | Brow Height | UH_BRW_05a_0 | UH_BRW_04a_0 | face |
+| 0x12 | Chin Height | UH_JAW_02a_0 | UH_JAW_06a_0 | face |
+| 0x13 | Chin Depth | UH_JAW_03a_0 | UH_JAW_04a_0 | face |
+| 0x14 | Chin Width | UH_JAW_05a_0 | UH_JAW_07a_0 | face |
+| 0x15 | Jaw Width | UH_JAW_09a_0 | UH_JAW_10a_0 | face |
+| 0x16 | Bridge Depth | UH_NOS_07a_0 | UH_NOS_08a_0 | face |
+| 0x17 | Bridge Width | UH_NOS_09a_0 | UH_NOS_10a_0 | face |
+| 0x18 | Nose Height | UH_NOS_11a_0 | UH_NOS_18a_0 | face |
+| 0x19 | Nose Depth | UH_NOS_36a_0 | UH_NOS_35a_0 | face |
+| 0x1A | Tip Width | UH_NOS_13a_0 | UH_NOS_15a_0 | face |
+| 0x1B | Nose Size | UH_NOS_33a_0 | UH_NOS_34a_0 | face |
+| 0x1C | Tip Depth | UH_NOS_38a_0 | UH_NOS_37a_0 | face |
+| 0x1D | Nostril Width | UH_NOS_02a_0 | UH_NOS_01a_0 | face |
+| 0x1E | Nose Shape | (a shape, below) | | face |
+| 0x1F | Ear Height | UH_EAR_01a_0 | UH_EAR_06a_0 | face |
+| 0x20 | Ear Size | UH_EAR_05a_0 | UH_EAR_03a_0 | face |
+| 0x21 | Neck Thickness | UH_NEC_02a_0 | UH_NEC_03a_0 | face |
+
+[C for every name, side and mesh; the labels are the existing table's.]
+
+- The eye shapes: every one of the race and gender's four (count 4: the function at 0x00A11120 returns 4) has its face and lashes target set to 0 (side 1, value 0, keep 0); then, if round(+0x220) = n ≠ 0, shape n − 1's face target (mesh 0) and lashes target (mesh 2) get its weight (side 1, keep as given) [C].
+- The nose shapes: every one of the race and gender's (count 0x007FE610) has its target set to 0; then, if round(+0x270) = n ≠ 0, shape n − 1's target (mesh 0) gets its weight [C].
+- The shape values (+0x220 and +0x270) are integers stored as they are, not weights [C, existing reading].
+
+#### The eye shapes: 0x007FE330(shape, out face, out lashes, out weight)
+
+Indexed by shape + rg × 4 [C]:
+
+| rg | shape 0 | shape 1 | shape 2 | shape 3 |
+|---|---|---|---|---|
+| 0 human male | CHM_09, 1.0 | CHM_10, 1.0 | CHM_11, 1.0 | CHM_12, 0.8 |
+| 1 human female | CHF_07, 0.7 | CHF_08, 1.0 | CHF_09, 0.7 | CHF_10, 0.8 |
+| 2 dwarf male | CDM_02, 0.6 | CDM_03, 0.8 | CDM_04, 0.8 | CDM_05, 0.6 |
+| 3 dwarf female | CDF_02, 0.6 | CDF_03, 0.7 | CDF_04, 0.6 | CDF_05, 0.7 |
+| 4 elf male | CEM_03, 0.7 | CEM_04, 0.7 | CEM_05, 0.8 | CEM_06, 0.7 |
+| 5 elf female | CEF_02, 0.7 | CEF_03, 0.8 | CEF_04, 0.8 | CEF_05, 0.6 |
+
+Each "X_nn" names two targets, UHM_X_nna_0 (the face) and ULM_X_nna_0 (the lashes) [C]. The weights are the locals' constants (1.0, 0.8 = 0xAF7610, 0.7 = 0xB03BF0, 0.6 = 0xAF7618) in stack order [C].
+
+#### The nose shapes: 0x007FE650(shape, out name, out weight) and 0x007FE610 (the count)
+
+Counts by rg: 0 → 6, 1 → 4, 2 → 6, 3 → 6, 4 → 5, 5 → 6, else 0 [C]. Indexed by shape + rg × 6, each a face target UH_X_nna_0 [C]:
+
+| rg | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| 0 | CHM_04, 0.8 | CHM_02, 0.8 | CHM_01, 0.8 | CHM_03, 0.8 | CHM_05, 1.0 | CHM_06, 1.0 |
+| 1 | CHF_02, 0.9 | CHF_04, 0.7 | CHF_01, 0.8 | CHF_03, 0.7 | (none, 0) | (none, 0) |
+| 2 | CDM_04, 0.6 | CDM_03, 0.8 | CDM_08, 0.6 | CDM_09, 0.7 | CDM_01, 1.0 | CDM_02, 0.7 |
+| 3 | CDF_06, 0.1 | CDF_03, 0.6 | CDF_05, 0.5 | CDF_01, 0.7 | CDF_01, 0.5 | CDF_04, 0.6 |
+| 4 | CEM_04, 0.7 | CEM_03, 0.8 | CEM_05, 0.8 | CEM_02, 0.8 | CEM_01, 0.6 | (none, 0) |
+| 5 | CEF_03, 0.6 | CEF_02, 0.7 | CEF_06, 0.7 | CEF_01, 0.8 | CEF_04, 0.8 | CEF_05, 0.8 |
+
+[C; the dwarf woman's list names CDF_01 twice, as the exe does; 0.9 is the four bytes "fff?" at 0xAF91D0 read as a float, 0.1 is 0xAE7BD8, 0.5 is 0xAE7104.]
+
+#### Reading the sliders back: 0x00805F20(this = paperdoll)
+
+- Each pair slider of the table above: stored value (+0x1F8 + 4 × id) = weight(positive target) − weight(negative target), the face's target for the eyes' sliders (UHM_EYE_*) [C for the targets read; the order of the subtraction is C from the disassembly at 0x00806503..0x008065E3: the first call's result is kept, the second call's is subtracted from it, and the strings built show that is the positive target less the negative for 0xC and 0xE] . 0xD and 0xF: the one target's weight as is [C].
+- Eye shape (+0x220): 0, then the first of the race and gender's four whose face target weighs more than 0.001, counted from 1 [C]. Nose shape (+0x270): the same over the nose shapes [C].
+- The list sliders: each the place of the recipe's entry in its list (0x007FFB70 → 0x0051F550, a name's index, 0 where not found): id 7 the eyes colour (tint slot 2, list at config +0x1B0), id 8 eye make-up (slot 4, +0x1C0), 0x2A beard (part 3, the race and gender's beards), 0x2B hair colour (slot 3, +0x190), 0x2C skin (FaceM1 `mml_tDiffuse`'s texture, +0x230), 0x2D skin tone (slot 0, +0x1A0), 0x30 lips (slot 1, +0x1E0), 0x27 brows (slot 10, +0x1F0), 0x23 tattoo colour (slot 6, +0x210) [C]. 0x2E blush is read from tint slot 5 against the list at +0x1A0, the same list as the skin tone's [C as decompiled; whether that is a slip in the exe or a decompiler artefact is not settled].
+- The intensities (9, 0x2F, 0x31, 0x24): 1.0, then the recipe's material value (0x007FF760, a MAT entry by node, parameter and component; value at +0x3C) where there is one: FaceM1 `mml_vTintMaskColours` components 1, 2, 0, and `mml_vTattooParameters` [C].
+- Eyebrows (0x25): -1, then the first of FaceM1 `g_vFacialHairWeights` components 0 to 3 whose value is above 1e-6 (0xB24D80) [C]. Stubble (0x26): components 4 to 7 above 1e-6 as bits 0 to 3 [C].
+- Hair (0x29): the cut is read from HairM1 `g_vFacialHairWeights` (the first component whose value is above 0, counted from 1), and the hair is the race and gender's hair choice with the recipe's part 2 name and that cut (the parallel cut list at config +0xD4 + 0x10 × rg) [C].
+- Tattoo (0x22): FaceM1 `mml_tTattooMask`'s texture and the first of `mml_vTattooParameters` components 0 to 3 above 1e-6, matched against the paperdoll's tattoo list (+0x2C4: name and component) [C].
+- Seen in play: the human man's 44 head sliders at presets 0 and 2, as the game's data tree answered them, are exactly these read-backs shown through 0x007FE9E0 (below), but for the beard's zeroes (0x00809980 below).
+
+#### Taking the sliders' own targets out: 0x0080AB30(this = paperdoll)
+
+Calls 0x00808510 with a zeroed 50-float array and keep 0, so every pair target, eye shape and nose shape goes to 0 with its weight given back to its base, then stores the recipe's remaining targets as the kept set (+0x1E8 = recipe +0x20; 0x00807BA0) [C]. So a preset's own targets that no slider names (UH_NOS_27, UHM_EYE_05, UH_CHM_06 ...) stay in the head whatever the sliders do [C].
+
+#### Making the head: 0x00809980(this = paperdoll), from CommandCreateMorph (0x007C11D0) and 0x00809D50
+
+CommandCreateMorph sets the paperdoll's +0xD8 to 1 (setters then queue nothing), calls 0x00809980, clears +0xD8, and hands the recipe to the ComposeMorphTask [C]. (The decompiler shows 0x00809980's argument as the task + 0x1C; the function reads +0x1E4 and +0x1F8, beyond a 0x90-byte task, so `this` is the paperdoll [I], and the game shows its slider values changed, below.) It does [C]:
+
+1. 0x00808510(this + 0x1F8, keep 1): the kept targets, then every slider's targets from the values.
+2. 0x007BFD10(0) (not followed).
+3. If the recipe's part 3 (the beard) is not empty: the setters of sliders 0, 1, 2, 3, 0xB, 0xC, 0xD, 0xE, 0xF, 0x12, 0x13, 0x14, 0x15 are called with 0 (0x00803300 ... 0x00803750), then each of these 18 targets whose weight is outside ±0.001 is set to 0 (0x00807F10(name, 0, side 1, mesh, keep 0)): UH_SHP_01a_0, UH_SHP_02a_0, UH_CHM_07a_0, UH_CHM_08a_0, UH_CHM_09a_0, UHM_CHM_08a_0, UEM_CHM_08a_0 (eyes), ULM_CHM_08a_0 (lashes), UH_CHM_10a_0, UH_CHM_11a_0, UHM_CEF_01a_0, UEM_CEF_01a_0 (eyes), ULM_CEF_01a_0 (lashes), UH_CDM_05a_0, UH_CDM_07a_0, UH_CHF_05a_0, UH_JAW_01a_0, UH_JAW_11a_0.
+4. A man (0x006A3650 == 1): blush (0x00805AE0), eye make-up (0x00804D40) and lips (0x00805D00) set to entry 0 of their lists, each also setting its FaceM1 `mml_vTintMaskColours` component (2, 1, 0) to 0 where the entry is empty, else to its intensity (+0x2B4, +0x21C, +0x2BC); then, for an elf (racial type 2) only, the stubble (0x00803F60(0): `g_vFacialHairWeights` components 4 to 7 = 0). A woman: the beard (0x008055C0(0): part 3 = the beards list's entry 0, or "" where the race and gender has no list) and the stubble 0.
+5. The recipe's lists are copied (0x004AC490 twice, 0x00807BA0, 0x008007C0, 0x008007E0, 0x00800800) and the compose task runs (0x007BAF20) [C for the calls].
+
+Seen in play (human man): preset 3 (with a beard) shows Mouth, Lip Size, Mouth Width, Overbite, the cheek, chin and jaw sliders all 0 although the preset has UH_CHK_08a_0 at 0.84; Cheek Shallow / Full shows 0 (its setter's 0, inverted, is the weight 1). After the beard is taken off they stay 0. With a beard the groups Mouth (5) and Jaw / Cheeks (6) answer `.Enabled` 0, 1 again with none [seen; which code sets the groups' Enabled is not read].
+
+#### Not read (the appearance editor)
+
+- The blush read-back against the skin-tone list: 0x00805F20 reads slider 0x2E from tint slot 5 against the list at +0x1A0 (the skin tone's), not the blush list at +0x1D4 its setter uses; whether that is a slip in the exe or a decompiler artefact is not settled.
+- The elf man's fall-through in 0x007FDD00: the decompiled switch has no break at the end of its case, so an id it does not list falls into the elf woman's; not checked in the disassembly.
+- What sets the `.Enabled` of the Mouth (5) and Jaw / Cheeks (6) groups: seen to be 0 with a beard, 1 without; the code that sets them was not read.
+- Whether anything outside GUICharGen writes `CharCreatorRunning` (below).
 
 ### For Paragon
 
@@ -449,7 +613,7 @@ A preset is a recipe: take MorphParts and the tints as a `.mor`'s; for each mesh
 
 ### Not read
 
-The vertex blend inside the model (how the targets' meshes are matched to the base and summed; whether bones move too); what each slider id (0..0x3A) names; the exact use of MorphMatParamIndex for scalar parameters; where HeadMorph is set to `Head_Morph<N>`.
+The vertex blend inside the model (how the targets' meshes are matched to the base and summed; whether bones move too); the exact use of MorphMatParamIndex for scalar parameters; where HeadMorph is set to `Head_Morph<N>`.
 
 ## The appearance sliders and chargenmorphcfg.xml
 
@@ -467,8 +631,8 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 
 - Sliders 0 to 0x21, except 7, 8, 9, 0xA and 0x1E, are morph weights. Each setter calls `0x007febb0(k, &v, invert, signed)` with k = the slider id and stores the result at +0x1F8 + 4k. Read.
 - The conversion: `0x007fdd00(k)` gives two scales lo and hi for k and the race and gender index (1.0 and 1.0 by default; per-race tables of 0.1 to 1.0, e.g. human male k 0, 0x12, 0x1C: 0.8 and 0.8). With signed set (every slider but 0x20), the weight is v × lo for v < 0 and v × hi otherwise, the slider running −1..1; slider 0xD (invert set, 0..1) gets hi × (1 − v) (its lo or hi by v's sign). Slider 0x20 (signed clear) gets (v + 1) / 2 × (lo + hi) − lo. Read.
-- That the 34 weights index the preset's morph targets in that order is inferred (the sibling reading has the targets).
-- Sliders 0xA (Eye Shape, 0..4) and 0x1E (Nose Shape, 0..n−1, n from `0x007fe610`) store the integer as is at +0x220 and +0x270, with no conversion. Read; that they pick among alternative targets is inferred.
+- Which targets each weight moves is read (2026-10-22): "The sliders' targets" in "How the engine makes the head".
+- Sliders 0xA (Eye Shape, 0..4) and 0x1E (Nose Shape, 0..n−1, n from `0x007fe610`) store the integer as is at +0x220 and +0x270, with no conversion. Read; that they pick among alternative targets is read (2026-10-22, "The eye shapes" and "The nose shapes").
 
 | id | label | range | what it sets |
 |---|---|---|---|
@@ -504,6 +668,61 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 | 0x20 | Ear Size | −1..1 | weight 0x20, linear |
 | 0x21 | Neck Thickness | −1..1 | weight 0x21 |
 
+#### The scales: 0x007FDD00(id, out lo, out hi)
+
+Both 1.0 unless listed [C]. lo is the weight at the slider's −1 end, hi at its +1 end (see the setter). Constants: 0.8 = 0xAF7610, 0.3 = 0xAF7614, 0.6 = 0xAF7618, 0.5 = 0xAE7104, 0.4 = 0xB169EC, 0.7 = 0xB03BF0, 0.2 = 0xAE7524, 0.1 = 0xAE7BD8 [C].
+
+| id | 0 human male | 1 human female | 2 dwarf male | 3 dwarf female | 4 elf male | 5 elf female |
+|---|---|---|---|---|---|---|
+| 0 | 0.8, 0.8 | 0.6, 0.6 | 0.8, 0.6 | 0.8, 0.6 | 0.8, 0.8 | 0.6, 0.6 |
+| 2 | 0.8, 1.0 | 0.6, 0.6 | | 0.8, 1.0 | 0.7, 0.6 | 0.5, 1.0 |
+| 4 | 0.8, 1.0 | 0.6, 1.0 | | | 0.8, 0.8 | 0.6, 0.6 |
+| 6 | 0.5, 0.3 | 0.5, 0.3 | 0.3, 0.3 | 0.6, 0.3 | 0.5, 0.3 | 0.5, 0.3 |
+| 0xB | 0.4, 1.0 | | | | 0.4, 1.0 | 0.4, 1.0 |
+| 0xC | 0.5, 0.4 | 0.5, 0.4 | 1.0, 0.4 | 1.0, 0.5 | 0.5, 0.4 | 0.5, 0.4 |
+| 0xD | | 1.0, 0.7 | | | | |
+| 0xE | 1.0, 0.5 | 1.0, 0.5 | 0.1, 0.5 | 1.0, 0.5 | 1.0, 0.5 | 1.0, 0.5 |
+| 0xF | 1.0, 0.4 | | | | | |
+| 0x10 | | 0.8, 0.8 | | | 1.0, 0.8 | 0.6, 1.0 |
+| 0x11 | 1.0, 0.8 | 0.8, 0.6 | | 1.0, 0.6 | 1.0, 0.6 | 1.0, 0.6 |
+| 0x12 | 0.8, 0.8 | 0.8, 0.6 | | 0.6, 0.8 | 0.8, 0.8 | 0.6, 0.6 |
+| 0x13 | 1.0, 0.6 | 0.6, 0.6 | | | 1.0, 0.6 | 0.8, 0.5 |
+| 0x14 | 0.8, 1.0 | 0.6, 0.8 | | | 0.6, 1.0 | 0.6, 0.8 |
+| 0x15 | 0.6, 0.4 | 0.6, 0.6 | 1.0, 0.5 | 0.8, 0.6 | 0.6, 0.8 | 0.6, 0.6 |
+| 0x16 | 1.0, 0.6 | 0.6, 0.6 | | 0.6, 1.0 | 0.6, 1.0 | 0.6, 0.3 |
+| 0x17 | 0.8, 1.0 | 0.2, 0.8 | | 0.3, 0.6 | (0.2, 0.5) | 0.2, 0.5 |
+| 0x18 | 0.5, 0.6 | 0.5, 0.6 | 0.6, 0.8 | 0.5, 0.6 | 0.5, 0.6 | 0.5, 0.4 |
+| 0x19 | 1.0, 0.8 | 0.6, 0.6 | | 0.6, 1.0 | 0.6, 0.6 | 0.6, 0.4 |
+| 0x1A | 0.8, 1.0 | 0.2, 0.8 | | 0.3, 1.0 | 0.5, 0.8 | 0.2, 1.0 |
+| 0x1B | 0.4, 1.0 | 0.3, 0.8 | | 0.3, 1.0 | 0.5, 0.8 | 0.3, 0.6 |
+| 0x1C | 0.8, 0.8 | 0.6, 0.8 | | 0.6, 1.0 | 0.6, 0.6 | 0.4, 0.8 |
+| 0x1D | 0.6, 0.6 | 0.3, 1.0 | | 0.3, 1.0 | 0.4, 0.6 | 0.3, 0.5 |
+| 0x1F | 1.0, 0.6 | 0.6, 1.0 | | | 1.0, 0.6 | |
+| 0x20 | 0.2, 1.0 | 0.2, 1.0 | | | 0.4, 1.0 | 0.4, 1.0 |
+| 0x21 | 1.0, 0.4 | 0.6, 0.4 | 1.0, 0.4 | 0.6, 1.0 | 0.8, 0.2 | 0.4, 0.3 |
+
+[C for every listed pair, from the decompiled switch.] The elf male's case (rg 4) has no break at its end: an id it does not list falls through into the elf female's switch [C as decompiled, not checked in the disassembly]. The elf male lists every id the elf female does but 0x17, so the one cell that takes the fall-through is 0x17 for the elf male, shown in brackets. Ids not in the table (1, 3, 5 and the non-morph sliders): 1.0, 1.0 for all.
+
+#### The setter's conversion: 0x007FEBB0(id, &value, invert, signed)
+
+With (lo, hi) = 0x007FDD00(id) [C]:
+
+- signed: s = lo if value < 0 else hi; weight = s × value, or with invert s − s × value [C].
+- not signed: weight = (value + 1) × 0.5 × (lo + hi) − lo, or with invert hi − (lo + hi) × (value + 1) × 0.5 [C].
+
+#### The getter's conversion: 0x007FE9E0(id, weight, invert, signed)
+
+The setter's inverse, clamped [C]:
+
+- signed: weight < −0.001: value = weight / lo (with invert (lo − weight) / lo), at least −1; |weight| ≤ 0.001: 0 (with invert 1); weight > 0.001: value = weight / hi (with invert (hi − weight) / hi), at most 1 [C].
+- not signed: if lo + hi < 0.001 (the double 0xAE7118): 0 (with invert 1); else f = 2 (weight + lo) / (lo + hi), value = f − 1 (with invert 1 − f), clamped to −1..1 (the double −1.0 at 0xAF0E48) [C].
+
+#### Each morph slider's flags (setters at 0x00803300.., getters at 0x007FEF70..)
+
+Every setter is `0x007FEBB0(id, &v, invert, signed)`, stores the result at +0x1F8 + 4 × id, and calls 0x00802BF0 [C]. Every getter is `FLD [this + 0x1F8 + 4 × id]; 0x007FE9E0(id, w, invert, signed)` [C]. Flags (invert, signed): 0xD (1, 1); 0x20 (0, 0); every other morph slider (0, 1) [C for 0 to 6, 0xB to 0xF, 0x10 to 0x1D, 0x1F to 0x21, read at each setter; the getters read for 0, 0xD, 0xF]. Setters by id: 0 0x00803300, 1 0x00803330, 2 0x00803360, 3 0x00803390, 0xB 0x00803570, 0xC 0x008035A0, 0xD 0x008035D0, 0xE 0x00803600, 0xF 0x00803630, 0x12 0x008036C0, 0x13 0x008036F0, 0x14 0x00803720, 0x15 0x00803750, and 4, 5, 6, 0x10, 0x11, 0x16 to 0x1D, 0x1F to 0x21 at 0x008033C0 to 0x00803980 (30 bytes apart) [C]. Getters: 0 0x007FEF70, 0xD 0x007FF090, 0xF 0x007FF0D0 [C].
+
+So the movie's value is −1..1 for a signed slider (0..1 for 0xD and 0xF, whose ranges start at 0), and the editor keeps the weight; a preset's weight past the scale shows as the slider's end [C].
+
 ### Choices and colours
 
 | id | label | range | what it sets |
@@ -529,6 +748,8 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 | 0x31 | Lip Intensity | 0..1 | `mml_vTintMaskColours` component 0. Read. |
 | 0x32 to 0x39 | Look Up / Down (−30..30), Turn Left / Right (−45..45), Camera Distance (0.5..0.72), Move Left / Right (±0.036), Move Up / Down (−0.02..0.1), Background (1..20), Expression | | the portrait's camera and backdrop (`0x0069ed50` and kin), not the head. Read in outline. |
 
+- The list setters called by 0x00809980 (each stores its value, sets its tint or part, and its intensity component, then 0x00802BF0) [C]: 0x00805AE0 blush (0x2E at +0x2B0; tint slot 5 = the list at config +0x1D4's entry; FaceM1 `mml_vTintMaskColours` component 2 = +0x2B4 or 0 where the entry is empty), 0x00804D40 eye make-up (8 at +0x218; slot 4 from +0x1C4; component 1 = +0x21C or 0), 0x00805D00 lips (0x30 at +0x2B8; slot 1 from +0x1E4; component 0 = +0x2BC or 0), 0x008055C0 beard (0x2A at +0x2A0; part 3 = the race and gender's beards entry, or "" with no list), 0x00803F60 stubble (0x26 at +0x290; `g_vFacialHairWeights` components 4..7 = 1.0 or 0 by bits 0..3), 0x00804F60 tattoo colour (0x23 at +0x284; the tattoo colours list's entry into three tint slots).
+- The beard's group rule (the Mouth and Jaw / Cheeks groups off with a beard) is seen in play, in "Making the head" above.
 - Which sliders appear (`0x0080ada0`): everyone gets 0 to 0x21 (morph), 7, 0x22 to 0x25, 0x28, 0x29, 0x2C, 0x2D and the portrait sliders. With `0x006a3650` true (inferred: male) the beard (0x2A, when the race has beards), Hair / Beard Color, Stubble (not elves, racial type 2) and Eyebrow / Stubble Color; otherwise the makeup sliders (8, 9, 0x2E to 0x31), Hair Color and Eyebrow Color. Read.
 - So the morph's tint slots, as these setters fill them: 0 skin, 1 lip makeup, 2 eyes, 3 hair, 4 eye makeup, 5 blush, 6 to 8 tattoo, 10 brows and stubble, 11 crew cut (9 not written here). That this list is the `.mor`'s `MorphTintFileNames`, in that order, is inferred.
 
