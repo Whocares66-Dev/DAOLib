@@ -414,6 +414,8 @@ Read 2026-10-19 by lib-agent-2 for paragon-agent's screens, in GOG's exe with `t
 
 ## The head morph a preset and the sliders make
 
+How the made head goes into a save and comes back (SavegamePlayerMorph, 16950: the writer 0x00803000, the reader in BuildAppearanceModel 0x006C0DE0), and a head written by `dao::core::morph::Write` seen drawn by the game: SAVES.md, "The hero's made head in a save".
+
 Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the game's files (`hm_cps_p01.mop` from chargen.rim, `hm_pcc_b01.mop` and `hm_pcc_b01/b02.mor` from face.erf, read with `tools/gff4.py`), for DAOParagonEngine #17 and #22 (dev/PARAGON_CHARGEN.md part 1). "Read" is seen in the code or the files; "inferred" is not read to the end.
 
 ### The `.mop` file (read)

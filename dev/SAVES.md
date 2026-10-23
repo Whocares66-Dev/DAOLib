@@ -86,6 +86,65 @@ The loading machine (0x006C76F0, 23 steps), then the area machine (state 6, 0x00
 - **The restore** (0x006BE980), in order: the common read; importance; the party state (0x0063B9A0: follower state, pool); **stats** (below) then UpdateCanLevelUp; substates, tactics, flags, class ranks; **equipment first** (+0xBE0, vtable +0x6C) **then the backpack** (+0xBF0, +0x70); the body bag, rank, appearance, sound sets, portrait floats, pool flag, no-permanent-death, TimeSinceDeath. creature +0xC58 is 1 during the load, so the template's own items are skipped and do not double up.
 - **Stats** (16209; 0x0071EDC0) are saved and read **only when the template's +0xBD4 is 0** (0x006BEB10): a creature with no stats struct is one whose template marks it so (Duncan, the hunters, Junar), not one "never active", and keeps its template's stats. A property is restored by its row in properties.gda (`SavegameStatPropertyIndex` 16353), not by its ATTR/DPLT/SMPL label: Simple's Base 16300, Attribute's Modifier 16301, Depletable's Current 16302 and Regen 16304. Then the talent, spell and skill lists (16306, 16305, 16307, each through AddAbility 0x0071EAC0), the modal abilities 16468 (a present list replaces the set), and a party member's quickslots (0x0062C3D0).
 - **Appearance** (16320, APP1/APL1/APC1; 0x0074A890): whatever labels the struct has, the type 16321 first. The hero's morph (16950) is not read by the restore: `BuildAppearanceModel` (0x006C0DE0) reads it from the save's PlayerChar struct.
+
+#### The hero's made head in a save, SavegamePlayerMorph (16950) (read 2026-10-22 by paragon-agent's helper, DAOParagonEngine #172; the play seen by lib-agent)
+
+Read 2026-10-22 in the GOG exe (ghidra-dao, read-only) and in a save with tools/gff4.py. [C] read in the code, [I] inferred, [F] read in the file, "seen in play" seen in the running game.
+
+##### The writer: 0x00803000
+
+- [C] 0x00803000 (`__fastcall`, this = the paperdoll) gets the attribute at this+0x5C, calls its object's vfunction68 and then vtable +0xE4 on the result (the head morph's name; CHARGEN.md has +0x5C as the paperdoll's `PaperCreature` attribute and +0xE4 as the model's head-morph-name getter). The result goes through 0x004F4710.
+- [C] It builds the wide string `L"Head_Morph"` (0x004C2480) and calls `GraphicsStructures::Morph` 0x0056FA20 with the type tag 0x20204350 (`"PC  "`) and an out buffer and size.
+- [I] The name passed is the morph file's own name. This rests on the decompile's data flow and on the game's own saves holding `Head_Morph` as the file's name (below).
+- [C] It then calls 0x00643420 to get a struct, takes its field 0x4236 (16950) through 0x00A5A8E0, resizes it with 0x004DD730(size), and copies the bytes one by one with 0x004782F0.
+- [I] The struct from 0x00643420 is the PlayerChar struct that `BuildAppearanceModel` reads (the same call and field are read there).
+- [C] When the paperdoll has a hero (this+0x58), it copies the hero's CAppearance (hero+0x7B0, 0x0074A610) and calls `CCCreature::SetAppearance`. In game mode 0xB it first sets hero+0x7B4 = 1.
+- [C] Before all this it runs the paperdoll's queued commands (this+0x2E0..0x2E4) and clears +0x2EC.
+- Unread: which step of character creation calls 0x00803000.
+
+##### The clear: 0x007FEED0
+
+- [C] 0x007FEED0 calls 0x00643420, takes field 0x4236 (16950) through 0x00A5A8E0, and calls 0x004DD730(0).
+- [I] 0x004DD730 resizes the list, so this empties the hero's morph list. Its callers were not followed.
+
+##### The reader: BuildAppearanceModel 0x006C0DE0
+
+- [C] Guarded by a byte at +0x7D4 of the object from 0x005D58C0 being 1, a check through 0x0074A7C0(1), and two equal shorts at +0x58 and +0x5A. It then calls 0x00643420 and, at 0x006C0EBC, pushes 0x4236 and calls 0x00A5A8E0.
+- [C] When the list is not empty (count from 0x004DB2A0), it allocates that many bytes (0x00413660) and copies the list into them (0x0047C940 per element).
+- [C] It hands the buffer to 0x005895D0 on a stack object made by 0x00587BD0 (its type from the object of 0x00867E30, vtable +0x1C).
+- [I] 0x005895D0 parses the morph file. That it is a morph parser is inferred from the call order and the bytes being a .mor.
+- [C] On success it takes 0x00587C20's result into 0x00534A70, and stores that through 0x004F4710 at this+0x1E4 (`LEA ECX,[ESI+0x1E4]`). It then frees the buffer (0x004136C0).
+- [I] +0x1E4 is the appearance's head-morph slot (CHARGEN.md's `UpdatePortraitMessage` writes the figure's head-morph name to `hero.appearance+0x1E4`).
+- Names: none of 0x00643420, 0x00A5A8E0, 0x005895D0, 0x00534A70, 0x004F4710, 0x007FEED0 or 0x00803000 is named in the address library (tools/addrlib.py lookup); 0x006C0DE0 is `BuildAppearanceModel` (ID 14965).
+
+##### What a save of the game's holds (Lyna/Slot_10)
+
+- [F] The hero's `SavegamePlayerMorph` (16950) is a u8 list of 44,614 bytes: `GFF V4.0PC  MORPV0.1`, struct `morp`.
+- [F] Inside it: field 2 (the name) is `Head_Morph`, MorphParts (23000) has 6 entries (`EF_UHM_BASa_0`, `ef_uem_basa_0`, `ef_har_ha2a_0`, ...), MorphTintFileNames (23001) has 12, and the nodes (23002) number 42. These include face bones such as `cheek_left` and `tongue1` (a position, no vertices) and meshes such as `FaceM1` (2,386 vertices, 5 texture, 4 vector parameters).
+- [F] The hero's APP1 `SavegameAppearanceMorphName` (16328) is `''`; its type is 2 and its gender 2.
+- [I] 16328 is empty in the game's saves generally; only this one save was read.
+
+##### What the play showed
+
+- Seen in play: the original game (GOG, an Eluvian instance with only the Eluvian plugin) loaded a save written by Paragon over a copy of Lyna/Slot_10, its 16950 replaced by a head made in Paragon's character creation. The head was written by core's `morph::Write` (DAOLib #237) over `hm_pcc_b01.mor`, named `Head_Morph`, and has **no bone nodes** (ComposeHead makes none).
+- Seen in play, matching base: an elf woman's made head over an elf woman's save (Slot_10's hero is elf, female). The game drew the written head seated correctly on the body, with the shape the sliders gave it (a wide jaw, the nose).
+- Seen in play, mismatched base: a human man's made head over the same elf woman's save. The game drew the written head floating above the body. Paragon's writer keeps the base's appearance type and gender, so the base's skeleton decides where the head sits.
+- [I] The float comes from the human head's vertices sitting at a human man's height on an elf woman's skeleton, not from the missing bone nodes; the matching case, also without bone nodes, sits right.
+
+##### Evidence
+
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\game_written_elf.jpg: the original game, the written elf head seated.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\game_written_human_on_elf_base.jpg: the original game, the written human head floating over the elf woman's body.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\elf_before_chargen.png: the elf head on Paragon's appearance page, before the save.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\before_chargen.png: the human head on Paragon's appearance page.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\after_load_json.png: the human head in Paragon after loading its own JSON save.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\after_load_original.png: the human head in Paragon after loading the written original-format save.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\docs\Characters\Lyna\Saves\Slot_11\GH3476EamonsestateinDenerimLoghainmet.das: the written original-format save with the human head ("madehead original"); its 16950 bytes equal the JSON save's (54,416 bytes).
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\docs\Characters\Lyna\Saves\Slot_12\GH3476EamonsestateinDenerimLoghainmet.das: the written original-format save with the elf head ("elfhead original"), the one the game drew seated.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\hero_saved.mor: the human head's morph file, extracted from the JSON save.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\saves\madehead.json and elfhead.json: Paragon's own saves of the two heroes.
+- C:\project\DAOParagonEngine-cutscenes\scratch\headsave\docs\Characters\Lyna\Saves\Slot_10\GH3476EamonsestateinDenerimLoghainmet.das: the scratch copy of the game's own save that both were written over, read for the Head_Morph above.
+
 - **Equipment** (16218, 16219): an item's Position is (an INVENTORY_SLOT_* id, the weapon set 0 or 1, z ignored). Backpack and plot items use x and y as their place, with slot 0xFF.
 - **Item lists** (0x007626C0, the same loader for every container): only when the list field is present, it clears and destroys the container's items first; each item is rebuilt from its ObjectID and TemplateResRef (0x00758340), and an entry with an empty ResRef is skipped.
 - **Effects** (16623, GME1 with its DTA1 arrays): added by the common read, before stats, not cleared first, and not applied by the load; defaults in the file (priority 999 for duration type 6).
