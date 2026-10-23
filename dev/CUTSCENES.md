@@ -23,10 +23,24 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and `script.ldf`, for
 ### Entering cutscene mode (`GameModeCutscene` slot 7, `0x00692980`)
 
 - Takes the pending cutscene (+0x50 → +0x4C), saves the camera (the mode's +0x70..+0xA0 into its own +0x0..+0x1C) and starts the player (`0x007CDC90`, `0x006C4AF0`, `0x006C2890(0, 1)`, `0x007CD0D0`). Read.
-- Calls the application's `0x005D5540(1)`: it stops timers (`0x00A35DE0`, `0x00A35A10`) and tells the graphics (slot 0x6C) and an object (slot 0x60) a cutscene began; the world timer at +0xD4 is saved on leaving. Inferred: the game's clock is held during a cutscene. Read in outline.
+- Calls the application's `0x005D5540(1)`: it stops timers (`0x00A35DE0`, `0x00A35A10`) and tells the graphics (slot 0x6C) and an object (slot 0x60) a cutscene began; the world timer at +0xD4 is saved on leaving. Corrected 2026-10-23 by lib-agent-2: what it does and what holds in a cut is read (read 2026-10-23 by lib-agent-2 with a subagent), below.
 - Calls `0x006A0D40` on each party member (`0x006300B0`, party at `0x005D57C0()`). Not read what it does; inferred: stops their movement or actions.
 - Opens the cutscene GUI (`*(app+0x158)` slot 0x88) and sets the input mode "GameModeCutscene". Read.
 - Whether the area's creatures that are not actors are hidden is not read; the file's `CutsceneShowAreaDynamics` (5009) is a likely switch (inferred).
+- **What 0x005D5540 does and what a cut holds** (read 2026-10-23 by lib-agent-2 with a subagent):
+  - **0x005D5540(flag) is the part of SetPaused that stops the clocks** [C]. Its callers are SetPaused (0x005D67D7), the cut's enter (1) and its leave (0).
+    - It returns at once if `app+0x100` already equals the flag (0x005D5548).
+    - Otherwise it pauses or resumes the world timer at `app+0xD4` (0x00A35DE0 / 0x00A35A10 / 0x00A35E20 are that one timer's methods; holding sets its +0x58 and freezes its time).
+    - It sets the AnimationManager's +0x94 (slot 5, 0x00810300), calls a graphics object's slot 0x60/0x64 [I for what it is], and sets the renderer's +0xCA (slot 27). It writes `app+0x100` last.
+    - It does not touch the paused bool (`app+0xD8`) or the audio ducking, which SetPaused does itself.
+  - **The enter then unfreezes the animation manager and the renderer** [C]: slot 5(0) at 0x00692B29, the graphics object's slot 0x64 at 0x00692B51 and renderer slot 27(0) at 0x00692B5B. So in a cut only the world timer holds, with `app+0x100` = 1 (FRAME_EFFECTS.md:75).
+  - **What holds and what runs during a cut** [C unless marked]:
+    - The world timer and the day clock hold.
+    - The AIMaster pass (0x0064B010) does not run: cutscene mode's slot 18 is the false stub 0x005C5E80, and the pass also tests `app+0x100` (0x0064B01C). So creatures' Update holds, and with it their commands, perception, effect ageing and regeneration [I that nothing else calls Update].
+    - Delayed events are not delivered: only `AIMaster::Update` 0x0064AF00 → 0x0064AE30 (0x0064AF3C) delivers them. A delay queued during a cut is timed from the frozen world time.
+    - An event signalled with the immediate flag is delivered at once (`DeliverNow` 0x0064AD80).
+  - **The cut's own clock is the frame time** [C]: `g_eclipseGame+0xB4` ITimer slot 2, read in the app frame (0x005D7590). It is passed through the controller (0x00641F90) and the mode's slot 8 (0x00692C60) to the player's update (0x007E3D30, at 0x00692C7E). It is neither the world timer nor the renderer clock, so a cut plays on through SetPaused. Actors' clips are advanced by the cut's actions alone.
+  - **Script events from a cut** [C]: none while it plays (none of the 27 action types raises one). At the edges: event 86 at binding (0x007F25A7) and 0x402 (1026) at release (0x007F27A4), both through `DeliverNow`, so at once [I for who receives 1026].
 
 ### The file (`0x007E1910`, the player's load)
 
@@ -36,6 +50,9 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and `script.ldf`, for
 
 - When cutscene mode is left, slot 8 restores the camera, takes the player's end script (`0x00691CF0`, the file's `CutsceneEndScript`), deletes the player, and, if the script is not empty, runs it at once: `ExecuteScript(script, OBJECT_INVALID, 0, -1)`. Read. So the end script runs with no OBJECT_SELF of the cutscene's choosing (OBJECT_INVALID passed; what the VM falls back to is not read) and no event; the generic one, `gen00cs_cutscene_end`, calls `CS_CutsceneEnd()`, which reads module variables. There is no `EVENT_TYPE_CUTSCENE_END` in `script.ldf`.
 - Then `0x005D5540(0)` restarts the timers, the cutscene GUI is closed (slot 0x8C), the input mode restored, and `GameMode` slot 8 runs. Read. The mode the game returns to is the controller's (not read); in play it was exploring (2026-10-01).
+- **The leave** (read 2026-10-23 by lib-agent-2 with a subagent):
+  - **The leave does not restore the entry's state** [C]: 0x005D5540(0) is unconditional (0x006925F5). The end script runs before it (0x006925E9), with the world still held.
+  - If the game was already SetPaused when the cut began, the enter's 0x005D5540(1) stopped at its guard. The leave's 0x005D5540(0) then resumes the world timer and clears `app+0x100`, but leaves `app+0xD8` set, so `IsPaused()` still answers true while the world runs [C for the code, I for the effect]. Whether the pause key reaches mode 5 was not read.
 
 ### Skipping (`GameModeCutscene::HandleMessage_SkipCutsceneMessage`, `0x00691D60`)
 
@@ -275,6 +292,7 @@ A line with no cut gets this camera; a line with one gets the cut's own (above).
 ### A line's cut against a full cutscene
 
 - **A line cut** is the same player and the same actions (`MakeLineCutscene` `0x007F0960`, with `LoadCutscene`'s builder `0x007E26E0` or the inline `0x007E2A70`), played in dialogue mode: it holds its last frame, its voices come from its `ASLN`s, 5018 matters only to it, its skip offers the replies, and its end script is never run. `dev/PLOTS.md`'s "A line's cut" has it.
+  - **A line's cut plays inside dialogue mode (4), not mode 5** [C]: the same player is updated from dialogue's slot 8 (0x0068DDD0, at 0x0068DF79) with the same frame dt. It never calls 0x005D5540, and the dialogue's enter calls `SetPaused(0,0)` (0x0068FEFF). So `app+0x100` stays 0 and the world runs (TURN_BASED.md:584–600). (read 2026-10-23 by lib-agent-2 with a subagent)
 - **A full cutscene** (`LoadCutscene`, mode 5):
   - **Skipping jumps to the next skip marker first** (`0x00691D60` → `0x007CF2E0`, the markers' starts at player +0x190): the actions are reset, the voices stopped. Only with no marker left does it end (above, "Skipping").
   - At its natural end (frame ≥ the last), the mode's exit runs the `EndScript` (5001) with `ExecuteScript(script, OBJECT_INVALID, 0, −1)` (`0x006925E9`), and the player is deleted, its creatures put back.
