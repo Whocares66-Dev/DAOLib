@@ -153,6 +153,7 @@ FSB = "src/dao/core/Fsb.cpp"
 SAVEGAME = "src/dao/core/Savegame.cpp"
 SAVEGAME_H = "src/dao/core/Savegame.h"
 SAVEGAME_WRITE = "src/dao/core/SavegameWrite.cpp"
+CTAB = "src/dao/core/Ctab.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -1962,6 +1963,30 @@ MUTANTS: list[Mutant] = [
         FEV,
         "r.roomLF = in.I32();",
         "r.roomLF = in.I32() + 1;",
+    ),
+    Mutant(
+        "ctab-register-index: a constant's first register is its +6, not its count at +8",
+        CTAB,
+        "const auto index = ReadAt<std::uint16_t>(table, at + 6);",
+        "const auto index = ReadAt<std::uint16_t>(table, at + 8);",
+    ),
+    Mutant(
+        "ctab-comment-length: a comment's length is in dwords",
+        CTAB,
+        "const std::size_t length = (*token >> 16) * sizeof(std::uint32_t);",
+        "const std::size_t length = (*token >> 16);",
+    ),
+    Mutant(
+        "ctab-at-last-register: a constant's registers end before index + count",
+        CTAB,
+        "reg - constant.index < constant.count;",
+        "reg - constant.index <= constant.count;",
+    ),
+    Mutant(
+        "ctab-register-set: a register set past the sampler is no table's",
+        CTAB,
+        "*set > static_cast<std::uint16_t>(RegisterSet::Sampler)",
+        "*set > static_cast<std::uint16_t>(RegisterSet::Sampler) + 1",
     ),
     Mutant(
         "wind-strength: a wind's strength is WndStrength, not the radius falloff",

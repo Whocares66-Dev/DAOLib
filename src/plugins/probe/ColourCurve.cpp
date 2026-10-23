@@ -1,6 +1,7 @@
 #include "ColourCurve.h"
 
-#include "dao/Hook.h"
+#include "dao/Frame.h"
+#include "dao/Render.h"
 
 #include <Windows.h>
 #include <d3d9.h>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,25 +25,10 @@ namespace
 
 using Clock = std::chrono::steady_clock;
 
-using CreateFn = IDirect3D9 *(__stdcall *)(UINT);
-using CreateDeviceFn = HRESULT(__stdcall *)(IDirect3D9 *, UINT, D3DDEVTYPE, HWND, DWORD, D3DPRESENT_PARAMETERS *,
-                                            IDirect3DDevice9 **);
-using SetTextureFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, DWORD, IDirect3DBaseTexture9 *);
-dao::Detour<CreateFn> g_create;
-dao::Detour<CreateDeviceFn> g_createDevice;
-dao::Detour<SetTextureFn> g_setTexture;
-
-constexpr std::size_t kCreateDeviceSlot = 16; // IDirect3D9::CreateDevice
-constexpr std::size_t kSetTextureSlot = 65;   // IDirect3DDevice9::SetTexture
-constexpr DWORD kSampler = 1;                 // hslmatrix.mat.xml's s1
-constexpr UINT kTallest = 4;                  // a curve is a row, or a few
+constexpr DWORD kSampler = 1; // hslmatrix.mat.xml's s1
+constexpr UINT kTallest = 4;  // a curve is a row, or a few
 constexpr auto kLookEvery = std::chrono::seconds(2);
 constexpr std::size_t kTexelsALine = 64;
-
-template <class Fn> Fn Method(void *object, std::size_t slot)
-{
-    return reinterpret_cast<Fn>((*static_cast<void ***>(object))[slot]);
-}
 
 // A curve seen: the texture, what its texels last were, when it was last looked at.
 struct Seen
@@ -216,48 +203,38 @@ void Look(IDirect3DDevice9 *device, IDirect3DBaseTexture9 *base)
     }
 }
 
-HRESULT __stdcall SetTexture(IDirect3DDevice9 *device, DWORD sampler, IDirect3DBaseTexture9 *texture)
+// The textures a draw's pixel shader samples at s1: the curve among them.
+void OnDraw(const dao::render::Draw &draw)
 {
-    if (sampler == kSampler && texture != nullptr)
+    for (const dao::render::Sampled &sampled : draw.pixel.textures)
     {
-        Look(device, texture);
+        if (sampled.sampler == kSampler && sampled.texture != nullptr)
+        {
+            Look(draw.device, sampled.texture);
+        }
     }
-    return g_setTexture.Original()(device, sampler, texture);
 }
 
-HRESULT __stdcall CreateDevice(IDirect3D9 *direct3d, UINT adapter, D3DDEVTYPE type, HWND window, DWORD behaviour,
-                               D3DPRESENT_PARAMETERS *parameters, IDirect3DDevice9 **device)
-{
-    const HRESULT result = g_createDevice.Original()(direct3d, adapter, type, window, behaviour, parameters, device);
-    if (SUCCEEDED(result) && device != nullptr && *device != nullptr && !g_setTexture.IsAttached())
-    {
-        const bool placed = g_setTexture.AttachTo(Method<SetTextureFn>(*device, kSetTextureSlot), &SetTexture);
-        spdlog::info("colour curve watch: {}", placed ? "SetTexture detoured" : "no detour on SetTexture");
-    }
-    return result;
-}
+std::optional<dao::render::Watcher> g_watch;
+Clock::time_point g_armed;
 
-IDirect3D9 *__stdcall Create(UINT version)
+// Arms the watch for one frame every kLookEvery, from the game's frame.
+void Rearm()
 {
-    IDirect3D9 *direct3d = g_create.Original()(version);
-    if (direct3d != nullptr && !g_createDevice.IsAttached() &&
-        !g_createDevice.AttachTo(Method<CreateDeviceFn>(direct3d, kCreateDeviceSlot), &CreateDevice))
+    const Clock::time_point now = Clock::now();
+    if (g_watch && !g_watch->Armed() && now - g_armed >= kLookEvery)
     {
-        spdlog::warn("colour curve watch: no detour on CreateDevice");
+        g_watch->Arm(1);
+        g_armed = now;
     }
-    return direct3d;
 }
 
 } // namespace
 
 void AttachColourCurveWatch()
 {
-    const HMODULE d3d9 = LoadLibraryW(L"d3d9.dll");
-    if (d3d9 == nullptr ||
-        !g_create.AttachTo(reinterpret_cast<CreateFn>(GetProcAddress(d3d9, "Direct3DCreate9")), &Create))
-    {
-        spdlog::warn("colour curve watch: no detour on Direct3DCreate9");
-    }
+    g_watch = dao::render::Watch(&OnDraw);
+    dao::OnFrame(&Rearm);
 }
 
 } // namespace probe

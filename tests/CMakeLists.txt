@@ -21,6 +21,7 @@ add_executable(
     test_facefx.cpp
     test_stage.cpp
     test_wind.cpp
+    test_ctab.cpp
     test_dazip.cpp
     test_dds_write.cpp
     test_effect.cpp

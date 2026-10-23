@@ -157,6 +157,7 @@ add_library(
     src/dao/core/FaceFx.cpp
     src/dao/core/Stage.cpp
     src/dao/core/Wind.cpp
+    src/dao/core/Ctab.cpp
     src/dao/core/DaZip.cpp
     src/dao/core/Dds.cpp
     src/dao/core/DdsWrite.cpp
@@ -277,6 +278,7 @@ add_library(
     src/dao/Framebuffer.cpp
     src/dao/Party.cpp
     src/dao/Portraits.cpp
+    src/dao/Render.cpp
     src/dao/Resources.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
@@ -412,6 +414,7 @@ if(DAO_BUILD_PLUGINS)
             src/plugins/probe/Probe.cpp
             src/plugins/probe/Recorder.cpp
             src/plugins/probe/SceneCheck.cpp
+            src/plugins/probe/DrawCheck.cpp
             src/plugins/probe/ScriptChecks.cpp
             "${DAO_PROBE_TARGETS}"
     )

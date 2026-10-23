@@ -24,9 +24,11 @@
 // - A named resource's read, around a plugin's patch of it (Reads.h).
 // - Every step of a loading screen, timed (Loading.h).
 // - The colour curve the frame's last pass is given, as the device has it (ColourCurve.h).
+// - A frame's draws every ten seconds, through dao::render (DrawCheck.h).
 #include "Census.h"
 #include "ColourCurve.h"
 #include "Conjure.h"
+#include "DrawCheck.h"
 #include "Events.h"
 #include "Hold.h"
 #include "Hud.h"
@@ -483,6 +485,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     probe::AttachReadWatch();
     probe::AttachLoadingWatch();
     probe::AttachSceneCheck();
+    probe::AttachDrawCheck();
 
     // The census, on everything but what is hooked above.
     const dao::AddressId hookedAbove[] = {
