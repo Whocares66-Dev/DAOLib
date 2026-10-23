@@ -666,13 +666,16 @@ namespace
 {
 
 // A worksheet's files merged: each the game's copy of a .gda the worksheet takes, read in the order
-// the game lists them.
+// the game lists them. A name the game has no copy of is none of its files: another campaign's
+// table (DAOLib #249), another language's. The copies are sorted the game's first, so the front
+// says which.
 m2da::Merged MergedSheet(const Index &index, const m2da::Worksheet &sheet)
 {
     std::vector<NamedCopy> files;
     for (const auto &[name, copies] : index.Resources())
     {
-        if (name.ends_with(".gda") && !copies.empty() && m2da::Takes(sheet, std::wstring(name.begin(), name.end() - 4)))
+        if (name.ends_with(".gda") && !copies.empty() && copies.front().unused == Unused::No &&
+            m2da::Takes(sheet, std::wstring(name.begin(), name.end() - 4)))
         {
             files.push_back({name, copies.front()});
         }

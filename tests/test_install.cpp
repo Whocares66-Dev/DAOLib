@@ -793,3 +793,38 @@ TEST_CASE("a table is parsed once and kept, and a worksheet merged from its file
     CHECK(index->Worksheet(7) == merged);
     CHECK(index->Worksheet(8) == nullptr);
 }
+
+// A table only another campaign has is not the loaded campaign's: Darkspawn Chronicles'
+// portraits_drk.gda had come into the Single Player campaign's portraits (DAOLib #249).
+TEST_CASE("a worksheet takes no file the game does not have, such as another campaign's", "[install]")
+{
+    files::TempFolder root;
+    const std::vector<std::uint32_t> baseHashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label"),
+                                                dao::core::GdaColumnHash("Worksheet")};
+    root.Write(L"game/packages/core/override/m2da_base.gda",
+               files::Gda({"ID", "Label", "Worksheet"}, {{7, std::string("Portraits"), std::string("portraits")}},
+                          baseHashes));
+    const std::vector<std::uint32_t> hashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label")};
+    root.Write(L"game/packages/core/override/portraits.gda",
+               files::Gda({"ID", "Label"}, {{1, std::string("default")}}, hashes));
+    root.Write(L"game/modules/single player/data/portraits_sp.gda",
+               files::Gda({"ID", "Label"}, {{2, std::string("ours")}}, hashes));
+    root.Write(L"game/modules/other/data/portraits_drk.gda",
+               files::Gda({"ID", "Label"}, {{3, std::string("player")}}, hashes));
+
+    const auto index = install::Index::Build(root.path / L"game", {});
+    REQUIRE(index->Find("portraits_drk.gda") != nullptr);
+    CHECK(index->Find("portraits_drk.gda")->front().unused == install::Unused::Campaign);
+    const auto *merged = index->Worksheet(7);
+    REQUIRE(merged != nullptr);
+    CHECK(merged->rows.size() == 2);
+    CHECK(dao::core::m2da::Taken(*merged, 2) != nullptr);
+    CHECK(dao::core::m2da::Taken(*merged, 3) == nullptr);
+
+    // The other campaign loaded: its table is the game's, and the Single Player campaign's is not.
+    const auto other = install::Index::Build(root.path / L"game", {}, {.campaign = "OTHER"});
+    const auto *theirs = other->Worksheet(7);
+    REQUIRE(theirs != nullptr);
+    CHECK(dao::core::m2da::Taken(*theirs, 3) != nullptr);
+    CHECK(dao::core::m2da::Taken(*theirs, 2) == nullptr);
+}
