@@ -124,6 +124,15 @@ bool Pause(ObjectId creature, bool paused);
 // still raises its events when its time comes.
 bool SetRate(ObjectId creature, float rate);
 
+// Sets where each of a creature's animations is in its cycle, the same place for all of them.
+// @param phase from 0, an animation's start, to 1, its end
+// @return false if the creature is not loaded or has no animation tree
+//
+// For frames to compare: set the same phase on every creature while the game is paused, and the
+// pose stays there, since the game moves animations by its own clock, which stands still while
+// paused. Unpaused, they play on from there. Call on the game thread.
+bool SetPhase(ObjectId creature, float phase);
+
 // Returns the speed of one creature's animation, as Pause and SetRate leave it.
 // @return nullopt if the creature is not loaded
 std::optional<float> Rate(ObjectId creature);

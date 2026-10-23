@@ -92,9 +92,12 @@
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -341,6 +344,20 @@ std::uintptr_t ModelOf(CCCreature *creature)
     return reinterpret_cast<std::uintptr_t>(reinterpret_cast<Fn>(VtableOf(self)[kModelSlot])(self, 0));
 }
 
+// The graphics object under a model: its +0x18, then +4, whose slot 19 answers it.
+void *GraphicsOf(std::uintptr_t model)
+{
+    const auto graphics = TryRead<std::uintptr_t>(model + kModelGraphics);
+    const auto owner = graphics && *graphics != 0 ? TryRead<std::uintptr_t>(*graphics + kGraphicsOwner) : std::nullopt;
+    if (!owner || *owner == 0)
+    {
+        return nullptr;
+    }
+    using GetFn = void *(__fastcall *)(void *self, int edx);
+    void *from = reinterpret_cast<void *>(*owner);
+    return reinterpret_cast<GetFn>(VtableOf(from)[kGraphicsSlot])(from, 0);
+}
+
 } // namespace
 
 bool Pause(ObjectId creature, bool paused)
@@ -366,20 +383,60 @@ bool SetRate(ObjectId creature, float rate)
     }
     // As the model's pause does: the graphics object's speed by its setter,
     // and the model's own copy.
-    const auto graphics = TryRead<std::uintptr_t>(model + kModelGraphics);
-    const auto owner = graphics && *graphics != 0 ? TryRead<std::uintptr_t>(*graphics + kGraphicsOwner) : std::nullopt;
-    if (owner && *owner != 0)
+    if (void *graphics = GraphicsOf(model))
     {
-        using GetFn = void *(__fastcall *)(void *self, int edx);
         using SetFn = void(__fastcall *)(void *self, int edx, double rate);
-        void *from = reinterpret_cast<void *>(*owner);
-        if (void *target = reinterpret_cast<GetFn>(VtableOf(from)[kGraphicsSlot])(from, 0))
-        {
-            reinterpret_cast<SetFn>(VtableOf(target)[kSetRateSlot])(target, 0, rate);
-        }
+        reinterpret_cast<SetFn>(VtableOf(graphics)[kSetRateSlot])(graphics, 0, rate);
     }
     *reinterpret_cast<float *>(model + kModelRate) = rate;
     return true;
+}
+
+// Read 2026-10-15 for DAOLib #131 and checked 2026-10-23 (dao/Addresses.h,
+// kModelAnimationTree_Vftable): the graphics object keeps its animations in a
+// vector at +0x17C, and a ModelAnimationTree's nodes are a vector at its +0x10,
+// 0x34 bytes each, a node's place in its cycle the 16-bit word at +0x2E (0x10000
+// the whole cycle) and its last place at +0x30. Both are set, so the next step
+// blends from where the node is now set and not from where it was.
+bool SetPhase(ObjectId creature, float phase)
+{
+    constexpr std::size_t kAnimationsBegin = 0x180;
+    constexpr std::size_t kAnimationsEnd = 0x184;
+    constexpr std::size_t kNodesBegin = 0x14;
+    constexpr std::size_t kNodesEnd = 0x18;
+    constexpr std::size_t kNodeSize = 0x34;
+    constexpr std::size_t kNodePlace = 0x2E;
+    constexpr std::size_t kNodeLastPlace = 0x30;
+    constexpr float kCycle = 65536.0F;
+    CCCreature *object = CreatureOf(creature);
+    const std::uintptr_t model = object != nullptr ? ModelOf(object) : 0;
+    const auto graphics = reinterpret_cast<std::uintptr_t>(model != 0 ? GraphicsOf(model) : nullptr);
+    if (graphics == 0)
+    {
+        return false;
+    }
+    const auto place = static_cast<std::uint16_t>(std::min(std::clamp(phase, 0.0F, 1.0F) * kCycle, 65535.0F));
+    const std::uintptr_t treeTable = Module::Address(addr::kModelAnimationTree_Vftable);
+    const auto begin = TryRead<std::uintptr_t>(graphics + kAnimationsBegin).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(graphics + kAnimationsEnd).value_or(0);
+    bool any = false;
+    for (std::uintptr_t slot = begin; begin != 0 && slot < end; slot += sizeof(std::uintptr_t))
+    {
+        const auto tree = TryRead<std::uintptr_t>(slot).value_or(0);
+        if (tree == 0 || TryRead<std::uintptr_t>(tree).value_or(0) != treeTable)
+        {
+            continue;
+        }
+        const auto first = TryRead<std::uintptr_t>(tree + kNodesBegin).value_or(0);
+        const auto last = TryRead<std::uintptr_t>(tree + kNodesEnd).value_or(0);
+        for (std::uintptr_t node = first; first != 0 && node + kNodeSize <= last; node += kNodeSize)
+        {
+            *reinterpret_cast<std::uint16_t *>(node + kNodePlace) = place;
+            *reinterpret_cast<std::uint16_t *>(node + kNodeLastPlace) = place;
+            any = true;
+        }
+    }
+    return any;
 }
 
 std::optional<float> Rate(ObjectId creature)
