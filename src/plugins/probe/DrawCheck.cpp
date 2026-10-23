@@ -26,6 +26,7 @@ using Micro = std::chrono::microseconds;
 constexpr auto kEvery = std::chrono::seconds(10);
 constexpr std::uint32_t kAlphaBlendEnable = 27; // D3DRS_ALPHABLENDENABLE
 constexpr std::uint32_t kZEnable = 7;           // D3DRS_ZENABLE
+constexpr std::size_t kSamples = 8;             // draws logged with what they are, a frame
 
 // What one armed frame showed; the render thread's while the frame is drawn.
 struct Tally
@@ -36,7 +37,11 @@ struct Tally
     std::size_t textures = 0;
     std::size_t named = 0; // textures with a .dds name
     std::size_t blended = 0;
-    bool logged = false; // one draw laid out
+    std::size_t owned = 0;   // draws that say their material
+    std::size_t noded = 0;   // and their node
+    std::size_t trees = 0;   // SpeedTree's (material SPT_...), which have no node
+    std::size_t sampled = 0; // of those, logged
+    bool logged = false;     // one draw laid out
     std::uint64_t frame = 0;
     bool presented = false; // the armed frame is all in
 };
@@ -105,6 +110,18 @@ void OnDraw(const dao::render::Draw &draw)
             g_tally.named += sampled.name.empty() ? 0 : 1;
         }
     }
+    if (!draw.material.empty())
+    {
+        ++g_tally.owned;
+        g_tally.noded += draw.node != 0 ? 1 : 0;
+        g_tally.trees += draw.material.starts_with(L"SPT_") ? 1 : 0;
+        if (g_tally.sampled < kSamples && draw.index % 200 == 0)
+        {
+            ++g_tally.sampled;
+            spdlog::info("draw check: draw {} is {} {}, material {}", draw.index, dao::Utf8(draw.model),
+                         dao::Utf8(draw.mesh), dao::Utf8(draw.material));
+        }
+    }
     for (const dao::render::State &state : draw.states)
     {
         g_tally.blended += state.state == kAlphaBlendEnable && state.value != 0 ? 1 : 0;
@@ -129,9 +146,10 @@ void Log(const Tally &t, Micro span, double average)
     const std::size_t draws = t.calls[0] + t.calls[1] + t.calls[2] + t.calls[3];
     spdlog::info("draw check: frame {}: {} draws ({} DrawPrimitive, {} DrawIndexedPrimitive, {} DrawPrimitiveUP, {} "
                  "DrawIndexedPrimitiveUP), {} with both tables read, {} constants, {} textures ({} by name), {} "
-                 "blended; the game's frame across it {} us, its frames' average {:.0f} us",
+                 "blended, {} saying their material ({} trees; {} their node); the game's frame across it {} us, its "
+                 "frames' average {:.0f} us",
                  t.frame, draws, t.calls[0], t.calls[1], t.calls[2], t.calls[3], t.tabled, t.constants, t.textures,
-                 t.named, t.blended, span.count(), average);
+                 t.named, t.blended, t.owned, t.trees, t.noded, span.count(), average);
 }
 
 // From the game's frame: logs an armed frame once it is in, keeps the frames' average time while none

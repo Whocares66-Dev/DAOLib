@@ -1,7 +1,11 @@
 #include "dao/Render.h"
 
+#include "dao/Addresses.h"
+#include "dao/GraphicsNodes.h"
 #include "dao/Hook.h"
+#include "dao/Module.h"
 #include "dao/Resources.h"
+#include "dao/SafeRead.h"
 
 #include <Windows.h>
 #include <d3d9.h>
@@ -242,6 +246,235 @@ void ReadShader(IDirect3DDevice9 *device, bool vertex, Shader &shader)
     }
 }
 
+// --- What a draw is (DAOLib #247) ---------------------------------------
+//
+// The frame thread does not draw: it records each batch's draw into the threaded driver's buffer,
+// inside a material instance's render that a node's render called with the node in the render
+// context's +0xE4. The render thread plays the buffer back one command at a time, in order, and a
+// played command's driver call (DrawBatch, 7 or 10) makes that record's draws. So a record's node and
+// names are noted at the record, queued with the record's number, and taken at the played call
+// with the same number. The frame thread also makes some draws at once, inside a material render;
+// those take the render's node directly. Numbers are counted always, so that a watch armed between
+// a record and its play does not pair one record's names with another's draw; the names are only
+// read and queued while a watch is armed. Read in dao/Addresses.h at kMaterialObjectInstance_Render.
+
+constexpr std::size_t kContextNode = 0xE4;   // in a render context: the node last rendered
+constexpr std::size_t kNodeMaterial = 0x150; // in a mesh's or cloth's node: its material instance
+constexpr std::size_t kMaterialObject = 0x4; // in a material instance: its material object
+constexpr std::size_t kMaterialName = 0x1C;  // in a material object: its name, a std::wstring
+
+// What a record or a draw made at once is.
+struct Owner
+{
+    std::uintptr_t node = 0;
+    std::uintptr_t object = 0;
+    std::wstring model;
+    std::wstring mesh;
+    std::wstring material;
+};
+
+// The node and material instance of the material render running on this thread, if any.
+struct Rendering
+{
+    std::uintptr_t node = 0;
+    std::uintptr_t material = 0;
+};
+
+thread_local Rendering t_rendering;
+thread_local bool t_playing = false;         // inside PlayCommand, on the render thread
+thread_local int t_driverDepth = 0;          // the driver's batch draws nest; only the outermost is a record's
+thread_local const Owner *t_owner = nullptr; // the draws being made are this one's
+
+std::atomic<std::uint64_t> g_recorded{0}; // records made, numbered from 1
+std::uint64_t g_played = 0;               // played commands, the render thread's alone
+std::mutex g_ownerLock;
+std::deque<std::pair<std::uint64_t, Owner>> g_owners; // queued while a watch is armed
+thread_local Owner t_playedOwner;                     // the played command's, kept while it draws
+thread_local Owner t_directOwner;                     // a draw made at once
+
+Owner OwnerOf(const Rendering &rendering)
+{
+    Owner owner;
+    // The context's node is the last a node's render wrote there: what draws without writing its own
+    // (a tree's fronds, seen drawn with a carriage's node) would take another's. So the node is kept
+    // only when its own material instance (a mesh's and cloth's +0x150, 0x00559DFD, 0x0056479E) is
+    // the one rendering.
+    const auto own = rendering.node != 0 ? TryRead<std::uintptr_t>(rendering.node + kNodeMaterial) : std::nullopt;
+    owner.node = own && *own == rendering.material ? rendering.node : 0;
+    if (owner.node != 0)
+    {
+        owner.object = TryRead<std::uintptr_t>(owner.node + detail::kNodeOwner).value_or(0);
+        owner.model = std::wstring(detail::ObjectModelName(owner.object));
+        owner.mesh = std::wstring(detail::NodeName(owner.node));
+    }
+    const auto object =
+        rendering.material != 0 ? TryRead<std::uintptr_t>(rendering.material + kMaterialObject) : std::nullopt;
+    if (object && *object != 0)
+    {
+        owner.material = std::wstring(detail::StringAt(*object + kMaterialName));
+    }
+    return owner;
+}
+
+using MaterialRenderFn = std::uintptr_t(__fastcall *)(void *self, int edx, std::uintptr_t a, std::uintptr_t context,
+                                                      std::uintptr_t b);
+using MaterialPassesFn = std::uintptr_t(__fastcall *)(void *self, int edx, std::uintptr_t a, std::uintptr_t context,
+                                                      std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
+using RecordFn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                              std::uintptr_t b, std::uintptr_t c, std::uintptr_t d);
+using Batch7Fn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                              std::uintptr_t b, std::uintptr_t c, std::uintptr_t d, std::uintptr_t e,
+                                              std::uintptr_t f);
+using Batch10Fn = std::uintptr_t(__fastcall *)(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a,
+                                               std::uintptr_t b, std::uintptr_t c, std::uintptr_t d, std::uintptr_t e,
+                                               std::uintptr_t f, std::uintptr_t g, std::uintptr_t h, std::uintptr_t i);
+using PlayFn = std::uintptr_t(__fastcall *)(void *self, int edx, std::uintptr_t buffer);
+
+Detour<MaterialRenderFn> g_materialRender;
+Detour<MaterialPassesFn> g_materialPasses;
+Detour<RecordFn> g_record;
+Detour<RecordFn> g_batch;
+Detour<Batch7Fn> g_batch7;
+Detour<Batch10Fn> g_batch10;
+Detour<PlayFn> g_play;
+
+// Notes a material render's node and instance on its thread while it runs.
+class Noting
+{
+  public:
+    Noting(std::uintptr_t material, std::uintptr_t context) : was_(t_rendering)
+    {
+        t_rendering = {TryRead<std::uintptr_t>(context + kContextNode).value_or(0), material};
+    }
+    ~Noting()
+    {
+        t_rendering = was_;
+    }
+    Noting(const Noting &) = delete;
+    Noting &operator=(const Noting &) = delete;
+
+  private:
+    Rendering was_;
+};
+
+std::uintptr_t __fastcall MaterialRender(void *self, int edx, std::uintptr_t a, std::uintptr_t context,
+                                         std::uintptr_t b)
+{
+    const Noting noting(reinterpret_cast<std::uintptr_t>(self), context);
+    return g_materialRender.Original()(self, edx, a, context, b);
+}
+
+std::uintptr_t __fastcall MaterialPasses(void *self, int edx, std::uintptr_t a, std::uintptr_t context,
+                                         std::uintptr_t b, std::uintptr_t c, std::uintptr_t d)
+{
+    const Noting noting(reinterpret_cast<std::uintptr_t>(self), context);
+    return g_materialPasses.Original()(self, edx, a, context, b, c, d);
+}
+
+std::uintptr_t __fastcall RecordBatch(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
+                                      std::uintptr_t c, std::uintptr_t d)
+{
+    const std::uint64_t number = ++g_recorded;
+    if (g_armed.load() > 0)
+    {
+        Owner owner = OwnerOf(t_rendering);
+        const std::lock_guard lock(g_ownerLock);
+        g_owners.emplace_back(number, std::move(owner));
+    }
+    return g_record.Original()(driver, edx, batch, a, b, c, d);
+}
+
+std::uintptr_t __fastcall Play(void *self, int edx, std::uintptr_t buffer)
+{
+    t_playing = true;
+    const std::uintptr_t answer = g_play.Original()(self, edx, buffer);
+    t_playing = false;
+    return answer;
+}
+
+// The owner of the draws a driver call is about to make: the next played command's record's, or the
+// material render's for a draw made at once. Null for none known.
+const Owner *OwnerForCall()
+{
+    if (t_playing)
+    {
+        const std::uint64_t number = ++g_played;
+        const std::lock_guard lock(g_ownerLock);
+        while (!g_owners.empty() && g_owners.front().first < number)
+        {
+            g_owners.pop_front(); // a record whose play was before any draw was handed
+        }
+        if (g_armed.load() == 0)
+        {
+            g_owners.clear();
+            return nullptr;
+        }
+        if (g_owners.empty() || g_owners.front().first != number)
+        {
+            return nullptr; // recorded before the watch was armed
+        }
+        t_playedOwner = std::move(g_owners.front().second);
+        g_owners.pop_front();
+        return &t_playedOwner;
+    }
+    if (t_rendering.material == 0 || g_armed.load() == 0)
+    {
+        return nullptr;
+    }
+    t_directOwner = OwnerOf(t_rendering);
+    return &t_directOwner;
+}
+
+// A driver batch draw: the outermost one says whose its draws are while it runs.
+template <class Call> std::uintptr_t DriverDraw(Call call)
+{
+    const bool outermost = t_driverDepth++ == 0;
+    if (outermost)
+    {
+        t_owner = OwnerForCall();
+    }
+    const std::uintptr_t answer = call();
+    if (--t_driverDepth == 0)
+    {
+        t_owner = nullptr;
+    }
+    return answer;
+}
+
+std::uintptr_t __fastcall Batch(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
+                                std::uintptr_t c, std::uintptr_t d)
+{
+    return DriverDraw([&] { return g_batch.Original()(driver, edx, batch, a, b, c, d); });
+}
+
+std::uintptr_t __fastcall Batch7(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
+                                 std::uintptr_t c, std::uintptr_t d, std::uintptr_t e, std::uintptr_t f)
+{
+    return DriverDraw([&] { return g_batch7.Original()(driver, edx, batch, a, b, c, d, e, f); });
+}
+
+std::uintptr_t __fastcall Batch10(void *driver, int edx, std::uintptr_t batch, std::uintptr_t a, std::uintptr_t b,
+                                  std::uintptr_t c, std::uintptr_t d, std::uintptr_t e, std::uintptr_t f,
+                                  std::uintptr_t g, std::uintptr_t h, std::uintptr_t i)
+{
+    return DriverDraw([&] { return g_batch10.Original()(driver, edx, batch, a, b, c, d, e, f, g, h, i); });
+}
+
+void AttachOwners()
+{
+    const bool placed = g_materialRender.Attach(addr::kMaterialObjectInstance_Render, &MaterialRender) &&
+                        g_materialPasses.Attach(addr::kMaterialObjectInstance_RenderPasses, &MaterialPasses) &&
+                        g_record.Attach(addr::kThreadedGraphicsDriver_DrawBatch, &RecordBatch) &&
+                        g_play.Attach(addr::kRenderer_PlayCommand, &Play) &&
+                        g_batch.Attach(addr::kD3DGraphicsDriver_DrawBatch, &Batch) &&
+                        g_batch7.Attach(addr::kD3DGraphicsDriver_DrawBatch7, &Batch7) &&
+                        g_batch10.Attach(addr::kD3DGraphicsDriver_DrawBatch10, &Batch10);
+    if (!placed)
+    {
+        spdlog::warn("render: not every detour for what a draw is placed; draws are handed without it");
+    }
+}
+
 // Reads the device's state for a draw and hands it to the active watches. The draw's own arguments
 // are filled by the caller.
 void Hand(Draw &draw)
@@ -255,6 +488,14 @@ void Hand(Draw &draw)
     t_scratch.names.clear();
     draw.frame = frame;
     draw.index = g_index;
+    if (const Owner *owner = t_owner; owner != nullptr)
+    {
+        draw.node = owner->node;
+        draw.object = owner->object;
+        draw.model = owner->model;
+        draw.mesh = owner->mesh;
+        draw.material = owner->material;
+    }
     ReadShader(draw.device, true, draw.vertex);
     ReadShader(draw.device, false, draw.pixel);
     for (const std::uint32_t state : handing.states)
@@ -446,6 +687,10 @@ void Attach()
             !g_create.AttachTo(reinterpret_cast<CreateFn>(GetProcAddress(d3d9, "Direct3DCreate9")), &Create))
         {
             spdlog::warn("render: no detour on Direct3DCreate9");
+        }
+        if (Module::IsKnownExecutable())
+        {
+            AttachOwners();
         }
     });
 }

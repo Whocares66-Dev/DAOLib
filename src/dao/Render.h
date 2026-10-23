@@ -85,6 +85,15 @@ struct Draw
     Shader vertex;
     Shader pixel;
     std::vector<State> states; // the render states the watch was armed with, in its order
+
+    // What the engine is drawing. The material for every draw a material instance makes; the node,
+    // its object and their names for a mesh's or cloth's, none (0, empty) for the rest (an emitter, a
+    // tree, the interface, a full-screen pass). The names are for the callback only.
+    std::uintptr_t node = 0;    // the graphics node, as dao::scene::Node::address
+    std::uintptr_t object = 0;  // the graphics object it is part of, as dao::scene::Object::address
+    std::wstring_view model;    // that object's model, with no extension
+    std::wstring_view mesh;     // the node's name in the model
+    std::wstring_view material; // its material object's name: its .mao, with no extension
 };
 
 // What a watch hands a draw to, on the render thread.

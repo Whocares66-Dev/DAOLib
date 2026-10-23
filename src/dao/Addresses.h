@@ -1444,6 +1444,43 @@ DAO_ADDRESS(kD3DGraphicsDriver_Present, 23543)
 // wait; the loading screen's own task (15 presents in a load from the menu)
 // did come through the driver's. The name is ours.
 DAO_ADDRESS(kD3DSwapChain_Present, 24028)
+// A batch's draw, read 2026-10-23 for DAOLib #247: D3DDriver::D3DBatchIndex's
+// slot 15 (vftable 0x00B2E6DC), __thiscall with five words, `ret 0x14`. It sets
+// the batch's streams and indices on the driver's context (0x00870B50,
+// 0x0086EFA0), then draws them indexed (0x0086F470: the context's state
+// flushed, 0x0086F030, and the device's DrawIndexedPrimitive, slot 82). The
+// one place a batch's indexed draw reaches the device from. The name is ours.
+DAO_ADDRESS(kD3DBatchIndex_Draw, 23770)
+// The draw's record, read 2026-10-23 for DAOLib #247: the frame thread does
+// not draw. Renderer::ThreadedGraphicsDriver (vftable 0x00B5834C) stands in
+// for the driver there; its slot 28, __thiscall with five words like the
+// driver's (D3DGraphicsDriver slot 28, 0x008688E0), writes opcode 17 and the
+// five words into its command buffer ([this+8]: the write pointer at
+// +0x600000, the commands counted at +0x600010 by InterlockedIncrement). The
+// render thread plays the buffer back (0x00A1EDA0, a switch of 41 opcodes on
+// the read pointer at +0x600004, from 0x00A1F9C0), opcode 17 calling the
+// driver's slot 28, which draws the batch (kD3DBatchIndex_Draw). The name is
+// ours.
+DAO_ADDRESS(kThreadedGraphicsDriver_DrawBatch, 32259)
+// What a draw is (dao/Render.h, Draw::node and its names; DAOLib #247, read
+// 2026-10-23 in the probe's record and batch watches). A node's render (its
+// +0x180 interface's slot 5 or 17) writes the node into the render context's
+// +0xE4 (the mesh's at 0x00559D9C and 0x00559DED) and hands the context, as
+// its second word, to its material instance's render: slot 2, __thiscall with
+// three words, `ret 0xC`, or the one slot 17 calls directly, five words,
+// `ret 0x14`. The batches those record are played on the render thread one
+// command at a time by 0x00A1EDA0 (__thiscall, the buffer, `ret 4`), whose
+// opcodes 17, 18 and 35 call D3DGraphicsDriver's slots 28 (five words,
+// `ret 0x14`), 29 (seven, `ret 0x1C`) and 30 (ten, `ret 0x28`). The frame
+// thread also calls those slots itself, at once, inside a material render
+// (from MaterialPass slot 3, 0x00506672). Seen in Redcliffe castle: 1,141,796
+// played commands, every one its record's in order. The names are ours.
+DAO_ADDRESS(kMaterialObjectInstance_Render, 5842)
+DAO_ADDRESS(kMaterialObjectInstance_RenderPasses, 5824)
+DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch, 23557)
+DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch7, 23558)
+DAO_ADDRESS(kD3DGraphicsDriver_DrawBatch10, 23559)
+DAO_ADDRESS(kRenderer_PlayCommand, 32141)
 // The loading screen's task, read 2026-10-11 for DAOLib #71, after a profile
 // (#68) found a loading screen's time in waits, a frame at a time. While a
 // loading screen is up it is drawn by Eclipse::UpdateAndRenderLoadingGUITask
