@@ -757,6 +757,11 @@ Read by the forked subagent; checked unless marked.
 
 - `player_core.nss`:863, ON_SELECT (89): `SSPlaySituationalSound(SOUND_SITUATION_SELECTED)`, nothing else.
 - ON_ORDER_RECEIVED (90): **no live handler** (`player_core.nss`:873 is commented out). Event 94 (`PLAYER_COMMAND_ADDED`, :879, raised in 0x0073CD10) plays the order sound.
+  - **Event 0x5E (94) is `EVENT_TYPE_PLAYER_COMMAND_ADDED`** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+    - **The raiser:** `CCObject::QueueCommand` (0x0073CD10, 0x0073CD57..0x0073CDD1) raises it when the command's `+0x10` (player-issued) is set. `QueuePlayerCommand` 0x0073D060 sets it, so every order raises it.
+    - **Contents and timing:** it goes to the ordered creature, with int 0 = the command type (`cmd+2`), before the add behaviour is applied.
+    - **The handler:** only `player_core.nss`:879–883 handles it. It plays `SSPlaySituationalSound(ORDER_RECEIVED, …)`, not when stealthy, with the commands table's `SoundsetProbability`, which is 0 for DRIVE, MOVE_TO_LOCATION and MOVE_TO_OBJECT in explore.
+    - **Not the same as `ON_ORDER_RECEIVED` (90),** which no script handles.
 
 ### Corrections
 

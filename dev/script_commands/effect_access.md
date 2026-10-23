@@ -36,7 +36,7 @@ Shared facts used below (checked unless marked):
 - **Handler:** 0x0065D290 (own).
 - **Does (checked):** returns 1 when the effect copy is non-null, its type (+0x24) ≠ 0, and its invalid word (+0x48) ≠ 1; else 0.
 - **State:** none.
-- **Edge cases:** an effect marked invalid by `SetIsCurrentEffectValid(FALSE)` or by removal (0x007A0A90 sets +0x48 = 1) reads 0; an empty `effect` variable (type 0) reads 0. Values of +0x48 other than 0/1 count as valid (checked; none seen written).
+- **Edge cases:** an effect marked invalid by `SetIsCurrentEffectValid(FALSE)` or by removal (0x007A0A90 sets +0x48 = 1) reads 0; an empty `effect` variable is a null handle, not a type-0 object (corrected 2026-10-23 by lib-agent-2; only `Effect()` makes a type-0 object: "The null effect handle" below, and GetEffectType gives −1 for it). Values of +0x48 other than 0/1 count as valid (checked; none seen written).
 
 ### RemoveEffectsByParameters (593)
 - **Handler:** 0x00673940 (own). Builds a filter (a vector of {matcher, value, negate}, 0x00670B20/0x00670A80) and calls the holder's 0x007A0C90.
@@ -231,10 +231,23 @@ Common facts used below [C]:
 - **State:** the modifiers. A depletable whose total drops has its current clamped down; raising it back does not refill (`dev/PROPERTIES.md`) [C].
 - **Edge cases:** as 854; nothing records that the effect was applied, so an unmatched remove subtracts anyway [C].
 
+### GetItemVisualEffectsIDs (781)
+
+- **Handler 0x00673BE0, `int[] GetItemVisualEffectsIDs(object oTarget)`** (script.ldf:6746, `COMMAND_GETITEMVFXS`; read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+  - **What it returns:** for an item (0x005D5870), the ids (+0x20) of the type-4 effects in the item's record at `+0x158` (its list at +4), as an array. A non-item or an item with no record gives an empty array. It changes nothing.
+  - **The ids** are what `RemoveItemVisualEffect` (782) takes.
+  - **Equipped items:** an equipped item's effect from 780 goes to the `+0x70` holder instead, so it may not be listed [I].
+  - No shipped script calls it.
+
 ### SetPhysicsController (839)
 - **Handler:** 0x0066BE50, shared with 296, 328, 329, 333, 335, 642, 643, 645, 676, 698, 758, 764, 805, 813 (backend list: `CCCreature::ForScript_SetItemDroppable`); byte switch on (cmd − 0x2FC), case at 0x0066C01D. [C]
 - **Does:** pops object, bEnable (default 0 if only one argument). Needs a creature (slot 0x10). Sets a creature local int (key {0, 0xB} into the variable table at creature+0x2E0, `ForScript_SetLocalInt`) to !bEnable [C], inferred `PHYSICS_DISABLED` (var_creature; `den_functions_h` reads it) [I]. Enable: if creature+0x770 (the physics controller) is null, builds it (0x006B1ED0(−1, −1)); then 0x0069EBB0(1). Disable: 0x0069EDC0 destroys the controller (slots 0x48/0x44/0, then +0x770 = 0), then 0x0069EBB0(0). [C]
 - **State:** +0x770 controller, +0x778 enabled flag (0x0069EBB0 writes it, then 0x0069EB60 sets the controller's slot 0x2C to 0 when enabled and creature byte +0x1AC is set, else 1) [C]; the local int [C].
+- **The create flag** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+  - **The call:** 0x0066C046 is in command 839's handler (`SetPhysicsController`, 0x0066BE50). It calls `ForScript_SetLocalInt` (0x00703DB0) with key {0, 0xB}, value `!bEnable` and create 0.
+  - **The finder:** 0x00703BF0 adds a record only on a miss with create set (0x00703C08).
+  - **So 839 never creates `PHYSICS_DISABLED`:** it writes it only where the creature already has that variable, and builds or removes the controller either way.
+  - **Engine writers that create it** (create 1): 0x007BC4DB and 0x007F457A, and the template loader 0x00704240.
 - **Edge cases:** non-creatures (placeable, item) and unknown ids → nothing [C]. The build (0x006B1ED0) is skipped unless the owner's slot 0x6C allows, the local int is 0, the creature is alive (or dead with 0x006A3A80 == 2), 0x0079FD80(0) is false and the creature has a model (slot 0xA0) [C in outline]; so enabling a dead or modelless creature only sets the flag [I].
 
 ## Not read
@@ -251,7 +264,7 @@ Common facts used below [C]:
 - The effects holder's slot 0x6C (which object kinds take native effects); the instant-VFX state at +0x154/+0x150.
 - `CreatureProperties::GetCurrent` / slot 7 with an unknown property id.
 - The physics controller's class and its slot 0x2C; the {0, 0xB} variable key's form.
-- GetItemVisualEffectsIDs (781), outside this list.
+- GetItemVisualEffectsIDs (781) is read (above).
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
@@ -340,3 +353,6 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) w
 - **Item visual effect on an unequipped item: pending list +0x158 applied on equip** stays [I] (effect_access.md:187, :246 open). A scan of the exe for `[reg+0x158]` was too noisy to find the equip reader; the equip path in ITEMS.md is where to look next.
 - **The ghost.** The type-7 apply 0x007A12E0 has no ghost test (read whole), and the sub-action 51 handler 0x007AAC10 (the ExecuteEffect step that plays the die clip and raises DEATH, COMBAT.md:376-379) makes no ability or trait query in the calls of its first 400 instructions (effect-array getters, matcher builders, 0x007A0C90 removal, event construction). So the exe queues the death command for a ghost too, and sub-action 51 would raise DEATH as for any creature, on top of the script's DYING/DEATH sends for a ghost (`effect_death_h`, COMBAT.md:369). [I: the tail of sub-action 51 was not read]
 - **The null effect handle.** RSADD of structure 0x13: `0x00A30700` -> 0x00A2D920 (`CVirtualMachine::StackPushEngineStructure`), which asks the game's structure handler at `vm+0x1968` (vtable slot 0x20, (type, arg)) for the object and stores the result on the structure stack; with no handler it returns 0 (0x00A2D923-0x00A2D973) [C]. What the handler returns for an effect (a type-0 effect or null) is not read [I]; effect_access.md:35 (an empty effect variable is type 0) and :284 (a null gives -1) disagree about which an empty variable is.
+- **The factory returns null for effect and itemproperty** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+  - **The value:** the VM pushes a null pointer. RSADD 0x00A30700 → 0x00A2D920(type − 0x10, 0) → the structure factory slot 8 (0x00674AF0 on the script VM), which returns 0 for effect (3) and itemproperty (4) with argument 0 (0x00674C5B).
+  - **Where a typed object comes from:** only `Effect()` makes a type-0 object.

@@ -87,6 +87,12 @@ Items, waypoints, stores and sounds get none.
 1. The object is constructed, with the flag 0.
 2. The template is loaded. For a creature, its `Equip_ItemList` is made and equipped and its `ItemList` filled (0x006BCC30), **before** SPAWN.
 3. The object is added to the area, which queues SPAWN.
+   - **SPAWN at the first entry** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+     - **The raiser:** SPAWN is raised by the creature's add-to-area (vtable +0xF8, 0x006B6BC0), not by `SetLocation`. It queues SPAWN when `+0xC54 == 0` and `0x00698490(3)` holds, sets `+0xC54 = 1` either way (0x006B6C87), and only then calls `SetLocation` (0x006B6C9C).
+     - **The gate:** `0x00698490(type)` is true unless the type is in the object's disabled set `+0x28C` (no shipped script adds 3).
+     - **Who writes `+0xC54`:** 0 in the constructor; the save reader (0x006BE980) sets it from two bytes the saved-heroes apply sets (0x006D1850).
+     - **An area's placed creatures** keep 0 until their first add, so they get SPAWN [I that their loaders skip the save reader].
+     - **Other raisers:** a placeable (0x00750B10) and a trigger (0x0079B6B0) raise their own.
 4. The orientation is set; the active flag is set from `bSpawnActive`; the override script is set; `bNoPermDeath` is stored.
 
 Two consequences:

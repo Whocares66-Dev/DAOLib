@@ -24,6 +24,9 @@ Shared facts: handlers are `__thiscall (commandId, paramCount)`, `ret 8`. A fail
   - It then requests **mode 8, PREGAME** (force 0) with a `GameModePregameData` (vtable 0x00B00278) whose +4 is **62 with credits, -1 without**: the GUI scene to show (62 is the credits; inferred from its use). (checked)
   - With credits, it gives GUI scene 62 (+0xF8) a name: "dao", or a name the module supplies through 0x0051B370 when that is not empty. (checked; what the name selects is inferred)
 - **Bypass:** if `g_eclipseGame` (0x00C1D0A0) holds a pending module name (+0xF0, its length at +0x104), it is loaded instead (0x005D95C0) and cleared. When that load answers 1, no PREGAME is requested. (checked; what sets the name was not read)
+- **Byte and pending module** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
+  - **The byte `+0x94`** of the music object (`[soundmgr+0x120]`, written at 0x0066A61D) means "end-of-game credits". The credits' start (0x005BBA20) then picks `music/_EndOfGameCredits`, and their end (0x005BBB00) restores `music/_menu` and clears it.
+  - **The pending module** is `g_eclipseGame+0xF0`. It is written only by the option `autologin` (0x00404B10, from `-autologin` on the command line or `.\command.ini` at start-up) and used and cleared once by 0x005DD310. So in a normal game it is empty and ShowStartMenu takes the PREGAME path.
 - **Telemetry, with credits only:** it sends `ScriptBackend::ForScript_SendOnlineTelemetry` (0x0047D4D0) twice: "GAME"/"GMNY" with the hero's money (`+0xBF0` inventory → money location → +0x90, as `%d`) and "GAME"/"CASQ" with a float from GUI scene 0's +0xC4 (`%.2f`). Both are sent only if `g_eclipseGame` exists. (checked; the codes are the four-character constants pushed)
 - **Edge cases:** the module is unloaded by the switch to PREGAME, not by the handler (read 2026-10-22, above). Only `epipt_main.nss`:99/105 calls it (credits, then the main menu). Returns 0. (checked)
 

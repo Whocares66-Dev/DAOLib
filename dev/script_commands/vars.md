@@ -138,7 +138,7 @@ Shared facts (checked unless marked), which hold for `GetLocalInt`/`SetLocalInt`
 - How names compare: the interned pool (0x004E8750) and the +0x28 branch of 0x00702970, so whether "foo" matches "FOO".
 - The writer's type filter (0x00704BA0 / 0x00705A70 in full) and the meaning of `CCObject`'s load flag (bit 0 of 0x0069AAD0's third argument, which picks the changed mark for template values). Hence why `dev/AI.md` saw a set int lost across a load.
 - The generic table copy 0x00705760 (all twelve types; called from 0x007589D0), and the dword at table+0xD0.
-- Who else calls `ForScript_SetLocalInt` (0x0066C046, 0x006BC631, 0x006D66E0, 0x007BC4DB, 0x007F0810, …) and with what create flag. One may create records outside a template (the PHYSICS_DISABLED key in `effect_access.md`).
+- Who else calls `ForScript_SetLocalInt` (0x0066C046, 0x006BC631, 0x006D66E0, 0x007BC4DB, 0x007F0810, …) and with what create flag. The PHYSICS_DISABLED key in `effect_access.md` does not create (read 2026-10-23 by lib-agent-2: 839 calls with create 0; the creators are 0x007BC4DB, 0x007F457A and the template loader 0x00704240).
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
