@@ -143,7 +143,8 @@ struct ActorRecord
     std::int32_t first = -1; // -1 in every file
     std::int32_t second = 0; // 0 in every file
     std::int32_t room = -1;  // the room's EnvRoomID
-    std::int32_t sound = 0;  // 0 to 15; inferred to be the floor's sound material
+    std::int32_t sound =
+        0; // 0 to 15: the surface's sound material, a row of sound_geometry_mat_types (dev/COLLISION.md)
 };
 
 // A shape's record after the stream, as its three words; what they mean is not read.
