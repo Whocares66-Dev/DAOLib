@@ -19,8 +19,16 @@ method's address is not in the vtable; it is where the handler is built:
     mov   dword ptr [eax + 8], ecx
     mov   dword ptr [eax + 0xc], edx
 
+GUI::ScaleformManager's cursor handlers are a smaller form, eight bytes:
+the method at +4 and no adjustment, which the invoke slot (0x00511350)
+calls on the owner (DAOLib #188):
+
+    push  8 ; call operator new
+    mov   dword ptr [eax], 0x00AF5480       ; the handler's vftable
+    mov   dword ptr [eax + 4], 0x00512980   ; the method
+
 This finds each handler vftable (tools/daoexe.py's RTTI walk), the code
-that stores it, and the values stored at +8 and +0xC there, tracking
+that stores it, and the values stored at +8 and +0xC there (or +4), tracking
 constants loaded into registers since the function began. It writes
 dev/message_handlers.csv, one row per handler:
 
@@ -67,10 +75,17 @@ def built_with(img, vftable, ref):
     regs = {}
     base = None
     found = {}
-    for ins in img.disasm(start, count=None, limit=ref - start + 0x40):
+    # Read on past a ret: the int3 padding function_start looks for is not always
+    # there, so start may be a function before the one holding ref (0x0063A240 for
+    # CCParty's SelectCharacterMessage, built at 0x0063A2C8; DAOLib #188). Nothing
+    # tracked before a ret holds after it.
+    for ins in img.disasm(start, count=1 << 20, limit=ref - start + 0x40):
         ops = [o.strip() for o in ins.op_str.split(",")]
         if ins.address > ref + 0x30:
             break
+        if ins.mnemonic == "ret":
+            regs, base, found = {}, None, {}
+            continue
         if (
             ins.mnemonic == "mov"
             and len(ops) == 2
@@ -80,7 +95,7 @@ def built_with(img, vftable, ref):
             base = ops[0][len("dword ptr [") : -1]
             continue
         if base and ins.mnemonic == "mov" and len(ops) == 2:
-            for disp, key in (("8", "fn"), ("0xc", "adjust")):
+            for disp, key in (("4", "plain"), ("8", "fn"), ("0xc", "adjust")):
                 if ops[0] == f"dword ptr [{base} + {disp}]":
                     found[key] = constant(ops[1], regs)
         # Register tracking: a constant loaded, zeroed, or anything else clobbering it.
@@ -104,9 +119,11 @@ def built_with(img, vftable, ref):
             regs.pop(ops[0], None)
         if "fn" in found and "adjust" in found:
             break
-    if found.get("fn") is None:
-        return None
-    return found["fn"], found.get("adjust") or 0
+    if found.get("fn") is not None:
+        return found["fn"], found.get("adjust") or 0
+    if found.get("plain") is not None:
+        return found["plain"], 0
+    return None
 
 
 def trivial(img, fn):

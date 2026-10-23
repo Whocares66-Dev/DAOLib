@@ -595,7 +595,7 @@ Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194
   - add = 0: 0x006368F0(id, 1, 1), replacing the selection, so it becomes controlled; on success **ON_SELECT (89)** runs at once through `RunEventScript` (0x00639F58), the id in both object slots.
   - add = 1, a toggle: already selected with others → deselected (0x00639DB0); else appended (0x006355A0(id, 1), to +0x184 and +0x194 if missing). No event; control unchanged.
 - **Its callers:**
-  - 0x00639F90 is `CCParty::HandleMessage_SelectCharacterMessage` (`dev/message_handlers.csv` has 0 for it, left for an issue of its own; built at 0x0063A2C1, vftable 0x00B058E0): `Select(msg+4, 0)`.
+  - 0x00639F90 is `CCParty::HandleMessage_SelectCharacterMessage` (built at 0x0063A2C1 in 0x0063A2B0, called from 0x0063B837; vftable 0x00B058E0; in `dev/message_handlers.csv` since DAOLib #188): `Select(msg+4, 0)`. Sent as the binding text "SelectCharacterMessage 219" through Eluvian (2026-10-23, lib-agent-3) it reached neither this handler nor the selection, where "SelectPartyMemberIndexMessage 1 0" did both; how the text's argument is parsed was not read.
   - `SelectPartyMemberIndexMessage` 0x00639FB0: msg+4 an index into the party's list +0xC8 (inferred: the bar's order); `Select(id, msg byte +6)`, the byte the add flag (inferred: Shift).
   - `GameModeExplore::SelectPartyMemberUnderCursorMessage` 0x0070C0B0: `Select(explore+0xCC, msg byte +4)`.
   - The primary click 0x00712830: case "select" (0x00712D1E) `Select(target, 0)`; case "deselect" (0x00712D57) 0x00639DB0.
@@ -769,7 +769,7 @@ Read by the forked subagent; checked unless marked.
 - `src/dao/Orders.cpp`: no script listens for event 90. Corrected the same day.
 - `dev/COMBAT.md`'s "Range, line of sight": the id at party+0x1E8 is the leader, not the controlled creature. Corrected the same day.
 - `dev/script_commands/Party.md`, `IsControlled`: TRUE for every selected member, not only `GetMainControlled`. Corrected the same day.
-- Open: `dev/message_handlers.csv` has 0 for `CCParty::HandleMessage_SelectCharacterMessage`, which is 0x00639F90. The table feeds generated code, so it waits for an issue of its own.
+- Open: who sends `SelectCharacterMessage` in play. Its one builder is 0x00776250, whose address is stored at 0x007808EF in 0x007808A0 (a callback, not read further).
 
 ### For a port
 

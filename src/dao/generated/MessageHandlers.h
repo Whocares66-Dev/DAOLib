@@ -49,14 +49,14 @@ inline constexpr AddressId CCCreature_SetSoundSetMessage{14950}; // 0x006be480
 inline constexpr AddressId CCCreature_ShowAbilityHeaderMessage{14815}; // 0x006b0980
 inline constexpr AddressId CCCreature_SwitchWeaponSetMessage{14685}; // 0x006ab380
 inline constexpr AddressId CCCreature_SwitchWeaponSetNowMessage{14686}; // 0x006ab3c0
-inline constexpr AddressId CCCreature_UnequipItemMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId CCCreature_UnequipItemMessage{14930}; // 0x006bc050
 inline constexpr AddressId CCItem_AttachRuneToItemMessage{18051}; // 0x00759b00
 inline constexpr AddressId CCItem_DetachRuneFromItemMessage{18052}; // 0x00759c60
 inline constexpr AddressId CCItem_RepairItemMessage{17973}; // 0x00752cd0
 inline constexpr AddressId CCParty_ApplyPartyPickerChangesMessage{12448}; // 0x00636f50
 inline constexpr AddressId CCParty_HideAlertMessage{12241}; // 0x0062f220
 inline constexpr AddressId CCParty_HideUberAlertMessage{12242}; // 0x0062f240
-inline constexpr AddressId CCParty_SelectCharacterMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId CCParty_SelectCharacterMessage{12480}; // 0x00639f90
 inline constexpr AddressId CCParty_SelectNextCharacterMessage{12445}; // 0x00636e20
 inline constexpr AddressId CCParty_SelectPartyMemberIndexMessage{12481}; // 0x00639fb0
 inline constexpr AddressId CCParty_SelectPreviousCharacterMessage{12446}; // 0x00636e30
@@ -110,7 +110,7 @@ inline constexpr AddressId GUI_DragonAgeGUISystem_GUI_UpdateFloatyLayerStageSize
 inline constexpr AddressId GUI_DragonAgeGUISystem_HideContextMenuMessage{11186}; // 0x00606760
 inline constexpr AddressId GUI_DragonAgeGUISystem_HideCraftingGUIMessage{11399}; // 0x0060b3c0
 inline constexpr AddressId GUI_DragonAgeGUISystem_HideFullScreenGUIMessage{11397}; // 0x0060b2e0
-inline constexpr AddressId GUI_DragonAgeGUISystem_HideGUIScreenMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GUI_DragonAgeGUISystem_HideGUIScreenMessage{11515}; // 0x0060faf0
 inline constexpr AddressId GUI_DragonAgeGUISystem_PopGUIScreenMessage{11502}; // 0x0060f270
 inline constexpr AddressId GUI_DragonAgeGUISystem_PushGUIScreenMessage{11586}; // 0x00610d20
 inline constexpr AddressId GUI_DragonAgeGUISystem_SelectNextCharacterMessage{11504}; // 0x0060f3b0
@@ -167,7 +167,7 @@ inline constexpr AddressId GUI_GUIFadeToBlackLoading_FadeCompleteMessage{16829};
 inline constexpr AddressId GUI_GUIInventory_ClearNewlyAcquiredFlagMessage{17217}; // 0x00731b70
 inline constexpr AddressId GUI_GUIInventory_ContainerChangedMessage{17214}; // 0x007319a0
 inline constexpr AddressId GUI_GUIInventory_GUI_ForceInventoryRefreshMessage{17212}; // 0x00731920
-inline constexpr AddressId GUI_GUIInventory_PartyBackpackChangedMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GUI_GUIInventory_PartyBackpackChangedMessage{17212}; // 0x00731920
 inline constexpr AddressId GUI_GUIInventory_PartyPlotItemsChangedMessage{17213}; // 0x00731960
 inline constexpr AddressId GUI_GUIInventory_SelectedGUICharacterChangedMessage{17215}; // 0x007319e0
 inline constexpr AddressId GUI_GUIInventory_SetBackpackSortMessage{17218}; // 0x00731d60
@@ -194,12 +194,12 @@ inline constexpr AddressId GUI_GUIPaperdoll_CharGenAssignAttributeMessage{20190}
 inline constexpr AddressId GUI_GUIPaperdoll_EquipmentChangedMessage{20213}; // 0x007b8880
 inline constexpr AddressId GUI_GUIPaperdoll_LoadSeededCharactersMessage{20226}; // 0x007bb090
 inline constexpr AddressId GUI_GUIPaperdoll_RotatePaperdollCameraMessage{20063}; // 0x007b2430
-inline constexpr AddressId GUI_GUIPaperdoll_RotatePaperdollLeftMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GUI_GUIPaperdoll_RotatePaperdollLeftMessage{20061}; // 0x007b2310
 inline constexpr AddressId GUI_GUIPaperdoll_RotatePaperdollRightMessage{20062}; // 0x007b23a0
 inline constexpr AddressId GUI_GUIPaperdoll_SetCameraPresetMessage{20114}; // 0x007b49b0
 inline constexpr AddressId GUI_GUIPaperdoll_UpdatePaperDollFromSeededCharacterMessage{20227}; // 0x007bb3a0
 inline constexpr AddressId GUI_GUIPaperdoll_UpdatePortraitMessage{20242}; // 0x007bc6c0
-inline constexpr AddressId GUI_GUIPopupLayer_ScriptDialogResultMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GUI_GUIPopupLayer_ScriptDialogResultMessage{16132}; // 0x007098c0
 inline constexpr AddressId GUI_GUIPurchaseConfirm_CancelPurchaseMessage{16737}; // 0x00724aa0
 inline constexpr AddressId GUI_GUIPurchaseConfirm_ConfirmPurchaseMessage{16736}; // 0x00724a50
 inline constexpr AddressId GUI_GUIScreenshots_DeleteScreenshotsMessage{16626}; // 0x00720f50
@@ -211,22 +211,22 @@ inline constexpr AddressId GUI_GUIStore_SetItemListFilterMessage{16902}; // 0x00
 inline constexpr AddressId GUI_GUIStore_StoreChangedMessage{16901}; // 0x007299c0
 inline constexpr AddressId GUI_GUISystem_GUI_SetCursorMessage{6943}; // 0x00523940
 inline constexpr AddressId GUI_GUISystem_Messages_Message{6942}; // 0x00523920
-inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonDblClickMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonDownMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonUpMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonDblClickMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonDownMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonUpMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonDblClickMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonDownMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonUpMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorScrollDownMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_GUICursorScrollUpMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_PlayMovieMessage{0}; // 0x00000000, not confirmed
-inline constexpr AddressId GUI_ScaleformManager_StopMovieMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonDblClickMessage{6634}; // 0x00512980
+inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonDownMessage{6632}; // 0x00512960
+inline constexpr AddressId GUI_ScaleformManager_GUICursorLeftButtonUpMessage{6633}; // 0x00512970
+inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonDblClickMessage{6640}; // 0x005129e0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonDownMessage{6638}; // 0x005129c0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorMiddleButtonUpMessage{6639}; // 0x005129d0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonDblClickMessage{6637}; // 0x005129b0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonDownMessage{6635}; // 0x00512990
+inline constexpr AddressId GUI_ScaleformManager_GUICursorRightButtonUpMessage{6636}; // 0x005129a0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorScrollDownMessage{6628}; // 0x005126f0
+inline constexpr AddressId GUI_ScaleformManager_GUICursorScrollUpMessage{6627}; // 0x005125e0
+inline constexpr AddressId GUI_ScaleformManager_PlayMovieMessage{6677}; // 0x00514c70
+inline constexpr AddressId GUI_ScaleformManager_StopMovieMessage{6611}; // 0x00511a50
 inline constexpr AddressId GameModeCharGen_CharGenGoBackMessage{16452}; // 0x007192a0
 inline constexpr AddressId GameModeCharGen_ExitToStartMenuMessage{12575}; // 0x006400c0
-inline constexpr AddressId GameModeCharGen_FindAbilityChainsMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GameModeCharGen_FindAbilityChainsMessage{16460}; // 0x00719450
 inline constexpr AddressId GameModeController_GUI_GUIMessage{12576}; // 0x006400e0
 inline constexpr AddressId GameModeController_LoadGameMessage{12579}; // 0x00640140
 inline constexpr AddressId GameModeController_Messages_GameMessage{12574}; // 0x00640080
@@ -242,7 +242,7 @@ inline constexpr AddressId GameModeController_TakeScreenshotMessage{12627}; // 0
 inline constexpr AddressId GameModeController_UnpauseMessage{12578}; // 0x00640120
 inline constexpr AddressId GameModeController_UserTogglePauseMessage{12587}; // 0x006403c0
 inline constexpr AddressId GameModeCutscene_SkipCutsceneMessage{13957}; // 0x00691d60
-inline constexpr AddressId GameModeDead_DeathResurrectPartyMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GameModeDead_DeathResurrectPartyMessage{18458}; // 0x0076e400
 inline constexpr AddressId GameModeDialog_SelectResponseMessage{13882}; // 0x0068d050
 inline constexpr AddressId GameModeDialog_SkipDialogMessage{13896}; // 0x0068dc10
 inline constexpr AddressId GameModeExplore_ActivateAnalogTargetModeMessage{16236}; // 0x0070d680
@@ -268,7 +268,7 @@ inline constexpr AddressId GameModeExplore_PerformSecondaryActionOnTargetMessage
 inline constexpr AddressId GameModeExplore_PerformSecondaryActionOnTargetUnderCursorMessage{16318}; // 0x00713300
 inline constexpr AddressId GameModeExplore_PerformUseObjectMessage{16188}; // 0x0070bc60
 inline constexpr AddressId GameModeExplore_PreMoveCharacterToLocationMessage{16146}; // 0x0070aaf0
-inline constexpr AddressId GameModeExplore_SelectHostileUnderCursorMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId GameModeExplore_SelectHostileUnderCursorMessage{16314}; // 0x00712de0
 inline constexpr AddressId GameModeExplore_SelectNextCharacterMessage{16185}; // 0x0070b9e0
 inline constexpr AddressId GameModeExplore_SelectNextCreatureTargetMessage{16270}; // 0x0070ee10
 inline constexpr AddressId GameModeExplore_SelectNextHostileTargetMessage{16282}; // 0x0070f400
@@ -305,11 +305,11 @@ inline constexpr AddressId GameModePregame_RefreshCreditEntriesMessage{12828}; /
 inline constexpr AddressId GameModePregame_ShowCreditsMessage{12807}; // 0x0064d050
 inline constexpr AddressId Journal_AcceptChantersQuestMessage{15503}; // 0x006eb850
 inline constexpr AddressId Journal_ClearChanterBoardMessage{15730}; // 0x006f3bc0
-inline constexpr AddressId Journal_MarkAllCodexAsReadMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId Journal_MarkAllCodexAsReadMessage{15548}; // 0x006ed620
 inline constexpr AddressId Journal_MarkCodexAsReadMessage{15561}; // 0x006eea50
 inline constexpr AddressId Journal_SetActiveQuestMessage{15748}; // 0x006f4fb0
 inline constexpr AddressId OnlineFeatures_ReConnectMessage{3221}; // 0x00479610
-inline constexpr AddressId PRCGUIShared_BuyDownloadMessage{0}; // 0x00000000, not confirmed
+inline constexpr AddressId PRCGUIShared_BuyDownloadMessage{4184}; // 0x004b4480
 inline constexpr AddressId PRCGUIShared_DisplayInformationDialogMessage{4172}; // 0x004b3c90
 inline constexpr AddressId PRCGUIShared_InstallContentMessage{4133}; // 0x004b2a10
 inline constexpr AddressId PRCGUIShared_OpenTechnicalHelpMessage{4134}; // 0x004b2ad0
@@ -361,14 +361,14 @@ inline constexpr Handler kHandlers[] = {
     {"CCCreature", "ShowAbilityHeaderMessage", AddressId{14815}, 0x006b0980, 0, false, true},
     {"CCCreature", "SwitchWeaponSetMessage", AddressId{14685}, 0x006ab380, 0, false, true},
     {"CCCreature", "SwitchWeaponSetNowMessage", AddressId{14686}, 0x006ab3c0, 0, false, true},
-    {"CCCreature", "UnequipItemMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"CCCreature", "UnequipItemMessage", AddressId{14930}, 0x006bc050, 0, false, true},
     {"CCItem", "AttachRuneToItemMessage", AddressId{18051}, 0x00759b00, 0, false, true},
     {"CCItem", "DetachRuneFromItemMessage", AddressId{18052}, 0x00759c60, 0, false, true},
     {"CCItem", "RepairItemMessage", AddressId{17973}, 0x00752cd0, 0, false, true},
     {"CCParty", "ApplyPartyPickerChangesMessage", AddressId{12448}, 0x00636f50, 0, false, true},
     {"CCParty", "HideAlertMessage", AddressId{12241}, 0x0062f220, 0, false, true},
     {"CCParty", "HideUberAlertMessage", AddressId{12242}, 0x0062f240, 0, false, true},
-    {"CCParty", "SelectCharacterMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"CCParty", "SelectCharacterMessage", AddressId{12480}, 0x00639f90, 0, false, true},
     {"CCParty", "SelectNextCharacterMessage", AddressId{12445}, 0x00636e20, 0, false, true},
     {"CCParty", "SelectPartyMemberIndexMessage", AddressId{12481}, 0x00639fb0, 0, false, true},
     {"CCParty", "SelectPreviousCharacterMessage", AddressId{12446}, 0x00636e30, 0, false, true},
@@ -423,7 +423,7 @@ inline constexpr Handler kHandlers[] = {
     {"GUI::DragonAgeGUISystem", "HideContextMenuMessage", AddressId{11186}, 0x00606760, 0, false, true},
     {"GUI::DragonAgeGUISystem", "HideCraftingGUIMessage", AddressId{11399}, 0x0060b3c0, 0, false, true},
     {"GUI::DragonAgeGUISystem", "HideFullScreenGUIMessage", AddressId{11397}, 0x0060b2e0, 0, false, true},
-    {"GUI::DragonAgeGUISystem", "HideGUIScreenMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GUI::DragonAgeGUISystem", "HideGUIScreenMessage", AddressId{11515}, 0x0060faf0, 0, false, true},
     {"GUI::DragonAgeGUISystem", "PopGUIScreenMessage", AddressId{11502}, 0x0060f270, 0, false, true},
     {"GUI::DragonAgeGUISystem", "PushGUIScreenMessage", AddressId{11586}, 0x00610d20, 0, false, true},
     {"GUI::DragonAgeGUISystem", "SelectNextCharacterMessage", AddressId{11504}, 0x0060f3b0, 0, false, true},
@@ -482,7 +482,7 @@ inline constexpr Handler kHandlers[] = {
     {"GUI::GUIInventory", "ClearNewlyAcquiredFlagMessage", AddressId{17217}, 0x00731b70, 0, false, true},
     {"GUI::GUIInventory", "ContainerChangedMessage", AddressId{17214}, 0x007319a0, 0, false, true},
     {"GUI::GUIInventory", "GUI::ForceInventoryRefreshMessage", AddressId{17212}, 0x00731920, 0, false, true},
-    {"GUI::GUIInventory", "PartyBackpackChangedMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GUI::GUIInventory", "PartyBackpackChangedMessage", AddressId{17212}, 0x00731920, 0, false, true},
     {"GUI::GUIInventory", "PartyPlotItemsChangedMessage", AddressId{17213}, 0x00731960, 0, false, true},
     {"GUI::GUIInventory", "SelectedGUICharacterChangedMessage", AddressId{17215}, 0x007319e0, 0, false, true},
     {"GUI::GUIInventory", "SetBackpackSortMessage", AddressId{17218}, 0x00731d60, 0, false, true},
@@ -509,12 +509,12 @@ inline constexpr Handler kHandlers[] = {
     {"GUI::GUIPaperdoll", "EquipmentChangedMessage", AddressId{20213}, 0x007b8880, 0, false, true},
     {"GUI::GUIPaperdoll", "LoadSeededCharactersMessage", AddressId{20226}, 0x007bb090, 0, false, true},
     {"GUI::GUIPaperdoll", "RotatePaperdollCameraMessage", AddressId{20063}, 0x007b2430, 0, false, true},
-    {"GUI::GUIPaperdoll", "RotatePaperdollLeftMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GUI::GUIPaperdoll", "RotatePaperdollLeftMessage", AddressId{20061}, 0x007b2310, 0, false, true},
     {"GUI::GUIPaperdoll", "RotatePaperdollRightMessage", AddressId{20062}, 0x007b23a0, 0, false, true},
     {"GUI::GUIPaperdoll", "SetCameraPresetMessage", AddressId{20114}, 0x007b49b0, 0, false, true},
     {"GUI::GUIPaperdoll", "UpdatePaperDollFromSeededCharacterMessage", AddressId{20227}, 0x007bb3a0, 0, false, true},
     {"GUI::GUIPaperdoll", "UpdatePortraitMessage", AddressId{20242}, 0x007bc6c0, 0, false, true},
-    {"GUI::GUIPopupLayer", "ScriptDialogResultMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GUI::GUIPopupLayer", "ScriptDialogResultMessage", AddressId{16132}, 0x007098c0, 0, false, true},
     {"GUI::GUIPurchaseConfirm", "CancelPurchaseMessage", AddressId{16737}, 0x00724aa0, 0, false, true},
     {"GUI::GUIPurchaseConfirm", "ConfirmPurchaseMessage", AddressId{16736}, 0x00724a50, 0, false, true},
     {"GUI::GUIScreenshots", "DeleteScreenshotsMessage", AddressId{16626}, 0x00720f50, 0, false, true},
@@ -526,24 +526,24 @@ inline constexpr Handler kHandlers[] = {
     {"GUI::GUIStore", "StoreChangedMessage", AddressId{16901}, 0x007299c0, 0, false, true},
     {"GUI::GUISystem", "GUI::SetCursorMessage", AddressId{6943}, 0x00523940, 0, false, true},
     {"GUI::GUISystem", "Messages::Message", AddressId{6942}, 0x00523920, 0, false, true},
-    {"GUI::ScaleformManager", "GUICursorLeftButtonDblClickMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorLeftButtonDownMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorLeftButtonUpMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorMiddleButtonDblClickMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorMiddleButtonDownMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorMiddleButtonUpMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorRightButtonDblClickMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorRightButtonDownMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorRightButtonUpMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorScrollDownMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "GUICursorScrollUpMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "PlayMovieMessage", AddressId{0}, 0x00000000, 0, false, false},
-    {"GUI::ScaleformManager", "StopMovieMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GUI::ScaleformManager", "GUICursorLeftButtonDblClickMessage", AddressId{6634}, 0x00512980, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorLeftButtonDownMessage", AddressId{6632}, 0x00512960, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorLeftButtonUpMessage", AddressId{6633}, 0x00512970, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorMiddleButtonDblClickMessage", AddressId{6640}, 0x005129e0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorMiddleButtonDownMessage", AddressId{6638}, 0x005129c0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorMiddleButtonUpMessage", AddressId{6639}, 0x005129d0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorRightButtonDblClickMessage", AddressId{6637}, 0x005129b0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorRightButtonDownMessage", AddressId{6635}, 0x00512990, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorRightButtonUpMessage", AddressId{6636}, 0x005129a0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorScrollDownMessage", AddressId{6628}, 0x005126f0, 0, false, true},
+    {"GUI::ScaleformManager", "GUICursorScrollUpMessage", AddressId{6627}, 0x005125e0, 0, false, true},
+    {"GUI::ScaleformManager", "PlayMovieMessage", AddressId{6677}, 0x00514c70, 0, false, true},
+    {"GUI::ScaleformManager", "StopMovieMessage", AddressId{6611}, 0x00511a50, 0, false, true},
     {"GameMode", "NextPageMessage", AddressId{16660}, 0x00722ae0, 0, true, false},
     {"GameMode", "PrevPageMessage", AddressId{16660}, 0x00722ae0, 0, true, false},
     {"GameModeCharGen", "CharGenGoBackMessage", AddressId{16452}, 0x007192a0, 0, false, true},
     {"GameModeCharGen", "ExitToStartMenuMessage", AddressId{12575}, 0x006400c0, 0, false, true},
-    {"GameModeCharGen", "FindAbilityChainsMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GameModeCharGen", "FindAbilityChainsMessage", AddressId{16460}, 0x00719450, 0, false, true},
     {"GameModeController", "GUI::GUIMessage", AddressId{12576}, 0x006400e0, 0, false, true},
     {"GameModeController", "LoadGameMessage", AddressId{12579}, 0x00640140, 0, false, true},
     {"GameModeController", "Messages::GameMessage", AddressId{12574}, 0x00640080, 0, false, true},
@@ -559,7 +559,7 @@ inline constexpr Handler kHandlers[] = {
     {"GameModeController", "UnpauseMessage", AddressId{12578}, 0x00640120, 0, false, true},
     {"GameModeController", "UserTogglePauseMessage", AddressId{12587}, 0x006403c0, 0, false, true},
     {"GameModeCutscene", "SkipCutsceneMessage", AddressId{13957}, 0x00691d60, 0, false, true},
-    {"GameModeDead", "DeathResurrectPartyMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GameModeDead", "DeathResurrectPartyMessage", AddressId{18458}, 0x0076e400, 0, false, true},
     {"GameModeDialog", "SelectResponseMessage", AddressId{13882}, 0x0068d050, 0, false, true},
     {"GameModeDialog", "SkipDialogMessage", AddressId{13896}, 0x0068dc10, 0, false, true},
     {"GameModeExplore", "ActivateAnalogTargetModeMessage", AddressId{16236}, 0x0070d680, 0, false, true},
@@ -585,7 +585,7 @@ inline constexpr Handler kHandlers[] = {
     {"GameModeExplore", "PerformSecondaryActionOnTargetUnderCursorMessage", AddressId{16318}, 0x00713300, 0, false, true},
     {"GameModeExplore", "PerformUseObjectMessage", AddressId{16188}, 0x0070bc60, 0, false, true},
     {"GameModeExplore", "PreMoveCharacterToLocationMessage", AddressId{16146}, 0x0070aaf0, 0, false, true},
-    {"GameModeExplore", "SelectHostileUnderCursorMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"GameModeExplore", "SelectHostileUnderCursorMessage", AddressId{16314}, 0x00712de0, 0, false, true},
     {"GameModeExplore", "SelectNextCharacterMessage", AddressId{16185}, 0x0070b9e0, 0, false, true},
     {"GameModeExplore", "SelectNextCreatureTargetMessage", AddressId{16270}, 0x0070ee10, 0, false, true},
     {"GameModeExplore", "SelectNextHostileTargetMessage", AddressId{16282}, 0x0070f400, 0, false, true},
@@ -623,11 +623,11 @@ inline constexpr Handler kHandlers[] = {
     {"GameModePregame", "ShowCreditsMessage", AddressId{12807}, 0x0064d050, 0, false, true},
     {"Journal", "AcceptChantersQuestMessage", AddressId{15503}, 0x006eb850, 0, false, true},
     {"Journal", "ClearChanterBoardMessage", AddressId{15730}, 0x006f3bc0, 0, false, true},
-    {"Journal", "MarkAllCodexAsReadMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"Journal", "MarkAllCodexAsReadMessage", AddressId{15548}, 0x006ed620, 0, false, true},
     {"Journal", "MarkCodexAsReadMessage", AddressId{15561}, 0x006eea50, 0, false, true},
     {"Journal", "SetActiveQuestMessage", AddressId{15748}, 0x006f4fb0, 0, false, true},
     {"OnlineFeatures", "ReConnectMessage", AddressId{3221}, 0x00479610, 0, false, true},
-    {"PRCGUIShared", "BuyDownloadMessage", AddressId{0}, 0x00000000, 0, false, false},
+    {"PRCGUIShared", "BuyDownloadMessage", AddressId{4184}, 0x004b4480, 0, false, true},
     {"PRCGUIShared", "DisplayInformationDialogMessage", AddressId{4172}, 0x004b3c90, 0, false, true},
     {"PRCGUIShared", "InstallContentMessage", AddressId{4133}, 0x004b2a10, 0, false, true},
     {"PRCGUIShared", "OpenTechnicalHelpMessage", AddressId{4134}, 0x004b2ad0, 0, false, true},
