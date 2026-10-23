@@ -1711,6 +1711,30 @@ Read in the GOG exe and the decompiled AS (`%TEMP%\lib-agent-2-guicmd-x\allgfx\a
    - **Setting a slot (what the movie sends):** `SetQuickslot` (QuickBarIconSlot.as:155-163): `SendMessageArgs(<player token> + ".SetQuickslot", creatureId (GUI.SelectedChar.ID), slotIndex, abilityId, itemTag, refTemplate)`, i.e. the message name is `GUI.SelectedChar.SetQuickslot`; abilityId 0 clears. The engine's handler is `CCreature::HandleMessage(SetQuickslotMessage)` `0x006A74B0` (dev/message_handlers.csv:11; the message fields: +0x2C a string, +0x10 a string, +8, +0xC two ints) feeding `0x0071F230` then updating the lists. Drops use `AbilityID != 0 && != ITEM_ABILITY_INVALID (200000, ItemUtils.as:9)` as the test for a real ability (IsDropAcceptable lines 94-103).
    - **Per-slot keys:** `InputMappings.Mappings.ActivateQuickslot<N+1>.PrimaryMappedKey` (QuickBarIconSlot.as:53; already in dev/GUI.md).
 
+### The quickbar: the load, the rebuild, a slot's item and which slots are usable (read 2026-10-23 by paragon-agent's helper for DAOParagonEngine #196, checked by lib-agent-2; the item and usable parts read 2026-10-23 by lib-agent-2 with a subagent)
+
+GOG addresses. [C] read in the code, [I] inferred. With "gui4a" above.
+
+- **The load** (0x0062C3D0) [C]:
+  - Bars 0–4 are the lists 16308 and 16313–16316 (`SavegameQuickslots`, then 1 to 4; the ids from the table at 0x00B05594).
+  - A slot is keyed by its number field 16331, else by its list index. Of two equal keys the first is kept.
+  - 16317 (`SavegameCurentQbar`) is the bar shown, taken only if under 5 (0x0062C5B9). 16318 is the lock.
+- **The writer** (0x0062B1E0) always writes the slot number (16331) [C].
+- **What the movie is given** (0x0062E680, its one caller 0x00719AB0 after SetQuickslot) [C]: when the bar is marked changed, the movie's `QuickSlots` list is rebuilt from the current bar, entry n being slot n. 0x0071AB10 registers `QuickSlots` and `QuickbarLocked`.
+- **The message** `SetQuickslotMessage` (`CCCreature`'s handler 0x006A74B0) [C]: slot, ability, tag and template go to 0x0071F230; then the rebuild (0x00719AB0); then the usable step 0x0071D4A0. `SetQuickslotBar` is 0x00719AE0.
+- **Placing a slot** [C]: the first free slot 0x0062AD80 has one caller, 0x0071F230 (at 0x0071F354). `AddAbility` 0x0071EAC0 and the party data's set-up 0x0071CCD0 place none.
+- **A slot's item and its grey:**
+  - **An item ability's slot holds the item's object id**, its record's `SourceItem` (+0xB8), with copies of its tag (+0xC8), template (+0x118), icon (+0x140) and name (+0xF0) [C].
+    - The record is found by ability id, and for items by tag (0x0062A300). Its item is resolved by object id only (0x005D5870).
+    - Nothing searches the inventory by tag or template on a refresh.
+    - 0x0062D760 writes the item fields only while the item object exists, so a gone item's tag, template, icon and id stay in the slot.
+  - **The grey** [C]: the "has item" test 0x0062AA20 (through 0x0071C0A0) is false when `SourceItem` is −1, and `CanUseAbility` then answers strref 244342, "You no longer have this item". `CanUseItem` 0x0062AA80 is tested after it, with no reason text.
+  - **"x0" is the movie's own** [C]: `QuickBarAbilityIcon.as` shows `<slot>.SourceItem.StackSize`, the one item object's stack, not a count by tag or template and not charges. With a non-empty `SourceItemTag` and a non-numeric value it shows a red "x0". [I] how a gone item reaches 0: the movie's test `Number(v) == NaN` is never true.
+- **Which slots are usable:**
+  - **0x0071D4A0 is a round-robin step** [C]: each call refreshes the one record at the cursor `this+0x1BC` (0x0071D1B0, also called at 0x0071D369 for all) and advances the cursor.
+  - **The refresh** asks `CCCreatureStats::CanUseAbility(ability, &reason, …)` per record. It keeps the reason strref, or −1 when usable, in the record (+0x64) and marks it changed (+0x68) when it differs [C]. How the reason becomes the movie's `IsError`/`Error`/`IsWarning`/`Warning` was not read [I].
+  - The reasons, in order, and the conditions bits: ABILITIES.md, "Why an ability is greyed".
+
 ### Evidence
 
 - AS: Quickbar.as:35-38 (MAX_QUICK_SLOTS 50, MIN_SLOT_COUNT 14, spacing 47), 48-80, 170-258, 259-268, 286-309, 327-351; QuickbarScene.as; GUI/Element.as:56-104 (`Initialize`: `GetInitFunction`, init functions, `FinalizeInstance`, `UpdateLayout`); frame_1/DoAction.as:103-117 (`GetInitFunction` walks `_parent`); TokenManager.as (`AddTokenObserverWithID` pushes to the batch array; `PerformBatchTokenReplacements` walks ids in order); `_OBSERVER_ID.as` 94-107 (QUICKBAR_EXPAND 1609, QUICKBAR_SCREEN_WIDTH 1613), 209-232; QuickBarIconSlot.as; QuickBarAbilityIcon.as; AbilityIcon.as; PieCooldown.as; Ability.as. Scripts: `%TEMP%\lib-agent-2-gui4a-*.py` (wide-string finder `-r.py`, function-start finder `-f.py`, caller finder `-c.py`, push-string lister `-p.py`).

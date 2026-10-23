@@ -83,6 +83,24 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - `abi_base`'s `Cost` is read by the engine only to check, not to take: `CCCreatureStats::CanUseAbility` (`0x0071CFFD`; Cost × (1 + fatigue/100) against property 8's current value, `dao/Addresses.h`) and the interface's ability info (`0x0062C9FA`). The builder (`0x00744166`) asks `CanUseAbility` and makes no command when it fails (read); `ability_core`'s COMMAND_PENDING case checks again with `Ability_CostCheck` and fails the ability (read in the scripts).
 - `CostUpkeep` (sustained abilities) is read by the engine only for the interface (`0x0062CA19`); the upkeep is the scripts' (`effect_upkeep_h`), as `ability_core`'s comments say (read in the scripts).
 
+#### Why an ability is greyed (read 2026-10-23 by lib-agent-2 with a subagent, for DAOParagonEngine #196)
+
+- **`CanUseAbility`'s reasons, in order** [C]:
+  1. an item ability with its item gone: 244342;
+  2. disabled by an effect: 223888;
+  3. the cost: 376267 (mana) or 376268 (stamina);
+  4. the `abi_base` conditions;
+  5. conjuring this ability already: 395779, "Ability is being cast".
+  - A plain cooldown gives no reason text.
+- **The conditions** are `ScriptBackend::ForScript_CanUseConditionedAbility` on `abi_base` `Conditions` (hash 0xB1CAEE1D) [C]:
+  - bit 1, a melee weapon (222426);
+  - bit 2, a shield (222427);
+  - bit 4, a ranged weapon in the main hand, `bitm_base` `Type` 6 (222425, "No ranged weapon equipped");
+  - 0x40, dual wield (315522);
+  - 0x100 and 0x200/0x400/0x800, race and class (383166–383169).
+  - So Pinning Shot (803, `Conditions` 4) is greyed by its own row, not by a separate weapon test.
+- The quickbar's round-robin step that asks `CanUseAbility` for each slot: GUI.md, "The quickbar: the load, the rebuild, a slot's item and which slots are usable".
+
 ### Cooldown
 
 - **Set by the scripts**, from `abi_base`'s `Cooldown`: `Ability_SetCooldown(oCaster, nAbility, oItem)` (`core_h.nss`, over the `SetCooldown` command, `kCCCreatureStats_SetCooldown`). The engine reads `Cooldown` only for the interface (`0x0062C9DB`) (read).
