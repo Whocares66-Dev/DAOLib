@@ -23,6 +23,7 @@ constexpr std::uint32_t kOrientation = 5;
 constexpr std::uint32_t kRoomSees = 3047;
 constexpr std::uint32_t kRoomModels = 3050;
 constexpr std::uint32_t kRoomConnects = 3099;
+constexpr std::uint32_t kRoomLightVis = 3164;
 constexpr std::uint32_t kModelScale = 3059;
 constexpr std::uint32_t kModelFile = 3063;
 // A placed model's user params (DAOLib #212): the level loader hands them to the model
@@ -691,6 +692,10 @@ std::optional<Room> RoomOf(const gff4::File &definition)
     room.turn = QuaternionOf(root->Floats(kOrientation));
     room.sees = root->Numbers(kRoomSees);
     room.connects = root->Numbers(kRoomConnects);
+    for (const std::uint32_t lit : root->Numbers(kRoomLightVis))
+    {
+        room.lightVis.push_back(static_cast<std::int32_t>(lit));
+    }
     for (const gff4::Struct &model : root->Structs(kRoomModels))
     {
         Placed placed;

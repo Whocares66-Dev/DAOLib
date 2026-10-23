@@ -1655,6 +1655,13 @@ MUTANTS: list[Mutant] = [
         "placed.cutAwayOverride = model.Get<std::uint8_t>(kModelCutAwayOverride).value_or(0);",
         "placed.cutAwayOverride = 0;",
     ),
+    # A room's light visibility list (#243): -1, every room, must stay -1.
+    Mutant(
+        "level-light-vis: a room's EnvRoomLightVisList is read as signed, its -1 kept",
+        LEVEL,
+        "room.lightVis.push_back(static_cast<std::int32_t>(lit));",
+        "room.lightVis.push_back(static_cast<std::int32_t>(lit & 0x7FFFFFFFU));",
+    ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
     Mutant(

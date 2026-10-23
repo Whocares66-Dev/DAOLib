@@ -294,12 +294,13 @@ std::vector<std::byte> LevelLayoutFile()
 std::vector<std::byte> RoomFile()
 {
     Builder b = Start("RML ", {{"ROOM",
-                                44,
+                                48,
                                 {{4, 10, 0, 0},
                                  {5, 13, 0, 16},
                                  {3047, 5, gff4::kList, 32},
                                  {3050, 2, gff4::kList | gff4::kStruct, 36},
-                                 {3099, 5, gff4::kList, 40}}},
+                                 {3099, 5, gff4::kList, 40},
+                                 {3164, 5, gff4::kList, 44}}},
                                {"LMAT", 24, {{3324, 12, 0, 0}, {3323, 14, 0, 16}, {3235, 14, 0, 20}}},
                                {"MDL ",
                                 52,
@@ -311,11 +312,12 @@ std::vector<std::byte> RoomFile()
                                  {3506, 3, gff4::kList | gff4::kStruct, 44},
                                  {3109, 0, 0, 48}}},
                                {"UPRM", 20, {{3507, 14, 0, 0}, {3508, 12, 0, 4}}}});
-    const std::size_t root = Struct(b, 44);
+    const std::size_t root = Struct(b, 48);
     Floats(b, root, {100, 0, 0});
     Floats(b, root + 16, {0, 0, 0, 1});
     b.U32(root + 32, b.Numbers({7, 9}));
     b.U32(root + 40, b.Numbers({9, 12}));
+    b.U32(root + 44, b.Numbers({0xFFFFFFFF}));
     const std::size_t models = b.bytes.size();
     b.U32(models, 1);
     const std::size_t model = Struct(b, 52);
@@ -580,6 +582,7 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
     CHECK(room->at == Point{100, 0, 0});
     CHECK(room->sees == std::vector<std::uint32_t>{7, 9});
     CHECK(room->connects == std::vector<std::uint32_t>{9, 12});
+    CHECK(room->lightVis == std::vector<std::int32_t>{-1}); // every room's lights (DAOLib #243)
     REQUIRE(room->models.size() == 1);
     CHECK(room->models[0].file == L"slab");
     CHECK(room->models[0].scale == 2.0F);
@@ -628,6 +631,7 @@ TEST_CASE("a room's trees are read with their place, turn, scale, model, tint an
     REQUIRE(room.has_value());
     CHECK(room->models.empty());
     CHECK(room->connects.empty()); // no list in the file
+    CHECK(room->lightVis.empty());
     REQUIRE(room->trees.size() == 2);
     const level::PlacedTree &first = room->trees[0];
     CHECK(first.at == Point{1, 2, 3});

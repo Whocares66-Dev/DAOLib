@@ -294,6 +294,9 @@ struct Room
     Quaternion turn{0, 0, 0, 1};
     std::vector<std::uint32_t> sees;     // the numbers of the rooms seen from it
     std::vector<std::uint32_t> connects; // the numbers of the rooms it opens onto; empty in most levels
+    // The rooms whose lights its figures may take (EnvRoomLightVisList): a single -1 for every room, empty for
+    // none beyond its own; empty where the file lacks it.
+    std::vector<std::int32_t> lightVis;
     std::vector<Placed> models;
     std::vector<PlacedTree> trees;
 };
