@@ -58,7 +58,7 @@ Read 2026-10-18 by lib-agent-2 (with subagents) in the GOG exe and the game's fi
 - **The action types** (the factory `0x007DDAA0`):
   - 4 PlayAnimation, 11 MakeActiveCamera, 13 CameraFOV;
   - 17 MoveSpline, 18 Rotate, 19 FrameBufferEffect, 20 Shake;
-  - 23 SpeakLine, 24 JumpToCamera, 25 JumpToPlace, 27 LinkToActor, 28 Headtracking;
+  - 23 SpeakLine, 24 JumpToCamera, 25 JumpToPlace, 27 LinkToActor, 28 Headtracking (below, "ActionHeadtracking");
   - 31 Sound, 32 ChangeVisibility, 33/34/35 a light's radius, intensity and colour;
   - 36 TogglePhysics, 38 SnapToWalkmesh, 39 OrientationFollowsCurve;
   - 41 DrawWeapon, 42 PlayMovie, 43 AutoAdjustHeight, 44 AnimateFace;
@@ -139,12 +139,32 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
   - **A script cutscene** (no conversation, put back = 1): each creature goes **back to its place and facing at binding**.
   - **A line cut** (put back = 0, except the player's creature when `StageAtCurrentLocation`): a creature not moved since binding goes to `S.p + R(S.q)·FinalPos`, facing `R(S.q ⊗ FinalOri)·(0, 1, 0)` flattened (`0x007E1396`–`0x007E14CA`); one a script moved stays. So `jowan_attacks`' creatures end at their world `FinalPos`.
 
+### A conversation's hold on its actors' look-at (read 2026-10-23 by paragon-agent's helper, for DAOParagonEngine; checked by lib-agent)
+
+GOG 1.05 addresses. [C] read in the code, [S] seen in the running game, [I] inferred.
+
+- `Conversation::BindLookAt` (0x007F2460, ID 21332), reached through 0x007F1E90 and 0x007F27D0 the first time a conversation binds a creature, resets the creature's look-at to neutral (0x006CAB90) and sets +0x16C = 0 [C].
+- With +0x16C = 0 the creature's own look-at update (0x006CAD80) returns at once [C].
+- `Conversation::ReleaseLookAt` (0x007F2800, ID 21335) sets +0x16C = 1, from neutral, at multiplier 1 [C].
+- The address library notes that both functions do more than this (events, other virtual calls); broader names may fit once read whole.
+
 ### Animations (AANI, type 4; `0x007DAD20`, update `0x007DB400`; checked unless said)
 
 - **The clip comes from the cut's own tree,** `CutsceneBlendtree` (5007, e.g. `jowan_attacks.cub`, an ANBT tree like an `.anb`), not the actor's trees. The action's name (5400) is a node of it (`mh_c.tw_die_v1__1` → `mh_c.tw_die_v1.ani`). The action's own `BlendtreeName` (5401) is never read. The clip's `.evt` events fire as its time passes them.
 - **Time:** `tc = min(tLocal, (stop − start) − 0.001)`, `clipTime = speed (5402) · tc + startOffset (5403)` seconds; a non-zero `LinkToMovement` (5407) uses the distance table (5412) instead.
 - **Weight:** `clamp(curve0(start + tLocal) / 100, 0, 1)` every frame (`0x007DB450`). **There is no automatic cross-fade:** blends are authored as overlapping actions with ramps (Jowan: `bloodmage__4` 100 → 0 over 6.22–6.567 as `bloodmage__2` goes 0 → 100).
 - **The pose fills the rest:** the actor's pose clip (`pose_<CutsceneActorPose 5211>`) gets `max(0, 1 − Σ weights)` (`0x007D62A3`). A clip outside its action's time is removed, so the pose takes over. Additive and override clips (e.g. `mh_o.eyelids`) aren't counted or removed. A clip past its length wraps (inferred).
+
+### ActionHeadtracking (ACHT, type 28; read 2026-10-23 by paragon-agent's helper, for DAOParagonEngine; checked by lib-agent)
+
+- Class `EC::Cutscene::Actor::ActionHeadtracking`: constructor 0x007DA820 (ID 20945), Update 0x007D0D00 (ID 20768), vftable 0x00B2330C [C].
+- The target is the eyes of the actor named in field 5620 (core's `actor`), with no distance or front test [C].
+- On its first frame it sets the look-at multiplier to the action's speed [C], and it calls `LookAt::Apply` (0x006CA990) at the cut's frame rate [C].
+- 0x007D0850 refreshes the creature's orientation only under the realign flags (5628, 5629) [C].
+- In Greagoir's Harrowing cut every line has one head-tracking action per actor; the head holds its 3/4 turn toward the hero through line 122138_m [S].
+- Fields the reader does not read yet:
+  - CutsceneActionHeadtrackSpeed (5621): Greagoir's cut has 0.51 to 0.90 [C]; Paragon takes 1.0, the field's default [I].
+  - CutsceneActionHeadtrackRealignStart (5628) and RealignCont (5629) [C]; Paragon takes the creature's facing every frame [I].
 
 ### The camera (checked unless said)
 
