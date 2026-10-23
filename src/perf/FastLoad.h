@@ -15,6 +15,9 @@
 //   neither for its own screen nor for the monitor; and its picture comes
 //   out of the black it begins in eight times as fast, so a short loading
 //   shows it. (A door's screen has no picture: it is black by design.)
+// - Hud: through an area transition the HUD is hidden and kept, as the GUI
+//   mode keeps it, and not closed and made anew on arrival: a door's black
+//   after its loading 60 to 145 ms where it was 290 to 413 (#83).
 //
 // They share one detour of the loading mode's update, from which each is
 // told of every update before the engine's runs, and one switch: "Fast
@@ -35,8 +38,8 @@ namespace perf
 // leaves all of it out, the switch too. Each part has a variable of its
 // own, for finding a fault: DAOLIB_AREA_LISTS (how many are kept, 0 for
 // none), DAOLIB_AREA_ROOMS=0, DAOLIB_LOADING_PACE (ms, 0 for the engine's),
-// DAOLIB_LOADING_PRESENT (ms, 0 for every frame) and DAOLIB_LOADING_FADE
-// (times as fast, 0 for the movie's own).
+// DAOLIB_LOADING_PRESENT (ms, 0 for every frame), DAOLIB_LOADING_FADE
+// (times as fast, 0 for the movie's own) and DAOLIB_KEEP_HUD=0.
 void InstallFastLoad();
 
 } // namespace perf

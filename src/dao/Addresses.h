@@ -830,6 +830,17 @@ DAO_ADDRESS(kScaleformManager_CreateMovieView, 6674)
 DAO_ADDRESS(kScaleformManager_OpenMovie, 6676)
 DAO_ADDRESS(kGuiMovie_Construct, 6782)
 DAO_ADDRESS(kGUISystem_OpenScreen, 6954)
+// The HUD's seven scenes (0x2F, 0x28, 0x1C, 0x2A, 0x2B, 0x29, 0x2C), read 2026-10-23 for
+// DAOLib #83: DragonAgeGUISystem's slot 28 closes them, each through its slot 14 (the
+// scene's slot 6, which drops its movie), and slot 29 hides them and keeps their movies,
+// each through its slot 15 (HideScreen); both __thiscall with nothing, `ret`, each first
+// calling its slot 41 (+0xA4). Slot 27 shows them (slot 13 each). The GUI's game mode change
+// (its slot 77, 0x0060BC60, called by the switch at 0x00641ED4) shows them for explore and
+// combat, hides them for the GUI mode, keeps them up when the loading mode is in state 3,
+// and closes them for every other mode, a door's loading among them (seen in play: from
+// 0x00641ED6, the loading mode in state 7). The names are ours.
+DAO_ADDRESS(kDragonAgeGUISystem_CloseHud, 11204)
+DAO_ADDRESS(kDragonAgeGUISystem_HideHud, 11205)
 DAO_ADDRESS(kGFxLoader_CreateMovie, 26910)
 // Every screen is a GUI::GUIScene (the base of GUIMain, GUIInventory,
 // GUIPopupLayer and the rest, a SmartObject), made by

@@ -6,6 +6,7 @@
 #include "dao/Options.h"
 #include "perf/fastload/AreaLists.h"
 #include "perf/fastload/AreaRooms.h"
+#include "perf/fastload/Hud.h"
 #include "perf/fastload/LoadingScreen.h"
 #include "perf/fastload/Shared.h"
 
@@ -22,7 +23,6 @@ namespace perf
 namespace
 {
 
-constexpr std::size_t kState = 0x84;             // in the loading mode: its state, a word
 constexpr std::int64_t kBetweenScreensMs = 1000; // an update this long after the last begins a loading screen
 constexpr const wchar_t *kSection = L"FastLoad";
 constexpr const wchar_t *kKey = L"On";
@@ -61,7 +61,7 @@ std::uintptr_t __fastcall Update(std::uintptr_t mode, int edx, float seconds)
 {
     fastload::Update update;
     update.mode = mode;
-    update.state = fastload::At<std::uint16_t>(mode, kState);
+    update.state = fastload::At<std::uint16_t>(mode, fastload::kModeState);
     update.now = fastload::NowMs();
     update.first = update.now - g_lastUpdate > kBetweenScreensMs;
     g_lastUpdate = update.now;
@@ -103,6 +103,7 @@ void InstallFastLoad()
     fastload::lists::Attach();
     fastload::rooms::Attach();
     fastload::screen::Attach();
+    fastload::hud::Attach();
     const bool shown = dao::options::AddSection(
         L"Performance",
         {{

@@ -3,6 +3,7 @@
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
+#include "dao/GameModes.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/SafeRead.h"
@@ -65,6 +66,99 @@ std::map<std::uintptr_t, Stepped> g_stepped; // by record, under g_mutex
 using StepFn = void(__fastcall *)(void *record, int edx, float first, float second, std::int32_t restricted);
 dao::Detour<StepFn> g_step;
 
+// The arrival watch (DAOLib #83): what the movies cost from a loading screen until 1.5 s after the
+// game has left the loading mode, the frames a door's black is made of. Each record's steps and
+// each OpenMovie are timed by name, and logged once the window has passed.
+struct Timed
+{
+    std::uint32_t calls = 0;
+    double ms = 0;
+    double most = 0;
+};
+std::map<std::string, Timed> g_arrivalSteps; // by record's name, under g_mutex
+std::map<std::string, Timed> g_arrivalOpens; // by movie's name, under g_mutex
+std::chrono::steady_clock::time_point g_lastLoading{};
+bool g_arriving = false;
+
+// OpenMovie, __thiscall (screen, const std::wstring &name, layer, flags), `ret 0x10` (dao/Addresses.h).
+using OpenMovieFn = std::uintptr_t(__fastcall *)(void *manager, int edx, std::uintptr_t screen,
+                                                 const dao::core::WStringRep *name, std::uint32_t layer,
+                                                 std::uint32_t flags);
+dao::Detour<OpenMovieFn> g_openMovie;
+
+void Add(std::map<std::string, Timed> &into, const std::string &name, double ms)
+{
+    Timed &timed = into[name];
+    ++timed.calls;
+    timed.ms += ms;
+    timed.most = std::max(timed.most, ms);
+}
+
+void ReportArrival()
+{
+    double steps = 0;
+    for (const auto &[name, timed] : g_arrivalSteps)
+    {
+        steps += timed.ms;
+    }
+    spdlog::info("movies: around a loading screen, until 1.5 s after it: {:.1f} ms in the movies' steps", steps);
+    for (const auto &[name, timed] : g_arrivalSteps)
+    {
+        if (timed.ms >= 1.0)
+        {
+            spdlog::info("movies:   step {}: {} calls, {:.1f} ms, the longest {:.1f} ms", name, timed.calls, timed.ms,
+                         timed.most);
+        }
+    }
+    for (const auto &[name, timed] : g_arrivalOpens)
+    {
+        spdlog::info("movies:   opened {}: {} times, {:.1f} ms, the longest {:.1f} ms", name, timed.calls, timed.ms,
+                     timed.most);
+    }
+    g_arrivalSteps.clear();
+    g_arrivalOpens.clear();
+}
+
+// Whether the watch is on now: the loading mode, or under 1.5 s since it was. Reports a window
+// that has passed. Under g_mutex.
+bool Arriving()
+{
+    const auto now = std::chrono::steady_clock::now();
+    const auto *app = dao::CClientExoApp::Get();
+    const auto *modes = app != nullptr ? app->GameModes() : nullptr;
+    if (modes != nullptr && modes->Mode() == dao::GameMode::Loading)
+    {
+        g_lastLoading = now;
+        g_arriving = true;
+        return true;
+    }
+    if (g_arriving && now - g_lastLoading > std::chrono::milliseconds(1500))
+    {
+        g_arriving = false;
+        ReportArrival();
+    }
+    return g_arriving;
+}
+
+double MsSince(std::chrono::steady_clock::time_point start)
+{
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+}
+
+std::uintptr_t __fastcall OpenMovie(void *manager, int edx, std::uintptr_t screen, const dao::core::WStringRep *name,
+                                    std::uint32_t layer, std::uint32_t flags)
+{
+    const auto start = std::chrono::steady_clock::now();
+    const std::uintptr_t record = g_openMovie.Original()(manager, edx, screen, name, layer, flags);
+    const double ms = MsSince(start);
+    const std::lock_guard lock(g_mutex);
+    if (Arriving())
+    {
+        Add(g_arrivalOpens, dao::Utf8(name->View()), ms);
+    }
+    return record;
+}
+
 void __fastcall Step(void *record, int edx, float first, float second, std::int32_t restricted)
 {
     {
@@ -85,7 +179,14 @@ void __fastcall Step(void *record, int edx, float first, float second, std::int3
         seen.secondLeast = std::min(seen.secondLeast, second);
         seen.secondMost = std::max(seen.secondMost, second);
     }
+    const auto start = std::chrono::steady_clock::now();
     g_step.Original()(record, edx, first, second, restricted);
+    const double ms = MsSince(start);
+    const std::lock_guard lock(g_mutex);
+    if (Arriving())
+    {
+        Add(g_arrivalSteps, dao::Utf8(reinterpret_cast<const dao::core::WStringRep *>(record)->View()), ms);
+    }
 }
 
 void ReportSteps(bool paused)
@@ -150,6 +251,10 @@ void AttachMovieWatch()
     if (!g_step.Attach(dao::addr::kMovieRecord_Step, &Step))
     {
         spdlog::warn("movies: could not detour a movie record's step");
+    }
+    if (!g_openMovie.Attach(dao::addr::kScaleformManager_OpenMovie, &OpenMovie))
+    {
+        spdlog::warn("movies: could not detour OpenMovie");
     }
 }
 

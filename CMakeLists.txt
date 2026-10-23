@@ -353,6 +353,7 @@ add_library(
     src/perf/fastload/AddressSpace.cpp
     src/perf/fastload/AreaLists.cpp
     src/perf/fastload/AreaRooms.cpp
+    src/perf/fastload/Hud.cpp
     src/perf/fastload/LoadingScreen.cpp
     src/loader/Instance.cpp
     src/loader/Loader.cpp

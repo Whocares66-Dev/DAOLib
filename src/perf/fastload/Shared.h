@@ -31,6 +31,9 @@ inline std::int64_t NowMs()
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
 }
 
+// In the loading mode: its state, a word (dao/Addresses.h, "The loading mode's states").
+inline constexpr std::size_t kModeState = 0x84;
+
 // A field of one of the engine's objects.
 template <class T> T &At(std::uintptr_t object, std::size_t offset)
 {
