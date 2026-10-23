@@ -514,8 +514,22 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
 #### The AI and the controlled creature
 
 **The engine does not switch the AI off.** It changes the creature's AI level only (checked):
-- `CCCreature::UpdateAILevel` 0x006A53E0 (`CCCreature` vtable 0x00B10484 slot 85, +0x154): **4** (`CSERVERAIMASTER_AI_LEVEL_VERY_HIGH`) for the controlled creature (compared with `GetMainControlled`); else **2** if +0xC60 holds something; else **3** if `CCParty::IsInParty` (0x00631830); else, if the creature's +0x254 equals the controlled creature's (0x005D5CD0), 0x007C49B0(self, 1); then `AIMaster`'s set (0x0064B480 on `app+0x1AC`).
-- `AIMaster` 0x0064B480: ignored while a script's `SetAILevel` (+0x2B4) is set; -1 takes it out (0x0064B240); 0–4 moves it to one of five lists of 0x14 bytes (0x0064B400) and stores it at +0x2B0 through slot +0x150. What the lists change in `AIMaster::Update` 0x0064AF00 was not read (inferred, from Aurora: how often it is updated, not whether).
+- `CCCreature::UpdateAILevel` 0x006A53E0 (`CCCreature` vtable 0x00B10484 slot 85, +0x154): **4** (`CSERVERAIMASTER_AI_LEVEL_VERY_HIGH`) for the controlled creature (compared with `GetMainControlled`); else **2** if +0xC60 holds something; else **3** if `CCParty::IsInParty` (0x00631830); else the chooser for other creatures (below; read 2026-10-23 by lib-agent-2, it replaces an unread `0x007C49B0(self, 1)` branch); then `AIMaster`'s set (0x0064B480 on `app+0x1AC`).
+- `AIMaster` 0x0064B480: ignored while a script's `SetAILevel` (+0x2B4) is set; -1 takes it out (0x0064B240); 0–4 moves it to one of five lists of 0x14 bytes (0x0064B400) and stores it at +0x2B0 through slot +0x150. What the lists change is read 2026-10-23 by lib-agent-2 (it was inferred, from Aurora: how often it is updated, not whether):
+  - **The chooser for other creatures** [C]:
+    - A creature outside the controlled creature's area (`+0x254` differs) gets **−1**, which is in no list, so it is never updated. −1 is also where a creature starts (the constructor) and goes at destruction.
+    - Otherwise `0x007C49B0(self, base)` gives base 2 in combat or 1 out of it (base − 1 for a dead creature). It adds 2 for band 0 and 1 for band 2 of a camera-distance band held in the creature's model holder (`+0x154`, its `+0x150`, handed out by the area's show/hide pass 0x006184E0 [I for the meaning]). The result is clamped to 0..4.
+    - So a living non-party creature in the controlled area is at 1..3 out of combat and 2..4 in combat.
+    - `UpdateAILevel` also runs from `SetLocation` 0x00696F90, `SetCombatState` 0x006AE0A0, control changes and the party code.
+    - Placeables have their own chooser, 0x0074D840, giving −1 or 1.
+  - **What the level changes** [C]: mainly how often the creature is updated, through the AIMaster pass's time slice (TURN_BASED.md, "The throttle is the AIMaster's time slice"). `CCCreature::Update`, `StepCommands` and perception do not read it. The other readers of `+0x2B0` are:
+    - the idle twitch (0x006AB73E): below level 2 it needs a party member within 50 m;
+    - `RequestPath` (0x0073EDEA): level 4 doubles a step factor passed to `MovementController::Step` [I: a search time slice];
+    - the approach's standing counter (0x007A97DA): skipped at levels 0 and 1, so such an approach never fails with −4 for standing still;
+    - 0x007F6506: it sets a level-0 creature to 1 [I for when];
+    - `GetAILevel`'s handler 0x00659DE0;
+    - the creature's load from a field `AILevel` (0x0069B160), which also sets the script lock `+0x2B4`. No readable `.utc` has the field [I: saved creatures].
+  - **The scripts** [C]: no script calls `GetAILevel`. `SetAILevel` is used at `rules_core.nss`:1197–1198 (resurrection: HIGH, then −1 to unlock) and `effect_resurrection_h.nss`:40 (−1); `den300pt_last_request.nss`:60 sets HIGH on a world-map location, not a creature. A death case setting level 0 (`rules_core.nss`:1175) is commented out.
 - Run on: control changing (0x0069D540, old and new), a member leaving the active party (0x006378F8), and elsewhere.
 
 **"Controlled → no AI" is the scripts'**, in `ai_main_h_2.nss`, through `IsControlled` (so for every selected member):
