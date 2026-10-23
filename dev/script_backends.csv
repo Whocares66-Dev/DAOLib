@@ -21,7 +21,7 @@ function_va,name,how,class,ghidra_name,commands
 0x005b6cd0,ScriptBackend::ForScript_SetMusicIntensity,sole,,ScriptBackend::ForScript_SetMusicIntensity,SetMusicIntensity
 0x005ba100,ScriptBackend::ForScript_StopSound,sole,,ScriptBackend::ForScript_StopSound,StopSound
 0x005bc7f0,ScriptBackend::ForScript_PlaySound,sole,,ScriptBackend::ForScript_PlaySound,PlaySound
-0x005fbc10,ScriptBackend::ForScript_ISPACKAGELOADED,sole,,ScriptBackend::ForScript_ISPACKAGELOADED,ISPACKAGELOADED
+0x005fbc10,ModuleResourceManager::IsPackageLoaded,sole,,ScriptBackend::ForScript_ISPACKAGELOADED,ISPACKAGELOADED
 0x005ff450,CCModule::ForScript_GetObjectByTag,direct,CCModule,CCModule::ForScript_GetObjectByTag,GetObjectByTag
 0x00600270,,direct,CCModule,FUN_00600270,SetTag
 0x00600a40,CCModule::ForScript_DoAreaTransition,direct,CCModule,CCModule::ForScript_DoAreaTransition,DoAreaTransition
@@ -104,7 +104,7 @@ function_va,name,how,class,ghidra_name,commands
 0x006a01b0,CCCreature::ForScript_EnableWeaponTrail,direct,CCCreature,CCCreature::ForScript_EnableWeaponTrail,EnableWeaponTrail
 0x006a25a0,ScriptBackend::ForScript_IsHumanoid,sole,,ScriptBackend::ForScript_IsHumanoid,IsHumanoid
 0x006a2cc0,CCCreature::GetParty,direct,CCCreature,CCCreature::ForScript_SetPartyPlotFlag,SetPartyPlotFlag | SETPARTYPLOTVAR | GetPartyPlotFlag | GETPARTYPLOTVAR
-0x006a2ce0,,direct,CCCreature,FUN_006a2ce0,TriggerPerception
+0x006a2ce0,CCCreature::IsActivePartyMember,direct,CCCreature,FUN_006a2ce0,TriggerPerception
 0x006a3660,,virtual,CCCreature,CCCreature::vfunction117,SetPrimaryControlled
 0x006a5f40,CCCreature::ForScript_SetControllable,direct,CCCreature,CCCreature::ForScript_SetControllable,SetControllable | SetPrimaryControlled
 0x006a7d90,CCCreature::GetRacialType,sole,,ScriptBackend::ForScript_GetCreatureRacialType,GetCreatureRacialType

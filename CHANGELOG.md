@@ -4,7 +4,7 @@
 
 ## 0.6.0
 
-For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary LIBVER](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/vLIBVER). The loader and its contract with plugins are as in 0.3.0.
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.6.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.6.0). The loader and its contract with plugins are as in 0.3.0.
 
 - **Saved games read and written, with no game running:** `daolib_core` reads a save into plain structs (the campaign, its journal and variables, every area with what is left in it, the hero and the party, the event queue), checked against the game's own loaders (#202), and writes a changed one back over the file it came from, its metadata too (#221, #226).
 - **For lighting and effects mods:** each point light's colour, a light probe's irradiance, an object's share of the sun, and a sprite emitter's colour, as the engine hands them to a draw, read and changed (`dao/Lights.h`, `dao/Vfx.h`, #223, #225, #230, #224); the effects running in the area with their models and places (#231); a texture as the engine makes it from a `.dds` (`dao/Resources.h`, #228); and changing the sunlight moves the sun's disc in the sky with it (#222).
