@@ -209,15 +209,25 @@ std::optional<RayHit> TriangleTree::Cast(const Point &origin, const Point &direc
     return nearest;
 }
 
-// Capsules (DAOLib #233): the engine's overlap query is PhysX's
-// overlapCapsuleShapes (dev/COLLISION.md, section 5), which asks whether a
-// capsule shares a point with each shape: a sphere, box or capsule as a
-// solid, a triangle mesh by its triangles. Each test here is the distance
-// between the capsule's segment and the other thing against the radius, the
-// closest points as Ericson's Real-Time Collision Detection gives them (5.1.5
-// a point and a triangle, 5.1.9 two segments).
+// Capsules (DAOLib #233, #238): the engine's overlap query is PhysX's
+// overlapCapsuleShapes and its sweep linearCapsuleSweep (dev/COLLISION.md,
+// sections 5 and 6), which ask whether a capsule shares a point with each
+// shape, at once or at some point of a move: a sphere, box or capsule as a
+// solid, a triangle mesh by its triangles. Both are built on one thing, the
+// nearest points of the capsule's segment and of the other shape, as
+// Ericson's Real-Time Collision Detection gives them (5.1.5 a point and a
+// triangle, 5.1.9 two segments): an overlap is their distance against the
+// radius, and a sweep is the least move that brings it down to the radius.
 namespace
 {
+
+// The nearest points of a capsule's segment and of a shape, and the square of the distance between them.
+struct Closest
+{
+    float squared = 0;
+    Point onShape{};
+    Point onSegment{};
+};
 
 Point Plus(const Point &a, const Point &b)
 {
@@ -240,8 +250,18 @@ float SquaredDistance(const Point &a, const Point &b)
     return Dot(d, d);
 }
 
-// The square of the least distance between the segments p1-q1 and p2-q2.
-float SegmentsSquared(const Point &p1, const Point &q1, const Point &p2, const Point &q2)
+Closest Between(const Point &onSegment, const Point &onShape)
+{
+    return Closest{SquaredDistance(onSegment, onShape), onShape, onSegment};
+}
+
+Closest Nearer(const Closest &one, const Closest &other)
+{
+    return other.squared < one.squared ? other : one;
+}
+
+// The nearest points of the segments p1-q1 (the capsule's) and p2-q2.
+Closest SegmentsClosest(const Point &p1, const Point &q1, const Point &p2, const Point &q2)
 {
     constexpr float kNone = 1e-12F;
     const Point d1 = Minus(q1, p1);
@@ -252,15 +272,12 @@ float SegmentsSquared(const Point &p1, const Point &q1, const Point &p2, const P
     const float f = Dot(d2, r);
     float s = 0;
     float t = 0;
-    if (a <= kNone && e <= kNone)
-    {
-        return Dot(r, r);
-    }
-    if (a <= kNone)
+    // Both a point: s and t stay 0.
+    if (a <= kNone && e > kNone)
     {
         t = Clamp01(f / e);
     }
-    else
+    else if (a > kNone)
     {
         const float c = Dot(d1, r);
         if (e <= kNone)
@@ -286,7 +303,7 @@ float SegmentsSquared(const Point &p1, const Point &q1, const Point &p2, const P
             }
         }
     }
-    return SquaredDistance(Plus(p1, Times(d1, s)), Plus(p2, Times(d2, t)));
+    return Between(Plus(p1, Times(d1, s)), Plus(p2, Times(d2, t)));
 }
 
 // The point of a triangle nearest a point.
@@ -334,8 +351,9 @@ Point NearestOnTriangle(const Point &p, const Triangle &t)
     return Plus(t.a, Plus(Times(ab, vb * denominator), Times(ac, vc * denominator)));
 }
 
-// Whether the segment p0-p1 passes through a box [low, high], ends included.
-bool SegmentMeetsBox(const Point &p0, const Point &p1, const Point &low, const Point &high)
+// Where along the segment p0-p1 (0 at p0, 1 at p1) it first is in a box [low, high], ends included; none if it
+// never is.
+std::optional<float> SegmentEntersBox(const Point &p0, const Point &p1, const Point &low, const Point &high)
 {
     const Point d = Minus(p1, p0);
     float enter = 0;
@@ -346,7 +364,7 @@ bool SegmentMeetsBox(const Point &p0, const Point &p1, const Point &low, const P
         {
             if (p0[axis] < low[axis] || p0[axis] > high[axis])
             {
-                return false;
+                return std::nullopt;
             }
             continue;
         }
@@ -360,31 +378,45 @@ bool SegmentMeetsBox(const Point &p0, const Point &p1, const Point &low, const P
         leave = std::min(leave, far);
         if (enter > leave)
         {
-            return false;
+            return std::nullopt;
         }
     }
-    return true;
+    return enter;
 }
 
-// The square of a point's distance from a box [low, high], 0 inside it.
-float BoxSquared(const Point &p, const Point &low, const Point &high)
+// The point of a box [low, high] nearest a point; the point itself inside it.
+Point ClampToBox(const Point &p, const Point &low, const Point &high)
 {
-    float sum = 0;
+    return {std::clamp(p[0], low[0], high[0]), std::clamp(p[1], low[1], high[1]), std::clamp(p[2], low[2], high[2])};
+}
+
+// The box a swept capsule fills.
+struct Bounds
+{
+    Point low{};
+    Point high{};
+};
+
+// The bounds of a capsule at the start of a move and at its end, together.
+Bounds SweptBounds(const Capsule &capsule, const Point &motion)
+{
+    Bounds bounds;
     for (std::size_t axis = 0; axis < 3; ++axis)
     {
-        const float out = std::max({low[axis] - p[axis], p[axis] - high[axis], 0.0F});
-        sum += out * out;
+        const float end0 = capsule.p0[axis] + motion[axis];
+        const float end1 = capsule.p1[axis] + motion[axis];
+        bounds.low[axis] = std::min({capsule.p0[axis], capsule.p1[axis], end0, end1}) - capsule.radius;
+        bounds.high[axis] = std::max({capsule.p0[axis], capsule.p1[axis], end0, end1}) + capsule.radius;
     }
-    return sum;
+    return bounds;
 }
 
-// Whether a capsule's bounding box meets a box [low, high].
-bool BoundsMeet(const Capsule &capsule, const Point &low, const Point &high)
+// Whether bounds meet a box [low, high].
+bool BoundsMeet(const Bounds &bounds, const Point &low, const Point &high)
 {
     for (std::size_t axis = 0; axis < 3; ++axis)
     {
-        if (std::min(capsule.p0[axis], capsule.p1[axis]) - capsule.radius > high[axis] ||
-            std::max(capsule.p0[axis], capsule.p1[axis]) + capsule.radius < low[axis])
+        if (bounds.low[axis] > high[axis] || bounds.high[axis] < low[axis])
         {
             return false;
         }
@@ -392,48 +424,39 @@ bool BoundsMeet(const Capsule &capsule, const Point &low, const Point &high)
     return true;
 }
 
-} // namespace
-
-bool Overlaps(const Capsule &capsule, const Triangle &triangle)
+// The nearest points of a segment and a triangle.
+Closest SegmentToTriangle(const Point &p0, const Point &p1, const Triangle &triangle)
 {
-    const float most = capsule.radius * capsule.radius;
-    const Point direction = Minus(capsule.p1, capsule.p0);
+    const Point direction = Minus(p1, p0);
     // Through the triangle: the distance is none. Otherwise the nearest points
     // are an end of the segment and the triangle, or the segment and an edge.
-    if (Meets(triangle, capsule.p0, direction, 0, 1))
+    if (const auto met = Meets(triangle, p0, direction, 0, 1))
     {
-        return true;
+        const Point at = Plus(p0, Times(direction, met->distance));
+        return Closest{0, at, at};
     }
-    return SquaredDistance(capsule.p0, NearestOnTriangle(capsule.p0, triangle)) <= most ||
-           SquaredDistance(capsule.p1, NearestOnTriangle(capsule.p1, triangle)) <= most ||
-           SegmentsSquared(capsule.p0, capsule.p1, triangle.a, triangle.b) <= most ||
-           SegmentsSquared(capsule.p0, capsule.p1, triangle.b, triangle.c) <= most ||
-           SegmentsSquared(capsule.p0, capsule.p1, triangle.c, triangle.a) <= most;
+    Closest best = Between(p0, NearestOnTriangle(p0, triangle));
+    best = Nearer(best, Between(p1, NearestOnTriangle(p1, triangle)));
+    best = Nearer(best, SegmentsClosest(p0, p1, triangle.a, triangle.b));
+    best = Nearer(best, SegmentsClosest(p0, p1, triangle.b, triangle.c));
+    return Nearer(best, SegmentsClosest(p0, p1, triangle.c, triangle.a));
 }
 
-bool Overlaps(const Capsule &capsule, const Capsule &other)
+// The nearest points of a segment and a solid box [-half, half].
+Closest SegmentToBox(const Point &p0, const Point &p1, const Point &high)
 {
-    const float reach = capsule.radius + other.radius;
-    return SegmentsSquared(capsule.p0, capsule.p1, other.p0, other.p1) <= reach * reach;
-}
-
-bool Overlaps(const Capsule &capsule, const Point &halfExtents)
-{
-    const Point high = halfExtents;
     const Point low{-high[0], -high[1], -high[2]};
-    if (SegmentMeetsBox(capsule.p0, capsule.p1, low, high))
+    if (const auto entry = SegmentEntersBox(p0, p1, low, high))
     {
-        return true;
+        const Point at = Plus(p0, Times(Minus(p1, p0), *entry));
+        return Closest{0, at, at};
     }
     // Apart, the nearest points are an end of the segment and the box, or the
     // segment and one of the box's twelve edges: a face's nearest point to an
     // inner point of the segment means the segment runs along the face, and
     // then an end or an edge is as near.
-    const float most = capsule.radius * capsule.radius;
-    if (BoxSquared(capsule.p0, low, high) <= most || BoxSquared(capsule.p1, low, high) <= most)
-    {
-        return true;
-    }
+    Closest best = Between(p0, ClampToBox(p0, low, high));
+    best = Nearer(best, Between(p1, ClampToBox(p1, low, high)));
     auto corner = [&](int i) {
         return Point{(i & 1) != 0 ? high[0] : low[0], (i & 2) != 0 ? high[1] : low[1], (i & 4) != 0 ? high[2] : low[2]};
     };
@@ -441,13 +464,171 @@ bool Overlaps(const Capsule &capsule, const Point &halfExtents)
     {
         for (int bit = 1; bit < 8; bit <<= 1)
         {
-            if ((i & bit) == 0 && SegmentsSquared(capsule.p0, capsule.p1, corner(i), corner(i | bit)) <= most)
+            if ((i & bit) == 0)
             {
-                return true;
+                best = Nearer(best, SegmentsClosest(p0, p1, corner(i), corner(i | bit)));
             }
         }
     }
-    return false;
+    return best;
+}
+
+// A sweep (DAOLib #238, dev/COLLISION.md section 6). The capsule moved by
+// `motion` times t, t from 0 to 1, has its segment at p + t * motion. For a
+// convex shape S, f(t) = the squared distance from that segment to S is
+// convex in t: the distance from a convex set moved by a line to a convex
+// set that stays is, and its square is, as the square is a nondecreasing
+// convex function of a distance. The capsule first touches S at the least
+// t where the distance is down to the radii's sum R, f(t) <= R squared. So
+// f(0) <= R squared is a touch at the start; else f's least value over
+// [0, 1] is found, by golden section, which a convex f needs and which takes
+// no derivative, and if that is over R squared the capsule never touches;
+// else f falls from f(0) > R squared to that least at tLeast, and the root is
+// bisected between them. The counts are fixed, not a tolerance, so a run
+// takes the same steps whatever the shape.
+constexpr int kSearchSteps = 60;
+
+// What a hit's normal is where there is no direction from the shape to the capsule's segment: against the move,
+// or up if there is none.
+Point NormalAgainst(const Point &motion)
+{
+    const float length = std::sqrt(Dot(motion, motion));
+    if (length < 1e-6F)
+    {
+        return {0, 0, 1};
+    }
+    return Times(motion, -1.0F / length);
+}
+
+// The hit at `t`, from the nearest points there. `shapeRadius` is a capsule's or sphere's own, so that the point is on
+// its surface and not its axis.
+SweepHit HitAt(float t, bool startsInside, const Closest &closest, float shapeRadius, const Point &motion)
+{
+    const Point away = Minus(closest.onSegment, closest.onShape);
+    const float length = std::sqrt(Dot(away, away));
+    // Zero distance is a segment through the shape (or a point shape on it): the surface's side is not told by the
+    // points.
+    const Point normal = length > 1e-6F ? Times(away, 1.0F / length) : NormalAgainst(motion);
+    return SweepHit{t, Plus(closest.onShape, Times(normal, shapeRadius)), normal, startsInside};
+}
+
+// Sweeps `capsule` by `motion` against a convex shape whose nearest points to a segment `nearest` gives.
+// @param shapeRadius the shape's own thickness about what `nearest` measures (a capsule's radius), 0 for a solid
+template <class Nearest>
+std::optional<SweepHit> SweepAgainst(const Capsule &capsule, const Point &motion, float shapeRadius, Nearest nearest)
+{
+    const float reach = capsule.radius + shapeRadius;
+    const float most = reach * reach;
+    auto at = [&](float t) {
+        const Point step = Times(motion, t);
+        return nearest(Plus(capsule.p0, step), Plus(capsule.p1, step));
+    };
+    const Closest start = at(0);
+    if (start.squared <= most)
+    {
+        return HitAt(0, true, start, shapeRadius, motion);
+    }
+    // The least of f over [0, 1]: golden section, then the end, which it only comes near.
+    constexpr float kGolden = 0.6180339887F;
+    float low = 0;
+    float high = 1;
+    float x1 = high - (kGolden * (high - low));
+    float x2 = low + (kGolden * (high - low));
+    float f1 = at(x1).squared;
+    float f2 = at(x2).squared;
+    for (int step = 0; step < kSearchSteps; ++step)
+    {
+        if (f1 < f2)
+        {
+            high = x2;
+            x2 = x1;
+            f2 = f1;
+            x1 = high - (kGolden * (high - low));
+            f1 = at(x1).squared;
+        }
+        else
+        {
+            low = x1;
+            x1 = x2;
+            f1 = f2;
+            x2 = low + (kGolden * (high - low));
+            f2 = at(x2).squared;
+        }
+    }
+    float tLeast = (low + high) * 0.5F;
+    float leastSquared = at(tLeast).squared;
+    if (const float atEnd = at(1).squared; atEnd <= leastSquared)
+    {
+        tLeast = 1;
+        leastSquared = atEnd;
+    }
+    if (leastSquared > most)
+    {
+        return std::nullopt;
+    }
+    // f is over R squared at `low` and at most it at `high`, and falls between them.
+    low = 0;
+    high = tLeast;
+    for (int step = 0; step < kSearchSteps; ++step)
+    {
+        const float middle = (low + high) * 0.5F;
+        if (at(middle).squared <= most)
+        {
+            high = middle;
+        }
+        else
+        {
+            low = middle;
+        }
+    }
+    return HitAt(high, false, at(high), shapeRadius, motion);
+}
+
+} // namespace
+
+bool Overlaps(const Capsule &capsule, const Triangle &triangle)
+{
+    return SegmentToTriangle(capsule.p0, capsule.p1, triangle).squared <= capsule.radius * capsule.radius;
+}
+
+bool Overlaps(const Capsule &capsule, const Capsule &other)
+{
+    const float reach = capsule.radius + other.radius;
+    return SegmentsClosest(capsule.p0, capsule.p1, other.p0, other.p1).squared <= reach * reach;
+}
+
+bool Overlaps(const Capsule &capsule, const Point &halfExtents)
+{
+    return SegmentToBox(capsule.p0, capsule.p1, halfExtents).squared <= capsule.radius * capsule.radius;
+}
+
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Triangle &triangle)
+{
+    // Cheap first: a triangle outside the swept capsule's bounds is never touched.
+    const Point low{std::min({triangle.a[0], triangle.b[0], triangle.c[0]}),
+                    std::min({triangle.a[1], triangle.b[1], triangle.c[1]}),
+                    std::min({triangle.a[2], triangle.b[2], triangle.c[2]})};
+    const Point high{std::max({triangle.a[0], triangle.b[0], triangle.c[0]}),
+                     std::max({triangle.a[1], triangle.b[1], triangle.c[1]}),
+                     std::max({triangle.a[2], triangle.b[2], triangle.c[2]})};
+    if (!BoundsMeet(SweptBounds(capsule, motion), low, high))
+    {
+        return std::nullopt;
+    }
+    return SweepAgainst(capsule, motion, 0,
+                        [&](const Point &p0, const Point &p1) { return SegmentToTriangle(p0, p1, triangle); });
+}
+
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Capsule &other)
+{
+    return SweepAgainst(capsule, motion, other.radius,
+                        [&](const Point &p0, const Point &p1) { return SegmentsClosest(p0, p1, other.p0, other.p1); });
+}
+
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Point &halfExtents)
+{
+    return SweepAgainst(capsule, motion, 0,
+                        [&](const Point &p0, const Point &p1) { return SegmentToBox(p0, p1, halfExtents); });
 }
 
 bool TriangleTree::Overlaps(const Capsule &capsule) const
@@ -456,6 +637,7 @@ bool TriangleTree::Overlaps(const Capsule &capsule) const
     {
         return false;
     }
+    const Bounds bounds = SweptBounds(capsule, {0, 0, 0});
     std::array<std::uint32_t, kStackMost> stack{};
     std::size_t depth = 0;
     stack[depth++] = 0;
@@ -467,7 +649,7 @@ bool TriangleTree::Overlaps(const Capsule &capsule) const
             break;
         }
         const Node &node = nodes_[stack[depth]];
-        if (!BoundsMeet(capsule, node.low, node.high))
+        if (!BoundsMeet(bounds, node.low, node.high))
         {
             continue;
         }
@@ -489,6 +671,50 @@ bool TriangleTree::Overlaps(const Capsule &capsule) const
         }
     }
     return false;
+}
+
+std::optional<SweepHit> TriangleTree::Sweep(const Capsule &capsule, const Point &motion) const
+{
+    if (nodes_.empty())
+    {
+        return std::nullopt;
+    }
+    const Bounds bounds = SweptBounds(capsule, motion);
+    std::optional<SweepHit> earliest;
+    std::array<std::uint32_t, kStackMost> stack{};
+    std::size_t depth = 0;
+    stack[depth++] = 0;
+    while (depth > 0)
+    {
+        --depth;
+        if (depth >= stack.size())
+        {
+            break;
+        }
+        const Node &node = nodes_[stack[depth]];
+        if (!BoundsMeet(bounds, node.low, node.high))
+        {
+            continue;
+        }
+        if (node.count == 0)
+        {
+            if (depth + 2 <= kStackMost)
+            {
+                stack[depth++] = node.first;
+                stack[depth++] = node.right;
+            }
+            continue;
+        }
+        for (std::uint32_t i = node.first; i < node.first + node.count; ++i)
+        {
+            if (const auto hit = core::Sweep(capsule, motion, triangles_[order_[i]]);
+                hit && (!earliest || hit->t < earliest->t))
+            {
+                earliest = hit;
+            }
+        }
+    }
+    return earliest;
 }
 
 } // namespace dao::core

@@ -1509,32 +1509,32 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "overlap-pierce: a capsule passing through a triangle touches it, its ends far",
         RAYCAST,
-        "if (Meets(triangle, capsule.p0, direction, 0, 1))",
-        "if (Meets(triangle, capsule.p0, direction, 2, 3))",
+        "if (const auto met = Meets(triangle, p0, direction, 0, 1))",
+        "if (const auto met = Meets(triangle, p0, direction, 2, 3))",
     ),
     Mutant(
         "overlap-box-through: a capsule through a box, its ends outside it, overlaps it",
         RAYCAST,
-        "    if (SegmentMeetsBox(capsule.p0, capsule.p1, low, high))",
-        "    if (SegmentMeetsBox(capsule.p0, capsule.p0, high, high))",
+        "if (const auto entry = SegmentEntersBox(p0, p1, low, high))",
+        "if (const auto entry = SegmentEntersBox(p0, p0, high, high))",
     ),
     Mutant(
         "overlap-box-edges: a capsule beside a box's edge, its ends far, overlaps it",
         RAYCAST,
-        "            if ((i & bit) == 0 && SegmentsSquared(",
-        "            if ((i & bit) == 8 && SegmentsSquared(",
+        "if ((i & bit) == 0)",
+        "if ((i & bit) == 8)",
     ),
     Mutant(
         "overlap-tree-bounds: the tree's nodes are met by the capsule's bounds grown by its radius",
         RAYCAST,
-        "std::min(capsule.p0[axis], capsule.p1[axis]) - capsule.radius > high[axis]",
-        "std::min(capsule.p0[axis], capsule.p1[axis]) > high[axis]",
+        "std::min({capsule.p0[axis], capsule.p1[axis], end0, end1}) - capsule.radius;",
+        "std::min({capsule.p0[axis], capsule.p1[axis], end0, end1});",
     ),
     Mutant(
         "overlap-unapply: a point in a pose's space is turned by the turn's transpose",
         COLLISION,
-        "(pose.rotation[3 + column] * d[1])",
-        "(pose.rotation[(column * 3) + 1] * d[1])",
+        "(pose.rotation[3 + column] * v[1])",
+        "(pose.rotation[(column * 3) + 1] * v[1])",
     ),
     Mutant(
         "overlap-level-mesh: a level's mesh shapes are overlapped by their triangles",
@@ -1553,6 +1553,79 @@ MUTANTS: list[Mutant] = [
         COLLISION,
         "centre - (height * 0.5F)",
         "centre - height",
+    ),
+    # The capsule sweep (#238): a start overlap is t = 0 and says so, the root is bisected toward the capsule's
+    # side of the touch, a touch at the move's very end is found, the swept bounds hold the move's end, a box's hit
+    # comes back out of its own space, a mesh's motion goes into its own, the pick's mode, the camera's centre, the
+    # swept shape's height and a level hit's room.
+    Mutant(
+        "sweep-start-flag: a capsule already touching a shape is reported as starting inside it",
+        RAYCAST,
+        "return HitAt(0, true, start, shapeRadius, motion);",
+        "return HitAt(0, false, start, shapeRadius, motion);",
+    ),
+    Mutant(
+        "sweep-start-t: a capsule already touching a shape is reported at t = 0",
+        RAYCAST,
+        "return HitAt(0, true, start, shapeRadius, motion);",
+        "return HitAt(1, true, start, shapeRadius, motion);",
+    ),
+    Mutant(
+        "sweep-bisect: the touch is bisected toward the side where the capsule is within the radii",
+        RAYCAST,
+        "if (at(middle).squared <= most)",
+        "if (at(middle).squared >= most)",
+    ),
+    # Not a mutant: the sweep's check of f(1) after the golden section (a touch exactly at the move's end). In float the
+    # section's 60 steps end on 1.0 itself for a minimum at the end, so dropping the check changes no answer; it stays
+    # as the guard for a section that stops a step short.
+    Mutant(
+        "sweep-bounds-end: the swept bounds hold the capsule's end of the move",
+        RAYCAST,
+        "std::max({capsule.p0[axis], capsule.p1[axis], end0, end1}) + capsule.radius;",
+        "std::max({capsule.p0[axis], capsule.p1[axis]}) + capsule.radius;",
+    ),
+    Mutant(
+        "sweep-box-point: a box's hit point comes back out of the box's space",
+        COLLISION,
+        "return SweepHit{local.t, Apply(pose, local.point), Turn(pose, local.normal), local.startsInside};",
+        "return SweepHit{local.t, local.point, Turn(pose, local.normal), local.startsInside};",
+    ),
+    Mutant(
+        "sweep-box-normal: a box's hit normal is turned out of the box's space",
+        COLLISION,
+        "return SweepHit{local.t, Apply(pose, local.point), Turn(pose, local.normal), local.startsInside};",
+        "return SweepHit{local.t, Apply(pose, local.point), local.normal, local.startsInside};",
+    ),
+    Mutant(
+        "sweep-mesh-motion: a mesh's motion is turned into the mesh's space",
+        COLLISION,
+        "const Point localMotion = Unturn(pose, motion);",
+        "const Point localMotion = motion;",
+    ),
+    Mutant(
+        "sweep-level-room: a level's hit carries its actor's room",
+        COLLISION,
+        "static_cast<std::int32_t>(a), actor.room,",
+        "static_cast<std::int32_t>(a), -1,",
+    ),
+    Mutant(
+        "sweep-swept-capsule: the engine's swept capsule is 0.1 m tall",
+        COLLISION,
+        "from[2] + 0.1F}, radius};",
+        "from[2] + 0.2F}, radius};",
+    ),
+    Mutant(
+        "sweep-pick-mode: mode 0 keeps the nearest hit and mode 1 the farthest",
+        COLLISION,
+        "if (pick == Pick::Nearest ? distance < chosenDistance : distance > chosenDistance)",
+        "if (pick == Pick::Farthest ? distance < chosenDistance : distance > chosenDistance)",
+    ),
+    Mutant(
+        "sweep-pick-centre: the camera's centre is the hit's point plus its normal times the radius",
+        COLLISION,
+        "centre[axis] = chosen->hit.point[axis] + (chosen->hit.normal[axis] * radius);",
+        "centre[axis] = chosen->hit.point[axis] - (chosen->hit.normal[axis] * radius);",
     ),
     # A weapon trail's node (#236): its duration is its own field, not its segment's length.
     Mutant(

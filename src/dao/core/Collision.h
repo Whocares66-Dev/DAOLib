@@ -28,6 +28,10 @@
 // for a free spot (0x006B1600, DAOLib #233), is a capsule against the same
 // shapes by the same test of bits0; Overlaps answers it for a level's shapes
 // and a placeable's.
+//
+// The engine's capsule sweep (Physics::PhysicsScene::SweepCapsule, 0x0082F600, DAOLib #238) moves a capsule along a
+// line and reports every shape of the mask it meets; Sweep and SweepAll answer it, and PickedCentre is the explore
+// camera's reading of the list.
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -218,5 +222,53 @@ bool Overlaps(const StaticPhysics &physics, const Capsule &capsule, std::uint32_
 // Returns whether a capsule overlaps a placeable's shapes that a mask meets.
 // @param placed where the placeable stands and how it is turned (PoseOf its position and orientation)
 bool Overlaps(std::span<const Shape> shapes, const Pose &placed, const Capsule &capsule, std::uint32_t mask);
+
+// One shape a swept capsule touched.
+struct ShapeHit
+{
+    SweepHit hit;
+    std::uint32_t bits0 = 0; // the shape's own mask; the engine's record holds the query's instead
+    std::int32_t actor = -1; // a level's: the actor's index in StaticPhysics::actors; -1 for a placeable's
+    std::int32_t room = -1;  // a level's: the actor's room; -1 for a placeable's
+    std::int32_t shape = -1; // the shape's index in its actor's shapes, or in the placeable's
+};
+
+// Returns where a capsule moved by `motion` first touches a solid sphere, box or capsule placed by a pose.
+// @param dimensions a box's half extents
+// @param height a capsule's, between its caps' centres along its y
+// @return nullopt for no touch, and for a mesh or a convex shape, which SweepAll over the level takes by its triangles
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, Kind kind, const Point &dimensions,
+                              float radius, float height, const Pose &pose);
+
+// Returns the shape the engine sweeps in the camera's queries: a capsule from `from` to 0.1 m above it.
+Capsule SweptCapsule(const Point &from, float radius);
+
+// Returns every shape of a level that a mask meets and a capsule moved by `motion` touches, each at its first touch.
+// @param mask the query's; a shape is met when its bits0 shares a bit with it
+//
+// In the order of the actors and their shapes, not sorted by t, as the engine's report is. A mesh shape is touched at
+// its earliest triangle.
+std::vector<ShapeHit> SweepAll(const StaticPhysics &physics, const Capsule &capsule, const Point &motion,
+                               std::uint32_t mask);
+
+// Returns the same over a placeable's shapes.
+// @param placed where the placeable stands and how it is turned (PoseOf its position and orientation)
+std::vector<ShapeHit> SweepAll(std::span<const Shape> shapes, const Pose &placed, const Capsule &capsule,
+                               const Point &motion, std::uint32_t mask);
+
+// Which of a sweep's hits the camera keeps: the one whose point is nearest the sweep's start, or the farthest.
+enum class Pick
+{
+    Nearest,
+    Farthest,
+};
+
+// Returns where a sphere of `radius` stands touching the hit picked from a sweep's list: its point plus its normal
+// times the radius.
+// @param start the capsule's p0, which the hits' points are measured from
+// @return nullopt for no hits, or a point or normal that is not a number
+//
+// The explore camera's wrapper (0x006490B0); on a tie the earlier hit stays.
+std::optional<Point> PickedCentre(std::span<const ShapeHit> hits, const Point &start, float radius, Pick pick);
 
 } // namespace dao::core::collision

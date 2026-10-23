@@ -1,6 +1,7 @@
 // Rays and capsules against triangles, quickly: a tree of boxes over a set of
 // triangles, the nearest triangle a ray meets, and whether a capsule touches
-// any (the engine's overlap query, dao/core/Collision.h; DAOLib #233). What bakes a level's light probes
+// any (the engine's overlap query, dao/core/Collision.h; DAOLib #233), and where
+// a capsule moved along a line first touches one (its sweep; DAOLib #238). What bakes a level's light probes
 // from its geometry in a second or two (DAOLib #65): a room and the rooms
 // seen from it are half a million triangles, and a ray tried against each
 // took a second a probe.
@@ -51,6 +52,32 @@ bool Overlaps(const Capsule &capsule, const Capsule &other);
 // The box is solid: a capsule wholly inside it overlaps it. Move the capsule into the box's space first.
 bool Overlaps(const Capsule &capsule, const Point &halfExtents);
 
+// Where a capsule swept along a move first touches a shape (the engine's PhysicsScene::SweepCapsule, DAOLib #238).
+struct SweepHit
+{
+    float t = 0;           // along the move: 0 at its start, 1 at its end
+    Point point{};         // on the shape's surface at the touch, as PhysX's contact point is
+    Point normal{0, 0, 1}; // unit, from the point toward the capsule's segment: out of the surface, toward the capsule
+    bool startsInside = false; // the capsule already touched the shape at the start, so t is 0
+};
+
+// Returns where a capsule moved by `motion` first touches a triangle, from either side of it.
+// @param motion how far the capsule goes, whole: t = 1 is its end
+// @return nullopt if it never does
+//
+// A capsule that already touches the shape is reported at t = 0 with startsInside. What PhysX itself reports
+// there is not read (dev/COLLISION.md, section 6). At zero distance the normal is against the motion, or (0, 0, 1)
+// with none.
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Triangle &triangle);
+
+// Returns where a capsule moved by `motion` first touches another capsule (a sphere has its ends the same point).
+// The hit's point is on the other capsule's surface.
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Capsule &other);
+
+// Returns where a capsule moved by `motion` first touches a solid box centred on the origin along the axes.
+// @param halfExtents the box's half sizes along x, y and z
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, const Point &halfExtents);
+
 // Where a ray met a triangle.
 struct RayHit
 {
@@ -77,6 +104,9 @@ class TriangleTree
 
     // Returns whether a capsule touches any of the triangles.
     bool Overlaps(const Capsule &capsule) const;
+
+    // Returns the earliest touch of a capsule moved by `motion` with any of the triangles, nullopt if none.
+    std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion) const;
 
     std::size_t Size() const
     {

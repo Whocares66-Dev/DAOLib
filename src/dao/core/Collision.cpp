@@ -1041,17 +1041,31 @@ Capsule CreatureCapsule(const Point &feet, float radius, float height, float cen
 namespace
 {
 
-// A point of the level in a pose's own space: the turn's transpose, a turn's inverse.
-Point Unapply(const Pose &pose, const Point &point)
+// A vector turned by a pose's turn.
+Point Turn(const Pose &pose, const Point &v)
 {
-    const Point d{point[0] - pose.translation[0], point[1] - pose.translation[1], point[2] - pose.translation[2]};
+    const auto &m = pose.rotation;
+    return {(m[0] * v[0]) + (m[1] * v[1]) + (m[2] * v[2]), (m[3] * v[0]) + (m[4] * v[1]) + (m[5] * v[2]),
+            (m[6] * v[0]) + (m[7] * v[1]) + (m[8] * v[2])};
+}
+
+// A vector of the level in a pose's own space: the turn's transpose, a turn's inverse.
+Point Unturn(const Pose &pose, const Point &v)
+{
     Point out{};
     for (std::size_t column = 0; column < 3; ++column)
     {
         out[column] =
-            (pose.rotation[column] * d[0]) + (pose.rotation[3 + column] * d[1]) + (pose.rotation[6 + column] * d[2]);
+            (pose.rotation[column] * v[0]) + (pose.rotation[3 + column] * v[1]) + (pose.rotation[6 + column] * v[2]);
     }
     return out;
+}
+
+// A point of the level in a pose's own space.
+Point Unapply(const Pose &pose, const Point &point)
+{
+    return Unturn(pose,
+                  {point[0] - pose.translation[0], point[1] - pose.translation[1], point[2] - pose.translation[2]});
 }
 
 bool MeshOverlaps(const Capsule &capsule, const TriangleMesh &mesh, const Pose &pose)
@@ -1113,6 +1127,185 @@ bool Overlaps(std::span<const Shape> shapes, const Pose &placed, const Capsule &
         return Meets(shape.mask, mask) && Overlaps(capsule, shape.kind, shape.dimensions, shape.radius, shape.height,
                                                    Compose(placed, PoseOf(shape.rotation, shape.position)));
     });
+}
+
+// The capsule sweep (DAOLib #238, dev/COLLISION.md section 6, read 2026-10-22):
+// Physics::PhysicsScene::SweepCapsule (0x0082F600) moves a capsule from p0 by
+// p1 - p0 through NxScene::linearCapsuleSweep (slot +0x1E0) with flags 0xB,
+// NX_SF_ALL_HITS among them, the ray's filter (a shape is hit when its bits0
+// shares a bit with the mask) and no group left out. It turns each
+// NxSweepQueryHit into a record of the hit's point and normal, the query's
+// mask and the shape's object, in the order the report gave them and
+// unsorted. The swept shape is the capsule from the start to the start plus
+// (0, 0, 0.1) (the float at 0x00AE7BD8, added at 0x0082F6AE) with the
+// caller's radius. SweepAll is that list, one hit a shape; the t is ours,
+// the engine's records do not carry it.
+
+namespace
+{
+
+// A hit found in a shape's own space, in the level's.
+SweepHit PlacedHit(const Pose &pose, const SweepHit &local)
+{
+    return SweepHit{local.t, Apply(pose, local.point), Turn(pose, local.normal), local.startsInside};
+}
+
+// A mesh's earliest touch, its triangles in the mesh's own space and the hit back in the level's.
+std::optional<SweepHit> MeshSweep(const Capsule &capsule, const Point &motion, const TriangleMesh &mesh,
+                                  const Pose &pose)
+{
+    const Capsule local{Unapply(pose, capsule.p0), Unapply(pose, capsule.p1), capsule.radius};
+    const Point localMotion = Unturn(pose, motion);
+    std::optional<SweepHit> earliest;
+    for (const auto &indices : mesh.triangles)
+    {
+        if (indices[0] >= mesh.points.size() || indices[1] >= mesh.points.size() || indices[2] >= mesh.points.size())
+        {
+            continue;
+        }
+        const auto hit = core::Sweep(
+            local, localMotion, Triangle{mesh.points[indices[0]], mesh.points[indices[1]], mesh.points[indices[2]]});
+        if (hit && (!earliest || hit->t < earliest->t))
+        {
+            earliest = hit;
+        }
+    }
+    if (!earliest)
+    {
+        return std::nullopt;
+    }
+    return PlacedHit(pose, *earliest);
+}
+
+} // namespace
+
+std::optional<SweepHit> Sweep(const Capsule &capsule, const Point &motion, Kind kind, const Point &dimensions,
+                              float radius, float height, const Pose &pose)
+{
+    switch (kind)
+    {
+    case Kind::Sphere:
+        return core::Sweep(capsule, motion, Capsule{pose.translation, pose.translation, radius});
+    case Kind::Capsule:
+        return core::Sweep(capsule, motion,
+                           Capsule{Apply(pose, {0, -height * 0.5F, 0}), Apply(pose, {0, height * 0.5F, 0}), radius});
+    case Kind::Box: {
+        // In the box's own space, where it is centred and square to the axes; the hit comes back out of it.
+        const auto local = core::Sweep(Capsule{Unapply(pose, capsule.p0), Unapply(pose, capsule.p1), capsule.radius},
+                                       Unturn(pose, motion), dimensions);
+        if (!local)
+        {
+            return std::nullopt;
+        }
+        return PlacedHit(pose, *local);
+    }
+    default:
+        return std::nullopt;
+    }
+}
+
+Capsule SweptCapsule(const Point &from, float radius)
+{
+    return Capsule{from, {from[0], from[1], from[2] + 0.1F}, radius};
+}
+
+std::vector<ShapeHit> SweepAll(const StaticPhysics &physics, const Capsule &capsule, const Point &motion,
+                               std::uint32_t mask)
+{
+    std::vector<ShapeHit> hits;
+    for (std::size_t a = 0; a < physics.actors.size(); ++a)
+    {
+        const Actor &actor = physics.actors[a];
+        for (std::size_t s = 0; s < actor.shapes.size(); ++s)
+        {
+            const StaticShape &shape = actor.shapes[s];
+            if (!Meets(shape.groupsMask[0], mask))
+            {
+                continue;
+            }
+            const Pose pose = Compose(actor.globalPose, shape.localPose);
+            std::optional<SweepHit> hit;
+            if (shape.kind != Kind::Mesh)
+            {
+                hit = Sweep(capsule, motion, shape.kind, shape.dimensions, shape.radius, shape.height, pose);
+            }
+            else if (shape.mesh >= 0 && static_cast<std::size_t>(shape.mesh) < physics.meshes.size())
+            {
+                hit = MeshSweep(capsule, motion, physics.meshes[static_cast<std::size_t>(shape.mesh)], pose);
+            }
+            if (hit)
+            {
+                hits.push_back(ShapeHit{*hit, shape.groupsMask[0], static_cast<std::int32_t>(a), actor.room,
+                                        static_cast<std::int32_t>(s)});
+            }
+        }
+    }
+    return hits;
+}
+
+std::vector<ShapeHit> SweepAll(std::span<const Shape> shapes, const Pose &placed, const Capsule &capsule,
+                               const Point &motion, std::uint32_t mask)
+{
+    std::vector<ShapeHit> hits;
+    for (std::size_t s = 0; s < shapes.size(); ++s)
+    {
+        const Shape &shape = shapes[s];
+        if (!Meets(shape.mask, mask))
+        {
+            continue;
+        }
+        const auto hit = Sweep(capsule, motion, shape.kind, shape.dimensions, shape.radius, shape.height,
+                               Compose(placed, PoseOf(shape.rotation, shape.position)));
+        if (hit)
+        {
+            hits.push_back(ShapeHit{*hit, shape.mask, -1, -1, static_cast<std::int32_t>(s)});
+        }
+    }
+    return hits;
+}
+
+// The explore camera's wrapper 0x006490B0 (dev/COLLISION.md section 6, read
+// 2026-10-22): it takes the record whose hit point is nearest to p0 (mode 0)
+// or the farthest (mode 1), the first record seeding the choice and the loop
+// from the second replacing it on a strictly nearer (or farther) point, so a
+// tie keeps the earlier; an empty list, or a NaN in the point or normal,
+// answers false. It returns point + normal * radius (0x0064931F-0x00649364).
+std::optional<Point> PickedCentre(std::span<const ShapeHit> hits, const Point &start, float radius, Pick pick)
+{
+    if (hits.empty())
+    {
+        return std::nullopt;
+    }
+    auto squared = [&](const ShapeHit &h) {
+        float sum = 0;
+        for (std::size_t axis = 0; axis < 3; ++axis)
+        {
+            const float d = h.hit.point[axis] - start[axis];
+            sum += d * d;
+        }
+        return sum;
+    };
+    const ShapeHit *chosen = hits.data();
+    float chosenDistance = squared(*chosen);
+    for (const ShapeHit &candidate : hits.subspan(1))
+    {
+        const float distance = squared(candidate);
+        if (pick == Pick::Nearest ? distance < chosenDistance : distance > chosenDistance)
+        {
+            chosen = &candidate;
+            chosenDistance = distance;
+        }
+    }
+    Point centre{};
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        if (std::isnan(chosen->hit.point[axis]) || std::isnan(chosen->hit.normal[axis]))
+        {
+            return std::nullopt;
+        }
+        centre[axis] = chosen->hit.point[axis] + (chosen->hit.normal[axis] * radius);
+    }
+    return centre;
 }
 
 } // namespace dao::core::collision

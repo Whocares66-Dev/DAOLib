@@ -15,6 +15,7 @@ add_executable(
     test_code.cpp
     test_collision.cpp
     test_overlap.cpp
+    test_sweep.cpp
     test_crashlog.cpp
     test_cutscene.cpp
     test_facefx.cpp
