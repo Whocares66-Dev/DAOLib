@@ -196,6 +196,7 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
   - At the area's add (slot 63, 0x00750B10), a placeable with a blocking state and two different `RoomID`s is registered as a door between those rooms (0x0068C190).
   - The current state's BlockVis (0x0074BCC0) is then read by a room-to-room walk that passes through doors not blocking (0x00686A70; inferred: visibility between rooms).
   - For a door (BaseType 1), 0x0074E850 sets a value on its model, 0.6 when open and 1.0 when shut (inferred: a fade or occlusion).
+    - **0x0074E850(bool)** (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #151) [C]: only for a placeable whose +0x638 is 1; it updates the collision (`CCPlaceable::SetCollisionBlocking(0x0074BCC0())`), then calls the placeable's model (+0x70) vtable +0x5C with 0.6 (0x00C0CBC8) when the door does not block and (its argument is set or the mode is not 4 or 5), else with 1.0 [C]. 0x006403F0 calls it on every placeable of the area's list as a conversation or cutscene begins or ends (section 2b) [C]. That +0x5C is the model's alpha, so an open door is drawn at 0.6 outside scenes, is [I].
   - A state change sets the area's +0x608 (inferred: visibility dirty).
 - **The walk grid's patch is chosen by the state's index** (0x0074DBA0: +0x690[state], skipped past the count at +0x694). The door's `.pwk` has six patches for its six states (that the file's order is the state's is inferred from the shapes: closed 7s, locked 8s, open a strip).
 

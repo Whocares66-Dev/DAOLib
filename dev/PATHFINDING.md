@@ -572,7 +572,7 @@ else:   ray2 from z+100 down with all hits; take the hit with the smallest |hit.
 ##### The mask's switch: area+0x658 → +0x7C is the level's EnvAreaChunkIsChunk (3122) (lib-agent-2, read 2026-10-19)
 
 ###### Short answer (checked)
-ChunkManager+0x7C is the area layout's "is chunked" flag: GFF4 field 3122 `EnvAreaChunkIsChunk` (bool, int8) of the area's layout file `<name>.arl` (root struct), stored as a dword 0/1. Rule a port can copy: `ground uses mask 0x24 (reject hits with flag 0x01000000) iff the area's .arl has EnvAreaChunkIsChunk != 0`, else mask 0x02000000 (Walkable). Nothing is computed and no data table is involved.
+ChunkManager+0x7C is the area layout's "is chunked" flag: GFF4 field 3122 `EnvAreaChunkIsChunk` (bool, int8) of the area's layout file `<name>.arl` (root struct), stored as a dword: 1 for a chunked level, 2 for a room level (`mov edi, 2` at 0x005D13F6, stored at +0x7C at 0x005D1A7B; corrected 2026-10-22: it was noted as 0/1), 0 only when the layout is not read; the test 0x0067B4D0 chooses is `== 1`. Rule a port can copy: `ground uses mask 0x24 (reject hits with flag 0x01000000) iff the area's .arl has EnvAreaChunkIsChunk != 0`, else mask 0x02000000 (Walkable). Nothing is computed and no data table is involved.
 
 Core already exposes it: `src/dao/core/Level.cpp:407` `kAreaIsChunked = 3122`, read at :644; when nonzero it fills `out.chunks` (`Chunks{rows, columns, width, height}` from fields 3123/3124/3125/3126). So "chunked" = `layout.chunks.has_value()` (check the field name in Level.h).
 
