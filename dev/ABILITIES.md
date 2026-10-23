@@ -108,14 +108,14 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
     - **2:** off 3, else 222427.
     - **0x40:** both 2, else 315522.
     - **Bits 1, 2 and 0x40:** each failure writes its reason, and the last test's verdict counts.
-    - **0x80:** main 2 and 0x00A664C0 true, else 378484 and refused. When it passes, earlier verdicts are dropped. What 0x00A664C0 tests was not read [I].
+    - **0x80:** main 2 and 0x00A664C0 true, else 378484 and refused. When it passes, earlier verdicts are dropped. 0x00A664C0 is EquippableSlots 0x00A66440 == 1 << 0, a two-handed item (ITEMS.md; read 2026-10-23, [C]).
   - **0x100:** `Condition_AppGroup` (0xC7E5BB24) & the appearance's restriction group (0x0071A210) == 0 gives 383166 "Not useable by current race."
   - **0xE00, the class** (0x0071B010: property 27's base, truncated). The block runs only when the mask holds some of 0xE00. A bit means the class may use the ability:
     - class 1 (Warrior) without 0x800 gives 383167 "Warriors cannot use this.";
     - class 2 (Wizard) without 0x200 gives 383168 "Mages…";
     - class 3 (Rogue) without 0x400 gives 383169 "Rogues…";
     - any other class passes.
-    - (An earlier 0x200/0x400/0x800 → 383167/8/9 mapping was wrong on all three.) Whether a specialisation changes property 27 was not read [I].
+    - (An earlier 0x200/0x400/0x800 → 383167/8/9 mapping was wrong on all three.) A specialisation does not change property 27, as far as the scripts go [C, read 2026-10-23]: 0x007FCE60 raises CHARGEN_ASSIGN_ABILITIES (51) to the module, and sys_chargen's 51 spends property 38 and adds the ability. Property 27's script writers are Chargen_SelectCoreClass (sys_chargen_h.nss:798/802), sys_autoscale_h.nss:379 and ability_summon_h.nss:669; native writers (the template hand-over, a save load) were not read [I].
   - **0x10:** `Condition_Mode` (0x07342EA2) non-zero and HasActiveModalAbility 0x0066DD60(mode) false gives 310917, and is refused. It is the last test.
 - The quickbar's round-robin step that asks `CanUseAbility` for each slot: GUI.md, "The quickbar: the load, the rebuild, a slot's item and which slots are usable".
 

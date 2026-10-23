@@ -29,6 +29,11 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - **The Survival table** [C]: `0x00631F30` (ID 12347, unnamed) reads `survival.gda` (table 112, 5 rows; `ID Label Range DetectLevel Hostility Race SubType Level Stealth`) at row = the party's best rank (column hashes 0x81F2A384 as an int, 0xAFE43727 as an int, five u8 columns through slot +0x2C) and `ranges.gda` (table 134) row 16 `PrimaryRange` (0x45BD822C): `party+0x428 = bestLevel + DetectLevel` (0x006321E2-0x006321E9) and `party+0x42C = survival.Range * ranges[16].PrimaryRange / 100.0` (0x0063222C-0x00632236, the double at 0x00AED110). The rows (ghilana, 2026-10-22): rank 1 Range 60, DetectLevel -2; rank 2 Range 72, DetectLevel 0 (Hostility 1, Race 1); rank 3 Range 85, DetectLevel 2 (SubType 1, Level 1); rank 4 Range 100, DetectLevel 10000 (Stealth 1). The five u8 columns are packed into the flag byte +0x430 beside flag 0x20 (0x006321F4-0x00632226); which column is which bit is read (corrected 2026-10-23 by lib-agent-2: it was [I], not decoded; read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x006321F4–0x00632226]: Stealth (0x7D392386) is 0x10, Level (0xA891EF11) 0x08, SubType (0x59CC31ED) 0x04, Race (0x79E65274) 0x02 and Hostility (0x0E855E11) 0x01. The top bits 0xE0 are kept (0x20 Sense Darkspawn). Who reads bits 0x01–0x08 was not read [I]. So the "level - 2, level, level + 2" mapping is read: it is `DetectLevel` from the table, and rank 4's 10000 tracks everything. With no rank (+0x414 <= 0) and flag 0x20 the range uses row 1 (0x00632128-0x00632141).
 - **When 0x00631F30 runs** [C, a scan of every `E8` call in .text for the target, 2026-10-22]: six call sites. 0x006377AD (the add to the active party, 0x00637560), 0x00637990 (the removal, 0x006377E0), 0x006BC533 and 0x006BC5C5 (the health-change handler 0x006BC4B0 after a death and after a revive, only for a creature whose `IsInParty` +0x504 is set; PARTY.md, "The run/walk toggle, the creature flag byte +0x504, and the Fade"), 0x0071EB7F (`AddAbility`, 0x0071EAC0) and 0x0071F002 (`RemoveAbility`, 0x0071EF00). There is no call from a level-up, from an area change or from the load's party placement; no other call to 0x00631F30 exists in .text. A level-up therefore does not refresh it (it was [I] in "The party's tracking (Survival)"; now [C]), and an area change is not a caller (corrected 2026-10-22).
 - **DISAPPEAR carries the perceiver as creator and target** [C]: `AIMaster::AddEventDeltaTime` (0x0064ACE0) is called at 0x006B8BEA with the perceiver's id (`0x0053CC40` of +4, kept at [esp+0x2C]) pushed twice as its 3rd and 4th arguments, then priority 0xA and the event (type 0x1A at +0x20, the lost one at +0x28, flag 0 = `0x006A2B80(lost)`). APPEAR (0x006AFCF0) queues the same way per this file's "APPEAR ... Queued to the perceiver".
+  - **The delay** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - AddTime 0x00A35B90 fails (−2, nothing queued) when the time of day or the delay is not below a day's milliseconds (this+0x4C). Those compares are signed.
+    - The carry compares unsigned. A negative sum takes it, and its ms ends as sum − a day, still negative.
+    - AddEventDeltaTime's delay test is unsigned (0x0064AD34): 0 is delivered now, and anything else, negatives included, goes to AddEventLater 0x0064A740.
+    - That ProcessEvent 0x0064A8C0 has no type test is [I], from its head only.
 - **A suppression of DISAPPEAR not in the notes above** [C for the code, I for the meaning]: before building the event (0x006B8B3B-0x006B8B7C) the loop computes `[esp+0x1A]`: false when the lost creature is ACTIVE in the party (`0x006A2CE0`), else true when the perceiver's `+0xBD4 == 1` or the lost creature's `+0xBD4 == 1`. The event is built only when the gate `0x00698490(26)` (this file, "Neither is raised when the gate ...") answers 1 and `[esp+0x1A]` is false (0x006B8B7C-0x006B8B88). +0xBD4 is the flag that also stops the perception call; what a value of 1 (against 0) means was not read.
 
 ### Perception through doors: a hostile behind a closed door is not perceived (read 2026-10-18 by lib-agent-2)
@@ -365,6 +370,9 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 - It's reached through `0x007a08e0` from:
   - expiry: `SEffectsHolder::AgeEffect` (`0x007a0b10`) → `0x007a0a90`, which first sets the invalid word;
   - removal by match: `0x007a0c50`, the holders' walk that `RemoveEffect` (598, `0x00674590` → `ForScript_RemoveEffect` `0x006741e0` → `0x00670a80`) and its kin drive;
+    - **REMOVEEFFECT 0x00674590** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+      - A null effect does nothing.
+      - An effect whose duration type (+0x28) is 5 (innate, which has no constant in the ldf; EFFECTS.md) or 6 (DEATH) is never removed.
   - a holder slot at `0x007a1410`, which calls `0x007a0840` directly. It's probably the holder emptying itself; inferred.
 - So REMOVE_EFFECT is sent on `RemoveEffect` and on expiry. Read. Whether the engine itself removes effects at death is not read; the scripts' death handling removes what it chooses.
 
@@ -372,7 +380,7 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 
 - What DAOLib already read (`Addresses.h`, `dao/Effects.h`): each object's update ages its effects (`kEffectsHolder_Update` → `AgeEffect`). For a temporary effect (+0x28 = 2) that has started (+0x50), `AgeEffect` asks the owner (slot 0x2C) for this update's milliseconds and calls `CGameEffect::AddElapsed`, which adds them to +0x30, capped at the duration in +0x2C. When nothing is left, `0x007a0a90` ends the effect, and REMOVE_EFFECT follows.
 - The granularity is the owner's update, in milliseconds. The time is the owner's own clock, the same one regeneration uses, which `dao/Clock.h` holds and advances.
-- Duration types are `EFFECT_DURATION_TYPE_INSTANT` 1, `TEMPORARY` 2, `PERMANENT` 3 and `DEATH` 6. An effect whose +0x24 is 2 is removed by `AgeEffect` straight away, or by `0x007a00a0` in some game states (modes 4 and 5 via `0x005d5e70`). Inferred: that's how an instant effect goes once applied.
+- Duration types are `EFFECT_DURATION_TYPE_INSTANT` 1, `TEMPORARY` 2, `PERMANENT` 3, 5 = innate (no constant in the ldf; EFFECTS.md) and `DEATH` 6. An effect whose +0x24 is 2 is removed by `AgeEffect` straight away, or by `0x007a00a0` in some game states (modes 4 and 5 via `0x005d5e70`). Inferred: that's how an instant effect goes once applied.
 
 ### Damage and death
 
@@ -412,6 +420,9 @@ The apply path (`0x007a0e30`) takes the native handler only when the type is 1�
 1. It sets the effect's duration type (+0x28) to 6 (`EFFECT_DURATION_TYPE_DEATH`) and +0x38 to 999.
 2. It sets +0x34 to `0x005ca740(effect int 0, effect int 1 == 0, 0)`: the death animation, the `React` column of `UnsyncDeathAnimations` (int 1 0) or `SyncDeathAnimations` at row int 0, 250 where there is none (read, corrected 2026-10-18). When int 1 is 0, it sets int 3 to 1.
 3. It calls `0x0079fe90`: APPLY_EFFECT (33), run at once on the target's own script. For a creature, `creature_core` → `rules_core` → `Effects_HandleApplyEffect` → `Effects_HandleApplyEffectDeath`. That is how the scripts' death handler runs.
+   - **The runner** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+     - 0x0069A130 is a this-adjusting thunk (ecx − 0x70) to CCObject::RunEventScript 0x00698960.
+     - That calls 0x006985F0, which puts the object's own id in place of a −1 target (0x00698675–0x0069867D).
 4. If the script left the effect valid (+0x48 is 0), it removes effects by three matches, in one ANDed list (0x007A137D-0x007A13D2: duration type 5, type 4, +0x48 == 0; effect_access.md, "Read for DAOParagonEngine #169") (`ForScript_RemoveEffect` with matcher `0x00695400` and 5, then `0x00670a80` with matchers `0x00651810`/4 and `0x006953e0`/0, and a holder walk `0x0079f5d0` with `0x007a0c50`), then calls the holder's slot 0x1C (`0x006977c0`), which queues command 32, `ExecuteEffect` (`0x00695f20`), for the dying creature (corrected 2026-10-18: not the list's add; where the effect is put in the list is not read). It returns 0. If invalid, it returns 1 and nothing is added.
 
 The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`), then the same removals, then walks the holder re-applying through `0x007a0e30` (inferred: effects held back while dead are put back on resurrection).
@@ -421,6 +432,15 @@ The type-7 remove handler (`0x007a1410`) raises REMOVE_EFFECT (34) (`0x007a0840`
 - For a creature:
   - nothing if it already has a death effect;
   - for a ghost: DYING, a visual effect, then DEATH;
+    - **The ghost's death** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, scripts and exe]:
+      - effect_death_h.nss:109–118 sends its own SendEventOnDeath and returns TRUE, so the effect stays valid and the type-7 apply queues ExecuteEffect as for anyone.
+      - creature_core's DEATH for a ghost (creature_core.nss:241–245) does three things in order:
+        - the vfx 93095 at its location;
+        - SetObjectActive(self, 0, 0, 0);
+        - Safe_Destroy_Object(1500).
+      - SetActive(false) runs ClearAllCommands(1, 1) (PARTY.md), which ends the static ExecuteEffect (below). So the death sub-action 0x007AAC10 does not reach its own DEATH, and the ghost gets one DEATH, the script's.
+      - That the script's DEATH is handled before the sub-action's clip ends is [I].
+      - A ghost in the active party is not deactivated (0x006B5D90, PARTY.md), so it would get both.
   - otherwise: set `CREATURE_RULES_FLAG_DYING`, `Effects_RemoveAllEffects`, achievements and stats, mana and stamina to 0, the slayer's mana back, then `SendEventDying` (EVENT_TYPE_DYING, the scripts' 1023, object 0 the killer, by `SignalEvent`, so queued). It does not send DEATH for an ordinary creature.
   - `creature_core`'s DYING gives the party XP and treasure and plays the dying sound.
 
@@ -481,6 +501,10 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
 - Where the death effect is put in the creature's effect list was not read.
 
 **Queuing it clears the queue.** Command 32's override is 2 in `commands.gda`, so `QueueCommand` (0x0073CD10) calls `ClearAllCommands(1, 0)` (0x0073C930) first.
+- **The static rule** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x0073C74B–0x0073C759]:
+  - ClearCurrentCommand 0x0073C730(a1, a2, a3, a4) clears a current command whose +0xC is 0.
+  - It ends a static one (+0xC == 1) only when a2 == 1 or a4 != 0.
+  - ClearAllCommands(x, y) calls it as (−2, 0, x, y). So ClearAllCommands(1, 1) ends ExecuteEffect, and QueueCommand's (1, 0) does not.
 - Queued commands that are not static are freed, with no End and no COMMAND_COMPLETE.
 - The current command, if not static, is cleared even mid-sub-action: `ClearCurrentCommand(-2, 0, 1, 0)` → `Commands::End(cmd, -2)`.
 - End's shared handler (0x00746900) **queues** COMMAND_COMPLETE (`AIMaster::AddEventDeltaTime`, not run at once). Its int 0 is the command's type and int 1 is -2 (`COMMAND_FAILED_COMMAND_CLEARED`).

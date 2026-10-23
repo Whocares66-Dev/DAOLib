@@ -536,6 +536,21 @@ GOG addresses.
       - `[creature+0x7B0]` (the appearance record) is non-null and its word +0x58 == 0xE;
       - the object whose id is at `creature+0xA08` (not −1) has that bit.
     - The earlier reading's +0xD8, +0x32C and "null or not 0xE" were wrong. What bit 0x20 and appearance 0xE mean was not read [I].
+    - **First test:** with no model object (0x006958D0 null), the byte stays 0 and the other two tests are not tried [C].
+    - **The model object** is a graphics `Object`. Slot 0xA4 is 0x0054F850 in GraphicsStructures::Object's +8 vtable (0x00AF8434), which returns Object+0x260, the flag word whose 0x20 EFFECTS.md:314 reads. Slots 39 and 40 (0x00549640, 0x00549660) are its OR and AND-NOT setters [C]. (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2)
+      - No store of 0x20 into it was found [I]. "Model visible" is a guess [I].
+    - **Word +0x58 == 0xE:** +0x58 is the apr_base row (CHARACTERS.md), and row 14 is the Wisp (`Cn_WISPa`, EFFECTS.md "The wisp") [C].
+    - **+0xA08 is the selection ring's effect id** [C]:
+      - 0x006A5F90 replaces it, with its vfx row at +0xA0C.
+      - Its only caller, 0x006AAC50, passes rows 30002–30012 ("Neutral Creature" … "Enemy Targeted"), or 0 when the ring is off.
+    - **Its other reader, 0x006A5200** (ID 14563, a creature's per-frame update gate, (float* dt)) [C]:
+      - It calls 0x006A42E0 first, then adds dt to +0xD00.
+      - It lets the update through when any of these holds:
+        - +0xCFC is set;
+        - the creature is in the party (byte +0x504);
+        - the global byte 0x00C021C0 is 0.
+      - Otherwise it throttles by the +0x70 holder's slot 0x64 answer: 0 gives 0.1 s, 2 gives 0.2 s, anything else 0.5 s (0x00B0F290, 0x00B0F294, 0x00B0F28C).
+      - What 0x00C021C0 and slot 0x64 are was not read [I].
 - **Release** [C, a .text scan for call and jmp]: `0x007CC060` (all rings, per attacker id) has exactly two callers, `0x006A3610` (the command end; its one caller is `0x00746A65`) and `0x007CC5E5` (inside the choice `0x007CC5B0`, the release before a claim); `0x007CC000` (per ring) has one caller, `0x007CC096` inside `0x007CC060`. No code path releases a place on the target's death or deletion. A dead target ends each attacker's command through the swing's -7 (`COMBAT.md`, "The swing", point 1), and that command end is what releases.
 - **The facing the centre and the arc use** [C, already in this file at "Q3, the centre"]: the creature's +0x130 vector as stored; `Vector::FromAngle` = (-sin a, cos a, 0) (`script_commands/posorient.md`) is how an engine angle becomes that vector.
 
