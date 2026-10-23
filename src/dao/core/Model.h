@@ -183,6 +183,15 @@ struct Export
     std::uint32_t controllerIndex = 0;
 };
 
+// A weapon trail's node (wtrl): its material and how long a streak it draws.
+struct WeaponTrail
+{
+    std::wstring material;         // MMHMaterialObject, the .mao with no extension: "weapontrail_streaks"
+    float segmentLength = 0;       // MMHWeapontrailSegmentLength, in metres
+    float duration = 0;            // MMHWeapontrailDuration, in seconds
+    bool useVariationTint = false; // MMHUseVariationTint
+};
+
 struct Node
 {
     std::wstring name;
@@ -197,6 +206,8 @@ struct Node
     // which a creature's hook of the same id carries it to (dev/EFFECTS.md).
     std::optional<std::uint8_t> crustHook;
     std::optional<MeshRef> mesh;
+    // A wtrl node's weapon trail: the streak a swung weapon or a flying arrow draws behind this node.
+    std::optional<WeaponTrail> trail;
     // Its exports, its children of kind xprt: a clip's channel names one of them, not the node
     // ("doorlow_rotation" for the node DoorLow).
     std::vector<Export> exports;

@@ -1553,6 +1553,13 @@ MUTANTS: list[Mutant] = [
         "centre - (height * 0.5F)",
         "centre - height",
     ),
+    # A weapon trail's node (#236): its duration is its own field, not its segment's length.
+    Mutant(
+        "model-trail-duration: a trail's duration is MMHWeapontrailDuration, not its segment's length",
+        MODEL,
+        ".duration = from.Get<float>(kTrailDuration)",
+        ".duration = from.Get<float>(kTrailSegmentLength)",
+    ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
     Mutant(

@@ -159,6 +159,59 @@ TEST_CASE("a model's nodes are in the file's order with their transforms, bones 
     CHECK(tree->bones == std::vector<int>{2, 1, -1});
 }
 
+TEST_CASE("a weapon trail's node has its material, its segment's length and its duration", "[model]")
+{
+    // As w_lsw_ls01a_0.mmh has it: under GOB, Cylinder04, weapontrail_streaks, 0.925 m, 0.5 s.
+    const std::uint16_t children = gff4::kList | gff4::kReference;
+    dao::test::Builder b = dao::test::Start(
+        "MMH ",
+        {{"mdlh", 16, {{6000, 14, 0, 0}, {6005, 14, 0, 4}, {6256, 4, 0, 8}, {6999, dao::test::kGeneric, children, 12}}},
+         {"node", 12, {{6000, 14, 0, 0}, {6254, 5, 0, 4}, {6999, dao::test::kGeneric, children, 8}}},
+         {"wtrl",
+          24,
+          {{6000, 14, 0, 0},
+           {6001, 14, 0, 4},
+           {6292, 8, 0, 8},
+           {6293, 8, 0, 12},
+           {6340, 0, 0, 20},
+           {6999, dao::test::kGeneric, children, 16}}},
+         {"trsl", 16, {{6047, 12, 0, 0}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    const std::size_t gob = dao::test::Struct(b, 12);
+    const std::size_t trail = dao::test::Struct(b, 24);
+    const std::size_t at = dao::test::Struct(b, 16);
+    b.U32(root, b.String(u"w_test.mmh"));
+    b.U32(root + 4, b.String(u"w_test.msh"));
+    b.U32(root + 12, dao::test::Children(b, {{1, gob}}));
+    b.U32(gob, b.String(u"GOB"));
+    b.U32(gob + 4, 0xFFFFFFFF);
+    b.U32(gob + 8, dao::test::Children(b, {{2, trail}}));
+    b.U32(trail, b.String(u"Cylinder04"));
+    b.U32(trail + 4, b.String(u"weapontrail_streaks"));
+    dao::test::Float(b, trail + 8, 0.925F);
+    dao::test::Float(b, trail + 12, 0.5F);
+    b.U8(trail + 20, 1);
+    dao::test::Floats(b, at, {0, 0, 0.35F, 1});
+    b.U32(trail + 16, dao::test::Children(b, {{3, at}}));
+
+    const std::optional<gff4::File> file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*file);
+    REQUIRE(tree);
+    REQUIRE(tree->nodes.size() == 2);
+    CHECK_FALSE(tree->nodes[0].trail);
+    const model::Node &node = tree->nodes[1];
+    CHECK(node.name == L"Cylinder04");
+    CHECK(node.kind == "wtrl");
+    CHECK(node.parent == 0);
+    CHECK(node.translation[2] == Approx(0.35F));
+    REQUIRE(node.trail);
+    CHECK(node.trail->material == L"weapontrail_streaks");
+    CHECK(node.trail->segmentLength == Approx(0.925F));
+    CHECK(node.trail->duration == Approx(0.5F));
+    CHECK(node.trail->useVariationTint);
+}
+
 TEST_CASE("the ogre's body, when it is in game/models, reads whole", "[model]")
 {
     const std::filesystem::path folder =

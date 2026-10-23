@@ -258,6 +258,13 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
             node.crustHook = static_cast<std::uint8_t>(*hook);
         }
     }
+    if (node.kind == "wtrl")
+    {
+        node.trail = WeaponTrail{.material = from.String(kMaterialObject).value_or(L""),
+                                 .segmentLength = from.Get<float>(kTrailSegmentLength).value_or(0.0F),
+                                 .duration = from.Get<float>(kTrailDuration).value_or(0.0F),
+                                 .useVariationTint = Number(from, kUseVariationTint).value_or(0) != 0};
+    }
     if (const auto bone = Number(from, kBoneIndex); bone && *bone >= 0)
     {
         node.bone = static_cast<int>(*bone);
