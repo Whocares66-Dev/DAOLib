@@ -178,7 +178,7 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 - **0x004670C0, the cutoff** (this = world +0xD4) [C]:
 - **The cutoff's +0x4C is the area's switch** [I]: where +0x4C is written was not read. The candidate is `EnvAreaCutoffSystemEnabled` (3134), which the layout load reads into ChunkManager +0x74: first +0x74 = `!EnvAreaChunkIsChunk` (`setz dl` at 0x005D1625, stored at 0x005D162D), then, if the file has field 0xC3E = 3134, its value (0x005D1640-0x005D1673) [C for the ChunkManager field].
 - **0x00466F40, the test of a node** [C]: the node's vtable +0x18 must answer non-zero, then its +0x1C is its kind:
-- **The cut-away test, slot +0x8C, is the mesh's `MMHMeshCutAway` (6193)** [I]. Evidence: the mesh-node loader 0x00594D40 reads field 0x1831 = 6193 into its prototype's byte +0x1A7 (0x00595025 push, 0x00595034 store) [C]; the shipped cut-away meshes are named `MshFade_*` (e.g. `cav_roof.mmh`: mesh `MshFade_CAV_Roof_0`, `MMHMeshCutAway` 1) [C, the file]; Ishal's first floor has 104 such mesh nodes [C, counted]. The slot itself was not followed to the byte.
+- **The cut-away test, slot +0x8C, is the mesh's `MMHMeshCutAway` (6193)** [C] (corrected 2026-10-22 by the camera helper's reading, checked by lib-agent; this said +0x1A7 and the link inferred). The mesh-node loader 0x00594D40 stores each read's result at its own block, after the next push: the byte at +0x1A7 (0x00595034) is the read before, and field 0x1831 = 6193's result goes to the blueprint's +0x1A8 (0x00595069). The blueprint's slot 0xA8 (0x0057CEE0) returns +0x1A8; the mesh's constructor (0x0055B972) fills its own +0x1C9 from that slot, and slot +0x8C (0x0055B460) returns +0x1C9. the shipped cut-away meshes are named `MshFade_*` (e.g. `cav_roof.mmh`: mesh `MshFade_CAV_Roof_0`, `MMHMeshCutAway` 1) [C, the file]; Ishal's first floor has 104 such mesh nodes [C, counted].
 - **0x00466930, what a cut-away mesh does with the value v** [C]:
 - **The global 0x00BF73FC is read by the SpeedTree and terrain draws** [C, xrefs: 0x0052CC60, 0x00530C20, 0x00536200, 0x005333D0, `EC::CExteriorChunk` slot 25 0x005CE410]: 0x00530C20 draws nothing below 1 when `0x00C1EBF4` is set; 0x005333D0 skips its four passes below 1 unless its +0x2C; 0x0052CC60 picks a "transparent" technique below 1 for objects with +0x1BC bit 0x40000000 [C]. What those objects are was not read.
 - **Files** [C, ghilana]: Ishal's floors and other room levels have cut-away roofs; the camp (`brc999d`) has `EnvAreaCutoffHeight` 2 and `EnvAreaCutoffSystemEnabled` 0, so its tents never fade [C for the fields, I for "never", through the +0x4C reading above].
@@ -187,7 +187,6 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 #### Not read (the fades)
 
 - Where the cutoff's +0x4C is written (the link to `EnvAreaCutoffSystemEnabled`).
-- The vtable slot +0x8C that 0x00466F40 calls (the link to `MMHMeshCutAway`).
 - The chain from the model's slot +0x20 (0x00695080) to `mml_fOpacityMultiplier`.
 - The writer of the explore controller's +0x70..+0x78 (the focus).
 - What the world's +0xC0 is (0x00538060's second call).
