@@ -329,3 +329,42 @@ each frame while enabled (after the world, before the UI):
 - The sampler state of s2 (the original) in pass 3 (GaussianBlur/HSVMatrixBlend states set stages 0 and 1 only), so whether it is point or linear (same result at 1:1).
 - Whether the world's own rendering (shadows, particles) changes while a full-screen screen is up; the game is paused by `GameModeGUI` (GUI.md), so the picture is static apart from effects that run on real time.
 - Scratch: `%TEMP%\lib-agent-2-guiblur-x\` (twopassblur, horizontal/verticalblur, hslmatrix) and `-x2\` (hslmatrixfade, states), extracted with ghilana (`all_copies`), dumped with `fxc /dumpbin`.
+
+## The vignette (read 2026-10-23 by paragon-agent for DAOParagonEngine #25, checked by lib-agent-2)
+
+GOG 1.05 addresses. [C] read in the code or the files, [I] inferred, [S] seen in play.
+
+- **What it is:** the frame's two top corners are darkened by a vignette, drawn after the frame effects and before the interface. It is a full-height strip at each side, made by the renderer and gated by the GUI system's visible flag [C].
+- **Made at the renderer's start** [C]:
+  - StartRenderer 0x00529C70 (ID 7142, slot 1 of IGraphicsInternal's vftable 0x00AF6D2C) looks up the material object `VignetteGUI` (0x00AF6CB8, through 0x004F79E0) and keeps it at `+0x10C`.
+  - It builds the MixGUI quad (0x00529530) and the vignette's mesh (0x005297B0), at 0x00529FF6 and 0x00529FFD.
+- **The material** [C, vanilla files, one copy each in the core .erf archives]:
+  - `vignettegui.mao` names `MixGUI.mat`, the semantic `LinearTextureInterpolation` and `da_vignette.dds` as `InputTexture` (sampler `smpGUI`).
+  - That semantic is `PassThrough.vsh` with `MixGUI.psh`, under `MixGUILin.sta`.
+  - The state blends SRCALPHA/INVSRCALPHA, filters linearly and clamps U, V and W. It has no z test or z write, and no alpha test or stencil.
+  - `MixGUI.psh` is `texld r0, t0, s0; mov oC0, r0`: the texel, with nothing multiplied in. `PassThrough.vsh` passes the position and TEXCOORD0 through.
+- **The mesh, 0x005297B0** [C]:
+  - It has 8 vertices of stride 0x18 (x, y, z, w, u, v) in clip space, and 12 indices (two quads), kept at `+0x110`.
+  - **The left quad:** x −1 to −0.5, with u 0 to 1.
+  - **The right quad:** x 0.5 to 1, with u 1 to 0, so the texture is mirrored.
+  - **Both:** y 1 to −1, the full height, with v 0 at the top. 0.5 is the float at 0x00AE7104.
+- **The texture** [C, decoded]:
+  - `da_vignette.dds` is 256×512 DXT5. Its RGB is black; the shape is all in alpha.
+  - The alpha is 201/255 at texel (0,0), peaking at 213 at (0,1), so about 0.21 of the frame is left at the corner.
+  - It falls to 0 by about x = 225 along the top and y = 352 down the left edge. The lower part and the right edge are 0.
+  - With u 0 at the screen's edge, only the two top corners darken, over the outer quarter of the width.
+- **Drawn at the frame's end** [C]:
+  - EndFrame 0x00528BB0 (ID 7124, slot 22) calls 0x005277E0 when `[this+0x114]` is set and the GUI system's byte `+0x7C` is set (0x00528D92: `mov eax, [0x00C31604]; cmp byte [eax+0x7C], 0`).
+  - 0x00C31604 is the GUI system's singleton, the primary object (vftable 0x00AF6744). It is stored by the constructor 0x00524240 at 0x005243B2.
+- **The flag `+0x7C`** [C]:
+  - **Set to 1** by the constructors 0x00524240 (0x005242D9) and 0x00524710 (ID 6975, 0x005247A1).
+  - **Its only other writer** is `GUISystem::SetGuiVisible` 0x00523900 (ID 6941). That is slot 11 (+0x2C) of GUISystem's vftable 0x00AF6744 and DragonAgeGUISystem's 0x00B03504.
+  - **What SetGuiVisible does:** it stores its argument at `+0x7C`. With a Scaleform manager at `+0x120`, it tail-jumps to 0x005118C0. That stores the argument at `[mgr+0x15]` and sets each movie record's byte `+0x28` (0x00518CB0, over the list `mgr+0x70`). So it shows or hides every movie, and the vignette with them.
+  - **Its callers:** none was found [I]. There is no E8/E9 call and no `call [r+0x2C]` in .text. None of the 146 calls through a +0x2C entry loads the singleton or the app's `+0x158` GUI system. Calls through the getter 0x0053CBF0 were not enumerated.
+  - Nothing maps it to a script command or a message handler. `ToggleMainInterfaceMessage` hides the HUD through the scene's HideScreen (GUI.md:114) and leaves the flag alone.
+  - So, as far as was read, the flag stays 1 and the vignette is drawn on every frame [I].
+- **For a plugin** [I]: clearing `[0x00C31604]+0x7C` drops the vignette alone. Calling SetGuiVisible(false) would hide every movie too.
+- **Seen at Redcliffe by day** (Eluvian frame_capture, no photo cam) [S]:
+  - It is drawn right after the grade's HSLMatrix draw (cc_arl100) and before the first Scaleform draw, as a MixGUI.psh draw of `da_vignette.dds`: 4 triangles, 8 vertices, SRCALPHA/INVSRCALPHA, sampled through `smpGUI`.
+  - Hiding the HUD (ToggleMainInterfaceMessage) leaves it drawn.
+- **Open** [I]: whether it shows over the start menu, movies and cutscenes.

@@ -1164,6 +1164,14 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
     - **What ChooseForLevel does with them:** it fills the LightState's ambient group (+0x30) from the list +0x54 only under the first flag (0x004644EB). Under the second it scores them (0x00464520); otherwise it takes them all (0x0046452F).
     - **Without 0x10000** a level draw has no ambient light from the lists. Who sets 0x10000 was not read [I].
     - **Seen in play** (DAOParagonEngine #206, frame captures) [S]: terrain draws' `g_vLightParams` hold only a point light and the sun, in the Fade and in Redcliffe.
+    - **Water reads no ambient at all** (read 2026-10-23 by paragon-agent for DAOParagonEngine #25, checked by lib-agent-2):
+      - **Water's shaders read no ambient** [C, vanilla listings]:
+        - `water0.vsh` declares `g_vLightParams` at c16–c18 but reads only c18, the sun's direction.
+        - `waterflowing0.vsh` has no light parameters.
+        - `water0.psh`, `waterflowing0.psh` and their `sm2_` variants declare c0–c3 and read only c2 and c3, the sun's direction and colour.
+        - No other light, ambient or irradiance register is declared. (`water0nospec.psh`'s c3 is a water parameter.)
+        - So water takes only the sun, and the owner-flag 0x10000 rule above cannot matter for it.
+      - **Seen** (Eluvian frame_capture, Redcliffe's lake Water0 and waterfall WaterFlowing0) [S]: the draws set nothing past g_vLightParams[3].
   - **Per light:**
     - A light with CanBeOccluded set and an MMHID missing from the passed sorted id list is skipped (inferred: the room's light visibility list).
     - For the "dynamic" lists, a light is skipped unless its owner Object's flags (vtable +0xA4, on owner+8) have bit 1. That bit is inferred to mean the effect's model is shown.
