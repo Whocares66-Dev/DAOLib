@@ -514,13 +514,36 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
 #### The AI and the controlled creature
 
 **The engine does not switch the AI off.** It changes the creature's AI level only (checked):
-- `CCCreature::UpdateAILevel` 0x006A53E0 (`CCCreature` vtable 0x00B10484 slot 85, +0x154): **4** (`CSERVERAIMASTER_AI_LEVEL_VERY_HIGH`) for the controlled creature (compared with `GetMainControlled`); else **2** if +0xC60 holds something; else **3** if `CCParty::IsInParty` (0x00631830); else the chooser for other creatures (below; read 2026-10-23 by lib-agent-2, it replaces an unread `0x007C49B0(self, 1)` branch); then `AIMaster`'s set (0x0064B480 on `app+0x1AC`).
+- `CCCreature::UpdateAILevel` 0x006A53E0 (`CCCreature` vtable 0x00B10484 slot 85, +0x154) tests in this order [C 0x006A53EB..0x006A5481, read 2026-10-23 by lib-agent-2; corrected 2026-10-23: it was noted as 4, then 2 if +0xC60 holds something, then 3 for the party], and the first that holds decides:
+  1. The controlled creature (0x005D5CA0, compared with `GetMainControlled`): **4** (`CSERVERAIMASTER_AI_LEVEL_VERY_HIGH`).
+  2. In combat (`+0xC60` non-null and its first dword non-zero): `0x007C49B0(self, 2)`, i.e. **2..4** by the band. This comes before the party test and the area test, so a party member in combat is 2..4, not 3, and a creature in combat in another area is not −1.
+  3. In the active party (`CCParty::IsInParty` 0x00631830): **3**.
+  4. In the controlled creature's area (`+0x254` against 0x005D5CD0): `0x007C49B0(self, 1)`, i.e. **1..3**.
+  5. Otherwise **−1**.
+  Then `AIMaster`'s set (0x0064B480 on `app+0x1AC`).
 - `AIMaster` 0x0064B480: ignored while a script's `SetAILevel` (+0x2B4) is set; -1 takes it out (0x0064B240); 0–4 moves it to one of five lists of 0x14 bytes (0x0064B400) and stores it at +0x2B0 through slot +0x150. What the lists change is read 2026-10-23 by lib-agent-2 (it was inferred, from Aurora: how often it is updated, not whether):
   - **The chooser for other creatures** [C]:
-    - A creature outside the controlled creature's area (`+0x254` differs) gets **−1**, which is in no list, so it is never updated. −1 is also where a creature starts (the constructor) and goes at destruction.
-    - Otherwise `0x007C49B0(self, base)` gives base 2 in combat or 1 out of it (base − 1 for a dead creature). It adds 2 for band 0 and 1 for band 2 of a camera-distance band held in the creature's model holder (`+0x154`, its `+0x150`, handed out by the area's show/hide pass 0x006184E0 [I for the meaning]). The result is clamped to 0..4.
-    - So a living non-party creature in the controlled area is at 1..3 out of combat and 2..4 in combat.
-    - `UpdateAILevel` also runs from `SetLocation` 0x00696F90, `SetCombatState` 0x006AE0A0, control changes and the party code.
+    - A creature that is neither controlled, in combat, nor in the active party, and is outside the controlled creature's area (`+0x254` differs), gets **−1** (corrected 2026-10-23; the order is above), which is in no list, so it is never updated. −1 is also where a creature starts (the constructor) and goes at destruction.
+    - `0x007C49B0(self, base)` is called with base 2 in combat or 1 out of it; the band below is added to it (read 2026-10-23 by lib-agent-2; it replaces an inference):
+    - **0x007C49B0** [C]: band 0 adds +2, band 2 adds +1, and any other band adds 0. A dead creature gets base − 1 with no band read. The result is clamped to 0..4. Band 1 is never stored [C: 0x00A5D5D0 treats it as unavailable and falls back by the table at 0x00B03B98].
+    - **What writes it** [C]: the engine's `LodManager` (static at 0x00C33B20, vftable 0x00B03C04). Its pass 0x006184E0 hands each object a band. The model holder's slot 0x44 (`AnimBase` at creature `+0x154`, 0x00A5D5D0) stores it at holder `+0x150`, reached through object slot 0x144 (0x0069F180) → 0x00695E00.
+    - **The distance** [C]: 3-D, from the camera's point (`[controlled creature's area +0x658]+0x550`, copied by 0x006170B0) to the model (its node [I]), in 0x006170F0. An object in another area, or with no model, is at 1000.
+      - It is multiplied by 1.5 for a size ratio under 0.7, or by 0.5 for one over 2.0. The ratio is `[creature+0x7B0]+0x68` / 1.8848.
+      - It is multiplied by 1.2 for a dead creature that is not the party's.
+      - It is multiplied by 0.5 when `[slot 0x24]+0x638 == 1` [I for the meaning].
+    - **Thresholds per game mode** (slot 26 of each GameMode, through 0x00616FF0) [C]:
+      - Explore, combat and loading (0x0070AB10), and the base mode (0x006942E0): band 0 under 10 m, band 2 under 29 m, band 3 beyond.
+      - Cutscene (0x00691E70): 19 and 39 m.
+      - Hysteresis is 0.5 m, outer edge only (0x00618B60).
+      - Each band holds objects up to a cost cap of 10 (object cost `+0x244`, default 1.0). A full band pushes objects outward (0x00618370) [I for the effect].
+      - Nothing tests the frustum or room visibility.
+      - An object of class `[+0x240]` 0 goes straight to band 0 outside loading [I: the party's].
+      - A forcing byte at `g_eclipseGame+0x258` is not read.
+    - **Rate** [C]: the tick 0x00619060 runs each frame from the game modes' update and recomputes everything every 1/3 s (0x00B03C10). An area load forces a full pass.
+    - **Show and hide use the same distance:** a creature is shown under 60 m (0x00BFD440, lowered by graphics detail), and other objects under 60 m (0x00BFD444).
+    - So a living creature that is not in the party and not controlled is at 1..3 out of combat in the controlled area, 2..4 in combat in any area, and −1 otherwise.
+    - **The level follows at once** [C]: 0x0069F180 calls `UpdateAILevel` (slot 85) when 0x00695E00 reports the stored band changed. It is called on every pass, and no band is stored, when the object's `+0x7BC` is non-zero [I for the meaning].
+    - **Its other callers** [C]: `SetLocation` 0x00696F90, `SetCombatState` 0x006AE0A0, control changes 0x0069D540 and the party code 0x006378F8.
     - Placeables have their own chooser, 0x0074D840, giving −1 or 1.
   - **What the level changes** [C]: mainly how often the creature is updated, through the AIMaster pass's time slice (TURN_BASED.md, "The throttle is the AIMaster's time slice"). `CCCreature::Update`, `StepCommands` and perception do not read it. The other readers of `+0x2B0` are:
     - the idle twitch (0x006AB73E): below level 2 it needs a party member within 50 m;
