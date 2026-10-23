@@ -198,7 +198,7 @@ Notes (checked): the movie list in the install (68 .gfx) has no skills.gfx, cont
   - **The hide** (0x0071F620) ends the music (0x0071F660 → 0x005BBB00).
   - **The file:** `dao_en-us.cre` is in `packages/core/patch/patch003.erf` (47,646 bytes; a copy of the same size is in patch002.erf). It is text beginning `<header1>BioWare</header1>`, with CR LF line ends.
 - **HUD pieces** (layer): FloatyLayer 0x2F (0), ArmyControl 0x1C, Minimap 0x2A, Portraits 0x2B (1), NavBar 0x28, Quickbar 0x29 (4), Notifications 0x2C (7), Tooltips 0x2D (8), PopupLayer 0x1E (7), ContextMenu 0x03 (7). Main 0x07 (layer 1) is not used by play (probe).
-- **Conversation / story**: Conversation 4 (layer 5), Slideshow 0x30, Cutscene 5 (its subtitles use scene 4 per the Cutscene mode's show, inferred), DeathScreen 0x13, FadeMap 0x1F.
+- **Conversation / story**: Conversation 4 (layer 5), Slideshow 0x30, Cutscene 5 (not shown by the cutscene mode, which shows scene 4, Conversation, at its enter 0x00692BE7: CUTSCENES.md; corrected 2026-10-23 by paragon-agent, read by lib-agent: it said the subtitles use scene 4, inferred), DeathScreen 0x13, FadeMap 0x1F.
 - **Inventory / character / level-up**: Inventory 8 (also the loot panel), CharacterRecord 0, LevelUp 0x2E, Skills 0xD and SpellsTalents 0xA (no movie), Tactics 0x17, Crafting 0x26, ItemUpgrade 0x25, Store 0x20, ItemExamine 0x3A, BookBack 0x3B and BookFront 0x3C (the book frame).
 - **Maps / journal**: Map 0xF, WorldMap 0x10, Journal 9.
 - **Chargen**: CharGen 1 (and LevelUp reuses the chargen mode). Party picker: PartyPicker 0x1B (GameModePartyPicker).

@@ -25,7 +25,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and `script.ldf`, for
 - Takes the pending cutscene (+0x50 → +0x4C), saves the camera (the mode's +0x70..+0xA0 into its own +0x0..+0x1C) and starts the player (`0x007CDC90`, `0x006C4AF0`, `0x006C2890(0, 1)`, `0x007CD0D0`). Read.
 - Calls the application's `0x005D5540(1)`: it stops timers (`0x00A35DE0`, `0x00A35A10`) and tells the graphics (slot 0x6C) and an object (slot 0x60) a cutscene began; the world timer at +0xD4 is saved on leaving. Corrected 2026-10-23 by lib-agent-2: what it does and what holds in a cut is read (read 2026-10-23 by lib-agent-2 with a subagent), below.
 - Calls `0x006A0D40` on each party member (`0x006300B0`, party at `0x005D57C0()`). Not read what it does; inferred: stops their movement or actions.
-- Opens the cutscene GUI (`*(app+0x158)` slot 0x88) and sets the input mode "GameModeCutscene". Read.
+- Opens the conversation GUI and sets the input mode "GameModeCutscene" (corrected 2026-10-23 by paragon-agent, read by lib-agent: it said it opens the cutscene GUI). The enter's call at 0x00692BE7 is DragonAgeGUISystem's slot 0x88 (vtable 0x00B03504) = 0x00610860, which calls the system's +0x34 with 4: it shows scene 4, Conversation. The leave's slot 0x8C (0x00610870) hides scene 4 [C]. So a cut plays in the conversation movie. Seen in play [S]: with jowan_attacks staged through Eluvian, cutscene mode listed Conversation (id 4) and no Cutscene scene.
 - Whether the area's creatures that are not actors are hidden is not read; the file's `CutsceneShowAreaDynamics` (5009) is a likely switch (inferred).
 - **What 0x005D5540 does and what a cut holds** (read 2026-10-23 by lib-agent-2 with a subagent):
   - **0x005D5540(flag) is the part of SetPaused that stops the clocks** [C]. Its callers are SetPaused (0x005D67D7), the cut's enter (1) and its leave (0).
@@ -257,9 +257,9 @@ A line with no cut gets this camera; a line with one gets the cut's own (above).
 ### The cutscene screen and the conversation screen's letterbox (read 2026-10-18 by lib-agent-2; checked unless said)
 
 - **The movies:**
-  - **Cutscene mode:** `GUI::GUICutscene` (vtable `0x00B1A8A8`, constructor near `0x00733500`) loads the scene `Cutscene` (string `0x00B0E834`), i.e. **`cutscene.gfx`**, on layer 5. The copy the game takes is patch003.erf's (29,094 bytes).
+  - **Cutscene mode:** `GUI::GUICutscene` (vtable `0x00B1A8A8`, constructor near `0x00733500`) is registered as scene 5 (0x00614F07), and nothing found shows it (corrected 2026-10-23 by paragon-agent, read by lib-agent: it said it loads the scene `Cutscene`, string `0x00B0E834`, i.e. `cutscene.gfx`, on layer 5; that string is the name the subtitle token is served under, Cutscene.SubtitleText, not a scene) [C; I that nothing shows it]. The copy the game takes is patch003.erf's (29,094 bytes).
   - **Dialogue mode:** `GUI::GUIConversation` (`0x00B1A950`) loads **`conversation.gfx`** (scene `Conversation`, file name `conversation`, `0x00B0E4A4`/`0x00B0E0C8`), also layer 5.
-- **The letterbox, `cutscene.gfx`** (authored stage 1024 × 768):
+- **The letterbox, `cutscene.gfx`** (authored stage 1024 × 768). Note (corrected 2026-10-23 by paragon-agent, read by lib-agent): the cutscene mode does not show this movie (scene 5; nothing found shows it, above), so what follows describes `cutscene.gfx` as a file, not what a cut displays:
   - `LetterboxTop_mc` sits at (0, 0) and `LetterboxBottom_mc` at (0, 668), both black-bar shapes 1024 × 100 at authoring (`Cutscene.StartScene`).
   - At run time each bar is `_width = Stage.width`, `_height = (Stage.height − Stage.width / 1.7777…) / 2`, the top one top-aligned and the bottom one bottom-aligned. `GUISystem.AspectRatio` = 16/9 is never changed.
   - **So the bars crop the screen to 16:9:** each is `(1 − (W/H) / (16/9)) / 2` of the screen's height. That is 0 at 16:9, 5% at 16:10 (60 px of 1200) and 12.5% at 4:3. It is not a 2.35 cinema crop.
