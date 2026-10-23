@@ -172,6 +172,9 @@ struct MeshRef
     std::wstring material;               // the .mao, with no extension
     std::wstring part;                   // its id, what a room's lightmap list knows it by
     std::vector<std::int32_t> bonesUsed; // a blend index's bone in the model's bones
+    // MMHMeshCutAway: a mesh the area's cutoff fades and hides when the camera is high above the
+    // focus (dev/CAMERA.md, "The cutoff: what the roof fade fades").
+    bool cutAway = false;
 };
 
 // A controller a node exports: the name an animation's channel goes by, and what it drives.

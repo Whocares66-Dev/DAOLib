@@ -212,6 +212,48 @@ TEST_CASE("a weapon trail's node has its material, its segment's length and its 
     CHECK(node.trail->useVariationTint);
 }
 
+TEST_CASE("a mesh node is cut away when its MMHMeshCutAway is set", "[model]")
+{
+    // As the levels' MshFade_ meshes have it: a byte at the mshh struct's +52.
+    const std::uint16_t children = gff4::kList | gff4::kReference;
+    dao::test::Builder b = dao::test::Start(
+        "MMH ",
+        {{"mdlh", 16, {{6000, 14, 0, 0}, {6005, 14, 0, 4}, {6256, 4, 0, 8}, {6999, dao::test::kGeneric, children, 12}}},
+         {"mshh",
+          64,
+          {{6000, 14, 0, 0},
+           {6001, 14, 0, 4},
+           {6006, 14, 0, 12},
+           {6193, 0, 0, 52},
+           {6999, dao::test::kGeneric, children, 20}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    const std::size_t fade = dao::test::Struct(b, 64);
+    const std::size_t wall = dao::test::Struct(b, 64);
+    b.U32(root, b.String(u"room.mmh"));
+    b.U32(root + 4, b.String(u"room.msh"));
+    b.U32(root + 12, dao::test::Children(b, {{1, fade}, {1, wall}}));
+    for (const std::size_t mesh : {fade, wall})
+    {
+        b.U32(mesh + 4, b.String(u"stone"));
+        b.U32(mesh + 20, 0xFFFFFFFF);
+    }
+    b.U32(fade, b.String(u"MshFade_roof"));
+    b.U32(fade + 12, b.String(u"Roof"));
+    b.U8(fade + 52, 1);
+    b.U32(wall, b.String(u"Wall"));
+    b.U32(wall + 12, b.String(u"Wall"));
+
+    const std::optional<gff4::File> file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*file);
+    REQUIRE(tree);
+    REQUIRE(tree->nodes.size() == 2);
+    REQUIRE(tree->nodes[0].mesh);
+    CHECK(tree->nodes[0].mesh->cutAway);
+    REQUIRE(tree->nodes[1].mesh);
+    CHECK_FALSE(tree->nodes[1].mesh->cutAway);
+}
+
 TEST_CASE("the ogre's body, when it is in game/models, reads whole", "[model]")
 {
     const std::filesystem::path folder =

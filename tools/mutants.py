@@ -1641,6 +1641,13 @@ MUTANTS: list[Mutant] = [
         "editor.SetNumber(at, kVertexCount, static_cast<std::int64_t>(node.places.size()))",
         "editor.SetNumber(at, kVertexCount, 0)",
     ),
+    # A mesh node's cut-away flag (#239), which the area's cutoff fades it by.
+    Mutant(
+        "model-cut-away: a mesh node's cutAway is its own MMHMeshCutAway",
+        MODEL,
+        ".cutAway = Number(from, kMeshCutAway).value_or(0) != 0",
+        ".cutAway = false",
+    ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.
     Mutant(
