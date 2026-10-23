@@ -540,6 +540,8 @@ Read in the GOG exe and the scripts by lib-agent-2 (with subagents) for DAOParag
 
 ### The game mode's change and EVENT_TYPE_GAMEMODE_CHANGE (60)
 
+The GUI mode's own enter, leave, finished flag and how a request under a screen is taken: GUI.md, "Game mode and pause".
+
 **`SetGameMode` (0x006414A0; mode, force, data) only files a request.**
 - A mode whose slot 10 (+0x28) answers true goes into a single base slot (+0x8C), a later request overwriting a waiting one. These modes are Explore, Combat, Dead, FlyCam and Fixed.
 - Every other mode is pushed on a stack (+0x9C): GUI, Dialog, Cutscene, Loading, Movie, CharGen, PartyPicker and Pregame.
