@@ -56,7 +56,7 @@ The pixel shader:
 ```
 d = normalize(view);  c = saturate(dot(-L, d));  gamma = acos(dot(-L, d));   // L = g_vLightParams[2].xyz, the sun's light's way
 phi = atan(view.z^2 / dot(view.xy, view.xy));                              // as written: of z^2 over x^2 + y^2, unnormalised
-D   = 170000 * (0.39 + 0.09*cos(phi) + 1/(1 + 25*gamma^2));                // path length, metres
+D   = 170000 * (0.39 + 0.09*cos(2*phi) + 1/(1 + 25*gamma^2));                // path length, metres
 ext = exp(-(c1.rgb * D)^2);                                                // Gaussian extinction
 Lin = (c3.rgb*(2 + 0.5*c*c) + c2.rgb / pow(c0.x - c0.y*c, 1.5)) / c1.rgb * float3(c1.w, c2.w, c3.w) * (1 - ext);
 f   = saturate(exp(-d.z^3 / (0.0636620 * F1.z)));                          // F = mml_vFogParams
@@ -66,6 +66,7 @@ oC0 = float4(saturate(t.rgb * t.a * c4.x + sky), mml_fOpacityMultiplier);
 oC1 = (0.34464, 0.99609375, 0.996084, 1);                                  // far depth, the second target
 ```
 - The cosines in both phase terms are clamped (saturate), so they are 0 away from the sun.
+- Corrected 2026-10-23 (paragon-agent, read by lib-agent in sky.psh): the angle handed to sincos is `frac(phi * c18.x + 0.5) * c18.z + c18.w` with `def c18, 0.318309873 (1/π), 0.5, 6.28318548, −3.14159274` (sky.psh lines 56–59), so for φ in [0, π/2) it is 2φ (the code block said cos φ). The path is shortest at the zenith (0.30 × 170000 against 0.48 at the horizon) [C]. With cos 2φ, Paragon's sky at Redcliffe's top centre is (97,85,100) against the game's (97,85,101), and Lothering's (73,59,73) against (71,57,70); with cos φ it was (150,130,126) [S, paragon-agent].
 - `sky.psh` takes its sun from `g_vLightParams[2]`, not the block.
 - The fog vectors:
   - F0 = (`fogRed`, `fogGreen`, `fogBlue`, (t·(I − k·I) + k·I)²), with I = `fogIntensity` and k = block +0x24;
@@ -157,6 +158,7 @@ a0     = pow(max(v1.w, 0), P.alphaPow)                        // Default 2, NoSp
 alpha  = f * (1 - a0) + a0
 out    = fogColor + max(v4.w, fogParams.y) * (rgb - fogColor)  // v4.w = exp(-dist * waterFog) from the vs
 ```
+- water0.vsh reduces its angle the same way (`def c31, 0.318309873, 0.5, 6.28318548, −3.14159274`, lines 101–104), and its `a` is `(1e7 − r1.w) * 1e-7` (c25.w, c26.x; lines 83–84) [C, read 2026-10-23 by lib-agent].
 
 ```
 cube_for_water_draw:
