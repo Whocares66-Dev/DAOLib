@@ -81,6 +81,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
+# A throw run inside a shell ends the script as an exception, which a `*>` redirect does not
+# take: the log had only the lines before it, and not why the script stopped (a -Remove that
+# refused for EA's game still running, 2026-10-23). So it is said as a line first.
+trap { Show-Bad $_.Exception.Message; break }
 
 $repo = Split-Path $PSScriptRoot -Parent
 $build = Join-Path $repo "build\$Preset"
@@ -128,8 +132,11 @@ function Wait-OwnGame {
 
 # Folders under build\matrix hold junctions into the game's installs. A recursive delete
 # follows a junction and empties what it points at, so each one goes first, as a link, and the
-# rest only once none is left.
-function Clear-Stage {
+# rest only once none is left. With -Lenient a stage that still will not go is a warning: the
+# removal after the rows, which is not to end the run before EA's rows. Once the base's copy of
+# binkw32.dll was refused for the whole twenty seconds with no game running from the stage, held
+# by something not found (2026-10-23); the next run's removal, before its rows, must succeed.
+function Clear-Stage([switch] $Lenient) {
     if (-not (Test-Path $stage)) { return }
     foreach ($link in @(Get-ChildItem $stage -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue)) {
         [IO.Directory]::Delete($link.FullName, $false)
@@ -142,8 +149,10 @@ function Clear-Stage {
     for ($try = 1; ; $try++) {
         try { Remove-Item -Recurse -Force $stage -ErrorAction Stop; return }
         catch {
-            if ($try -ge 10) { throw }
-            Start-Sleep -Seconds 2
+            if ($try -lt 10) { Start-Sleep -Seconds 2; continue }
+            if (-not $Lenient) { throw }
+            Show-Warn "the stage was left in $stage ($($_.Exception.Message)); the next run removes it"
+            return
         }
     }
 }
@@ -426,9 +435,31 @@ function Invoke-Ea {
         }
     }
     finally {
+        Close-EaGame $bin
         if ($before) { Set-ItemProperty $pathKey -Name Path -Value $before; Show-Info "Path of $pathKey is $before again" }
     }
     return $failed
+}
+
+# The EA app starts EA's game, and once started one during a row after that row's games were
+# stopped, which ran on past the rows and kept a deploy.ps1 -Remove from the install (2026-10-23).
+# No game of EA's runs before its rows (Test-GameAsEver), so every one from its folder after them
+# is the matrix's: they are stopped until none has been seen for five seconds, a minute at most.
+function Close-EaGame([string] $Bin) {
+    $prefix = $Bin.TrimEnd('\') + '\'
+    $quiet = (Get-Date).AddSeconds(5)
+    $until = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $quiet -and (Get-Date) -lt $until) {
+        $runs = @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) })
+        foreach ($run in $runs) {
+            Show-Info "EA's game still ran after its rows (process $($run.Id)); stopped"
+            Stop-Process -Id $run.Id -Force -ErrorAction SilentlyContinue
+            $run.WaitForExit(15000) | Out-Null
+            $quiet = (Get-Date).AddSeconds(5)
+        }
+        Start-Sleep -Milliseconds 500
+    }
 }
 
 if ($Firewall) {
@@ -470,7 +501,7 @@ try {
     }
 }
 finally {
-    Clear-Stage
+    Clear-Stage -Lenient
 }
 if ($EaApp) {
     $total += $Layers.Count

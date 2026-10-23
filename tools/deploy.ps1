@@ -56,6 +56,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'console.ps1')
+# A throw run inside a shell ends the script as an exception, which a `*>` redirect does not
+# take: the log had only the lines before it, and not why the script stopped (a -Remove that
+# refused for EA's game still running, 2026-10-23). So it is said as a line first.
+trap { Show-Bad $_.Exception.Message; break }
 $repo = Split-Path -Parent $PSScriptRoot
 
 if (-not $Game) {
