@@ -1210,6 +1210,45 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
   - So a port matching vanilla gives each mesh or figure **the single highest-scoring effect light of its domain**, by the score above. ([10]/[12] are filled, but elgara's per-draw log says shaders read only [9]/[11]; that was not re-checked here.)
 - **DAOLib's `Lights.h`** covers only the ambient term ([4], `Fill`'s base plus the +0x30 ambient lights), not point lights. An effect has no ambient-light nodes in the data seen, so effects do not touch it [I].
 
+###### A moving object's lights: ChooseForMoving (read 2026-10-22 by paragon-agent's helper, DAOParagonEngine #78)
+
+GOG 1.05 addresses. [C] read in the code (ghidra-dao, read-only), [I] inferred.
+
+**When and on what**
+- `ChooseForMoving` (0x00464560) runs once a frame for each mesh node of a moving object [C]. It takes the node's bounding sphere (0x00462520: the renderable's slot +0x70; centre at +0x10, radius at +0x20) and the object's room [C].
+
+**Scores**
+- Point light (0x0053D280, ID 7628): |intensity| x (radius + size - distance); nothing past that reach (score <= 0 drops it) [C].
+- Probe (0x0053D3E0, ID 7629): 1 / distance; the best one gives the irradiance and reflection cube [C].
+
+**The room test (0x0053D210, ID 7627)**
+A light passes when [C]:
+- the object is in no room, or
+- the light has no room, or
+- they share a room, or
+- the object's room is in the light's room's list.
+The list is the room's EnvRoomLightVisList (3164), read by `CRoom::vfunction4` into CRoom +0xC0 at 0x005D3C73; the test reads its first and last at +0xC4/+0xC8 through the light's +0x188 [C]. A single -1 entry passes everything; an empty list passes nothing more [C]. Core: level::Room::lightVis (DAOLib #243).
+- A lamp's or probe's room (+0x188) is the room whose .rml placed its layout [I]: the code that sets +0x188 was not found.
+
+**Held slots and fades (`LightList::ChooseFor` 0x00463E40, 0x0046A430, 0x0046A470)**
+Three static slots [C]:
+- a light still chosen keeps its slot;
+- a dropped light fades out over 0.25 (weight min(1, 4t)) and holds its slot until the fade ends;
+- a newcomer takes only a free slot;
+- a fade turned the other way restarts from 0.25 - t.
+- The fade's time is seconds [I].
+
+**The sun's share (0x00462470, ID 2638; `EaseSun` ID 2824)**
+- 0.1 where the lighting manager's +0x120 flag is set (EnvAreaSunlightCanBeOccludedChar) and the object's cell's light subset is empty or does not start with -1; 1.0 otherwise [C]. Eased toward that at 4 a second [C].
+- The subset index is the walk grid's AreaGridLightSubsetData8, found through the manager's +0x124 +0x4A0 and the object's +0x28 (0x004622C0) [C].
+
+**Not read (open)**
+- The manager's +0x121 flag.
+- The CanBeOccluded lamps' visible-light test; Version-1 lamp scoring (0x004CB490); the lighting-quality-0 path; clearing all slots on a layout change or when the best light has +0x194; exact score ties; the coarser-than-grid subset form (0x00A48FB0).
+
+**Checked against the game**
+Redcliffe castle main floor (interior), the same save and camera in Eluvian and Paragon: a figure's chest 120,81,63 in the game, 119,80,62 with this choice (59,38,36 with the level's first three fills). Redcliffe village at night and the camp at night close too.
+
 ###### Not read
 
 - The model-side call from the effect's vtable +0x104 (0x007E9AB0, model interface slot 1) through to `ISceneInstance::AddObject`. It is inferred, not traced.
