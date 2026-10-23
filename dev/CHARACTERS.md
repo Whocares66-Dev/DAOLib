@@ -251,7 +251,7 @@ GOG 1.05 addresses. [C] read in the code or the files, [I] inferred.
   - For example, `pf_rob_mora.mao` uses `AlphaArmourSkinTint` with a normal map. Its `_l2` uses `PunchthroughArmourSkinTintL2`, and its `_l3` `ArmourSkinTintL3`, both with no normal map.
   - Vanilla `Character.mat.xml` gives L2 and L3 the technique `LOD2`: `Char2.vsh` with `Ch2ArmTnt.psh`. It requires only POSITION, NORMAL and TEXCOORD0.
   - The `_l2` textures are a quarter of the base's bytes, and the `_l3` a sixteenth.
-- **The meshes** [C]: the `_2` and `_3` meshes have no tangent or binormal. `hm_hed_dcp_2.msh`/`_3` have 36-byte vertices, where `_0` has 52 with both. The draft's "the `_2` meshes keep their tangents" is wrong.
+- **The meshes** [C]: some `_2` and `_3` meshes have tangents and binormals and some do not (corrected 2026-10-23 by lib-agent; it said none had). Of the game's 543 `*_2.msh` (ghilana, every copy, read with tools/gff4.py), 318 declare a TANGENT (usage 6) and BINORMAL (7) element and 225 don't: `hm_arm_med_2.msh` has both, as `hm_arm_med_0.msh` does; `cn_hed_ogr_2`, `df_har_bld_2` and the levels' `*_v_2` meshes have neither [C, read 2026-10-23 by lib-agent]. `hm_hed_dcp_2.msh`/`_3` have 36-byte vertices, where `_0` has 52 with both.
 - **The shaders** [C, vanilla `shaders.erf`, disassembled]:
   - `Ch2ArmTnt` is `Ch1`'s with the normal-map sampler dropped, so it uses the vertex normal (`nrm r1.xyz, v2`).
   - `Char2.vsh` drops the tangent and binormal inputs and skins by 2 bones, its weights over `v3.x + v3.y`. `Char1.vsh` skins by 4.
