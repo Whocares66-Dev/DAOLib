@@ -177,11 +177,11 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in the running game, [I] infe
 - Class `EC::Cutscene::Actor::ActionHeadtracking`: constructor 0x007DA820 (ID 20945), Update 0x007D0D00 (ID 20768), vftable 0x00B2330C [C].
 - The target is the eyes of the actor named in field 5620 (core's `actor`), with no distance or front test [C].
 - On its first frame it sets the look-at multiplier to the action's speed [C], and it calls `LookAt::Apply` (0x006CA990) at the cut's frame rate [C].
-- 0x007D0850 refreshes the creature's orientation only under the realign flags (5628, 5629) [C].
+- The fields, as the constructor reads them: the target (5620) at +0x28, the speed (5621) at +0x2C, RealignStart (5628) at +0x30 and RealignCont (5629) at +0x31, both bytes taken as bools [C] (read 2026-10-23 by lib-agent-3, DAOLib #245).
+- **RealignStart** is read by the action's Update alone: on its first frame (+0x14), with the flag set, it marks the cut's actor's +0x15E, +0x15F and +0x161 and calls 0x007D0850, which refreshes the creature's orientation [C].
+- **RealignCont** is read by the cut's actor, not the action: each step (0x007D8610, ID 20914), once the actor is known to have a head-tracking action (0x007D09C0, ID 20762, which caches that at +0x15C), 0x007D0A50 (ID 20763) asks whether any of its type-28 actions has RealignCont and a window holding the time (start − 0.0001 ≤ t ≤ stop + 0.0001; the constant at 0x00B10B98). If one does, the actor's +0x15E is set before the same 0x007D0850 call, so the orientation is refreshed that step [C].
 - In Greagoir's Harrowing cut every line has one head-tracking action per actor; the head holds its 3/4 turn toward the hero through line 122138_m [S].
-- Fields the reader does not read yet:
-  - CutsceneActionHeadtrackSpeed (5621): Greagoir's cut has 0.51 to 0.90 [C]; Paragon takes 1.0, the field's default [I].
-  - CutsceneActionHeadtrackRealignStart (5628) and RealignCont (5629) [C]; Paragon takes the creature's facing every frame [I].
+- core's `cutscene::Action` reads the three as `lookSpeed`, `realignStart` and `realignContinue` (DAOLib #245). In the game's 3,158 cuts there are 19,384 head-tracking actions; their speeds run from 0 to 1000, exactly 1.0 the most common (928); 825 have RealignStart and 594 RealignCont [C]. Greagoir's cut has speeds of 0.51 to 0.90 [C].
 
 ### The camera (checked unless said)
 

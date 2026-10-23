@@ -42,8 +42,8 @@ std::uint32_t FloatList(Builder &b, const std::vector<float> &values)
 
 // A cutscene laid out as bhmcs_intro.cut is (tools/gff4.py --templates), cut down: its header,
 // one actor, and in its generic queue an animation with one curve of one vertex and a
-// transition, a spoken line, and a stage camera by the henchman's place as alistair_main's
-// line 1351 has (DAOLib #203).
+// transition, a spoken line, a stage camera by the henchman's place as alistair_main's
+// line 1351 has (DAOLib #203), and a head-tracking action laid out as the game's are (DAOLib #245).
 std::vector<std::byte> CutsceneFile()
 {
     constexpr std::uint16_t kStructList = gff4::kList | gff4::kStruct;
@@ -102,7 +102,17 @@ std::vector<std::byte> CutsceneFile()
            {5214, 10, 0, 24}}},
          {"AJSC",
           20,
-          {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {1, 14, 0, 12}, {5570, 0, 0, 16}, {5571, 0, 0, 17}}}});
+          {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {1, 14, 0, 12}, {5570, 0, 0, 16}, {5571, 0, 0, 17}}},
+         {"ACHT",
+          20,
+          {{5300, 0, 0, 16},
+           {5301, 8, 0, 0},
+           {5302, 8, 0, 4},
+           {5304, 0, 0, 17},
+           {5620, 4, 0, 8},
+           {5621, 8, 0, 12},
+           {5628, 0, 0, 18},
+           {5629, 0, 0, 19}}}});
     const std::size_t root = Struct(b, 40);
     b.U32(root, b.String(u"bhm500ar_tower_harrowing"));
     Float(b, root + 4, 61.0F);
@@ -174,7 +184,14 @@ std::vector<std::byte> CutsceneFile()
     b.U32(camera + 12, b.String(u"gen00fl_alistair"));
     b.U8(camera + 16, 0);
     b.U8(camera + 17, 255);
-    b.U32(actor + 12, Children(b, {{4, animation}, {5, line}, {7, camera}}));
+    const std::size_t headtrack = Struct(b, 20);
+    Floats(b, headtrack, {1.0F, 4.0F});
+    b.U32(headtrack + 8, 3);
+    Float(b, headtrack + 12, 0.6348F);
+    b.U8(headtrack + 16, 28);
+    b.U8(headtrack + 18, 255);
+    b.U8(headtrack + 19, 0);
+    b.U32(actor + 12, Children(b, {{4, animation}, {5, line}, {7, camera}, {8, headtrack}}));
     return b.bytes;
 }
 
@@ -189,7 +206,7 @@ std::vector<std::byte> FromDisk(const std::filesystem::path &path)
 
 } // namespace
 
-TEST_CASE("a cutscene's header, an actor, and its queue of actions of three templates", "[cutscene]")
+TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templates", "[cutscene]")
 {
     const auto bytes = CutsceneFile();
     const auto file = gff4::File::Parse(bytes);
@@ -214,7 +231,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of three temp
     CHECK(actor.mappingTag == L"bhm_jowan");
     CHECK(actor.scale == 1.5F);
     CHECK(actor.originPosition == std::array<float, 3>{1.0F, 2.0F, 3.0F});
-    REQUIRE(actor.actions.size() == 3);
+    REQUIRE(actor.actions.size() == 4);
 
     const auto &animation = actor.actions[0];
     CHECK(animation.kind == "AANI");
@@ -267,6 +284,17 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of three temp
     CHECK(camera.tag == L"gen00fl_alistair");
     CHECK_FALSE(camera.stageCameraDefault);
     CHECK(camera.stageCameraHenchman);
+    CHECK(camera.lookSpeed == 0.0F);
+
+    const auto &headtrack = actor.actions[3];
+    CHECK(headtrack.kind == "ACHT");
+    CHECK(headtrack.type == 28);
+    CHECK(headtrack.start == 1.0F);
+    CHECK(headtrack.stop == 4.0F);
+    CHECK(headtrack.actor == 3);
+    CHECK(headtrack.lookSpeed == 0.6348F);
+    CHECK(headtrack.realignStart);
+    CHECK_FALSE(headtrack.realignContinue);
 }
 
 TEST_CASE("a file of another type is no cutscene", "[cutscene]")
@@ -278,13 +306,12 @@ TEST_CASE("a file of another type is no cutscene", "[cutscene]")
     CHECK_FALSE(cutscene::CutsceneOf(*file));
 }
 
-TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with its actors' actions", "[cutscene][game]")
+namespace
 {
-    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cutscenes";
-    if (!std::filesystem::is_directory(folder))
-    {
-        SKIP("no game/cutscenes (ghilana's extract of *.cut writes them there)");
-    }
+
+// What the game's cutscenes hold, counted over all of them.
+struct Counts
+{
     std::size_t cutscenes = 0;
     std::size_t actors = 0;
     std::size_t actions = 0;
@@ -293,6 +320,55 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
     std::size_t lines = 0;
     std::size_t ending = 0;
     std::size_t unlabelled = 0;
+    std::size_t headtracks = 0;
+    std::size_t fullSpeed = 0;
+    std::size_t realignStarts = 0;
+    std::size_t realignContinues = 0;
+
+    void Add(const cutscene::Action &action)
+    {
+        unlabelled += action.kind.empty() ? 1 : 0;
+        lines += action.kind == "ASLN" && !action.voBank.empty() ? 1 : 0;
+        if (action.kind == "ACHT")
+        {
+            ++headtracks;
+            fullSpeed += action.lookSpeed == 1.0F ? 1 : 0;
+            realignStarts += action.realignStart ? 1 : 0;
+            realignContinues += action.realignContinue ? 1 : 0;
+        }
+        curves += action.curves.size();
+        for (const auto &curve : action.curves)
+        {
+            vertices += curve.vertices.size();
+        }
+    }
+
+    void Add(const cutscene::Cutscene &read)
+    {
+        ++cutscenes;
+        ending += read.endScript.empty() ? 0 : 1;
+        actors += read.actors.size();
+        for (const auto &actor : read.actors)
+        {
+            actions += actor.actions.size();
+            for (const auto &action : actor.actions)
+            {
+                Add(action);
+            }
+        }
+    }
+};
+
+} // namespace
+
+TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with its actors' actions", "[cutscene][game]")
+{
+    const auto folder = std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "cutscenes";
+    if (!std::filesystem::is_directory(folder))
+    {
+        SKIP("no game/cutscenes (ghilana's extract of *.cut writes them there)");
+    }
+    Counts counts;
     for (const auto &entry : std::filesystem::directory_iterator(folder))
     {
         const auto bytes = FromDisk(entry.path());
@@ -300,23 +376,7 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
         REQUIRE(file);
         const auto read = cutscene::CutsceneOf(*file);
         REQUIRE(read);
-        ++cutscenes;
-        ending += read->endScript.empty() ? 0 : 1;
-        actors += read->actors.size();
-        for (const auto &actor : read->actors)
-        {
-            actions += actor.actions.size();
-            for (const auto &action : actor.actions)
-            {
-                unlabelled += action.kind.empty() ? 1 : 0;
-                lines += action.kind == "ASLN" && !action.voBank.empty() ? 1 : 0;
-                curves += action.curves.size();
-                for (const auto &curve : action.curves)
-                {
-                    vertices += curve.vertices.size();
-                }
-            }
-        }
+        counts.Add(*read);
         if (entry.path().filename() == "bhmcs_intro.cut")
         {
             CHECK(read->endScript == L"gen00cs_cutscene_end");
@@ -326,14 +386,19 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
         }
     }
     // 2026-10-18: all 3,158, as tools/gff4.py counts them.
-    CHECK(cutscenes == 3158);
-    CHECK(ending == 279);
-    CHECK(actors == 39803);
-    CHECK(actions == 246502);
-    CHECK(curves == 372345);
-    CHECK(vertices == 320650);
-    CHECK(lines == 3555);
-    CHECK(unlabelled == 0);
+    CHECK(counts.cutscenes == 3158);
+    CHECK(counts.ending == 279);
+    CHECK(counts.actors == 39803);
+    CHECK(counts.actions == 246502);
+    CHECK(counts.curves == 372345);
+    CHECK(counts.vertices == 320650);
+    CHECK(counts.lines == 3555);
+    CHECK(counts.unlabelled == 0);
+    // 2026-10-23, as tools/gff4.py reads them (DAOLib #245).
+    CHECK(counts.headtracks == 19384);
+    CHECK(counts.fullSpeed == 928); // exactly 1, the most common speed
+    CHECK(counts.realignStarts == 825);
+    CHECK(counts.realignContinues == 594);
 }
 
 namespace

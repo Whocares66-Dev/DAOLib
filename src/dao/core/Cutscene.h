@@ -140,6 +140,9 @@ struct Action
     std::wstring sound;                          // ACSP
     std::int32_t actor = -1;          // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
     std::int32_t node = -1;           // ALNK: the target's node linked to
+    float lookSpeed = 0.0F;           // ACHT: the look-at multiplier set on the action's first frame
+    bool realignStart = false;        // ACHT: the creature's facing refreshed on the action's first frame
+    bool realignContinue = false;     // ACHT: and on each step of the cut while the action runs
     std::wstring tag;                 // AJSC's and AJSP's stage tag
     std::wstring lookAt;              // AJSP
     bool stageCameraDefault = false;  // AJSC: the tag is a place's, its default camera is the camera

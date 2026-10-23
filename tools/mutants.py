@@ -710,6 +710,12 @@ MUTANTS: list[Mutant] = [
         "local = Add(local, travel.position);",
     ),
     Mutant(
+        "cutscene-headtrack-speed: a head-tracking action's speed is its own field, not the clip's speed",
+        CUTSCENE,
+        "constexpr std::uint32_t kHeadtrackSpeed = 5621;",
+        "constexpr std::uint32_t kHeadtrackSpeed = 5402;",
+    ),
+    Mutant(
         "cutscene-linear-fraction: a linear transition's fraction is of the segment's own length",
         CUTSCENE,
         "((time - from.time) / (to.time - from.time))",

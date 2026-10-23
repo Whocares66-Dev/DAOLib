@@ -80,6 +80,9 @@ constexpr std::uint32_t kStageLookAt = 5580;
 // The four actions that name another actor, each in a field of its own:
 // AACC's camera and ALNK's and ACRU's targets an S32, ACHT's a U32.
 constexpr std::array<std::uint32_t, 4> kOtherActor = {5610, 5620, 5630, 5640};
+constexpr std::uint32_t kHeadtrackSpeed = 5621;
+constexpr std::uint32_t kHeadtrackRealignStart = 5628;
+constexpr std::uint32_t kHeadtrackRealignCont = 5629;
 constexpr std::uint32_t kLinkNode = 5631;
 constexpr std::uint32_t kSound = 5670;
 constexpr std::uint32_t kVisible = 5680;
@@ -238,6 +241,9 @@ Action ActionOf(const gff4::Struct &in)
         }
     }
     action.node = in.Get<std::int32_t>(kLinkNode).value_or(-1);
+    action.lookSpeed = in.Get<float>(kHeadtrackSpeed).value_or(0.0F);
+    action.realignStart = in.Get<std::uint8_t>(kHeadtrackRealignStart).value_or(0) != 0;
+    action.realignContinue = in.Get<std::uint8_t>(kHeadtrackRealignCont).value_or(0) != 0;
     action.tag = in.String(kTag).value_or(L"");
     action.lookAt = in.String(kStageLookAt).value_or(L"");
     // Bools to the engine, which takes any value but 0 as set (0x007DC450; dev/CUTSCENES.md,
