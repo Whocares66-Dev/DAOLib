@@ -69,10 +69,17 @@ if (-not (Test-Path (Join-Path $Game 'DAOrigins.exe'))) { throw "No DAOrigins.ex
 # The game holds its DLLs open. Another install of the game has the same
 # process name (the EA version beside GOG's), so the running one is asked
 # where it runs from: only this install's blocks the copy. One whose path
-# cannot be read is taken for this install's.
+# cannot be read is most often a game being torn down, which reads so for a
+# moment (a play matrix's just stopped, 2026-10-23): it is given ten seconds
+# to go, and is taken for this install's if it stays.
 $exe = (Resolve-Path (Join-Path $Game 'DAOrigins.exe')).Path
 foreach ($running in @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue)) {
     $from = $running.Path
+    if (-not $from) {
+        $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+        if ($running.HasExited) { continue }
+        $from = $running.Path
+    }
     if (-not $from -or [string]::Equals($from, $exe, [StringComparison]::OrdinalIgnoreCase)) {
         $where = if ($from) { $from } else { 'a path that cannot be read' }
         throw "DAOrigins.exe is running from $where (process $($running.Id)); close it first"

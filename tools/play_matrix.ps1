@@ -152,10 +152,16 @@ function Get-Run([string] $Exe) {
     @(Get-CimInstance Win32_Process -Filter "Name='DAOrigins.exe'" |
             Where-Object { $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $Exe, 'OrdinalIgnoreCase') })
 }
+# Waits on the processes it stopped, by id: one being torn down can have no ExecutablePath,
+# which Get-Run leaves out, and a deploy.ps1 -Remove run then found it, its path unreadable,
+# and refused to remove anything (2026-10-23).
 function Close-Run([string] $Exe) {
-    foreach ($left in Get-Run $Exe) { Stop-Process -Id $left.ProcessId -Force -ErrorAction SilentlyContinue }
+    $ids = @(Get-Run $Exe | ForEach-Object { [int] $_.ProcessId })
+    foreach ($id in $ids) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
     $until = (Get-Date).AddSeconds(15)
-    while ((Get-Run $Exe) -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 300 }
+    while (($ids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }) -and (Get-Date) -lt $until) {
+        Start-Sleep -Milliseconds 300
+    }
 }
 # The game as ever holds the mutex "dragonage" (dev/BUILDS.md); a second one exits at once.
 function Test-GameAsEver {
