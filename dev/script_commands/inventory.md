@@ -221,10 +221,15 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Handler:** 0x006635E0 (own). Sends `ShowPartyPickerMessage` to the current game mode (the controller's current mode object).
 - **Does:** only `GameModeExplore` and `GameModeGUI` handle it (0x007183A0): `SetGameMode(12)` (PartyPicker). Checked. After its fade (`FadeToBlackLoading`, scene 0x22), the mode delivers `EVENT_TYPE_PARTYPICKER_INIT` (104) to the module at once and shows scene 0x1B `PartyPicker` (0x0076C7C4-0x0076C878, checked).
 - **Closing:** Submit (`SubmitPartyChangesMessage`, 0x00767060) queues `EVENT_TYPE_PARTYPICKER_CLOSED` (71) to the module (0x00766C10), then exits; Exit alone (0x00765960) only shows the fade and sets the leaving flag, no event (checked).
-- **Edge cases:** the message goes to the mode at index 0 (explore), whatever the current mode (corrected 2026-10-23 by lib-agent-2; it was noted as ignored in combat, dialogue and cutscene), see the next bullet. Whether mode 12 pauses is not read.
+- **Edge cases:** the message goes to the mode at index 0 (explore), whatever the current mode (corrected 2026-10-23 by lib-agent-2; it was noted as ignored in combat, dialogue and cutscene), see the next bullet. Mode 12 does not pause; the AIMaster pass does not run under it (GUI.md, "Game mode and pause", the party picker's enter) [C, read 2026-10-23 by paragon-agent, checked by lib-agent-2].
 - **Which modes take it** (read 2026-10-23 by lib-agent-2 with a subagent) [C]:
   - **What it does:** it sends `ShowPartyPickerMessage` to the mode at index 0 (explore), whatever the mode. The handler 0x007183A0 (explore and GUI) only asks `SetGameMode(12, 0, 0)`.
   - **Nothing refuses it by a test.** The controller takes the stack mode 12 at once from a base mode (explore, combat), or from GUI as it is interruptible (GUI.md). Under dialogue or a cutscene, which are not interruptible, it waits until they end [I for "waits"]. A request for the current mode with force 0 is dropped.
+    - **The slots behind "waits"** (read 2026-10-23, checked by lib-agent-2) [C for the slots]:
+      - Slot 12 (interruptible) is the false stub 0x005C5E80 for movie, dialogue and cutscene.
+      - For loading it is the byte `+0x148` (0x006C58C0).
+      - For chargen it is true while `+0x86` is 0 (0x00719260).
+      - So under loading and chargen the request is taken or waits by those flags [I for "waits"].
 
 ### SetPartyPickerGUIStatus (311)
 - **Handler:** 0x00663660 (own).

@@ -320,6 +320,23 @@ Read 2026-10-21 by lib-agent-2 in the GOG exe (base 0x400000) with `tools/daoexe
    - **Which saves:** in the load screens' mode (`+0xAC` not 1), all four kinds, folders `Slot_n` (kind 0, manual), `AutoSave_n` (1), `QuickSave_n` (2), `PostCampaign_n` (3). In the save screen's mode (`+0xAC` == 1) only kind 0 (C for the structure in 0x006D1160, I for the folder-to-kind names from SAVES.md:220 and the folders on disk).
    - **Order:** by the .das file's last-write time, newest first, all kinds mixed. The insertion in 0x006CF550 (0x006CFA58-0x006CFACD) walks the list and inserts before the first element whose 64-bit key is smaller; on equal keys the new one goes after the existing (C). The key is the `*.das` file's time as Unix seconds (the loop at 0x004C99A1-0x004C99C7 takes `ftLastWriteTime`, subtracts the 1601 to 1970 offset and divides by 10^7) (C for the conversion, I for which store feeds the record).
    - **Filled** by `RefreshSaves`' worker 0x006D1160 (called from `ResumeGame` at 0x006D162C via 0x006D15D0, and from the screens): it clears the list (0x006CF4E0), and if `+0xE4` is non-empty calls 0x006D0A50 for kind 0 and, when the mode is not 1, for kinds 1, 2 and 3. 0x006D0A50 lists `<Characters>\<char>\Saves\*` (mask `*`), and for each folder lists `*.das`, takes the first file (must be a file with size > 0), reads its `.das.met` header, and inserts a record with 0x006CF550 (C). In save mode (`+0xAC` == 1) 0x006D1160 also inserts a "new save" record at index 0.
+   - **A save's name in the list** (0x006CF550; read 2026-10-23 by paragon-agent for DAOParagonEngine #204, checked by lib-agent-2) [C]:
+     - **The format:** the name is `%ls%ls%ls` (0x00B10F60), filled with three parts.
+     - **The word**, by kind (table 0x006CFB44):
+       - kind 0 has no word;
+       - kind 1 is strref 399579 "Auto-save";
+       - kind 2 is 336243 "Quick Save";
+       - kind 3 is 395082 "Post-Campaign Save".
+     - **The number:** ` (%d) - ` (0x00B10F74), only when there is a word. The `%d` is the folder's own number (`AutoSave_n` and so on): 0x006D0A50 reads it with `StringToInt` (0x004C0950) on part of the folder's name (0x006D0D53) [I that the part starts after the `_`].
+     - **The name**, the first non-empty of:
+       - the `.das.met`'s `SavegameMetaSaveName` (16808, 0x006CC1D0);
+       - its `SavegameMetaAreaName` (16800, 0x006CC130);
+       - the fallback, the folder's `*.das` listing entry (0x006D0A50's `esi`, passed at 0x006D0F2C) [I that its string is the file's bare name].
+     - **No readable `.das.met`:** when it is missing or is not GFF `V4.0` (0x006D0E7D), the name and area lookup is skipped and the name is the word, the number and the fallback (0x006CF9BB).
+     - **Seen in the files on this machine:** an autosave's, a quick save's and a post-campaign save's `.das.met` all have an empty SaveName. So they list as "Auto-save (1) - Redcliffe" and so on (derived from the code, not seen on the screen).
+     - A manual save with an empty SaveName lists as its area (from the code). Every manual save read had a name.
+     - **Save mode:** in save mode only kind 0 is listed (0x006D1237 skips kinds 1–3), as the bullet above says.
+     - **Slot bounds:** 0x006D0A50's kind table (0x006D1150) gives 501 for manual saves (slots 1–500), 5 for autosaves, and 2 for quick and post-campaign saves.
    - **How `ResumeGame` picks when `LastPlayedGame` is missing or stale:** the first element of the list, i.e. the newest save of the chosen character over all four kinds. Its path is rebuilt by 0x00645E00 from `+0xE4`'s folder name, the record's `Slot` and `SaveType` (that function lists the folder with `*.das` and returns the full path of the .das it finds), then tested for existence with 0x006CB910. "Stale" means the file cannot be opened; the path is not checked against the character (C).
 
 ### ResumeGame, step by step (handler 0x006D15E0, `SaveLoadProxy`, `ResumeGameMessage` dev/message_handlers.csv:303)
@@ -351,7 +368,7 @@ Read 2026-10-21 by lib-agent-2 in the GOG exe (base 0x400000) with `tools/daoexe
 - Where the main menu's Resume button is shown, hidden or greyed (whether it looks at `LastPlayedGame` or at the list); no code outside the two accesses above was found to read the option, but the scan was a window scan.
 - Whether the options screen's "restore defaults" for the Game tab clears `LastPlayedGame` (0x005E968B's block is inside the constructor's range; its group was not read).
 - What 0x005E4880(1) and the full body of 0x005E6280 do beyond being the commit path (the ini write was shown only by the file time).
-- The 0x006CF550 argument order for `Name`, `Area`, `Story`, `TimePlayed`, `LastPlayed` (what fills each from the `.das.met`), and the `SaveType` numbering past SAVES.md:220 (kind 3 as PostCampaign is from the folder names on disk and the iteration, not from a table).
+- The 0x006CF550 argument order is answered (read 2026-10-23 by paragon-agent, checked by lib-agent-2): the arguments are the number, the kind, the listing entry, the 64-bit sort key, the meta struct (four words) and a string pointer. Still open: the `Story`, `TimePlayed` and `LastPlayed` sources, and the `SaveType` numbering past SAVES.md:220 (kind 3 as PostCampaign is from the folder names on disk and the iteration, not from a table).
 - Whether the hero list's key (`+0x58`/`+0x5C`) is the newest save time over all four kinds or only some (0x006CDE50 is called four times, once per kind, and its out values were not followed to the record).
 - The `ResumeGame` message's Flash side (what the death screen and main menu send exactly) beyond dev/COMBAT.md:621; no DAOTurnBased or DAOEluvianMCP note mentions `ResumeGame` or `LastPlayedGame` (grep of both repos' dev/).
 

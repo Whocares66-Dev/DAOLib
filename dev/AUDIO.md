@@ -152,8 +152,8 @@ Music is three layers. **The area** names a theme: its `.are` field `MusicPreset
   - The subgroup `stingers` (+0x28) is got, and its `from_main` (+0x3C) and `to_main` (+0x40) events got, paused and started.
   - The stored `music_state` (+0x124) is applied (slot 7).
   - **Nothing plays yet**: a track is set by the controller's next mode change or a pending track.
-- **The menu.** `GameModePregame`'s enter (slot 6, 0x0064CB50) sets the theme `music/_menu` (0x00B06C0C). Pregame is mode 8, which then sets the track `main`.
-- **The credits** (`GUI::GUICredits`): their start (0x0071FD0B → 0x005BBA20) sets the theme `music/_EndOfGameCredits` when the controller's +0x94 is set (the game's end, `ShowStartMenu(TRUE)`); otherwise the track `chargen` if +0x95, else `credits_df`, in the theme playing (`music/_menu`). Their end (0x0071F660 → 0x005BBB00) sets `music/_menu` again after the end-of-game credits (and clears +0x94), else the track `main`.
+- **The menu.** `GameModePregame`'s enter (slot 6, 0x0064CB50) sets the theme `music/_menu` (0x00B06C0C), through 0x005BB510 on the music controller `[0x005B9020()+0x120]` (0x0064CC59..0x0064CC91; read 2026-10-23 by paragon-agent, checked by lib-agent-2). The enter does not push the start menu's scene: 0x005DD310 does, with mode 8 (0x006414A0), and ShowStartMenu calls it. Pregame is mode 8, which then sets the track `main`.
+- **The credits** (`GUI::GUICredits`): their start (0x0071FD0B → 0x005BBA20) sets the theme `music/_EndOfGameCredits` when the music controller's +0x94 (`[0x005B9020()+0x120]`, not the game-mode controller; corrected 2026-10-23 by lib-agent-2) is set (the game's end, `ShowStartMenu(TRUE)`); otherwise the track `chargen` if +0x95, else `credits_df`, in the theme playing (`music/_menu`). Their end (the hide 0x0071F620, its call at 0x0071F660 → 0x005BBB00; corrected 2026-10-23 by lib-agent-2; seen in play, in DAOParagonEngine: the menu's Credits play `credits_df` and the hide gives `main`, and `EPI_JUMP_TO_CREDITS` (epipt_main flag 18, `ShowStartMenu(TRUE)`) gives `_EndOfGameCredits` and then `_menu`) sets `music/_menu` again after the end-of-game credits (and clears +0x94), else the track `main`.
 - **Restart (theme slot 4, 0x005C4060):** after a load (the controller sees mode 9 left, 0x005BB6D1), the theme is reloaded with its current track, but only if `<project>.fev` now resolves to another file than the loaded one (0x005C0D50; inferred: an add-in or override changed). Normally false: a load does not restart the music.
 
 #### 3. The track: set by the game mode (checked)
@@ -295,7 +295,15 @@ What plays, by the code and the data together (inferred as a sequence; each step
 - Who calls the theme's pause (slot 5) and whether music pauses with the game (`OnGamePause` ducks music -9 dB: data).
 - How FMOD changes piece inside an event when `music_state` moves (crossfade, wait for the end of the playing sound, or a cut): FMOD's. The instance's loop mode and spawning are decoded in `dev/PARAGON_AUDIO.md`, "The answers" (2026-10-19).
 - `_stingerprecache`'s parameter `param02` and what the load mode 2 does; `stingers` vs the theme's own `stingers/hit*`.
-- The controller's +0x95 (a pregame menu index) and the credits' `chargen` choice; who starts the `_EndOfGameCredits`.
+- The music controller's +0x95 and +0x94 are answered (read 2026-10-23 by paragon-agent, checked by lib-agent-2; they were open here):
+  - **+0x95's writers:**
+    - The music controller's constructor sets it to 1 (0x005B6C8B).
+    - `GameModePregame`'s ShowCredits handler 0x0064D050 sets it to "the credits entry's index is not 0" (0x0064D0C5).
+  - **So** the first entry gives `credits_df`, and any other entry gives `chargen` [I for "the first entry is `dao`", RefreshCreditEntries not read].
+  - **+0x94's writers:**
+    - ShowStartMenu sets it to `bShowCredits != 0` (0x0066A61D).
+    - The credits' end clears it (0x005BBB64).
+    - The constructor sets it to 0 (0x005B6C85).
 - 0x005BD220's jump table (which mode plays `OnCutscene`, `OnDeath`, `OnGameLoading`): question 12.
 - That 0x007CF2E0's object is the conversation's line timer (its callers 0x0068DCA8, 0x00691E23 are in the dialogue code).
 - The step of the area-load machine 0x006C8EF0 that holds the call at 0x006C937E, and when exactly the party enters the trigger relative to it.
