@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.6.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary LIBVER](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/vLIBVER). The loader and its contract with plugins are as in 0.3.0.
+
+- **Saved games read and written, with no game running:** `daolib_core` reads a save into plain structs (the campaign, its journal and variables, every area with what is left in it, the hero and the party, the event queue), checked against the game's own loaders (#202), and writes a changed one back over the file it came from, its metadata too (#221, #226).
+- **For lighting and effects mods:** each point light's colour, a light probe's irradiance, an object's share of the sun, and a sprite emitter's colour, as the engine hands them to a draw, read and changed (`dao/Lights.h`, `dao/Vfx.h`, #223, #225, #230, #224); the effects running in the area with their models and places (#231); a texture as the engine makes it from a `.dds` (`dao/Resources.h`, #228); and changing the sunlight moves the sun's disc in the sky with it (#222).
+- **More for plugin authors:** a callback when a creature plays an animation and when a sound event starts (#217, #218); the world's clock as a save keeps it (`dao::clock::Now`, #232); the camera's projection, and the near and far planes given back after a free view (#204, #205); and a few of the exe's bytes changed in place only where they are as expected (`dao/Patch.h`, #220).
+- **The game's files read whole:** compiled scripts and `script.ldf` (#166, #167), plots, campaigns, cutscenes and conversations' switches (#168 to #179), head presets (#171), FaceFX's lip-sync and expressions (#206), sound banks and event projects (#191, #192), a level's collision, walk-grid patches, wind and trees (#176, #182, #189, #196, #197), with the overlap test the game makes when it places a creature (#233). The install's index builds from a warm cache in half a second (#207).
+- **For players:** the documentation names the requirement, the latest x86 Visual C++ Redistributable, whose older versions stop the game at start with 0xc0000142; and each release's documentation is kept, with a version selector (#201).
+
 ## 0.5.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.5.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.5.0). The loader and its contract with plugins are as in 0.3.0.
