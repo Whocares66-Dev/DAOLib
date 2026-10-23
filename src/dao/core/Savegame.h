@@ -264,7 +264,7 @@ struct Quickslot
     std::uint32_t ability = 0;
     std::wstring itemTag;
     std::wstring templateResRef;
-    std::int8_t number = 0;
+    Opt<std::int8_t> number;          // none for a slot without one, which the game keys by its place in the list
     std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 

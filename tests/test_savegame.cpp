@@ -86,6 +86,7 @@ enum Tpl : std::uint16_t
     kPtaj,
     kEscr,
     kSce1,
+    kCqs1NoNumber,
 };
 
 std::vector<TemplateSpec> Templates()
@@ -173,7 +174,7 @@ std::vector<TemplateSpec> Templates()
           {16209, kCps1, kS, 12},
           {16950, kU8, kL, 16},
           {16255, kTlk, 0, 20}}},
-        {"CPS1", 8, {{16305, kU32, kL, 0}, {16308, kCqs1, kSL, 4}}},
+        {"CPS1", 12, {{16305, kU32, kL, 0}, {16308, kCqs1, kSL, 4}, {16313, kCqs1NoNumber, kSL, 8}}},
         {"CQS1", 8, {{16311, kU32, 0, 0}, {16331, kS8, 0, 4}}},
         {"PRTY",
          20,
@@ -206,6 +207,7 @@ std::vector<TemplateSpec> Templates()
           {16635, kU32, 0, 16},
           {16650, kSce1, kS, 20}}},
         {"SCE1", 16, {{16670, kS32, 0, 0}, {16671, kU32, 0, 4}, {16672, kU32, 0, 8}, {16674, kStr, 0, 12}}},
+        {"CQS1", 4, {{16311, kU32, 0, 0}}}, // a slot with no number, as no save of the game's has
     };
 }
 
@@ -391,12 +393,14 @@ std::vector<std::byte> MakeSave(const char *type = "SAVE")
     Str(b, crp + 24, u"Aria"); // a TlkString's text is its second word
     b.U8(crp + 8, 1);
     b.U32(crp + 16, dao::test::Bytes(b, {'G', 'F', 'F'}));
-    const std::size_t cps = New(b, 8);
+    const std::size_t cps = New(b, 12);
     b.U32(cps, Numbers(b, {1, 2}));
     std::size_t qs = 0;
     b.U32(cps + 4, InPlace(b, 8, 1, qs));
     b.U32(qs, 99);
     b.U8(qs + 4, 3);
+    b.U32(cps + 8, InPlace(b, 4, 1, qs));
+    b.U32(qs, 98);
     b.U32(crp + 12, Rel(b, cps));
     b.U32(plyr, Rel(b, crp));
     b.U32(plyr + 4, 555);
@@ -600,6 +604,9 @@ TEST_CASE("the hero, the party and the game's state are mapped", "[savegame]")
     CHECK(save->hero->stats->quickslots[0].size() == 1);
     CHECK(save->hero->stats->quickslots[0][0].ability == 99);
     CHECK(save->hero->stats->quickslots[0][0].number == 3);
+    REQUIRE(save->hero->stats->quickslots[1].size() == 1);
+    CHECK(save->hero->stats->quickslots[1][0].ability == 98);
+    CHECK_FALSE(save->hero->stats->quickslots[1][0].number); // not slot 0
     CHECK_FALSE(save->hero->stats->lockQbar);
     CHECK(save->hero->playerMorph.size() == 3);
     CHECK(save->timePlayedSeconds == 555);
@@ -1084,6 +1091,18 @@ TEST_CASE("an Opt that is none leaves the field as the file has it", "[savegame]
     CHECK(out.save.areas[0].creatures[0].stats->stats.empty());
     CHECK(out.save.hero->nameStrref == 5);
     CHECK(out.save.hero->nameText == L"Aria");
+}
+
+TEST_CASE("a quickslot read without a number is written back without one", "[savegame][write]")
+{
+    const auto bytes = MakeSave();
+    auto save = ReadOf(bytes);
+    save.hero->stats->quickslots[1][0].ability = 97;
+    const auto out = Rewrite(bytes, save);
+    CHECK(out.unwritten.empty());
+    CHECK(out.save.hero->stats->quickslots[1][0].ability == 97);
+    CHECK_FALSE(out.save.hero->stats->quickslots[1][0].number);
+    CHECK(out.bytes.size() == bytes.size());
 }
 
 TEST_CASE("items in a list: added", "[savegame][write]")

@@ -440,6 +440,8 @@ void Fill(const Struct &s, Stat &out)
     Take(s, L::kStatRegen, out.regen);
 }
 
+// The load [exe 0x0062C3D0] keys a slot by its number, or by its index in the list where it has none; the
+// game's writer [exe 0x0062B1E0] always writes one (dev/GUI.md, the quickbar; DAOLib #248).
 void Fill(const Struct &s, Quickslot &out)
 {
     Take(s, L::kQsAbility, out.ability);
