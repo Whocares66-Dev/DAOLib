@@ -236,3 +236,27 @@ Which of the peer's options: none of depth bias, draw order, skinning or alpha. 
 - Whether anything outside the build (a script, SetGore (cutscene command 45), a respawn or load) writes `a+0x5D` back to 0; the only writer found in 0x006A... was `0x006AAC20` (a full scan of `+0x5D` writes was too noisy to finish).
 - A ray test of the cap against the face's triangles; the armour chest models' collars; the seen-in-play check; depth bias and ZFUNC calls (not searched).
 - Scratch: `%TEMP%\lib-agent-2-neck2b-*.py` and `lib-agent-2-neck2b-files\`.
+
+## A model's level of detail (read 2026-10-23 by paragon-agent for DAOParagonEngine #111, checked by lib-agent-2)
+
+GOG 1.05 addresses. [C] read in the code or the files, [I] inferred.
+
+- **The level:** it comes from the creature's LOD band (PARTY.md, the LodManager), through `AnimBase` slot 0x44 (0x00A5D5D0) and the table 0x00B03B98. Bands 0–3 draw levels 0, 0, 2 and 3; level 1 is never used [C].
+- **The two held items follow the body** [C]: AnimBaseWield's slot 0x44 (0x00A669C0) calls 0x00A5D5D0. On a change, it reloads its two holders at `+0x230`/`+0x234` (0x00A68DB0) [I that they are the hands' items].
+- **The file:** 0x00A67BE0 (this, name, level, out) tries `%ls_%d.mmh` (0x00B598E0) over the level's row in 0x00B03B98 (0x00617020), then `%ls.mmh`, then `%ls_0.mmh` [C].
+  - So a missing level falls back along the row.
+  - The data has no `_1` files (for example `hm_hed_dcpa_0`, `_2`, `_3`) [C].
+  - The reload fires when the level found differs from the holder's `+0xB4` [C; the rest of 0x00A68DB0 not read].
+- **The materials:** the `_l2`/`_l3` `.mao` name LOD semantics [C].
+  - For example, `pf_rob_mora.mao` uses `AlphaArmourSkinTint` with a normal map. Its `_l2` uses `PunchthroughArmourSkinTintL2`, and its `_l3` `ArmourSkinTintL3`, both with no normal map.
+  - Vanilla `Character.mat.xml` gives L2 and L3 the technique `LOD2`: `Char2.vsh` with `Ch2ArmTnt.psh`. It requires only POSITION, NORMAL and TEXCOORD0.
+  - The `_l2` textures are a quarter of the base's bytes, and the `_l3` a sixteenth.
+- **The meshes** [C]: the `_2` and `_3` meshes have no tangent or binormal. `hm_hed_dcp_2.msh`/`_3` have 36-byte vertices, where `_0` has 52 with both. The draft's "the `_2` meshes keep their tangents" is wrong.
+- **The shaders** [C, vanilla `shaders.erf`, disassembled]:
+  - `Ch2ArmTnt` is `Ch1`'s with the normal-map sampler dropped, so it uses the vertex normal (`nrm r1.xyz, v2`).
+  - `Char2.vsh` drops the tangent and binormal inputs and skins by 2 bones, its weights over `v3.x + v3.y`. `Char1.vsh` skins by 4.
+  - Not read: the SM2 variants, `Face2.psh` and `Char2_VertexLit.vsh`.
+- **What Paragon saw in play in the camp** (Lyna, Slot_489):
+  - Morrigan at 11.6 and 14.6 m from the hero was drawn by `Char2.vsh` and Ch2 (robe `pf_rob_mora_0dl2`), her head by `Face2.psh` and her hair by `Hair2`.
+  - The dog at 26 m was at level 2, and the emissaries at 29.4–30.8 m at level 3.
+  - Shale's body was at level 0 while his head was at level 2 (not explained).
