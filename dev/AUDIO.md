@@ -1329,6 +1329,13 @@ Key kind 1: row = the surface (0x006A0590), column = +0x934 (`Sound_Monster_Size
   - Table 154, row = the caster's weapon material (hand by `|Left`).
   - 69 + 12 events in the clips carry `|PlayHit`.
 
+- **A projectile's wall impact** (read 2026-10-23 by paragon-agent, checked by lib-agent-2): `CProjectile::SweepCollision` (0x007E8C10) calls 0x007E67F0 at a wall hit (0x007E8CCE), before the arrival [C].
+  - 0x007E67F0 reads the projectile's prj_base `SoundMatType` (21 for arrows) [C]. It plays nothing when that cell cannot be read, or when the hit's groups mask (the world ray's +0x24) has 0x1000, trees [C].
+  - Otherwise it fetches the sound manager (0x005B9020, the singleton) and hands the record's +0x28 (the surface's sound material; COLLISION.md) to 0x005BCAB0 [C].
+  - 0x005BCAB0 (unnamed in the address library) builds the event's column name: `sound_geometry_mat_types` (table 156) `Label` at that row; an empty label or "INVALID" becomes "Unknown"; the name is trimmed of spaces and tabs (0x00ADEE0C) [C].
+  - The event is `sound_weapon_hits[SoundMatType][that column]` (0x005B6BA0), the column found by name without regard to case (the GDA column hash lowercases: "Hollow_wood" finds "Hollow_Wood") [C], played at the hit point (`ScriptBackend::ForScript_PlaySound`, 0x005BC7F0) [C].
+  - Not yet heard in the running game.
+
 ##### 8.7 Weapon actions: data notes [C]
 
 - `sound_weapon_actions`' columns are swapped in the data for melee weapons: **`Sheath` (played on EquipR/L, the draw) holds `…/movement/unsheath`** and `Unsheath` holds `…/sheath`. So the draw sounds right.

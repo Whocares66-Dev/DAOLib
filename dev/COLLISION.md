@@ -42,7 +42,7 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
   - It makes no setGroupsMask call, so bits0 is the file's.
 - **Actor record (16 bytes):** (−1, 0, **room id**, small int).
   - The room id is the `.rml` room's id (1101 … 1325) and is read as the room (section 3).
-  - The 4th field is 0–15 in lak302d; inferred to be a sound material.
+  - The 4th field is 0–15 in lak302d; read to be a sound material. (read 2026-10-23 by paragon-agent, checked by lib-agent-2; "A hit's sound material" below).
 
 ### What the shapes are (lak302d.opf, checked)
 
@@ -86,6 +86,19 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
 - **Creatures** (checked by the fork): the creature load (`0x006B2160`–`0x006B21A0`) puts its controller (creature+0x770) in actor and shape group 4 and sets groupsMask {0x10, 0, 0, 0} (`0x00838120`, NxShape slot 0x8C). So creatures are outside 0x24.
 
 **For the stand-in:** load every static shape with its bits0 and treat a shape as an occluder when `bits0 & 0x24` is non-zero. Add the placeables (section 2). The ray runs eye to eye (+1.8 m) over the segment's length, and any hit means not seen.
+
+### A hit's sound material, and the world ray's record (read 2026-10-23 by paragon-agent, checked by lib-agent-2)
+
+GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
+
+- RaycastClosestSegment's result +0x38 is `0x0081C4F0(actor)` [C].
+- 0x0081C4F0 answers by actor kind [C]: a creature controller's actor (kind 4 by its slot 0x58) gives 0; an actor whose userData record's owner (`u+4`) is null gives `[u+0xC]`, the level .opf's actor record's fourth word, core's `ActorRecord::sound` (its sibling `GetActorRoomId` 0x0081C560 gives `[u+8]`, the room, which confirms the layout {first, second, room, sound}); a placeable's shape (an actor with an owner) asks the owner's slot 0x48, then that object's slot 4, then 0x005429C0, which gives the owner's `+0x2F0` when it is not negative, else 0. What sets `+0x2F0` was not read.
+- The world ray (0x00648C60) copies it to its own record's +0x28 [C], and the projectile's wall impact reads it there as a row of sound_geometry_mat_types (table 156) [C]; see AUDIO.md, "A projectile's wall impact".
+- Over the install, in Paragon: stone gives the arrow's `impact_materials/metal` event, Hollow_wood its `wood` event [S].
+- It comes from the collision file, not the walk grid [C].
+- The world ray's record (0x00648C60):
+  - +0x20 and +0x24 are swapped from the physics record's; +0x24 is the shape's groups mask [C]. It also sets its +0x18 to (not bit 24 of the hit's +0x20), the Nonwalkable bit cleared [C, 0x00648D4B..0x00648D6A].
+  - +0x28 is the physics record's +0x38, the sound material above [C].
 
 ## 2. Placeables (checked, by a fork; one claim inferred)
 
@@ -139,7 +152,7 @@ The reader is `dao/core/Collision.h` (#189, #197): a level's static physics, fro
   - −1 on 36,288 cells; 5 on 21,021 (14,360 walkable); 15 on 512; 1 on 260; 0 on 131.
   - Every creature, door and trigger position in the `.are` that was tried reads 5, whatever its room (1101, 1103, 1325, 1291).
   - 15 is past the 12-room list.
-  - Its values match the actor records' 4th field (0–15), inferred to be the floor's sound material.
+  - Its values match the actor records' 4th field (0–15), read to be the floor's sound material. (read 2026-10-23 by paragon-agent, checked by lib-agent-2; "A hit's sound material" below).
 - **For the port:** take a creature's room by casting down from 2 m above its feet onto the static shapes (bits0 & 0x20) and reading the hit actor's room id from the `.opf`'s actor record. Test reachability by walking `EnvRoomConnectivityList` through passable doors keyed by the `.are`'s RoomID pairs.
 
 ### Rooms seen (read 2026-10-20 by lib-agent-2, DAOParagonEngine #108; C checked, I inferred)
