@@ -19,6 +19,11 @@ The area's load is a machine of steps (`0x006c8ef0`, steps 1 to 8):
 - Step 4 queues `EVENT_TYPE_AREALOAD_PRELOADEXIT` (38; 42 for an area loaded from a save) to the area, and runs `AIMaster::Update` at once, so the event is handled within the step.
 - Step 6 waits for the area's rooms.
 - Step 8 queues `EVENT_TYPE_AREALOAD_POSTLOADEXIT` (39; 43 from a save) to the area and runs the queue again.
+- **Step 7, before it** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x006C91A0–0x006C9247]:
+  - Step 7 first polls a module count (`[module+0x658]`, through 0x005CA1B0/0x005C84D0). Above 0 it pauses (SetPaused(1, 0)) and stays in step 7. What the count is was not read.
+  - Otherwise it unpauses (0x006C91E4) and tests the loading screen (+0x14C). When that is not 0x10 it goes to step 8.
+  - When it is 0x10, the load holds, paused, while all of these hold: scene 0x10's +0xBC is set, and 0x0072EDC0 answers "not done". Otherwise it unpauses again (0x006C9238) and goes to step 8.
+  - 0x0072EDC0 finds the "WorldMap" movie; with none it is done. It invokes `GetTravelling` and `GetAnimating`, and when the map is travelling and not animating it invokes `AreaLoadedNotify`. It is done only when the map is not travelling. Nothing is stored: the movie is asked at every poll.
 
 Before them, at step 3, `EVENT_TYPE_AREALOAD_SPECIAL` (40, or 41 from a save) is run on the area's script at once, not queued (below). A saved game's load is told by the loading state's byte +0x68 (`0x006c90b8`), set only by load requests of kind 2 and 8. 37 and 80 are never raised.
 
@@ -205,6 +210,14 @@ Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address
   1. The request's own call shows nothing, unless the world map is up (WorldMap 0x10, 0x006C6060).
   2. State 7 (0x006C7380 to 0x006C7080) finds the area and calls slot 14 with **5** if it is in the area list in memory (LightLoading 0x21, `load_light`) or **4** if not (Loading 0x0E, `load_town`), each with the same world-map exception (the pushes at 0x006C72AE, 0x006C72FA, 0x006C7300, 0x006C7318 and 0x006C732C). A failure calls slot 14 with 1 (nothing) or the load-failure routine.
   3. State 6 (0x006C8EF0) calls slot 14 with 6, the fade (0x006C60F0), which shows nothing new: the screen of step 2 stays until the mode's leave (0x006C5A00) hides it.
+  - **The loading mode's leave (0x006C5A00)** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - The leave first calls `[0x00C31650]`'s slot 0xF0 with 0, then 0x008472C0 → 0x00844F60 (not read).
+    - It then hides the screen +0x14C through GUI slot 0x38 and sets +0x14C to −1.
+    - Finally it calls 0x006945A0, the base leave.
+  - **0x006C5FE0, which sets the loading screen** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - When the id differs from +0x14C, it hides the old screen through GUI slot 0x38 (unless the old one is −1).
+    - It stores the new id.
+    - It shows the new screen through slot 0x34 when the loading mode is the controller's current mode.
 - **A transition to the area the party is in does nothing at all: no reload and no move** (read 2026-10-21 by lib-agent-2, for DAOParagonEngine) [C unless marked].
   - **The command checks only that the tag is known.** `CCModule::ForScript_DoAreaTransition` (0x00600A40) looks the area's tag up in the module's areas. If it is known, it always pushes a kind-7 loading request (0x00600B6A..0x00600BAC) and returns 1 to the script. It does not test whether the area is the current one.
   - **State 7 drops the request.** Its lookup, 0x006C7080, finds the target in the area list in memory (`0x006FA910` on module +0x2CC). It then compares the target's id with the controlled creature's area id: `[[app+0xD0]+0x5C]` through 0x0069D2E0, then +0x254, at 0x006C7236..0x006C7246. If they are equal it returns false, and so does any failed lookup (0x006C725F, 0x006C733E).
@@ -226,4 +239,4 @@ Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address
 - **The scripts pick it:** `UT_DoAreaTransition` (`utility_h.nss`, about lines 1051 to 1095) calls `SetLoadHint` before each `DoAreaTransition`:
   - with the module's `AREA_LOAD_HINT` set: that row of `loadhints` (206), and the local is reset;
   - otherwise a random row by the hero's level: up to 3, table 284 (`vlowlevelloadhints`); 4 to 7, 277 (`lowlevelloadhints`); 8 to 12, 275 (named `HighLeveLoadHints`); 13 on, 276 (named `MidLeveLoadHints`). The script's comments have the last two the other way round.
-- **Not read:** the hint on a new game's or a save's load (whether a stale one shows); how markup such as `<LeftClickDefaultCapped/>` in a hint becomes text; `SendEventTransitionToWorldMap`'s engine side; whether the world map scene's +0xBC is set on a normal world-map trip; the kind-3 early-out in slot 5 (0x006C6DC2–0x006C6DFE).
+- **Not read:** the hint on a new game's or a save's load (whether a stale one shows); how markup such as `<LeftClickDefaultCapped/>` in a hint becomes text; `SendEventTransitionToWorldMap` has no engine side: it is a script event to the module (script_commands/arrays.md, "Leaving a random encounter") [I for no engine reader] (corrected 2026-10-23 by lib-agent-2); whether the world map scene's +0xBC is set on a normal world-map trip; the kind-3 early-out in slot 5 (0x006C6DC2–0x006C6DFE).

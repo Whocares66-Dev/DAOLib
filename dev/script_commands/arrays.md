@@ -73,7 +73,7 @@ Shared facts, all checked unless marked:
   - It sets the travel state +0xA8 to 1 (encounter) or 2 (straight) and notifies.
   - If the `WorldMap` scene's byte +0xBC is 0 (inferred: not open), it opens the map as 757 does.
 - **Later:** the movie's `WorldMapPreTransitionMessage` (0x00700B90) sets +0x100. In state 1 it asks the module (0x00600A40) for an area transition to +0xC8/+0xE4. If that fails, it runs 697's continuation. In state 2 it raises `EVENT_TYPE_WORLDMAP_PRETRANSITION` (92) to the module with no arguments (0x00700830). (checked)
-- **Edge cases:** **there is no `EVENT_TYPE_FINISHED_TRAVEL`**: `script.ldf` names it, but defines no such constant, and the engine sends 92. `sp_module_travel` then reads its own stored area and waypoint and transitions. The destination is whatever pin the GUI set at +0xB8 (the clicked pin; inferred). With no primary map set, 0x007C7720 is called on null (checked: no null test at 0x007009F1; a crash inferred). One string empty: no encounter.
+- **Edge cases:** **there is no `EVENT_TYPE_FINISHED_TRAVEL`**: `script.ldf` names it, but defines no such constant, and the engine sends 92. `sp_module_travel` then reads its own stored area and waypoint and transitions. The destination is whatever pin the GUI set at +0xB8 (the clicked pin: the movie's attribute `WorldMap.LastClickedPinIndex`, read 2026-10-23; corrected 2026-10-23 by lib-agent-2: it was inferred). With no primary map set, 0x007C7720 is called on null (checked: no null test at 0x007009F1; a crash inferred). One string empty: no encounter.
 
 ### WorldMapCompleteRandomEncounter (697)
 - **Handler:** 0x006651A0 (own) → `ScriptBackend::ForScript_WorldMapCompleteRandomEncounter` (0x00700A60).
@@ -98,8 +98,8 @@ Shared facts, all checked unless marked:
 
 ## Not read
 - Who reads `WorldMap`+0x98 (the GUI status) and how the area map's button uses it.
-- The rest of 0x007C7720 (the route along the map's graph and where an encounter is placed on it), the movie's travel animation, and how the clicked pin reaches +0xB8.
-- `EVENT_TYPE_BEGIN_TRAVEL` (91), built at 0x007006F0: who calls it. `EVENT_TYPE_WORLDMAP_POSTTRANSITION` (103): where it is raised.
+- The rest of 0x007C7720 (the route along the map's graph and where an encounter is placed on it), the movie's travel animation, and how the clicked pin reaches +0xB8 (read 2026-10-23: the movie's `MapPinIcon.PinClicked` sets it, corrected 2026-10-23 by lib-agent-2).
+- `EVENT_TYPE_BEGIN_TRAVEL` (91), built at 0x007006F0: 0x00700CA0 calls it, from the AreaTransition handler (read 2026-10-23, corrected 2026-10-23 by lib-agent-2). `EVENT_TYPE_WORLDMAP_POSTTRANSITION` (103): where it is raised.
 - The world-map messages' senders (0x00776910, 0x00776990, 0x006FFE80), and whether hiding the scene sends `WorldMapClosedMessage`.
 - `WorldMapSwapMapsMessage` (0x00701240); what the secondary map is for.
 - `GameModeGUI`+0x84 (assumed: the leave-mode flag) and `GUIWorldMap`'s byte +0xBC (assumed: open).
@@ -139,6 +139,52 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
   - **So** the journey's time on screen depends on the route's length, about 0.5 s per path node plus about 5 s for an encounter, or the load's time if that is longer [I for the "longer"].
 - **Swapping the maps** [C]: `WorldMapSwapMapsMessage` (0x00701240) calls 0x00700E00. When both +0x68 and +0x78 are set, it calls `SetPrimary`(the secondary's id) (0x00700D80), then `SetSecondary`(the old primary's id) (0x00700DB0), the ordinary setters with their refresh. With either map null it does nothing.
 - **A pin's "activated once" flag (+0x1B8)** [C]: the save's field 16792 (`SavegameWorldmapMapPinActivatedPreviously`, 0x4198) sets it at load (the pin's loader 0x007F7090, at 0x007F7200..0x007F7216: `pin+0x1B8 = value != 0`), and the saver 0x007F6B60 writes it back. A plain byte store, so a loaded pin does not flash.
+- **Leaving a random encounter** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2):
+  - **The exit placeable** [C, scripts and template]:
+    - `wmt_rand_encounter_exit` has `PLC_AT_DEST_TAG` "rand", `PLC_AT_DEST_AREA_TAG` "world_map", and all five `PLC_AT_WORLD_MAP_ACTIVE_n` empty. Each empty pin lookup logs a CRITICAL trace.
+    - Its collision (`placeable_core.nss:266`) goes to `Placeable_PromptAreaTransition` (`placeable_h.nss:44`). That shows popup 321167 only when the placeable is interactive and the game mode is neither GM_COMBAT nor GM_GUI.
+    - The popup's result goes to `Placeable_DoAreaTransition`, then `UT_PCJumpOrAreaTransition`, which refuses combat again with a message. That calls `UT_DoAreaTransition` with "world_map", which calls `SendEventTransitionToWorldMap`.
+  - **`EVENT_TYPE_TRANSITION_TO_WORLD_MAP` (1005)** is a script event:
+    - It is built by `events_h.nss` with strings 0..6: the map, the transition type and five pins. It is signalled to the module, and `sp_module` hands it to `sp_module_travel`.
+    - "rand" calls `WorldMapCompleteRandomEncounter`; "camp" opens the party picker; anything else does `SetWorldMapGuiStatus(USE)` and `OpenPrimaryWorldMap`. The five pins are made active first [C].
+    - No engine code compares an event type with 1005 [I]: a scan of .text for 0x3ED immediates found five, all in library code at 0x88xxxx–0x91xxxx. Jump tables were not scanned.
+  - **697 (0x00700A60) keeps the route** [C]: it does not call 0x007C7720, so the route (+0xFC/+0x118) and the destination (+0xB8) are those from before the encounter.
+  - **The map opens read-only** [C, scripts]: the encounter area's enter runs `WM_SetWorldMapGuiStatus` (`area_core.nss:68`, and again on WORLD_MAP_CLOSED at `module_core.nss:528`). It sets USE, READ_ONLY or NO_USE from the area's and module's flags.
+  - **The movie with status 2** [C, AS]: `AnimatePathStart` draws the leg before the encounter as already travelled, sends `WorldMapPreTransition` at once, and animates the rest.
+- **+0xB8 is set by the movie** [C]. This answers "The destination is whatever pin the GUI set at +0xB8 (the clicked pin; inferred)" in WorldMapStartTravelling's edge cases, and "how the clicked pin reaches +0xB8" in its Not read.
+  - +0xB8 is the attribute `WorldMap.LastClickedPinIndex`: the wide string is at 0x00B155C4, registered at 0x007022F3, with the field at 0x00702326.
+  - `MapPinIcon.PinClicked` sets it with SetValue and then sends `GameModeController.AreaTransition`.
+  - 0x007006F0 only builds `BEGIN_TRAVEL` (91, at 0x00700763) from the two pins and delivers it through 0x0064AD80; it writes nothing into the WorldMap.
+  - This also answers "`EVENT_TYPE_BEGIN_TRAVEL` (91), built at 0x007006F0: who calls it": 0x00700CA0 calls it, from the AreaTransition handler below.
+- **AreaTransitionMessage is handled only in the GUI mode** [C]:
+  - `GameModeController::HandleMessage_GameMessage` 0x00640080 offers a game message to the GUI system (app+0x158) first, and to the current mode (+0x74) only if the GUI system did not take it.
+  - The type cell 0x00C0859C has three references in the whole image: its getter 0x00717DF6, its initialisation check 0x00717E37, and the registration at 0x00718ADA/0x00718AE5. That registration is in GameModeGUI's registry 0x00C085C8, with the handler 0x007180E0.
+  - So outside mode 3 the click reaches no handler, and no `BEGIN_TRAVEL` follows.
+  - In mode 3 the handler needs only the module's WorldMap (0x005D57E0) and always returns true. 0x00700CA0 does nothing without a primary map, and sends nothing without a destination pin. It does not test that scene 0x10 is up.
+- **The map's close** [C]:
+  - **The scene:** `GUIWorldMap` (constructor 0x0072ECE0) is `GUIScene("WorldMap", "WorldMap", 3, 8, 0x10)`. Its hide (vtable +0x18 = 0x0072EF40) calls `GUIScene::OnHide` 0x00A55910, then 0x00716A00(0) on scene 0x3B (the book background, not read).
+  - **OnHide** tests the mask at +0xA0:
+    - it returns at once when the name (+0x58) is empty;
+    - bit 1 calls `[0xC31650]` slot 0x98(1);
+    - bit 4 plays the outro (GUI slot 0x144); otherwise it calls slot 0x48, CloseScreen, on the name;
+    - it then clears +0xBC and +0xBD;
+    - bit 8 calls GUI slot 0x64(0).
+    - The map's mask is 8, so a hide closes it, which finishes the movie (GUI.md, FinishSceneFromGame).
+  - **The movie's close:** `WorldMap.FinishScene` (WorldMap.as:141–146) sends `WorldMap.WorldMapClosed` with `m_bClosedByTravel ? 1 : 0`.
+    - `m_bClosedByTravel` is a static (WorldMap.as:36). It is set true by a pin's click, but only for an ACTIVE pin on a map that is not read-only (MapPinIcon.as:134). It is set false by the close button (WorldMap.as:69).
+    - Nothing resets it at the scene's start, so it stays true until the movie is unloaded [I: that dropping the record unloads it].
+  - **The engine's handler:** `WorldMap::HandleMessage_WorldMapClosedMessage` 0x00700610 clears +0x100, sets the state +0xA8 to 0 and notifies, then raises `EVENT_TYPE_WORLD_MAP_CLOSED` (75) with the message's int, delivered at once (0x0064AD80).
+  - **Who hides the scene:** GUI slot 0x38 (0x00606650) calls the hide when the scene's +0xBC or +0xBD is set. Its callers here are:
+    - `HideGUIScreenMessage` 0x0060FAF0 → 0x0060FAC0, which also erases the id from the full-screen stack and, when that empties, calls 0x00717BA0 (not read);
+    - the loading mode's leave 0x006C5A00;
+    - GameModeGUI's leave 0x007188C0: with +0x95 set, slot 0x40 (0x0060F240) pops the stack +0x1E4 one id at a time through 0x0060F1E0.
+  - **So** the travel state and +0x100 do not outlive the scene through any of these hides [C]. Toggling the screen's visibility (HideScreen) is not a hide [I], and whether the shutdown unload (0x005151F0) sends WorldMapClosed was not read.
+- **WorldMapStartTravelling opens the map** through scene 0x10, fetched by GUI slot 0x60 (0x00700A37), with no null test on the scene (0x00700A3E reads its +0xBC directly) [C].
+- **Not read** (more):
+  - 0x00716A00 (scene 0x3B on the map's show and hide);
+  - 0x00717BA0;
+  - what a GUIScene's +0x54 is;
+  - whether a save keeps +0xA8, +0x100 or the route.
 - **Not read:** whether the movie's message reaches the engine in the same frame; field 16793.
 
 ### The click, and where the maps come from (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169)
