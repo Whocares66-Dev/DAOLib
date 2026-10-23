@@ -138,7 +138,9 @@ struct RunningEffect
 };
 
 // Returns every visual effect the area has running, off screen as well as in view: those a script,
-// an ability or a plugin made. Effects that are part of a room's own models are not among them.
+// an ability or a plugin made, and the effects that are part of its rooms' own models (a fire or a
+// torch's flame the level places), which have no id or row of their own: their id and owner are
+// kInvalidObject, their vfx 0 and their position the model's place.
 //
 // Call it on the game thread.
 std::vector<RunningEffect> RunningEffects();

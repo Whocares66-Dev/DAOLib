@@ -73,6 +73,7 @@
 #include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
+#include "dao/Scene.h"
 #include "dao/World.h"
 
 #include <algorithm>
@@ -467,22 +468,10 @@ void OnEmitterColor(std::function<void(EmitterColor &)> callback)
 namespace
 {
 
-constexpr std::size_t kEffects = 0x48;     // in the manager: begin and end of its effects
-constexpr std::size_t kPhase = 0x444;      // in an effect: 0 when it is gone
-constexpr std::size_t kRow = 0x44C;        // in an effect: its vfx_base row
-constexpr std::size_t kOwner = 0x450;      // in an effect: the object it is on
-constexpr std::size_t kAnimation = 0x154;  // in an effect: what holds its model
-constexpr std::size_t kModelHolder = 0x18; // in that: what holds the Object's base below at +4
-constexpr std::size_t kObjectBase = 8;     // in a GraphicsStructures::Object: the base handed out
-
-// The GraphicsStructures::Object of the effect's model, or 0 while it has none.
-std::uintptr_t ModelObject(std::uintptr_t effect)
-{
-    const std::uintptr_t animation = detail::Field(effect + kAnimation);
-    const std::uintptr_t holder = animation != 0 ? detail::Field(animation + kModelHolder) : 0;
-    const std::uintptr_t base = holder != 0 ? detail::Field(holder + 4) : 0;
-    return base != 0 ? base - kObjectBase : 0;
-}
+constexpr std::size_t kEffects = 0x48; // in the manager: begin and end of its effects
+constexpr std::size_t kPhase = 0x444;  // in an effect: 0 when it is gone
+constexpr std::size_t kRow = 0x44C;    // in an effect: its vfx_base row
+constexpr std::size_t kOwner = 0x450;  // in an effect: the object it is on
 
 RunningEffect Running(std::uintptr_t address)
 {
@@ -498,7 +487,7 @@ RunningEffect Running(std::uintptr_t address)
         running.owner = on;
         running.position = owner->AsItem() == nullptr ? std::optional(owner->Position()) : std::nullopt;
     }
-    const std::uintptr_t object = ModelObject(address);
+    const std::uintptr_t object = detail::GraphicsObjectOf(address);
     running.model = detail::ObjectModelName(object);
     running.modelHasLight = detail::ObjectHasPointLight(object);
     return running;
@@ -527,7 +516,46 @@ std::vector<RunningEffect> RunningEffects()
             effects.push_back(Running(*entry));
         }
     }
+    // The rooms' own models with an emitter (DAOLib #242), one an object, from the scene.
+    std::uintptr_t last = 0;
+    scene::ForEach(scene::Kind::Emitter, [&](const scene::Object &object, const scene::Node &) {
+        if (!object.room || object.address == last)
+        {
+            return;
+        }
+        last = object.address;
+        RunningEffect effect;
+        effect.position = object.place;
+        effect.model = std::wstring(object.model);
+        effect.modelHasLight = detail::ObjectHasPointLight(object.address);
+        effects.push_back(std::move(effect));
+    });
     return effects;
 }
 
 } // namespace dao::vfx
+
+namespace dao::detail
+{
+
+std::vector<ObjectId> RunningEffectIds()
+{
+    std::vector<ObjectId> ids;
+    const auto manager = Module::IsKnownExecutable() ? reinterpret_cast<std::uintptr_t>(vfx::Manager()) : 0;
+    if (manager == 0)
+    {
+        return ids;
+    }
+    const auto *begin = reinterpret_cast<const std::uintptr_t *>(Field(manager + vfx::kEffects));
+    const auto *end = reinterpret_cast<const std::uintptr_t *>(Field(manager + vfx::kEffects + 4));
+    for (const auto *entry = begin; begin != nullptr && entry < end; ++entry)
+    {
+        if (*entry != 0 && Field(*entry + vfx::kPhase) != 0)
+        {
+            ids.push_back(reinterpret_cast<const CCObject *>(*entry)->Id());
+        }
+    }
+    return ids;
+}
+
+} // namespace dao::detail

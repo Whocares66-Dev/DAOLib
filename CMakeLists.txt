@@ -265,6 +265,7 @@ add_library(
     src/dao/Attack.cpp
     src/dao/Damage.cpp
     src/dao/Vfx.cpp
+    src/dao/Scene.cpp
     src/dao/CommandEvents.cpp
     src/dao/Audio.cpp
     src/dao/Equipment.cpp
@@ -410,6 +411,7 @@ if(DAO_BUILD_PLUGINS)
             src/plugins/probe/Loading.cpp
             src/plugins/probe/Probe.cpp
             src/plugins/probe/Recorder.cpp
+            src/plugins/probe/SceneCheck.cpp
             src/plugins/probe/ScriptChecks.cpp
             "${DAO_PROBE_TARGETS}"
     )

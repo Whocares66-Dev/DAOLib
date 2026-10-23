@@ -4,12 +4,14 @@
 
 #include "dao/Addresses.h"
 #include "dao/Module.h"
+#include "dao/ObjectId.h"
 #include "dao/core/Msvc8.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 // Notes on the nodes (DAOLib #223 and #224, read 2026-10-21; dao/Addresses.h at
 // kObjectNodePointLight_vftable): ObjectNode's constructor (0x0055ED20) keeps the
@@ -76,6 +78,23 @@ inline bool ObjectHasPointLight(std::uintptr_t object)
     return begin != nullptr &&
            std::any_of(begin, end, [pointLight](const std::uintptr_t *l) { return l != nullptr && *l == pointLight; });
 }
+
+// The GraphicsStructures::Object a game object (a CCObject: a creature, placeable, item, visual
+// effect) is drawn as, or 0 while it has none: its +0x154, that one's +0x18, and that one's +4, the
+// Object's +8 interface (dev/SCENE.md).
+inline std::uintptr_t GraphicsObjectOf(std::uintptr_t gameObject)
+{
+    constexpr std::size_t kAnimation = 0x154;  // in a game object: what holds its model
+    constexpr std::size_t kModelHolder = 0x18; // in that: what holds the Object's +8 interface at +4
+    constexpr std::size_t kObjectBase = 8;     // the interface's place in the Object
+    const std::uintptr_t animation = gameObject != 0 ? Field(gameObject + kAnimation) : 0;
+    const std::uintptr_t holder = animation != 0 ? Field(animation + kModelHolder) : 0;
+    const std::uintptr_t base = holder != 0 ? Field(holder + 4) : 0;
+    return base != 0 ? base - kObjectBase : 0;
+}
+
+// Returns the ids of the visual effects the area has running (dao/Vfx.cpp, the effect manager's).
+std::vector<ObjectId> RunningEffectIds();
 
 // Whether the model the node is part of has a point light of its own.
 inline bool ModelHasPointLight(std::uintptr_t node)

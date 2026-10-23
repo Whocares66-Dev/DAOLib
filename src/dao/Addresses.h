@@ -200,6 +200,15 @@ DAO_DATA(kPerspectiveCamera_Vftable, 74603)
 // the model's box by its slot 5 (0x00549B80, ID 7935); only an interface
 // with this table is asked.
 DAO_DATA(kGraphicsStructures_Object_RenderableVftable, 63977)
+// The scene's objects and nodes changing (dao/Scene.h, read 2026-10-22,
+// dev/SCENE.md): a Graphics::ISceneInstance takes a GraphicsStructures::Object
+// into its list (+0x90) by AddObject and out of it by RemoveObject, each
+// __thiscall (the Object's +8 interface, a second word), `ret 8`; a node takes
+// a child by AddChild, __thiscall (child), `ret 4`, into its vector at +0x10,
+// setting the child's parent at +0x170.
+DAO_ADDRESS(kISceneInstance_AddObject, 7474)
+DAO_ADDRESS(kISceneInstance_RemoveObject, 7458)
+DAO_ADDRESS(kObjectNode_AddChild, 8352)
 DAO_ADDRESS(kWorld_CurrentScene, 12699)
 DAO_ADDRESS(kCCArea_LineOfSight, 13635)
 DAO_ADDRESS(kCCPlaceable_BlocksSight, 13576)

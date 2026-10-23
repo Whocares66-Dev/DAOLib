@@ -34,6 +34,7 @@
 #include "Movies.h"
 #include "Reads.h"
 #include "Recorder.h"
+#include "SceneCheck.h"
 #include "ScriptChecks.h"
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
@@ -481,6 +482,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     probe::AttachHudWatch();
     probe::AttachReadWatch();
     probe::AttachLoadingWatch();
+    probe::AttachSceneCheck();
 
     // The census, on everything but what is hooked above.
     const dao::AddressId hookedAbove[] = {

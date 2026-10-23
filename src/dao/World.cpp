@@ -19,6 +19,7 @@
 // (dao::FrameThreadId), each answers nothing: no hits, no sight.
 
 #include "dao/World.h"
+#include "dao/WorldDetail.h"
 
 #include "dao/RenderCamera.h"
 
@@ -51,6 +52,22 @@ namespace dao::world
 
 namespace
 {
+
+// The area's game objects: a vector of their ids at the area's +0x690. Nothing for one that does
+// not read as a vector.
+std::optional<core::VectorRep<ObjectId>> AreaObjectIds(const CCArea *area)
+{
+    constexpr std::size_t kAreaObjects = 0x690;
+    const auto objects = area != nullptr
+                             ? TryRead<core::VectorRep<ObjectId>>(reinterpret_cast<std::uintptr_t>(area) + kAreaObjects)
+                             : std::nullopt;
+    if (!objects || objects->first == nullptr || objects->last < objects->first ||
+        objects->last - objects->first > 100000)
+    {
+        return std::nullopt;
+    }
+    return objects;
+}
 
 constexpr std::uint32_t kMaxHits = 32;    // what the engine's own callers ask for
 constexpr std::size_t kRaycaster = 0x10C; // in the application: Raycast's `this`
@@ -571,11 +588,9 @@ bool IsShutDoor(const CCPlaceable *placeable)
 // a search that gives up short of an inactive one.
 ObjectId Blocker(CClientExoApp &app, const CCArea *area, const Vector &point)
 {
-    constexpr std::size_t kAreaObjects = 0x690; // in the area: a vector of ids
     constexpr float kReach = 5.0F;
-    const auto objects = TryRead<core::VectorRep<ObjectId>>(reinterpret_cast<std::uintptr_t>(area) + kAreaObjects);
-    if (!objects || objects->first == nullptr || objects->last < objects->first ||
-        objects->last - objects->first > 100000)
+    const auto objects = AreaObjectIds(area);
+    if (!objects)
     {
         return kInvalidObject;
     }
@@ -832,10 +847,8 @@ class Searcher
     // stood 2.2 m off; unlocked and shut, answer 6 at the door).
     ObjectId ClosedDoorNear(const Vector &stop) const
     {
-        constexpr std::size_t kAreaObjects = 0x690; // in the area: a vector of ids
-        const auto objects = TryRead<core::VectorRep<ObjectId>>(reinterpret_cast<std::uintptr_t>(area_) + kAreaObjects);
-        if (!objects || objects->first == nullptr || objects->last < objects->first ||
-            objects->last - objects->first > 100000)
+        const auto objects = AreaObjectIds(area_);
+        if (!objects)
         {
             return kInvalidObject;
         }
@@ -1552,6 +1565,17 @@ namespace dao::detail
 void *RenderCamera()
 {
     return world::RenderCamera();
+}
+
+std::vector<std::uintptr_t> RoomPointers()
+{
+    return world::RoomPointers();
+}
+
+std::vector<ObjectId> AreaObjects()
+{
+    const auto objects = world::OnGameThread() ? world::AreaObjectIds(world::CurrentArea()) : std::nullopt;
+    return objects ? std::vector<ObjectId>(objects->View().begin(), objects->View().end()) : std::vector<ObjectId>{};
 }
 
 } // namespace dao::detail
