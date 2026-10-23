@@ -176,13 +176,66 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 - **The area hands the fade to its world each update** [C]: 0x0068AF30 (an area update, callers 0x005FE800, `GameModePartyPicker` slot 9, 0x007B4BB0) calls `0x00538060(GameModeController+0xD0, GameModeController+0xD4)` on the area's world (area +0x62C), then clears +0xD4 [C 0x0068AF44-0x0068AF61].
 - **0x00538060** [C]: if the world's +0xD4 (the cutoff) exists, `0x004670C0(value, flag)`; if its +0xC0 exists, that object's vtable +0x20 with the value [C]. What +0xC0 is was not read.
 - **0x004670C0, the cutoff** (this = world +0xD4) [C]:
+  - It first stores the value in the global `0x00BF73FC` [C]; then if its +0x4C is 0 the value is taken as 1.0 [C].
+  - If the value equals its +0x48 and the flag is 0 it returns [C]; else +0x48 = value, and it walks every layer of the scene (`0x00537D70` on +0x10's scene; each layer's vtable +4 gives its nodes, gathered by `0x005D2480`) and asks `0x00466F40(node)` of each [C].
+  - A node it answers 1 for gets flag 0x100 in its +0x24 (hidden) [C]; one it answers 0 for has 0x100 cleared and its Umbra object's flag 8 set again from `(+0x24 & 0x11) == 0` [C]. That 0x100 means "not drawn" is [I: by the Umbra visibility set beside it].
+  - **What that means outdoors** [I, by the readers below]: a level whose cutoff system is off still hands the roof fade to everything that reads 0x00BF73FC. In practice these are the SpeedTree draws: outdoors, the 5.5 m height of 0x0076FD30 applies, so the tactical view hides the trees there (see (b)).
+  - Only a cut-away mesh at a value of 0 or less makes the node test return non-zero: 0x00466930 returns 1 there [C]. That 0x100 hides the node is [I].
 - **The cutoff's +0x4C is the area's switch** [I]: where +0x4C is written was not read. The candidate is `EnvAreaCutoffSystemEnabled` (3134), which the layout load reads into ChunkManager +0x74: first +0x74 = `!EnvAreaChunkIsChunk` (`setz dl` at 0x005D1625, stored at 0x005D162D), then, if the file has field 0xC3E = 3134, its value (0x005D1640-0x005D1673) [C for the ChunkManager field].
-- **0x00466F40, the test of a node** [C]: the node's vtable +0x18 must answer non-zero, then its +0x1C is its kind:
+- **0x00466F40, the test of a node** (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #151) [C]:
+  - **The filter and the kind** [C]: the interface's slot +0x18 must return non-zero; then slot +0x1C returns the node's kind [C].
+  - **Kind 1, a mesh** [C]: ObjectNodeMesh (interface vtable 0x00AF8E7C, slot +0x1C 0x0055B480 → `mov eax,1`) and ObjectNodeVFXMesh (0x00AF900C).
+    - The full node's slot +0x8C must return true: ObjectNodeMesh primary vtable 0x00AF8F4C, slot +0x8C = 0x0055B460, `mov al,[ecx+0x1C9]` [C]. Then 0x00466930 runs on it (below).
+  - **Kinds 6 and 7, the sprite emitters** [C, the interface vtables' slot +0x1C, each a thunk to `mov eax,imm`]:
+    - 6: `ObjectNodeEmitterSprite<SpriteParticle>` (0x00AF8724) and `ObjectNodeEmitterSpriteLinked<SpriteParticle>` (0x00AFACDC).
+    - 7: `ObjectNodeEmitterSprite<PhysicsSpriteParticle>` (0x00AF88B4) and `ObjectNodeEmitterSpriteLinked<PhysicsSpriteParticle>` (0x00AFAE6C).
+  - **Kind 0x13, the mesh emitter** [C]: `ObjectNodeEmitterMesh<MeshParticle>` (0x00AFAB64).
+  - **Kind 0x14** [I]: another emitter. No class among the RTTI vtables returns it; it is handled together with 6, 7 and 0x13.
+  - **Kind 0x16, the emitter group** [C]: ObjectNodeEmitterGroup (0x00AF7D44, slot +0x1C 0x0053D970 → 0x008CCE30, `mov eax,0x16`).
+  - **For 6, 7, 0x13 and 0x14** [C]: if the owner graphics Object's flags (`[node+0x154]+8`, its +8 interface, slot +0xA4 → `return flags`, +0x260) have bit 8, then node +0x4E0 = the cutoff's +0x48. The write is `[entry+0x360]` with the entry at node+0x180.
+  - **For 0x16** [C]: under the same bit-8 test, 0x0053D790 writes the value into +0x4E0 of every emitter in the group's list +0x244..+0x248.
+    - The group's list is a `std::vector`: its begin at +0x244 and end at +0x248 [C: 0x0053D790].
+  - **The test returns 0 for every kind other than a cut-away mesh at 0** [C]. So the walk never hides an emitter: it only clears its 0x100 and resets its Umbra flag [C].
+  - **What +0x4E0 does** is EFFECTS.md's existing reading [C there]:
+    - the update runs only while it is above 0 (0x00552D4C);
+    - the fill draws only while it is above 0 (0x00550271);
+    - the fill's alpha is multiplied by `+0x4F4 · +0x4E0` (0x005509BE).
+    - The other fills read it the same way: 0x00550EC7, 0x005515B4, 0x00551ADD, and the linked emitters' Fill at 0x00585116/0x00585161 and 0x00585976/0x005859C1 [C].
+  - **The cutoff touches no lights** [C]. None of the walk's kinds is a light class: ObjectNodeLight, PointLight, AmbientLight and LightProbe have no thunk to 1, 6, 7, 0x13 or 0x16 at slot +0x1C.
 - **The cut-away test, slot +0x8C, is the mesh's `MMHMeshCutAway` (6193)** [C] (corrected 2026-10-22 by the camera helper's reading, checked by lib-agent; this said +0x1A7 and the link inferred). The mesh-node loader 0x00594D40 stores each read's result at its own block, after the next push: the byte at +0x1A7 (0x00595034) is the read before, and field 0x1831 = 6193's result goes to the blueprint's +0x1A8 (0x00595069). The blueprint's slot 0xA8 (0x0057CEE0) returns +0x1A8; the mesh's constructor (0x0055B972) fills its own +0x1C9 from that slot, and slot +0x8C (0x0055B460) returns +0x1C9. the shipped cut-away meshes are named `MshFade_*` (e.g. `cav_roof.mmh`: mesh `MshFade_CAV_Roof_0`, `MMHMeshCutAway` 1) [C, the file]; Ishal's first floor has 104 such mesh nodes [C, counted].
 - **0x00466930, what a cut-away mesh does with the value v** [C]:
-- **The global 0x00BF73FC is read by the SpeedTree and terrain draws** [C, xrefs: 0x0052CC60, 0x00530C20, 0x00536200, 0x005333D0, `EC::CExteriorChunk` slot 25 0x005CE410]: 0x00530C20 draws nothing below 1 when `0x00C1EBF4` is set; 0x005333D0 skips its four passes below 1 unless its +0x2C; 0x0052CC60 picks a "transparent" technique below 1 for objects with +0x1BC bit 0x40000000 [C]. What those objects are was not read.
+  - it clears bit 1 of the mesh's +0x1A4; then, only when v < 1:
+  - v ≤ 0: sets bit 1 and returns 1, so the node is hidden [C];
+  - 0 < v < 1: `Graphics::SetMaterialOpacity(0, v)`; if the material has no opacity parameter (the call answers 0) and `0x004F25B0` allows it, it switches the material (`0x004F44C0(0)`, then `0x004F4380(0xB, 1)`, `0x004F4380(5, 0xC)`, `0x004F4380(6, 0xD)`) and sets the opacity again [C]. That those are blending on with SRCALPHA/INVSRCALPHA is [I: the D3D blend numbers 5 and 6]. It sets bit 1 and returns 0 [C].
+  - So a cut-away mesh is drawn at opacity v while 0 < v < 1 and hidden at 0 [C]; at v = 1 bit 1 is cleared and the opacity left as it was [C], drawn as authored [I: that bit 1 selects the opacity's use].
+- **The global 0x00BF73FC is read by the SpeedTree and terrain draws** [C, xrefs: 0x0052CC60, 0x00530C20, 0x00536200, 0x005333D0, `EC::CExteriorChunk` slot 25 0x005CE410]: 0x00530C20 draws nothing below 1 when `0x00C1EBF4` is set; 0x005333D0 skips its four passes below 1 unless its +0x2C; 0x0052CC60 picks a "transparent" technique below 1 for objects with +0x1BC bit 0x40000000 [C]. Those objects are the trees that have collision objects (TREES.md, "The trees under the area's cutoff").
+  - The forests, their faded-tree pass and shadows: TREES.md, "The trees under the area's cutoff".
 - **Files** [C, ghilana]: Ishal's floors and other room levels have cut-away roofs; the camp (`brc999d`) has `EnvAreaCutoffHeight` 2 and `EnvAreaCutoffSystemEnabled` 0, so its tents never fade [C for the fields, I for "never", through the +0x4C reading above].
 - Seen (Ishal floor 1, the tactical view): the upper walls and the floor above are gone in the game. With the meshes shown, the floor above covers the hall from that camera.
+
+#### Object flag 8: EnvModelCutAwayOverride (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #151)
+
+- **The only writer is slot 0x148** of the Object's +8 interface [C]: `GraphicsStructures::Object::vfunction83`, 0x00546650 (the vtable word at 0x00AF857C, in `Object::vftable_at_8` at +0x148).
+  - It takes a bool b. It sets byte +0x1C9 of every kind-1 node in the Object's node list (+0x5C..+0x60) to b, then sets (b) or clears (not b) bit 8 of +0x258 on the interface, which is the Object's +0x260 [C].
+- **Its caller is a room model's creation, 0x0053A510** (0x0053A737–0x0053A755) [C]:
+  - the record's byte +0x13C = 1 → slot 0x148(false);
+  - 2 → slot 0x148(true);
+  - anything else → no call.
+  - One other call site, 0x00A1F4A9 in 0x00A1EDA0, was not read [C for the site].
+- **The record's +0x13C is the room model's EnvModelCutAwayOverride** (3109, 0xC25) [C]: the room-model reader 0x00A29A80 checks for the field and reads it at 0x00A29C97–0x00A29CDD.
+- **So** [C for the chain]:
+  - override 2 makes every mesh of the placed model cut away, and its emitters take the cutoff's value as their opacity;
+  - override 1 makes none of its meshes cut away;
+  - 0 leaves each mesh's own MMHMeshCutAway.
+- **The meshes' +0x1C9 by default** [C]: the ObjectNodeMesh constructor (0x0055B972) stores the blueprint's slot 0xA8 there. That slot is `ObjectNodeMeshBlueprint` 0x0057CEE0, `mov al,[ecx+0x1A8]`.
+- **The files** [C, the install's 3,526 .rml, every EnvRoomModelList element]: EnvModelCutAwayOverride is
+  - 0 on 134,325 models;
+  - 1 on 263;
+  - 2 on 2,784, mostly placed effects and props: fxe_fire_cnd_p 737, fxe_fire_small_p 200, prp_chi_window_01 174, fxe_sunbeam_s_p 170, fxe_moonbm_s_p 168, prp_chain02_0 95, prp_ferelden_torch_0 62, fxe_sunbeam_w_p 61;
+  - absent on 1,727.
+  - The levels with the most 2s: den505d 235, den500d 224, lak302d 193, lak506d 192, lak304d 120.
+- **What the player sees** [I, from the chain above]: the candle and fire flames, torches and sun beams placed in a room level fade with the roofs in the tactical view, and are not updated while at 0. Not seen in play.
+- Core's room reader (`RoomOf`, `Placed`) does not read 3109 [C, Level.cpp].
 
 #### Not read (the fades)
 
@@ -190,7 +243,6 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 - The chain from the model's slot +0x20 (0x00695080) to `mml_fOpacityMultiplier`.
 - The writer of the explore controller's +0x70..+0x78 (the focus).
 - What the world's +0xC0 is (0x00538060's second call).
-- The kinds 6, 7, 0x13, 0x14 and 0x16 and their flag 8.
 - 0x004F25B0 and the blend states 0x004F4380 sets.
 
 ## The tactical view at the Fade's start is the tutorial's (read 2026-10-18 by lib-agent-2)

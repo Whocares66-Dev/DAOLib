@@ -330,3 +330,29 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
   - a leaf card's rock and rustle = `g_vLeafAngleScalars.xy × g_vLeafAngles[leaf angle index].xy`.
 
 Core reads the `.wnd` as `dao/core/Wind.h` (`wind::WindOf`: every field of the file, 115 of the game's read 2026-10-18, with only the strength, direction and gusts marked as the ones that reach the engine's wind; DAOLib #196).
+
+## The trees under the area's cutoff (the roof fade) (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #151)
+
+The roof fade of CAMERA.md ("The roof fade", "The cutoff") hands a value to 0x00BF73FC; these are the readings of how the forests are built and drawn under it. [C] read in the code or the files, [I] inferred.
+
+- **Two forests per level model** [C]: 0x005CBDE0 makes two `SpeedTreeForest` objects (constructor 0x00535BB0, the bool argument stored at +0x2C):
+  - +0x104 with +0x2C = 0;
+  - +0x108 with +0x2C = 1.
+  - It registers both with the world's cutoff, (area+0x4E0)+0xD4, through 0x004678F0 [C].
+- **Which forest a tree goes to** [C]: at 0x005CC007–0x005CC023, a tree whose `CSpeedTreeRT::GetNumCollisionObjects` (0x0090A49A, the DLL's) is above 0 goes to +0x104; the others to +0x108.
+- **The model's flag** [C]: the level's model (0x00533DA0) sets +0x1BC bit 0x40000000 at 0x00533F0E on the same condition, GetNumCollisionObjects non-zero.
+- **The forest's draw skips those trees** [C]: `SpeedTreeForest::vfunction6` (0x005370D0) calls 0x005333D0. Below 1 (0x00BF73FC < 1.0), unless the forest's +0x2C is set, 0x005333D0 skips all four of its passes: 0x00533140 with kinds 4, 8, 2, 1, each through 0x00530C20.
+  - Either way it then calls 0x00532A50(…, 1), the billboard batch [C]. 0x00532A50 writes four corners per tree through 0x0052CE50, the billboard vertex of section 3 [C].
+  - So the trees with collision objects lose their branches, fronds and leaves while the cutoff is below 1. Their billboards (the far level of detail) and the trees without collision objects are still drawn [I: the reading of the batch as the billboards is by 0x0052CE50].
+- **The hidden trees are collected** [C]: the forest's cull, 0x00536200, takes a flag that is true when 0x00BF73FC < 1 and the forest's +0x2C is clear. Under it, each visible tree is pushed onto the global list 0x00C316F8 (0x00536332–0x00536347).
+- **They are drawn by a pass of their own** [C]: `Renderer::SOSMRenderFadedSpeedTrees` (vtable 0x00AE8280, slot 0x0046F590) calls 0x00534CF0.
+  - 0x00534CF0 draws each tree of the list with kinds 1, 2, 4 and 8 (materials +0xD28, +0xD2C, +0xD30, +0xD34). Before each, it calls `Graphics::SetMaterialOpacity(2, −1.0)`, which only marks the parameter dirty, and afterwards clears the material's +0xD0 [C].
+  - [I] SOSM is the shadow map: the pass sits beside `SOSMStartPartition` and `SOSMStopPartition` (0x00AE8258, 0x00AE826C). So the hidden trees still cast their shadows.
+- **The tree model's alpha multiplier** [C]: each update, 0x0052CC60 (called from 0x00530DB0) runs on a model with +0x1BC bit 0x40000000.
+  - It sets +0xACC = max(0x00BF73FC, 0.12). +0xACC is bound to `g_fAlphaMultiplier` on the four materials, e.g. 0x0052FCA2 with the name at 0x00AF72F4 [C].
+  - Below 1 it adds the render class "transparent" to the branch material (+0xD28); at 1 or more it removes it. "transparent" is bit 1 in 0x004F6660's name table; 0x004F6AE0 and 0x004F6B00 set and clear it at +0x30/+0x34 [C].
+  - Which of the faded pass's draws use that class and multiplier was not read.
+  - SPT_Branch.sta has no blending and no alpha test [C, the file]. spt_billboards0.psh does not read g_fAlphaMultiplier [C, the listing]. spt_fronds.psh writes `texture alpha × g_fAlphaMultiplier` (c13) as its alpha [C, the listing].
+- **0x00530C20's test of 0x00C1EBF4** [C]: 0x00C1EBF4 is set by `EclipseUmbraCommander` command 0xA0 and cleared by 0xA1 (0x0045CB53, 0x0045CCA7). While it is set and 0x00BF73FC < 1, 0x00530C20 draws nothing.
+  - [I] That is Umbra's occlusion depth pass: the trees stop occluding while the cutoff is below 1, with no visible effect.
+- **Seen in play** (2026-10-22, through Eluvian, the explore controller's 5.5 m height): in Lothering's tactical view (lot100ar_lothering, around (299, 259)), the trees' crown shadows are drawn on the square and no tree is drawn.

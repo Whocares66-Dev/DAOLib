@@ -790,7 +790,7 @@ Read in the GOG exe (`DAOrigins.exe`, base 0x400000) and the game's files (vanil
 - **Its one source is a scene-wide opacity** [C]:
   - 0x004670C0 (ID 2755, `(float a, bool force)`) stores `a` in the global 0x00BF73FC and in this+0x48, or 1.0 if this+0x4C is off.
   - It walks the scene's objects with the visitor 0x00466F40, which acts only on objects whose flags have bit 8 (0x00466FBD).
-  - On an emitter node (types 6, 7, 0x13, 0x14) it writes node +0x4E0 (`[entry+0x360]`, the entry being node+0x180) = `a`. On type 0x16 (an emitter group [I]) it does that for every emitter in its list +0x240 (0x0053D790).
+  - On an emitter node (types 6, 7, 0x13, 0x14) it writes node +0x4E0 (`[entry+0x360]`, the entry being node+0x180) = `a`. On type 0x16 (an emitter group [I]) it does that for every emitter in its list +0x240 (a std::vector: its begin at +0x244 and end at +0x248, as 0x0053D790 reads them) (0x0053D790).
   - Its caller: 0x00538060 (ID 7423) ← 0x0068AF30 (ID 13856), which takes the float at `[[0x00C327EC]+0x114]+0xD0` (dirty byte +0xD4) and gives it to the area's scene (+0x62C).
   - Who writes that +0xD0 was not found [not read].
 - **The object fade (+0x190, 0x00695A90/0x00695080) does not reach +0x4E0** [C: no path found from it to 0x0053D790/0x004670C0]. [I] It hides effects only by the emit bit above and by hiding the model.
