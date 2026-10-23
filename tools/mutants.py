@@ -113,6 +113,7 @@ CLIP = "src/dao/core/Clip.cpp"
 EFFECT = "src/dao/core/Effect.cpp"
 FEV = "src/dao/core/Fev.cpp"
 MODEL = "src/dao/core/Model.cpp"
+MORPH = "src/dao/core/Morph.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
@@ -1559,6 +1560,13 @@ MUTANTS: list[Mutant] = [
         MODEL,
         ".duration = from.Get<float>(kTrailDuration)",
         ".duration = from.Get<float>(kTrailSegmentLength)",
+    ),
+    # A morph written (#237): a mesh node's vertex count is its places', which the reader takes the data's length by.
+    Mutant(
+        "morph-write-count: a written node's MeshStreamVertexCount is the count of its places",
+        MORPH,
+        "editor.SetNumber(at, kVertexCount, static_cast<std::int64_t>(node.places.size()))",
+        "editor.SetNumber(at, kVertexCount, 0)",
     ),
     # The .arl's binary NXU stream (#197): a pose as three rows of four, a string's NUL, the fields skipped before
     # the ones read, the later SDK's block numbers, a mesh's index width, and a stream that cannot be read whole.

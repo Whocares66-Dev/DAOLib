@@ -90,6 +90,157 @@ TEST_CASE("a file that is no morph is not read as one", "[morph]")
     CHECK_FALSE(morph::MorphOf(*file));
 }
 
+namespace
+{
+
+// An empty morph with the game's five templates, as hm_pcc_b01.mor has them (tools/gff4.py --templates):
+// a base for Write.
+std::vector<std::byte> GameTemplatesBase()
+{
+    const std::uint16_t inPlace = gff4::kList | gff4::kStruct;
+    dao::test::Builder b = dao::test::Start(
+        "MORP", {{"morp",
+                  16,
+                  {{2, 14, 0, 0}, {23000, 14, gff4::kList, 4}, {23001, 14, gff4::kList, 8}, {23002, 4, inPlace, 12}}},
+                 {"tprm", 8, {{2, 14, 0, 0}, {23003, 14, 0, 4}}},
+                 {"vprm", 8, {{2, 14, 0, 0}, {17, 12, gff4::kList, 4}}},
+                 {"fprm", 8, {{2, 14, 0, 0}, {23007, 8, 0, 4}}},
+                 {"node",
+                  48,
+                  {{2, 14, 0, 16},
+                   {4, 10, 0, 0},
+                   {8013, 4, 0, 24},
+                   {8024, 8, gff4::kList, 20},
+                   {23004, 1, inPlace, 28},
+                   {23005, 2, inPlace, 32},
+                   {23006, 3, inPlace, 36}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    b.U32(root, b.String(u"base"));
+    b.U32(root + 4, 0xFFFFFFFF);
+    b.U32(root + 8, 0xFFFFFFFF);
+    b.U32(root + 12, 0xFFFFFFFF);
+    return b.bytes;
+}
+
+morph::Morph MadeHead()
+{
+    morph::Morph made;
+    made.name = L"hero";
+    made.parts = {L"hm_uhm_basa", L"", L"hm_ulm_eyea"};
+    made.tints = {L"tint_skin"};
+    morph::Node brow;
+    brow.name = L"brow";
+    brow.position = {0.1F, -0.2F, 0.3F};
+    morph::Node face;
+    face.name = L"FaceM1";
+    face.places = {{1, 2, 3, 1}, {4, 5, 6, 1}, {7, 8, 9, 1}};
+    face.textures = {{L"mml_tDiffuse", L"uh_hed_masa_0d"}, {L"mml_tNormalMap", L"uh_hed_masa_0n"}};
+    face.vectors = {{L"mml_vTintMaskColours", {{0.5F, 0.25F, 0.125F, 1}, {1, 0, 0, 1}}}};
+    face.floats = {{L"mml_fAge", 0.75F}};
+    made.nodes = {brow, face};
+    return made;
+}
+
+} // namespace
+
+TEST_CASE("a morph written into a copy of a game's .mor reads back as it was given", "[morph]")
+{
+    const std::vector<std::byte> base = GameTemplatesBase();
+    const std::optional<gff4::File> file = gff4::File::Parse(base);
+    REQUIRE(file);
+    const morph::Morph made = MadeHead();
+    const auto written = morph::Write(*file, made);
+    REQUIRE(written);
+    const std::optional<gff4::File> again = gff4::File::Parse(*written);
+    REQUIRE(again);
+    const std::optional<morph::Morph> read = morph::MorphOf(*again);
+    REQUIRE(read);
+    CHECK(read->name == L"hero");
+    CHECK(read->parts == made.parts);
+    CHECK(read->tints == made.tints);
+    REQUIRE(read->nodes.size() == 2);
+    CHECK(read->nodes[0].name == L"brow");
+    CHECK(read->nodes[0].position == made.nodes[0].position);
+    CHECK(read->nodes[0].places.empty());
+    CHECK(read->nodes[0].textures.empty());
+    const morph::Node &face = read->nodes[1];
+    CHECK(face.places == made.nodes[1].places);
+    REQUIRE(face.textures.size() == 2);
+    CHECK(face.textures[1].name == L"mml_tNormalMap");
+    CHECK(face.textures[1].texture == L"uh_hed_masa_0n");
+    REQUIRE(face.vectors.size() == 1);
+    CHECK(face.vectors[0].name == L"mml_vTintMaskColours");
+    CHECK(face.vectors[0].values == made.nodes[1].vectors[0].values);
+    REQUIRE(face.floats.size() == 1);
+    CHECK(face.floats[0].name == L"mml_fAge");
+    CHECK(face.floats[0].value == Approx(0.75F));
+
+    // Written again over its own result with fewer nodes, the rest go.
+    morph::Morph fewer = made;
+    fewer.nodes.resize(1);
+    const auto rewritten = morph::Write(*again, fewer);
+    REQUIRE(rewritten);
+    const std::optional<gff4::File> third = gff4::File::Parse(*rewritten);
+    REQUIRE(third);
+    const std::optional<morph::Morph> readFewer = morph::MorphOf(*third);
+    REQUIRE(readFewer);
+    REQUIRE(readFewer->nodes.size() == 1);
+    CHECK(readFewer->nodes[0].name == L"brow");
+}
+
+TEST_CASE("a morph is not written over a file that is no morph, or one whose nodes lack a field it needs", "[morph]")
+{
+    dao::test::Builder b = dao::test::Start("MMH ", {{"mdlh", 4, {{2, 14, 0, 0}}}});
+    dao::test::Struct(b, 4);
+    const std::optional<gff4::File> model = gff4::File::Parse(b.bytes);
+    REQUIRE(model);
+    CHECK_FALSE(morph::Write(*model, MadeHead()));
+    // The chamberlain-like file's nodes have no parameters' lists.
+    const std::vector<std::byte> bytes = Chamberlain();
+    const std::optional<gff4::File> bare = gff4::File::Parse(bytes);
+    REQUIRE(bare);
+    CHECK_FALSE(morph::Write(*bare, MadeHead()));
+}
+
+TEST_CASE("hm_pcc_b01.mor in game/heads, when there, written over itself reads back the same", "[morph]")
+{
+    const std::filesystem::path path =
+        std::filesystem::path(__FILE__).parent_path().parent_path() / "game" / "heads" / "hm_pcc_b01.mor";
+    if (!std::filesystem::exists(path))
+    {
+        SKIP("no hm_pcc_b01.mor in game/heads (ghilana's extract writes it there)");
+    }
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<char> chars((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::vector<std::byte> bytes(chars.size());
+    std::memcpy(bytes.data(), chars.data(), chars.size());
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    const std::optional<morph::Morph> before = morph::MorphOf(*file);
+    REQUIRE(before);
+    const auto written = morph::Write(*file, *before);
+    REQUIRE(written);
+    const std::optional<gff4::File> again = gff4::File::Parse(*written);
+    REQUIRE(again);
+    const std::optional<morph::Morph> after = morph::MorphOf(*again);
+    REQUIRE(after);
+    CHECK(after->name == before->name);
+    CHECK(after->parts == before->parts);
+    CHECK(after->tints == before->tints);
+    REQUIRE(after->nodes.size() == before->nodes.size());
+    for (std::size_t i = 0; i < before->nodes.size(); ++i)
+    {
+        const morph::Node &a = after->nodes[i];
+        const morph::Node &b = before->nodes[i];
+        CHECK(a.name == b.name);
+        CHECK(a.position == b.position);
+        CHECK(a.places == b.places);
+        CHECK(a.textures.size() == b.textures.size());
+        CHECK(a.vectors.size() == b.vectors.size());
+        CHECK(a.floats.size() == b.floats.size());
+    }
+}
+
 TEST_CASE("the chamberlain's morph in game/models, when there, names its parts' mesh nodes and their materials' values",
           "[morph]")
 {

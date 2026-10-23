@@ -14,12 +14,16 @@
 // hm_genfl_alistair.mor, FaceM1's diffuse, normal and age maps and its
 // mml_vTintMaskColours, ten Vector4s laid out as a .tnt's are
 // (DAOLib #158).
+//
+// Write puts a morph into a copy of any of the game's .mor files, for a head made
+// with no file of its own (a character creation's; DAOLib #237).
 #pragma once
 
 #include "dao/core/Gff4.h"
 #include "dao/core/RayCast.h"
 
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -70,5 +74,10 @@ struct Morph
 // Returns a morph file's parts and nodes, or nothing for a file that is no
 // morph. A node whose places run out of the file has none.
 std::optional<Morph> MorphOf(const gff4::File &file);
+
+// Returns a morph file holding `morph`: a copy of `base`, any of the game's .mor files, with its name, parts,
+// tints and nodes replaced by the morph's. MorphOf reads the result back as `morph`.
+// @return nothing for a base that is no morph, or one whose templates lack a field the morph needs
+std::optional<std::vector<std::byte>> Write(const gff4::File &base, const Morph &morph);
 
 } // namespace dao::core::morph
