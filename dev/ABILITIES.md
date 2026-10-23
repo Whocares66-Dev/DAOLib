@@ -85,20 +85,38 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 
 #### Why an ability is greyed (read 2026-10-23 by lib-agent-2 with a subagent, for DAOParagonEngine #196)
 
-- **`CanUseAbility`'s reasons, in order** [C]:
-  1. an item ability with its item gone: 244342;
-  2. disabled by an effect: 223888;
-  3. the cost: 376267 (mana) or 376268 (stamina);
-  4. the `abi_base` conditions;
-  5. conjuring this ability already: 395779, "Ability is being cast".
-  - A plain cooldown gives no reason text.
-- **The conditions** are `ScriptBackend::ForScript_CanUseConditionedAbility` on `abi_base` `Conditions` (hash 0xB1CAEE1D) [C]:
-  - bit 1, a melee weapon (222426);
-  - bit 2, a shield (222427);
-  - bit 4, a ranged weapon in the main hand, `bitm_base` `Type` 6 (222425, "No ranged weapon equipped");
-  - 0x40, dual wield (315522);
-  - 0x100 and 0x200/0x400/0x800, race and class (383166–383169).
-  - So Pinning Shot (803, `Conditions` 4) is greyed by its own row, not by a separate weapon test.
+- **CanUseAbility 0x0071CE90** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) (ID 16539) is (ability, uint* reason, itemId = −1), `ret 0xC`. The reason is written only through a non-null pointer [C].
+- **The order of the checks** [C] (corrected 2026-10-23 by lib-agent-2: it replaces the earlier, shorter list):
+  - **The item checks:** for an item ability (AbilityType 4), 0x0071C0A0 false gives 244342. Then, with `stats+0x1B4` set, CanUseItem 0x0062AA80 false gives reason 0.
+  - **The active modal:** an ability in the active-modal vector (stats +0xF8, ABILITIES.md:127) is usable at once (0x0071CF8A), before the disabled test.
+  - **The disabled test:** `(4 << AbilityType | 0x80) & 0x00A64740()` gives 223888. 4 << type is DISABLE_COMBAT, TALENTS, SPELLS, SKILLS or ITEMS for types 0–4. 0x80 is EFFECT_FLAG_DISABLE_INPUT, which disables every type.
+  - **The cost:** abi_base `Cost` (0xF03D763E) × (1 + property 41's modifier, vtable +0x18, × 0.01), against property 8's current value (vtable +0x24).
+    - It is asked of every type, and refused only when the cost is greater, so an equal cost passes.
+    - It is excused while the active-modal vector holds 10700 (Blood Magic).
+  - **The reason is `0x5BDCC − (ClassHasMana != 0)`:** 376267 "Insufficient mana" when the stats' `ClassHasMana` bool (+0x6C) is set, else 376268 "Insufficient stamina".
+  - **The order at the end:** the conditions (0x0071C310, mask 0x7FFFFFFF), then the cooldown (0x0071CE60 > 0, refused with no reason), then conjuring (395779). So the cooldown comes after the conditions and before conjuring.
+- **ClassHasMana** [C]:
+  - It is false when the stats are made, and registered as L"ClassHasMana" by 0x0071A940.
+  - 0x0071A070(class) sets it to cla_data (table 3) `BUsesMana` (0x34E302CF) != 0 at the class's row. Its callers are 0x0071B0D3, after a property-27 set, and 0x0071E3FC.
+  - **cla_data `BUsesMana` is 1 for** Wizard, Shapeshifter, Spirit Healer, Blood Mage (12), Shale (16), MONSTER_SPIRIT (23), MONSTER_BALANCED_MENTAL (24) and MONSTER_SPELLCASTER (25).
+  - **It is 0 for** Warrior, Rogue, Champion, Templar, Berserker, Reaver, Arcane Warrior, Assassin, Bard, Ranger, Duelist, the Dog and the physical monster classes.
+- **The conditions** (corrected 2026-10-23 by lib-agent-2: the "0x100 and 0x200/0x400/0x800" line was wrong) [C, 0x0071C310]:
+  - **The mask** is abi_base `Conditions` (0xB1CAEE1D) & the asked mask; none means usable.
+  - **The weapon bits** (mask & 0xC7) come from the main and off hands' bitm Type (`item+0x6E0`):
+    - **4:** main 6, else 222425 "No ranged weapon equipped", returning at once.
+    - **1:** main 2, or off 2, or main 0 (unarmed counts as melee), else 222426.
+    - **2:** off 3, else 222427.
+    - **0x40:** both 2, else 315522.
+    - **Bits 1, 2 and 0x40:** each failure writes its reason, and the last test's verdict counts.
+    - **0x80:** main 2 and 0x00A664C0 true, else 378484 and refused. When it passes, earlier verdicts are dropped. What 0x00A664C0 tests was not read [I].
+  - **0x100:** `Condition_AppGroup` (0xC7E5BB24) & the appearance's restriction group (0x0071A210) == 0 gives 383166 "Not useable by current race."
+  - **0xE00, the class** (0x0071B010: property 27's base, truncated). The block runs only when the mask holds some of 0xE00. A bit means the class may use the ability:
+    - class 1 (Warrior) without 0x800 gives 383167 "Warriors cannot use this.";
+    - class 2 (Wizard) without 0x200 gives 383168 "Mages…";
+    - class 3 (Rogue) without 0x400 gives 383169 "Rogues…";
+    - any other class passes.
+    - (An earlier 0x200/0x400/0x800 → 383167/8/9 mapping was wrong on all three.) Whether a specialisation changes property 27 was not read [I].
+  - **0x10:** `Condition_Mode` (0x07342EA2) non-zero and HasActiveModalAbility 0x0066DD60(mode) false gives 310917, and is refused. It is the last test.
 - The quickbar's round-robin step that asks `CanUseAbility` for each slot: GUI.md, "The quickbar: the load, the rebuild, a slot's item and which slots are usable".
 
 ### Cooldown
@@ -174,11 +192,12 @@ The condition 0x0071A0C0 (ID 16490), from the creature's two hands (0x006A2B40) 
 | anything else (unarmed, melee + other) | | 0xFF (no conditional passive) |
 
 So the dual-weapon passives apply natively when both hands hold melee weapons, and are re-evaluated **only when an item is equipped or unequipped** (0x0071B970's two callers); no per-frame update and no script event. A weapon-set switch goes through the same equip/unequip handlers (inferred). Gaining the talent while already dual-wielding applies it at once (AddAbility passes stats+0x1B8). The initial value of stats+0x1B8 was not read.
+  - the stats' constructor 0x0071E940 stores `+0x1B8 = 0xFF` (0x0071EA8F), with +0x1B4 and +0x1BC = 0. 0xFF is "no condition", as 0x0071A0C0 returns and the save pairs use [C]. (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2, [C])
 
 ### (c) ClearCreatureProperties keeps passives (checked)
 Passives are **modifiers** (+0x54), never bases. ClearCreatureProperties (333, 0x00795C10) sets only each property's base (and a depletable's current) to max(Min, 0) and does not touch modifiers, so every applied passive (and every equipped item's stats, also modifiers) survives it; the creature's totals after it are max(Min,0) + engine link + the kept modifiers.
 
 ### Not read
 
-- creature+0xC58's meaning (inferred: restoring from a save) and the load path of passives; stats+0x1B8's initial value.
+- creature+0xC58's meaning (inferred: restoring from a save) and the load path of passives; stats+0x1B8's initial value is read (below, corrected 2026-10-23 by lib-agent-2).
 - Whether the four enciphered add-in `passive_abilities_*` files add rows (the running game reads them; Eluvian can).
