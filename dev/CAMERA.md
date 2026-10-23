@@ -131,7 +131,7 @@ These pan only when the setting is all the way out (`TacticalStep` 0x00771060). 
 ## Collision: a pull-in, close in only
 
 The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) acts on the controller's mode `+0x30` after the behaviours. The mode is set each frame (0x0076F0B0): 1 in the close view (zc ≥ 0.5), 2 in the band, and in tactical 0 where `ctl+0x9D`, else 3.
-- **The pull-in, mode 1** (0x006C3710 → 0x006C32C0): a capsule of radius 0.25 m and 0.1 m tall in z is swept from the orbit's place to the pivot (0x006490B0, mask 0x1024; corrected 2026-10-22, this said a sphere cast from the pivot: COLLISION.md section 6):
+- **The pull-in, mode 1** (0x006C3710 → 0x006C32C0): a capsule of radius 0.25 m and 0.1 m tall in z is swept from the pivot out to the orbit's place (0x006490B0, mask 0x1024; COLLISION.md section 6; corrected 2026-10-22: a sphere is in fact that capsule, and the direction is as this first said, after a wrong correction the same day):
   ```
   want = min(|hit - raw|, max(|pivot - raw| - 0.25, 0))
   if want <= pull: pull = want                                    // in at once
