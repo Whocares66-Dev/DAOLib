@@ -10,6 +10,8 @@ Read in the GOG exe and the sky shaders' disassembly (`C:\project\DAOElgaraShade
 
 `sky.mat.xml` declares `mml_vSkyParams`, `mml_vFogParams` and `g_vLightParams` by usage: SkyParameters (0x2C), FogParameters (0x2E) and LightsArray (0x11); CloudParameters is 0x2D. The shader-parameter provider (0x004F8A10) hands each the scene's vectors: sky at scene +0x38, fog at +0x18, clouds at +0x48.
 
+The clouds' time is `ApplicationTime` (usage 0x29): the renderer's clock from the game's start, frozen by the pause and through cutscenes (FRAME_EFFECTS.md, read 2026-10-23 by lib-agent).
+
 The scene's sky update (0x00538FA0, every frame):
 1. It calls 0x0055BFA0 on the area's sky block (`dao/core/Sky.h`). That recomputes only when the block's changed flag (+0x84) is set or t has moved by 0.001. Its Preetham n, N and pn arguments are never read.
 2. It copies the results out: sky[0..4] from the block's +0x90, +0xA0, +0xB0, +0xC0, +0x110; sky[5..8] the 4×4 at +0x120; cloud[0..2]; fog[0..1].
