@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cwctype>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -311,7 +312,18 @@ Owner OwnerOf(const Rendering &rendering)
         rendering.material != 0 ? TryRead<std::uintptr_t>(rendering.material + kMaterialObject) : std::nullopt;
     if (object && *object != 0)
     {
-        owner.material = std::wstring(detail::StringAt(*object + kMaterialName));
+        // The engine keeps a level's material objects by their file's name (brc300d_15_0.mao) and the
+        // rest without the extension (tvm_master, uh_hed_fema): seen by Eluvian's frame_capture in
+        // the forest clearing (bed100ar), 2026-10-23. One name for one material: the extension goes.
+        std::wstring_view name = detail::StringAt(*object + kMaterialName);
+        constexpr std::wstring_view kExtension = L".mao";
+        const auto sameLetter = [](wchar_t a, wchar_t b) { return std::towlower(a) == std::towlower(b); };
+        if (name.size() > kExtension.size() &&
+            std::ranges::equal(name.substr(name.size() - kExtension.size()), kExtension, sameLetter))
+        {
+            name.remove_suffix(kExtension.size());
+        }
+        owner.material = std::wstring(name);
     }
     return owner;
 }

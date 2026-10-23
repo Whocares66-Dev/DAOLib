@@ -40,6 +40,7 @@ struct Tally
     std::size_t owned = 0;   // draws that say their material
     std::size_t noded = 0;   // and their node
     std::size_t trees = 0;   // SpeedTree's (material SPT_...), which have no node
+    std::size_t dotted = 0;  // materials still with an extension: 0 expected
     std::size_t sampled = 0; // of those, logged
     bool logged = false;     // one draw laid out
     std::uint64_t frame = 0;
@@ -115,6 +116,7 @@ void OnDraw(const dao::render::Draw &draw)
         ++g_tally.owned;
         g_tally.noded += draw.node != 0 ? 1 : 0;
         g_tally.trees += draw.material.starts_with(L"SPT_") ? 1 : 0;
+        g_tally.dotted += draw.material.find(L'.') != std::wstring_view::npos ? 1 : 0;
         if (g_tally.sampled < kSamples && draw.index % 200 == 0)
         {
             ++g_tally.sampled;
@@ -146,10 +148,10 @@ void Log(const Tally &t, Micro span, double average)
     const std::size_t draws = t.calls[0] + t.calls[1] + t.calls[2] + t.calls[3];
     spdlog::info("draw check: frame {}: {} draws ({} DrawPrimitive, {} DrawIndexedPrimitive, {} DrawPrimitiveUP, {} "
                  "DrawIndexedPrimitiveUP), {} with both tables read, {} constants, {} textures ({} by name), {} "
-                 "blended, {} saying their material ({} trees; {} their node); the game's frame across it {} us, its "
-                 "frames' average {:.0f} us",
+                 "blended, {} saying their material ({} trees, {} with an extension; {} their node); the game's "
+                 "frame across it {} us, its frames' average {:.0f} us",
                  t.frame, draws, t.calls[0], t.calls[1], t.calls[2], t.calls[3], t.tabled, t.constants, t.textures,
-                 t.named, t.blended, t.owned, t.trees, t.noded, span.count(), average);
+                 t.named, t.blended, t.owned, t.trees, t.dotted, t.noded, span.count(), average);
 }
 
 // From the game's frame: logs an armed frame once it is in, keeps the frames' average time while none
