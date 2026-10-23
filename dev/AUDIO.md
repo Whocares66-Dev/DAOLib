@@ -121,7 +121,7 @@ Music is three layers. **The area** names a theme: its `.are` field `MusicPreset
 - +0x5C wstring, +0x78 byte, +0x7C float: a pending track, its "return to main" flag and its delay in seconds (-1 none).
 - +0x80 a volume (1.0), +0x84 the options' music volume, linear (0x005BC735; -60 dB when music is off).
 - +0x88 float delay (s) and +0x8C float value: a pending `music_state`.
-- +0x90 initialised, +0x91 music disabled (the option `MusicSystemDisabled`, settings +0x3D0, passed at 0x004042EF by 0x005B6CB0), +0x92 a one-shot theme plays, +0x93 last "playing" seen by the ducking update, +0x94 "credits at the end of the game" (`ShowStartMenu(bShowCredits)`, command 362, handler 0x0066A5A0, sets it at 0x0066A61D), +0x95 a pregame flag (1 at construction; set at 0x0064D0C5 from a menu index ≠ 0; meaning unread).
+- +0x90 initialised, +0x91 music disabled (the option `MusicSystemDisabled`, settings +0x3D0, passed at 0x004042EF by 0x005B6CB0), +0x92 a one-shot theme plays, +0x93 last "playing" seen by the ducking update, +0x94 "credits at the end of the game" (`ShowStartMenu(bShowCredits)`, command 362, handler 0x0066A5A0, sets it at 0x0066A61D), +0x95 a pregame flag (1 at construction; set at 0x0064D0C5 from a menu index ≠ 0; meaning: the credits entry chosen is not the first, so `chargen` plays over `credits_df`, see below; read 2026-10-23 by lib-agent-2).
 
 **Theme fields** (constructor 0x005C4680, debug print 0x005C13A0 "Music theme= '%s', track= '%s'"):
 - +0x04 wstring the loaded project's resolved path; +0x20 the FMOD `EventProject`; +0x24 the `EventGroup` (the theme); +0x28 its `stingers` subgroup.
