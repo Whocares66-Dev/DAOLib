@@ -235,7 +235,9 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
   - frond LOD +0x7C = max(frond LOD − 1, 0), alpha +0xF0;
   - leaf LODs +0x80/+0x84, alphas +0xF4/+0xF8;
   - the billboard fade +0x70 = `m_fBillboardFadeOut`, and +0x6C = (fade > 0).
-- Per draw, 0x52CE80 gives the kind's LOD and `alpha / 255`, which becomes the draw's alpha-test reference (`× 255` → the renderer's state 9 at 0x530D40 and 0x52DE90; that enum 9 is the alpha reference is inferred).
+- Per draw, 0x52CE80 gives the kind's LOD and `alpha / 255`, which becomes the draw's alpha-test reference (`× 255` (the double 255.0 at 0xAF6EA8) → the renderer's state 9 at 0x530D40 and 0x52DE90; that enum 9 is the alpha reference is inferred). The conversion truncates: the x87 control word is set to round toward zero (`or eax, 0xC00`; `fistp` at 0x530D60 and 0x52DEB0), so a whole-number alpha is kept and 126.5 becomes 126 (checked 2026-10-22).
+- 0x530C20 and 0x52DE10 clamp the kind's level to the model's level count − 1 and skip the draw for a level below 0 (0x530C20) or of −1 or less (0x52DE10); 0x52DE10 draws the second leaf slot in a second pass (checked 2026-10-22).
+- **The level itself** (0x536010, per frame and instance, checked 2026-10-22): d² = the camera's (0xC316B0) squared distance to the instance's position (+0x20); level = `1 − clamp((d² − near²)/(far² − near²), 0, 1)` with near² and far² the instance's +0x118 and +0x11C (0x52E260's). When the byte at 0xC31664 is set, every instance takes near² = 400 and far² = 3600 (20 and 60 m; the floats 0xBF73F0 and 0xBF73F4) instead; what sets that byte was not read.
 
 **SLodValues** (0x24 bytes; ctor 0x10024030, checked): +0x00 `int` branch LOD, +0x04 `float` branch alpha, +0x08 frond LOD, +0x0C frond alpha, +0x10/+0x14 two leaf LODs, +0x18/+0x1C their alphas (ints −1, floats −1.0), +0x20 `float` billboard fade (0.0).
 
@@ -243,17 +245,22 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
 - the tree's own values:
   - `r` = token 9003 (+0x24): 0.1667 for the trees, 0.125 for the grass;
   - `e` = token 9004 (+0x28): 1.3 for the trees, 1.5 for the grass;
-  - `a` = +0x30: 0 in the ctor, set to 0.5 only for transition method 2 (0x1002E410). `oth000d` uses method 1 (token 9002), so a = 0 (inferred: no other writer was found on this object);
+  - `a` = +0x30: **a per-tree float of the .spt**, the main parse's case at 0x1002E1A1 (`fstp [esi+0x30]` at 0x1002E1AF; token 16014, 0x3E8E); the ctor's 0 and method 2's 0.5 (0x1002E426) are only defaults (corrected 2026-10-22 by lib-agent with a subagent, from paragon-agent's samples of the DLL's own GetLodValues (DAOParagonEngine #173); this said a = 0 for method 1, inferred from no other writer found);
   - the opaque alpha = +0x4C = **84** (ctor).
-- **W = 2·r·(1 − a)**: 0.333 for the trees, 0.25 for the grass.
+- **W = 2·r·(1 − a)**, each tree its own. Lothering's, fitted exactly to the DLL's samples (squared error under 1e-7 over all 18 of its trees) [I for the values]: r = 0.125 for all; oaks a = 0.2, e = 1.4, W = 0.2; bushes a = 0.15, e = 1.3, W = 0.2125; grass and flowers a = 0.25, e = 1.5, W = 0.1875. The 0.333 and 0.25 this gave for `oth000d` took a = 0; its trees' W wants their own token 16014 (corrected 2026-10-22 by lib-agent with a subagent, from paragon-agent's samples of the DLL's own GetLodValues (DAOParagonEngine #173)).
 - **L ≥ 1:** branch and frond LOD 0, alpha 84.
-- **W < L < 1:** branch LOD = `int(numBranchLods·(1 − L))`, frond the same; alpha 84; **billboard fade 0** (no billboard).
+- **W < L < 1:** alpha 84; **billboard fade 0** (no billboard).
+- **Branch and frond LOD** = `int(numBranchLods·(1 − L))` (the frond's the same) for every 0 < L < 1, below W too [C] (corrected 2026-10-22 by lib-agent with a subagent, from paragon-agent's samples of the DLL's own GetLodValues (DAOParagonEngine #173); this gave it above W only).
 - **0 < L ≤ W:**
   - the 3-D tree's alpha-test value `= 84 + 171·(1 − L/W)^e`: it rises from 84 (opaque) to 255 (gone) as L goes to 0;
   - **billboard fade `= min(1, 1.5·(1 − L/W))`**: it starts at L = W and is full at L = W/3.
-  - So for `oth000d`'s trees the billboard fades in over L 0.333 → 0.111, while the tree dissolves by alpha test over L 0.333 → 0.
+  - So for Lothering's oaks (W = 0.2) the billboard fades in over L 0.2 → 0.067, while the tree dissolves by alpha test over L 0.2 → 0. With W from each tree's own parameters these formulas give the DLL's numbers: at L = 129/1024 the fade is 0.555 (oak), 0.611 (bush) and 0.492 (grass), the oak's alpha 126.5.
 - **L ≤ 0:** branch and frond LOD −1 (not drawn), billboard fade 1.
-- **Leaves:** in 0 < L ≤ W the last leaf LOD fades by the same `84 + 171·(1 − L/W)^e`, and is dropped when that reaches 255. Above W the two leaf slots cross-fade discrete leaf LODs using +0xD0–0xE0 (not decoded further).
+- **Leaves** (decoded 2026-10-22 by lib-agent with a subagent, DAOParagonEngine #173) [C unless marked]: slot 2 is −1 and its alpha 255 unless set below; D = +0xD0, A = +0xD8, B = +0xE0 (+0xD4 and +0xDC with drop-to-billboard off), with the tree's a and e:
+  - **L < W:** slot 1 is the finest leaf LOD (nLeaf − 1) with alpha `84 + 171·(1 − L/W)^e`, the branches' curve, and is dropped (−1) when that reaches 255 (0x100252B6–0x10025319).
+  - **L ≥ W:** L' = L − D, n = int(L'/B), k = max(nLeaf − n − 1, 0), r' = L' − n·B. With r' < A the single LOD k is drawn at alpha 84. With r' ≥ A slots k − 1 (slot 1, the coarser) and k (slot 2, the finer) cross-fade over u = (r' − A)/D: slot 2's alpha is 84 until u = a, then `84 + 171·((u − a)/(1 − a))^e` (0x100253B1–0x100253F9); slot 1's is `84 + 171·(1 − u/(1 − a))^e` until u = 1 − a, then 84 (0x10025417–0x1002545A).
+  - D, A and B were not traced to a writer; fitted to the samples [I]: D = 0.25, B = (1 − D)/(nLeaf − 1), A = B − D. So a tree of three leaf LODs (Lothering's bushes, oakbig) cross-fades over L 0.375–0.625 and 0.75–1, and one of two (grass) over 0.75–1, as the DLL's samples show. The same a and e fit both the near fade and these bands.
+  - Token 75005 (+0xF0) is not read by GetLodValues; it reaches only the shader, through S360Billboard+0x30.
 
 `ComputeLodCurve` (0x10024DB0) is `a + (b − a)·t^e`, or `b + (a − b)·(1 − t)^e` inverted. `ComputeLodCurveBB` (0x10024E20) is the same over `(t − F)/(1 − a)`, where F = +0xF0 (checked, but not on the path above).
 
