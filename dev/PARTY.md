@@ -868,6 +868,18 @@ The save writer is 0x007AD880 (C). It writes the tag and resref only when the st
 - For command 7 (Use Item) with `CommandItem` ≠ -1: it copies the item's tag (item +0xB8) to +0x128, its resref (+0x1CC) to +0x144, the name and icon, and sets `CommandParam` to the item's ability (item +0x660).
 - For command 7 with no item and the refresh flag: it looks up the name and icon from the saved resref (0x007532E0).
 - For any other command: `CommandItem` = -1, and the strings are cleared.
+- **The item refresh 0x007ACDF0, its other branches** (beside master's found and non-Use-Item ones) [C]:
+  - Command 7 with CommandItem −1: when the flag is on, it looks the name and icon up from the resref (0x007532E0; the name through a string-ref record, 0x004D1EB0); otherwise it does nothing.
+  - CommandItem set but the item gone: CommandItem becomes −1, and **the tag and resref stay**.
+- **The constructor 0x007AD310** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - CommandItem (+0xC8) starts at −1.
+  - Enabled (+0x58) is built false and set to 1 by the constructor's last write (0x007AD831).
+  - Target, TargetID, Condition, ConditionID, Command and CommandParam are 0, and ItemName and ItemIcon empty.
+  - So an untouched row answers GetTacticTargetObject and GetTacticConditionObject with 0. OBJECT_INVALID is only the out-of-range answer.
+- **The reset 0x007ABEC0** (SetTacticPresetID, LoadPreset type 0) [C]:
+  - It sets Enabled 1; Target, Condition, Command and CommandParam 0; CommandItem −1; ItemName and ItemIcon "".
+  - It empties the resref (+0x144) and the tag (+0x128).
+  - **TargetID (+0x78) and ConditionID (+0x98) are not written.**
 
 #### The tactic list in the save
 

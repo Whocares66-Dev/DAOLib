@@ -146,6 +146,17 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). 
 - **Described in:** `dev/script_commands/stats.md`, "RemoveAbility" (the refusal of type 4 is noted there).
 - **Does:** pops creature, ability, and bSendNotification **only when the argument count is above 2** (default FALSE); for ability > 0 and a known row with `AbilityType` != 4, calls `CCCreatureStats::AddAbility` 0x0071EAC0(ability, type, -1). If bSendNotification and the creature is in the party pool (0x006316F0), it queues a notification on party+0x330 (0x006291C0, with the ability and type) (checked; the notification's shape inferred from `Party.md`'s queue).
 - **Edge cases:** **an item ability (type 4) is silently not added.** A duplicate: 0x0071EAC0 sees `HasAbility` and returns early unless the type is 4 (checked). Unknown ability, ability <= 0, invalid or non-creature: nothing. Returns 0.
+- **The order of a creature's ability vectors** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **AddAbility 0x0071EAC0** [C]:
+    - Type 0 (abi_base AbilityType through 0x00719990) returns.
+    - A new ability is **appended at the end** of its type's vector (0x0076B540 → 0x006F1340).
+    - A held type-4 ability with an item takes only the item path: no vector add and no passive.
+  - **RemoveAbility 0x0071EF00** erases through 0x004E9640: a find, a compacting copy, an erase. So the order is kept [I that the compaction is MSVC's `std::remove`; only its entry was read].
+  - **So** each vector is in the order its abilities were added.
+- **GetAbilityList** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - **Which vectors:** type 0 appends vectors 1, 2 and 3 in turn (0x0071D410); types 1–3 give that vector alone. Type 4 and above return false and leave the output untouched.
+    - **With bOnCooldownOnly:** it walks i from the end down to 0. When `ForScript_GetRemainingCooldown(ability, "")` (an empty source-item tag) is ≤ 0, it removes element i by swapping in the last (0x0071D580). So the order left is permuted, not kept.
+  - **The tactics' list 0x007AED50** (PARTY.md's ListTacticAbilities) [C]: it walks vectors 1, 2 and 3 in order, each in its own order, and keeps an ability only when its UseType is 4 (with ShowInTactics, TargetType and the AOE filter).
 
 ### GetCreatureMana (242)
 - **Handler:** 0x0066CC30, the same handler as `GetCreatureStamina` (238) (checked).
