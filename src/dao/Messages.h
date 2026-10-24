@@ -164,10 +164,15 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // All message classes, their sizes and fields, are in dev/messages.csv
 // (tools/messages.py, from each class's clone).
 
-// Notes on PerformAbilityMessage: 0x10 bytes, from its clone (0x0077B210). The quickbar leaves
-// the target 0 (seen by the turn-based mod in play, 2026-09-30). The handler (GameModeExplore's,
-// 0x00711B50, which combat mode inherits), read 2026-09-30, does not take the target from the
-// message. Once the ability may be used (0x0071CE90), it reads the ability's row of abi_base
+// Notes on PerformAbilityMessage: 0x10 bytes, from its clone (0x0077B210). The third word is the
+// item the ability comes from, not a target (read 2026-10-24, DAOLib #253, correcting the reading
+// of 2026-09-30): the quickbar's icon sends its SourceItem.ID (QuickBarAbilityIcon.OnButtonAction,
+// quickbar.gfx), and the handler looks it up (0x00711BF8) and gives the may-use check the item's tag
+// (+0xB8) and UseAbility (0x00711680) the id as its item; the targeting state keeps it at +0x48 for
+// the click that ends the targeting. In play, 2026-10-24, the quickbar sent 0 for a talent and for
+// the Litany of Adralla's slot (its SourceItem.ID read none). The handler (GameModeExplore's,
+// 0x00711B50, which combat mode inherits), read 2026-09-30, takes no target from the message.
+// Once the ability may be used (0x0071CE90), it reads the ability's row of abi_base
 // (TargetType, UseType, AutoTarget) and uses the ability (UseAbility, dao/Addresses.h) on, in
 // order:
 // - the caster, if the ability targets only its user, or an input (its action 0x2F, taken for
@@ -181,7 +186,7 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // answers with PerformAbilityOnTargetUnderCursorMessage.
 
 // The player's order for a creature to use an ability, from the quickbar or a radial menu.
-// The handler ignores `target`. It uses the ability on the caster, the selected target or the
+// It names no target: the handler uses the ability on the caster, the selected target or the
 // caster's attack target, whichever the ability allows, and otherwise asks the player to pick a
 // target.
 struct PerformAbilityMessage : Message
@@ -189,9 +194,190 @@ struct PerformAbilityMessage : Message
     DAO_VFTABLE(68725);
     std::int32_t ability; // the ability's ID: its row in the abi_base data table
     ObjectId caster;
-    ObjectId target; // 0 from the quickbar; the handler ignores it
+    ObjectId item; // the item whose ability it is, as the quickbar sends it; 0 for none
 };
 static_assert(sizeof(PerformAbilityMessage) == 0x10);
+
+// Notes on the targeting messages: read 2026-10-24 (DAOLib #253) from their handlers, all
+// GameModeExplore's (combat mode inherits them). While an ability waits for a target, explore
+// mode's targeting state (0x00C35F60) holds it: the ability at +0x40, the item it comes from
+// at +0x48, the ability's TargetType at +0x4C, the caster at +0x50. Each of the three below takes
+// a target, tests it with ValidTarget (0x0070D550) and, if it passes, uses the pending ability on
+// it (0x00711680, which then leaves targeting, 0x007113F0); with no ability pending but a
+// script's RequestTarget waiting (+0x54), the target's place goes to the script instead
+// (0x0070D8D0). OnTargetUnderCursor's (0x007116C0) target is the object under the cursor
+// (0x00C35FF0), else the ground clicked; it is bound to the left button in the targeting
+// contexts (the input table, 0x006E01DB, 0x006E67B9). OnSelectedTarget's (0x00711A00) is the
+// selected target (0x00C06794), and its one binding is a gamepad button (0x006E69BD).
+// OnPlayer's (0x00711940) is the object at +4, looked up by id (0x005D5BE0): no binding and no
+// sender in the exe or the movies. CancelAbilityTargeting's handler (0x00711AC0) plays the
+// interface's "Click" and leaves targeting; Escape, the right button and a pad's button send it
+// in the targeting contexts (0x006E683D, 0x006E68BD, 0x006E6942). ActivateLinearTargetMode's
+// (0x0070D650) and ActivateAnalogTargetMode's (0x0070D680) select a target as the target-cycle
+// keys do (0x0070D030), the creature explore mode has at +0xBC if usable, else the selected
+// one; the pad's bindings send them. RequestTargetMessage (0xC bytes) and IsValidTargetMessage
+// (8) have no handler and no sender: the script command RequestTarget calls the mode's
+// 0x0070BB70 directly. They are not typed here. In play, 2026-10-24 (examples/messages): Dirty
+// Fighting pressed on the quickbar (its movie's ActivateQuickslot), then Escape's binding, logged PerformAbility and
+// CancelAbilityTargeting; pressed again with the cursor held on a walking corpse, the left
+// click's binding logged OnTargetUnderCursor and Lyna's command queue took the ability;
+// OnPlayer sent with the corpse's id arrived with it; the pad's three arrived with no fields.
+
+// Uses the ability waiting for a target, after PerformAbilityMessage asked for one, on the
+// object under the cursor, or the ground there. A left click in targeting mode sends it.
+struct PerformAbilityOnTargetUnderCursorMessage : Message
+{
+    DAO_VFTABLE(68786);
+};
+static_assert(sizeof(PerformAbilityOnTargetUnderCursorMessage) == 4);
+
+// Uses the ability waiting for a target on the selected target, the one the target-cycle keys
+// choose. A gamepad's button sends it.
+struct PerformAbilityOnSelectedTargetMessage : Message
+{
+    DAO_VFTABLE(68789);
+};
+static_assert(sizeof(PerformAbilityOnSelectedTargetMessage) == 4);
+
+// Uses the ability waiting for a target on the object given. Nothing in the game sends it.
+struct PerformAbilityOnPlayerMessage : Message
+{
+    DAO_VFTABLE(68790);
+    ObjectId target; // used if the pending ability may be used on it
+};
+static_assert(sizeof(PerformAbilityOnPlayerMessage) == 8);
+
+// Leaves targeting mode with the ability unused. Escape or the right button sends it there.
+struct CancelAbilityTargetingMessage : Message
+{
+    DAO_VFTABLE(68787);
+};
+static_assert(sizeof(CancelAbilityTargetingMessage) == 4);
+
+// Selects a target as the target-cycle keys do, for a gamepad's linear targeting.
+struct ActivateLinearTargetModeMessage : Message
+{
+    DAO_VFTABLE(68720);
+};
+static_assert(sizeof(ActivateLinearTargetModeMessage) == 4);
+
+// Selects a target as the target-cycle keys do, for a gamepad's radial targeting.
+struct ActivateAnalogTargetModeMessage : Message
+{
+    DAO_VFTABLE(68721);
+};
+static_assert(sizeof(ActivateAnalogTargetModeMessage) == 4);
+
+// Notes on SetQuickslotMessage: 0x48 bytes; its clone (0x0070AF00) copies the three words and
+// the two strings (0x004C2510). Read 2026-10-24 (DAOLib #253): explore mode's handler
+// (0x0070BE30) looks the creature up and hands the message to the creature's (0x006A74B0), which
+// sets the slot of its quickbar (0x0071F230, the creature's stats at +0x7C4; nothing without
+// their interface object, +0x1B4) and rebuilds the bar (0x00719AB0). A slot of -1 is the first
+// free one (0x0062AD80); otherwise it must be at most 49 (0x0071F360). With a tag the slot is an
+// item's, found through the party's inventory (0x005D4FC0); an empty template is the item's own
+// (item +0x1CC). The quickbar movie sends it as an icon is dropped on a slot or dragged off
+// (QuickBarIconSlot.as, SendMessageArgs(<player token>.SetQuickslot, creature, slot, ability,
+// tag, template); a slot cleared sends ability 0 and empty strings). Its "GUI.SelectedChar" is
+// the controlled creature, whose handler takes it: in play, 2026-10-24, the movie's SetQuickslot
+// on two slots arrived at the CCCreature with slot 0, ability 11 and no strings, and slot 6,
+// ability 200203 and cir000im_litany for both strings (examples/messages).
+
+// Puts an ability or an item in a slot of a creature's quickbar, or clears the slot. Sent to the
+// creature, as the quickbar does when an icon is dropped, or to the game modes, which pass it on.
+struct SetQuickslotMessage : Message
+{
+    DAO_VFTABLE(67741);
+    // Makes the message with the creature, slot and ability 0 and the strings empty.
+    SetQuickslotMessage() : Message{}
+    {
+    }
+    ObjectId creature{};
+    std::int32_t slot = 0;        // the slot, 0 to 49, or -1 for the first free one
+    std::int32_t ability = 0;     // the ability's row in abi_base, or 0 to clear the slot
+    core::WStringRep tag;         // an item's tag for an item's slot, else empty
+    core::WStringRep refTemplate; // an item's template, or empty for the tagged item's own
+};
+static_assert(sizeof(SetQuickslotMessage) == 0x48);
+
+// Notes on the ability headers' messages: 8 bytes each, clones 0x0077F98D (Hide) and 0x0077FA69
+// (Show). Read 2026-10-24 (DAOLib #253): the creature's handlers keep a set of minimized
+// headers, the skills' (creature +0x70C) for a list of 3 and the talents' (+0x728) for any other,
+// the saves' MinimizedSkillHeaderList and MinimizedTalentHeaderList (16471, 16472, header ids
+// s16, dev/SAVE_WRITER.md). Hide (0x006B75B0) adds the header if it is not there (0x006AE450,
+// 0x006B1140); Show (0x006B0980) takes it out (0x006AFF00, 0x006AF840). The message names no
+// creature: it goes to the creature's own handler. No movie of the install sends either. In
+// play, 2026-10-24, their bindings' text ("ShowAbilityHeaderMessage 7 3", "Hide... -2 1") was
+// parsed by the engine into header 7, list 3 and header -2, list 1.
+
+// Expands an ability header in a creature's ability lists: takes it out of the minimized ones.
+// Sent to the creature.
+struct ShowAbilityHeaderMessage : Message
+{
+    DAO_VFTABLE(68807);
+    std::int16_t header; // the header's id
+    std::uint8_t list;   // 3 for the skills' headers, anything else for the talents'
+};
+static_assert(sizeof(ShowAbilityHeaderMessage) == 8);
+
+// Collapses an ability header in a creature's ability lists: adds it to the minimized ones.
+// Sent to the creature.
+struct HideAbilityHeaderMessage : Message
+{
+    DAO_VFTABLE(68806);
+    std::int16_t header; // the header's id
+    std::uint8_t list;   // 3 for the skills' headers, anything else for the talents'
+};
+static_assert(sizeof(HideAbilityHeaderMessage) == 8);
+
+// Notes on the ability screens' messages: 0x10 bytes each, three words, as their clones copy.
+// Read 2026-10-24 (DAOLib #253), with dev/CHARGEN.md's reading of the scripts' side.
+// CharGenAssignAbility: character creation's handler (GUICharGenBase, 0x007FCE60) raises the
+// module's EVENT_TYPE_CHARGEN_ASSIGN_ABILITIES (51) with the creature as object 0, the ability as
+// int 0 and the kind as int 1, delivered at once (0x0064AD80); the paperdoll's (0x007B8900) adds
+// the ability to the abilities it shows picked (+0xF0), or takes -ability out. The level-up and
+// creation movies send it as an ability is picked (chargen.gfx, levelup.gfx: GUICharGen.,
+// Paperdoll. and GUILevelUp.CharGenAssignAbility). FindAbilityChains: GameModeGUI's (0x00718090)
+// and GameModeCharGen's (0x00719450) handlers rebuild the creature's list of ability chains of
+// the type (0x0062E9C0: 1 talents, 2 spells, 3 skills, any other none), the mode passed to the
+// walk (0x0062DCD0). The movies send their display mode (Ability.DISPLAYMODE_*: 1 character
+// creation, 2 level-up, 4 the spellbook, the skills and talents screens). In play, 2026-10-24:
+// the skills screen sent type 3, mode 4; the level-up screen types 1, 2 and 3, mode 2; a talent
+// taken there sent CharGenAssignAbility to GUICharGen with ability 8, kind 0.
+// CharGenSelectSpecialization: character creation's handler (0x00736B80) raises the module's
+// event 52 (CHARGEN_SELECT_LEVELUP_CLASS) with the creature and the specialization, if not 0, and with the flag set
+// moves the screen on (dev/CHARGEN.md); no movie sends it, and its text is no binding's, so it was not seen in play.
+
+// Picks an ability, or unpicks one, on the level-up or character creation screen. Sent to the
+// screen (GUICharGen), as the movie does when an ability is clicked.
+struct CharGenAssignAbilityMessage : Message
+{
+    DAO_VFTABLE(69370);
+    ObjectId creature;
+    std::int32_t ability; // the ability's row in abi_base; its negative to unpick it
+    std::int32_t kind;    // 0 a skill, talent or spell, 1 a specialization
+};
+static_assert(sizeof(CharGenAssignAbilityMessage) == 0x10);
+
+// Rebuilds a creature's chains of abilities of one type, as the ability screens show them.
+// Sent to the game modes, as the movies do after each pick.
+struct FindAbilityChainsMessage : Message
+{
+    DAO_VFTABLE(67880);
+    ObjectId creature;
+    std::int32_t type; // 1 talents, 2 spells, 3 skills
+    std::int32_t mode; // the screen's: 1 character creation, 2 level-up, 4 the spellbook
+};
+static_assert(sizeof(FindAbilityChainsMessage) == 0x10);
+
+// Chooses a specialization on the character creation screen. Nothing in the game sends it.
+struct CharGenSelectSpecializationMessage : Message
+{
+    DAO_VFTABLE(68334);
+    ObjectId creature;
+    std::int32_t specialization; // 0 chooses none
+    std::int32_t next;           // not 0: the screen moves on to its next step
+};
+static_assert(sizeof(CharGenSelectSpecializationMessage) == 0x10);
 
 // Notes on the move messages: read 2026-09-30. MoveCharacterToLocationMessage's clone allocates
 // 4 bytes, the vtable. Its handler (0x0070C9A0) takes the place from explore mode's own state.

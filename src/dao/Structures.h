@@ -261,7 +261,8 @@ class CGameEffect : public CDataArrays
     // Notes on a temporary effect's time, read 2026-09-30: Engine_ApplyEffectOnObject stores the
     // duration it is given, times 1000, at +0x2C (0x0065C760); AddElapsed (0x0079F2A0) adds each
     // update's time to +0x30, never past the duration; the effect ends when nothing is left
-    // (dao/Effects.h). Not yet seen in play.
+    // (dao/Effects.h). Seen in play 2026-10-24 (DAOLib #253): a daze applied for 12.5 s read 12.5,
+    // and its time left fell with the game's time.
 
     // Returns how long a temporary effect lasts, in milliseconds, or 0 for other duration types.
     std::int32_t DurationMs() const
@@ -274,12 +275,12 @@ class CGameEffect : public CDataArrays
     {
         return Read<std::int32_t>(kElapsed);
     }
-    // Returns how long a temporary effect lasts, in seconds. Not yet tested in the game.
+    // Returns how long a temporary effect lasts, in seconds.
     float Duration() const
     {
         return static_cast<float>(DurationMs()) / 1000;
     }
-    // Returns how long a temporary effect has left, in seconds. Not yet tested in the game.
+    // Returns how long a temporary effect has left, in seconds.
     float Remaining() const
     {
         return static_cast<float>(DurationMs() - ElapsedMs()) / 1000;
