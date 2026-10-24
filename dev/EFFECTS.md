@@ -202,7 +202,7 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
   addv:  c = tex*vcolor*UserMul; out = (c.rgb, min(c.a, max(c.r, c.g, c.b)))
   ```
   `mml_vUserColorMultiplier` is filled at 0x00541472 and 0x0054675A from a named user parameter (inferred: the emitter's `UserParamName`).
-- Not read: weapon trails (`ObjectNodeWeapontrail`, 0x00AFE634), mesh particles (the Chunky semantics), an emitter group's order of its children.
+- Not read: weapon trails (`ObjectNodeWeapontrail`, 0x00AFE634), an emitter group's order of its children.
 
 ### How an emitter spawns and moves its particles
 
@@ -235,6 +235,41 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
   - +0x132: KillParticleWhenTargetHit 6188.
 - **An age-map element** (`amel`, 0x20 bytes, 0x0058D0A0): PercentLifeElapsed, the reciprocal of the gap to the previous element, Color RGBA, ScaleX, ScaleY.
 - The animation drives the live values by the tag of the node's export (slot 14, 0x0053DAD0).
+
+#### An emitter's target (read 2026-10-23 by lib-agent-2 with a subagent, for DAOParagonEngine #28)
+
+Nothing here was seen in play. [C] read in the exe, [I] inferred.
+
+- **The name** [C]:
+  - MMHEmitterTargetName (6184) is loaded into a wstring at blueprint +0x288 (0x00593250).
+  - The flags' "(a target)" is blueprint +0x131 bit 6 (0x40). The loader sets it whenever the name is not empty (0x00593AA9); it is not a field of the file.
+- **The node** [C]:
+  - The blueprint's slot 6 (0x00560370) searches the emitter's own effect model, depth first, for the first node whose name matches exactly (case-sensitive, 0x0055E280).
+  - If that node is an `emtg` (`ObjectNodeEmitterTarget`, vtable 0x00AFE4D4), its pointer is kept at emitter +0x418.
+  - So the target is a node of the same effect model, not a bone or hook of a creature.
+  - That slot 6 runs once, at instancing, is [I]: no direct caller was found.
+- **Its position, every update** [C]: 0x00542440, the emitter's per-update bookkeeping (from the sprite update at 0x00552D7F, the physics sprite at 0x0055354F and the mesh at 0x00583FCA), has the `emtg` write its node's world translation into emitter +0x380 (its slot 29, 0x0055DDE0).
+- **A name with no `emtg`** [C]: +0x418 stays null and +0x380 stays (0, 0, 0).
+  - The pull is still on, because it is gated by the flag bit, not the node. So the particles are pulled toward the world origin, and SpawnDirectionTracksTarget aims at it too.
+  - 19 of 182 `fx*_c` emitters naming a target name none (leftover `NewTarget_*` names, and "0"). fxa_spi_spl_shd_c's carry a nonzero attraction.
+- **The pull, per live particle** (`SpriteParticle::Update` 0x0057BF30; called by the sprite updater 0x005528E0 and by the mesh updater 0x00584C20) [C]:
+  - It runs in world space, after the step's velocity, acceleration, gravity and position update. It moves the position and never touches the velocity:
+    ```
+    D = target(+0x380) - p;  d = |D|;  n = D / d
+    r = TargetRadius (live +0x394)
+    if r == -1.0:      s = TargetAttraction (live +0x390)          // unlimited reach
+    elif d*d < r*r:    s = TargetAttraction * (1 - d / r)          // linear falloff to the edge
+    else:              s = 0
+    p += n * s * h                                                // h the step; s is a speed, units/s
+    ```
+  - A negative attraction repels; the data has −1, −2, −5 and −15.
+  - The file's default radius is 0.0, which means no pull unless a clip sets the live radius (tag 23). Seven emitters with a name and an attraction have radius 0.
+- **A hit** (0x0057C2D9–0x0057C31E) [C]:
+  - A hit is `d² < |v|² h²`: the target is nearer than the particle's own velocity carries it in one step. A particle with no velocity, only pulled, never hits.
+  - KillParticleWhenTargetHit (+0x132 bit 0) off: nothing happens, and the pull goes on.
+  - On: age = −1.0 (0x0057C318). The ageing loop removes it at the next pass, at the position just reached.
+  - The radius plays no part in the hit.
+- **Not read:** whether the physics sprite (0x005534C0), which does not call this updater, has a pull of its own [I: likely none]; whether a clip key replaces the live attraction or mixes with it.
 
 **The update** (slot 34: `Sprite<SpriteParticle>` 0x00552CF0), once a frame, one step:
 - It is skipped where UpdateOnlyWhenVisible and the model is unseen; the particles don't age then.
@@ -1109,6 +1144,45 @@ loop:
 - 0x0057BEC0 (mode 3's direction from the velocity) when the velocity is 0.
 - The `PhysicsSpriteParticle` variants (vtables 0x00AFAF3C, 0x00AF8984): where they are made.
 - How the submitted batch is sorted (the ribbon's bounds aren't refreshed by its fill).
+
+##### Mesh particles (read 2026-10-23 by lib-agent-2 with a subagent, for DAOParagonEngine #28)
+
+Nothing here was seen in play. [C] read in the exe and the vanilla files, [I] inferred.
+
+- **The model** [C]:
+  - MMHNodeEmitMeshParticleModelName (6284) is loaded once per blueprint. The emitter loader 0x00592C60 asks the object manager ([0x00C31D88]) for "ChunkyParticle_" + the name, and keeps it at blueprint +0x2C0. That makes the emitter an `ObjectNodeEmitterMesh<MeshParticle>` (0x00560080; see the ribbons' class choice).
+  - The 20 vanilla mesh emitters use fx_rock, fx_m_cylinder, fx_m_tube01/02, fx_b_branch, fx_m_sphere, fx_l_plane and fx_m_woodchunk1. fxp_spirit_spawn_p's name is a stray "0".
+- **The draw** [C]:
+  - Every particle of every instance shares the one model object. Each frame, for each live particle, the emitter re-poses the model and submits it through its `SubmissionQueueProgram` (the +0x180 vtable's slots 5 and 17, 0x00583640 and 0x00583960). That is one submission per particle: not instanced, and not batched by the emitter.
+  - The emitter's slot 33 (0x00583420) puts an `SOMaterialObjectInstanceOverride` into the queue with the emitter's MaterialLibrary (blueprint +0x150) and MaterialObject (+0x134). So the model's meshes draw with the emitter's material, not their own [I from the class and its arguments].
+  - Example: fx_m_tube01's own material is fx_c_fresnel_add; fxa_fire_aoe_p draws it with fx_c_twister.
+- **The transform** [C]:
+  - **Position:** the particle's, by the same motion as sprites (0x005AC5E0; spin and movement spread 0x005ACCE0; birth 0x00583DC0).
+  - **Orientation** (0x005ACA20): the model's UpAxis (6302, live +0x400) is turned onto the particle's velocity, or onto (0, 0, 1) when the velocity is zero. Then it is rolled about the RollAxis (6303, live +0x3F0, turned into the world by the emitter's rotation) by the particle's roll angle. OrientationBehavior is not used.
+  - **Scale:** one uniform factor, the age map's ScaleX × AgemapScalexMultiplier × the particle's size, on all three axes. ScaleY and its multiplier are computed but never read. The owner's scale is not applied, unlike a sprite's. Whether the 0.5 key halving applies is [I].
+- **Colour** [C for the values, I for the binding]:
+  - Each particle's rgba is the age map's colour × the emitter's colour multiplier. Its alpha is also × the emitter's opacity (+0x4E0), and × the owner's user colour when the blueprint names a user parameter. There is no saturate.
+  - It is written to the submit context's +0xD0. That this reaches the shader's `aur_vExternalColor` is [I]: every Chunky pass declares that constant, and this is the only per-particle colour written.
+- **The shader and states** (vanilla, from shaders.erf and the core archives) [C]:
+  - `vfxchunky0.psh`: rgb = diffuse × ExternalColor, blended toward the fog colour by `mml_vUserColorMultiplier`; alpha = diffuse.a × ExternalColor.a × `mml_fOpacityMultiplier` × a Fresnel term saturate(|a|·a / (Start − End)²), with a = |Invert − N·V| − End. No lighting.
+  - Chunky is opaque (`DAMshOpqe1S`).
+  - ChunkyAddv is SRCALPHA/ONE, no depth write, LESSEQUAL, cull CW, no alpha test (`daemtaddv1s.sta`).
+  - ChunkyBlend uses `DAEmtNorm1S` (not opened).
+- **Against the sprite update** (`Mesh<MeshParticle>` 0x00583F80) [C]:
+  - **Shared:** the spawn count, birth, life and kill, the frame advance, the motion, the target pull (above), the presimulation and the cap of 256.
+  - **The particle** is 0x60 bytes (roll axis +0x40, roll angle +0x50), not 0x80.
+  - **No vertex fill.**
+  - **No UpdateOnlyWhenVisible early out**, so mesh particles age and spawn while unseen [C from the missing test].
+  - **A Life of 0 or less** (fxa_stone_swrd_c's −1) gives an inverse life of −1: the particle never dies and is drawn at t = 0.
+- **Worked examples** [C, data]:
+  - fxa_fire_aoe_p's `Twister_FireMesh_Funnel`: fx_m_tube01 drawn with fx_c_twister (ChunkyAddv), Life 1.5, speed 15, key scale 2.5–3, multiplier 0.9.
+  - fxa_stone_swrd_c's `st_rock_loc`: fx_rock with stone_rock (Chunky), a burst of 25, Life −1, its scale driven by a clip.
+- **Not read:**
+  - the `DAMshOpqe1S` and `DAEmtNorm1S` states;
+  - whether the submission queue sorts or merges the per-particle draws;
+  - the manager's class behind "ChunkyParticle_";
+  - the mesh update's spawn-volume loop;
+  - the other 18 emitters' materials.
 
 ##### 6. An effect's point lights
 
