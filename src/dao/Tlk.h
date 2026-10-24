@@ -13,11 +13,11 @@
 namespace dao::tlk
 {
 
-// Returns the text of a string reference.
+// Returns the text of a string reference, as the game shows it now: the female form where the
+// hero is female and the language has one.
 // @param strref the string reference, as a data table or a script holds it
-// @param female true for the female form where the table has one; false for the male form
 // @return the text, or an empty string for an unknown reference or before the talk tables load
-std::wstring String(std::uint32_t strref, bool female = false);
+std::wstring String(std::uint32_t strref);
 
 // Replaces the game's tokens in a text, the same way the game's screens do.
 // For example, a reply's "<FirstName/>, wait!" becomes "Lyna, wait!", and a tutorial's key tokens

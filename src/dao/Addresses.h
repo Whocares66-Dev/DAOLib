@@ -1812,8 +1812,8 @@ DAO_ADDRESS(kScaleformManager_LoadImage, 6704)
 
 // The talk tables (dao/Tlk.h), read 2026-09-30 from GetTlkTableString: the
 // engine's CTlkTable in this global; GetString, __thiscall (strref,
-// std::wstring &out, flag 0), `ret 0xC`, with the gender to use set at the
-// table's +0x1C first (0 male, 1 female).
+// std::wstring &out, flag 0), `ret 0xC`. The +0x1C GetTlkTableString sets
+// is read by no lookup (2026-10-24, #106): the gender is the tables' order.
 DAO_DATA(kTlkTable, 99738)
 DAO_ADDRESS(kCTlkTable_GetString, 5384)
 // Talk-table text as the screens show it (dao/Tlk.h), read 2026-10-03:

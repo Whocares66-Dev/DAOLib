@@ -76,7 +76,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 
 ### SetPartyLeader (625)
 - **Handler:** 0x00661320 → `ForScript_SetPartyLeader` 0x00636180 (checked).
-- **Does:** `CClientExoApp::GetCreatureById`; then sets party+0x1E8 to the id (checked). It calls the talk table (g_tlkTable 0xC1D08C, 0x004E5CF0) with 1 when the creature's +0x7B0 record has byte +0x50 == 2, else 0 (checked). That this selects female text for gendered strings is inferred. If the creature is in the active party (+0x234) and not already first, it is moved to index 0 (erase 0x004E9640, insert 0x006CE860). Then 0x00635B40 (controlled list +0x184 → creature pointers +0x194) and 0x00635B60 (four-slot rebuild, inferred: the party bar) run (checked: the calls).
+- **Does:** `CClientExoApp::GetCreatureById`; then sets party+0x1E8 to the id (checked). It calls the talk table (g_tlkTable 0xC1D08C, 0x004E5CF0) with 1 when the creature's +0x7B0 record has byte +0x50 == 2, else 0 (checked). That is the talk tables' gender setter: it moves the tables of that gender (the `_f` ones for 1) ahead of the rest, reversed, which is how female text is chosen (read and seen in play 2026-10-24 for #106, correcting "inferred"; `dev/FILES.md`, "Talk tables"). If the creature is in the active party (+0x234) and not already first, it is moved to index 0 (erase 0x004E9640, insert 0x006CE860). Then 0x00635B40 (controlled list +0x184 → creature pointers +0x194) and 0x00635B60 (four-slot rebuild, inferred: the party bar) run (checked: the calls).
 - **State:** party+0x1E8, +0x234 order, +0x194 (checked).
 - **Edge cases:** not a creature or not found → nothing (checked). A creature outside the active party still becomes the leader and sets the talk table's gender, with no reorder (checked). No party → nothing (checked).
 
@@ -191,7 +191,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 ## Not read
 - What creature +0x240, +0xB70, slot +0x154, the party's slot +0x64 and the global float 0xC33B44 mean (AddNonPartyFollower / RemoveNonPartyFollower), and 0x006AE780's full effect.
 - Who reads FollowerInfo's substate, locked and follow-leader bytes (movement, the party GUI); where map entries are created (0x0063A020, per dev/PARTY.md) and their initial values.
-- 0x00635B60 (four-slot rebuild after SetPartyLeader) and the talk table call 0x004E5CF0 beyond its argument.
+- 0x00635B60 (four-slot rebuild after SetPartyLeader).
 - The notification queue's consumer on party+0x330 (types 6 and 8).
 - SetTacticEntry's valid-list builders (0x007AFE80, 0x007AED50, 0x007AF6C0); who sets tactics +0xE4 (customized), +0xD4's other values, +0x5C (party AI on); the class at creature +0xC00 (`PartyTactics` inferred from its message handlers).
 - The stealth visuals' function 0x005B9450, the config at 0x005B9020+0x28, and app state 9.

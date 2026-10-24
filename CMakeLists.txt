@@ -205,6 +205,7 @@ add_library(
     src/dao/core/ScriptValue.cpp
     src/dao/core/StackText.cpp
     src/dao/core/TalkTable.cpp
+    src/dao/core/TalkTables.cpp
 )
 dao_apply_warnings(daolib_core)
 dao_release_symbols(daolib_core)

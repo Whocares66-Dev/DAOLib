@@ -147,6 +147,7 @@ GDAFILE = "src/dao/core/GdaFile.cpp"
 M2DA = "src/dao/core/M2da.cpp"
 ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
+TALKTABLES = "src/dao/core/TalkTables.cpp"
 ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
 FSB = "src/dao/core/Fsb.cpp"
@@ -165,6 +166,25 @@ FACEFX = "src/dao/core/FaceFx.cpp"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # The talk tables the game searches, in its order (#106).
+    Mutant(
+        "talktables-gender-front: setting a gender moves its tables ahead, reversed",
+        TALKTABLES,
+        "        if (tables[i].female == female)",
+        "        if (tables[i].female != female)",
+    ),
+    Mutant(
+        "talktables-en-us-fallback: a name with no table in the language takes en-us's",
+        TALKTABLES,
+        '{FileName(name, language, female), FileName(name, "en-us", female)}',
+        "{FileName(name, language, female)}",
+    ),
+    Mutant(
+        "talktables-campaign-own: the loaded campaign's own table comes last",
+        TALKTABLES,
+        "        Load(index, CampaignFileName(campaign), tables);",
+        "        (void)CampaignFileName(campaign);",
+    ),
     # The order made public for a merged table's files (#106): copies of any names sorted by
     # their sources, and the engine source a copy is read from.
     Mutant(

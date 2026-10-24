@@ -137,6 +137,13 @@ struct Options
     std::filesystem::path archiveCopies{};
 };
 
+// Returns a name with its ASCII letters in lower case, as the index keeps names.
+std::string Lower(std::string_view text);
+
+// Returns a campaign's name as its files are named, in lower case with no spaces: its .cif's and
+// its talk table's ("singleplayer" for "Single Player", "dao_prc_ep_1").
+std::string CampaignFileName(std::string_view campaign);
+
 // A file by its name, and a copy of it.
 struct NamedCopy
 {

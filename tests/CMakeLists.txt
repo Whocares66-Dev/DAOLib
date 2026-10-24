@@ -69,9 +69,13 @@ add_executable(
     test_sky.cpp
     test_script_table.cpp
     test_talktable.cpp
+    test_talktables.cpp
 )
 dao_apply_warnings(dao_core_tests)
-target_link_libraries(dao_core_tests PRIVATE daolib_core Catch2::Catch2WithMain)
+target_link_libraries(
+    dao_core_tests
+    PRIVATE daolib_core Catch2::Catch2WithMain shell32 ole32
+)
 
 include(Catch)
 # Each test's tags are its labels too: the debug-asan preset leaves out

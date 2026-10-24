@@ -97,18 +97,6 @@ constexpr std::size_t kOpenKept = 8;
 // No resource of the game's is near this; a size past it is a damaged directory's.
 constexpr std::uint32_t kLargest = 1U << 30;
 
-std::string Lower(std::string text)
-{
-    for (char &c : text)
-    {
-        if (c >= 'A' && c <= 'Z')
-        {
-            c = static_cast<char>(c - 'A' + 'a');
-        }
-    }
-    return text;
-}
-
 std::string Utf8(const fs::path &path)
 {
     const std::u8string text = path.generic_u8string();
@@ -547,18 +535,37 @@ void Index::GatherResources()
     gathered_.shrink_to_fit();
 }
 
-// The loaded campaign's .cif is its name with no spaces and ".cif" (singleplayer.cif,
-// dao_prc_ep_1.cif); any copy of it that reads gives its packages.
-void Index::ReadPackages()
+std::string Lower(std::string_view text)
+{
+    std::string lower(text);
+    for (char &c : lower)
+    {
+        if (c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    return lower;
+}
+
+std::string CampaignFileName(std::string_view campaign)
 {
     std::string name;
-    for (const char c : Lower(options_.campaign))
+    for (const char c : Lower(campaign))
     {
         if (c != ' ')
         {
             name.push_back(c);
         }
     }
+    return name;
+}
+
+// The loaded campaign's .cif is its name with no spaces and ".cif" (singleplayer.cif,
+// dao_prc_ep_1.cif); any copy of it that reads gives its packages.
+void Index::ReadPackages()
+{
+    const std::string name = CampaignFileName(options_.campaign);
     const auto copies = resources_.find(name + ".cif");
     if (name.empty() || copies == resources_.end())
     {

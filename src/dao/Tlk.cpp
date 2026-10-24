@@ -2,16 +2,15 @@
 //
 // Read 2026-09-30 from the script command GetTlkTableString: the engine's CTlkTable (the object
 // in 0x00C1D08C) answers a string reference with its text through GetString, __thiscall
-// (strref, std::wstring &out, flag), `ret 0xC`, choosing the male or female form by its +0x1C.
-// tools/tlk.py reads the same tables from the files. Not yet seen in play.
+// (strref, std::wstring &out, flag), `ret 0xC`. tools/tlk.py reads the same tables from the files.
 //
-// That 1 is the female form is confirmed, read 2026-10-18 by lib-agent-2 (DAOLib #187).
-// SetPartyLeader's backend (0x00636180) calls the talk table's gender setter 0x004E5CF0 with 1
-// when the new leader's appearance +0x50 is 2, GENDER_FEMALE as GetCreatureGender (263) returns
-// it (0x0065A444-0x0065A44A), and with 0 otherwise (0x006361B1-0x006361D5); the setter reloads
-// the tables (0x004E4B10). GetTlkTableString (14) keeps a gender of 0 or 1 and makes anything
-// else 0 (0x00654BED-0x00654C17), so a script passing GENDER_MALE (1) gets the female form, a
-// vanilla quirk; no shipped script passes a gender.
+// The gender, read 2026-10-24 for DAOLib #106 and seen in play: GetString asks the tables front
+// to back and reads no gender, nor does the per-table find (0x004E47F0). GetTlkTableString sets
+// the table's +0x1C to its gender argument, which no lookup reads: in play its argument changed
+// nothing. The female form is the order of the tables: the gender setter 0x004E5CF0 moves the
+// tables of one gender to the front, called with the hero's on a campaign's load and from
+// SetPartyLeader's backend (0x00636180, with 1 when the new leader's appearance +0x50 is 2,
+// GENDER_FEMALE: lib-agent-2's reading for #187). dao/core/TalkTables.h has the whole order.
 #include "dao/Tlk.h"
 
 #include "dao/Addresses.h"
@@ -19,27 +18,19 @@
 #include "dao/Module.h"
 #include "dao/String.h"
 
-#include <cstddef>
-
 namespace dao::tlk
 {
 
-std::wstring String(std::uint32_t strref, bool female)
+std::wstring String(std::uint32_t strref)
 {
     void *table = Global<void *>(addr::kTlkTable);
     if (table == nullptr)
     {
         return {};
     }
-    // The script command sets the gender byte for its call and leaves it;
-    // this puts it back.
-    auto &gender = *(static_cast<std::byte *>(table) + 0x1C);
-    const std::byte before = gender;
-    gender = female ? std::byte{1} : std::byte{0};
     WString text;
     using Fn = void(__fastcall *)(void *, int, std::uint32_t, core::WStringRep *, std::int32_t);
     reinterpret_cast<Fn>(Module::Address(addr::kCTlkTable_GetString))(table, 0, strref, text.Engine(), 0);
-    gender = before;
     return std::wstring(text.View());
 }
 
