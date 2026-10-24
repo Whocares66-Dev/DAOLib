@@ -1,0 +1,10 @@
+type,path,field,target,evidence
+utc,Appearance Data,Appearance_Type,2,"the creature's appearance, an Appearances row (apr_base); the scan counts the values that are its IDs"
+utc,,Race,5,"the creature's race, a Races row (race_base)"
+utc,,Package,163,"the creature's package, a Packages row (packages_base)"
+utc,,Rank,174,"the creature's rank, a Creature Ranks row (creatureranks)"
+utc,,TreasureCategory,198,"the creature's treasure category, a Treasure System Category row (ts_category)"
+utc,TalentList[],TalentNumber,1,"a talent the creature has, an Abilities row (abi_base)"
+utc,SpellList[],SpellNumber,1,"a spell the creature has, an Abilities row (abi_base)"
+utc,SkillList[],SkillID,1,"a skill the creature has, an Abilities row (abi_base)"
+utc,PropertyList[],Index,98,"one of the creature's properties, a Properties row"

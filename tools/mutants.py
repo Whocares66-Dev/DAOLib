@@ -150,6 +150,7 @@ INSTALL = "src/dao/core/Install.cpp"
 TALKTABLES = "src/dao/core/TalkTables.cpp"
 GDASCHEMA = "src/dao/core/generated/GdaSchema.cpp"
 TABLEROW = "src/dao/core/TableRow.h"
+GFF3SCHEMA = "src/dao/core/generated/Gff3Schema.cpp"
 ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
 FSB = "src/dao/core/Fsb.cpp"
@@ -169,6 +170,12 @@ FACEFX = "src/dao/core/FaceFx.cpp"
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
     # The worksheets' catalogue and typed rows (#106, step 5).
+    Mutant(
+        "templates-field-path: a field is its struct's, not another's of its label",
+        GFF3SCHEMA,
+        "field.path == path && field.label == label",
+        "(field.path == path || field.path != path) && field.label == label",
+    ),
     Mutant(
         "tables-find-id: a worksheet the catalogue has not is none",
         GDASCHEMA,

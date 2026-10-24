@@ -207,6 +207,7 @@ add_library(
     src/dao/core/TalkTable.cpp
     src/dao/core/TalkTables.cpp
     src/dao/core/generated/GdaSchema.cpp
+    src/dao/core/generated/Gff3Schema.cpp
 )
 dao_apply_warnings(daolib_core)
 dao_release_symbols(daolib_core)
@@ -225,6 +226,12 @@ if(PROJECT_IS_TOP_LEVEL)
     target_link_libraries(dao_gda_schema PRIVATE daolib_core)
     target_compile_definitions(
         dao_gda_schema
+        PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+    )
+    add_executable(dao_gff3_schema tools/gff3_schema/Gff3Schema.cpp)
+    target_link_libraries(dao_gff3_schema PRIVATE daolib_core)
+    target_compile_definitions(
+        dao_gff3_schema
         PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
     )
 endif()

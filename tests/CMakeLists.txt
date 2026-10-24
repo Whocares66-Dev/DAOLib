@@ -33,6 +33,7 @@ add_executable(
     test_gdafile_roundtrip.cpp
     test_gda_schema.cpp
     test_gff3_roundtrip.cpp
+    test_gff3_schema.cpp
     test_gff3.cpp
     test_gff4.cpp
     test_gff4_roundtrip.cpp
@@ -144,6 +145,13 @@ if(Python3_Interpreter_FOUND)
         COMMAND
             "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tools/gen_gda_schema.py" --check
+    )
+    # The templates' catalogue and views are what the scanned schema says.
+    add_test(
+        NAME gff3_schema
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tools/gen_gff3_schema.py" --check
     )
     # The scripts' constants are what script.ldf and the scripts say (passes
     # with no game or no extracted toolset).
