@@ -35,6 +35,7 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
     - AddEventDeltaTime's delay test is unsigned (0x0064AD34): 0 is delivered now, and anything else, negatives included, goes to AddEventLater 0x0064A740.
     - That ProcessEvent 0x0064A8C0 has no type test is [I], from its head only.
 - **A suppression of DISAPPEAR not in the notes above** [C for the code, I for the meaning]: before building the event (0x006B8B3B-0x006B8B7C) the loop computes `[esp+0x1A]`: false when the lost creature is ACTIVE in the party (`0x006A2CE0`), else true when the perceiver's `+0xBD4 == 1` or the lost creature's `+0xBD4 == 1`. The event is built only when the gate `0x00698490(26)` (this file, "Neither is raised when the gate ...") answers 1 and `[esp+0x1A]` is false (0x006B8B7C-0x006B8B88). +0xBD4 is the flag that also stops the perception call; what a value of 1 (against 0) means was not read.
+  - When `GetCreatureById` finds no creature for the lost id, the flag stays 0, so the DISAPPEAR is not suppressed (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x006B8B3B–0x006B8B53].
 
 ### Perception through doors: a hostile behind a closed door is not perceived (read 2026-10-18 by lib-agent-2)
 

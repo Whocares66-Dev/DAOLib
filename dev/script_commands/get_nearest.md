@@ -15,6 +15,7 @@ The perceived set is creature+0xC18 (a `std::set` of ids), kept by the perceptio
 ### IsPartyPerceivingHostiles (165)
 - **Handler:** 0x00668A20 (shared; case at 0x00668B69) → 0x006A2CC0 (the party: `[[app+0xD0]+0x58]`, 0 with no game) → party method 0x0062F9F0. (checked)
 - **Does:** for each id in the active party (the vector at party+0x234, elements from +0x238 to +0x23C), `GetCreatureById` (0x005D58C0) and, if found, 0x006AC230 (`IsPerceivingHostiles`'s test above); TRUE at the first member that perceives a hostile, else FALSE. (checked)
+  - The vector at party +0x234 is IsInParty's list, holding the states ACTIVE and LOCKED_ACTIVE (PARTY.md). The creature's own active byte (+0x2C5) is not tested (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C], so a member in that list but deactivated still counts, with whatever perceived set it last had [I].
 - **State:** reads the active party list and each member's +0xC18; writes nothing. (checked)
 - **Edge cases:** **oCreature is only a gate**: it must be a valid creature (else 0, as above) but is otherwise ignored — any creature, party member or not, gives the same answer, the active party's. script.ldf's "the party of a creature" suggests otherwise. (checked) No party (no game) → 0. (checked) Ids in the list that are no longer creatures are skipped. (checked) Members in the pool but not the active party (+0x244) are not asked. (checked: only +0x234 is walked)
 

@@ -133,6 +133,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
   - The room is taken from the first hit (in report order) whose room id (hit+0x34) is not −1 and whose flags (hit+0x20) lack bit 2. The id is looked up with ChunkManager slot 4.
   - The hit's room id comes from `0x0081C560(actor)`: the actor's userData record +8. That is the `.opf`/`EnvStatPhys` actor record's **room id**, or, for an object-owned actor, owner→+0x258→+0x14.
   - So the room is the room of the static floor under the creature.
+  - **A miss clears the room; no last room is kept** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]: 0x00695D70 passes the ray's answer to SetRoom 0x00695D10 untested (0x00695DCD). With no area it passes 0. 0x0067B3A0 also answers 0 when area +0x658 is null. SetRoom stores room 0 and id −1 for a null room, and skips the store only when the same room and id are already set (0x00695D23–0x00695D31). So an object over no static geometry has no room, and the perception update then exits at once (COMBAT.md, +0x41C null).
 - **Room ids are one numbering throughout:**
   - the `.arl`'s `EnvAreaRoomList/EnvRoomID`;
   - the `.rml` file names (`lak302d_1101`);
