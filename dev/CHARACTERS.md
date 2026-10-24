@@ -94,6 +94,31 @@ Where the row's `WeaponOffset` is set (the back), the weapon is moved off the bo
 
 The engine turns the weapon no further. AttachWeaponToNode (`0x00a66b70`) calls the weapon object's attach (`GraphicsStructures::Object`, `0x0054d860`) with the model, the node, its name, the WeaponOffset vector and no rotation (param_5 = 0). The attach builds an `ObjectAttachDependency`: the offset is stored as a translation (+0x30, `0x00542ea0`) and the weapon is parented to the node. So the weapon's root (GOB, identity in `w_lsw_ls01a_0.mmh`, the blade along +Z) = the prop node's world × translate(offset). The prop's frame is its whole chain: `Prop10` is a child of `Prop15` (rotation about 172°) under `Chest1`. At rest, and with `mh_m.p.ani`'s spine keys (the clip keys neither prop), `Prop10`'s +Z points down and about 9° to the left, from the upper right back at (0.17, −0.18, 1.71). Read by lib-agent-2, 2026-10-17. Seen in play the same day: turn-based-agent ran lib-agent-2's read-only scratch reader of the scene nodes, with two `default_hm_noble` idle in the Dragonbone Wastes, each with `gen_im_wep_mel_lsw_lsw` sheathed. Each weapon's GOB world matrix equals its owner's `Prop10` to 0.0° and 0.1°, and it sits 0.0196 m along the creature's model-space +Y (`Prop10`'s −X), the WeaponOffset push. In model space, with the idle playing, `Prop10` was at (0.161, −0.178, 1.577), +Z (−0.166, −0.059, −0.984), +Y (−0.977, −0.128, 0.172). On those nodes, +0x60 is the node's world matrix, +0xA0 its model-space matrix, and +0x20 the model's world matrix, the same layout as the bones.
 
+### A node the body lacks (read 2026-10-24 by lib-agent-2 with a subagent, for DAOParagonEngine)
+
+Nothing was played. [C] read in the exe and the files, [I] inferred.
+
+- **No node, no attach, and no fallback** [C]:
+  - AttachWeaponToNode 0x00A66B70 reads the row's `AttachNode` (weaponparts, column 0x90028895) and looks the name up on the body model through its vtable +0x10 (0x00A66C32–0x00A66C41).
+  - A null node (0x00A66C47) goes to 0x00A66E24, which frees the name and returns false (0x00A66E3B).
+  - The detach of the old attachment (0x0054DAC0), the attach itself (vtable +0xF0, which builds the ObjectAttachDependency) and the slot's remembered row (+0x22C + slot × 4) all come after the node is found.
+  - So nothing falls back: not the model root, not another Prop, not the Wield or Wear counterpart.
+- **The callers carry on** [C]:
+  - The first hang, 0x006A6940 (through 0x006A1350 at 0x006A6B0A), returns false. The equip routine (ID 14834, at 0x006B1A52) then only zeroes the slot's float at appearance +0x180 + slot × 4 (0x00747E50) and goes on.
+  - The equip and unequip events' mover 0x006A64B0 ignores the result (0x006A65F9). So a missing Wield node leaves the weapon on its Wear node, or attached nowhere if that one was missing too.
+  - That a weapon attached nowhere is not drawn is [I]: the weapon model's builder 0x00A672F0 and the other attach caller 0x007CFE5F were not read, and it was not seen in play.
+- **Only a combat humanoid draws and sheathes** [C]:
+  - The test is IsHumanoid 0x006A25A0 → 0x0069F030: apr_base's `CombatModelTree` (0xDE80B418) must be "combat_humanoid". ModelType (H or P) is not tested.
+  - A creature that fails it plays `enter`/`exit` (anim_combat rows 100/101) and never moves a weapon (ANIMATION.md, "Drawing and sheathing weapons").
+  - apr_base has no "always drawn" column. The template's WeaponsDrawn applies to humanoids only.
+- **The revenant, worked through** [C, data]:
+  - apr_base 26 has ModelType H but `CombatModelTree` c_reva_cbt.anb, so it is not a combat humanoid.
+  - Its body (cn_bdy_reva_0, _2, _3) has only Prop01 (under RightWrist), Prop04, Prop19, Prop20, Prop21 and Prop22.
+  - Its sword and shield are the body's own meshes: RightSpawn (bone 100, Mesh3, cn_lsw_reva) and LeftSpawn (bone 99, Mesh2, cn_shd_reva), always drawn.
+  - Its own weapon, gen_im_cweapon_revenant.uti, is base item 23 (a creature weapon), whose Wear and Wield columns are all 0, so it asks for no node.
+  - Any shield given to it (WearL Prop11, WieldL Prop03), or a sword or axe (Wear Prop10, or Prop07 for the left), finds no node and is not attached. A right-hand weapon's Wield node Prop01 exists, but it is reached only by an EquipR event, which a non-humanoid's combat state never queues [I for the listed items' base types, inferred from their names; their .uti files were not found].
+- Where a node is missing, nothing is attached: the weapon is not hung at the drawn node or the root.
+
 ## A bone's transform, and the face at rest
 
 `GraphicsStructures::ObjectNode` builds a node's local matrix (`0x0055e9d0`) from three translations added and two rotations composed: translation = rest (+0x100) + animation (+0x120) + FaceFX (+0x130); rotation = FaceFX (+0xF0) composed with the animated rotation (+0xE0); scale +0x110. A pose reset (`0x0055e160`) zeroes +0x120 and +0x130, sets +0xF0 to identity and puts the rest rotation back in +0xE0.
