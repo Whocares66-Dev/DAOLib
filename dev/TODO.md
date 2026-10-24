@@ -10,7 +10,43 @@ DAOLib earns its place where those cannot reach:
 
 Each item says why it needs native work, what is known, and when it is done. Most valuable first. A finished item moves to `dev/LIBRARY.md`'s table, and gets an example in `examples/` when it is something a plugin would use (`dev/PLUGINS.md` says how). Refreshed 2026-10-04: much below was read on 2026-09-30 and has been built and played since, and the turn-based mod's needs of that week (attack reach, the melee ring, script timers, held time, the camera's distance) were met as they came (DAOLib #14 to #19).
 
-## 1. The light on trees, grass and buildings
+## 1. Moments as events
+
+From lib-agent-3's survey of the sibling projects (2026-10-24, DAOLib #255).
+
+- **Why native:** a plugin that must act when something happens now polls each frame or guesses with timers, because the script event comes late or not at all.
+- **Who and what it replaces:** the Eluvian server watches every hurt creature each frame for up to a minute for its death, as EVENT_TYPE_DEATH arrives 1.5 to 2.5 s late (its `src/game/Shared.h:184-231`); a creature it spawns reads health 1 of 1 on its first frame (`Stage.cpp:458`); it guesses a load's end and the game taking input again with settle timers (`core/Ready.cpp`, `Warp.cpp:243-258`, `Travel.cpp`). The turn-based mod polls the game mode each frame after a load to write its cooldown holds back (its `dev/DAOLIB_NEEDS.md`, check 24).
+- **Leads:** `dev/LOAD_EVENTS.md` (a module's and an area's load events, in order), `dev/COMBAT.md` (effects applied, a death), `dev/PARTY.md` (the party pool carried on a transition), `dao/Events.h`, `dao/Input.h`. Each moment a detour at the engine's own point: the health write or the death's path, the creature's stats made, the area's load ended with the party placed, the input context back. No per-frame check in the library.
+- **Done when:** a callback on the frame a creature's health reaches 0, before the script event; one on the frame a made creature has its stats; one per load once the party stands in the area; one when the game takes input again; each seen in play, and the Eluvian server's and the mod's polls replaceable by them.
+
+## 2. The renderer's lights as data
+
+From the survey (DAOLib #256).
+
+- **Why native:** the lights a level and its effects place are the renderer's, in no script.
+- **Who and what it replaces:** DAOElgaraShaders walks the light manager's lists and reads each light node by offset every frame (its `src/EffectLights.cpp:56-82`, 270ff: the place at 0x6C/0x7C/0x8C, reach 0x1B0, colour 0x1A0, tinted 0x196, owner 0x154 and its tint 0x2D4, strength 0x1B4, flicker 0x1BC), and the light probes (`src/Probes.cpp:46-64`: the manager's probe list +0x3C, a light state's group +0x20, a probe's blueprint +0x174 and its irradiance +0x160, a node's light +0x180, the score +0x184). The riskiest workaround the survey found.
+- **Leads:** `dao/Lights.h` (`OnPointLight` gives a light's model, name and colour; `OnProbe` the probes' matrices), `dev/SCENE.md`, ElgaraShaders' own reading.
+- **Done when:** `OnPointLight` gives each point light's world place, reach, colour after tint and flicker, owner, model and name, and `OnProbe` each light state's chosen probes with place and irradiance, the shape agreed with elgara-agent; seen in play as ElgaraShaders' fire, lamp and probe light unchanged, from no raw offsets.
+
+## 3. What holds a creature
+
+From the survey (DAOLib #257); which parts the turn-based mod still needs after item 1 to be agreed with its agent.
+
+- **Why native:** what a held creature's command runs, and for how long, is the engine's, as are its movement rate and an approach's verdict.
+- **Who and what it replaces:** the turn-based mod's list of five holding kinds checked by script polls (its `src/game/Bridge.cpp:1652-1712`), a raw read of an effect's engine parameters at +0x54 that it multiplies itself (`Bridge.cpp:1111`), and wall-clock limits on a stuck approach (`src/core/TurnMachine.h:1564-1585`; its `dev/DAOLIB_NEEDS.md` "The command queue" 7, "Rules, later" 1, lines 190 and 202).
+- **Leads:** `dao/SubActions.h`, `dao/Effects.h`, `dao/Attack.h`, `dev/COMBAT.md`, `dev/ABILITIES.md`.
+- **Done when:** a held creature's holding effect and the hold's whole length (the effect and the timed sub-actions after it), a creature's movement rate as the engine has it, and an approach's own "no place" or give-up, each seen in play: a knockdown that outlasts the bar ends the turn at once with its effect named; Haste changes the movement meter by the engine's factor; an attacker with no ring place ends on the engine's answer.
+
+## 4. Typed templates for placeables and stores
+
+From the survey (DAOLib #258).
+
+- **Why native:** not native: the game's files, in `core/`, for tools and plugins that read them.
+- **Who and what it replaces:** DAOParagonEngine reads template fields by label path in about 25 places (its `crates/paragon/src/area.rs`, `scripting.rs`, `gui*.rs`, `doors.rs`, `interact.rs`), which its shim calls a stopgap, with an item's name read ad hoc (`scripting.rs:2491`); an area load spent 0.6 s re-reading lists for 96 creatures (Paragon #93). The Eluvian server copies placeables' states and actions from table 93 (`Shared.cpp:33-41`).
+- **Leads:** `dao/core/generated/Gff3Schema.h` (typed views of `.utc` and `.uti`, DAOLib #106, step 5), `tools/gen_gff3_schema.py`, `tools/gff3_schema`, `dev/FILES.md` "The templates' catalogue".
+- **Done when:** the generator gives `.utp` and `.utm` views and a LocString's text, and Paragon's reads are replaceable by them.
+
+## 5. The light on trees, grass and buildings
 
 - **Why native:** an area's sky and sunlight can be set (`dao/Atmosphere.h`, DAOLib #62), and with them the ground, the creatures, the shadows and the haze follow from day to night. The trees, the grass and the buildings do not: under the night village's sky and sunlight the day village's pines and grass keep their warm olive on blue ground, and the night village's mill and trees stay night-dark on day-coloured ground. No script command or data table reaches any of it.
 - **Leads:** the static models' lightmaps (`EnvModelLightmapAtlas`, field 3323, and the level's `LvlLightmap*`); the trees' controller (`EnvAreaTreecontrollerList`, 3355); the area file's `EnvLightProbe` list (3103, 3104, 3108) and the models' `MMHLightprobeIrradianceCoefficients*` (6190 to 6192); `EnvAreaSunlightColorMult` (3153), pushed nowhere in the exe, so inferred never read (`dev/EFFECTS.md`, "What a draw takes"). The layout's load (`EC::ChunkManager`, 0x005D1290) is where the sunlight's fields were found.
