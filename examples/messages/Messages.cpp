@@ -1,8 +1,9 @@
-// Example: the engine's messages read by their fields (dao/Messages.h), the abilities' first.
+// Example: the engine's messages read by their fields (dao/Messages.h): the abilities' and the party's.
 //
-// Each typed message of the abilities is logged as it is delivered, whoever sent it: an ability
+// Each typed message is logged as it is delivered, whoever sent it: an ability
 // pressed on the quickbar, a target clicked or the targeting left, an icon dropped on a slot, an
-// ability picked on the level-up screen. A line gives the message, its receiver's class and
+// ability picked on the level-up screen; a member selected by key or click, the party picker,
+// the alerts and the tactics screen. A line gives the message, its receiver's class and
 // each field. What it finds goes to example_messages.log.
 #include "dao/Messages.h"
 #include "dao/Log.h"
@@ -83,5 +84,48 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         "CharGenSelectSpecialization", [](const messages::CharGenSelectSpecializationMessage &m) {
             return fmt::format("{} specialization {} next {}", Named(m.creature), m.specialization, m.next);
         });
+    // The party's.
+    Log<messages::SelectCharacterMessage>("SelectCharacter",
+                                          [](const messages::SelectCharacterMessage &m) { return Named(m.creature); });
+    Log<messages::SelectPartyMemberIndexMessage>("SelectPartyMemberIndex",
+                                                 [](const messages::SelectPartyMemberIndexMessage &m) {
+                                                     return fmt::format("index {} add {}", m.index, m.add);
+                                                 });
+    Log<messages::SelectPartyMemberUnderCursorMessage>(
+        "SelectPartyMemberUnderCursor",
+        [](const messages::SelectPartyMemberUnderCursorMessage &m) { return fmt::format("add {}", m.add); });
+    Log<messages::UnselectPartyMemberMessage>("UnselectPartyMember", [](const messages::UnselectPartyMemberMessage &m) {
+        return fmt::format("slot {}", m.slot);
+    });
+    Log<messages::HideAlertMessage>("HideAlert",
+                                    [](const messages::HideAlertMessage &m) { return fmt::format("type {}", m.type); });
+    Log<messages::HideUberAlertMessage>("HideUberAlert", Empty);
+    Log<messages::GoToGuiWithFollowerMessage>("GoToGuiWithFollower", [](const messages::GoToGuiWithFollowerMessage &m) {
+        return fmt::format("screen {} follower {}", dao::Utf8(m.screen.View()), Named(m.follower));
+    });
+    Log<messages::ApplyPartyPickerChangesMessage>("ApplyPartyPickerChanges", Empty);
+    Log<messages::ClearPartyPickerMessage>("ClearPartyPicker", Empty);
+    Log<messages::ExitPartyPickerMessage>("ExitPartyPicker", Empty);
+    Log<messages::SubmitPartyChangesMessage>("SubmitPartyChanges", Empty);
+    Log<messages::ShowPartyPickerMessage>("ShowPartyPicker", Empty);
+    Log<messages::ToggleFullPartySelectMessage>("ToggleFullPartySelect", Empty);
+    Log<messages::ToggleHoldPartyMessage>("ToggleHoldParty", Empty);
+    Log<messages::ToggleRunWalkMessage>("ToggleRunWalk", Empty);
+    Log<messages::CenterOnMainPartyMemberMessage>("CenterOnMainPartyMember", Empty);
+    // The tactics screen's.
+    Log<messages::DirtyPresetMessage>("DirtyPreset", Empty);
+    Log<messages::LoadPresetMessage>("LoadPreset", [](const messages::LoadPresetMessage &m) {
+        return fmt::format("index {} type {}", m.index, m.type);
+    });
+    Log<messages::SavePresetMessage>(
+        "SavePreset", [](const messages::SavePresetMessage &m) { return fmt::format("slot {}", m.slot); });
+    Log<messages::RefreshTacticsDataMessage>("RefreshTacticsData", [](const messages::RefreshTacticsDataMessage &m) {
+        return fmt::format("from template {}", m.fromTemplate);
+    });
+    Log<messages::SetBehaviourMessage>("SetBehaviour", [](const messages::SetBehaviourMessage &m) {
+        return fmt::format("behaviour {}", m.behaviour);
+    });
+    Log<messages::ValidateActionMessage>(
+        "ValidateAction", [](const messages::ValidateActionMessage &m) { return fmt::format("row {}", m.row); });
     return true;
 }

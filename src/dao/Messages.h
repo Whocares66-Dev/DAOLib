@@ -379,6 +379,255 @@ struct CharGenSelectSpecializationMessage : Message
 };
 static_assert(sizeof(CharGenSelectSpecializationMessage) == 0x10);
 
+// Notes on the party's messages: read 2026-10-24 (DAOLib #253) from their clones, their text
+// readers (each class's slot 5, through Messages::InputStringDataStream's typed readers: +0x20 an
+// unsigned word, +0x24 a signed one, +0x28 an unsigned half, +0x30 a byte, +0x34 a bool, +0x14
+// a std::wstring) and their handlers. A binding's text (dao::messages::SendBinding) reaches only
+// what the current game mode handles, which is why SelectCharacterMessage, CCParty's alone, is
+// not one (dev/PARTY.md); a movie's text names its receiver ("Party.HideAlert 1").
+// SelectCharacter: CCParty's handler (0x00639F90) selects the creature alone (Party::Select,
+// 0x00639E50, add 0), which signals it EVENT_TYPE_ON_SELECT; nothing in the game sends it.
+// SelectPartyMemberIndex: CCParty's (0x00639FB0) selects the member at the index of the party's
+// list (+0xC8), out of range nothing; explore mode's (0x0070B9E0) passes it on. The keys F1 to F4
+// send "SelectPartyMemberIndexMessage 0 0" to "3 0", with Shift "0 1" to "3 1" (the input table,
+// 0x006E5300 to 0x006E578F). SelectPartyMemberUnderCursor: explore mode's (0x0070C0B0) selects
+// the creature under the cursor (+0xCC), adding with the flag; the left button's release sends
+// 0, with Shift 1 (0x006E63C3, 0x006E6447). The party picker's (0x00768AE0) ignores the flag and
+// picks by its own ray. UnselectPartyMember: the picker's (0x00767100) takes the member in the
+// slot (0 to 3, each entry's +0x24) out of the party being picked, unless it is the hero, which
+// plays the picker's error sound; the picker's portraits send it (PartyPickerPortrait.as, partypicker.gfx).
+// HideAlert: CCParty's (0x0062F220) dismisses the first alert of the type (the alerts' manager,
+// party +0x330, 0x00628970); notifications.gfx's Alert.as sends "Party.HideAlert <type>" as an
+// alert fades or is clicked. HideUberAlert (0x0062F240) dismisses the first of the large alerts.
+// GoToGuiWithFollower: the GUI system's (0x0060B430) shows the full-screen screen named for the
+// follower if it is in the party's pool (0x006316F0); the alerts send it for the tactics,
+// ability and approval alerts ("Tactics", "Skills" or "SpellsTalents", "CharacterRecord").
+// The fieldless: ApplyPartyPickerChanges (CCParty 0x00636F50) raises the follower events for the
+// members whose state changed (dev/PARTY.md), and nothing sends it; ClearPartyPicker (the
+// picker's 0x00767230) unselects slots 0 to 3, the picker's Remove All; ExitPartyPicker (0x00765960)
+// fades the picker's scene and leaves, sent by nothing (Submit calls it); SubmitPartyChanges
+// (0x00767060), the picker's Accept; ShowPartyPicker (0x007183A0) switches to the picker's mode
+// (12), from the navigation bar and the script command ShowPartyPickerGUI; ToggleFullPartySelect
+// (CCParty 0x00636E40) selects every controllable living member, or the controlled one alone;
+// ToggleHoldParty (0x0062F1F0) flips the party's HoldPositions, key H; ToggleRunWalk
+// (0x0062EC60) flips party +0x4A8, numpad /; CenterOnMainPartyMember (explore's 0x0070C0E0)
+// snaps the camera to the creature it follows, bound in the cursor contexts. In play,
+// 2026-10-24 (examples/messages, Leliana's origin with Tug and Sketch): the keys' bindings
+// arrived with index 1 add 0, index 0 add 1, index 0 add 0, and the left click's with add 1 and
+// 0 over Tug; "Party.SelectCharacterMessage 19" at CCParty with Leliana; the notifications movie
+// sent HideAlert type 4 as the level-up alert went; "GUI.GoToGuiWithFollowerMessage Tactics 224"
+// arrived with the screen and Tug, and the tactics screen opened for him; ShowPartyPicker opened
+// the picker, which took UnselectPartyMember slot 1, ClearPartyPicker, ExitPartyPicker and, on a
+// second opening, SubmitPartyChanges, the party unchanged; the fieldless toggles each arrived.
+
+// Selects one creature alone, as if the player picked it. Sent to the party (its receiver,
+// "Party"); nothing in the game sends it.
+struct SelectCharacterMessage : Message
+{
+    DAO_VFTABLE(68761);
+    ObjectId creature;
+};
+static_assert(sizeof(SelectCharacterMessage) == 8);
+
+// Selects the party member at a place in the party bar, as F1 to F4 do, or adds it to the
+// selection, as Shift with them does. Sent to the game modes, which pass it to the party.
+struct SelectPartyMemberIndexMessage : Message
+{
+    DAO_VFTABLE(67739);
+    std::uint16_t index; // the member's place in the bar, from 0
+    std::uint8_t add;    // 1 adds it to the selection, 0 selects it alone
+};
+static_assert(sizeof(SelectPartyMemberIndexMessage) == 8);
+
+// Selects the party member under the cursor, as a left click does, or adds it, as Shift-click
+// does. In the party picker it picks the figure under the cursor and the flag is ignored.
+struct SelectPartyMemberUnderCursorMessage : Message
+{
+    DAO_VFTABLE(68766);
+    std::uint8_t add; // 1 adds it to the selection, 0 selects it alone
+};
+static_assert(sizeof(SelectPartyMemberUnderCursorMessage) == 8);
+
+// Takes a member out of the party being picked in the party picker, as a click on its portrait
+// does. The hero cannot be taken out: the picker plays its error sound.
+struct UnselectPartyMemberMessage : Message
+{
+    DAO_VFTABLE(68638);
+    std::uint8_t slot; // the picked member's portrait, 0 to 3
+};
+static_assert(sizeof(UnselectPartyMemberMessage) == 8);
+
+// Dismisses the first alert of a type, as the alert area does when one fades or is clicked.
+// Sent to the party ("Party.HideAlert").
+struct HideAlertMessage : Message
+{
+    DAO_VFTABLE(65631);
+    // The alert's type, the notification movie's Alert.ALERT_*: 0 custom, 1 quest, 2 codex,
+    // 3 items, 4 level-up, 5 money, 6 tactics, 7 ability, 8 approval, 9 new content, 10 world
+    // map, 11 specialization, 12 connection lost.
+    std::int32_t type;
+};
+static_assert(sizeof(HideAlertMessage) == 8);
+
+// Dismisses the first of the large alerts. Sent to the party ("Party.HideUberAlert").
+struct HideUberAlertMessage : Message
+{
+    DAO_VFTABLE(65632);
+};
+static_assert(sizeof(HideUberAlertMessage) == 4);
+
+// Opens a full-screen screen showing a follower, as an alert's click does. Sent to the GUI
+// system ("GUI.GoToGuiWithFollowerMessage"); the follower must be in the party's pool.
+struct GoToGuiWithFollowerMessage : Message
+{
+    DAO_VFTABLE(65176);
+    // Makes the message with no screen and no follower.
+    GoToGuiWithFollowerMessage() : Message{}
+    {
+    }
+    core::WStringRep screen; // the screen's name: "Tactics", "Skills", "SpellsTalents", "CharacterRecord"
+    ObjectId follower{};
+};
+static_assert(sizeof(GoToGuiWithFollowerMessage) == 0x24);
+
+// Raises the follower events for the members whose state the party picker changed. Sent to the
+// party; nothing in the game sends it.
+struct ApplyPartyPickerChangesMessage : Message
+{
+    DAO_VFTABLE(68773);
+};
+static_assert(sizeof(ApplyPartyPickerChangesMessage) == 4);
+
+// Takes every member but the hero out of the party being picked: the picker's Remove All.
+struct ClearPartyPickerMessage : Message
+{
+    DAO_VFTABLE(68813);
+};
+static_assert(sizeof(ClearPartyPickerMessage) == 4);
+
+// Leaves the party picker as it is. The picker's Accept leaves through it.
+struct ExitPartyPickerMessage : Message
+{
+    DAO_VFTABLE(68637);
+};
+static_assert(sizeof(ExitPartyPickerMessage) == 4);
+
+// Takes the party picked and leaves the picker: its Accept.
+struct SubmitPartyChangesMessage : Message
+{
+    DAO_VFTABLE(68812);
+};
+static_assert(sizeof(SubmitPartyChangesMessage) == 4);
+
+// Opens the party picker, as its button on the navigation bar does.
+struct ShowPartyPickerMessage : Message
+{
+    DAO_VFTABLE(65854);
+};
+static_assert(sizeof(ShowPartyPickerMessage) == 4);
+
+// Selects every controllable living party member, or the controlled one alone if all are.
+struct ToggleFullPartySelectMessage : Message
+{
+    DAO_VFTABLE(68764);
+};
+static_assert(sizeof(ToggleFullPartySelectMessage) == 4);
+
+// Turns the party's Hold Position on or off, as the H key does.
+struct ToggleHoldPartyMessage : Message
+{
+    DAO_VFTABLE(68765);
+};
+static_assert(sizeof(ToggleHoldPartyMessage) == 4);
+
+// Switches the party between running and walking, as numpad / does.
+struct ToggleRunWalkMessage : Message
+{
+    DAO_VFTABLE(68703);
+};
+static_assert(sizeof(ToggleRunWalkMessage) == 4);
+
+// Snaps the camera to the creature it follows.
+struct CenterOnMainPartyMemberMessage : Message
+{
+    DAO_VFTABLE(68769);
+};
+static_assert(sizeof(CenterOnMainPartyMemberMessage) == 4);
+
+// Notes on the tactics screen's messages: read 2026-10-24 (DAOLib #253), each handler
+// PartyTactics's (registered in its constructor, 0x007B1120), the screen's object for the
+// follower at its +0x58, with its attributes (+0x5C Enabled, +0x6C TacticsList, +0x88
+// PresetIdList, +0xA8 the custom slots, +0xC4 PresetIndex, +0xD4 PresetType, +0xE4 Dirty;
+// dev/PARTY.md). The tactics movie (tactics.gfx, patch003.erf's) sends all six as
+// "GUI.SelectedChar.Tactics.<name> args", and nothing else under that token. DirtyPreset
+// (0x007AD100) sets Dirty, so the preset's name shows a "*" and GetTacticPresetID answers 0;
+// sent as a row is changed. LoadPreset (0x007AE4B0) clears Dirty and, for type 2, turns the
+// tactics on and loads the preset at the index of PresetIdList (SetTacticPresetID, 0x007ADB40;
+// event 83 fills the rows), for type 1 the custom slot, for type 0 turns them off
+// (PresetPicker.as: "<index> 2" for the presets, "<index> 1" for the custom slots). SavePreset
+// (0x007AE780) copies the rows into the custom slot (0x007AE160), out of range nothing, and
+// sets PresetIndex, PresetType 1, Dirty 0; Tactics.as sends the slot picked in its Save dialog.
+// RefreshTacticsData (0x007AD170) refreshes every row's item (0x007AD070); with the flag set a
+// Use Item row with no item finds its name and icon from the saved template. The movie sends 1
+// as the list is rebuilt. SetBehaviour (0x007AD120) sets the follower's
+// PROPERTY_SIMPLE_AI_BEHAVIOR (18) to the row of aibehaviors (table 187); BehaviourPicker.as
+// sends the row picked. ValidateAction (0x007B0170) checks the row's command against its
+// condition (ConditionBase, table 137) and changes the command if the condition does not allow
+// it (dev/PARTY.md); Tactics.as sends it after a condition is picked. In play, 2026-10-24, on
+// Tug's tactics screen, each sent as its movie sends it: the screen sent RefreshTacticsData 1 as
+// it opened and after each load; DirtyPreset set Dirty to 1; SetBehaviour 1 set his property 18
+// to 1, and 0 back; SavePreset 2 made PresetType 1, PresetIndex 2; LoadPreset 0 2 made them 2
+// and 0 and Dirty 0 again; ValidateAction arrived with row 0.
+
+// Marks the follower's tactics changed from their preset. Sent to the follower's tactics
+// ("GUI.SelectedChar.Tactics.DirtyPreset").
+struct DirtyPresetMessage : Message
+{
+    DAO_VFTABLE(68963);
+};
+static_assert(sizeof(DirtyPresetMessage) == 4);
+
+// Loads a preset of tactics, or a custom slot, into the follower's rows, or turns them off.
+struct LoadPresetMessage : Message
+{
+    DAO_VFTABLE(68964);
+    std::int32_t index; // a place in PresetIdList for type 2, a custom slot for type 1
+    std::int32_t type;  // 0 tactics off, 1 a custom slot, 2 a preset
+};
+static_assert(sizeof(LoadPresetMessage) == 0xC);
+
+// Saves the follower's rows into one of the custom slots.
+struct SavePresetMessage : Message
+{
+    DAO_VFTABLE(68965);
+    std::int32_t slot; // the custom slot, from 0
+};
+static_assert(sizeof(SavePresetMessage) == 8);
+
+// Refreshes the items the follower's Use Item rows name.
+struct RefreshTacticsDataMessage : Message
+{
+    DAO_VFTABLE(68967);
+    std::int32_t fromTemplate; // 1, as the movie sends it: a row with no item finds it by template
+};
+static_assert(sizeof(RefreshTacticsDataMessage) == 8);
+
+// Sets the follower's behaviour, as the tactics screen's behaviour picker does.
+struct SetBehaviourMessage : Message
+{
+    DAO_VFTABLE(68966);
+    std::int32_t behaviour; // a row of the aibehaviors table
+};
+static_assert(sizeof(SetBehaviourMessage) == 8);
+
+// Changes a tactics row's command if its condition does not allow it.
+struct ValidateActionMessage : Message
+{
+    DAO_VFTABLE(68968);
+    std::int32_t row; // the row, from 0
+};
+static_assert(sizeof(ValidateActionMessage) == 8);
+
 // Notes on the move messages: read 2026-09-30. MoveCharacterToLocationMessage's clone allocates
 // 4 bytes, the vtable. Its handler (0x0070C9A0) takes the place from explore mode's own state.
 // PreMove's handler (0x0070AAF0) only arms a flag the move needs.
