@@ -91,6 +91,18 @@ Length is the whole instruction, opcode and type byte included. Handler addresse
 
 The names of 0x2E, 0x2F, 0x34, 0x35 and 0x36 are the compiler's strings (`WAITFOR`, `WAITUNTIL`, `STORE_FULL_STATE`, `ABORTSCRIPT`, `STOREWAITUNTILTIMER`, and its sequence `STOREWAITUNTILTIMER`, `WAITUNTIL`, `JNZ PAST_ABORTSCRIPT`, `ABORTSCRIPT`) matched to the handlers by what each does; only WAITFOR is seen in a shipped file. 0x30 to 0x33 are certain by their handlers and the compiler's `CPSPTOAL`, `CPBPTOAL`, `CPALTOPSP`, `CPALTOPBP`.
 
+**BP** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
+
+- **SAVEBP** (0x00A30F5A) [C]: it reads BP ([vm+0x173C]) and SP ([vm+0x1738], a cell count), pushes the old BP (0x00A2D650), then sets BP to the SP read **before** that push. So BP is the index of the saved-BP cell, and the cells below it are what was on the stack: the globals, in a script's global block.
+- **RESTOREBP** (0x00A30F7C) [C] pops an int (0x00A2F3C0) into BP.
+- **The BP-relative ops** [C for CPTOPBP, from the draft for the others]:
+  - CPTOPBP (0x27) shares CPTOPSP's handler 0x00A307FD. Its cell index is `base − (−offset >> 2)`, with base = BP for 0x27 and SP for 0x03 (0x00A30837–0x00A30854). So `CPTOPBP −4` reads cell BP − 1, the last global, not the saved BP.
+  - CPDOWNBP (0x00A30620), INCIBP and DECIBP (0x00A3198E), and CPBPTOAL and CPALTOPBP (0x00A3067F, 0x00A308EC) take the same base, [I: from paragon-agent-2's reading, not re-read here].
+- **STORE_STATE's two sizes** (+0x1964 the globals', +0x1960 the locals') go with the stack through `CVirtualMachine::StackPopCommand` 0x00A2FD10 to 0x00A2FB90.
+  - It divides both by 4 (0x00A2FBA9, 0x00A2FBAC). When both are 0 it takes the whole stack: BP's size from the stack's +4, and SP − BP for the rest (0x00A2FBBF–0x00A2FBCB) [C].
+  - It copies n = the globals' size cells from below the old BP (the saved BP not among them), then the locals' cells from below SP, and makes the new stack's BP = n [I for the copy and the new BP: 0x00A2FB90 was read only to 0x00A2FBDE].
+- **Why it matters:** with BP one cell high, every BP-relative read is off by one, reading the global above the one meant, or the saved BP for −4. Ten shipped scripts use BP-relative ops: arl101ev/tr_fire_trap, auto_addition, cir000ip_fade_fire_base, den600pt_bigfight, intfloatconversions, mgb_test1, monster_talent_web, zz_bdnpt_debug and zz_crafting (a census of the shipped scripts).
+
 ## What the shipped files use
 
 Of the 54 opcodes, 48 pairs of opcode and type appear; none of 0x2F, 0x31, 0x33, 0x34, 0x35, 0x36, `EQUAL`/`NEQUAL` 0x24 or 0x30–0x39, `SHRIGHT`, `USHRIGHT`, `STORE_STATEALL`, or engine structures 0x14 and 0x15. The most common: `CPTOPSP` (1.2 million), `MOVSP`, `CONST` int, `ACTION`, `CPDOWNSP`.
