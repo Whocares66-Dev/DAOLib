@@ -10,8 +10,13 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
 
 ### SetAbilityResult (715)
 - **Handler:** 0x0065E050 → `CCObject::GetCurrentCommand` 0x0073C5F0 → the cast record `0x006A0180` (creature+0xB54 holder, its +8 a lazily allocated 0x50-byte record, ctor 0x00696690). Checked.
-- **Does:** copies the creature's current command's parameters into the record: +0 the command's int 0 (the ability), +4 its object 1, +0x3C its object 0, +0x10..+0x18 its vector 0 (16 bytes copied, so +0x1C is uninitialized stack). Then it writes the arguments: +8 = nResistanceCheckResult, +0x40 = nProjectileTarget. Checked.
+- **Does:** copies the creature's current command's parameters into the record: +0 the command's int 0 (the ability), +4 the command's object 0 (the target) and +0x3C its object 1 (the item) (corrected 2026-10-24 by lib-agent-2: they were swapped; see below), +0x10..+0x18 its vector 0 (16 bytes copied, so +0x1C is uninitialized stack). Then it writes the arguments: +8 = nResistanceCheckResult, +0x40 = nProjectileTarget. Checked.
 - **Readers:** the cast impact (0x006AF430) raises ABILITY_CAST_IMPACT with int 0/int 1 = record +0/+8 (`dev/ABILITIES.md`). The launch (0x006B6F60, command type 25) copies the caster's record into the projectile (+0x488 holder) and resets the caster's (0x00695420). Checked; the purpose of +0x40 there is inferred.
+- **The two objects, and the record's defaults and reset** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - Object 1 is fetched at 0x0065E101 (`push 1`) and stored to +0x3C (0x0065E15E). Object 0 is fetched at 0x0065E10F and stored to +4 (0x0065E14A).
+    - The impact 0x006AF430 agrees: it uses +4 as the target and passes +0x3C to 0x006A0DA0 as the item. This matches ABILITIES.md's "object 1 the item, object 2 the target".
+  - **The record's defaults** [C]: its constructor 0x00696690 and reset 0x00695420 set +0 to 0, +4 to −1, +8 to 0x80000000, +0xC to 1, the vector to 0, +0x20 to an empty wstring, +0x3C to −1 and +0x40 to 0.
+  - **Reset at every command's end** [C]: the shared end 0x00746AB8–0x00746ABF calls 0x006A0180, then the reset 0x00695420.
 - **Edge cases:** pops object, int, then a third int only when given (arg count > 2), else +0x40 = 0 (checked). Not a creature, or no current command → returns **1** with nothing written (checked; positive, so not a script failure). No range check on either int.
 
 ### SetCreatureRank (766)

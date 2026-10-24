@@ -547,7 +547,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - A blend of -2.0 or below is a code: 20% (-2) or 5% (-3) of the clip's length (0x00694FE0).
   - The timer is the Die clip's own length (`AnimationStepLength(250)`).
   - If the creature's current animation already has the new one's State (already dead), it goes straight to the loop through TransitionTo (0x00696060).
-  - A sync death (int 3 = 0, a deathblow) runs 0x007A7290 instead; not read.
+  - A sync death (int 3 = 0, a deathblow) runs 0x007A7290 instead (read 2026-10-24 by lib-agent-2: ANIMATION.md, "Sync abilities").
 - Every tick while the duration type is 6, Dead (3) is played again as `(3, 1.0, -2.0, loop 1)` if the current animation is a loop whose State isn't 1, or isn't 3 while creature byte +0x1AC is 0. Inferred: Die plays out, the animation's own TransitionTo moves it to 3, and these calls hold it there.
 - DEATH (4) is run once, when the timer runs out: the end of the Die clip.
 

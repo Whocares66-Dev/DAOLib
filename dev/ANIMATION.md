@@ -1490,7 +1490,24 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
   - **Stun and the sleep spell** hold the `dazed` loop for the effect's whole time, then crossfade into `pause` (about 2 s of `pause`'s 9.97 s step) with no get-up clip. **Plot sleep** is die → dieloop, then 263 `diegetup` (`mh_c.sw_diegup_v1`, 2.4 s).
   - **Paralysis plays no clip.** Its apply (0x007A05B0) sets priority 998, plays its effect's visual and queues command 32. The sub-action calls the creature's slot 0x4C(1), `CCreatureAnimController::Pause` (0x006C9E60), freezing it in whatever pose it has; on removal slot 0x4C(0) (0x006CAB00) resumes it. Paralysis (998) outranks a knockdown (981).
 - **Other creatures' trees** have the same rows by AnimName: bear, dragon, golem and deep stalker have `kd_enter`, `kd_lp` and `kd_exit` (the getting-up times of 1.5–3.8 s DAOTurnBased saw); bronto, brood mother and high dragon have no knockdown nodes. Their lengths were not read.
-- Not read: the bodies of 0x007A5E80, 0x007A4D50 and 0x007A6DA0 (the get-up's blend, a one-shot's timer through 0x007A7290); what 0x00695700 and 0x00696060 return for the start clip; what plays when a higher-priority effect goes while a lower one stands (inferred: the lower one's start clip again); the cause of the dragon's fall and rise after a knockback (by the table, likely a second effect on the same blow); RECURRING_KNOCKDOWN (2001, not in `effects.gda`); add-ins' effects rows.
+- Not read: the bodies of 0x007A5E80, 0x007A4D50 and 0x007A6DA0 (the get-up's blend, a one-shot's timer through 0x007A7290, which is read 2026-10-24 by lib-agent-2: "Sync abilities"); what 0x00695700 and 0x00696060 return for the start clip; what plays when a higher-priority effect goes while a lower one stands (inferred: the lower one's start clip again); the cause of the dragon's fall and rise after a knockback (by the table, likely a second effect on the same blow); RECURRING_KNOCKDOWN (2001, not in `effects.gda`); add-ins' effects rows.
+
+#### Sync abilities (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2)
+
+- **Whether an effect is a sync one,** 0x00A653D0 (four callers) [C]:
+  - For type 7 it is int 0 > 0.
+  - Otherwise it needs an ability, a priority > 0, an animation, and table 0x65's column 0x414A699C > 0. The answer is cached at +0x4C.
+  - The partner is read and set through 0x0079F510 and 0x0079F4F0 [C].
+- **The apply's refusal** (0x007A0E30, 0x007A0F21–0x007A10FA, for a sync effect only) [C]:
+  - **Rule 1:** when the holder's top effect (creature +0x158) has a priority not below the new one's, the new effect is made invalid (`0x00424030(1)`, +0x48), and the creator's effects are removed (0x007A0C90).
+  - **Rule 2:** when the holder is farther from the partner than table 0x65's `Distance` (0x909085DA) + 1.0, the same happens.
+  - An invalid effect returns 3 (effect_access.md).
+- **The placement** [C unless marked]:
+  - **The gate:** sub-action 51 runs 0x007A7290 when the effect's flag 0 and int 3 are both 0 (0x007AB1A5–0x007AB1BC).
+  - **0x007A7290** builds a record, calls 0x007A6DA0(creature, effect, &rec), then 0x007A4D50(creature, arg, animation, &rec). This closes ANIMATION.md's and effect_access.md's "0x007A7290 not read".
+  - **0x007A6DA0** fills the record with the partner, an attacker byte, table 0x65 and the row (effect +0x44). It reads the effect's float 2, its int 1 (compared with 1 and 2), its float 0 and its vector 2. For the attacker only, it sets creature +0x750 +0x14 = 1.0 and calls 0x007C1600.
+  - **0x007A5A30** slides over a default of 0.25 s (0x00AFF3E8). It skips when the partner is the creature itself or the record's +0x31 is set, and takes the distance and angles from 0x005CA7B0.
+  - [I]: the angles' roles and units, Percentage read as seconds, and which of the two moves. The draft has the victim moving, unlike the deathblow's, where the attacker slides.
 
 #### The deathblow
 
