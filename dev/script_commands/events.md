@@ -89,7 +89,7 @@ Shared facts, checked unless marked:
 
 ### HandleEvent_String (133)
 - **Handler:** 0x006588E0. It calls `CClientExoApp::GetGameObjectById` (0x005D5840) on OBJECT_SELF (`[this+8]`), then 0x006985F0 (CCObject), 0x0067BFB0 (area) or 0x005FE840 (module, with a third argument 1).
-- **Does:** pops the event, then sName; hands the event to OBJECT_SELF **at once (inline)**, with sName as the script, or the object's own script when sName is empty: CCObject +0x26C, area +0x38C, module +0x1F8. Ownership of the popped copy passes to the callee. (checked; that the area and module paths run it at once is inferred)
+- **Does:** pops the event, then sName; hands the event to OBJECT_SELF **at once (inline)** [C; for the area and module this was inferred, corrected 2026-10-23 by lib-agent-2], with sName as the script, or the object's own script when sName is empty: CCObject +0x26C, area +0x38C, module +0x1F8. Ownership of the popped copy passes to the callee. (checked; that the area and module paths run it at once is inferred)
 - **State:** for a CCObject, 0x006985F0 as in the shared facts: the gate, +0x2A8 current event during the run, target set to self if -1, the listeners notified, the event deleted. (checked)
 - **Edge cases:** it skips `RunEventScript`, so `engineevents.gda` is not consulted. The event's +0x2C is never used (a copy has none anyway). An empty sName on an object with no script, or an event type in the object's disabled set, runs nothing and deletes the event (checked). An OBJECT_SELF that is neither a CCObject (cast slot +0x18), an area nor the module, or none: the event is freed, nothing runs (checked). There is no `.ncs` stripping here: sName is the script name as given (checked: no find on `.`). script.ldf has no comment for it; `HandleEvent` (121, 0x006586D0) is the resource form.
   - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) no cut at '.' (stated above). With NCS.md ("The VM then appends .ncs itself"), a name given with ".ncs" is looked up as "x.ncs.ncs"; that no such resource is found is still [I] (`Resources::Find` on a double extension is unread, NCS.md "Not read").
@@ -120,7 +120,7 @@ Shared facts, checked unless marked:
 
 ## Not read
 - 0x00707000, called with every event delivered to a CCObject (a log or profiler, guessed).
-- The area's and module's listener delivery and disabled sets (0x0067BFB0, 0x005FE840, 0x0067D6D0, 0x005FEB00, 0x00681750, 0x00601610, 0x00682930, 0x00601D00): taken to mirror the CCObject's.
+- The area's and module's listener delivery and disabled sets (0x0067BFB0, 0x005FE840, 0x0067D6D0, 0x005FEB00, 0x00681750, 0x00601610, 0x00682930, 0x00601D00): taken to mirror the CCObject's (corrected 2026-10-23 by lib-agent-2: that holds for neither the area's 0x0067BFB0 nor the module's 0x005FE840, which run the script alone; the other six were not re-read; see HandleEvent (121)).
 - What +0x4C of `CScriptEvent` holds; the save side of `EventListeners`.
 - The element access 0x0069BD60 for a negative index in `SetEventResource`.
 
@@ -175,6 +175,16 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) w
 - **Described in:** `dev/NCS.md` (the first-dot cut, by stem) and `events.md` (`HandleEvent_String`, the resource-name sibling).
 - **Does:** runs the event **at once, inline,** on OBJECT_SELF with that script (the stem of rScriptName), or with the object's own default script when rScriptName is empty (CCObject +0x26C, area +0x38C, module +0x1F8): CCObject 0x006985F0, area 0x0067BFB0, module 0x005FE840 (with a third argument 1). (checked)
 - **Edge cases:** it calls the delivery function directly, so **`engineevents.gda` is not consulted**, as for `HandleEvent_String`; the event's own script is not used; the object's disabled-event gate (`EnablevEvent`) applies for a CCObject. An OBJECT_SELF that is none of the three kinds, or none, deletes the event and runs nothing. A null event passes through quietly for a CCObject (the delivery function tests for it). A failed pop of either argument gives -639. (checked)
+- **Results and the area and module** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
+  - **HandleEvent (0x006586D0) and HandleEvent_String (0x006588E0)** return 0 after both pops succeed; a failed pop returns −639 [C for HandleEvent; I for _String's `xor eax, eax` at 0x00658A77, by the same shape].
+    - The delivery calls are 0x0065880E (an object, 0x006985F0), 0x0065884C (an area, 0x0067BFB0) and 0x00658886 (the module, 0x005FE840).
+    - None of their results is read.
+  - **An object's delivery 0x006985F0 ignores the script's result** [C]: RunScript (0x006986A0) is followed at once by 0x00707000 with eax overwritten. So the type-21 listeners are told even when the script is missing or failed.
+  - **The area's and module's delivery** (corrected 2026-10-23 by lib-agent-2: the "taken to mirror the CCObject's" line above was wrong for these two) [C; the other six functions listed there were not re-read]:
+    - **The area's 0x0067BFB0:** it calls only the name accessor, RunScript, 0x00707000 and the event's delete, and restores +0x3C4.
+    - **The module's 0x005FE840:** it sets +0x390, calls the name accessor and RunScript, deletes the event only when its third argument (a byte) is non-zero, and restores +0x390.
+    - Neither has the object's gate, empty-name test, target set or listener loop.
+  - **The area and module run the event at once** [C]: both call RunScript inline.
 
 ### GetEventTarget (126)
 - **Handler:** 0x00659030 (not shared). Pops the event, pushes `+0x28` with `StackPushObject`, frees the copy.
