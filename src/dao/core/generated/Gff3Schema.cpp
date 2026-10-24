@@ -305,6 +305,16 @@ constexpr std::array<Field, 18> kUtm{{
     {"WillNotBuy[]", "BaseItem", gff3::Type::Int, Kind::Row, "", 6, 1},
     {"WillOnlyBuy[]", "BaseItem", gff3::Type::Int, Kind::Plain, "", -1, 1},
 }};
+constexpr std::array<Field, 8> kUtt{{
+    {"", "Tag", gff3::Type::String, Kind::Plain, "", -1, 773},
+    {"", "TemplateResRef", gff3::Type::ResRef, Kind::Resource, "utt", -1, 773},
+    {"", "EventScript", gff3::Type::ResRef, Kind::Resource, "ncs", -1, 773},
+    {"", "GroupId", gff3::Type::Dword, Kind::Plain, "", -1, 773},
+    {"", "VarTable", gff3::Type::List, Kind::Plain, "", -1, 772},
+    {"VarTable[]", "Name", gff3::Type::String, Kind::Plain, "", -1, 772},
+    {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 772},
+    {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 772},
+}};
 
 } // namespace
 
@@ -325,6 +335,10 @@ std::span<const Field> Fields(std::string_view type)
     if (type == "utm")
     {
         return kUtm;
+    }
+    if (type == "utt")
+    {
+        return kUtt;
     }
     return {};
 }

@@ -1,0 +1,9 @@
+type,path,struct,field,gff3type,kind,extension,target,files,hits,values,least
+utt,"",4294967295,"Tag",string,plain,,-1,773,0,0,0
+utt,"",4294967295,"TemplateResRef",resref,resource,utt,-1,773,773,773,0
+utt,"",4294967295,"EventScript",resref,resource,ncs,-1,773,241,241,0
+utt,"",4294967295,"GroupId",dword,plain,,-1,773,0,0,0
+utt,"",4294967295,"VarTable",list,plain,,-1,772,0,0,0
+utt,"VarTable[]",0,"Name",string,plain,,-1,772,0,0,0
+utt,"VarTable[]",0,"Type",byte,plain,,-1,772,4,4,1
+utt,"VarTable[]",0,"Value",int,plain,,-1,772,50,71,1

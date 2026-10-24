@@ -1447,4 +1447,62 @@ class Store : public StructView
 
 } // namespace utm
 
+namespace utt
+{
+
+// VarTable[] of a template.
+class VarTableEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::string> Name() const
+    {
+        return Text("Name");
+    }
+    std::optional<std::uint8_t> Type() const
+    {
+        return Number<std::uint8_t>("Type");
+    }
+    std::optional<std::int32_t> Value() const
+    {
+        return Number<std::int32_t>("Value");
+    }
+};
+
+// The top struct of a template.
+class Trigger : public StructView
+{
+  public:
+    using StructView::StructView;
+
+    // Returns a file's top struct; none for a file with none.
+    static std::optional<Trigger> Of(const gff3::File &file)
+    {
+        const auto root = file.Root();
+        return root ? std::optional<Trigger>(Trigger(*root)) : std::nullopt;
+    }
+    std::optional<std::string> Tag() const
+    {
+        return Text("Tag");
+    }
+    std::optional<std::string> TemplateResRef() const
+    {
+        return ResRef("TemplateResRef");
+    }
+    std::optional<std::string> EventScript() const
+    {
+        return ResRef("EventScript");
+    }
+    std::optional<std::uint32_t> GroupId() const
+    {
+        return Number<std::uint32_t>("GroupId");
+    }
+    std::vector<VarTableEntry> VarTable() const
+    {
+        return List<VarTableEntry>("VarTable");
+    }
+};
+
+} // namespace utt
+
 } // namespace dao::core::templates

@@ -126,3 +126,19 @@ TEST_CASE("a store's stock is read through its views, a list within a list", "[g
     CHECK(items[0].InventoryRes() == "gen_im_qck_health_101");
     CHECK(items[0].Infinite() == 1);
 }
+
+TEST_CASE("a trigger's script is a compiled script, and the trigger is read through its view", "[gff3][schema]")
+{
+    CHECK(templates::FieldOf("utt", "", "EventScript")->extension == "ncs");
+    Builder b("UTT");
+    const auto script = b.ResRef("trg_ambush");
+    b.Struct(0xFFFFFFFF, {{"EventScript", 11, script}, {"GroupId", 4, 2}});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto trigger = templates::utt::Trigger::Of(*file);
+    REQUIRE(trigger);
+    CHECK(trigger->EventScript() == "trg_ambush");
+    CHECK(trigger->GroupId() == 2u);
+    CHECK(trigger->VarTable().empty());
+}

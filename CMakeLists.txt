@@ -220,6 +220,17 @@ target_link_libraries(daolib_core PRIVATE Microsoft::DirectXTex)
 target_compile_definitions(daolib_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 add_library(DAOLib::core ALIAS daolib_core)
 
+# An archive's files written out and GFF4 files as JSON (tools/files, DAOLib #106), over the core
+# alone. Declared in every build, as a consumer's build step runs it (DAOElgaraShaders'
+# build_shaders.py); outside DAOLib's own tree it is built only when asked for, as a custom
+# command naming $<TARGET_FILE:dao_files> does.
+if(PROJECT_IS_TOP_LEVEL)
+    add_executable(dao_files tools/files/Files.cpp)
+else()
+    add_executable(dao_files EXCLUDE_FROM_ALL tools/files/Files.cpp)
+endif()
+target_link_libraries(dao_files PRIVATE daolib_core)
+
 # The worksheets' columns and what each holds, scanned from an install for the generated schema
 # (tools/gda_schema, DAOLib #106); over the core alone, so in either width.
 if(PROJECT_IS_TOP_LEVEL)
@@ -229,8 +240,6 @@ if(PROJECT_IS_TOP_LEVEL)
         dao_gda_schema
         PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
     )
-    add_executable(dao_files tools/files/Files.cpp)
-    target_link_libraries(dao_files PRIVATE daolib_core)
     add_executable(dao_gff4_leaves tools/second_reader/Gff4Leaves.cpp)
     target_link_libraries(dao_gff4_leaves PRIVATE daolib_core)
     add_executable(dao_gff3_schema tools/gff3_schema/Gff3Schema.cpp)
