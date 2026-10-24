@@ -25,7 +25,7 @@ OUT_H = os.path.join(ROOT, "src", "dao", "core", "generated", "Gff3Schema.h")
 OUT_CPP = os.path.join(ROOT, "src", "dao", "core", "generated", "Gff3Schema.cpp")
 
 # Each kind of template, and the name of its top struct's view.
-TYPES = {"utc": "Creature"}
+TYPES = {"utc": "Creature", "uti": "Item"}
 
 GFF3 = {
     "byte": ("Byte", "Number<std::uint8_t>", "std::uint8_t"),

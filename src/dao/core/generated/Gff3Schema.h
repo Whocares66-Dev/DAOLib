@@ -859,4 +859,157 @@ class Creature : public StructView
 
 } // namespace utc
 
+namespace uti
+{
+
+// PropertiesList[] of a template.
+class PropertiesListEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::int32_t> PropertyID() const
+    {
+        return Number<std::int32_t>("PropertyID");
+    }
+    std::optional<std::int32_t> PropertyPower() const
+    {
+        return Number<std::int32_t>("PropertyPower");
+    }
+};
+
+// VarTable[] of a template.
+class VarTableEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::string> Name() const
+    {
+        return Text("Name");
+    }
+    std::optional<std::uint8_t> Type() const
+    {
+        return Number<std::uint8_t>("Type");
+    }
+    std::optional<std::int32_t> Value() const
+    {
+        return Number<std::int32_t>("Value");
+    }
+};
+
+// The top struct of a template.
+class Item : public StructView
+{
+  public:
+    using StructView::StructView;
+
+    // Returns a file's top struct; none for a file with none.
+    static std::optional<Item> Of(const gff3::File &file)
+    {
+        const auto root = file.Root();
+        return root ? std::optional<Item>(Item(*root)) : std::nullopt;
+    }
+    std::optional<std::uint8_t> ModelVariation() const
+    {
+        return Number<std::uint8_t>("ModelVariation");
+    }
+    std::optional<std::string> TemplateResRef() const
+    {
+        return ResRef("TemplateResRef");
+    }
+    std::optional<gff3::LocString> LocalizedName() const
+    {
+        return Loc("LocalizedName");
+    }
+    std::optional<gff3::LocString> Description() const
+    {
+        return Loc("Description");
+    }
+    std::optional<std::string> Script() const
+    {
+        return ResRef("Script");
+    }
+    std::optional<std::int32_t> AbilityID() const
+    {
+        return Number<std::int32_t>("AbilityID");
+    }
+    std::optional<std::int32_t> CraftingRecipeID() const
+    {
+        return Number<std::int32_t>("CraftingRecipeID");
+    }
+    std::optional<std::int32_t> OnHitEffectID() const
+    {
+        return Number<std::int32_t>("OnHitEffectID");
+    }
+    std::optional<std::int32_t> OnHitPower() const
+    {
+        return Number<std::int32_t>("OnHitPower");
+    }
+    std::optional<std::string> Tag() const
+    {
+        return Text("Tag");
+    }
+    std::optional<std::int32_t> BaseItem() const
+    {
+        return Number<std::int32_t>("BaseItem");
+    }
+    std::optional<std::uint8_t> Plot() const
+    {
+        return Number<std::uint8_t>("Plot");
+    }
+    std::optional<std::int32_t> Cost() const
+    {
+        return Number<std::int32_t>("Cost");
+    }
+    std::optional<std::string> Icon() const
+    {
+        return Text("Icon");
+    }
+    std::optional<std::int32_t> Material() const
+    {
+        return Number<std::int32_t>("Material");
+    }
+    std::optional<std::int32_t> MaterialProgress() const
+    {
+        return Number<std::int32_t>("MaterialProgress");
+    }
+    std::optional<std::uint8_t> Heraldry() const
+    {
+        return Number<std::uint8_t>("Heraldry");
+    }
+    std::optional<std::int32_t> TintOverride() const
+    {
+        return Number<std::int32_t>("TintOverride");
+    }
+    std::optional<std::uint8_t> Damaged() const
+    {
+        return Number<std::uint8_t>("Damaged");
+    }
+    std::optional<std::uint8_t> Unique() const
+    {
+        return Number<std::uint8_t>("Unique");
+    }
+    std::optional<std::int32_t> BodyTintMask() const
+    {
+        return Number<std::int32_t>("BodyTintMask");
+    }
+    std::optional<std::int32_t> BodyTint() const
+    {
+        return Number<std::int32_t>("BodyTint");
+    }
+    std::optional<std::int32_t> InvSubgroup() const
+    {
+        return Number<std::int32_t>("InvSubgroup");
+    }
+    std::vector<PropertiesListEntry> PropertiesList() const
+    {
+        return List<PropertiesListEntry>("PropertiesList");
+    }
+    std::vector<VarTableEntry> VarTable() const
+    {
+        return List<VarTableEntry>("VarTable");
+    }
+};
+
+} // namespace uti
+
 } // namespace dao::core::templates

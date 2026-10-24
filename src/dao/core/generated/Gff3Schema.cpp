@@ -182,6 +182,38 @@ constexpr std::array<Field, 169> kUtc{{
     {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 2486},
     {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 2486},
 }};
+constexpr std::array<Field, 30> kUti{{
+    {"", "ModelVariation", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
+    {"", "TemplateResRef", gff3::Type::ResRef, Kind::Resource, "uti", -1, 1275},
+    {"", "LocalizedName", gff3::Type::LocString, Kind::Plain, "", -1, 1275},
+    {"", "Description", gff3::Type::LocString, Kind::Plain, "", -1, 1275},
+    {"", "Script", gff3::Type::ResRef, Kind::Plain, "", -1, 1275},
+    {"", "AbilityID", gff3::Type::Int, Kind::Row, "", 1, 1275},
+    {"", "CraftingRecipeID", gff3::Type::Int, Kind::Row, "", 144, 1275},
+    {"", "OnHitEffectID", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "OnHitPower", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "Tag", gff3::Type::String, Kind::Plain, "", -1, 1275},
+    {"", "BaseItem", gff3::Type::Int, Kind::Row, "", 6, 1275},
+    {"", "Plot", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
+    {"", "Cost", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "Icon", gff3::Type::String, Kind::Plain, "", -1, 1275},
+    {"", "Material", gff3::Type::Int, Kind::Row, "", 89, 1275},
+    {"", "MaterialProgress", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "Heraldry", gff3::Type::Byte, Kind::Row, "", 99, 1275},
+    {"", "TintOverride", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "Damaged", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
+    {"", "Unique", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
+    {"", "BodyTintMask", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "BodyTint", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "InvSubgroup", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+    {"", "PropertiesList", gff3::Type::List, Kind::Plain, "", -1, 1275},
+    {"", "VarTable", gff3::Type::List, Kind::Plain, "", -1, 1275},
+    {"PropertiesList[]", "PropertyID", gff3::Type::Int, Kind::Plain, "", -1, 519},
+    {"PropertiesList[]", "PropertyPower", gff3::Type::Int, Kind::Plain, "", -1, 519},
+    {"VarTable[]", "Name", gff3::Type::String, Kind::Plain, "", -1, 1275},
+    {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
+    {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 1275},
+}};
 
 } // namespace
 
@@ -190,6 +222,10 @@ std::span<const Field> Fields(std::string_view type)
     if (type == "utc")
     {
         return kUtc;
+    }
+    if (type == "uti")
+    {
+        return kUti;
     }
     return {};
 }

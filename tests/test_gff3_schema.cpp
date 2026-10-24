@@ -58,3 +58,28 @@ TEST_CASE("a creature is read through its views, a field it lacks or of another 
     CHECK(creature->Equip_ItemList().empty());
     CHECK_FALSE(creature->TeamId()); // an Int in the schema, a Byte in this file
 }
+
+TEST_CASE("an item's kind is a row of the items' worksheet, and the item is read through its view", "[gff3][schema]")
+{
+    const templates::Field *kind = templates::FieldOf("uti", "", "BaseItem");
+    REQUIRE(kind != nullptr);
+    CHECK(kind->kind == templates::Kind::Row);
+    CHECK(kind->target == 6); // an Items row (BITM_base)
+    Builder b("UTI");
+    const auto tag = b.ExoString("gen_im_wep_swd");
+    b.Struct(0xFFFFFFFF, {{"Tag", 10, tag}, {"BaseItem", 5, 2}, {"PropertiesList", 15, 0}});
+    const auto power = b.Struct(0, {{"PropertyID", 5, 1001}, {"PropertyPower", 5, 3}});
+    b.List({power});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto item = templates::uti::Item::Of(*file);
+    REQUIRE(item);
+    CHECK(item->BaseItem() == 2);
+    CHECK(item->Tag() == "gen_im_wep_swd");
+    const auto properties = item->PropertiesList();
+    REQUIRE(properties.size() == 1);
+    CHECK(properties[0].PropertyID() == 1001);
+    CHECK(properties[0].PropertyPower() == 3);
+    CHECK_FALSE(item->Material());
+}
