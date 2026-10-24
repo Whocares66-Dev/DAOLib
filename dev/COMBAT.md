@@ -346,9 +346,21 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
   - **Which effects reach it** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, an E8 scan of .text for callers]:
     - 0x007A0E30 sends a type 1..11 with an apply-table entry to that handler, after the target's slot 0x6C allows it. Any other type goes to `EffectsHolder::RaiseApplyEffect` 0x0079FE90, then 0x0079FC10.
     - Of the handled types, type 4 (visual effect) writes int 2 itself and calls 0x0079F7A0 directly (0x007A00A0). The type-5 handler (0x007A0348, 0x007A0396) and type 8, PARALYZE (0x007A05D7), call 0x0079FC10 themselves.
-    - Types 2, 6, 7, 9, 10 and 11 never reach 0x0079FC10 or 0x0079F7A0.
+    - Types 2, 6, 9, 10 and 11 reach neither 0x0079FC10 nor 0x0079F7A0; type 7 (death) reaches 0x0079FC10 through RaiseApplyEffect 0x0079FE90 (corrected 2026-10-23 by lib-agent-2: it was listed with those that never do; see the next bullet).
     - The apply table has entries for types 2 and 4..11; type 1's was not read.
-    - So an effect's engine int 2 is drawn for every type without a handler (the scripted types 1000 and up), and for types 4, 5 and 8.
+    - So an effect's engine int 2 is drawn for every type without a handler (the scripted types 1000 and up), and for types 4, 5, 7 and 8 (type 7 added: corrected 2026-10-23 by lib-agent-2).
+  - **The type-7 handler calls RaiseApplyEffect itself** (corrected 2026-10-23 by lib-agent-2; read 2026-10-23) [C]:
+    - `EffectsHolder::RaiseApplyEffect` 0x0079FE90 has two callers in .text: 0x007A110F, in 0x007A0E30's path for types without a handler, and **0x007A1371, in the type-7 (death) handler 0x007A12E0**.
+    - The death handler calls it unconditionally for a non-null effect, after setting the duration type 6, +0x38 = 999 and +0x34 (0x007A136D–0x007A1371).
+    - 0x0079FE90 always ends in `0x0079FC10(holder, effect, 0)` (0x007A0078).
+    - So a death effect raises APPLY_EFFECT and has its engine int 2 drawn like a scripted effect's: when int 2 > 0, +0x48 is 0 and 0x007C4A60 passes.
+    - The earlier scan counted only direct calls of 0x0079FC10, so it missed this one through 0x0079FE90.
+  - **Which effects reach 0x0079FC10, corrected** [C]:
+    - every type without an apply handler, and type 7, through 0x0079FE90;
+    - types 5 and 8, which call it directly (0x007A0348, 0x007A0396, 0x007A05D7).
+    - Type 4 draws through its own path, writing int 2 and calling 0x0079F7A0 (0x007A00A0).
+    - Types 2, 6, 9, 10 and 11 reach neither.
+  - **What a death effect's engine int 2 holds** was not read [I]. The engine's deathblow death (0x00745E10) and `EffectDeath()` set script ints, so its int 2 is presumably 0 and no visual is drawn unless a script sets it.
   - **0x007C4A60** is false only for an INSTANT effect (+0x28 == 1) on a target whose slot 0x64 answers above 2 [C].
   - **0x0079F540** reads engine ints 2, 4 and 5 and engine float 3 [C].
   - 0x0079FE90 has a branch for abilities 500001..500099 before the event, which was not read.
