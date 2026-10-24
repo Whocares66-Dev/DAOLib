@@ -12,9 +12,10 @@
 // hours, most of it the animations' 173 million fields).
 //
 // Lines are matched to the edits by their slot, not their path: a struct reached by two paths (ten
-// cutscenes' first transition) changes at both. A generic list of no structs is not walked, as no
-// call of the reader lists its elements; each pass counts them. The first run found the reader's
-// TlkText reading a text word of 0 as an offset (dao/core/Gff4.cpp, 2026-10-23).
+// cutscenes' first transition) changes at both. Every element of the game's generic lists is a
+// struct, which the walk follows; one that is not would fail a pass, as no call of the reader lists
+// such elements (DAOLib #250), and the null or empty generic lists are counted. The first run found
+// the reader's TlkText reading a text word of 0 as an offset (dao/core/Gff4.cpp, 2026-10-23).
 #include "dao/core/Gff4.h"
 #include "dao/core/Install.h"
 
@@ -139,7 +140,12 @@ struct Walk
     // Each field's line's slot, its place in the file: a struct reached by two paths has one slot
     // for both, and an edit there is seen at both.
     std::map<std::string, std::size_t> slots;
-    std::size_t unwalked = 0;   // generic lists of no structs, which no call of the reader lists
+    const gff4::File *file = nullptr;
+    std::size_t nullLists = 0; // generic lists null or of no elements, at each path that reaches them
+    // Elements of generic lists that are not structs, which no call of the reader lists: none in the
+    // game's files (DAOLib #250: every element of the conversations', the models' and 400 physics
+    // files' generic lists is a struct), so a pass fails on one, and the reader would want a call.
+    std::size_t nonStructs = 0;
     std::set<std::size_t> path; // the structs above, by offset: a reference back up is not followed
 
     void Struct(const gff4::Struct &in, const std::string &at, int depth)
@@ -157,6 +163,28 @@ struct Walk
         path.erase(in.Offset());
     }
 
+    // A generic list's elements read as their words: each one's flags say whether it is a struct.
+    void CountGeneric(const gff4::Struct &in, const gff4::Field &field)
+    {
+        constexpr std::uint32_t kNull = 0xFFFFFFFF;
+        constexpr std::size_t kElement = 8;
+        const auto list = file->U32(in.Offset() + field.offset);
+        const auto count = list && *list != kNull ? file->U32(file->DataOffset() + *list) : std::nullopt;
+        if (!count || *count == 0)
+        {
+            ++nullLists;
+            return;
+        }
+        for (std::uint32_t i = 0; i < *count; ++i)
+        {
+            const auto word = file->U32(file->DataOffset() + *list + 4 + (kElement * i));
+            if (!word || ((*word >> 16) & gff4::kStruct) == 0)
+            {
+                ++nonStructs;
+            }
+        }
+    }
+
     void FieldOf(const gff4::Struct &in, const gff4::Field &field, const std::string &at, int depth)
     {
         slots[at] = in.Offset() + field.offset;
@@ -166,9 +194,9 @@ struct Walk
         {
             const auto children = in.Structs(field.label);
             lines[at] = "list of " + std::to_string(children.size());
-            if (!structs && children.empty())
+            if (!structs)
             {
-                ++unwalked;
+                CountGeneric(in, field);
             }
             for (std::size_t i = 0; i < children.size(); ++i)
             {
@@ -196,6 +224,7 @@ struct Walk
 // Fills `walk` rather than returning one: its maps' move may allocate.
 void WalkOf(const gff4::File &file, Walk &walk)
 {
+    walk.file = &file;
     if (const auto root = file.Root())
     {
         walk.Struct(*root, "", 0);
@@ -267,7 +296,8 @@ struct Checked
     bool parsed = false;
     int edits = 0;
     std::size_t lines = 0;
-    std::size_t unwalked = 0;
+    std::size_t nullLists = 0;
+    std::size_t nonStructs = 0;
     std::vector<std::string> wrong; // lines that differ and should not, or should and do not
 };
 
@@ -326,7 +356,12 @@ Checked Check(std::span<const std::byte> bytes)
     Walk after;
     WalkOf(*again, after);
     checked.lines = before.lines.size();
-    checked.unwalked = before.unwalked;
+    checked.nullLists = before.nullLists;
+    checked.nonStructs = before.nonStructs;
+    if (before.nonStructs != 0)
+    {
+        checked.wrong.push_back(std::to_string(before.nonStructs) + " elements of generic lists are no structs");
+    }
     std::set<std::string> keys;
     for (const auto &[key, value] : before.lines)
     {
@@ -372,7 +407,7 @@ struct Tally
     std::size_t files = 0;
     std::size_t edits = 0;
     std::size_t lines = 0;
-    std::size_t unwalked = 0;
+    std::size_t nullLists = 0;
 };
 
 struct Pass
@@ -393,7 +428,7 @@ struct Pass
         ++tally.files;
         tally.edits += static_cast<std::size_t>(checked.edits);
         tally.lines += checked.lines;
-        tally.unwalked += checked.unwalked;
+        tally.nullLists += checked.nullLists;
         if (!checked.parsed)
         {
             wrong.push_back(name + ": does not parse");
@@ -416,7 +451,7 @@ struct Pass
         for (const auto &[type, tally] : byType)
         {
             out << type << ": " << tally.files << " files, " << tally.edits << " edits, " << tally.lines << " fields, "
-                << tally.unwalked << " generic lists unwalked\n";
+                << tally.nullLists << " null or empty generic lists\n";
         }
         return out.str();
     }
