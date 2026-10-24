@@ -612,6 +612,7 @@ The hero's creation does not select it (corrected 2026-10-19 by lib-agent-2; thi
 Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194 mirrors them as creature pointers (every writer updates both; 0x00635A90 rebuilds +0x194), and each writer ends with +0x194's slot 0x24, which runs the observer 0x00637220. **So control is always the selection's first entry, whoever wrote it; appending never changes it** (0x0069D540 returns at once when the creature is the same, 0x0069D55A, checked).
 
 - **`Party::Select` 0x00639E50**, `__thiscall (id, bool add)`, `ret 8`. Nothing unless the creature is controllable (+0x7F9) and alive (slot +0x1D0 = 0).
+  - +0x7F9 is written only by CCCreature's constructor (0x006BA402, to 1) and SetControllable (0x006A5F46) [C for a scan of .text for the displacement 0x7F9, every other hit a read; I for completeness: a write through a computed pointer would be missed]. What keeps a hostile unselectable stays [I] (lib-agent-2, 2026-10-24).
   - add = 0: 0x006368F0(id, 1, 1), replacing the selection, so it becomes controlled; on success **ON_SELECT (89)** runs at once through `RunEventScript` (0x00639F58), the id in both object slots.
   - add = 1, a toggle: already selected with others → deselected (0x00639DB0); else appended (0x006355A0(id, 1), to +0x184 and +0x194 if missing). No event; control unchanged.
 - **Its callers:**

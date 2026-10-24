@@ -579,7 +579,7 @@ xcharacter.dll`, PhysX 2.8 NxCharacter: 131,072 bytes, SHA-256 728D8351394AC2DE1
     - SetObjectProperty (0x0066C076, 0x0066C091).
     - Sub-actions 37 and 51, by ±1.
     - 0x0069EBB0's callers 0x006BA793, 0x006C2074, 0x00746EBC, 0x0074727F, 0x00747309, 0x007473E7 and 0x007A7130 (sets 0, then +0x420 = 1).
-  - **+0x1AC:** it is set by CCObject vfunction 80 (0x0069A950), which also adds the object to its area's physics. CCCreature's override (0x006AA890) re-applies the interaction. [I]: +0x1AC means "in the world"; 0x006A0DF0's event is the death's.
+  - **+0x1AC:** it is set by CCObject's slot 79 (+0x13C, 0x0069A950), which on the way on also adds the object's model to its area's scene (+0x62C, through slot +0x104), not to physics (corrected 2026-10-24 by lib-agent-2: slot 80, +0x140, is SetActive). CCCreature's override (0x006AA890) re-applies the interaction. [I]: +0x1AC means "in the world"; 0x006A0DF0's event is the death's.
 - **The move wrapper 0x00838240** [C]:
   - It pushes the scene's filter (`PushFilter` 0x0082D900 with 1 and the 4-dword mask {0x2011134, 0, 0, 0} twice), then 0x0082A150 with three zeros.
   - It calls NxController::move(disp, activeGroups 0x2011134, minDist 0.001, &flags, sharpness 1.0, &mask), and stores DOWN (bit 2) at +0xC, SIDES (bit 0) at +0xD and UP (bit 1) at +0xE.
