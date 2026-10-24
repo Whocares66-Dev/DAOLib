@@ -55,5 +55,38 @@ Read 2026-10-18 in the GOG exe. Not seen in play. A creature's perceived set is 
 - **State:** creature +0xC18 and +0xC28.
 - **Edge cases:** an invalid or non-creature id does nothing and returns 0. **No DISAPPEAR event is raised** for the creatures dropped (the function raises none; checked), so a script that listens for it does not hear these. The next perception update refills the set from the creatures in range. A failed pop is -639.
 
+### GetObjectsInShape (673) and FilterObjectsInShape (197) (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]
+
+- **Handler:** 0x00670EB0 (`ScriptCommand::FilterOrGetObjectsInShape`), shared by both commands.
+- **The arguments:**
+  - It pops the array (197 only), the type mask, the shape, the location, fA, fB and fC.
+  - fC defaults to 65505.0 (0x477FE100), and no shape reads it.
+  - bExcludeDead is popped only when 673 has more than 6 arguments or 197 more than 7.
+- **The objects:**
+  - With no array, the location's area's list (GetAreaById, area +0x690).
+  - With an array, the array's objects, whatever area each is in.
+  - With neither, an empty array.
+- **Each object is dropped when:**
+  - it is not found;
+  - it is inactive (+0x70 slot 0x6C, GetObjectActive; script_fields.csv:32);
+  - `(1 << (byte[obj+0x14] − 1)) & mask` is 0 (0x00A581F0);
+  - bExcludeDead is set and it is dead (`CCObject::ForScript_IsDead` 0x00695300: health, slot +0x120, ≤ 0);
+  - the shape is neither 1 nor 2.
+- **Personal space:** slot 39 (+0x9C) is `CCCreature::PersonalSpace` 0x006A21A0 (`[[+0x7B0]+0x60]`, apr_base PerSpace). Every other class has 0x0083A430, which returns 0.0 (a scan of every class with at least 40 slots).
+- **Sphere (1), 0x004EB340(object position +0x120, space, the location's position, fA):** the ground (x, y) distance² ≤ (space + fA)², inclusive. z is not read.
+- **Cone (2), 0x004EB3B0(object position, space, apex P, the location's orientation, fA, fB):**
+  - It is refused unless 0 ≤ fA ≤ 180 (180.0 at 0x00AF14D0), so fA is the whole width.
+  - The object must first pass the sphere test with fB: within fB + space of the apex, on the ground.
+  - θ = `Vector::ToAngle`(orientation) (0x004EE570), and h = fA × 0.5 (0x00AE70F8).
+  - The edges are Lft = P + fB·FromAngle(θ + h) and Rgt = P + fB·FromAngle(θ − h). `Vector::FromAngle` 0x004EAE30 is (−sin, cos, 0).
+  - The object is in when it lies strictly between the two edges, both cross products > 0 as in the draft.
+  - Otherwise it is in when its personal-space circle meets either edge segment (0x004EB240 with the foot 0x004EAF10): an end strictly inside the circle, or the foot on the segment at a ground distance² ≤ space².
+  - So with no space, the apex and any point exactly on an edge are in.
+- **The cone spell** (`_Ability_Scripts\Spells\spell_cone.nss`, from :75):
+  - **The shape:** `GetObjectsInShape(OBJECT_TYPE_CREATURE, SHAPE_CONE, GetLocation(caster), aoe_param1, aoe_param2)`, with aoe_param2 = 5.0 when ≤ 0. The apex is the caster, the direction the caster's facing, and the caster is left out by the script.
+  - **Dead creatures are hit:** bExcludeDead is left false (:104).
+  - **The damage:** each target that passes CheckSpellResistance gets `SetIndividualImpactAOEEvent(..., 500)`, a delayed per-target event. Flame Blast first sends COMBO_EVENT_IGNITE.
+  - **The look:** `EffectConeCasting(vfx_impact0)` on the caster for 1.5 s.
+
 ## Not read
 - 0x006A2BB0 (the perception test TriggerPerception relies on), 0x0067B430's use of creature +0x150.

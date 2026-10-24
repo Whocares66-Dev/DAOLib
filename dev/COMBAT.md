@@ -343,6 +343,16 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 - In the scripts, `creature_core` hands unhandled events to `rules_core`. Its `EVENT_TYPE_APPLY_EFFECT` case calls `Effects_HandleApplyEffect` (`effects_h.nss`), which reads `GetCurrentEffect()`, switches on `GetEffectType` to the `effect_*_h` handlers, and ends with `SetIsCurrentEffectValid(nReturnValue)`. A dead target refuses everything except resurrection and death.
 - After the script, `0x007a0e30` checks the effect's invalid word (+0x48). If the script marked it invalid, the apply returns 3 and the effect is not added: `0x007a1920` sets +0x48 to 1. If still valid, the holder's slot 0x1C adds it to the target's list, and slots 0x70 and 0x34 follow. So the script runs first and the list changes after, only for a valid effect. Read in outline; the slots' bodies are not read.
 - `0x0079fc10`, after the event: when the effect's engine int 2 (+0x54's arrays, `EFFECT_INTEGER_VFX`, set by `SetEffectEngineInteger` or the visual-effect commands; `0x0079FC3D`–`0x0079FC44`) is above 0 and the effect is still valid (+0x48 = 0), it plays that visual effect. Read. A damage effect's `nImpactVfx` is its script int 2 (`EffectDamage`, `0x00662950`–`0x00662974`), which leaves the engine int unset and is played by the scripts (below), not here (corrected 2026-10-18 by lib-agent-2).
+  - **Which effects reach it** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, an E8 scan of .text for callers]:
+    - 0x007A0E30 sends a type 1..11 with an apply-table entry to that handler, after the target's slot 0x6C allows it. Any other type goes to `EffectsHolder::RaiseApplyEffect` 0x0079FE90, then 0x0079FC10.
+    - Of the handled types, type 4 (visual effect) writes int 2 itself and calls 0x0079F7A0 directly (0x007A00A0). The type-5 handler (0x007A0348, 0x007A0396) and type 8, PARALYZE (0x007A05D7), call 0x0079FC10 themselves.
+    - Types 2, 6, 7, 9, 10 and 11 never reach 0x0079FC10 or 0x0079F7A0.
+    - The apply table has entries for types 2 and 4..11; type 1's was not read.
+    - So an effect's engine int 2 is drawn for every type without a handler (the scripted types 1000 and up), and for types 4, 5 and 8.
+  - **0x007C4A60** is false only for an INSTANT effect (+0x28 == 1) on a target whose slot 0x64 answers above 2 [C].
+  - **0x0079F540** reads engine ints 2, 4 and 5 and engine float 3 [C].
+  - 0x0079FE90 has a branch for abilities 500001..500099 before the event, which was not read.
+  - EffectImpact's int 2 is a script int, so 0x0079FC10 never reads it [C] (closes effect_access.md's "[I: whether that reads script or engine int …]").
 - **An instant effect with an animation becomes temporary** (read 2026-10-21 by lib-agent-2, for DAOParagonEngine #144; C checked, I inferred):
   - **What happens to it** [C, the apply 0x007A0E30 at 0x007A11DC..0x007A1225]: after the target's APPLY_EFFECT script has run, an effect with priority > 0 (0x00A65380; knockdown 981) and duration type 1 (INSTANT) is changed:
     - its type becomes 2 (TEMPORARY);

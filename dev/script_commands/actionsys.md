@@ -46,7 +46,7 @@ Shared facts, all checked:
 
 ### GetGraphicsDetailLevel (851)
 - **Handler:** 0x00654CE0. Same as 15 with the attribute at `ClientOptions` **+0x4F0** (the int at +0x4FC). (checked)
-- **Does:** pushes that value; the option's name `GraphicsDetailLevel` (0x00B0105C) is inferred to be this attribute. (checked for the read)
+- **Does:** pushes that value; the option's name `GraphicsDetailLevel` is read to be this attribute [C, read 2026-10-23 by lib-agent-2]: the options' reader and writer load +0x4F0 at 0x005EBDEC and 0x005EBE33, beside the string (0x005EBDF7, 0x005EBE5A). Its one script reader is `effect_dot2_h.nss`:154 (_EffectDOT), which adds the DOT's crust vfx (fire 10, electricity 1005, cold 1008) only when the level is above 0.
 - **Edge cases:** no `GRAPHICS_DETAIL_LEVEL_*` constants exist in script.ldf or the scripts despite its doc comment; no range check. A failed push returns -638. (checked)
 
 ### DebugSpawnScriptDebugger (16)

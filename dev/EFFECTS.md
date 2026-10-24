@@ -447,10 +447,9 @@ Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area o
   - Flame Blast, Shock and Cone of Cold have `VFX_Impact0` 90139 `fxa_fire_cone_c`, 90151 `fxa_lit_cone_c` and 90161 `fxa_ice_con_c`. These are crust rows of Type D.
   - They are applied on the caster as `EffectConeCasting(vfx)` with `ApplyEffectOnObject(..., oCaster, 1.5f)` (`spell_cone.nss`:77–79, `abi_templates.nss`:429–430).
   - `fxa_fire_cone_c.mmh` has one `crst` node, CrustHook2 (hook id 2, "Right Cast" in `crusts.gda`), holding all five emitters and both lights.
-  - So the cone is drawn at the caster's right-hand cast hook, not at a location anchor [I: how the engine turns a type-1030 effect's `EFFECT_INTEGER_VFX` into a visual effect was not read].
+  - So the cone is drawn at the caster's right-hand cast hook, not at a location anchor [C, read 2026-10-23 by lib-agent-2: `EffectConeCasting` is a script function (`effect_conecasting_h.nss`), `Effect(EFFECT_TYPE_CONECASTING)` (1030) then `SetEffectEngineInteger(e, EFFECT_INTEGER_VFX, nVfx)`. Type 1030 has no apply handler, so it goes 0x0079FE90 → 0x0079FC10, which makes the row's visual on the holder: the caster. So the cone's crust row is bound to the caster's hooks, CrustHook2, "Right Cast", for the fire cone].
 - **Not read:**
   - 0x0079D880 to its end;
-  - the type-1030 effect's visual;
   - the projectile maker's sixth argument (0x007E709E);
   - the aiming effect's row (UpdateAim, 0x00711322);
   - scripts that build the vfx id in a variable.

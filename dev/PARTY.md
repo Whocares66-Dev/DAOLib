@@ -760,6 +760,17 @@ Read by the forked subagent; checked unless marked.
   - 5 select, 6 deselect (above), 7 nothing.
   - Callers: `PerformPrimaryActionOnTargetUnderCursor` 0x007132B0, `PerformSecondaryActionOnTargetUnderCursor` 0x00713300, `PerformDefaultActionOnTarget` 0x00713350, `PerformSecondaryActionOnTarget` 0x00713390; the action from 0x0070CAD0(object).
 - **Abilities go to one caster:** `PerformAbilityMessage` 0x00711B50 takes the caster from msg+8 (ability +4, item +0xC); 0x007116C0, 0x00711A00 and 0x00711940 take the targeting state's caster (0x0070ABE0: +0x4C or +0x54). All end in `GameModeExplore::UseAbility` 0x00711680 → `Orders::UseAbility` 0x007F6690.
+  - **The ability order** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - **0x00711680** calls 0x007F6690, then 0x007113F0 (not read).
+    - **0x007F6690(ability, creature, item, target, point):**
+      - It does nothing when the creature's slot 0x1D0 answers 1.
+      - It calls `Orders::OrderReceived` 0x007F6370.
+      - An ability in the creature's active modal list (+0x7C4) goes to 0x006B9970 [I: turned off].
+      - An item the creature may not use (`CCCreature::ForScript_CanUseItem`) does nothing.
+      - When the ability's abi_base `ProcessWithEvent` (0x57119DC9) is non-zero, an event of that type is delivered at once instead (AIMaster::DeliverNow), with int 0 the ability and object 0 the item. Only TRAP_MAKING, HERBALISM and POISON_MAKING have it, all 101 (EVENT_TYPE_USE_ABILITY_IMMEDIATE).
+      - **Otherwise** it calls `QueuePlayerCommand(25, params, 0)`, which calls `QueueNewCommand(25, params, 0, 0, 1, −1, 1)`, so the command goes at the back of the queue. The params are int 0 the ability, object 0 the target, object 1 the item, vector 0 the point. That nothing is cleared is [I]: QueueNewCommand was not re-read.
+    - **The party AI:** `AI_DetermineCombatRound` (ai_main_h_2.nss:377–386) returns at once while a command is current or queued, so the queue, not the player-issued flag, holds the AI off.
+    - **What drops a follower's order:** damage interrupts (rules_core.nss:385 for a ranged attacker hit in melee, :445 while conjuring) clear anyone's commands. :941 (a hostile appears out of combat) clears only non-followers.
 - **Hold, `ToggleHoldPartyMessage` 0x0062F1F0:** toggles the bool attribute party+0xA4 (saved; read in the party's load 0x00637D50). It stops the engine's follow (0x00760F90) and the catch-up 0x006326C0, not the group move.
 
 ### Who follows: the engine, not the scripts
