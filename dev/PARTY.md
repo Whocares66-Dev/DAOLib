@@ -1035,6 +1035,14 @@ No shipped script is known to use the client VM (I).
   - **0x00628970** (`this` = party +0x330) calls 0x00628500, which walks the `Party.Alerts` list (+0x68) from index 0 and returns the first alert whose attribute at +0x58 (its `Type`) equals the argument, or −1.
   - **A found alert** is handed to 0x00628650 with the list at +0xA0, erased from +0x68 (0x004A62E0), and the list notified (its attribute slot 0x24). What +0xA0 keeps (the hidden alerts) is [I].
   - **None of that type:** nothing. One alert per message.
+- **The items alert** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2; the caller is the party possessor's OnItemAdded 0x006313A0, ITEMS.md):
+- **0x00629620** (`this` = party +0x2C0 + 0x70, the alerts) [C]:
+  - It makes nothing in game mode 9 (`GameModeController::GetGameMode` 0x005D5E70; −1 with none), or when an alert of type 3 is already in the list (0x00628500(3)).
+  - Otherwise it makes one (0x006294C0), sets its Type (+0x58) to 3 (ALERT_ITEMS), appends it to the list (+0x68) and notifies.
+- **So** any number of items added together gives one "Items received" alert (strref 336172, `LOC_ITEMS_RECEIVED` in notifications.gfx's Alert.as; the string is not in the exe) [C].
+- `CreateItemOnObject` with bSuppressNotification sets flag 4 (ITEMS.md), which skips the alert. Flag 2 skips it too.
+- Whether a merge onto a stack reaches OnItemAdded, and which flags stores and crafting set, are [I].
+  - Whether the mode-9 skip holds while the add-ins' PRCSCR list scripts run (LOAD_EVENTS.md, "The add-ins' list scripts (PRCSCR)") is open: step 1 calls SetGameMode with (0, 1, 0).
 - **The caller is the notifications movie, not an engine timer** [C, `Alert.as`]. It sends `Party.HideAlert <this.Type>` in two places:
   - in `Hide()` (:205), when its fade-out animation ends. The fade starts after the movie's own delay (`TriggerFadeoutDelay`, a `setInterval`), which stops while the mouse is over a non-sticky alert;
   - on a click (`OnButtonAction`, :236–253), after `GUI.GoToQuest`, `GoToCodex`, `GoToItem`, the tactics screen or the ability screen.

@@ -71,6 +71,36 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 
 - Not raised: no code stores 0x50 as an event's type (`mov dword [reg+0x20], 0x50`, none), and no `push 0x50` reaches the event gate or the plot event builder. No shipped script handles it either (`toolset\extract\scripts`, none). Read. It looks like a number reserved and never used.
 
+### The add-ins' list scripts (PRCSCR) (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2)
+
+GOG 1.05 addresses. [C] read in the code, [I] inferred. Step 5 of the area-load machine, between PRELOADEXIT and POSTLOADEXIT.
+
+- **The table** [C]:
+  - Each add-in's and offer's start-up script is a row of a `PRCSCR_*.gda` table, with the columns ID, AreaListName and Script. No module or campaign script of their own does this; the engine runs the table.
+  - Example: `prcscr_o_shale.gda` row 10199, "any", `shl_offer_check_available`.
+  - The table is not one of m2da_base's numbered tables.
+- **The collection, 0x006FBA00** (ID 15828, `__fastcall` on a `CSAreaList`) [C]:
+  - **Its callers:** `CSAreaList::ReadAreas` 0x006FBFF0 (at 0x006FC045; it is itself called from 0x006C80AE and 0x006C8C49), and the content reload 0x006031C0 (at 0x006035F0). The reload then runs the list again with 0x006FA480; it is called from 0x004A7752 and 0x00616A92.
+  - **The table:** it builds `M2DA(L"PRCSCR_")` (0x00B14F98), whose parts are listed by `ECResMan::ResMan::ListNames` with the type "GDA" (0x00AF0FB8) and an empty second filter (0x00ADEF14). So the parts are every `prcscr_*` file the game has, merged as FILES.md says, with one row vector sorted by ID.
+  - **The match:** it widens the list's name (+0x68). For each row index 0..count−1 it reads AreaListName (0xF41E4134, through 0x004EC250; a failed read skips the row). It keeps the row when that is "any" (0x00B14F90) or the list's own name; both compares ignore ASCII case (0x004C0350).
+  - **The script:** it reads Script (0xF333FE09; a failed read skips the row). A row whose script is `mem000_additem` (0x00B14F70) is kept only when the module's name (`CCModule::ForScript_GetName` 0x0051B370, module +0x230) is "Single Player" (0x00B14F54) (0x006FBC27–0x006FBC74).
+  - **The result:** it pushes the script's name onto the list's vector of 28-byte wstrings at +0xCC (0x006FBCAC) and returns the count.
+- **The run, 0x006FA480** [C]:
+  - For each name in that vector, in order, it calls `CVirtualMachine::RunScript` 0x00A31E70 on `[0x00C1D080]` with (name, self, 1, 0x50).
+  - Self is 0x005D5CA0, the controlled creature (`[[app+0xD0]+0x5C]`), or −1 with no app.
+  - No current event is set, so the scripts run as plain scripts. That is read from this function only; RunScript's own body was not re-read.
+- **When, 0x006FA700** (`__fastcall` on the module's `CSAreaList`, module +0x2CC) [C]:
+  - While the list's byte +0xDC is 0, it runs 0x006FA480 and sets the byte to 1. Then it steps one area of the list (cursor +0xC4).
+  - The constructor 0x006FBE50 clears +0xDC (0x006FBEB8).
+  - Its only caller is 0x005FE200. That is tail-called by the world update 0x0064B010 unless there is no module, and 0x0064B010 is skipped only while `[app+0x100]` is set.
+  - 0x0064B010's callers are 0x00641FD1 and step 5 of the area-load machine (0x006C915E), gated by `[app+0x1AC] != 0` and `[0x00402CA0()+0x158] == 0`.
+  - **So** a new list's scripts run in step 5 of its first load: after step 4's PRELOADEXIT (38 or 42) and before step 8's POSTLOADEXIT (39 or 43). Step 5's own `AIMaster::Update(0)` (0x006C9170) delivers what they queued before step 8.
+  - That no world update runs between the list's creation and step 5 is [I].
+- **Who runs them again** [I from the callers]:
+  - A new game, a loaded game and a journey to another list each make a new CSAreaList, so the scripts run each time. A door within a list does not.
+  - The scripts guard themselves with plot flags, as paragon-agent-2 read in their dumps (not checked here).
+- **Open:** step 1 calls SetGameMode with (0, 1, 0), so whether the items alert's "not mode 9" test holds while these scripts run is not settled (PARTY.md, "The items alert"); it needs a play check.
+
 ## EVENT_TYPE_SPAWN (3): once per object, for creatures, placeables and triggers
 
 **Where it is sent.** Three places build it, each the class's add-to-area (vtable +0xF8, index 62; `dev/LOAD_EVENTS.md`'s "slot 63" is Ghidra's 1-based count):
