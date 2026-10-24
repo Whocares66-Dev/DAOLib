@@ -27,6 +27,11 @@
 #include <functional>
 #include <string_view>
 
+namespace dao
+{
+class CGameObject;
+}
+
 namespace dao::messages
 {
 
@@ -80,6 +85,25 @@ inline bool Send(void *receiver, const Message &message)
 {
     using Fn = bool(__cdecl *)(const Message *, void *);
     return reinterpret_cast<Fn>(Module::Address(addr::kMessages_Send))(&message, receiver);
+}
+
+// Notes on a game object as a receiver: read 2026-10-24 (DAOLib #253) after the Eluvian server's
+// EquipItemMessage sent to a creature at +0 crashed in Messages::Send (0x004D834A, a call through
+// the receiver's vtable). The engine hands a handler its receiver as a Messages::MessageReceiver,
+// and a game object's is at +0x18, after its CGameObject (tools/daoexe.py --bases: CCCreature,
+// CCPlaceable, CCItem, CCObject, CCParty and Store alike), where a game mode's and Journal's is at
+// +0. The observers' receiver is the same pointer, which dao::TypeName names by the object's class.
+// Seen in play 2026-10-24: an EquipItemMessage sent so to a creature arrived at its handler and
+// equipped the item.
+
+// Sends a message to a game object: a creature, a placeable or an item, whose handlers take the
+// messages the movies send them ("GUI.SelectedChar.EquipItem", "Container.AcquireItem").
+// @param object the object; null sends nothing and answers false
+// @return as the other Send
+inline bool Send(CGameObject *object, const Message &message)
+{
+    constexpr std::size_t kReceiver = 0x18; // the object's Messages::MessageReceiver
+    return object != nullptr && Send(reinterpret_cast<std::byte *>(object) + kReceiver, message);
 }
 
 // Builds a message from a line of text and sends it to the receiver the text names, the same way
@@ -345,7 +369,8 @@ static_assert(sizeof(HideAbilityHeaderMessage) == 8);
 // taken there sent CharGenAssignAbility to GUICharGen with ability 8, kind 0.
 // CharGenSelectSpecialization: character creation's handler (0x00736B80) raises the module's
 // event 52 (CHARGEN_SELECT_LEVELUP_CLASS) with the creature and the specialization, if not 0, and with the flag set
-// moves the screen on (dev/CHARGEN.md); no movie sends it, and its text is no binding's, so it was not seen in play.
+// moves the screen on (dev/CHARGEN.md). Never seen, as nothing sends it in vanilla: no movie, no
+// binding and no code but its factory.
 
 // Picks an ability, or unpicks one, on the level-up or character creation screen. Sent to the
 // screen (GUICharGen), as the movie does when an ability is clicked.
@@ -677,8 +702,11 @@ static_assert(sizeof(ValidateActionMessage) == 8);
 // and InventoryClosed; OpenStore opened a store, which took SellItem and BuyItem of a poultice
 // (the money 27500, 27525, 27500) and sent CloseStore and its notices as it closed;
 // ShowItemExamine of Party.Backpack.0 showed the examine screen; the closing ones arrived.
-// Not seen: AttachRuneToItem and DetachRuneFromItem (no rune to hand), CountIngredients and
-// ShowInventoryGUI, which their callers' handlers run without sending.
+// A Grandmaster Silverite Rune made on Lyna went into Duncan's Sword's slot 0 by
+// "GUI.SelectedChar.Equipment.0.AttachRuneToItem 274952 0", the item upgrade movie's text, and
+// out again by DetachRuneFromItem 0, GetItemSubItems reading the rune there and then none.
+// Never seen, as nothing sends them in vanilla: CountIngredients and ShowInventoryGUI, whose
+// callers (CraftItem's handler, ShowContainerGUI's) run the handlers directly.
 
 // Equips an item on a creature, in a slot, as the inventory's paperdoll and radial menu do
 // ("GUI.SelectedChar.EquipItem"). The handler answers true even if the equip is refused.
@@ -1011,8 +1039,10 @@ static_assert(sizeof(ShowItemSplitDialogMessage) == 4);
 // whose OK sent "GUIPopupLayer.ScriptDialogResult 3 1 140", which arrived as popup 3, button 1,
 // the board, and closed the box (DialogBoxClosed); "GUI.GoToQuest lel000pt_main 0" opened the
 // journal at that quest; GoToCodex, GoToJournalPRCTab, Show and HideJournalGUI and ShowDialogBox
-// arrived. Not seen: AcceptChantersQuest (that campaign's board is a conversation) and
-// GUIPRCDialogResult (no offer's prompt).
+// arrived. In the main campaign ShowChantersGUI(3), the board's own script command, opened a
+// board whose Accept sent AcceptChantersQuest with entry 0, which the board then had accepted.
+// Never seen: GUIPRCDialogResult, sent only by a downloadable content offer's prompt, which no
+// install of today shows.
 
 // A popup's button pressed, as the popup layer sends it for a popup a script showed. Raises
 // EVENT_TYPE_POPUP_RESULT for the scripts, then closes the popup.
