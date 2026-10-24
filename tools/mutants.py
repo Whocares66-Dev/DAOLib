@@ -92,6 +92,7 @@ class Mutant:
 
 
 GFF4 = "src/dao/core/Gff4.cpp"
+GFF4_WALK = "src/dao/core/Gff4Walk.cpp"
 GRID = "src/dao/core/Grid.cpp"
 LEVEL = "src/dao/core/Level.cpp"
 WALKPATCH = "src/dao/core/WalkPatch.cpp"
@@ -557,6 +558,18 @@ MUTANTS: list[Mutant] = [
         GFF4,
         "    if (field->type != static_cast<std::uint16_t>(type))\n",
         "    if (field->type < static_cast<std::uint16_t>(type))\n",
+    ),
+    Mutant(
+        "gff4-walk-u64-unsigned: a U64 past INT64_MAX is walked as the unsigned number it is, not negative",
+        GFF4_WALK,
+        "return *value > static_cast<std::uint64_t>(INT64_MAX) ? Leaf(*value)",
+        "return *value < static_cast<std::uint64_t>(INT64_MAX) ? Leaf(*value)",
+    ),
+    Mutant(
+        "gff4-walk-depth: a struct at the depth limit has its fields marked, not walked",
+        GFF4_WALK,
+        "        if (depth <= 0)\n",
+        "        if (depth < 0)\n",
     ),
     Mutant(
         "gff4-list-not-scalar: a list field is not read as a number",

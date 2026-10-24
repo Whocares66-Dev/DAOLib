@@ -206,6 +206,7 @@ add_library(
     src/dao/core/StackText.cpp
     src/dao/core/TalkTable.cpp
     src/dao/core/TalkTables.cpp
+    src/dao/core/Gff4Walk.cpp
     src/dao/core/generated/GdaSchema.cpp
     src/dao/core/generated/Gff3Schema.cpp
 )
@@ -228,6 +229,8 @@ if(PROJECT_IS_TOP_LEVEL)
         dao_gda_schema
         PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
     )
+    add_executable(dao_files tools/files/Files.cpp)
+    target_link_libraries(dao_files PRIVATE daolib_core)
     add_executable(dao_gff4_leaves tools/second_reader/Gff4Leaves.cpp)
     target_link_libraries(dao_gff4_leaves PRIVATE daolib_core)
     add_executable(dao_gff3_schema tools/gff3_schema/Gff3Schema.cpp)
