@@ -13,6 +13,7 @@
 // loaded, LoadOrder and SetGender the steps it is made of.
 #pragma once
 
+#include "dao/core/Gff3.h"
 #include "dao/core/Install.h"
 #include "dao/core/TalkTable.h"
 
@@ -83,5 +84,9 @@ class Strings
     std::vector<LoadedTable> tables_;
     std::vector<TalkTableFile> files_;
 };
+
+// Returns the text the game shows for a template's localised string: its own text if it has any,
+// the first of them whatever its language, else its id's text from the tables, else nothing.
+std::wstring TextOf(const gff3::LocString &text, const Strings &strings);
 
 } // namespace dao::core::install

@@ -214,6 +214,97 @@ constexpr std::array<Field, 30> kUti{{
     {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 1275},
     {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 1275},
 }};
+constexpr std::array<Field, 69> kUtp{{
+    {"", "LocName", gff3::Type::LocString, Kind::Plain, "", -1, 1886},
+    {"", "LocPopupText", gff3::Type::LocString, Kind::Plain, "", -1, 1885},
+    {"", "Tag", gff3::Type::String, Kind::Plain, "", -1, 1886},
+    {"", "TemplateResRef", gff3::Type::ResRef, Kind::Resource, "utp", -1, 1886},
+    {"", "EventScript", gff3::Type::ResRef, Kind::Resource, "ncs", -1, 1886},
+    {"", "Conversation", gff3::Type::ResRef, Kind::Resource, "dlg", -1, 1886},
+    {"", "GroupId", gff3::Type::Dword, Kind::Plain, "", -1, 1885},
+    {"", "Appearance", gff3::Type::Dword, Kind::Row, "", 93, 1886},
+    {"", "AnimContState", gff3::Type::Word, Kind::Plain, "", -1, 1886},
+    {"", "Health", gff3::Type::Short, Kind::Plain, "", -1, 1886},
+    {"", "MaxHealth", gff3::Type::Short, Kind::Plain, "", -1, 1886},
+    {"", "PickLock", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+    {"", "KeyName", gff3::Type::String, Kind::Plain, "", -1, 1886},
+    {"", "AutoRemoveKey", gff3::Type::Byte, Kind::Plain, "", -1, 1886},
+    {"", "TrapDetection", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+    {"", "TrapDisarm", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+    {"", "KeyRequired", gff3::Type::Byte, Kind::Plain, "", -1, 1886},
+    {"", "Useable", gff3::Type::Byte, Kind::Plain, "", -1, 1886},
+    {"", "Plot", gff3::Type::Byte, Kind::Plain, "", -1, 1886},
+    {"", "Rank", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+    {"", "TreasureCategory", gff3::Type::Int, Kind::Row, "", 198, 1885},
+    {"", "TeamId", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+    {"", "IsBodyBag", gff3::Type::Byte, Kind::Plain, "", -1, 1885},
+    {"", "ItemList", gff3::Type::List, Kind::Plain, "", -1, 1885},
+    {"", "VarTable", gff3::Type::List, Kind::Plain, "", -1, 1885},
+    {"", "Ref", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnUsed", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Portrait", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "OnUserDefined", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "HasInventory", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnDamaged", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Faction", gff3::Type::Dword, Kind::Plain, "", -1, 1},
+    {"", "Locked", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "CloseLockDC", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnOpen", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "HP", gff3::Type::Short, Kind::Plain, "", -1, 1},
+    {"", "Description", gff3::Type::LocString, Kind::Plain, "", -1, 1},
+    {"", "TrapDetectable", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "PaletteID", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnClosed", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "DisarmDC", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnMeleeAttacked", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Hardness", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "AnimationState", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "TrapOneShot", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "Interruptable", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnLock", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "OnTrapTriggered", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "TrapType", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnDeath", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "OnUnlock", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Comment", gff3::Type::String, Kind::Plain, "", -1, 1},
+    {"", "TrapDisarmable", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "Lockable", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnHeartbeat", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "OpenLockDC", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "TrapDetectDC", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnSpellCastAt", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "Fort", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "Will", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnInvDisturbed", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"", "TrapFlag", gff3::Type::Byte, Kind::Plain, "", -1, 1},
+    {"", "OnDisarm", gff3::Type::ResRef, Kind::Plain, "", -1, 1},
+    {"ItemList[]", "TemplateResRef", gff3::Type::ResRef, Kind::Resource, "uti", -1, 230},
+    {"ItemList[]", "StackSize", gff3::Type::Int, Kind::Plain, "", -1, 230},
+    {"VarTable[]", "Name", gff3::Type::String, Kind::Plain, "", -1, 1885},
+    {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 1885},
+    {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 1885},
+}};
+constexpr std::array<Field, 18> kUtm{{
+    {"", "LocName", gff3::Type::LocString, Kind::Plain, "", -1, 50},
+    {"", "Tag", gff3::Type::String, Kind::Plain, "", -1, 50},
+    {"", "EventScript", gff3::Type::ResRef, Kind::Plain, "", -1, 50},
+    {"", "MarkDown", gff3::Type::Int, Kind::Plain, "", -1, 50},
+    {"", "MarkUp", gff3::Type::Int, Kind::Plain, "", -1, 50},
+    {"", "WillNotBuy", gff3::Type::List, Kind::Plain, "", -1, 50},
+    {"", "WillOnlyBuy", gff3::Type::List, Kind::Plain, "", -1, 50},
+    {"", "StoreList", gff3::Type::List, Kind::Plain, "", -1, 50},
+    {"", "VarTable", gff3::Type::List, Kind::Plain, "", -1, 50},
+    {"StoreList[]", "ItemList", gff3::Type::List, Kind::Plain, "", -1, 50},
+    {"StoreList[]/ItemList[]", "Infinite", gff3::Type::Byte, Kind::Plain, "", -1, 41},
+    {"StoreList[]/ItemList[]", "StackSize", gff3::Type::Int, Kind::Plain, "", -1, 41},
+    {"StoreList[]/ItemList[]", "InventoryRes", gff3::Type::ResRef, Kind::Resource, "uti", -1, 41},
+    {"VarTable[]", "Name", gff3::Type::String, Kind::Plain, "", -1, 50},
+    {"VarTable[]", "Type", gff3::Type::Byte, Kind::Plain, "", -1, 50},
+    {"VarTable[]", "Value", gff3::Type::Int, Kind::Plain, "", -1, 50},
+    {"WillNotBuy[]", "BaseItem", gff3::Type::Int, Kind::Row, "", 6, 1},
+    {"WillOnlyBuy[]", "BaseItem", gff3::Type::Int, Kind::Plain, "", -1, 1},
+}};
 
 } // namespace
 
@@ -226,6 +317,14 @@ std::span<const Field> Fields(std::string_view type)
     if (type == "uti")
     {
         return kUti;
+    }
+    if (type == "utp")
+    {
+        return kUtp;
+    }
+    if (type == "utm")
+    {
+        return kUtm;
     }
     return {};
 }

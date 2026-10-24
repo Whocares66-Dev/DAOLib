@@ -83,3 +83,46 @@ TEST_CASE("an item's kind is a row of the items' worksheet, and the item is read
     CHECK(properties[0].PropertyPower() == 3);
     CHECK_FALSE(item->Material());
 }
+
+TEST_CASE("a placeable's appearance is a row of the placeables' worksheet, read through its view", "[gff3][schema]")
+{
+    const templates::Field *look = templates::FieldOf("utp", "", "Appearance");
+    REQUIRE(look != nullptr);
+    CHECK(look->kind == templates::Kind::Row);
+    CHECK(look->target == 93); // a Placeables row (placeable_types)
+    Builder b("UTP");
+    const auto tag = b.ExoString("genip_chest");
+    b.Struct(0xFFFFFFFF, {{"Tag", 10, tag}, {"Appearance", 4, 7}, {"Useable", 0, 1}});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto placeable = templates::utp::Placeable::Of(*file);
+    REQUIRE(placeable);
+    CHECK(placeable->Appearance() == 7u);
+    CHECK(placeable->Useable() == 1);
+    CHECK(placeable->ItemList().empty());
+}
+
+TEST_CASE("a store's stock is read through its views, a list within a list", "[gff3][schema]")
+{
+    CHECK(templates::FieldOf("utm", "StoreList[]/ItemList[]", "InventoryRes")->extension == "uti");
+    Builder b("UTM");
+    const auto potion = b.ResRef("gen_im_qck_health_101");
+    b.Struct(0xFFFFFFFF, {{"MarkUp", 5, 150}, {"StoreList", 15, 0}});
+    const auto stock = b.Struct(0, {{"InventoryRes", 11, potion}, {"Infinite", 0, 1}});
+    const auto shelf = b.Struct(0, {{"ItemList", 15, 8}}); // the second list, after the first's 8 bytes
+    b.List({shelf});
+    b.List({stock});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto store = templates::utm::Store::Of(*file);
+    REQUIRE(store);
+    CHECK(store->MarkUp() == 150);
+    const auto shelves = store->StoreList();
+    REQUIRE(shelves.size() == 1);
+    const auto items = shelves[0].ItemList();
+    REQUIRE(items.size() == 1);
+    CHECK(items[0].InventoryRes() == "gen_im_qck_health_101");
+    CHECK(items[0].Infinite() == 1);
+}

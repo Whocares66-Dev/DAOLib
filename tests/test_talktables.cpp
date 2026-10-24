@@ -256,3 +256,20 @@ TEST_CASE("on the GOG install, the tables and texts the game had in play", "[.][
     CHECK(install::Strings(*german, install::TalkTables(*german, true)).Lookup(238912)->text == L"Magierin");
     CHECK(install::Strings(*german, install::TalkTables(*german, false)).Lookup(238912)->text == L"Magier");
 }
+
+TEST_CASE("a template's localised string shows its own text first, whatever its language, else its id's",
+          "[talktables]")
+{
+    const Tables folder;
+    const auto index = folder.Build();
+    const install::Strings strings(*index, install::TalkTables(*index, true));
+    dao::core::gff3::LocString name;
+    name.strref = 3;
+    CHECK(install::TextOf(name, strings) == L"c core");
+    name.strings = {{2, "Duncan's Sword"}, {0, "another"}};
+    CHECK(install::TextOf(name, strings) == L"Duncan's Sword"); // the first, its own over the id's
+    name = {};
+    CHECK(install::TextOf(name, strings).empty()); // no id and no text of its own
+    name.strref = 7;                               // an id no table has
+    CHECK(install::TextOf(name, strings).empty());
+}

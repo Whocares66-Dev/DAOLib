@@ -1012,4 +1012,439 @@ class Item : public StructView
 
 } // namespace uti
 
+namespace utp
+{
+
+// ItemList[] of a template.
+class ItemListEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::string> TemplateResRef() const
+    {
+        return ResRef("TemplateResRef");
+    }
+    std::optional<std::int32_t> StackSize() const
+    {
+        return Number<std::int32_t>("StackSize");
+    }
+};
+
+// VarTable[] of a template.
+class VarTableEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::string> Name() const
+    {
+        return Text("Name");
+    }
+    std::optional<std::uint8_t> Type() const
+    {
+        return Number<std::uint8_t>("Type");
+    }
+    std::optional<std::int32_t> Value() const
+    {
+        return Number<std::int32_t>("Value");
+    }
+};
+
+// The top struct of a template.
+class Placeable : public StructView
+{
+  public:
+    using StructView::StructView;
+
+    // Returns a file's top struct; none for a file with none.
+    static std::optional<Placeable> Of(const gff3::File &file)
+    {
+        const auto root = file.Root();
+        return root ? std::optional<Placeable>(Placeable(*root)) : std::nullopt;
+    }
+    std::optional<gff3::LocString> LocName() const
+    {
+        return Loc("LocName");
+    }
+    std::optional<gff3::LocString> LocPopupText() const
+    {
+        return Loc("LocPopupText");
+    }
+    std::optional<std::string> Tag() const
+    {
+        return Text("Tag");
+    }
+    std::optional<std::string> TemplateResRef() const
+    {
+        return ResRef("TemplateResRef");
+    }
+    std::optional<std::string> EventScript() const
+    {
+        return ResRef("EventScript");
+    }
+    std::optional<std::string> Conversation() const
+    {
+        return ResRef("Conversation");
+    }
+    std::optional<std::uint32_t> GroupId() const
+    {
+        return Number<std::uint32_t>("GroupId");
+    }
+    std::optional<std::uint32_t> Appearance() const
+    {
+        return Number<std::uint32_t>("Appearance");
+    }
+    std::optional<std::uint16_t> AnimContState() const
+    {
+        return Number<std::uint16_t>("AnimContState");
+    }
+    std::optional<std::int16_t> Health() const
+    {
+        return Number<std::int16_t>("Health");
+    }
+    std::optional<std::int16_t> MaxHealth() const
+    {
+        return Number<std::int16_t>("MaxHealth");
+    }
+    std::optional<std::int32_t> PickLock() const
+    {
+        return Number<std::int32_t>("PickLock");
+    }
+    std::optional<std::string> KeyName() const
+    {
+        return Text("KeyName");
+    }
+    std::optional<std::uint8_t> AutoRemoveKey() const
+    {
+        return Number<std::uint8_t>("AutoRemoveKey");
+    }
+    std::optional<std::int32_t> TrapDetection() const
+    {
+        return Number<std::int32_t>("TrapDetection");
+    }
+    std::optional<std::int32_t> TrapDisarm() const
+    {
+        return Number<std::int32_t>("TrapDisarm");
+    }
+    std::optional<std::uint8_t> KeyRequired() const
+    {
+        return Number<std::uint8_t>("KeyRequired");
+    }
+    std::optional<std::uint8_t> Useable() const
+    {
+        return Number<std::uint8_t>("Useable");
+    }
+    std::optional<std::uint8_t> Plot() const
+    {
+        return Number<std::uint8_t>("Plot");
+    }
+    std::optional<std::int32_t> Rank() const
+    {
+        return Number<std::int32_t>("Rank");
+    }
+    std::optional<std::int32_t> TreasureCategory() const
+    {
+        return Number<std::int32_t>("TreasureCategory");
+    }
+    std::optional<std::int32_t> TeamId() const
+    {
+        return Number<std::int32_t>("TeamId");
+    }
+    std::optional<std::uint8_t> IsBodyBag() const
+    {
+        return Number<std::uint8_t>("IsBodyBag");
+    }
+    std::vector<ItemListEntry> ItemList() const
+    {
+        return List<ItemListEntry>("ItemList");
+    }
+    std::vector<VarTableEntry> VarTable() const
+    {
+        return List<VarTableEntry>("VarTable");
+    }
+    std::optional<std::uint8_t> Ref() const
+    {
+        return Number<std::uint8_t>("Ref");
+    }
+    std::optional<std::string> OnUsed() const
+    {
+        return ResRef("OnUsed");
+    }
+    std::optional<std::string> Portrait() const
+    {
+        return ResRef("Portrait");
+    }
+    std::optional<std::string> OnUserDefined() const
+    {
+        return ResRef("OnUserDefined");
+    }
+    std::optional<std::uint8_t> HasInventory() const
+    {
+        return Number<std::uint8_t>("HasInventory");
+    }
+    std::optional<std::string> OnDamaged() const
+    {
+        return ResRef("OnDamaged");
+    }
+    std::optional<std::uint32_t> Faction() const
+    {
+        return Number<std::uint32_t>("Faction");
+    }
+    std::optional<std::uint8_t> Locked() const
+    {
+        return Number<std::uint8_t>("Locked");
+    }
+    std::optional<std::uint8_t> CloseLockDC() const
+    {
+        return Number<std::uint8_t>("CloseLockDC");
+    }
+    std::optional<std::string> OnOpen() const
+    {
+        return ResRef("OnOpen");
+    }
+    std::optional<std::int16_t> HP() const
+    {
+        return Number<std::int16_t>("HP");
+    }
+    std::optional<gff3::LocString> Description() const
+    {
+        return Loc("Description");
+    }
+    std::optional<std::uint8_t> TrapDetectable() const
+    {
+        return Number<std::uint8_t>("TrapDetectable");
+    }
+    std::optional<std::uint8_t> PaletteID() const
+    {
+        return Number<std::uint8_t>("PaletteID");
+    }
+    std::optional<std::string> OnClosed() const
+    {
+        return ResRef("OnClosed");
+    }
+    std::optional<std::uint8_t> DisarmDC() const
+    {
+        return Number<std::uint8_t>("DisarmDC");
+    }
+    std::optional<std::string> OnMeleeAttacked() const
+    {
+        return ResRef("OnMeleeAttacked");
+    }
+    std::optional<std::uint8_t> Hardness() const
+    {
+        return Number<std::uint8_t>("Hardness");
+    }
+    std::optional<std::uint8_t> AnimationState() const
+    {
+        return Number<std::uint8_t>("AnimationState");
+    }
+    std::optional<std::uint8_t> TrapOneShot() const
+    {
+        return Number<std::uint8_t>("TrapOneShot");
+    }
+    std::optional<std::uint8_t> Interruptable() const
+    {
+        return Number<std::uint8_t>("Interruptable");
+    }
+    std::optional<std::string> OnLock() const
+    {
+        return ResRef("OnLock");
+    }
+    std::optional<std::string> OnTrapTriggered() const
+    {
+        return ResRef("OnTrapTriggered");
+    }
+    std::optional<std::uint8_t> Type() const
+    {
+        return Number<std::uint8_t>("Type");
+    }
+    std::optional<std::uint8_t> TrapType() const
+    {
+        return Number<std::uint8_t>("TrapType");
+    }
+    std::optional<std::string> OnDeath() const
+    {
+        return ResRef("OnDeath");
+    }
+    std::optional<std::string> OnUnlock() const
+    {
+        return ResRef("OnUnlock");
+    }
+    std::optional<std::string> Comment() const
+    {
+        return Text("Comment");
+    }
+    std::optional<std::uint8_t> TrapDisarmable() const
+    {
+        return Number<std::uint8_t>("TrapDisarmable");
+    }
+    std::optional<std::uint8_t> Lockable() const
+    {
+        return Number<std::uint8_t>("Lockable");
+    }
+    std::optional<std::string> OnHeartbeat() const
+    {
+        return ResRef("OnHeartbeat");
+    }
+    std::optional<std::uint8_t> OpenLockDC() const
+    {
+        return Number<std::uint8_t>("OpenLockDC");
+    }
+    std::optional<std::uint8_t> TrapDetectDC() const
+    {
+        return Number<std::uint8_t>("TrapDetectDC");
+    }
+    std::optional<std::string> OnSpellCastAt() const
+    {
+        return ResRef("OnSpellCastAt");
+    }
+    std::optional<std::uint8_t> Fort() const
+    {
+        return Number<std::uint8_t>("Fort");
+    }
+    std::optional<std::uint8_t> Will() const
+    {
+        return Number<std::uint8_t>("Will");
+    }
+    std::optional<std::string> OnInvDisturbed() const
+    {
+        return ResRef("OnInvDisturbed");
+    }
+    std::optional<std::uint8_t> TrapFlag() const
+    {
+        return Number<std::uint8_t>("TrapFlag");
+    }
+    std::optional<std::string> OnDisarm() const
+    {
+        return ResRef("OnDisarm");
+    }
+};
+
+} // namespace utp
+
+namespace utm
+{
+
+// StoreList[]/ItemList[] of a template.
+class StoreListEntryItemListEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::uint8_t> Infinite() const
+    {
+        return Number<std::uint8_t>("Infinite");
+    }
+    std::optional<std::int32_t> StackSize() const
+    {
+        return Number<std::int32_t>("StackSize");
+    }
+    std::optional<std::string> InventoryRes() const
+    {
+        return ResRef("InventoryRes");
+    }
+};
+
+// StoreList[] of a template.
+class StoreListEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::vector<StoreListEntryItemListEntry> ItemList() const
+    {
+        return List<StoreListEntryItemListEntry>("ItemList");
+    }
+};
+
+// VarTable[] of a template.
+class VarTableEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::string> Name() const
+    {
+        return Text("Name");
+    }
+    std::optional<std::uint8_t> Type() const
+    {
+        return Number<std::uint8_t>("Type");
+    }
+    std::optional<std::int32_t> Value() const
+    {
+        return Number<std::int32_t>("Value");
+    }
+};
+
+// WillNotBuy[] of a template.
+class WillNotBuyEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::int32_t> BaseItem() const
+    {
+        return Number<std::int32_t>("BaseItem");
+    }
+};
+
+// WillOnlyBuy[] of a template.
+class WillOnlyBuyEntry : public StructView
+{
+  public:
+    using StructView::StructView;
+    std::optional<std::int32_t> BaseItem() const
+    {
+        return Number<std::int32_t>("BaseItem");
+    }
+};
+
+// The top struct of a template.
+class Store : public StructView
+{
+  public:
+    using StructView::StructView;
+
+    // Returns a file's top struct; none for a file with none.
+    static std::optional<Store> Of(const gff3::File &file)
+    {
+        const auto root = file.Root();
+        return root ? std::optional<Store>(Store(*root)) : std::nullopt;
+    }
+    std::optional<gff3::LocString> LocName() const
+    {
+        return Loc("LocName");
+    }
+    std::optional<std::string> Tag() const
+    {
+        return Text("Tag");
+    }
+    std::optional<std::string> EventScript() const
+    {
+        return ResRef("EventScript");
+    }
+    std::optional<std::int32_t> MarkDown() const
+    {
+        return Number<std::int32_t>("MarkDown");
+    }
+    std::optional<std::int32_t> MarkUp() const
+    {
+        return Number<std::int32_t>("MarkUp");
+    }
+    std::vector<WillNotBuyEntry> WillNotBuy() const
+    {
+        return List<WillNotBuyEntry>("WillNotBuy");
+    }
+    std::vector<WillOnlyBuyEntry> WillOnlyBuy() const
+    {
+        return List<WillOnlyBuyEntry>("WillOnlyBuy");
+    }
+    std::vector<StoreListEntry> StoreList() const
+    {
+        return List<StoreListEntry>("StoreList");
+    }
+    std::vector<VarTableEntry> VarTable() const
+    {
+        return List<VarTableEntry>("VarTable");
+    }
+};
+
+} // namespace utm
+
 } // namespace dao::core::templates

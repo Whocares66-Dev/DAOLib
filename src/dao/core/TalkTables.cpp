@@ -197,4 +197,35 @@ std::vector<Strings::Found> Strings::All(std::uint32_t id) const
     return found;
 }
 
+// Notes on TextOf: read 2026-10-24 (DAOLib #258) in the GOG exe. The engine's LocString field
+// reader (0x00A37300; a creature's LocName from 0x0069AC9B) keeps the id and, if the field has any
+// substrings, the first one's text alone, its language and gender id unread (0x00A37404 to
+// 0x00A37422), and marks the text set; the text's getter (0x004D1EB0) looks the id up in the talk
+// tables (0x004E4990, the first table that has it, in the order the hero's gender leaves) only when
+// no text was set (0x004D1D50). So the field's own text wins, and an id of none with no text is
+// nothing. The text is widened through the C runtime (0x004C42B0); in its default locale each byte
+// is the character of its value, as here [inferred].
+std::wstring TextOf(const gff3::LocString &text, const Strings &strings)
+{
+    if (!text.strings.empty())
+    {
+        const std::string &own = text.strings.front().second;
+        std::wstring wide;
+        wide.reserve(own.size());
+        for (const char c : own)
+        {
+            wide.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
+        }
+        return wide;
+    }
+    if (text.strref != 0xFFFFFFFF)
+    {
+        if (const auto found = strings.Lookup(text.strref))
+        {
+            return found->text;
+        }
+    }
+    return {};
+}
+
 } // namespace dao::core::install

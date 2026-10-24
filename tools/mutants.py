@@ -222,6 +222,12 @@ MUTANTS: list[Mutant] = [
     ),
     # The talk tables the game searches, in its order (#106).
     Mutant(
+        "talktables-textof-own-first: a localised string's own text wins over its id's",
+        TALKTABLES,
+        "    if (!text.strings.empty())",
+        "    if (text.strings.empty() && !text.strings.empty())",
+    ),
+    Mutant(
         "talktables-gender-front: setting a gender moves its tables ahead, reversed",
         TALKTABLES,
         "        if (tables[i].female == female)",
