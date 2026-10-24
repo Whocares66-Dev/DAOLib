@@ -581,6 +581,22 @@ The GUI mode's own enter, leave, finished flag and how a request under a screen 
 - Dialog and Cutscene can't be interrupted, so requests wait until they end.
 - The new mode can refuse there (+0x24, then slot 5 +0x14; dialogue's ambient start is such a refusal).
 - **A request for the current mode with force 0 is dropped**: no switch, no event. The script's `SetGameMode` (530) passes force 0. Dialogue, cutscenes and explore after a load pass 1.
+- **In detail** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2; [C] unless marked):
+  - **The slots the take reads:**
+    - slot 9 (+0x24), the new mode's refusal test;
+    - slot 10 (+0x28), base;
+    - slot 11 (+0x2C), finished;
+    - slot 12 (+0x30), interruptible, which counts only while the stack is not empty.
+    - A null current mode (+0x74 = 0) also lets the take run (0x00640C84).
+  - **A dropped same-mode request:** one taken from the stack lets the take go on to the next (back to 0x00640C80); one from the base slot ends the take (0x00640D86).
+  - **GameModeDialog** (vtable 0x00B0E3DC): slots 5–8 are 0x0068FDA0, 0x0068FE40, 0x006910D0 (the leave) and 0x0068DDD0. Slot 9 is true (0x004137C0). Slots 10 and 12 are false (0x005C5E80). Slot 11 is its byte +0x2BC (0x00561A60).
+  - **GameModePregame** (mode 8, vtable 0x00B06CE4): slot 10 is false, slot 11 false (never finished) and slot 12 true. So it is a stack mode that yields to any later request.
+  - **The dialogue's finished byte +0x2BC:**
+    - It is set by slots 5 and 6 (0x0068FE2C, 0x0068FEB2), by the end-of-conversation helper 0x0068D810 (0x0068D82B; it calls 0x00695060(1.0) first; its callers are 0x0068DBD5, in the reply-taking code, and 0x0068F616 and 0x0068F6A2), and by 0x0068F640 (0x0068F64D).
+    - 0x0068F640 is called only from 0x007EED70, the conversation's end [I for the name]. That function is called from 0x007F10A7 and 0x007F203B; with a false argument it calls 0x0068F470 instead, which frees the cutscene at +0x208.
+    - It is cleared at 0x0069173C, in 0x006913E0. The leave (slot 7) does not touch it.
+  - **The dialogue mode asks for no mode itself:** no caller of SetGameMode (0x006414A0) or its wrapper 0x005D5E90 is in 0x0068C000–0x00692600. The leave's two virtual calls (0x006911CA, 0x006911E0) were not followed [I].
+  - **So any request made during a conversation waits** until +0x2BC is 1. Then the stack's oldest request is taken first, and the base slot's only when the stack is empty. This holds for a screen (3), a cutscene (5) and a second conversation (4) alike [C for the slots; I for not having been played].
 
 **The switch (0x00641D30), in order:**
 1. The old mode's leave (slot 7).
