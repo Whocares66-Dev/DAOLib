@@ -26,6 +26,7 @@ add_executable(
     test_dds_write.cpp
     test_effect.cpp
     test_erf.cpp
+    test_erf_roundtrip.cpp
     test_fev.cpp
     test_fsb.cpp
     test_gdafile.cpp

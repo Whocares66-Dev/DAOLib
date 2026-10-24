@@ -10,6 +10,14 @@
 // units; the files' bytes follow the directory with no gap before the first,
 // in the entries' order, each after the one before at the next multiple of
 // four.
+//
+// Seen 2026-10-24 over every 2.0 archive of the GOG install, 10,257 of them
+// (tests/test_erf_roundtrip.cpp): each written back from its files and its
+// header's date is its own bytes, the gaps zero. Four of packages\core\data
+// (designerareas, designercutscenes, designertriggers, fonts) end in 256
+// ASCII hex digits more, no plain hash of the rest; what makes or reads
+// them is unread, and this writes none. One add-in's archive has no files,
+// its header alone, which this refuses to make.
 #include "dao/core/Erf.h"
 
 #include <algorithm>
