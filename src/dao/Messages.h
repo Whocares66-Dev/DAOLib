@@ -170,11 +170,11 @@ template <class M> void InterceptMessage(std::function<bool(void *receiver, cons
 // quickbar.gfx), and the handler looks it up (0x00711BF8) and gives the may-use check the item's tag
 // (+0xB8) and UseAbility (0x00711680) the id as its item; the targeting state keeps it at +0x48 for
 // the click that ends the targeting. In play, 2026-10-24, the quickbar sent 0 for a talent and for
-// the Litany of Adralla's slot (its SourceItem.ID read none). The handler (GameModeExplore's,
-// 0x00711B50, which combat mode inherits), read 2026-09-30, takes no target from the message.
-// Once the ability may be used (0x0071CE90), it reads the ability's row of abi_base
-// (TargetType, UseType, AutoTarget) and uses the ability (UseAbility, dao/Addresses.h) on, in
-// order:
+// the Litany of Adralla's slot (its SourceItem.ID read none). The Eluvian server's order by click with a
+// Lesser Health Poultice's id there healed and spent one of the stack (Eluvian #173, 2026-10-24). The handler
+// (GameModeExplore's, 0x00711B50, which combat mode inherits), read 2026-09-30, takes no target from the message. Once
+// the ability may be used (0x0071CE90), it reads the ability's row of abi_base (TargetType, UseType, AutoTarget) and
+// uses the ability (UseAbility, dao/Addresses.h) on, in order:
 // - the caster, if the ability targets only its user, or an input (its action 0x2F, taken for
 //   self-casting, not checked) is held and it may target its user, or it is an active mode being
 //   turned off (UseType 2);
@@ -628,6 +628,480 @@ struct ValidateActionMessage : Message
 };
 static_assert(sizeof(ValidateActionMessage) == 8);
 
+// Notes on the items' messages: read 2026-10-24 (DAOLib #253) from their clones, text readers
+// (0x007738C0 two unsigned words, 0x007749C0 one, 0x00773BD0 two and a signed one, 0x007735F0 a
+// signed and an unsigned) and handlers. The movies send them to "GUI.SelectedChar." (the
+// character the screen shows), "Container.", "Store.", "GUICrafting.", "GUIInventory." or an
+// item's own token. EquipItem: the creature's handler (0x006BE330) equips the item in the slot
+// (CCCreature::Equip, 0x006BC7F0, dao/Equipment.h) and plays the item's sound; it answers true
+// whenever the item exists, the equip refused or not. The radial menu sends the item's first or
+// second slot, a drop on the paperdoll that slot, a double click 255 (the engine chooses).
+// UnequipItem (0x006BC050) takes it off (0x006B7690), flashing the inventory's full overlay
+// when the pack has no room. DropItem (0x006A72E0) destroys the whole stack (0x00762100), after
+// the Destroy prompt (ItemUtils.as). AcquireItem: the creature's (0x006A70E0) takes the item into
+// the pack, the container's (CCPlaceable 0x0074FCC0) into the container; AcquireAllItems
+// (0x006A1FD0) takes a container's all (dev/ITEMS.md). AttachRuneToItem: the item's (CCItem
+// 0x00759B00) puts the rune in an empty rune slot of its list (+0x4BC), its bonuses taken off and
+// put back if worn and its value made again; DetachRuneFromItem (0x00759C60) gives the slot's
+// rune to the party's inventory. Both from the item upgrade movie, and the script commands
+// AddItemSubItem and RemoveItemSubItem call the handlers. GiftItem: GUI mode's (0x00718210)
+// raises EVENT_TYPE_GIFT_ITEM (82) on the recipient with the item as object 0, delivered at once;
+// the scripts take the item (rules_core.nss). BuyItem and SellItem: the store's (0x007ED340,
+// 0x007EC740), unit by unit for an item that does not stack (dev/ITEMS.md has the prices).
+// CraftItem: the crafting screen's (0x00726430) makes the recipe (0x0073FE00), raises
+// EVENT_TYPE_CRAFT_ITEM (102) and counts the ingredients again. ClearNewlyAcquiredFlag
+// (GUIInventory 0x00731B70) clears an item's New mark (+0x620), sent as it is pointed at.
+// SetBackpackSort (0x00731D60, the store's 0x00729A70) keeps the party's sort, ItemSortPicker.as
+// sending 0 type, 1 name, 2 newest; SetItemListFilter (0x00731B10, 0x00729A00) the list's filter
+// (dev/ITEMS.md). ShowInventoryGUI (the GUI system's 0x0060C530) shows the inventory, with a
+// container beside it if asked; ShowContainerGUI (0x0060C670) makes one with the container, and
+// the script command OpenInventory sends it. GoToItem (0x00606A70) opens the inventory and reads
+// no item. ShowCraftingGUI (0x0060B300) opens crafting for the skill (the script command
+// ShowCraftingGUI). StartDragging (0x0060F3D0) starts the tooltips' drag at the place;
+// StopDragging (0x0060F5E0) ends it. ShowItemExamine (GUIItemExamine 0x00720010) shows the item
+// at the token, from Inspect. OpenStore (0x007EB9D0) opens the store's screen, sent by the
+// script command OpenStore; CloseStore (0x007EC8B0) settles the store as its screen closes (the
+// store screen's 0x00729820). The rest are the screens' own notices, each sent as the data they
+// watch changes: ContainerChanged, PartyBackpackChanged, PartyPlotItemsChanged,
+// EquipmentChanged, StoreChanged, SelectedGUICharacterChanged, ForceInventoryRefresh, and the
+// screens' closing ones. RepairItemMessage has no sender and is not typed here. In play,
+// 2026-10-24 (examples/messages), each sent as its screen or command sends it: the inventory's
+// EquipItem and UnequipItem of Lyna's Lucky Stone (slot 10); the inventory opened sent its four
+// notices, and took SetBackpackSort 2 (Party.BackpackSort read 2) and 0 again, SetItemListFilter 1
+// and 0, ClearNewlyAcquiredFlag, StartDragging at (100.5, 200.25), whose drag the movie ended
+// with StopDragging 1, ShowItemSplitDialog and GoToItem; GiftItem of an ox bone raised
+// Alistair's approval from 30 to 42; crafting opened with ShowCraftingGUI for poison-making
+// (100071) and herbalism (100061), and CraftItem made recipe 1 for Wynne; DropItem destroyed what
+// it made; OpenInventory on a crate sent ShowContainerGUI with can-add 1 (its handler calls
+// ShowInventoryGUI's own, no message), and the crate took AcquireItem both ways, AcquireAllItems
+// and InventoryClosed; OpenStore opened a store, which took SellItem and BuyItem of a poultice
+// (the money 27500, 27525, 27500) and sent CloseStore and its notices as it closed;
+// ShowItemExamine of Party.Backpack.0 showed the examine screen; the closing ones arrived.
+// Not seen: AttachRuneToItem and DetachRuneFromItem (no rune to hand), CountIngredients and
+// ShowInventoryGUI, which their callers' handlers run without sending.
+
+// Equips an item on a creature, in a slot, as the inventory's paperdoll and radial menu do
+// ("GUI.SelectedChar.EquipItem"). The handler answers true even if the equip is refused.
+struct EquipItemMessage : Message
+{
+    DAO_VFTABLE(68754);
+    ObjectId item;
+    std::uint32_t slot; // an INVENTORY_SLOT_*, or 255 for the slot the engine chooses
+};
+static_assert(sizeof(EquipItemMessage) == 0xC);
+
+// Takes an item off a creature into the pack ("GUI.SelectedChar.UnequipItem").
+struct UnequipItemMessage : Message
+{
+    DAO_VFTABLE(68755);
+    ObjectId item;
+};
+static_assert(sizeof(UnequipItemMessage) == 8);
+
+// Destroys an item's whole stack, as the inventory's Destroy does ("GUI.SelectedChar.DropItem").
+struct DropItemMessage : Message
+{
+    DAO_VFTABLE(68753);
+    ObjectId item;
+};
+static_assert(sizeof(DropItemMessage) == 8);
+
+// Takes an item into a creature's pack ("GUI.SelectedChar.AcquireItem") or a container
+// ("Container.AcquireItem").
+struct AcquireItemMessage : Message
+{
+    DAO_VFTABLE(68751);
+    ObjectId item;
+};
+static_assert(sizeof(AcquireItemMessage) == 8);
+
+// Takes everything in a container into the creature's pack, as the loot panel's Take All does.
+struct AcquireAllItemsMessage : Message
+{
+    DAO_VFTABLE(68752);
+    ObjectId container;
+};
+static_assert(sizeof(AcquireAllItemsMessage) == 8);
+
+// Puts a rune in an empty rune slot of an item. Sent to the item.
+struct AttachRuneToItemMessage : Message
+{
+    DAO_VFTABLE(65195);
+    ObjectId rune;
+    std::uint32_t slot; // the item's rune slot, from 0
+};
+static_assert(sizeof(AttachRuneToItemMessage) == 0xC);
+
+// Takes the rune out of a rune slot of an item into the party's inventory. Sent to the item.
+struct DetachRuneFromItemMessage : Message
+{
+    DAO_VFTABLE(65196);
+    std::uint32_t slot; // the item's rune slot, from 0
+};
+static_assert(sizeof(DetachRuneFromItemMessage) == 8);
+
+// Gives an item to a follower: raises EVENT_TYPE_GIFT_ITEM on the follower for the scripts.
+// Sent to the game modes, as the inventory does ("GameModeController.GiftItem").
+struct GiftItemMessage : Message
+{
+    DAO_VFTABLE(68726);
+    ObjectId recipient;
+    ObjectId item;
+};
+static_assert(sizeof(GiftItemMessage) == 0xC);
+
+// Buys an item from the store that is open ("Store.BuyItem").
+struct BuyItemMessage : Message
+{
+    DAO_VFTABLE(69288);
+    ObjectId buyer;
+    ObjectId item;
+    std::int32_t quantity;
+};
+static_assert(sizeof(BuyItemMessage) == 0x10);
+
+// Sells an item to the store that is open ("Store.SellItem").
+struct SellItemMessage : Message
+{
+    DAO_VFTABLE(69289);
+    ObjectId seller;
+    ObjectId item;
+    std::int32_t quantity;
+};
+static_assert(sizeof(SellItemMessage) == 0x10);
+
+// Makes a recipe on the crafting screen, as its Create button does ("GUICrafting.CraftItem").
+struct CraftItemMessage : Message
+{
+    DAO_VFTABLE(68033);
+    std::int32_t recipe; // the recipe's id
+    ObjectId crafter;
+};
+static_assert(sizeof(CraftItemMessage) == 0xC);
+
+// Counts again the crafting screen's ingredients the party has.
+struct CountIngredientsMessage : Message
+{
+    DAO_VFTABLE(68032);
+};
+static_assert(sizeof(CountIngredientsMessage) == 4);
+
+// Clears an item's New mark, as pointing at it in the inventory does.
+struct ClearNewlyAcquiredFlagMessage : Message
+{
+    DAO_VFTABLE(68262);
+    ObjectId item;
+};
+static_assert(sizeof(ClearNewlyAcquiredFlagMessage) == 8);
+
+// Sorts the party's pack in the inventory and the store.
+struct SetBackpackSortMessage : Message
+{
+    DAO_VFTABLE(68260);
+    std::uint32_t sort; // 0 by type, 1 by name, 2 newest first
+};
+static_assert(sizeof(SetBackpackSortMessage) == 8);
+
+// Filters the inventory's or the store's list of items.
+struct SetItemListFilterMessage : Message
+{
+    DAO_VFTABLE(68259);
+    // 0 all, 1 weapons, 2 armour, 3 accessories, 4 other, 5 crafting, 6 plot, 7 buyback
+    std::uint32_t filter;
+};
+static_assert(sizeof(SetItemListFilterMessage) == 8);
+
+// Shows the inventory, with a container beside it if asked. Sent to the GUI system.
+struct ShowInventoryGUIMessage : Message
+{
+    DAO_VFTABLE(65160);
+    ShowInventoryGUIMessage() : Message{}
+    {
+    }
+    std::uint8_t withContainer = 0;
+    std::uint8_t padding1[3]{};
+    ObjectId container{};
+    std::uint8_t canAddItems = 0; // whether items may be put in the container
+    std::uint8_t padding2[3]{};
+};
+static_assert(sizeof(ShowInventoryGUIMessage) == 0x10);
+
+// Shows a container's loot beside the inventory, as the script command OpenInventory does.
+struct ShowContainerGUIMessage : Message
+{
+    DAO_VFTABLE(65168);
+    ShowContainerGUIMessage() : Message{}
+    {
+    }
+    ObjectId container{};
+    std::uint8_t canAddItems = 0; // whether items may be put in the container
+    std::uint8_t padding[3]{};
+};
+static_assert(sizeof(ShowContainerGUIMessage) == 0xC);
+
+// Opens the inventory, as a new item's notice does when clicked. The item is not read.
+struct GoToItemMessage : Message
+{
+    DAO_VFTABLE(65174);
+    ObjectId item; // unread by the handler
+};
+static_assert(sizeof(GoToItemMessage) == 8);
+
+// Opens the crafting screen for a crafting skill, as the script command ShowCraftingGUI does.
+struct ShowCraftingGUIMessage : Message
+{
+    DAO_VFTABLE(65192);
+    std::int32_t skill; // the crafting skill's ability id
+};
+static_assert(sizeof(ShowCraftingGUIMessage) == 8);
+
+// Starts dragging an icon from a place on the stage ("GUI.StartDragging").
+struct StartDraggingMessage : Message
+{
+    DAO_VFTABLE(65184);
+    float x;
+    float y;
+};
+static_assert(sizeof(StartDraggingMessage) == 0xC);
+
+// Ends dragging an icon ("GUI.StopDragging").
+struct StopDraggingMessage : Message
+{
+    DAO_VFTABLE(65185);
+    std::uint8_t aborted; // 1 if the drag was given up
+};
+static_assert(sizeof(StopDraggingMessage) == 8);
+
+// Shows the examine screen for an item, as Inspect does ("GUIItemExamine.ShowItemExamine").
+struct ShowItemExamineMessage : Message
+{
+    DAO_VFTABLE(67941);
+    // Makes the message with no item.
+    ShowItemExamineMessage() : Message{}
+    {
+    }
+    core::WStringRep item;              // the item's token in the data tree
+    std::uint8_t onRightSide = 0;       // show it on the right of the screen
+    std::uint8_t checkRequirements = 0; // mark the requirements the character does not meet
+    std::uint8_t padding[2]{};
+};
+static_assert(sizeof(ShowItemExamineMessage) == 0x24);
+
+// Opens the store's screen. Sent to the store, as the script command OpenStore does.
+struct OpenStoreMessage : Message
+{
+    DAO_VFTABLE(65848);
+};
+static_assert(sizeof(OpenStoreMessage) == 4);
+
+// Settles the store as its screen closes.
+struct CloseStoreMessage : Message
+{
+    DAO_VFTABLE(68101);
+};
+static_assert(sizeof(CloseStoreMessage) == 4);
+
+// A container's loot panel closed. Sent to the container.
+struct InventoryClosedMessage : Message
+{
+    DAO_VFTABLE(68760);
+};
+static_assert(sizeof(InventoryClosedMessage) == 4);
+
+// The inventory's notice that the container's items changed.
+struct ContainerChangedMessage : Message
+{
+    DAO_VFTABLE(68258);
+};
+static_assert(sizeof(ContainerChangedMessage) == 4);
+
+// The inventory's and the store's notice that the party's pack changed.
+struct PartyBackpackChangedMessage : Message
+{
+    DAO_VFTABLE(68099);
+};
+static_assert(sizeof(PartyBackpackChangedMessage) == 4);
+
+// The inventory's notice that the party's plot items changed.
+struct PartyPlotItemsChangedMessage : Message
+{
+    DAO_VFTABLE(68257);
+};
+static_assert(sizeof(PartyPlotItemsChangedMessage) == 4);
+
+// The paperdoll's notice that the character's equipment changed.
+struct EquipmentChangedMessage : Message
+{
+    DAO_VFTABLE(69009);
+};
+static_assert(sizeof(EquipmentChangedMessage) == 4);
+
+// The store screen's notice that the store's items changed.
+struct StoreChangedMessage : Message
+{
+    DAO_VFTABLE(68100);
+};
+static_assert(sizeof(StoreChangedMessage) == 4);
+
+// The inventory's notice that it shows another character.
+struct SelectedGUICharacterChangedMessage : Message
+{
+    DAO_VFTABLE(68261);
+};
+static_assert(sizeof(SelectedGUICharacterChangedMessage) == 4);
+
+// Has the inventory rebuild its lists.
+struct ForceInventoryRefreshMessage : Message
+{
+    DAO_VFTABLE(65202);
+};
+static_assert(sizeof(ForceInventoryRefreshMessage) == 4);
+
+// Closes the loot panel and the inventory with it.
+struct HideContainerGUIMessage : Message
+{
+    DAO_VFTABLE(65169);
+};
+static_assert(sizeof(HideContainerGUIMessage) == 4);
+
+// Closes the inventory.
+struct HideInventoryGUIMessage : Message
+{
+    DAO_VFTABLE(65161);
+};
+static_assert(sizeof(HideInventoryGUIMessage) == 4);
+
+// Closes the full-screen screen that is open, the crafting screen's way out.
+struct HideCraftingGUIMessage : Message
+{
+    DAO_VFTABLE(65193);
+};
+static_assert(sizeof(HideCraftingGUIMessage) == 4);
+
+// Shows the dialog that splits a stack of items ("GUI.ShowItemSplitDialog").
+struct ShowItemSplitDialogMessage : Message
+{
+    DAO_VFTABLE(65182);
+};
+static_assert(sizeof(ShowItemSplitDialogMessage) == 4);
+
+// Notes on the popups' and the journal's messages: read 2026-10-24 (DAOLib #253) from their
+// clones, text readers and handlers. ScriptDialogResult: the script command ShowPopup (0x00663810)
+// makes each button's callback "GUIPopupLayer.ScriptDialogResult %d %d %d" from the popup's
+// row, the button (1 to 4) and the owner (0x00663A16), and the popup layer's movie sends it as
+// a button is pressed (PopupLayer.as:571), an input box's text first written to
+// GUIPopupLayer.InputText. The popup layer's handler (0x007098C0) raises EVENT_TYPE_POPUP_RESULT
+// (76) with the owner as object 0, the popup as int 0, the button as int 1 and the input text as
+// string 0, delivered at once (0x0064AD80; the scripts read them so, module_core.nss), then sends
+// DialogBoxClosedMessage. GUIPRCDialogResult: the content manager's offers' prompts' callbacks
+// ("PRCContentManager.GUIPRCDialogResult 1 <id>", "... 2 <id>", 0x00723678, 0x00723872); its
+// handler (0x007239C0) closes the box and acts on the offer by its button. ShowDialogBox: the
+// GUI system's (0x0060BB60) shows the popup layer and has it read the box the movie wrote into
+// the data tree (GUIPopupLayer.DialogBoxText, NumButtons, ...; Popups.as). The journal's, the
+// GUI system's: ShowJournalGUI (0x00606780) and HideJournalGUI (0x00606790) show and close the
+// journal's scene (9); GoToQuest (0x00606860) has the journal show the quest (0x00707DB0) and
+// opens it (SetFullScreenGUIMessage "Journal"), as a quest's alert does ("GUI.GoToQuest <plot>
+// <completed>", notifications.gfx's Alert.as); GoToCodex (0x00606910) the same for a codex entry,
+// from its alert and a tutorial's popup; GoToJournalPRCTab (0x006069C0) its downloadable content's
+// tab, its string unread. AcceptChantersQuest: the journal's (0x006EB850) accepts the Chanter's
+// board's entry at the index (dev/GUI.md), from the board's movie. Show and
+// HideConversationGUIMessage have no handler and nothing makes them; a conversation's screen is
+// the dialogue mode's. They are not typed here. In play, 2026-10-24 (examples/messages, Leliana's
+// Song in the Denerim market): ShowPopup of popup 3 with the Chanter's board as owner made a box
+// whose OK sent "GUIPopupLayer.ScriptDialogResult 3 1 140", which arrived as popup 3, button 1,
+// the board, and closed the box (DialogBoxClosed); "GUI.GoToQuest lel000pt_main 0" opened the
+// journal at that quest; GoToCodex, GoToJournalPRCTab, Show and HideJournalGUI and ShowDialogBox
+// arrived. Not seen: AcceptChantersQuest (that campaign's board is a conversation) and
+// GUIPRCDialogResult (no offer's prompt).
+
+// A popup's button pressed, as the popup layer sends it for a popup a script showed. Raises
+// EVENT_TYPE_POPUP_RESULT for the scripts, then closes the popup.
+struct ScriptDialogResultMessage : Message
+{
+    DAO_VFTABLE(67705);
+    std::int32_t popup;  // the popup, its row in the popups table, as ShowPopup was given it
+    std::int32_t button; // the button pressed, 1 to 4
+    ObjectId owner;      // the object ShowPopup named, or OBJECT_INVALID
+};
+static_assert(sizeof(ScriptDialogResultMessage) == 0x10);
+
+// A downloadable content offer's prompt answered. Sent to the content manager
+// ("PRCContentManager.GUIPRCDialogResult").
+struct GUIPRCDialogResultMessage : Message
+{
+    DAO_VFTABLE(67979);
+    std::int32_t button;  // 1 or 2, the prompt's two buttons
+    std::int32_t content; // the offer, by the content manager's id
+};
+static_assert(sizeof(GUIPRCDialogResultMessage) == 0xC);
+
+// Shows the message box the popup layer's data says ("GUI.ShowDialogBox").
+struct ShowDialogBoxMessage : Message
+{
+    DAO_VFTABLE(65181);
+};
+static_assert(sizeof(ShowDialogBoxMessage) == 4);
+
+// Shows the journal's screen.
+struct ShowJournalGUIMessage : Message
+{
+    DAO_VFTABLE(65162);
+};
+static_assert(sizeof(ShowJournalGUIMessage) == 4);
+
+// Closes the journal's screen.
+struct HideJournalGUIMessage : Message
+{
+    DAO_VFTABLE(65163);
+};
+static_assert(sizeof(HideJournalGUIMessage) == 4);
+
+// Opens the journal at a quest, as a quest's alert does when clicked ("GUI.GoToQuest").
+struct GoToQuestMessage : Message
+{
+    DAO_VFTABLE(65171);
+    // Makes the message with no quest.
+    GoToQuestMessage() : Message{}
+    {
+    }
+    core::WStringRep plot;      // the quest's plot, by its resource name
+    std::uint8_t completed = 0; // 1 for a quest done, shown among the completed
+    std::uint8_t padding[3]{};
+};
+static_assert(sizeof(GoToQuestMessage) == 0x24);
+
+// Opens the journal at a codex entry, as its alert does when clicked ("GUI.GoToCodex").
+struct GoToCodexMessage : Message
+{
+    DAO_VFTABLE(65172);
+    // Makes the message with no entry.
+    GoToCodexMessage() : Message{}
+    {
+    }
+    core::WStringRep entry; // the codex entry, by its resource name
+};
+static_assert(sizeof(GoToCodexMessage) == 0x20);
+
+// Opens the journal at its downloadable content's tab ("GUI.GoToJournalPRCTab").
+struct GoToJournalPRCTabMessage : Message
+{
+    DAO_VFTABLE(65173);
+    // Makes the message with its string empty.
+    GoToJournalPRCTabMessage() : Message{}
+    {
+    }
+    core::WStringRep unused; // empty, as the alert sends it; the handler does not read it
+};
+static_assert(sizeof(GoToJournalPRCTabMessage) == 0x20);
+
+// Accepts an entry of the Chanter's board, as its Accept button does ("Journal.AcceptChantersQuest").
+struct AcceptChantersQuestMessage : Message
+{
+    DAO_VFTABLE(68771);
+    std::int32_t entry; // the entry's place on the board, from 0
+};
+static_assert(sizeof(AcceptChantersQuestMessage) == 8);
+
 // Notes on the move messages: read 2026-09-30. MoveCharacterToLocationMessage's clone allocates
 // 4 bytes, the vtable. Its handler (0x0070C9A0) takes the place from explore mode's own state.
 // PreMove's handler (0x0070AAF0) only arms a flag the move needs.
@@ -765,6 +1239,16 @@ static_assert(sizeof(DialogBoxClosedMessage) == 4);
 // Notes on the conversation's and cutscene's keys: read 2026-10-01 from their handlers.
 // SelectResponseMessage's is the dialogue mode's 0x0068D050, SkipDialogMessage's the dialogue
 // mode's 0x0068DC10, and SkipCutsceneMessage's the cutscene mode's 0x00691D60.
+// Read again 2026-10-24 (DAOLib #253): SelectResponse's index is a place in the replies the mode
+// keeps (+0x1A4); the handler answers false and does nothing during the input's cooldown (+0x258),
+// past the end, or for a reply with no text, the lone Continue; else it keeps the index (+0x254)
+// for the update and has the movie show the choice (Conversation.HandleResponseSelection).
+// ConversationData's handler (0x0068D260) passes it to its mode's. The movie sends
+// "Conversation.SelectResponse <index>" for a click and 0 for Continue; the keys send
+// "SelectResponseMessage 0" to "5" (0x006E703E to 0x006E72A0), and "SkipDialogMessage"
+// (0x006E6FC4), which the slideshow's movie sends too. In play, 2026-10-24: the conversation
+// movie's "Conversation.SelectResponse 0" arrived at ConversationData with reply 0 and ended the
+// board's conversation; the skip key's binding arrived during it.
 
 // Picks a reply in a conversation, as clicking it or pressing its number key does. The dialogue
 // mode handles it (dao/Dialogue.h).
