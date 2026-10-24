@@ -39,9 +39,10 @@ import math
 import os
 import re
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gda  # noqa: E402
+import gff4  # noqa: E402
 import script_commands  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -88,16 +89,30 @@ SKIPPED = {"TRUE", "FALSE"}
 PROPERTY_IDS = ("PROPERTY_ATTRIBUTE_", "PROPERTY_SIMPLE_", "PROPERTY_DEPLETABLE_")
 
 
+TABLE_ARCHIVE = os.path.join(
+    script_commands.GAME, "packages", "core", "data", "2da.erf"
+)
+# A data table's GFF4 labels: its column list, a column's name hash, its row list, a row's first cell.
+COLUMN_LIST, COLUMN_HASH, ROW_LIST, FIRST_CELL = 10002, 10001, 10003, 10005
+
+
+def column_hash(name):
+    """A column's name as the table keeps it: CRC32 of it in lower case (dao/core/GdaHash.h)."""
+    return zlib.crc32(name.lower().encode("utf-16-le")) & 0xFFFFFFFF
+
+
 def properties():
     """{id: (Stat, ToolsetName)} from the game's properties table, or None."""
-    if not os.path.exists(gda.ARCHIVE):
+    if not os.path.exists(TABLE_ARCHIVE):
         return None
-    columns, rows = gda.read_gda(
-        script_commands.erf_entries(gda.ARCHIVE)["properties.gda"]
+    table = gff4.Gff4(
+        script_commands.erf_entries(TABLE_ARCHIVE)["properties.gda"]
+    ).walk()
+    at = {c[COLUMN_HASH]: i for i, c in enumerate(table[COLUMN_LIST])}
+    ident, stat, tool = (
+        FIRST_CELL + at[column_hash(n)] for n in ("ID", "Stat", "ToolsetName")
     )
-    at = {h: i for i, (h, _) in enumerate(columns)}
-    ident, stat, tool = (at[gda.column_hash(n)] for n in ("ID", "Stat", "ToolsetName"))
-    return {r[ident]: (str(r[stat] or ""), str(r[tool] or "")) for r in rows}
+    return {r[ident]: (str(r[stat] or ""), str(r[tool] or "")) for r in table[ROW_LIST]}
 
 
 def squash(name):

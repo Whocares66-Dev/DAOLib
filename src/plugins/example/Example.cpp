@@ -52,7 +52,7 @@ void CheckTables()
 {
     using dao::script::Table;
     constexpr auto kAbilities = static_cast<std::int32_t>(Table::AbilitiesTalents);
-    constexpr std::int32_t kShieldPummel = 1; // abi_base's row 1 (tools/gda.py --dump abi_base --names)
+    constexpr std::int32_t kShieldPummel = 1; // abi_base's row 1
     const auto type = dao::gda::GetInt(Table::AbilitiesTalents, kShieldPummel, "AbilityType");
     const std::int32_t typeScript = dao::script::api::GetM2DAInt(kAbilities, L"AbilityType", kShieldPummel);
     const auto cost = dao::gda::GetFloat(Table::AbilitiesTalents, kShieldPummel, "Cost");

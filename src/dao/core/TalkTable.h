@@ -2,7 +2,7 @@
 // plugin's own (dao/Strings.h). Over the bytes, read once into a map, so
 // the bytes need not outlive it.
 //
-// Read 2026-09-30, as tools/tlk.py reads the game's 1,501: GFF4 of type
+// Read 2026-09-30, as tools/gff4.py reads the game's 1,501: GFF4 of type
 // "TLK " version "V0.2", the top struct's list of strings (19001), each a
 // STRN of its id (19002, a u32) and its text (19003), as xoreos reads them
 // (src/aurora/talktable_gff.cpp). Version 0.5, whose text is Huffman-coded,

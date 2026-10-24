@@ -1,7 +1,7 @@
 // Notes on GDA files:
 //
 // A GFF4 of type "G2DA" (the game keeps 749 in packages\core\data\2da.erf).
-// Read 2026-09-30 by tools/gda.py, which this follows, as xoreos reads it
+// Read 2026-09-30 by tools/gda.py (retired 2026-10-24, #106), which this follows, as xoreos reads it
 // (src/aurora/gdafile.cpp): the top struct holds the column list (10002, each
 // column's name hash in 10001) and the row list (10003); a row's template has
 // a field per column, 10005 on, of the column's type. Written in C++ for

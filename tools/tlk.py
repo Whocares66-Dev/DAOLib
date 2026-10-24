@@ -1,68 +1,20 @@
-"""The game's text, out of its talk tables.
+"""A plugin's own talk table, written as the game's are.
 
-Every name and description the game shows is a string reference (a
-StrRef, like abi_base's NameStrRef) into a talk table:
-packages\\core\\data\\talktables\\core_en-us.tlk, its languages, and one per
-add-on. A talk table is a GFF4 file of type "TLK " (tools/gff4.py reads
-GFF4), and all 1,501 in the GOG install are version 0.2 (checked
-2026-09-30): the top struct's string list (field 19001), each string's id
-(19002) and its text (19003), as xoreos reads them
-(src/aurora/talktable_gff.cpp). Version 0.5, which Huffman-codes the text
-and which xoreos also reads, does not occur here.
+A talk table is a GFF4 file of type "TLK " version 0.2: the top struct's string list (field
+19001), each string's id (19002) and its text (19003), laid out byte for byte as every one of the
+game's 1,501 (dao/core/TalkTable.cpp has the rules, DAOLib #106). The game's tables are read
+through dao/core/TalkTable.h, and from Python through tools/gff4.py; this writes one.
 
-    python tools/tlk.py 379897 ...          print those strings
-    python tools/tlk.py --lang de-de 379897 in another language
-    python tools/tlk.py --count             how many strings there are
-    python tools/tlk.py --write IN.csv OUT.tlk
-                                            a plugin's own talk table
+    python tools/tlk.py --write IN.csv OUT.tlk     a plugin's own talk table (dao/Strings.h)
 
---write makes a talk table of a plugin's own (dao/Strings.h) from a CSV of
-id,text rows (UTF-8, a header row of "id,text" allowed), laid out as the
-game's own: the same templates, labels and field types, so the library's
-reader and the game's read it alike.
+IN.csv is id,text rows (UTF-8, a header row of "id,text" allowed).
 """
 
 import csv
-import os
 import struct
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import gff4  # noqa: E402
-import script_commands  # noqa: E402
-
-TABLES = os.path.join(script_commands.GAME, "packages", "core", "data", "talktables")
 STRING_LIST, STRING_ID, STRING_TEXT = 19001, 19002, 19003
-
-
-class TalkTable:
-    def __init__(self, data):
-        g = gff4.Gff4(data)
-        if g.type != "TLK ":
-            raise ValueError(f"a {g.type!r}, not a talk table")
-        top = g.fields(0)
-        if STRING_LIST not in top:
-            raise ValueError(
-                "no string list (field 19001): not a version 0.2 talk table"
-            )
-        self.strings = {}
-        for template, p in g.list_of_structs(g.data_offset, top[STRING_LIST]):
-            f = g.fields(template)
-            strref = g.value(p, f[STRING_ID])
-            if strref != 0xFFFFFFFF:  # an empty slot of the table
-                self.strings[strref] = g.value(p, f[STRING_TEXT]) or ""
-
-    @classmethod
-    def open(cls, lang="en-us"):
-        with open(os.path.join(TABLES, f"core_{lang}.tlk"), "rb") as f:
-            return cls(f.read())
-
-    def __len__(self):
-        return len(self.strings)
-
-    def get(self, strref):
-        return self.strings.get(strref)
 
 
 NONE = 0xFFFFFFFF  # an empty slot's id, and the offset of no text
@@ -144,26 +96,15 @@ def read_csv(path):
 
 
 def main(argv):
-    if "--write" in argv:
-        i = argv.index("--write")
-        source, target = argv[i + 1], argv[i + 2]
-        strings = read_csv(source)
-        with open(target, "wb") as f:
-            f.write(write(strings))
-        print(f"{len(strings)} strings written to {target}")
-        return 0
-    lang = "en-us"
-    if "--lang" in argv:
-        i = argv.index("--lang")
-        lang = argv[i + 1]
-        argv = argv[:i] + argv[i + 2 :]
-    table = TalkTable.open(lang)
-    sys.stdout.reconfigure(encoding="utf-8")
-    if "--count" in argv:
-        print(f"{len(table)} strings in core_{lang}.tlk")
-        return 0
-    for a in argv:
-        print(f"{a}\t{table.get(int(a))}")
+    if "--write" not in argv or len(argv) < argv.index("--write") + 3:
+        print("python tools/tlk.py --write IN.csv OUT.tlk", file=sys.stderr)
+        return 2
+    i = argv.index("--write")
+    source, target = argv[i + 1], argv[i + 2]
+    strings = read_csv(source)
+    with open(target, "wb") as f:
+        f.write(write(strings))
+    print(f"{len(strings)} strings written to {target}")
     return 0
 
 

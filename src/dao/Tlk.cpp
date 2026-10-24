@@ -2,7 +2,7 @@
 //
 // Read 2026-09-30 from the script command GetTlkTableString: the engine's CTlkTable (the object
 // in 0x00C1D08C) answers a string reference with its text through GetString, __thiscall
-// (strref, std::wstring &out, flag), `ret 0xC`. tools/tlk.py reads the same tables from the files.
+// (strref, std::wstring &out, flag), `ret 0xC`. dao/core/TalkTable.h reads the same tables from the files.
 //
 // The gender, read 2026-10-24 for DAOLib #106 and seen in play: GetString asks the tables front
 // to back and reads no gender, nor does the per-table find (0x004E47F0). GetTlkTableString sets

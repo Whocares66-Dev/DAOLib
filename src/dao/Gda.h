@@ -9,7 +9,7 @@
 //   const auto label = dao::gda::GetString(Table::AbilitiesTalents, ability, "Label");
 //   const auto rows = dao::gda::Rows(Table::AbilitiesTalents);
 //
-// dev/gda_tables.csv lists each table's files and columns with their types.
+// dev/gda_schema.csv lists each worksheet's columns with their types.
 #pragma once
 
 #include "dao/core/GdaHash.h"

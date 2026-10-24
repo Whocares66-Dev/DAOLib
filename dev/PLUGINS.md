@@ -114,7 +114,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Read or set a creature's stats | `Health()`, `MaxHealth()`, `Level()`, `Property(PropertyAttribute::Strength, PropertyValue::Base)`, `SetProperty(...)` | `dao/Objects.h` |
 | Read an effect or an event | `dao::CGameEffect`, `dao::CScriptEvent`, `CCObject::CurrentEvent()` | `dao/Structures.h` |
 | Use the scripts' strings, locations and arrays | `dao::WString`, `dao::CScriptLocation`, `dao::script::Array` | `dao/String.h`, `dao/Structures.h`, `dao/Script.h` |
-| Read a data table | `dao::gda::GetInt(Table::AbilitiesTalents, ability, "Cooldown")`, `GetFloat`, `GetString`, `GetBool`, `Rows`, `Columns`; the columns of each table are in `dev/gda_tables.csv` | `dao/Gda.h` |
+| Read a data table | `dao::gda::GetInt(Table::AbilitiesTalents, ability, "Cooldown")`, `GetFloat`, `GetString`, `GetBool`, `Rows`, `Columns`; the columns of each table are in `dev/gda_schema.csv` (and `dao/core/generated/GdaSchema.h`) | `dao/Gda.h` |
 | Get the game's text by string reference, in the player's language | `dao::tlk::String(strref)`; `String(strref, true)` for the female form | `dao/Tlk.h` |
 | Resolve a line's tokens as the game shows it (`<FirstName/>`, a key as bound) | `dao::tlk::Resolve(text)` | `dao/Tlk.h` |
 | Use a plugin's own text, in the player's language | talk tables beside the DLL (`<name>_<locale>.tlk`); `dao::strings::Locale` | `dao/Strings.h` |

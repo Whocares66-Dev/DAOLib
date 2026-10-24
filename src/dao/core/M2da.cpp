@@ -3,7 +3,7 @@
 // m2da_base.gda (426 rows on the GOG install) and 2da_base.gda (378) have the
 // columns ID, Label, Worksheet and PackageIDForAI; a worksheet is a prefix,
 // "ABI_" for table 1, Abilities, or a whole name, "portraits" for table 7,
-// which DAOTurnBased's portraits_turnbased.gda extends (tools/gda.py,
+// which DAOTurnBased's portraits_turnbased.gda extends (read
 // 2026-09-30). 2da_base lists "ABI_base" as an old single table of its own,
 // which the longest prefix of all would take abi_base.gda from the abilities'
 // M2DA for, so m2da_base's prefixes are tried first (seen 2026-10-12).

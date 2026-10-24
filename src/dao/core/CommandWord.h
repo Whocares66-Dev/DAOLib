@@ -14,7 +14,7 @@ namespace dao::core
 {
 
 // Every command type the game has: the commands table (TABLE_COMMANDS,
-// commands.gda, 43 rows, tools/gda.py --dump commands), which QueueCommand
+// commands.gda, 43 rows), which QueueCommand
 // reads each type's add behaviour from. Named as script.ldf's
 // COMMAND_TYPE_* where it declares one (20 of them), else after the
 // table's label. Two differ: script.ldf calls 22 RECOVER, but the table

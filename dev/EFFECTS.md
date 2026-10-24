@@ -2,7 +2,7 @@
 
 A visual effect as the game's files hold it: the table row that names it, the model that is its parts, and the clips and events that run it. The reader is `src/dao/core/Effect.h` (DAOLib #181), for DAOParagonEngine's effects (Paragon #26, `dev/PARAGON_VFX.md`'s first part). The first sections are the files; the last, how the engine plays them, is lib-agent-2's reading in the exe (the request's second part).
 
-Read 2026-10-18 by a subagent of lib-agent over ghilana's extract of what the game takes: the 600 models `fx*.mmh`, their 549 trees `fx*.anb`, 1,091 clips `fx*.ani` with as many `.gad`, 1,070 event files `fx*.evt`, and `vfx_base.gda`'s 993 rows (tools/gff4.py, tools/gda.py, and scripts of the session's own). "By the look of it" marks what the files suggest and the exe has not confirmed.
+Read 2026-10-18 by a subagent of lib-agent over ghilana's extract of what the game takes: the 600 models `fx*.mmh`, their 549 trees `fx*.anb`, 1,091 clips `fx*.ani` with as many `.gad`, 1,070 event files `fx*.evt`, and `vfx_base.gda`'s 993 rows (tools/gff4.py, tools/gda.py (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`), and scripts of the session's own). "By the look of it" marks what the files suggest and the exe has not confirmed.
 
 ## There is no effect file
 

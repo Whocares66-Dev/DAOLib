@@ -3,8 +3,8 @@
 // A table is one of the scripts' TABLE_* numbers (dao::script::Table, from
 // 2da_constants_h.nss): an M2DA, every file of the game's 2da.erf whose
 // name starts with the table's prefix (m2da_base.gda: 1 is "ABI_", 6
-// "BITM_"). dev/gda_tables.csv lists each file's table and columns with
-// their types (tools/gda.py). A row is the row's id, as scripts pass it to
+// "BITM_"). dev/gda_schema.csv lists each worksheet's columns with their
+// types (tools/gda_schema, DAOLib #106). A row is the row's id, as scripts pass it to
 // GetM2DAInt; a column is its name, hashed as the game does
 // (dao/core/GdaHash.h). The same values are the scripts' GetM2DAInt and
 // GetM2DAFloat, which dao::script::api also reaches; these go straight to
