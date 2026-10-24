@@ -24,11 +24,16 @@
 #include "dao/SubActions.h"
 
 #include "dao/ClientExoApp.h"
+#include "dao/CommandEvents.h"
+#include "dao/Frame.h"
+#include "dao/Guard.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
 #include "dao/core/ObjectType.h"
 
 #include <algorithm>
+#include <mutex>
+#include <utility>
 
 namespace dao::commands
 {
@@ -127,6 +132,99 @@ std::optional<Held> HeldFor(ObjectId creature)
     }
     held.seconds = static_cast<float>(ms) / 1000.0F;
     return held;
+}
+
+// Notes on a hold: read 2026-10-24 (DAOLib #257). An effect that holds its target queues the
+// ExecuteEffect command on it (CCObject::QueueExecuteEffect, 0x00695F20; type 32, at the front),
+// which keeps no effect: its start (0x00742B70) adds sub-action 51, whose handler (0x007AAC10)
+// takes each tick the effect at the head of the creature's effects holder (+0x158, whose first
+// word is its effect of the highest priority) and shows it, a stronger one arriving in its place.
+// So the hold's effect is that head, matched by its id (CGameEffect +0x20) to dao::effects::On.
+// Seen in play, 2026-10-24, in Redcliffe's siege (examples/moments): a knockdown staged on a
+// walking corpse came as effect type 1014 from Lyna, held 1.37 s; each death came as a hold too,
+// by the death effect (7) from its killer, 2.1 s; a knight's knockback (1027) as at least 0 s,
+// untimed; and some holds came with no effect left, the command outliving it.
+
+namespace
+{
+
+constexpr std::size_t kEffectsHead = 0x158; // in a creature: its effects holder, whose first word is the top effect
+constexpr std::size_t kEffectId = 0x20;     // in an effect: its id, CGameEffect::Id
+
+std::mutex g_holdMutex;
+std::vector<std::function<void(ObjectId, const Hold &)>> g_holdObservers;
+std::vector<ObjectId> g_starting; // the creatures whose effect command started this frame
+
+void FireHolds()
+{
+    std::vector<ObjectId> starting;
+    std::vector<std::function<void(ObjectId, const Hold &)>> observers;
+    {
+        const std::lock_guard lock(g_holdMutex);
+        starting.swap(g_starting);
+        observers = g_holdObservers;
+    }
+    for (const ObjectId creature : starting)
+    {
+        if (const auto hold = HoldOf(creature))
+        {
+            for (const auto &observer : observers)
+            {
+                detail::Guard("a hold callback", [&] { observer(creature, *hold); });
+            }
+        }
+    }
+}
+
+} // namespace
+
+std::optional<Hold> HoldOf(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    const CCObject *object = app != nullptr ? app->GetObjectById(creature) : nullptr;
+    const Command *command =
+        object != nullptr && object->Type() == core::ObjectType::Creature ? object->CurrentCommand() : nullptr;
+    if (command == nullptr || command->Type() != core::CommandType::ExecuteEffect)
+    {
+        return std::nullopt;
+    }
+    Hold hold;
+    hold.timing = HeldFor(creature).value_or(Held{0, false});
+    const auto at = reinterpret_cast<std::uintptr_t>(object);
+    const auto holder = TryRead<std::uintptr_t>(at + kEffectsHead).value_or(0);
+    const auto top = holder != 0 ? TryRead<std::uintptr_t>(holder).value_or(0) : 0;
+    const auto id = top != 0 ? TryRead<std::uint32_t>(top + kEffectId) : std::nullopt;
+    if (id)
+    {
+        for (const effects::Standing &effect : effects::On(creature))
+        {
+            if (effect.id == *id)
+            {
+                hold.effect = effect;
+                break;
+            }
+        }
+    }
+    return hold;
+}
+
+void OnHold(std::function<void(ObjectId creature, const Hold &hold)> observer)
+{
+    {
+        const std::lock_guard lock(g_holdMutex);
+        g_holdObservers.push_back(std::move(observer));
+    }
+    static std::once_flag once;
+    std::call_once(once, [] {
+        commands::OnStart([](ObjectId object, const Command &command) {
+            if (command.Type() == core::CommandType::ExecuteEffect)
+            {
+                const std::lock_guard lock(g_holdMutex);
+                g_starting.push_back(object);
+            }
+        });
+        OnFrame(&FireHolds);
+    });
 }
 
 } // namespace dao::commands

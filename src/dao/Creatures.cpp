@@ -40,6 +40,7 @@
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Objects.h"
+#include "dao/SafeRead.h"
 
 #include <cstdint>
 #include <mutex>
@@ -153,6 +154,49 @@ void OnReady(std::function<void(ObjectId creature)> observer)
             observer(object);
         }
     });
+}
+
+// Notes on movement: read 2026-10-24 (DAOLib #257). A creature's movement controller is in it at
+// +0xA30 (its RTTI's MovementController, vtable 0x00B596C0; dev/ANIMATION.md, dev/PATHFINDING.md).
+// Its target speed (0x00A63120) is apr_base's Game_WalkSpeed or Game_RunSpeed by its state (+0xF0:
+// 1 walk, 2 run; 0, 3 and 4 none), or Game_CbtSpeed in combat (+0xF9), plus +0xDC, times +0xD4; its
+// update (0x00A635D0) keeps that at +0xE4 and eases the speed at +0xE0 toward it by 8 m/s each
+// second. +0xD4 is the product of the speed effects (types 9 and 11, each's engine float 1): their
+// apply and remove handlers (0x007A0610, 0x007A0690) store it through the creature's +0x70 slot
+// 0x58 (0x006A3704), so it is what the turn-based mod reckoned from the effects itself. Seen in
+// play, 2026-10-24: Lyna in combat at 4.66 m/s (apr_base's human Game_CbtSpeed), multiplier 1; a
+// movement rate effect staged with no potency made it 0 and stopped her; removed, 1 and 4.66 again.
+
+namespace
+{
+
+constexpr std::size_t kMovement = 0xA30; // in a creature: its movement controller
+constexpr std::size_t kMultiplier = 0xD4;
+constexpr std::size_t kOffset = 0xDC;
+constexpr std::size_t kSpeed = 0xE0;
+constexpr std::size_t kTargetSpeed = 0xE4;
+constexpr std::size_t kState = 0xF0;
+constexpr std::size_t kCombat = 0xF9;
+
+} // namespace
+
+std::optional<Movement> MovementOf(ObjectId creature)
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    CCCreature *found = app != nullptr ? app->GetCreatureById(creature) : nullptr;
+    if (found == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto at = reinterpret_cast<std::uintptr_t>(found) + kMovement;
+    Movement movement;
+    movement.speed = TryRead<float>(at + kSpeed).value_or(0);
+    movement.target = TryRead<float>(at + kTargetSpeed).value_or(0);
+    movement.multiplier = TryRead<float>(at + kMultiplier).value_or(1);
+    movement.offset = TryRead<float>(at + kOffset).value_or(0);
+    movement.state = TryRead<std::int32_t>(at + kState).value_or(0);
+    movement.combat = TryRead<std::uint8_t>(at + kCombat).value_or(0) != 0;
+    return movement;
 }
 
 } // namespace dao::creatures

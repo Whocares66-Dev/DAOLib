@@ -10,16 +10,7 @@ DAOLib earns its place where those cannot reach:
 
 Each item says why it needs native work, what is known, and when it is done. Most valuable first. A finished item moves to `dev/LIBRARY.md`'s table, and gets an example in `examples/` when it is something a plugin would use (`dev/PLUGINS.md` says how). Refreshed 2026-10-04: much below was read on 2026-09-30 and has been built and played since, and the turn-based mod's needs of that week (attack reach, the melee ring, script timers, held time, the camera's distance) were met as they came (DAOLib #14 to #19).
 
-## 1. What holds a creature
-
-From the survey (DAOLib #257); which parts the turn-based mod still needs after item 1 to be agreed with its agent.
-
-- **Why native:** what a held creature's command runs, and for how long, is the engine's, as are its movement rate and an approach's verdict.
-- **Who and what it replaces:** the turn-based mod's list of five holding kinds checked by script polls (its `src/game/Bridge.cpp:1652-1712`), a raw read of an effect's engine parameters at +0x54 that it multiplies itself (`Bridge.cpp:1111`), and wall-clock limits on a stuck approach (`src/core/TurnMachine.h:1564-1585`; its `dev/DAOLIB_NEEDS.md` "The command queue" 7, "Rules, later" 1, lines 190 and 202).
-- **Leads:** `dao/SubActions.h`, `dao/Effects.h`, `dao/Attack.h`, `dev/COMBAT.md`, `dev/ABILITIES.md`.
-- **Done when:** a held creature's holding effect and the hold's whole length (the effect and the timed sub-actions after it), a creature's movement rate as the engine has it, and an approach's own "no place" or give-up, each seen in play: a knockdown that outlasts the bar ends the turn at once with its effect named; Haste changes the movement meter by the engine's factor; an attacker with no ring place ends on the engine's answer.
-
-## 2. Typed templates for placeables and stores
+## 1. Typed templates for placeables and stores
 
 From the survey (DAOLib #258).
 
@@ -28,7 +19,7 @@ From the survey (DAOLib #258).
 - **Leads:** `dao/core/generated/Gff3Schema.h` (typed views of `.utc` and `.uti`, DAOLib #106, step 5), `tools/gen_gff3_schema.py`, `tools/gff3_schema`, `dev/FILES.md` "The templates' catalogue".
 - **Done when:** the generator gives `.utp` and `.utm` views and a LocString's text, and Paragon's reads are replaceable by them.
 
-## 3. The light on trees, grass and buildings
+## 2. The light on trees, grass and buildings
 
 - **Why native:** an area's sky and sunlight can be set (`dao/Atmosphere.h`, DAOLib #62), and with them the ground, the creatures, the shadows and the haze follow from day to night. The trees, the grass and the buildings do not: under the night village's sky and sunlight the day village's pines and grass keep their warm olive on blue ground, and the night village's mill and trees stay night-dark on day-coloured ground. No script command or data table reaches any of it.
 - **Leads:** the static models' lightmaps (`EnvModelLightmapAtlas`, field 3323, and the level's `LvlLightmap*`); the trees' controller (`EnvAreaTreecontrollerList`, 3355); the area file's `EnvLightProbe` list (3103, 3104, 3108) and the models' `MMHLightprobeIrradianceCoefficients*` (6190 to 6192); `EnvAreaSunlightColorMult` (3153), pushed nowhere in the exe, so inferred never read (`dev/EFFECTS.md`, "What a draw takes"). The layout's load (`EC::ChunkManager`, 0x005D1290) is where the sunlight's fields were found.
@@ -40,6 +31,7 @@ From the survey (DAOLib #258).
 
 Read, built and seen in play; what is left of each is small, and kept here.
 
+- **What holds a creature** (`dao/SubActions.h`: `HoldOf`, `OnHold`, the sub-actions' names; `dao/Attack.h`: `OnApproachGivesUp`; `dao/Creatures.h`: `MovementOf`; DAOLib #257, seen 2026-10-24). A held creature's effect, by the effect its ExecuteEffect shows, with HeldFor's time; an attack approach's own verdict (no place, its timeout, stuck, a door, the target gone); a creature's speed, its target and its effects' multiplier. Seen in Redcliffe's siege: a knockdown's hold named, deaths as holds by their death effect, three no-place and four timeout verdicts, a movement effect's multiplier. Left: TurnTo for a placeable target (the turn-based mod's lowest); an attacker circling a ring whose places keep moving, for which the engine has no verdict.
 - **The renderer's lights as data** (`dao/Lights.h`: `PointLights`, `AreaProbes`, `Probes`, `SetObjectsTakeUnflagged`, and `PointLight`'s `place` and `reach`; DAOLib #256, seen 2026-10-24). Each point light of the area's scene from the light manager's lists, with its place (the light's own answer), reach and colour (the engine's own functions), owner and list; the area's probes and a light state's chosen ones with their irradiance; the engine's quality pass made to give objects none of the unflagged lists' lights. The shape agreed with elgara-agent. Left: DAOElgaraShaders moving off its offsets onto these (theirs); the third of a light's colour reads left with the switch off, not traced.
 - **Moments as events** (`dao/Creatures.h`: `OnDeath`, `OnRevive`, `OnReady`; `dao/GameModes.h`: `modes::OnModeChanged`, `OnAreaLoaded`, `OnInputBack`; `dao::events::OnScriptEventHandled`; `examples/moments`; DAOLib #255, seen 2026-10-24). A death on its frame with its killer, 2.1 s before the scripts' event (17 in a minute's fight); a made creature ready with its health (499 of 499, not the template's 1 of 1); a load's end with the party in the area; input back as a load or a screen ends. Each a detour at the engine's own point: `CCCreature::OnHealthChanged`, the spawn script's return, `GameModeController::SwitchMode`. Left: the Eluvian server's DeathWatch and settle timers and the turn-based mod's post-load poll moved onto them (theirs to do); a creature restored from a save, which is not spawned again, has no OnReady.
 - **World queries** (`dao/World.h`: `LineOfSight`, `PickAt`, `Raycast`, `FindPath`, `Pathfind`, `CurrentPath`, DAOLib #254, seen 2026-10-24). Line of sight agreed with the scripts' `CheckLineOfSightObject` on 60 of 60 pairs; `PickAt`'s first object was the game's cursor object at 23 of 23 pixels; a found path was within 0.4 m of the creature's own over ten walks of 15 to 26 m, and `Remaining` read what was left. The reading of the pathfinder is in `dev/PATHFINDING.md` and `src/dao/World.cpp`. Left: the groups mask's other bits; `FirstHit` compared on its own (it is `Raycast`'s nearest, which `PickAt` uses); an answer 6 across a door that stood open, seen by the turn-based mod at Soldier's Peak and not reproduced here (its doors lead out of the area, so nothing lies behind).

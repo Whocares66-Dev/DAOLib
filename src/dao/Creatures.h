@@ -9,7 +9,9 @@
 
 #include "dao/ObjectId.h"
 
+#include <cstdint>
 #include <functional>
+#include <optional>
 
 namespace dao::creatures
 {
@@ -39,4 +41,19 @@ void OnRevive(std::function<void(ObjectId creature)> observer);
 // the game thread.
 void OnReady(std::function<void(ObjectId creature)> observer);
 
+// A creature's movement as its movement controller has it now.
+struct Movement
+{
+    float speed = 0;      // metres a second it moves at now, eased toward `target`
+    float target = 0;     // metres a second it eases toward, by its state and the effects on it
+    float multiplier = 1; // the product of its speed effects (Haste, slows): what the table's speeds are scaled by
+    float offset = 0;     // added to the table's speed before the multiplier
+    // 0 idle, 1 walking, 2 running, 3 stopping, 4 turning on the spot
+    std::int32_t state = 0;
+    bool combat = false; // in combat the table's combat speed is taken, walking or running
+};
+
+// Returns a creature's movement now: its speed, the speed it eases toward and its effects' multiplier.
+// @return nullopt if there is no such creature. Call it on the game thread.
+std::optional<Movement> MovementOf(ObjectId creature);
 } // namespace dao::creatures

@@ -78,6 +78,8 @@
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Gda.h"
+#include "dao/Guard.h"
+#include "dao/Hook.h"
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
@@ -87,6 +89,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -864,6 +867,96 @@ std::vector<ObjectId> RingNeighbours(ObjectId target)
         node = parent;
     }
     return found;
+}
+
+// Notes on the approach's verdict: read 2026-10-24 (DAOLib #257). ApproachMelee (0x007AA560,
+// sub-action 4) and ApproachRanged (0x007AA200, 15) are __thiscall on their handler with the
+// sub-action and the attacker, `ret 8`, and answer an int the command ends with when it is not 0
+// (RunCurrentCommand, 0x0073CC5E): -5 when the target's ring has no place (MeleeRingSpot, slot
+// 38, at the first run, on the -9 re-ask and on the 1.5 s re-ask), -10 when the command's own
+// timeout ran out (only a command with a timeout, the AI's WR_AddCommand, has one; creature
+// +0xCEC), -4 from the walk's own update (a walker standing still past 1 s, or a path that cannot
+// be walked), -9 for a path action (a door), -7 and -8 a target gone or out of reach, -3 a bad
+// target. Detoured, the verdict is seen where it is reached, apart from a swing's or a walk's.
+// Seen in play, 2026-10-24, in Redcliffe's siege (examples/moments): in 40 s of a fight, three
+// walking corpses' approaches ended with -5 (no place) and four with -10 (their AI command's
+// timeout); a corpse knocked down mid-approach ended its ranged one with -8, so -8 also comes of
+// an approach cut short by an effect's hold.
+
+namespace
+{
+
+GiveUp WhyOf(std::int32_t status)
+{
+    switch (status)
+    {
+    case -5:
+        return GiveUp::NoPlace;
+    case -10:
+        return GiveUp::Timeout;
+    case -4:
+        return GiveUp::Stuck;
+    case -9:
+        return GiveUp::PathAction;
+    case -7:
+    case -8:
+        return GiveUp::TargetGone;
+    default:
+        return GiveUp::Other;
+    }
+}
+
+using ApproachFn = std::int32_t(__fastcall *)(void *handler, int edx, void *subAction, CCObject *attacker);
+Detour<ApproachFn> g_approachMelee;
+Detour<ApproachFn> g_approachRanged;
+std::mutex g_giveUpMutex;
+std::vector<std::function<void(ObjectId, GiveUp, std::int32_t, bool)>> g_giveUps;
+
+void TellGiveUp(const CCObject *attacker, std::int32_t status, bool ranged)
+{
+    if (status >= 0 || attacker == nullptr)
+    {
+        return;
+    }
+    std::vector<std::function<void(ObjectId, GiveUp, std::int32_t, bool)>> observers;
+    {
+        const std::lock_guard lock(g_giveUpMutex);
+        observers = g_giveUps;
+    }
+    const ObjectId id = attacker->Id();
+    for (const auto &observer : observers)
+    {
+        detail::Guard("an approach callback", [&] { observer(id, WhyOf(status), status, ranged); });
+    }
+}
+
+std::int32_t __fastcall ApproachMelee(void *handler, int edx, void *subAction, CCObject *attacker)
+{
+    const std::int32_t status = g_approachMelee.Original()(handler, edx, subAction, attacker);
+    TellGiveUp(attacker, status, false);
+    return status;
+}
+
+std::int32_t __fastcall ApproachRanged(void *handler, int edx, void *subAction, CCObject *attacker)
+{
+    const std::int32_t status = g_approachRanged.Original()(handler, edx, subAction, attacker);
+    TellGiveUp(attacker, status, true);
+    return status;
+}
+
+} // namespace
+
+void OnApproachGivesUp(std::function<void(ObjectId attacker, GiveUp why, std::int32_t status, bool ranged)> observer)
+{
+    {
+        const std::lock_guard lock(g_giveUpMutex);
+        g_giveUps.push_back(std::move(observer));
+    }
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_approachMelee.Attach(addr::kCSSubActionHandler_ApproachMelee, &ApproachMelee);
+        g_approachRanged.Attach(addr::kCSSubActionHandler_ApproachRanged, &ApproachRanged);
+    });
 }
 
 } // namespace dao::attack

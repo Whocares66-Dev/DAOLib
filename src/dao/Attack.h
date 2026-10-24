@@ -17,6 +17,8 @@
 #include "dao/Structures.h"
 
 #include <array>
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -183,4 +185,23 @@ std::optional<Walked> Walk(ObjectId attacker, ObjectId target);
 // @param ability a row of the abilities table (TABLE_ABILITIES_SPELLS)
 std::optional<Walked> Walk(ObjectId user, ObjectId target, std::int32_t ability);
 
+// Why an attack's approach ended without arriving, as the engine decided it.
+enum class GiveUp : std::uint8_t
+{
+    NoPlace,    // the target's ring had no place for the attacker (COMMAND_FAILED_NO_SPACE_IN_MELEE_RING)
+    Timeout,    // the command's own time ran out; only commands given one (the AI's) have it
+    Stuck,      // the walker stood still too long, or the path could not be walked
+    PathAction, // a door or the like is in the way
+    TargetGone, // the target is no more or cannot be attacked, or the attacker was knocked down
+    Other,      // any other failure the engine answers
+};
+
+// Calls `observer` when an attack's approach gives up: the engine's own verdict, at the update it
+// is reached, before the command ends with it.
+// @param observer receives the attacker, why, the engine's status (the command's result, such as
+// -5) and whether it was the ranged approach
+//
+// It does not fire for an attacker that keeps walking round a ring whose places keep moving: the
+// engine gives no verdict for that. Callbacks run on the game thread.
+void OnApproachGivesUp(std::function<void(ObjectId attacker, GiveUp why, std::int32_t status, bool ranged)> observer);
 } // namespace dao::attack
