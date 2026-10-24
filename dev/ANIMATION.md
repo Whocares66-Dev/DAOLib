@@ -1506,8 +1506,40 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
   - **The gate:** sub-action 51 runs 0x007A7290 when the effect's flag 0 and int 3 are both 0 (0x007AB1A5–0x007AB1BC).
   - **0x007A7290** builds a record, calls 0x007A6DA0(creature, effect, &rec), then 0x007A4D50(creature, arg, animation, &rec). This closes ANIMATION.md's and effect_access.md's "0x007A7290 not read".
   - **0x007A6DA0** fills the record with the partner, an attacker byte, table 0x65 and the row (effect +0x44). It reads the effect's float 2, its int 1 (compared with 1 and 2), its float 0 and its vector 2. For the attacker only, it sets creature +0x750 +0x14 = 1.0 and calls 0x007C1600.
-  - **0x007A5A30** slides over a default of 0.25 s (0x00AFF3E8). It skips when the partner is the creature itself or the record's +0x31 is set, and takes the distance and angles from 0x005CA7B0.
-  - [I]: the angles' roles and units, Percentage read as seconds, and which of the two moves. The draft has the victim moving, unlike the deathblow's, where the attacker slides.
+  - **0x007A5A30, the placement** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2; the [I] about the angles' roles and units, Percentage and who moves is now read, 2026-10-24 by lib-agent-2) [C, 0x007A5A30–0x007A5BE9; the inputs from the effect's own +0x54 array through 0x007A6DA0]:
+    ```
+    out.seconds = rec.seconds > 0 ? rec.seconds : 0.25           // 0x00AFF3E8
+    out.pos = creature.pos (+0x120);  out.facing = ToAngle(creature.orient +0x130)
+    P = the partner
+    if P and P != creature and rec.int1 != 2:
+        if !GetSyncRow(table 0x65, row, &out.seconds, &A, &T, &D):  // 0x005CA7B0: Percentage <= 0 means no row
+            out.facing = ToAngle(P.pos - out.pos)                  // no row: turn to the partner, no move
+        else:
+            if rec.attacker: q = Yaw(-AngleTarg); extra = AngleATK
+            else:            q = Yaw(+AngleATK);  extra = AngleTarg
+            out.pos    = P.pos + Distance * Rotate(q, P.orient)    // 0x004CB6D0
+            out.facing = ToAngle(-P.orient) + extra
+        if float2 < 0: out.pos = P.pos + float2 * normalize(P.pos - out.pos)   // pulled to |float2| short of the partner
+    if rec.int1 == 1: out.facing = float0                          // a facing, in degrees
+    elif rec.int1 == 2:                                            // a point, vector 2
+        if float2 >= 0: out.facing = ToAngle(V2 - out.pos)
+        else:           out.facing = ToAngle(out.pos - V2); out.pos = V2 + float2 * normalize(V2 - out.pos)
+    if float2 > 0: out.pos -= float2 * Rotate(Yaw(out.facing), (0, 1, 0))   // knocked back along its own facing
+    ```
+  - **Percentage** (0x414A699C) is the slide's time in seconds. It also says whether the row exists: 0x005CA7B0 returns false when it is ≤ 0 [C].
+  - **The angles** are in degrees [C]: FromYawPitchRoll 0x004EE200 multiplies by 0.0174533, and ToAngle 0x004EE570 is atan2 in degrees, 0 along +Y. They are measured from the partner's facing (+0x130). The sign of the yaw was not derived [I].
+  - **Who moves:** 0x007A5A30 only computes the result for the creature it is run for; it moves nobody itself [C]. Each of the pair holds its own effect, so both can be placed, each by its own role above.
+    - A creature whose effect has int 3 set skips the placement (vfunction 29, below), so it stays where it is [C for the branch; I that the scripts set int 3 on the attacker's effect].
+    - The deathblow is another caller of the same function (above).
+    - A ground-height byte exists in the record, but 0x007A6DA0 never sets it [C].
+  - **CCCreature vfunction 29** (0x006B9170, ID 14897) (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - It gets the effect's creator. If that is not this creature and 0x006A51C0 holds, it calls 0x006B5B30(1, name, 0) and sets the effect's flag 1.
+    - **Int 3 = 0:** it calls 0x007A7290, the placement.
+    - **Int 3 ≠ 0:**
+      - for the creator (0x0079F4F0) it sets +0x750 +0x14 = 1.0 and calls 0x007C1600(0x65, ability, the partner);
+      - then it plays the animation through slot 0xB0 (animation, 1.0, −2.0, loop 1): the plain play, with no placement.
+    - **Then:** it sets the effect's flag 0. If the effect's int 0 is 1, it also sets flag 2, calls 0x0069EBB0(0) (creature +0x778 = 0) and sets creature +0x420 = 1.
+    - Who calls slot 29 was not read.
 
 #### The deathblow
 

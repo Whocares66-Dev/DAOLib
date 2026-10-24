@@ -575,7 +575,7 @@ xcharacter.dll`, PhysX 2.8 NxCharacter: 131,072 bytes, SHA-256 728D8351394AC2DE1
   - **Its writers:**
     - 0x006A0DF0 sets 0, sets +0x420 = 1 and sets `[[this+0x154]+0xEA]` = 1. It is called from `OnAnimationEvent` 0x006C0CC6 and from 0x007A2F86.
     - 0x006A0E10 sets 1, from 0x006C0CCF and 0x00747347.
-    - CCCreature's vfunctions 29 and 30 (0x006B9170 sets 0, 0x006B9330 restores 1).
+    - CCCreature's vfunctions 29 and 30 (0x006B9170 sets 0, 0x006B9330 restores 1). 0x006B9170 sets +0x778 to 0 only when its sync effect's int 0 is 1 (ANIMATION.md, "Sync abilities"), so only then does a creature in a sync ability stop blocking other creatures' controllers (read 2026-10-24 by lib-agent-2; corrected: the earlier line made it unconditional).
     - SetObjectProperty (0x0066C076, 0x0066C091).
     - Sub-actions 37 and 51, by ±1.
     - 0x0069EBB0's callers 0x006BA793, 0x006C2074, 0x00746EBC, 0x0074727F, 0x00747309, 0x007473E7 and 0x007A7130 (sets 0, then +0x420 = 1).
