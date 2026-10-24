@@ -31,6 +31,7 @@ add_executable(
     test_fsb.cpp
     test_gdafile.cpp
     test_gdafile_roundtrip.cpp
+    test_gda_schema.cpp
     test_gff3_roundtrip.cpp
     test_gff3.cpp
     test_gff4.cpp
@@ -136,6 +137,13 @@ if(Python3_Interpreter_FOUND)
         COMMAND
             "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tools/gen_script_fields.py" --check
+    )
+    # The worksheets' catalogue and typed rows are what the scanned schema says.
+    add_test(
+        NAME gda_schema
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tools/gen_gda_schema.py" --check
     )
     # The scripts' constants are what script.ldf and the scripts say (passes
     # with no game or no extracted toolset).

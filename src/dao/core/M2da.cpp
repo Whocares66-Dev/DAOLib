@@ -291,7 +291,11 @@ const Row *Taken(const Merged &table, std::int64_t id)
 
 const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_view column)
 {
-    const std::uint32_t hash = GdaColumnHash(column);
+    return CellOf(table, row, GdaColumnHash(column));
+}
+
+const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::uint32_t hash)
+{
     for (std::size_t i = 0; i < table.columns.size() && i < row.cells.size(); ++i)
     {
         if (table.columns[i].hash == hash)

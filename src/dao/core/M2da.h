@@ -92,5 +92,7 @@ const Row *Taken(const Merged &table, std::int64_t id);
 // Returns a row's cell of a column, by the column's name in any case; null where the table has no
 // such column.
 const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_view column);
+// Returns a row's cell of a column by the column's hash (dao/core/GdaHash.h).
+const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::uint32_t hash);
 
 } // namespace dao::core::m2da

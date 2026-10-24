@@ -206,6 +206,7 @@ add_library(
     src/dao/core/StackText.cpp
     src/dao/core/TalkTable.cpp
     src/dao/core/TalkTables.cpp
+    src/dao/core/generated/GdaSchema.cpp
 )
 dao_apply_warnings(daolib_core)
 dao_release_symbols(daolib_core)
@@ -216,6 +217,17 @@ target_link_libraries(daolib_core PRIVATE Microsoft::DirectXTex)
 # <Windows.h>, which DirectXTex's headers bring, without its min and max macros.
 target_compile_definitions(daolib_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 add_library(DAOLib::core ALIAS daolib_core)
+
+# The worksheets' columns and what each holds, scanned from an install for the generated schema
+# (tools/gda_schema, DAOLib #106); over the core alone, so in either width.
+if(PROJECT_IS_TOP_LEVEL)
+    add_executable(dao_gda_schema tools/gda_schema/GdaSchema.cpp)
+    target_link_libraries(dao_gda_schema PRIVATE daolib_core)
+    target_compile_definitions(
+        dao_gda_schema
+        PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+    )
+endif()
 
 if(DAO_CORE_ONLY)
     if(DAO_BUILD_TESTS)

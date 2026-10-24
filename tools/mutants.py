@@ -148,6 +148,8 @@ M2DA = "src/dao/core/M2da.cpp"
 ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
 TALKTABLES = "src/dao/core/TalkTables.cpp"
+GDASCHEMA = "src/dao/core/generated/GdaSchema.cpp"
+TABLEROW = "src/dao/core/TableRow.h"
 ARCHIVECACHE = "src/dao/core/ArchiveCache.cpp"
 ADDINORDER = "src/dao/core/AddInOrder.h"
 FSB = "src/dao/core/Fsb.cpp"
@@ -166,6 +168,19 @@ FACEFX = "src/dao/core/FaceFx.cpp"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # The worksheets' catalogue and typed rows (#106, step 5).
+    Mutant(
+        "tables-find-id: a worksheet the catalogue has not is none",
+        GDASCHEMA,
+        "found->id == id ? &*found : nullptr",
+        "found->id == found->id ? &*found : nullptr",
+    ),
+    Mutant(
+        "tables-cell-kind: a cell of another kind than its column's reads as none",
+        TABLEROW,
+        "return cell != nullptr ? std::get_if<T>(cell) : nullptr;",
+        "return cell != nullptr && !std::holds_alternative<std::monostate>(*cell) ? reinterpret_cast<const T *>(cell) : nullptr;",
+    ),
     # A data table written back as the game's own are laid out (#106).
     Mutant(
         "gdafile-row-fill: a row's bytes no field takes are 0xFF",
