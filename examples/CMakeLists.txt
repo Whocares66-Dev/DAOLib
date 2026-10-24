@@ -61,6 +61,9 @@ dao_apply_warnings(example_party)
 add_daolib_plugin(example_messages SOURCES messages/Messages.cpp)
 dao_apply_warnings(example_messages)
 
+add_daolib_plugin(example_moments SOURCES moments/Moments.cpp)
+dao_apply_warnings(example_moments)
+
 add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
 dao_apply_warnings(example_attack)
 

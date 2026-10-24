@@ -23,8 +23,7 @@ using ScriptEventCallback = std::function<void(ObjectId target, const CScriptEve
 //
 // Call it when the plugin loads or later. Callbacks run on the game thread and can only watch:
 // they cannot change or stop the event. EVENT_TYPE_DEATH arrives about 1.5 to 5 seconds after
-// IsDead starts returning true for the creature. To catch the moment of death, watch IsDead or
-// EVENT_TYPE_DAMAGED.
+// the creature dies; dao::creatures::OnDeath (dao/Creatures.h) is the moment itself.
 void OnScriptEvent(ScriptEventCallback callback);
 
 // Calls `callback` for script events of one type only. Otherwise it works like the overload
@@ -34,5 +33,14 @@ void OnScriptEvent(ScriptEventCallback callback);
 // ability, and the creator is the attacker. The event comes only for a blow that does not kill;
 // a fatal blow sends the death event instead.
 void OnScriptEvent(script::EventType type, ScriptEventCallback callback);
+
+// Calls `callback` once an object's own scripts have handled an event of one type: after the
+// script ran, with what it changed in place. Only for events the object's scripts run (not an
+// area's or the module's), and the event itself is gone by then.
+//
+//   dao::events::OnScriptEventHandled(dao::script::EventType::Spawn, [](dao::ObjectId object) {
+//       // the object's spawn script has set it up
+//   });
+void OnScriptEventHandled(script::EventType type, std::function<void(ObjectId target)> callback);
 
 } // namespace dao::events

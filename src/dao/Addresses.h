@@ -142,6 +142,14 @@ DAO_ADDRESS(kMovieRecord_Step, 6791)
 // field.
 DAO_ADDRESS(kGameModeController_Constructor, 12617)
 DAO_ADDRESS(kGameModeController_SetGameMode, 12618)
+// The controller's switch (dao/GameModes.h, OnModeChanged): __fastcall on the controller, no
+// stack arguments, plain `ret`, from its update on the game thread. It takes a queued request
+// (0x00640C60), runs the old mode's Leave (slot 7), writes the new mode at +0x78 and the old at
+// +0x88, runs the new mode's Enter (slot 6), has the GUI show or hide the HUD (slot 77) and
+// delivers EVENT_TYPE_GAMEMODE_CHANGE (60) to the module; no request taken, +0x78 stays. A load
+// ends here, the loading mode (9) left in its last state (6), the party placed and the load
+// scripts run before it. Read 2026-10-24 (DAOLib #255), dev/CUTSCENES.md.
+DAO_ADDRESS(kGameModeController_SwitchMode, 12624)
 
 // What is under the mouse cursor, read 2026-09-30 (dao/GameModes.h,
 // GameModeExplore, has the fields). The mode's update re-picks 15 times a
@@ -2424,6 +2432,14 @@ DAO_ADDRESS(kAIMaster_DeliverNow, 12755)
 // straight, delivering at once: a creature's death and update, the command
 // queue, effects, Party::Select, the orders. Read 2026-09-30.
 DAO_ADDRESS(kCCObject_RunEventScript, 14176)
+// A creature's health changed (dao/Creatures.h, OnDeath and OnRevive): __thiscall (float old
+// health, byte flag), `ret 8`, void, called through the stats' change notice (0x00719A00, for
+// property 7) from every setter of the current health. Old above 0 and new at or below is a
+// death; with the flag and a mortal creature it applies the death effect (0x007A1A40) itself,
+// as a script's SetCurrentHealth(0) does; a fatal blow's death effect lowers the health on its
+// ExecuteEffect's first tick (0x007AB313), the flag 0. Old at or below 0 and new above is a
+// revive. Read 2026-10-24 (DAOLib #255), dev/COMBAT.md "Health and IsDead".
+DAO_ADDRESS(kCCCreature_OnHealthChanged, 14935)
 DAO_ADDRESS(kCCObject_EventHandler, 14177)
 DAO_ADDRESS(kCCArea_EventHandler, 13685)
 

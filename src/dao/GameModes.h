@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 
@@ -287,3 +288,25 @@ class GameModeController
 };
 
 } // namespace dao
+
+namespace dao::modes
+{
+
+// Calls `observer` each time the game's mode changes, once the new mode has entered.
+// @param observer receives the mode left and the mode entered
+//
+// Callbacks run on the game thread, from the controller's update, after the module has had its
+// EVENT_TYPE_GAMEMODE_CHANGE.
+void OnModeChanged(std::function<void(GameMode before, GameMode now)> observer);
+
+// Calls `observer` once per load, as the loading screen goes: a save loaded, an area
+// transition, a new game. The area is loaded, the party stands in it where the engine placed it,
+// and the area's and module's load scripts have run. A save's own loading screen is not a load.
+// If a load script starts a cutscene or a conversation, it comes before that plays.
+void OnAreaLoaded(std::function<void()> observer);
+
+// Calls `observer` when the game takes the player's input again: explore or combat mode entered
+// from any other, as a load, a cutscene, a conversation or a full-screen screen ends.
+void OnInputBack(std::function<void()> observer);
+
+} // namespace dao::modes

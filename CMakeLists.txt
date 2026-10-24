@@ -305,6 +305,7 @@ add_library(
     src/dao/Portraits.cpp
     src/dao/Render.cpp
     src/dao/Resources.cpp
+    src/dao/Creatures.cpp
     src/dao/Events.cpp
     src/dao/Frame.cpp
     src/dao/Camera.cpp

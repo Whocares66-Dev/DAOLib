@@ -17,8 +17,8 @@
 // creator the killer for a death from a blow and null for one by an
 // applied effect. Over a longer session the same day, 39 deaths gave 39
 // events, a median 2.15 s after IsDead and at most 5.14 s (once 20 ms
-// before a frame's IsDead poll). For the moment of death itself, a plugin
-// watches IsDead or EVENT_TYPE_DAMAGED.
+// before a frame's IsDead poll). The moment of death itself is
+// dao::creatures::OnDeath (DAOLib #255).
 //
 // EVENT_TYPE_DAMAGED is damage as it is taken: effect_damage_h.nss sends
 // it (events_h.nss, SendEventOnDamaged) straight after it lowers a
@@ -75,6 +75,13 @@ struct Entry
 std::mutex g_mutex;
 std::vector<Entry> g_callbacks;
 
+struct Handled
+{
+    script::EventType type;
+    std::function<void(ObjectId)> callback;
+};
+std::vector<Handled> g_handled;
+
 bool IsScriptEvent(std::uintptr_t data)
 {
     return data != 0 &&
@@ -105,13 +112,39 @@ void Tell(ObjectId target, const CScriptEvent &event)
 using RunEventScriptFn = void(__fastcall *)(CCObject *object, int edx, CScriptEvent **event);
 Detour<RunEventScriptFn> g_runEventScript;
 
+// After the script: the event's type and target are taken first, as the engine frees or clears
+// the event in the call (DAOLib #255's reading of the dispatch, 2026-10-24).
+void TellHandled(ObjectId target, script::EventType type)
+{
+    std::vector<Handled> handled;
+    {
+        const std::lock_guard lock(g_mutex);
+        handled = g_handled;
+    }
+    for (const auto &entry : handled)
+    {
+        if (entry.type == type)
+        {
+            detail::Guard("a handled script event callback", [&] { entry.callback(target); });
+        }
+    }
+}
+
 void __fastcall RunEventScript(CCObject *object, int edx, CScriptEvent **event)
 {
+    std::optional<script::EventType> type;
+    ObjectId target = kInvalidObject;
     if (object != nullptr && event != nullptr && IsScriptEvent(reinterpret_cast<std::uintptr_t>(*event)))
     {
-        Tell(object->Id(), **event);
+        target = object->Id();
+        type = (*event)->Type();
+        Tell(target, **event);
     }
     g_runEventScript.Original()(object, edx, event);
+    if (type)
+    {
+        TellHandled(target, *type);
+    }
 }
 
 // The queue, for the events it hands to an area or the module, which have
@@ -134,17 +167,22 @@ void __fastcall ProcessEvent(void *master, int edx, void *nodeSlot)
     g_processEvent.Original()(master, edx, nodeSlot);
 }
 
+void Attach()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        g_runEventScript.Attach(addr::kCCObject_RunEventScript, &RunEventScript);
+        g_processEvent.Attach(addr::kAIMaster_ProcessEvent, &ProcessEvent);
+    });
+}
+
 void Add(Entry entry)
 {
     {
         const std::lock_guard lock(g_mutex);
         g_callbacks.push_back(std::move(entry));
     }
-    static std::once_flag once;
-    std::call_once(once, [] {
-        g_runEventScript.Attach(addr::kCCObject_RunEventScript, &RunEventScript);
-        g_processEvent.Attach(addr::kAIMaster_ProcessEvent, &ProcessEvent);
-    });
+    Attach();
 }
 
 } // namespace
@@ -157,6 +195,15 @@ void OnScriptEvent(ScriptEventCallback callback)
 void OnScriptEvent(script::EventType type, ScriptEventCallback callback)
 {
     Add({type, std::move(callback)});
+}
+
+void OnScriptEventHandled(script::EventType type, std::function<void(ObjectId target)> callback)
+{
+    {
+        const std::lock_guard lock(g_mutex);
+        g_handled.push_back({type, std::move(callback)});
+    }
+    Attach();
 }
 
 } // namespace dao::events

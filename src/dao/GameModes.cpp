@@ -53,10 +53,16 @@
 // the ground's place too (dao/Vfx.h, SetPickable).
 #include "dao/GameModes.h"
 
+#include "dao/Guard.h"
+#include "dao/Hook.h"
 #include "dao/SafeRead.h"
 #include "dao/TypeName.h"
 
+#include <cstdint>
+#include <mutex>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace dao
 {
@@ -97,3 +103,118 @@ CameraController *GameModeController::Camera() const
 }
 
 } // namespace dao
+
+// Notes on the mode's changes: read 2026-10-24 (DAOLib #255). The controller's switch
+// (GameModeController::SwitchMode, 0x00641D30) is where every change happens: it takes the request
+// SetGameMode queued, runs the old mode's Leave and the new one's Enter, and tells the module
+// (dao/Addresses.h). Each mode's Enter and Leave turn its input group on and off, so explore or
+// combat entered is the game taking the player's input again. A load (a save's, a transition's,
+// a new game's machine, 0x006C76F0, or the area list's states 4 and 5) places the party
+// (0x006C73C0), then hands the loading mode its state 6 (0x006C8EF0), which asks for explore,
+// sends AREALOAD_SPECIAL, PRELOADEXIT and POSTLOADEXIT and drains the queue after each, and only
+// then lets the switch take the request. A save's own loading screen (kind 3) runs state 3 and
+// never reaches 6. The switch runs at every update of the controller, request or none, so it sees
+// the loading mode's states as they pass: in play, 2026-10-24, a save loaded read state 2 for 138
+// updates, 6 for 6, then 1 at the update that left it. So a load's end is the loading mode left
+// after state 6 was seen in it. The state is read before the original, as the mode's Leave runs
+// in it. Seen in play, 2026-10-24 (examples/moments): a save loaded gave the mode 9 to 0, the area
+// loaded with Lyna in arl101ar_redcliffe_night, and input back, all on that frame; the inventory
+// opened and closed in a fight gave 1 to 3, 3 to 1 and input back.
+
+namespace dao::modes
+{
+
+namespace
+{
+
+constexpr std::size_t kLoadingState = 0x84; // in the loading mode: its state, 16 bits
+constexpr std::uint16_t kLoadEnding = 6;    // the state that ends a load (0x006C8EF0)
+
+bool g_loadEnding = false; // state 6 seen since the loading mode was entered; the game thread's
+
+std::mutex g_mutex;
+std::vector<std::function<void(GameMode, GameMode)>> g_changes;
+std::vector<std::function<void()>> g_loads;
+std::vector<std::function<void()>> g_inputs;
+
+template <class T> std::vector<T> Copy(const std::vector<T> &callbacks)
+{
+    const std::lock_guard lock(g_mutex);
+    return callbacks;
+}
+
+bool TakesInput(GameMode mode)
+{
+    return mode == GameMode::Explore || mode == GameMode::Combat;
+}
+
+using SwitchModeFn = void(__fastcall *)(GameModeController *controller, int edx);
+Detour<SwitchModeFn> g_switchMode;
+
+void __fastcall SwitchMode(GameModeController *controller, int edx)
+{
+    const GameMode before = controller->Mode();
+    if (before == GameMode::Loading)
+    {
+        const auto at = reinterpret_cast<std::uintptr_t>(controller->ModeObject(GameMode::Loading));
+        g_loadEnding = g_loadEnding || (at != 0 && TryRead<std::uint16_t>(at + kLoadingState) == kLoadEnding);
+    }
+    g_switchMode.Original()(controller, edx);
+    const GameMode now = controller->Mode();
+    if (now == before)
+    {
+        return;
+    }
+    const bool loaded = before == GameMode::Loading && g_loadEnding;
+    if (before == GameMode::Loading)
+    {
+        g_loadEnding = false;
+    }
+    for (const auto &observer : Copy(g_changes))
+    {
+        detail::Guard("a mode change callback", [&] { observer(before, now); });
+    }
+    if (loaded)
+    {
+        for (const auto &observer : Copy(g_loads))
+        {
+            detail::Guard("an area loaded callback", [&] { observer(); });
+        }
+    }
+    if (TakesInput(now) && !TakesInput(before))
+    {
+        for (const auto &observer : Copy(g_inputs))
+        {
+            detail::Guard("an input back callback", [&] { observer(); });
+        }
+    }
+}
+
+template <class Fn> void Add(std::vector<Fn> &to, Fn observer)
+{
+    {
+        const std::lock_guard lock(g_mutex);
+        to.push_back(std::move(observer));
+    }
+    static std::once_flag once;
+    std::call_once(once, [] { g_switchMode.Attach(addr::kGameModeController_SwitchMode, &SwitchMode); });
+}
+
+} // namespace
+
+void OnModeChanged(std::function<void(GameMode before, GameMode now)> observer)
+{
+    Add(g_changes, std::move(observer));
+}
+
+void OnAreaLoaded(std::function<void()> observer)
+{
+    Add(g_loads, std::move(observer));
+}
+
+void OnInputBack(std::function<void()> observer)
+{
+    Add(g_inputs, std::move(observer));
+}
+
+} // namespace dao::modes

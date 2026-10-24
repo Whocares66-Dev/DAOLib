@@ -10,16 +10,7 @@ DAOLib earns its place where those cannot reach:
 
 Each item says why it needs native work, what is known, and when it is done. Most valuable first. A finished item moves to `dev/LIBRARY.md`'s table, and gets an example in `examples/` when it is something a plugin would use (`dev/PLUGINS.md` says how). Refreshed 2026-10-04: much below was read on 2026-09-30 and has been built and played since, and the turn-based mod's needs of that week (attack reach, the melee ring, script timers, held time, the camera's distance) were met as they came (DAOLib #14 to #19).
 
-## 1. Moments as events
-
-From lib-agent-3's survey of the sibling projects (2026-10-24, DAOLib #255).
-
-- **Why native:** a plugin that must act when something happens now polls each frame or guesses with timers, because the script event comes late or not at all.
-- **Who and what it replaces:** the Eluvian server watches every hurt creature each frame for up to a minute for its death, as EVENT_TYPE_DEATH arrives 1.5 to 2.5 s late (its `src/game/Shared.h:184-231`); a creature it spawns reads health 1 of 1 on its first frame (`Stage.cpp:458`); it guesses a load's end and the game taking input again with settle timers (`core/Ready.cpp`, `Warp.cpp:243-258`, `Travel.cpp`). The turn-based mod polls the game mode each frame after a load to write its cooldown holds back (its `dev/DAOLIB_NEEDS.md`, check 24).
-- **Leads:** `dev/LOAD_EVENTS.md` (a module's and an area's load events, in order), `dev/COMBAT.md` (effects applied, a death), `dev/PARTY.md` (the party pool carried on a transition), `dao/Events.h`, `dao/Input.h`. Each moment a detour at the engine's own point: the health write or the death's path, the creature's stats made, the area's load ended with the party placed, the input context back. No per-frame check in the library.
-- **Done when:** a callback on the frame a creature's health reaches 0, before the script event; one on the frame a made creature has its stats; one per load once the party stands in the area; one when the game takes input again; each seen in play, and the Eluvian server's and the mod's polls replaceable by them.
-
-## 2. The renderer's lights as data
+## 1. The renderer's lights as data
 
 From the survey (DAOLib #256).
 
@@ -28,7 +19,7 @@ From the survey (DAOLib #256).
 - **Leads:** `dao/Lights.h` (`OnPointLight` gives a light's model, name and colour; `OnProbe` the probes' matrices), `dev/SCENE.md`, ElgaraShaders' own reading.
 - **Done when:** `OnPointLight` gives each point light's world place, reach, colour after tint and flicker, owner, model and name, and `OnProbe` each light state's chosen probes with place and irradiance, the shape agreed with elgara-agent; seen in play as ElgaraShaders' fire, lamp and probe light unchanged, from no raw offsets.
 
-## 3. What holds a creature
+## 2. What holds a creature
 
 From the survey (DAOLib #257); which parts the turn-based mod still needs after item 1 to be agreed with its agent.
 
@@ -37,7 +28,7 @@ From the survey (DAOLib #257); which parts the turn-based mod still needs after 
 - **Leads:** `dao/SubActions.h`, `dao/Effects.h`, `dao/Attack.h`, `dev/COMBAT.md`, `dev/ABILITIES.md`.
 - **Done when:** a held creature's holding effect and the hold's whole length (the effect and the timed sub-actions after it), a creature's movement rate as the engine has it, and an approach's own "no place" or give-up, each seen in play: a knockdown that outlasts the bar ends the turn at once with its effect named; Haste changes the movement meter by the engine's factor; an attacker with no ring place ends on the engine's answer.
 
-## 4. Typed templates for placeables and stores
+## 3. Typed templates for placeables and stores
 
 From the survey (DAOLib #258).
 
@@ -46,7 +37,7 @@ From the survey (DAOLib #258).
 - **Leads:** `dao/core/generated/Gff3Schema.h` (typed views of `.utc` and `.uti`, DAOLib #106, step 5), `tools/gen_gff3_schema.py`, `tools/gff3_schema`, `dev/FILES.md` "The templates' catalogue".
 - **Done when:** the generator gives `.utp` and `.utm` views and a LocString's text, and Paragon's reads are replaceable by them.
 
-## 5. The light on trees, grass and buildings
+## 4. The light on trees, grass and buildings
 
 - **Why native:** an area's sky and sunlight can be set (`dao/Atmosphere.h`, DAOLib #62), and with them the ground, the creatures, the shadows and the haze follow from day to night. The trees, the grass and the buildings do not: under the night village's sky and sunlight the day village's pines and grass keep their warm olive on blue ground, and the night village's mill and trees stay night-dark on day-coloured ground. No script command or data table reaches any of it.
 - **Leads:** the static models' lightmaps (`EnvModelLightmapAtlas`, field 3323, and the level's `LvlLightmap*`); the trees' controller (`EnvAreaTreecontrollerList`, 3355); the area file's `EnvLightProbe` list (3103, 3104, 3108) and the models' `MMHLightprobeIrradianceCoefficients*` (6190 to 6192); `EnvAreaSunlightColorMult` (3153), pushed nowhere in the exe, so inferred never read (`dev/EFFECTS.md`, "What a draw takes"). The layout's load (`EC::ChunkManager`, 0x005D1290) is where the sunlight's fields were found.
@@ -58,6 +49,7 @@ From the survey (DAOLib #258).
 
 Read, built and seen in play; what is left of each is small, and kept here.
 
+- **Moments as events** (`dao/Creatures.h`: `OnDeath`, `OnRevive`, `OnReady`; `dao/GameModes.h`: `modes::OnModeChanged`, `OnAreaLoaded`, `OnInputBack`; `dao::events::OnScriptEventHandled`; `examples/moments`; DAOLib #255, seen 2026-10-24). A death on its frame with its killer, 2.1 s before the scripts' event (17 in a minute's fight); a made creature ready with its health (499 of 499, not the template's 1 of 1); a load's end with the party in the area; input back as a load or a screen ends. Each a detour at the engine's own point: `CCCreature::OnHealthChanged`, the spawn script's return, `GameModeController::SwitchMode`. Left: the Eluvian server's DeathWatch and settle timers and the turn-based mod's post-load poll moved onto them (theirs to do); a creature restored from a save, which is not spawned again, has no OnReady.
 - **World queries** (`dao/World.h`: `LineOfSight`, `PickAt`, `Raycast`, `FindPath`, `Pathfind`, `CurrentPath`, DAOLib #254, seen 2026-10-24). Line of sight agreed with the scripts' `CheckLineOfSightObject` on 60 of 60 pairs; `PickAt`'s first object was the game's cursor object at 23 of 23 pixels; a found path was within 0.4 m of the creature's own over ten walks of 15 to 26 m, and `Remaining` read what was left. The reading of the pathfinder is in `dev/PATHFINDING.md` and `src/dao/World.cpp`. Left: the groups mask's other bits; `FirstHit` compared on its own (it is `Raycast`'s nearest, which `PickAt` uses); an answer 6 across a door that stood open, seen by the turn-based mod at Soldier's Peak and not reproduced here (its doors lead out of the area, so nothing lies behind).
 - **Dialogue** (`dao/Dialogue.h`, DAOLib #254, seen 2026-10-24): each line and reply as shown (`OnNpcLine`, `OnReplies`, `examples/dialogue`), a reply hidden and a reply whose condition failed offered (`OnLineAvailable`), choosing and skipping (`Choose`, `SkipCutscene`, through the Eluvian server). Left: a line the file does not have, which means giving the engine a changed file.
 - **The engine's messages, typed** (`dao/Messages.h`, `examples/messages`, DAOLib #253, seen 2026-10-24). The abilities' (the targeting messages, SetQuickslot, the ability headers, the ability screens'), the party's (the selections, the party picker, the alerts, the toggles, the tactics screen's six), the items' (equip and unequip, destroy, take, the runes, a gift, buying and selling, crafting, the inventory's and the store's screens) and the conversations', popups' and journal's, each read from its clone, its text reader and its handlers, with its senders, and each seen in play through the game's own screens, keys and script commands, the effects read back where there are any. PerformAbilityMessage's third word is the ability's item. Never seen, as nothing sends them in vanilla: CharGenSelectSpecialization, GUIPRCDialogResult, CountIngredients and ShowInventoryGUI. Not typed: RequestTarget, IsValidTarget, Show and HideConversationGUI and RepairItem, which nothing handles or sends. Left: a message a plugin asks for that these families do not cover (who has control and what goes on whom, asked for by the Eluvian server, are events at the engine's own functions, DAOLib #22).
