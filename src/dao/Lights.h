@@ -13,11 +13,16 @@
 //   });
 #pragma once
 
+#include "dao/ObjectId.h"
+#include "dao/Structures.h"
+
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace dao::lights
 {
@@ -70,6 +75,10 @@ struct PointLight
     std::wstring_view model;
     // The light's node, the same each frame for the same light; for telling lights apart.
     std::uintptr_t node = 0;
+    // Where the light is in the world.
+    Vector place{};
+    // How far the light reaches, in metres.
+    float reach = 0;
 };
 
 // Adds a callback to run each time the engine takes a point light's colour, once for each object
@@ -79,6 +88,69 @@ struct PointLight
 // Nothing is kept: a callback that stops changing the colour leaves the light as vanilla has it.
 // Callbacks run on the render thread, many times a frame, so keep them short.
 void OnPointLight(std::function<void(PointLight &)> callback);
+
+// Which of the light manager's lists a point light is in. The level's are the lights placed with
+// the level and its effects, the figures' those that move with a creature; a flagged light is one
+// its model marks (BlueprintFlag), which the engine lights fewer objects with.
+enum class LightList : std::uint8_t
+{
+    LevelsUnflagged,
+    LevelsFlagged,
+    FiguresFlagged,
+    FiguresUnflagged,
+};
+
+// A point light of the area's scene, as the engine has it this frame.
+struct SceneLight
+{
+    std::uintptr_t node = 0; // the same each frame for the same light, as PointLight's
+    Vector place{};          // where it is in the world
+    float reach = 0;         // how far it reaches, in metres
+    // Its colour as the shaders are handed it: its own, times its owner's tint where it takes one, times
+    // its strength and its flicker; less only the fade each object may give it.
+    Color color{};
+    Color own{};        // its own colour, as its model has it
+    float strength = 0; // what the colour is scaled by
+    float flicker = 0;  // the flicker's share this frame, 1 for a steady light
+    // The game object whose model the light is part of, or kInvalidObject for one of no game object
+    // (a room's layout, a figures' rig, a weapon's part).
+    ObjectId owner = kInvalidObject;
+    LightList list = LightList::LevelsUnflagged;
+    std::wstring model; // the model the light is part of
+    std::wstring name;  // the light's name in it
+};
+
+// Returns every point light of the current area's scene, from the light manager's lists.
+// @return none with no area loaded, or off the game thread
+//
+// Call it on the game thread, for example from a frame callback (dao/Frame.h). Lights of other scenes
+// (a portrait's, an area fast load keeps) are not in it.
+std::vector<SceneLight> PointLights();
+
+// Stops, or lets again, the engine giving objects the lights of the two unflagged lists: the lights the
+// level and its effects place, and those that move with figures. A plugin that lights every surface with
+// them itself (from PointLights) turns them off so they are not added twice.
+// @param take false to give objects none of them, true for vanilla's
+//
+// It lasts for every area loaded after, until changed. Call it on the game thread.
+void SetObjectsTakeUnflagged(bool take);
+
+// A light probe of the area's scene.
+struct SceneProbe
+{
+    std::uintptr_t node = 0;            // the probe's node, as ProbeLight's `probe`
+    Vector place{};                     // where it is in the world
+    std::array<float, 48> irradiance{}; // three 4x4 matrices for red, green and blue, as its blueprint has them
+    std::wstring model;                 // the model it is part of: a room's <level>_<x>_<y>_<d>_ll, or a rig's
+};
+
+// Returns the probes a light state chose: the object's, from which the engine hands it one.
+// @param state a light state, as OnAmbient, OnProbe and OnSunShare give it
+// @return none for no state, or off the game and render threads
+std::vector<SceneProbe> Probes(std::uintptr_t state);
+
+// Returns every light probe of the current area's scene. Call it on the game thread.
+std::vector<SceneProbe> AreaProbes();
 
 // One light state's light probe, as the engine has just handed it the probe's irradiance.
 struct ProbeLight

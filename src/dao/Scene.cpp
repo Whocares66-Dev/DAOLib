@@ -702,6 +702,12 @@ void ForEach(Kind kind, const std::function<void(const Object &object, const Nod
 namespace dao
 {
 
+std::unordered_map<std::uintptr_t, ObjectId> detail::GraphicsOwners()
+{
+    CClientExoApp *app = CClientExoApp::Get();
+    return app != nullptr ? scene::ReadOwners(*app) : std::unordered_map<std::uintptr_t, ObjectId>{};
+}
+
 std::vector<scene::Object> detail::FreshSceneObjects()
 {
     std::vector<scene::Object> objects;

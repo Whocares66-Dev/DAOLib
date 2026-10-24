@@ -27,6 +27,10 @@
 // a figure walked under a cliff or into a house's shadow in daylight stays
 // lit by the sun there.
 //
+// Every ten seconds it also logs the area's point lights as the light manager lists them, how many in
+// each list and the first few with their place, reach, colour and owner, and its light probes
+// (dao::lights::PointLights, AreaProbes).
+//
 // What it does goes to example_lights.log.
 #include "dao/Lights.h"
 #include "dao/Frame.h"
@@ -34,13 +38,16 @@
 #include "dao/Plugin.h"
 #include "dao/String.h"
 
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <unordered_set>
 
 namespace
@@ -145,6 +152,50 @@ void Sun(SunShare &sun)
     sun.share = 1.0F;
 }
 
+const char *ListName(dao::lights::LightList list)
+{
+    switch (list)
+    {
+    case dao::lights::LightList::LevelsUnflagged:
+        return "level's";
+    case dao::lights::LightList::LevelsFlagged:
+        return "level's flagged";
+    case dao::lights::LightList::FiguresFlagged:
+        return "figures' flagged";
+    default:
+        return "figures'";
+    }
+}
+
+// The area's point lights and probes as the light manager lists them: how many in each list, and
+// the first few in full.
+void LogScene()
+{
+    const auto lights = dao::lights::PointLights();
+    std::array<std::size_t, 4> counts{};
+    for (const auto &light : lights)
+    {
+        ++counts[static_cast<std::size_t>(light.list)];
+    }
+    spdlog::info("the area's point lights: {} level's, {} level's flagged, {} figures' flagged, {} figures'", counts[0],
+                 counts[1], counts[2], counts[3]);
+    for (std::size_t i = 0; i < lights.size() && i < 3; ++i)
+    {
+        const auto &light = lights[i];
+        spdlog::info("  {} '{}' of {} ({}), at {:.1f} {:.1f} {:.1f}, reach {:.1f} m, colour {:.3f} {:.3f} {:.3f}, "
+                     "owner 0x{:x}",
+                     ListName(light.list), dao::Utf8(light.name), dao::Utf8(light.model), light.node, light.place.x,
+                     light.place.y, light.place.z, light.reach, light.color[0], light.color[1], light.color[2],
+                     light.owner);
+    }
+    const auto probes = dao::lights::AreaProbes();
+    spdlog::info("the area's light probes: {}{}", probes.size(),
+                 probes.empty() ? std::string()
+                                : fmt::format(", the first {} at {:.1f} {:.1f} {:.1f}, red's first {:.3f}",
+                                              dao::Utf8(probes[0].model), probes[0].place.x, probes[0].place.y,
+                                              probes[0].place.z, probes[0].irradiance[0]));
+}
+
 void Frame()
 {
     static Clock::time_point logged = Clock::now();
@@ -159,6 +210,7 @@ void Frame()
                  g_brightest.exchange(0));
     spdlog::info("sun share set in 10 s: {} level pieces, {} moving; {} in vanilla's shade", g_sunLevel.exchange(0),
                  g_sunMoving.exchange(0), g_sunShaded.exchange(0));
+    LogScene();
 }
 
 } // namespace

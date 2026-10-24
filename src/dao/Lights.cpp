@@ -87,7 +87,13 @@
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/Objects.h"
+#include "dao/SafeRead.h"
+#include "dao/SceneDetail.h"
+#include "dao/World.h"
 
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -112,6 +118,44 @@ constexpr std::size_t kOwnColor = 0x1A0;   // in a light's node: four floats
 constexpr std::size_t kProbes = 0x24;      // in the state: begin and end of the chosen probes
 constexpr std::size_t kKeptProbe = 0x110;  // in the state: the probe whose irradiance it holds
 constexpr std::size_t kIrradiance = 0x130; // in the state: three 4x4 matrices of floats
+
+// The scene's light manager and its lists (DAOLib #256, read 2026-10-24): the scene makes its
+// managers with 0x0046C620 (0x00539FE0) and keeps the default one, Renderer::LightManagerDefault,
+// at +0xDC, unless it defers them; each of its six lists is the chooser at +0, the most per object
+// at +4 and a vector of 8-byte elements at +0xC and +0x10, each the record whose +0x18 is the
+// light's node (Insert, 0x00464A50; AddLights, 0x00464E30, puts a point light in the figures' or
+// the levels' pair by its node's +0x18C, and flagged or not by its blueprint's flag). A light's
+// interface, whose slot 2 answers its place, is the node's +0x180; a probe's irradiance is its
+// blueprint's (node +0x174) +0x160. Seen in play, 2026-10-24, at night in Redcliffe's village
+// (examples/lights): 8 point lights, 1 the level's unflagged (Lyna's sword's glow, fxa_lit_swrd_c, at
+// her place with her as owner), 4 the level's flagged (the layout's fires, lak100n_*_ll, 16 m of reach
+// and their warm colour, no owner) and 3 the figures' flagged; 1 probe. With SetObjectsTakeUnflagged
+// off, the sword light's colour was taken 220 times in 10 s against 650 with it on, and 650 again when
+// it was put back; the third left is another of the light's users, about once a frame, not traced.
+constexpr std::size_t kSceneLights = 0xDC;        // in the area's scene: its light manager
+constexpr std::size_t kListBegin = 0xC;           // in a list: the elements' begin, then end
+constexpr std::size_t kElement = 8;               // an element's size
+constexpr std::size_t kRecordNode = 0x18;         // in an element's record: the light's node
+constexpr std::size_t kProbeList = 0x3C;          // in the manager
+constexpr std::size_t kLightOfNode = 0x180;       // in a light's node: its light interface
+constexpr std::size_t kPlaceSlot = 2;             // in the light interface's vtable: its place
+constexpr std::size_t kStrength = 0x1B4;          // in a point light's node
+constexpr std::size_t kFlicker = 0x1BC;           // in a point light's node
+constexpr std::size_t kOwnerObject = 0x154;       // in a light's node: the graphics object it is of
+constexpr std::size_t kBlueprint = 0x174;         // in a light's node
+constexpr std::size_t kProbeIrradiance = 0x160;   // in a probe's blueprint: 48 floats
+constexpr std::size_t kChosenProbes = 0x20;       // in a light state: the chosen probes' group, begin at +4
+constexpr std::size_t kUnflagged[] = {0xC, 0x84}; // the levels' and the figures' unflagged lists
+
+struct ListOf
+{
+    std::size_t at;
+    LightList list;
+};
+constexpr ListOf kPointLists[] = {{0xC, LightList::LevelsUnflagged},
+                                  {0x24, LightList::LevelsFlagged},
+                                  {0x6C, LightList::FiguresFlagged},
+                                  {0x84, LightList::FiguresUnflagged}};
 
 using Callbacks = std::vector<std::function<void(Ambient &)>>;
 using PointCallbacks = std::vector<std::function<void(PointLight &)>>;
@@ -271,6 +315,24 @@ void __fastcall Fill(void *state, int edx, const float *base)
     }
 }
 
+// A light's place: its light interface's own answer (slot 2), the translation of the node's matrix
+// over its w, as Fill takes it (0x0046B44F; 0x0053CC90 -> 0x0053CA70).
+Vector PlaceOf(std::uintptr_t node)
+{
+    using PlaceFn = void(__fastcall *)(void *light, int edx, float *out);
+    auto *const light = reinterpret_cast<void *>(node + kLightOfNode);
+    alignas(16) std::array<float, 4> out{};
+    (*reinterpret_cast<PlaceFn *const *>(light))[kPlaceSlot](light, 0, out.data());
+    return Vector{out[0], out[1], out[2]};
+}
+
+float ReachOf(std::uintptr_t node)
+{
+    using ReachFn = float(__fastcall *)(const void *node, int edx);
+    return reinterpret_cast<ReachFn>(Module::Address(addr::kObjectNodePointLight_Reach))(
+        reinterpret_cast<const void *>(node), 0);
+}
+
 void __fastcall LightColor(const void *node, int edx, float *color)
 {
     g_color.Original()(node, edx, color);
@@ -290,6 +352,8 @@ void __fastcall LightColor(const void *node, int edx, float *color)
     light.name = detail::NodeName(address);
     light.model = detail::ModelName(address);
     light.node = address;
+    light.place = PlaceOf(address);
+    light.reach = ReachOf(address);
     for (const auto &callback : *callbacks)
     {
         detail::Guard("a point light callback", [&] { callback(light); });
@@ -378,6 +442,198 @@ void OnSunShare(std::function<void(SunShare &)> callback)
     {
         g_easeSun.Attach(addr::kLightState_EaseSun, &EaseSun);
     }
+}
+
+namespace
+{
+
+// The current area's light manager, checked by its vtable; 0 with none.
+std::uintptr_t AreaManager()
+{
+    CCArea *area = world::CurrentArea();
+    const auto scene = area != nullptr ? reinterpret_cast<std::uintptr_t>(area->Scene()) : 0;
+    const auto manager = scene != 0 ? TryRead<std::uintptr_t>(scene + kSceneLights).value_or(0) : 0;
+    if (manager == 0 || TryRead<std::uintptr_t>(manager) != Module::Address(addr::kLightManagerDefault_vftable))
+    {
+        return 0;
+    }
+    return manager;
+}
+
+// The nodes of a vector of elements, each a record whose +0x18 is the node.
+std::vector<std::uintptr_t> NodesOf(std::uintptr_t begin, std::uintptr_t end, std::size_t stride)
+{
+    std::vector<std::uintptr_t> nodes;
+    for (std::uintptr_t at = begin; begin != 0 && at < end && nodes.size() < 4096; at += stride)
+    {
+        const auto record = TryRead<std::uintptr_t>(at).value_or(0);
+        const auto node = record != 0 ? TryRead<std::uintptr_t>(record + kRecordNode).value_or(0) : 0;
+        if (node != 0)
+        {
+            nodes.push_back(node);
+        }
+    }
+    return nodes;
+}
+
+std::vector<std::uintptr_t> ListNodes(std::uintptr_t list)
+{
+    return NodesOf(TryRead<std::uintptr_t>(list + kListBegin).value_or(0),
+                   TryRead<std::uintptr_t>(list + kListBegin + 4).value_or(0), kElement);
+}
+
+SceneProbe ProbeOf(std::uintptr_t node)
+{
+    SceneProbe probe;
+    probe.node = node;
+    probe.place = PlaceOf(node);
+    const auto blueprint = TryRead<std::uintptr_t>(node + kBlueprint).value_or(0);
+    if (blueprint != 0)
+    {
+        TryCopy(probe.irradiance.data(), blueprint + kProbeIrradiance, sizeof(probe.irradiance));
+    }
+    probe.model = std::wstring(detail::ModelName(node));
+    return probe;
+}
+
+SceneLight LightOf(std::uintptr_t node, LightList list, const std::unordered_map<std::uintptr_t, ObjectId> &owners)
+{
+    SceneLight light;
+    light.node = node;
+    light.list = list;
+    light.place = PlaceOf(node);
+    light.reach = ReachOf(node);
+    // The colour as the engine works it out, not through OnPointLight's detour and its callbacks.
+    const auto color = g_color.IsAttached()
+                           ? g_color.Original()
+                           : reinterpret_cast<LightColorFn>(Module::Address(addr::kObjectNodeLight_Color));
+    color(reinterpret_cast<const void *>(node), 0, light.color.data());
+    TryCopy(light.own.data(), node + kOwnColor, sizeof(Color));
+    light.strength = TryRead<float>(node + kStrength).value_or(0);
+    light.flicker = TryRead<float>(node + kFlicker).value_or(0);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        light.color[i] *= light.strength * light.flicker;
+    }
+    const auto object = TryRead<std::uintptr_t>(node + kOwnerObject).value_or(0);
+    if (const auto owner = owners.find(object); owner != owners.end())
+    {
+        light.owner = owner->second;
+    }
+    light.model = std::wstring(detail::ModelName(node));
+    light.name = std::wstring(detail::NodeName(node));
+    return light;
+}
+
+// The engine's quality pass, and what SetObjectsTakeUnflagged asked: after it, the unflagged lists
+// take none for objects while the switch is off.
+using ApplyQualityFn = void(__fastcall *)(void *manager, int edx);
+Detour<ApplyQualityFn> g_applyQuality;
+std::atomic<bool> g_takeUnflagged{true};
+
+void TakeNoneOfUnflagged(std::uintptr_t manager)
+{
+    using SetLimitsFn = void(__fastcall *)(void *list, int edx, std::uint32_t most, void *chooser);
+    const auto setLimits = reinterpret_cast<SetLimitsFn>(Module::Address(addr::kLightList_SetLimits));
+    for (const std::size_t at : kUnflagged)
+    {
+        auto *const list = reinterpret_cast<void *>(manager + at);
+        setLimits(list, 0, 0, *static_cast<void **>(list));
+    }
+}
+
+void __fastcall ApplyQuality(void *manager, int edx)
+{
+    g_applyQuality.Original()(manager, edx);
+    if (!g_takeUnflagged.load())
+    {
+        TakeNoneOfUnflagged(reinterpret_cast<std::uintptr_t>(manager));
+    }
+}
+
+} // namespace
+
+std::vector<SceneLight> PointLights()
+{
+    std::vector<SceneLight> lights;
+    const std::uintptr_t manager = AreaManager();
+    if (manager == 0)
+    {
+        return lights;
+    }
+    const auto owners = detail::GraphicsOwners();
+    const auto pointLight = Module::Address(addr::kObjectNodePointLight_vftable);
+    for (const ListOf &list : kPointLists)
+    {
+        for (const std::uintptr_t node : ListNodes(manager + list.at))
+        {
+            if (TryRead<std::uintptr_t>(node) == pointLight)
+            {
+                lights.push_back(LightOf(node, list.list, owners));
+            }
+        }
+    }
+    return lights;
+}
+
+std::vector<SceneProbe> Probes(std::uintptr_t state)
+{
+    std::vector<SceneProbe> probes;
+    if (state == 0)
+    {
+        return probes;
+    }
+    // The group's entries are pointers to the manager's elements, whose first word is the record.
+    for (const std::uintptr_t node : NodesOf(TryRead<std::uintptr_t>(state + kChosenProbes + 4).value_or(0),
+                                             TryRead<std::uintptr_t>(state + kChosenProbes + 8).value_or(0), 4))
+    {
+        probes.push_back(ProbeOf(node));
+    }
+    return probes;
+}
+
+std::vector<SceneProbe> AreaProbes()
+{
+    std::vector<SceneProbe> probes;
+    if (const std::uintptr_t manager = AreaManager(); manager != 0)
+    {
+        for (const std::uintptr_t node : ListNodes(manager + kProbeList))
+        {
+            probes.push_back(ProbeOf(node));
+        }
+    }
+    return probes;
+}
+
+void SetObjectsTakeUnflagged(bool take)
+{
+    if (!Module::IsKnownExecutable())
+    {
+        return;
+    }
+    static std::once_flag once;
+    std::call_once(once, [] { g_applyQuality.Attach(addr::kLightManagerDefault_ApplyQuality, &ApplyQuality); });
+    if (g_takeUnflagged.exchange(take) == take)
+    {
+        return;
+    }
+    const std::uintptr_t manager = AreaManager();
+    if (manager == 0)
+    {
+        return;
+    }
+    // Vanilla's limits are the quality pass's own; it is run again to put them back.
+    if (take)
+    {
+        g_applyQuality.Original()(reinterpret_cast<void *>(manager), 0);
+    }
+    else
+    {
+        TakeNoneOfUnflagged(manager);
+    }
+    using MarkChangedFn = void(__fastcall *)(void *manager, int edx);
+    reinterpret_cast<MarkChangedFn>(Module::Address(addr::kLightManager_MarkChanged))(reinterpret_cast<void *>(manager),
+                                                                                      0);
 }
 
 } // namespace dao::lights

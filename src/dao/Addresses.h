@@ -2643,6 +2643,15 @@ DAO_DATA(kLightManager_LightsOfType3, 99994)
 DAO_ADDRESS(kLightManager_AddLights, 2701)
 DAO_ADDRESS(kLightManager_RemoveLights, 2702)
 DAO_ADDRESS(kLightManager_MarkChanged, 2621)
+// The light manager's quality (dao/Lights.h, SetObjectsTakeUnflagged): ApplyQuality, __thiscall on the
+// manager, no arguments, sets each of its six lists' most-per-object by the graphics quality
+// (0x00BF22C8): at 0 the two unflagged point lists 0 and the rest 1, else unflagged 2 and flagged 3,
+// probes and ambient 1; only the manager's constructor (0x00464BE0, at 0x00464D8E) calls it.
+// SetLimits, __thiscall (most, chooser), `ret 8`, writes a list's most at +4 and its chooser at +0.
+// Read 2026-10-24 (DAOLib #256).
+DAO_ADDRESS(kLightManagerDefault_ApplyQuality, 2632)
+DAO_ADDRESS(kLightList_SetLimits, 2619)
+DAO_DATA(kLightManagerDefault_vftable, 61964)
 DAO_ADDRESS(kLightList_Insert, 2698)
 DAO_ADDRESS(kLightList_Erase, 2699)
 
@@ -2697,6 +2706,9 @@ DAO_ADDRESS(kLightState_Fill, 2848)
 // vtable's +0x68. Read 2026-10-16, DAOLib #147.
 DAO_ADDRESS(kLightManager_ChooseForLevel, 2693)
 DAO_ADDRESS(kObjectNodeLight_Color, 7605)
+// A point light's reach in metres: `fld [ecx+0x1B0]; ret`, __thiscall, no arguments. Read 2026-10-24
+// (DAOLib #256).
+DAO_ADDRESS(kObjectNodePointLight_Reach, 7567)
 
 // A point light's node, as the light colour above is handed it (dao/Lights.h,
 // OnPointLight; DAOLib #223, read 2026-10-21). Its vftable tells it from an
