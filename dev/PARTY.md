@@ -765,7 +765,12 @@ Read by the forked subagent; checked unless marked.
     - **0x007F6690(ability, creature, item, target, point):**
       - It does nothing when the creature's slot 0x1D0 answers 1.
       - It calls `Orders::OrderReceived` 0x007F6370.
-      - An ability in the creature's active modal list (+0x7C4) goes to 0x006B9970 [I: turned off].
+      - An ability in the creature's active modal list (the stats' +0xF8; the stats are +0x7C4, through 0x0053CC40) is switched off: 0x006B9970 at 0x007F6726, then return (corrected 2026-10-23 by lib-agent-2: it said the list was +0x7C4, and the switch-off [I]) [C, 0x007F6700–0x007F6726].
+        - **0x006B9970(ability)** [C]:
+          - It builds event 0x23 (COMMAND_PENDING, 35) with int 0 = 25 (the UseAbility command) and int 1 = the ability. Creator and objects 0 and 1 are the creature.
+          - It runs it at once through 0x00698960 [I: that this runs the event script; only its prologue was read].
+          - If the ability's `BlendTree` (0x70F463FA) is not empty, it then goes to 0x0073C600.
+          - So switching a mode off is the scripts' COMMAND_PENDING path (ability_core.nss:194–204), run straight away and not queued.
       - An item the creature may not use (`CCCreature::ForScript_CanUseItem`) does nothing.
       - When the ability's abi_base `ProcessWithEvent` (0x57119DC9) is non-zero, an event of that type is delivered at once instead (AIMaster::DeliverNow), with int 0 the ability and object 0 the item. Only TRAP_MAKING, HERBALISM and POISON_MAKING have it, all 101 (EVENT_TYPE_USE_ABILITY_IMMEDIATE).
       - **Otherwise** it calls `QueuePlayerCommand(25, params, 0)`, which calls `QueueNewCommand(25, params, 0, 0, 1, −1, 1)`, so the command goes at the back of the queue. The params are int 0 the ability, object 0 the target, object 1 the item, vector 0 the point. That nothing is cleared is [I]: QueueNewCommand was not re-read.

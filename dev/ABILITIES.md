@@ -150,6 +150,25 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 - Its flight comes from `prj_base` (table 1006): `InitialSpeed`, `Acceleration`, `MinSpeed`, `TopSpeed`, `Simulation`, `ImpactTimeout`, read at `0x007E8156` and `0x007E6900`–`0x007E6984` (the flight's integration not read). Arcane Bolt (`abi_base` 200254: `Projectile` 137, `Range` 4, `Speed` 1, `Cooldown` 6.0, `Cost` 15.0, `ConjureAnim` 244, `CastAnim` 246, `SpellScript` `spell_singletarget.ncs`): `prj_base` 137 "Arcane Bolt", model `fxa_arc_bolt_p`, `InitialSpeed` 5.0, `Acceleration` 10.0, `MinSpeed` 15.0, `TopSpeed` 40.0 (m/s and m/s², inferred), static collisions 1. Chain Lightning's is 114: 10 initial, 10 acceleration, 20 top.
 - The spell's own script (`SpellScript`) is reached by `ability_core` through `Ability_DoRunSpellScript` with its own events (`EventSpellScriptCast`, `EventSpellScriptImpact`), not by the engine (read in the scripts).
 
+### What switches a modal ability off: 0x0071DEE0 (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]
+
+- **0x0071DEE0(bAutoCancel, nAbility, bShapechange)**, `ret 0xC`, walks the stats' modal list (+0xF8) and switches off (0x006B9970) each ability that matches one of three cases:
+  - **bAutoCancel:** a mode whose abi_base `AutoCancel` is set.
+  - **nAbility:** a mode in the same `Condition_Group` as nAbility.
+  - **bShapechange:** the ability held by a shapechange effect (effect +0x44). It is found through the effect search 0x00A64FA0 → 0x00A64D80: +0x44 != 0, duration type +0x28 not 1, 5 or 6, type +0x24 not 4, 6 or 10, and +0x48 == 0.
+- **Its six callers** (an E8 scan):
+  - **SetAppearance** (0x006C1591) passes (0, 0, 1), on its "changed" branch, unless a skip flag ([esp+0x38]) is set. So an appearance change ends a shapechange's mode.
+  - **QueueCommand** (0x0073CEF3) passes (0, the command's int 0, 0), only for a command of type 25 (UseAbility). So queuing an ability switches off the modes of its Condition_Group.
+  - **Four combat sub-actions** (0x007A8E06, 0x007A9B96, 0x007AA4AB, 0x007AA786) pass (1, 0, 0), each right after 0x007A4F90. So starting to move or attack switches off every AutoCancel mode.
+- **The shapeshift abilities** [C, ghilana abi_base]:
+  - UseType, `Condition_Group` 17007, AutoCancel 0, CostUpkeep 30/50/60 (or 0) and an empty BlendTree.
+  - Cooldowns: 0.5 for the four plot forms, 60 for Swarm and 90 for Spider and Bear.
+  - ability_h.nss:253 makes a shapeshifted caster's spells and talents free.
+- **0x006BBCB0, the effect flags' reader** [C]:
+  - Callers: 0x0062FE2A, 0x006BCF78 and 0x006BD6DC. The first and last come right after the stats' 0x0071E300 and 0x0071D4A0.
+  - Its effects' flag 0x100 goes to 0x00719AC0 (LockQuickslotBar). The inverse of 0x200 goes to the +0x5F4 object's slot 0x54 (the equipment-change permission [I for the name]).
+  - It is gated by +0xC3D, which the constructor sets to 1 (0x006B4627) and 0x006BBCB0 clears (0x006BBCE6). So the gated part runs once per creature.
+
 ## IsModalAbilityActive and Engine_SetModalAbilityGUI share one list
 
 - `IsModalAbilityActive` (726, 0x0066DD80) searches the creature's stats' (+0x7C4 → `CCCreatureStats`) **+0xF8 vector of ability ids**.

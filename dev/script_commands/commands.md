@@ -341,5 +341,5 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) w
 ## Not read
 - The end handlers: 0x00747360 (Deathblow), 0x00746B30 (Attack), 0x00746BA0 (UseAbility), the UseObject and Wait ends (shared end 0x00746900 only).
 - The remaining half of `CommandDeathBlow`'s start (0x00745E10 past 0x00746180) and the UseObject start past the first sub-action block.
-- What `QueueCommand` does with 0x0071DEE0 (the event 0x5E is read: PARTY.md, "EVENT_TYPE_PLAYER_COMMAND_ADDED"); any de-duplication of queued commands.
+- What `QueueCommand` does with 0x0071DEE0 is answered (read 2026-10-23 by lib-agent-2): for a UseAbility command (type 25) it calls 0x0071DEE0(0, the ability, 0) at 0x0073CEF3, which switches off the modes in that ability's Condition_Group (ABILITIES.md; the event 0x5E is read: PARTY.md, "EVENT_TYPE_PLAYER_COMMAND_ADDED"); any de-duplication of queued commands.
 - 0x007A1AE0 (the wait's counter), and the kind-by-kind spots of sub-action 32.
