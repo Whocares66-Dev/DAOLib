@@ -154,7 +154,11 @@ Quaternions are (x, y, z, w), `v' = q v q*`, the product Hamilton's (`0x004CB640
 - **An unmapped actor**, or a tag not found (`0x007E3862`): a bare model from `ModelResRef`, or one assembled from `CreatureResRef`'s appearance and items (`0x006A4F00`). **No game creature is made**: no object, no AI.
 - **At the end** (the player's teardown `0x007E10A0`), from the bind record (0x4C bytes at player +0xEC):
   - **A script cutscene** (no conversation, put back = 1): each creature goes **back to its place and facing at binding**.
-  - **A line cut** (put back = 0, except the player's creature when `StageAtCurrentLocation`): a creature not moved since binding goes to `S.p + R(S.q)·FinalPos`, facing `R(S.q ⊗ FinalOri)·(0, 1, 0)` flattened (`0x007E1396`–`0x007E14CA`); one a script moved stays. So `jowan_attacks`' creatures end at their world `FinalPos`.
+  - **A line cut** (put back = 0, except the player's creature when `StageAtCurrentLocation`): a creature not moved since binding goes to `S.p + R(S.q)·FinalPos`, facing `R(S.q ⊗ FinalOri)·(0, 1, 0)` flattened (`0x007E1396`–`0x007E14CA`); one a script moved stays (the test is exact, below). So `jowan_attacks`' creatures end at their world `FinalPos`.
+    - **"Not moved since binding" is an exact test** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]: the creature's place (+0x120) and facing (+0x130) are compared with the bind record's place (+4) and facing (+0x10) by `Vector::Equals` 0x004D4EB0 (0x007E13CB, 0x007E13F2), x, y and z as floats for exact equality (`fucompp` each), with no tolerance.
+      - **Both equal:** the creature goes to the stage's `FinalPos` as above, then 0x006B3070 on the area.
+      - **Either differs:** `SetPosition(its own place, 1)` (0x007E1503–0x007E150C): it stays where it is, put through SetPosition again with the flag 1.
+      - **What can make them differ:** the cut itself cannot, since it drives the model's place, not the object's (`0x007CF450`); only a script or an engine SetPosition during the cut can. Example: Redcliffe's `ARL_MEET_AT_MILL_MEET_TEAGAN` jumps Teagan with `UT_LocalJump` while the line plays, so in vanilla he stays at the mill's waypoint.
 
 ### A conversation's hold on its actors' look-at (read 2026-10-23 by paragon-agent's helper, for DAOParagonEngine; checked by lib-agent)
 
