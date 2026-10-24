@@ -371,6 +371,10 @@ std::vector<Line> Replies()
     return lines;
 }
 
+// Seen in play, 2026-10-24 (DAOLib #254), in Leliana's Song: a callback returning false for
+// Jovi Merice's reply at line 15 left only line 13 on the screen, and one returning true for the
+// Chanter's board's reply whose plot flag failed ("Nail Bann Perrin's suspect underthings to the
+// board.", line 6) put it on the screen above Leave.
 void OnLineAvailable(std::function<bool(Conversation &, const Line &line, bool available)> decide)
 {
     Attach();

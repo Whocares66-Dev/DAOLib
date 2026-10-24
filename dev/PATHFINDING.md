@@ -309,7 +309,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 **While walking** [C by enumerating every direct caller of 0x00A4BB80, 0x00A46710, 0x00A46760, 0x00A46FC0, 0x00A62A90 and 0x00A626F0; I for indirect calls]:
 - Nothing re-tests a walking creature's path against stamps.
 - A blocked walker is caught only by the stuck counter (1000 ms, answer −4; TURN_BASED.md).
-- The melee approach's look-ahead (0x00A62C90) uses flags (1, 1), so it ignores stamps.
+- The melee approach's look-ahead (0x00A62C90) uses flags (1, 1), so it ignores stamps. It is a thiscall on the creature's MovementController (start, target, a time budget of 0.003 s from 0x00B211B0, `ret 0xC`), called only from ApproachMelee at 0x007AA9FB. From the last waypoint down to the next it tests each waypoint's line to the target, under the budget, and rewrites the path in place through 0x00A483A0 (a waypoint set and everything after it erased): the waypoints past the first whose line to the target is clear are replaced by the target, or the whole path by start and target when the line from the start is clear too. A plain move's path is never cut after its search: its two-waypoint walks are RequestPath's straight test (0x00A626F0) passing (read 2026-10-24 by lib-agent-3's subagent, DAOLib #254, after `Pathfind` and a creature's own path were compared in play).
 
 **For a port** [I]:
 1. Stamp at every position change, with lift-then-place.

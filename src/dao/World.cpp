@@ -291,6 +291,9 @@ std::optional<ScreenPoint> ToScreen(const Vector &point)
     return screen;
 }
 
+// Seen in play, 2026-10-24 (DAOLib #254): with the cursor held at each of 23 pixels (three
+// party members' aim points and a grid of 20 across the view), the first object PickAt found was
+// the game's own cursor object every time, a creature or none.
 std::vector<Hit> PickAt(std::int32_t x, std::int32_t y)
 {
     void *camera = RenderCamera();
@@ -1044,6 +1047,16 @@ class Searcher
 // holding that point. Where the search gave up part way (the answer 1), by the same
 // test on points up to 2.5 m ahead of where it stopped, the way the path was heading.
 // A shut door in play.
+//
+// Against the creature's own walk, 2026-10-24 (DAOLib #254), in Redcliffe village: for ten moves
+// of 15 to 26 m, each searched then ordered, the path found was within 0.4 m of the creature's
+// own (CurrentPath), a little longer, with a few more waypoints, both from the engine's search
+// (17.29 m and 17.03 m, 25.84 and 25.42, a straight 15.07 and 15.07). One walk ended 4 m short
+// of the point, on a shorter path of its own. Once, searched with the party standing at the goal,
+// the straight walk failed where the creature, ordered with them gone, walked straight: the
+// straight test goes by the other creatures' marks at the moment (dev/PATHFINDING.md). Nothing
+// cuts a plain move's path afterwards; the melee approach's look-ahead (0x00A62C90, from
+// 0x007AA9FB) is an attack's only. CurrentPath's Remaining read the distance left to the goal.
 PathSearch Pathfind(ObjectId creature, const Vector &to, ObjectId toward)
 {
     PathSearch answer;
@@ -1372,6 +1385,10 @@ std::optional<Room> RoomOf(ObjectId object)
 // that is not a door or of base type 8 (0x0067A670 reads GetPlaceableBaseType), and
 // `ignore`. Only the nearest is judged, so a chest in front of a wall leaves the view
 // clear, as the scripts see it.
+//
+// Seen in play, 2026-10-24 (DAOLib #254), through the Eluvian server in Redcliffe village: from
+// five viewers to every creature of the area, 60 pairs, LineOfSight(viewer, target) agreed with
+// the scripts' CheckLineOfSightObject on every one, blocked or clear.
 Sight LineOfSight(const Vector &from, const Vector &to, ObjectId ignore)
 {
     return Ask(CurrentArea(), from, to, ignore);
