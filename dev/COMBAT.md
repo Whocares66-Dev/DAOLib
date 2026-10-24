@@ -43,7 +43,14 @@ Read 2026-10-18 in the GOG exe and the game's files by lib-agent-2 (with subagen
 
 **The candidates** (0x006B8540 → the area's query 0x00686F70 → 0x00685B50), for hostiles and others alike, need all of:
 - a room (+0x41C); a perceiver with none perceives nothing (0x006B8A11);
-- a room whose bit (room +0x278) is in the perceiver room's 128-bit visible mask (+0x288, tested by 0x0067A3C0). The mask is built once (0x00A28FC0) from the room itself and its `EnvRoomVisibilityList` (.rml field 3047, CRoom +0xB0). A room numbered 128 or more has an empty mask;
+- a room whose bit (room +0x278) is in the perceiver room's 128-bit visible mask (+0x288). In detail (corrected 2026-10-24 by lib-agent-2, from paragon-agent-2's reading) [C unless marked]:
+  - **The test:** 0x0067A3C0 ANDs the candidate room's own bits (+0x278, 16 bytes) with the perceiver room's visible mask (+0x288, 16 bytes); any common bit passes. The newcomer scan pushes the perceiver room's +0x278 block as the query's mask (0x006B867B).
+  - **The masks** are built once, by 0x00A28FC0 (ID 32389), on the rooms' base class `IRoomLayout` (constructor 0x00A29400), on one of two paths:
+    - **With a layout** (interior rooms; 0x005C8820 in 0x005C87F0, over the layout's list +0x424): the room's own bit (0x0067B890, 0x0067A440; empty for an index of −1 or 128 or more) goes into both masks, and the own bits of each room in its `EnvRoomVisibilityList` (.rml field 3047, the vector at +0xB0, elements +0xB4..+0xB8) are ORed into the visible mask.
+    - **With a null layout** it writes −1 over both masks (+0x278..+0x297), so the room sees and is seen by every room.
+  - **Which areas take which** (0x005C9726–0x005C972C, `cmp [esi+0x7C], 1`, esi the layout): at 1 the exterior load 0x005C8E50 (ID 10230) runs. It makes each cell's `EC::CExteriorChunk` (0x005C8210 → constructor 0x005CF790; in 0x005C82C0 the chunk's id is −3, `push layout+0x42C; push −1; push −3`), calls 0x00A28FC0(null) on it (0x005C8EFE), and keeps it at layout +0x530 unless its type (+0x264) is 3 [I for what that chunk is for]; it never runs the layout pass 0x005C87F0. Otherwise the interior load 0x005C8F90 (ID 10231) runs, rooms from `.rml` files, and is 0x005C87F0's only caller (0x005C9127). That +0x7C is `EnvAreaChunkIsChunk` is [I].
+  - **So in a chunked (terrain) area the room test passes for a candidate in any chunk.** A candidate in no room still fails (+0x41C null).
+  - **No other writer:** a scan of .text for stores at +0x278..+0x297 found only the constructor's zeroing and 0x00A28FC0; a block copy of the 32 bytes was not searched for [I].
 - a 3D distance within the range: `ranges.gda` `PrimaryRange` by `PerceptionClass`, usually 30 m. For the controlled creature, the party's range for the query, then its own.
 
 **A hostile** (0x006B8880–0x006B88F7, checked) is then tested twice. Non-hostiles get neither test.
@@ -56,7 +63,8 @@ A failure skips the candidate, except in a stealth-detection case. Once perceive
 
 **The room walk** (0x00687EC0, `__thiscall (CRoom *origin, int targetRoom)`, `ret 8`):
 - The target is found by number over the layout (0x0067B430).
-- If the target has no connectivity list (`EnvRoomConnectivityList`, .rml field 3099, CRoom +0xD0), the answer is whether the origin can see it (CRoom slot 0x54, 0x005D22E0: the same room, or in the visibility list).
+- If the target is found and has no connectivity list (`EnvRoomConnectivityList`, .rml field 3099, CRoom +0xD0), the origin's slot 0x54 is asked, and a true answer returns 1 (0x00687EE6–0x00687EF6). A false answer, like a target not found or one with a connectivity list, goes on to the depth-first walk (0x00687EFC) (corrected 2026-10-24 by lib-agent-2: a false answer does not end the test) [C].
+  - Slot 0x54 is 0x005D22E0 for a `CRoom` (the same room, or one in the visibility list). For an `EC::CExteriorChunk` (vtable 0x00AFFEF4, slot at 0x00AFFF48) it is 0x00722AE0, `mov al, 1; ret 4`, so between two chunks the walk always passes, and only the ray remains for a hostile.
 - Otherwise a depth-first walk (0x00686A70) with the visited list at area +0x470:
   - each room passed through must be in the origin's visibility list;
   - a step between two rooms is taken when no door is registered for the pair (the map at area +0x634, keyed by (min, max) room, 0x00685100), or when any door registered for it doesn't block.
