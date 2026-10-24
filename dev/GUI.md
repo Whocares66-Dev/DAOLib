@@ -1913,6 +1913,33 @@ Who defines a right handler (grep over all 56 movies, `function onRight...`): `P
 - The gate is not on the message but on the target the cursor update computes. `GameModeExplore::UpdateCursor` (0x0070F270, ID 16280, per frame): calls the pick `0x0070EAA0`, then clears `explore+0xCC` (cursor object id = -1), `+0xD0` (ground hit) and `+0xD4`. The pick begins by asking the GUI system's slot 71 (offset 0x11C of the object at `[app+0x158]`); true -> returns 0 (0x0070EABF-0x0070EAC3). Slot 71 goes to `ScaleformManager::MouseOverInterface` 0x00511420: false when the manager is not running; true when the movie hit list at +0x80 is not empty (the list the manager fills each frame with `HitTest` hits, GUI.md "Mouse input"); when empty, true only if the capture movie at +0xA0 is set. (checked; dev/GUI.md "A movie under the cursor")
 - With no pick result (`edi = 0`): `UpdateCursor` then reads the attribute object at the static 0xC35FF0 with `SmartData::Attribute::Get` 0x0053CC40 (`mov eax,[ecx+0xC]`): if it is nonzero and not -1 it becomes `explore+0xCC` directly (0x0070F2A2-0x0070F2C0). The static 0xC35FF0 is the one `GameModeExplore`'s constructor registers under the name `GameModeExplore.GUITargetedPlayer` (wide string 0xB162C4, registrations at 0x0070B2CD and 0x00713A6F, with 0xC35FF0 pushed at 0x00713AA4). (checked the code; that 0xC35FF0 is that attribute's storage is read from the constructor's registration order)
 - `PerformPrimaryActionOnTargetUnderCursor` (0x007132B0): looks up `explore+0xCC` with `0x005D5BE0`; null -> returns false; else calls `0x00712830(target, kind = 0x0070CAD0(target), 0)`. The ground-move path needs `+0xD0/+0xD4`, set only when the pick found ground (record kind 1), so it too is empty over the GUI (dev/PARTY.md "Move click", dev/PLACEABLES.md "A placeable clicked"). (checked)
+- **What the click does by target** (read 2026-10-23 by lib-agent-2 with subagents, for DAOParagonEngine; static reading, nothing played) [C unless marked]:
+  - **The kind** [C]: 0x0070CAD0 gives the primary kind and 0x0070CC50 the secondary, by the object's type byte.
+
+    | Under the cursor | Primary kind | Notes |
+    |---|---|---|
+    | the controlled creature | none | |
+    | another member of the active party | 3 (talk), out of combat only | secondary: none |
+    | a stealthed creature | none | the secondary has no stealth test |
+    | a dead creature | 8 (use) when `HasLootableBodyBag` (0x006AB100) | secondary: any body bag |
+    | a hostile creature | 4 (attack) | hostile = the bool at creature +0x4E8 |
+    | a live non-hostile creature | 3 when byte +0x860 is set and the mode is not combat | +0x860's meaning is [I]; a statue (+0xC94) still gives 3 |
+    | an interactive placeable (+0x42C) | 8 when its Action0 is set | secondary: Action1; an Action1 of 4 (Destroy) gives 4 |
+    | an item | 7, which does nothing | there is no pick-up click; dropped loot is a placeable body bag |
+  
+  - **0x00712830(target, kind, secondary)** [C]:
+    - **Kind 4:** every selected member not disabled gets `Orders::Attack` 0x007F6410.
+    - **Kind 3:** the first selected member only, through 0x007F64C0. It is refused when 0x0064B900 says so [I: a hostility test]. The order is queued through 0x0069EE80, then `OrderReceived`.
+    - **Kind 8:** the first selected member only, through `Orders::UseObject` 0x007F6550 with Action0, or Action1 for the secondary. A dead creature is swapped for its body bag first.
+    - **Kinds 5 and 6** are `Party::Select` and deselect; **7** does nothing.
+  - **The ground** [C]: no object is involved. `MoveCharacterToLocationMessage` 0x0070C9A0 → `MoveTo` 0x0070BE80 → the group move 0x006389F0 (the formation and delays: PARTY.md). `OrderReceived` goes to the controlled creature.
+  - **Shift** (`PerformSecondaryAction`) does not queue or append [C]. It is the same path with secondary = 1: a placeable's Action1 in place of Action0, and the small creature differences in the table.
+  - **The cursor** (0x0070CDA0) [C]:
+    - It picks a name per object and appends "_pressed" while input 0x49 is held.
+    - **Creatures:** standard, attack, converse, examine, chest or invalid. Attack shows as standard while bit 4 of the party's flags word (0x0062FFC0) is set [I for the bit].
+    - **A placeable:** its `placeable_interactions` (table 100) row's cursor (19 rows: open, close, unlock, destroy, use, examine, disarm, dialog, chest, area_transition, trigger_trap and more). A disabled cursor is used where `0x006A8860(controlled, placeable)` is false [I for which column hash is which].
+    - **The ground:** standard.
+  - **Not read:** the conversation command's content; the message at 0x00712A77; +0x860; how the pick chooses among overlapping candidates.
 - No per-slot "hovered" token exists for the quickbar: `grep GUITargetedPlayer` over all movies hits only `SharedLibrary/Portrait.as:71, 76, 81`. The quickbar's rollover does a tooltip and a highlight, nothing in the data tree. (checked)
 
 ### 3. What happens, by element

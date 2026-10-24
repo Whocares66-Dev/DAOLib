@@ -118,6 +118,29 @@ These pan only when the setting is all the way out (`TacticalStep` 0x00771060). 
 
 **Back to the close view** (0x0076F470): both offsets are zeroed. The focus eases from where it was to the leader over max(0.3, 0.6 × (1 − d/60)) s for d ≤ 60 m (60 at 0x00B03BF8), and snaps beyond that.
 
+### The mouse buttons, and a click in the world (read 2026-10-23 by lib-agent-2 with subagents, for DAOParagonEngine; static reading, nothing played)
+
+- **The codes are DirectInput's button offsets** [C, `ReadMouse` 0x0087FF40 and the polled query 0x0087E0E0]: 0x0C is button 0, the left; 0x0D is button 1, the right; 0x0E is button 2, the middle.
+- **The swap** [C]: `SwapMouseButtons` (`ClientOptions` +0x350, through 0x00838210) swaps 0x0C and 0x0D, both where a raw event is made (0x00880230) and in the polled query (0x0087E13B). It is 0 in the player's DragonAge.ini.
+- **So in vanilla, with the default options, the RIGHT button acts** (move, attack, talk, use) and the LEFT selects. This agrees with the Fade tutorial's "right-click", with GUI.md's key label "Right-click" for PerformPrimaryAction, and with DAOTurnBased's playtest ("Right-click is the action button in this install").
+- **The right button's bindings** [C, 0x006E6AC5–0x006E6D97]:
+  - **The press** (and a double-click's second press) sends `PreMoveCharacterToLocationMessage`, which only arms the byte 0xC35E77.
+  - **The release** sends `MoveCharacterToLocationMessage` (0x0070C9A0), which moves only when that byte is armed. It also sends `PerformPrimaryActionOnTargetUnderCursor`; with Shift, the secondary instead.
+  - So the action fires on the **release**.
+  - **A double-click** is two presses of the same button within 200 ms (0x0088028F). The second comes as a "double-click" event, and on the right button it still arms the move.
+- **The right button's orbit** [C]: input 14, polled by the camera (`CameraControllerBase::ReadInput` 0x007EDC60), not an event.
+  - It latches once the summed mouse x and y movement passes 30 mickeys (`DelayCameraLookOffset`). A hold time applies only when `DelayCameraLookTime` is above 0; its default is 0.0.
+  - While latched, the cursor is hidden and held at the press point.
+  - **Not settled:** whether a release after an orbit still acts. No code was found that disarms the move or cancels the release's action after an orbit, and the cursor stays where the press was. The orbit does zero a record through ctl+4 (0x007EE460), which was not traced. A play test would settle it: orbit more than 30 mickeys over the ground, release, and see whether a move is ordered.
+- **The left button's bindings** [C]:
+  - Its release (0x0C with flag 0x10000) sends `SelectPartyMemberUnderCursorMessage 0`, and with Shift `… 1`, so Shift adds to the selection [I for what 1 means] (0x006E63C3, 0x006E6447).
+  - It also sends `SelectHostileUnderCursor` (0x00712DE0), which sends the primary action for each selected member passing a test that was not read.
+  - A double-click sends `CenterOnObjectUnderCursor`, which selects the creature and calls a game-mode slot, the camera's centring [I].
+  - A release, and Shift+release, sends `StopDragSelect`, which ends the box (inputs 48 and 49 start it).
+  - On bare ground the left button does nothing else.
+- **The middle button** pans, and latches the same way as the orbit.
+- **Over the interface:** while the mouse is over any movie element, the world pick returns nothing (`MouseOverInterface`, gated at 0x0070EAAC; GUI.md). A portrait's click is the Flash UI's.
+
 ## On a load, and after a scene
 
 - **Every load and transition ends with the camera reset behind the leader.** Three places set `ctl+0x25`: the loading state 6 (0x006C60F0, after the party is placed), the area's object load (0x00688625) and `GameModeLoading` slot 6 (0x006C5950). Each does `SetTarget(controlled creature)`; the next update calls the reset (explore slot 9, 0x00770FF0):
