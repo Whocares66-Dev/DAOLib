@@ -218,6 +218,11 @@ class Index
     }
     // Returns a resource's copies, by its name in any case, in the game's order; null for none.
     const std::vector<Copy> *Find(std::string_view name) const;
+    // Returns the files of a type the game has, each with the copy it takes, in the order the game
+    // lists them (SortFiles): by source, then by name. The order a merged table takes its files in,
+    // and the world map its .map files in.
+    // @param extension the type with its dot, in lower case: ".gda", ".map"
+    std::vector<NamedCopy> Listed(std::string_view extension) const;
     // Returns the place of the source of an id, in any case.
     std::optional<std::uint32_t> SourceOf(std::string_view id) const;
     // Returns where a copy is: its archive's path, or its own file's, relative to its base folder.

@@ -63,6 +63,8 @@ A data table the game merges (an M2DA: abilities, items, portraits, most of what
 
 One source's order was seen in play, not read in the code (2026-10-13): test copies of `achievements_ep1.gda` (table 268), each giving row 25 a value of its own, in one ERF in a plugin's `override\` folder, ahead of every add-in, and the game asked for the row through Eluvian's script tool. Of `achievements_zz1` and `_zz2`, the first, whichever the archive's entries put first; of `_b` and `_a`, `_a`; of `_q` and `_c`, `_c`; of `_m9` and `_m10`, `_m10`; of five files in a shuffled order, `_b2`, the first by name; and of `_y`, `_e` and `_s` loose in the folder, written in that order, `_e`. Seven of seven the first by name, where a hash's order would have matched them all once in more than a hundred.
 
+The world map's `.map` files are listed the same way (`WorldMap::LoadMapResources` 0x00701990 calls `ListNames` 0x004C56B0 with the type `MAP` exactly as `GdaStore::Load` does with `GDA`) and loaded in that order, unsorted, so an add-in's map, and the pins it gives its parent, come before an offer's (read 2026-10-23 by lib-agent-2, for #251). `install::Index::Listed` gives a type's files in that order.
+
 `install::Index::SortFiles` puts a table's files in that order, and `dao::core::m2da` applies the rest: `WorksheetsOf` gives every worksheet a file is part of, `Takes` says whether one is, and `Merge` marks each ID's row the game keeps (`taken`), given the files in the game's order.
 
 Talk tables: the game asks for one by a name it makes of the table's, the language's and `.tlk` (`core_en-us.tlk`; `_f.tlk` for the female player's), so a talk table of another language is never the game's; `install::Index` marks it `Unused::Language`.

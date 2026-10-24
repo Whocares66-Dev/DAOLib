@@ -593,6 +593,22 @@ const std::vector<Copy> *Index::Find(std::string_view name) const
     return it == resources_.end() ? nullptr : &it->second;
 }
 
+// A name the game has no copy of is none of its files: another campaign's (DAOLib #249), another
+// language's. The copies are sorted the game's first, so the front says which.
+std::vector<NamedCopy> Index::Listed(std::string_view extension) const
+{
+    std::vector<NamedCopy> files;
+    for (const auto &[name, copies] : resources_)
+    {
+        if (name.ends_with(extension) && !copies.empty() && copies.front().unused == Unused::No)
+        {
+            files.push_back({name, copies.front()});
+        }
+    }
+    SortFiles(files);
+    return files;
+}
+
 std::optional<std::uint32_t> Index::SourceOf(std::string_view id) const
 {
     const std::string wanted = Lower(std::string(id));
@@ -666,21 +682,13 @@ namespace
 {
 
 // A worksheet's files merged: each the game's copy of a .gda the worksheet takes, read in the order
-// the game lists them. A name the game has no copy of is none of its files: another campaign's
-// table (DAOLib #249), another language's. The copies are sorted the game's first, so the front
-// says which.
+// the game lists them.
 m2da::Merged MergedSheet(const Index &index, const m2da::Worksheet &sheet)
 {
-    std::vector<NamedCopy> files;
-    for (const auto &[name, copies] : index.Resources())
-    {
-        if (name.ends_with(".gda") && !copies.empty() && copies.front().unused == Unused::No &&
-            m2da::Takes(sheet, std::wstring(name.begin(), name.end() - 4)))
-        {
-            files.push_back({name, copies.front()});
-        }
-    }
-    index.SortFiles(files);
+    std::vector<NamedCopy> files = index.Listed(".gda");
+    std::erase_if(files, [&sheet](const NamedCopy &file) {
+        return !m2da::Takes(sheet, std::wstring(file.name.begin(), file.name.end() - 4));
+    });
     std::vector<GdaFile> tables;
     for (const NamedCopy &file : files)
     {

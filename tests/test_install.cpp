@@ -794,6 +794,31 @@ TEST_CASE("a table is parsed once and kept, and a worksheet merged from its file
     CHECK(index->Worksheet(8) == nullptr);
 }
 
+// A type's files in the order the game lists them (ListNames, 0x004C56B0): the world map takes its
+// .map files so, and a pin's index follows it (DAOLib #251). An add-in's before the core's before an
+// offer's, one source's by name, another campaign's not at all.
+TEST_CASE("a type's files are listed in the game's order: by source, then by name", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/data/core_world.map", files::FromText("core"));
+    root.Write(L"game/Addins/a_high/module/data/z_addin.map", files::FromText("add-in, z"));
+    root.Write(L"game/Addins/a_high/module/data/b_addin.map", files::FromText("add-in, b"));
+    root.Write(L"game/Offers/o_shop/core/data/a_offer.map", files::FromText("offer"));
+    root.Write(L"game/modules/other/data/c_other.map", files::FromText("another campaign's"));
+    root.Write(L"game/packages/core/data/notamap.gda", files::FromText("another type"));
+    root.Write(L"documents/Settings/AddIns.xml", files::FromText(kThreeAddIns));
+    root.Write(L"documents/Settings/offers.xml",
+               files::FromText(R"(<OfferList><OfferItem UID="O_SHOP" Priority="1"/></OfferList>)"));
+    const auto index = install::Index::Build(root.path / L"game", root.path / L"documents");
+
+    std::vector<std::string> names;
+    for (const install::NamedCopy &file : index->Listed(".map"))
+    {
+        names.push_back(file.name);
+    }
+    CHECK(names == std::vector<std::string>{"b_addin.map", "z_addin.map", "core_world.map", "a_offer.map"});
+}
+
 // A table only another campaign has is not the loaded campaign's: Darkspawn Chronicles'
 // portraits_drk.gda had come into the Single Player campaign's portraits (DAOLib #249).
 TEST_CASE("a worksheet takes no file the game does not have, such as another campaign's", "[install]")

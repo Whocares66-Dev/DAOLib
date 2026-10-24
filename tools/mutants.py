@@ -1965,10 +1965,10 @@ MUTANTS: list[Mutant] = [
         "r.roomLF = in.I32() + 1;",
     ),
     Mutant(
-        "install-worksheet-campaign: a worksheet takes no file only another campaign has",
+        "install-listed-campaign: a listing, and a worksheet, take no file only another campaign has",
         INSTALL,
-        "!copies.empty() && copies.front().unused == Unused::No &&",
-        "!copies.empty() && copies.front().unused != Unused::Level &&",
+        "name.ends_with(extension) && !copies.empty() && copies.front().unused == Unused::No)",
+        "name.ends_with(extension) && !copies.empty() && copies.front().unused != Unused::Level)",
     ),
     Mutant(
         "ctab-register-index: a constant's first register is its +6, not its count at +8",
