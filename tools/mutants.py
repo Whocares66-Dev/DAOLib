@@ -166,6 +166,37 @@ FACEFX = "src/dao/core/FaceFx.cpp"
 # field path (the next read lands in the first 64 KiB, never mapped); and an
 # engine string's capacity bound (at worst an extra line in a crash log).
 MUTANTS: list[Mutant] = [
+    # A data table written back as the game's own are laid out (#106).
+    Mutant(
+        "gdafile-row-fill: a row's bytes no field takes are 0xFF",
+        GDAFILE,
+        "out_.resize(out_.size() + size, std::byte{0xFF});",
+        "out_.resize(out_.size() + size, std::byte{0});",
+    ),
+    Mutant(
+        "gdafile-shared-text: a text two cells share is written once",
+        GDAFILE,
+        "        if (added)",
+        "        if (!found->first.empty())",
+    ),
+    Mutant(
+        "gdafile-no-rows: a table of no rows has no row list",
+        GDAFILE,
+        "table->rowList_ = !rows.empty();",
+        "table->rowList_ = true;",
+    ),
+    Mutant(
+        "gdafile-text-align: a text starts on four bytes",
+        GDAFILE,
+        "            Align();\n            found->second = Here();",
+        "            found->second = Here();",
+    ),
+    Mutant(
+        "gdafile-cell-at-field: a cell goes where its field is, as the table's layout has it",
+        GDAFILE,
+        "const std::size_t at = rowsAt + (r * rowSize_) + *cellAt_[c];",
+        "const std::size_t at = rowsAt + (r * rowSize_) + (c * 4);",
+    ),
     # The talk tables the game searches, in its order (#106).
     Mutant(
         "talktables-gender-front: setting a gender moves its tables ahead, reversed",
@@ -267,8 +298,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "gda-cell-by-column: each column's cell is its own field",
         GDAFILE,
-        "kFirstCell + static_cast<std::uint32_t>(i)",
-        "kFirstCell",
+        "row.Shape().Find(kFirstCell + static_cast<std::uint32_t>(i))",
+        "row.Shape().Find(kFirstCell)",
     ),
     Mutant(
         "gda-type: only a G2DA is read as a table",

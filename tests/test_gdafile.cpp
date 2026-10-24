@@ -7,7 +7,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstring>
 #include <string>
+#include <variant>
 #include <vector>
 
 using dao::core::GdaColumnHash;
@@ -197,7 +199,100 @@ TEST_CASE("a GDA file is not written of a row of another length or a cell of ano
     CHECK(GdaFile::Write(original, shortRow).empty());
     const std::vector<std::vector<GdaFile::Cell>> textForNumber{{std::wstring(L"100"), std::wstring(L"Horned"), 4.0}};
     CHECK(GdaFile::Write(original, textForNumber).empty());
+    CHECK(GdaFile::Write(files::Tlk({{1, "x"}}), shortRow).empty());
+}
+
+TEST_CASE("a GDA file is written under an original of no rows: its layout is its templates'", "[gda]")
+{
     const auto empty = files::Gda({"ID"}, {}, Hashes({"ID"}));
     const std::vector<std::vector<GdaFile::Cell>> one{{std::int64_t{1}}};
-    CHECK(GdaFile::Write(empty, one).empty()); // no row to copy the layout of
+    const auto written = GdaFile::Parse(GdaFile::Write(empty, one));
+    REQUIRE(written);
+    CHECK(written->Rows() == one);
+}
+
+namespace
+{
+
+std::uint32_t U32(const std::vector<std::byte> &bytes, std::size_t at)
+{
+    std::uint32_t value = 0;
+    std::memcpy(&value, bytes.data() + at, sizeof(value));
+    return value;
+}
+
+// A table whose row template has its two fields the other way round, with four bytes no field
+// takes between them, as a table's editing leaves its layout (apr_base's).
+files::Bytes Reordered()
+{
+    files::Gff4 file("G2DA", "V0.2",
+                     {{"gtop", 8, {{10002, 1, files::kListOfStructs, 0}, {10003, 2, files::kListOfStructs, 4}}},
+                      {"colm", 8, {{10001, 4, 0, 0}, {10999, 0, 0, 4}}},
+                      {"rows", 12, {{10005, 5, 0, 8}, {10006, 14, 0, 0}}}});
+    const std::uint32_t top = file.Reserve(8);
+    const std::uint32_t columns = file.Reserve(4 + 16);
+    file.Set32(top, columns);
+    file.Set32(columns, 2);
+    file.Set32(columns + 4, GdaColumnHash("ID"));
+    file.Set32(columns + 12, GdaColumnHash("Label"));
+    const std::uint32_t rows = file.Reserve(4 + 12);
+    file.Set32(top + 4, rows);
+    file.Set32(rows, 1);
+    file.Set32(rows + 4 + 8, 7);
+    file.Set32(rows + 4, file.String("seven"));
+    return file.bytes;
+}
+
+} // namespace
+
+TEST_CASE("a table is written with its own layout, each cell at its field and the rest 0xFF", "[gda]")
+{
+    const auto bytes =
+        GdaFile::Write(Reordered(), std::vector<std::vector<GdaFile::Cell>>{{std::int64_t{7}, std::wstring(L"seven")},
+                                                                            {std::int64_t{8}, std::wstring(L"seven")},
+                                                                            {std::int64_t{9}, std::monostate{}}});
+    REQUIRE_FALSE(bytes.empty());
+    const std::size_t data = U32(bytes, 24);
+    const std::size_t rows = data + U32(bytes, data + 4);
+    CHECK(U32(bytes, rows) == 3);
+    for (std::size_t r = 0; r < 3; ++r)
+    {
+        const std::size_t row = rows + 4 + (12 * r);
+        CHECK(U32(bytes, row + 8) == 7 + r);
+        CHECK(U32(bytes, row + 4) == 0xFFFFFFFF);
+    }
+    // A text two rows share is written once; no text is none.
+    CHECK(U32(bytes, rows + 4) == U32(bytes, rows + 16));
+    CHECK(U32(bytes, rows + 28) == 0xFFFFFFFF);
+    const auto table = GdaFile::Parse(bytes);
+    REQUIRE(table);
+    CHECK(table->Bytes() == bytes);
+}
+
+TEST_CASE("texts start on four bytes after 0xFF, and a table of no rows has no row list", "[gda]")
+{
+    const auto original = files::Gda({"ID", "Label"}, {{1, std::string("x")}}, Hashes({"ID", "Label"}));
+    const auto bytes =
+        GdaFile::Write(original, std::vector<std::vector<GdaFile::Cell>>{{std::int64_t{1}, std::wstring(L"odd")},
+                                                                         {std::int64_t{2}, std::wstring(L"next")}});
+    const std::size_t data = U32(bytes, 24);
+    const std::size_t rows = data + U32(bytes, data + 4);
+    const std::uint32_t odd = U32(bytes, rows + 8);
+    const std::uint32_t next = U32(bytes, rows + 16);
+    // "odd" and its NUL take twelve bytes: the next starts on four bytes, no 0xFF needed; "x" would.
+    CHECK(next == odd + 12);
+    const auto one =
+        GdaFile::Write(original, std::vector<std::vector<GdaFile::Cell>>{{std::int64_t{1}, std::wstring(L"ab")},
+                                                                         {std::int64_t{2}, std::wstring(L"cd")}});
+    const std::size_t oneRows = data + U32(one, data + 4);
+    const std::uint32_t ab = U32(one, oneRows + 8);
+    CHECK(U32(one, oneRows + 16) == ab + 12);
+    CHECK(one[data + ab + 10] == std::byte{0xFF});
+    CHECK(one[data + ab + 11] == std::byte{0xFF});
+    const auto none = GdaFile::Write(original, std::vector<std::vector<GdaFile::Cell>>{});
+    CHECK(U32(none, data + 4) == 0xFFFFFFFF);
+    const auto table = GdaFile::Parse(none);
+    REQUIRE(table);
+    CHECK(table->Rows().empty());
+    CHECK(table->Columns().size() == 2);
 }

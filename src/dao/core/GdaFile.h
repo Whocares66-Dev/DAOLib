@@ -31,7 +31,7 @@ class GdaFile
     struct Column
     {
         std::uint32_t hash = 0;
-        std::optional<gff4::Type> type; // as the rows hold it; none if no row has the cell
+        std::optional<gff4::Type> type; // as the rows' template holds it; none if it has no such field
     };
 
     // Returns the table in `bytes`; nothing if they are no GFF4 of type G2DA.
@@ -50,15 +50,19 @@ class GdaFile
     std::optional<std::size_t> ColumnOf(std::uint32_t hash) const;
     std::optional<std::size_t> ColumnOf(std::string_view name) const;
 
-    // Returns a GDA file of the given rows under an original's columns: a
-    // copy of the original with its rows replaced, for a mod's part of a table
-    // the game merges (an apr_mymod.gda of new appearances).
+    // Returns the table as a file, laid out byte for byte as the game's own are: its columns and
+    // their layout as read, its rows.
+    std::vector<std::byte> Bytes() const;
+
+    // Returns a GDA file of the given rows under an original's columns and layout, for a mod's
+    // part of a table the game merges (an apr_mymod.gda of new appearances).
     // @param rows each a cell for each column, of the column's kind: an integer for a column
-    // of whole numbers, a float for f32, text for a string
-    // @return empty for an original that is no GDA file or has no row to copy the layout of, a
-    // row of another length, or a cell of another kind
+    // of whole numbers, a float for f32 or f64, text or none for a string
+    // @return empty for an original that is no GDA file, a row of another length, or a cell of
+    // another kind
     static std::vector<std::byte> Write(std::span<const std::byte> original, std::span<const std::vector<Cell>> rows);
 
+    static constexpr std::uint32_t kColumnName = 10000; // version 0.1's
     static constexpr std::uint32_t kColumnHash = 10001;
     static constexpr std::uint32_t kColumnList = 10002;
     static constexpr std::uint32_t kRowList = 10003;
@@ -67,6 +71,20 @@ class GdaFile
   private:
     std::vector<Column> columns_;
     std::vector<std::vector<Cell>> rows_;
+    // The layout as read, for Bytes: the header and templates; the top struct's size and where its
+    // two lists' offsets are; the column structs as they are; version 0.1's column names and
+    // where a column struct holds its name; each column's field in a row, and a row's size.
+    std::vector<std::byte> head_;
+    std::uint32_t topSize_ = 8;
+    std::uint32_t columnListAt_ = 0;
+    std::uint32_t rowListAt_ = 4;
+    std::vector<std::byte> columnStructs_;
+    std::uint32_t columnSize_ = 0;
+    std::optional<std::uint32_t> nameAt_;
+    std::vector<std::wstring> names_;
+    std::vector<std::optional<std::uint32_t>> cellAt_;
+    std::uint32_t rowSize_ = 0;
+    bool rowList_ = true; // false where the file has none: a table of no rows
 };
 
 } // namespace dao::core

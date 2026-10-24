@@ -30,6 +30,7 @@ add_executable(
     test_fev.cpp
     test_fsb.cpp
     test_gdafile.cpp
+    test_gdafile_roundtrip.cpp
     test_gff3.cpp
     test_gff4.cpp
     test_gff4_roundtrip.cpp
