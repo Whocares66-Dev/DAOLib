@@ -434,8 +434,8 @@ C = read in the disassembly or script source, I = inferred. Addresses are GOG's 
 
 - **Build: 0x0076C170**, called once from the show step 0x0076C82E (after fade scene 0x22). For each id in the pool list (party+0x244, count from 0x0062F9B0): creature = `GetCreature(id)`; skipped when the byte at creature+0x610 (`0x00838210` on creature+0x604) is true (the destroying/hidden flag, name not read); state = `GetFollowerState` (0x00632810); `isHero = (party+0x1E8 == id)`. (C)
 - **The `partypicker` table** (module's name, default `partypicker`, `SetPartyPickerStage` 858 changes it; `dev/script_commands/plotman.md`:28) is searched for the row whose `Tag` (0x88578372) equals the creature's tag (creature+0xB8). Columns read (hashes from `tools/gda.py`): `ID` 0x66FBC936 -> entry+0xC (default 0x7FFFFFFF), `Stature` 0xF495CE71 -> entry+0x28 (default 1), `BlendTree` 0x70F463FA (string), `VFX` 0x9512145E -> entry+0x2C (default 0). Table columns per `dev/gda_tables.csv`:392: `ID Label Tag BlendTree AddAnimation RemoveAnimation AddSound RemoveSound Stature VFX`. These drive the 3D stage (the figures that appear), not the list. (C for reads; the column-to-field mapping of the constructor arguments is a careful stack count, so I)
-- **Entry layout** (ctor 0x00765390; stride 0x34): +0 creature id, +4 the stage's clone creature (made by 0x007662A0), +8 state (1 picked, 2 available, 3 unavailable, 5, 7 locked), +0xC sort key (table ID), +0x10 byte isHero, +0x14/+0x18 = 1 (visual flags), +0x24 slot index (-1 not in the party; 0..3 filled), +0x28 stature, +0x2C VFX, +0x30 a scene/effect handle (-1). (C)
-- **Order:** the pool's order, then a sort by +0xC (0x0076AE90 -> 0x0076ABD0 -> introsort 0x00769F60, whose compare is `A.+0xC < B.+0xC`, 0x00767F81-0x00767F9E). The hero comes with its own row's ID like any other. (C for the compare, I for it being the only key)
+- **Entry layout** (ctor 0x00765390; stride 0x34): +0 creature id, +4 the stage's clone creature (made by 0x007662A0), +8 state (1 picked, 2 available, 3 unavailable, 5, 7 locked), +0xC sort key (table ID), +0x10 byte isHero, +0x14, +0x18, +0x1C, +0x20 the row's AddAnimation, RemoveAnimation, AddSound and RemoveSound (corrected 2026-10-24 by lib-agent-2: not visual flags; 0x00767830 reads them from the `partypicker` row, and a follower with no row gets row 0's, the player's), +0x24 slot index (-1 not in the party; 0..3 filled), +0x28 stature, +0x2C VFX, +0x30 a scene/effect handle (-1). (C)
+- **Order:** the pool's order, then a sort by +0xC (0x0076AE90 -> 0x0076ABD0 -> introsort 0x00769F60, whose compare is `A.+0xC < B.+0xC`, 0x00767F81-0x00767F9E). 0x0076AE90 then places each clone on the stage ("The 3D stage" below), so it is not a sort alone (corrected 2026-10-24). The hero comes with its own row's ID like any other. (C for the compare, I for it being the only key)
 - **Auto-selection:** after the entries are built the second loop (0x0076C47F-0x0076C5D6) puts every entry with `state == 1` or `state == 7` or `+0x10 != 0` into the next free slot (max 4; `mode+0x124` is the slot vector of ids, `mode+0xA2` the count) and sets `entry+0x24`. Locked state 7 members and the hero therefore always occupy slots. The hero is always a party member, so the picker never lists it unselected. (C)
 - **Toggle rules** (click `SelectPartyMemberUnderCursor`, 0x00768AE0; and `Unselect` 0x00767100, which skips entries with +0x10 or state != 1):
   - works only while `GetPartyPickerGUIStatus` (party+0x74) == 2 (USE), not while the mode is showing/leaving (+0xA0/+0xA1) and not while GUI-scene slot +0x11C says busy;
@@ -451,10 +451,70 @@ C = read in the disassembly or script source, I = inferred. Addresses are GOG's 
 - **104 comes from the engine**, queued in the show step 0x0076C7C4-0x0076C827 (`ev+0x20 = 0x68`, target = the module id, `AddEventNow`), once, when the fade ends (flag +0xA0 cleared at 0x0076C8A2). `dev/script_commands/inventory.md`:217-221 has it. Handlers: `sp_module.nss`:104 -> `module_core_travel` (`sp_module_travel.nss`:338 locks followers) and `module_core.nss`:602 (`RW_CatchUpToPlayer` for every pool member: follower XP catches up to the hero). (C)
 - 71 (`PARTYPICKER_CLOSED`) is only raised by Submit (0x00767014) and by the CCParty apply path (0x006371D6). (C)
 
+### The 3D stage (read 2026-10-24 by lib-agent-2 with subagents, for DAOParagonEngine #243)
+
+Read in the GOG exe and the files (ghilana); the camera's constants (0x00C0D704 = 7.75, 0x00C0D708 = 7.0, 0x00C0D710 = 30.0, the aspect test against 1.6 at 0x00B010F0), 0x0076AE90's sort then placing, and the tint colour's two readers were re-read by lib-agent-2. Nothing was played.
+
+- **The mode** [C]: `GameModePartyPicker`'s slot 6 (0x0076CF40) is enter, slot 7 (0x0076BEC0) leave, and slot 8 (0x0076C720) the update. The update runs the show step:
+  1. build the entries and clones (0x0076C170);
+  2. sort and place them (0x0076AE90);
+  3. read the rows (0x00767830);
+  4. activate the stage (0x00707040);
+  5. set the poses (0x00766AB0);
+  6. set the camera (0x007672C0).
+- **Enter** [C]: input context `GameModePartyPicker`; the `ambient` and `vfxamb_combat` sound busses set; the scene camera's position, orientation and FOV saved (mode +0xB0/+0xC0/+0xD0); scene 0x22 faded in; the stage's marks gathered (0x0076CC90).
+- **The stage** [C]: the module's SharedCharacterStage (+0x388, `char_stage`, layout `oth999d`; CHARGEN.md). It is **switched to**, not drawn apart. 0x00707040 sets area +0x45C = 1, saves the current area at +0x6E8, and makes the stage's scene (+0x62C) the renderer's active one (0x0067C3B0(1)). The camp stays loaded.
+- **A clone** (0x007662A0, entry +4) [C]:
+  - It is a fresh `CCCreature(-1)`, not in the area's object list. It copies the follower's appearance record (+0x7B0, through 0x0074A610), its sound set and its equipment (0x007B8950, not read).
+  - It goes into the stage's scene only (its slot 66 with mode +0x84). The row's `BlendTree` (`pp_<name>.anb`) is loaded through 0x006B5B30.
+  - Each frame (0x00765880) it is updated: animation 0x0069EAF0(dt), slot 0x110(dt).
+- **Its place** [C]:
+  1. The stage mark whose tag is `char_` + the creature's tag, with its position and facing.
+  2. Otherwise the next unused mark of the Stature's list: 0 `char_short*`, 1 `char_med*`, 2 `char_tall*`.
+  3. Otherwise (0, 0, 0).
+  - **Stature is not a scale**; nothing scales a clone.
+  - **The vanilla marks:** char_stage.are has only named marks, all at z 0.900991: `char_player` (−2.628284, −3.132766, yaw 28°) and ten companions' `char_gen00fl_<name>` (the stage file lists them all). So an unmatched follower stands at the origin.
+- **Its pose** [C]:
+  - The anim_base rows are 673 `party_enter` → 674 `party_enter_loop` → 675 `party_exit` → 676 `party_exit_loop` → 673.
+  - **Picked (1) and locked (7):** rest in 674.
+  - **Available (2) and unavailable (3):** rest in 676.
+  - **The hero:** idles normally.
+  - The opening poses are played with blend −1.0.
+  - **Select** (0x00766040): AddAnimation 673 with blend −2.0 (20% of the clip), then 674; AddSound, `SS_YES` (47), on the clone, at most once in 0.1 s.
+  - **Deselect** (0x007661B0): 675 → 676, and `SS_CUSS` (54).
+- **Its effect** [C]: the row's VFX (entry +0x2C; only 3042 Morrigan and 3043 Wynne, the crust rows `fxc_mor_gui_c` and `fxc_wyn_gui_c`) is placed on the clone while picked or locked (0x00765F90, handle at +0x30). Its removal is triggered by clone +0xCF4, whose writer was not read.
+- **Its tint** [C for the code, I for the colour]:
+  - An unavailable entry (state 3) is tinted with amount 0.85 (0x00C0D700) and the colour at 0x00C374B0..B8 (0x00765830 → 0x00765470 → the scene object's slots).
+  - Nothing writes that colour statically (two readers only), so it is presumably 0: black.
+  - The hover (0x007658E0) passes amount 0, so it shows no tint.
+- **The camera** (0x007672C0, once at the show step) [C, numbers checked]:
+  - It is reset (0x006C4410), set to mode 0 (0x006C2890(0, 1)) and given FOV 30° (0x006C4B20).
+  - With P and F the hero's clone's position and facing, it is placed at `P + d·F + (−0.5)·(F.y, −F.x, 0) + (0, 0, 2.5)`, where d = 7.75, or 7.0 when the aspect is 1.6 or more. It looks at `P + (0, 0, 0.75)`.
+  - So it is in front of the hero, looking back at the line. For vanilla `char_player` that is about (−6.705, 3.476, 3.401) looking at (−2.628, −3.133, 1.651) [I that the waypoint's stored quaternion becomes this facing vector].
+  - Near and far are unchanged.
+- **The pan** [C]: `PanCameraLeft` (0x00765990) and `PanCameraRight` (0x007659E0) slide the camera 1 m along its own right vector over 1 s (curve 3, `SceneCamera::SetPosition` 0x006C45F0). It has no limit, and the orientation is unchanged. Who sends them was not traced.
+- **The pick** [C]:
+  - 0x007675B0 unprojects the mouse through the camera and casts a physics ray (`World::Raycast` 0x006497A0, up to 32 hits).
+  - It skips hits of type 2 with flag 0x20000, and matches a hit's id to each clone's attribute at clone +4 [I: its physics body's id]. It does not use MouseOverInterface.
+  - `SelectPartyMemberUnderCursor` (0x00768AE0) ignores its message and picks again.
+  - When the hovered entry changes, the GUI's two strings are filled: +0x140 the creature's name, and +0x168 a line from strref 0x4F7B7 with a creature attribute (data-tree paths not traced).
+- **The teardown** [C]:
+  - **Exit** (0x00765960) only starts scene 0x22's fade and sets +0xA1.
+  - **The update** then waits for the fade (or 2 s), hides screen 0x1B and sets +0x98.
+  - **Leave** (0x0076BEC0) deletes the scratch waypoint (+0xE0) and destroys each clone (slot 0x108, then its destructor). It restores the saved camera (position, orientation and FOV, at once) and returns to the saved area's scene (0x00707020). It turns the sound busses back off and pops the input context.
+  - The stage is never unloaded.
+- **Not read:**
+  - the marks' order within a list (comparator 0x0076AD50);
+  - the equipment copy 0x007B8950;
+  - clone +0xCF4's writer;
+  - the four `0x00634F20(0)` calls in leave;
+  - who sends the pans;
+  - the DLC Shale's row (enciphered).
+
 ### Not read
 
 - Who builds `ApplyPartyPickerChangesMessage` (0x007768F5 / 0x0077DC89) and what GUI action calls it.
-- The 3D stage's own code (0x00767830, 0x007672C0, 0x0076AE90); the meaning of creature+0x610 (picker skips it).
+- The meaning of creature+0x610 (picker skips it). The 3D stage's code is read below in "The 3D stage", with what of it is still not read.
 - The party picker movie sends only `GameModeController.SubmitPartyChanges` and `ClearPartyPicker` (`PartyPicker.as`:28, :37).
 - `ClearPartyPicker` (0x00767230) runs Unselect for slots 0–3, with no event and no state change.
 - The +0x270 list that 0x00636F50 compares is filled from the +0x2A8 map at 0x00638640..0x00638992, apparently for a GUI data tree. It is not the picker's entries.
