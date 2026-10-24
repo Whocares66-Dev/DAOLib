@@ -3,6 +3,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -114,4 +116,99 @@ TEST_CASE("a talk table written reads back its strings, and is refused an id twi
     CHECK(table->String(900001) == L"Élan");
     const std::vector<std::pair<std::uint32_t, std::wstring>> twice{{1, L"a"}, {1, L"b"}};
     CHECK(dao::core::TalkTableFile::Write(twice).empty());
+    const std::vector<std::pair<std::uint32_t, std::wstring>> empty{{TalkTableFile::kEmptySlot, L"a"}};
+    CHECK(dao::core::TalkTableFile::Write(empty).empty());
+}
+
+namespace
+{
+
+constexpr std::size_t kList = 100; // the data at 96, the top struct, then the list's count
+
+std::uint32_t U32(const std::vector<std::byte> &bytes, std::size_t at)
+{
+    std::uint32_t value = 0;
+    std::memcpy(&value, bytes.data() + at, sizeof(value));
+    return value;
+}
+
+} // namespace
+
+// The ids of the game's core_de-de_f.tlk (its texts aside), in the slots the file has them in.
+TEST_CASE("a table written puts each id in the slot the game's own table has it in")
+{
+    const std::vector<std::uint32_t> slots{TalkTableFile::kEmptySlot,
+                                           0x5CF65,
+                                           0x4F194,
+                                           0x3A540,
+                                           0x5FBE4,
+                                           TalkTableFile::kEmptySlot,
+                                           TalkTableFile::kEmptySlot,
+                                           0x5FC33,
+                                           0x3A53B,
+                                           0x3A53D,
+                                           0x3A54C,
+                                           0x3A53C,
+                                           0x5FC30,
+                                           0x60E84,
+                                           TalkTableFile::kEmptySlot,
+                                           0x3A53A};
+    std::vector<std::pair<std::uint32_t, std::wstring>> strings;
+    for (const std::uint32_t id : slots)
+    {
+        if (id != TalkTableFile::kEmptySlot)
+        {
+            strings.emplace_back(id, std::to_wstring(id));
+        }
+    }
+    const auto bytes = TalkTableFile::Write(strings);
+    REQUIRE(U32(bytes, kList) == slots.size());
+    for (std::size_t i = 0; i < slots.size(); ++i)
+    {
+        INFO("slot " << i);
+        CHECK(U32(bytes, kList + 4 + (8 * i)) == slots[i]);
+    }
+}
+
+TEST_CASE("a text written once for the ids that share it, an empty one as none, each on four bytes after 0xFF")
+{
+    const std::vector<std::pair<std::uint32_t, std::wstring>> strings{{1, L"ab"}, {2, L"ab"}, {3, L""}, {4, L"cd"}};
+    const auto bytes = TalkTableFile::Write(strings);
+    const std::uint32_t count = U32(bytes, kList);
+    REQUIRE(count == 5);
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> words; // id, offset
+    words.reserve(count);
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+        words.emplace_back(U32(bytes, kList + 4 + (8 * i)), U32(bytes, kList + 8 + (8 * i)));
+    }
+    const auto offset = [&](std::uint32_t id) {
+        return std::ranges::find(words, id, &std::pair<std::uint32_t, std::uint32_t>::first)->second;
+    };
+    CHECK(offset(1) == offset(2));
+    CHECK(offset(3) == 0xFFFFFFFF);
+    CHECK(offset(TalkTableFile::kEmptySlot) == 0xFFFFFFFF);
+    // "ab" and its NUL take ten bytes, so the next text starts two bytes of 0xFF later.
+    const std::uint32_t first = std::min(offset(1), offset(4));
+    const std::uint32_t second = std::max(offset(1), offset(4));
+    CHECK(second == first + 12);
+    CHECK(bytes[96 + first + 10] == std::byte{0xFF});
+    CHECK(bytes[96 + first + 11] == std::byte{0xFF});
+    CHECK(bytes.size() == 96 + second + 10);
+    const auto table = TalkTableFile::Parse(bytes);
+    REQUIRE(table);
+    CHECK(table->Size() == 4);
+    CHECK(table->String(2) == L"ab");
+    CHECK(table->String(3) == L"");
+    CHECK_FALSE(table->String(TalkTableFile::kEmptySlot));
+}
+
+TEST_CASE("a table of no strings has no list")
+{
+    const auto bytes = TalkTableFile::Write({});
+    REQUIRE(bytes.size() == 100);
+    CHECK(U32(bytes, 96) == 0xFFFFFFFF);
+    const auto table = TalkTableFile::Parse(bytes);
+    REQUIRE(table);
+    CHECK(table->Size() == 0);
 }

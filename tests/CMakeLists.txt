@@ -71,6 +71,7 @@ add_executable(
     test_script_table.cpp
     test_talktable.cpp
     test_talktables.cpp
+    test_talktable_roundtrip.cpp
 )
 dao_apply_warnings(dao_core_tests)
 target_link_libraries(

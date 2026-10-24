@@ -23,9 +23,11 @@ namespace dao::core
 class TalkTableFile
 {
   public:
-    // The table in `bytes`; nothing if they are not a version 0.2 talk table.
+    // The table in `bytes`; nothing if they are not a version 0.2 talk table. An id the table
+    // holds with no text is kept, with an empty text, as the game finds it.
     static std::optional<TalkTableFile> Parse(std::span<const std::byte> bytes);
 
+    // Returns the text of an id; nothing if the table does not hold it.
     std::optional<std::wstring> String(std::uint32_t id) const;
     std::size_t Size() const
     {
@@ -37,15 +39,21 @@ class TalkTableFile
         return strings_;
     }
 
-    // Returns a talk table of the strings, as the game's are kept (GFF4 TLK V0.2), for a mod's
-    // own names: an add-in's core\data\talktables\<uid>_c_<language>.tlk, as the game's own
-    // add-ins have theirs.
-    // @return empty for an id given twice
+    // Returns a talk table of the strings laid out byte for byte as the game's own are (GFF4 TLK
+    // V0.2), for a mod's own names: an add-in's core\data\talktables\<uid>_c_<language>.tlk, as
+    // the game's own add-ins have theirs. An empty text is written as none.
+    // @return empty for an id given twice, or an id of kEmptySlot
     static std::vector<std::byte> Write(std::span<const std::pair<std::uint32_t, std::wstring>> strings);
+
+    // Returns the game's hash of an id: its remainder by a table's slots is the slot the game's
+    // search for the id starts at.
+    static std::uint32_t Hash(std::uint32_t id);
 
     static constexpr std::uint32_t kStringList = 19001;
     static constexpr std::uint32_t kStringId = 19002;
     static constexpr std::uint32_t kString = 19003;
+    // The id of a slot of the list that holds no string.
+    static constexpr std::uint32_t kEmptySlot = 0xFFFFFFFF;
 
   private:
     // Sorted by id; a vector, whose move cannot throw.

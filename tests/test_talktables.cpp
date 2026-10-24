@@ -166,12 +166,7 @@ namespace
 // the id, an empty slot, or the start again.
 bool GameFinds(const std::vector<std::uint32_t> &slots, std::uint32_t id)
 {
-    std::uint32_t a = (id << 15) + ~id;
-    std::uint32_t c = (a >> 12) ^ a;
-    a = c * 5;
-    c = (a >> 4) ^ a;
-    c *= 0x809;
-    const std::size_t start = ((c >> 16) ^ c) % slots.size();
+    const std::size_t start = dao::core::TalkTableFile::Hash(id) % slots.size();
     std::size_t i = start;
     do
     {

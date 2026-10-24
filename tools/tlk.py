@@ -49,7 +49,9 @@ class TalkTable:
         self.strings = {}
         for template, p in g.list_of_structs(g.data_offset, top[STRING_LIST]):
             f = g.fields(template)
-            self.strings[g.value(p, f[STRING_ID])] = g.value(p, f[STRING_TEXT])
+            strref = g.value(p, f[STRING_ID])
+            if strref != 0xFFFFFFFF:  # an empty slot of the table
+                self.strings[strref] = g.value(p, f[STRING_TEXT]) or ""
 
     @classmethod
     def open(cls, lang="en-us"):
@@ -63,10 +65,26 @@ class TalkTable:
         return self.strings.get(strref)
 
 
+NONE = 0xFFFFFFFF  # an empty slot's id, and the offset of no text
+
+
+def hash_id(strref):
+    """The game's hash of a string id (CTlkTable's find, 0x004E47F0): its
+    remainder by a table's slots is where the game's search for it starts."""
+    a = ((strref << 15) + (~strref & NONE)) & NONE
+    c = (a >> 12) ^ a
+    a = (c * 5) & NONE
+    c = (a >> 4) ^ a
+    c = (c * 0x809) & NONE
+    return (c >> 16) ^ c
+
+
 def write(strings):
-    """A version 0.2 talk table of [(id, text)], as bytes: GFF V4.0 PC,
-    type "TLK " V0.2, a TLK top struct holding the string list, each a STRN
-    of the id and an offset to the text, as the game's own are."""
+    """A version 0.2 talk table of [(id, text)], as bytes, laid out byte for
+    byte as the game's own are (dao/core/TalkTable.cpp has the rules, read
+    2026-10-24 over all 1,501): GFF V4.0 PC, type "TLK " V0.2, a TLK top
+    struct holding the string list, an open hash table of STRN, each the id
+    and an offset to the text."""
     templates = [
         (b"TLK ", [(STRING_LIST, 1, 0x8000 | 0x4000, 0)], 4),
         (b"STRN", [(STRING_ID, 4, 0, 0), (STRING_TEXT, 14, 0, 4)], 8),
@@ -78,17 +96,37 @@ def write(strings):
         for flabel, t, flags, off in fields:
             decls += struct.pack("<III", flabel, (flags << 16) | t, off)
     data_offset = fields_at + len(decls)
-    body = bytearray(4)
-    # The list starts right after the top struct.
-    struct.pack_into("<I", body, 0, len(body))
-    body += struct.pack("<I", len(strings))
-    at = len(body)
-    body += bytes(8 * len(strings))
-    for i, (strref, text) in enumerate(strings):
-        raw = (text + "\0").encode("utf-16-le")
-        struct.pack_into("<II", body, at + 8 * i, strref, len(body))
-        body += struct.pack("<I", len(raw) // 2) + raw
     head = b"GFF V4.0PC  TLK V0.2" + struct.pack("<II", len(templates), data_offset)
+    texts = dict(strings)
+    if len(texts) != len(strings) or NONE in texts:
+        raise ValueError("an id given twice, or an id of 0xFFFFFFFF")
+    if not texts:
+        return head + tmpl + decls + struct.pack("<I", NONE)
+    # The list starts right after the top struct: a third more slots than
+    # strings, the ids put in from the lowest at their hash's slot or the next
+    # free one.
+    count = len(texts) * 4 // 3
+    slots = [NONE] * count
+    for strref in sorted(texts):
+        at = hash_id(strref) % count
+        while slots[at] != NONE:
+            at = (at + 1) % count
+        slots[at] = strref
+    body = bytearray(struct.pack("<II", 4, count))
+    listed = len(body)
+    body += bytes(8 * count)
+    first = {}
+    for i, strref in enumerate(slots):
+        offset = NONE
+        text = texts.get(strref, "")
+        if strref != NONE and text:
+            if text not in first:
+                body += b"\xff" * (-len(body) % 4)
+                first[text] = len(body)
+                raw = (text + "\0").encode("utf-16-le")
+                body += struct.pack("<I", len(raw) // 2) + raw
+            offset = first[text]
+        struct.pack_into("<II", body, listed + 8 * i, strref, offset)
     return head + tmpl + decls + bytes(body)
 
 

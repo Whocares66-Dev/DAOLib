@@ -6,8 +6,8 @@
 // the table, its name, a female byte. GetString (0x004E4990) asks each table front to back and
 // takes the first that holds the id (0x004E47F0: the file's list of strings is an open hash
 // table, searched from hash(id) % count one slot on at a time until the id, an empty slot of id
-// 0xFFFFFFFF, or the start again; every shipped table is laid out so, and a table with no empty
-// slot is searched whole, as TalkTableFile::Write's are). It reads no gender: the +0x1C that
+// 0xFFFFFFFF, or the start again; every shipped table is laid out so, as TalkTableFile::Write
+// lays its own, and a table with no empty slot is searched whole). It reads no gender: the +0x1C that
 // GetTlkTableString sets is not read in a lookup, and its gender argument changed nothing in
 // play.
 //

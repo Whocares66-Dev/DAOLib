@@ -798,6 +798,36 @@ MUTANTS: list[Mutant] = [
         'file->TypeVersion() == "V0.9"',
     ),
     Mutant(
+        "talktable-hash: each id goes in the slot the game's search starts at",
+        TALKTABLE,
+        "    c *= 0x809;",
+        "    c *= 0x80B;",
+    ),
+    Mutant(
+        "talktable-slots: a table has a third more slots than strings",
+        TALKTABLE,
+        "sorted.size() * 4 / 3",
+        "sorted.size() * 3 / 2",
+    ),
+    Mutant(
+        "talktable-padding: a text starts on four bytes after bytes of 0xFF",
+        TALKTABLE,
+        "std::byte{0xFF});",
+        "std::byte{0});",
+    ),
+    Mutant(
+        "talktable-shared-text: a text two ids share is written once",
+        TALKTABLE,
+        "            if (added)",
+        "            if (!found->first.empty())",
+    ),
+    Mutant(
+        "talktable-empty-slot: an empty slot of the list is no string",
+        TALKTABLE,
+        "if (id && text && *id != kEmptySlot)",
+        "if (id && text)",
+    ),
+    Mutant(
         "savemeta-level-field: the level is read from its own field",
         SAVEMETA,
         "meta.level = root->Get<std::int32_t>(kLevel).value_or(0);",
