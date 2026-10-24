@@ -420,6 +420,41 @@ Read 2026-10-18 in the GOG exe (`tools\daoexe.py`, capstone sweeps) and the game
 
 So **what decides whether a crust row draws is the owner, not the effect's model**: an owner with no `crst` node gets no effect at all from a crust row (nothing drawn, the load false) [C]; an effect model with no `crst` node is fine.
 
+###### A crust row at a location draws nothing (read 2026-10-23 by lib-agent-2 with a subagent, for DAOParagonEngine #28)
+
+Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area owner never reaches; it is not the area's own slot. Nothing here was seen in play.
+
+- **A crust row (`CrustEffect` 1) applied at a location is not drawn at all** [C]. The effect is made, finds no crust target, its model load returns false, and it is removed at once. Its `crst` subtrees are never instanced, at the anchor or anywhere else.
+- **The path** [C]:
+  - **The command:** `Engine_ApplyEffectAtLocation` (596, 0x0065C830) takes the area from the location (GetAreaById 0x005D5960). It writes the location's position and orientation into the effect, then applies it through the area's effect holder at area+0xCC.
+  - **The holder:** that interface's slot 16 (+0x40) is 0x0067C070, the area's twin of the creature's 0x00697830. It sets the row struct's owner id (+4) to the area's own id and calls the manager's create 0x0079EDC0 with a crust target of 0 (0x0067C09C). The creature's twin passes 0 too, so the maker finds the target itself.
+  - **The maker:** 0x0079E8A0 looks the owner up with GetObjectById (0x005D5BE0), which casts the entry through its slot 6 (+0x18). CCArea's vtable 0x00B0DE04 has 0x004137B0 (`xor eax, eax`) there, so an area owner is null.
+    - So the block that asks the owner's slot 0x10C for a crust target (0x0079E946–0x0079E961) is skipped, and the target stays 0.
+  - **The load:** the model load 0x007EA550 applies the `CrustEffect` test to a location effect too. With CrustEffect 1 and no target it returns false (0x007EA853–0x007EA87E). There is no separate location branch.
+  - **The removal:** 0x0079D9F0 then removes the handle (0x004E9640) and calls 0x0079D880.
+    - The script has already been given the handle id (0x0079EDF4–0x0079EE00), so it holds an id for an effect that is gone.
+    - That nothing else keeps it is [I]: 0x0079D880 was not read to its end.
+- **A non-crust row at a location** loads normally [C]:
+  - 0x0079D9F0 finds GetAreaById(owner) non-null, so it skips the creature attachments 0x0079D690 and 0x0079D580 and sets effect +0x448 = 3.
+  - 0x0079D410 parents the graphics object to the area's scene (area +0x62C, `src/dao/Objects.h`'s ISceneInstance) through effect slot 0x104.
+  - The transform is world space: the location's position through 0x007E9A10 (+0x120) and its orientation through slot 0x1C0 (+0x130, 16 bytes). Neither `FixedOrientation` nor any hook is involved.
+  - So the crust-map code (0x0079D690, 0x00543BD0) never runs for a location.
+- **The data keeps the two apart** [C, scripts and ghilana]:
+  - A spell's location impact (`VFX_Impact0`, `Ability_ApplyLocationImpactVFX`, `ability_h.nss`:1175–1186) is a non-crust row for every AoE_Type 1 spell.
+  - `combat_damage_h.nss`:72–82 gives the location the non-crust 90146 and the creature the crust rows 90150 and 90164.
+  - The one crust-at-location call found is `orz510pt_caridins_cross.nss`:164: vfx 5022 "Rock Impact", `fxp_rock_imp_c`, CrustEffect 1, and a model with no `crst` node. By the above it draws nothing [I that this was never seen].
+- **The cones are not location effects** [C scripts]:
+  - Flame Blast, Shock and Cone of Cold have `VFX_Impact0` 90139 `fxa_fire_cone_c`, 90151 `fxa_lit_cone_c` and 90161 `fxa_ice_con_c`. These are crust rows of Type D.
+  - They are applied on the caster as `EffectConeCasting(vfx)` with `ApplyEffectOnObject(..., oCaster, 1.5f)` (`spell_cone.nss`:77–79, `abi_templates.nss`:429–430).
+  - `fxa_fire_cone_c.mmh` has one `crst` node, CrustHook2 (hook id 2, "Right Cast" in `crusts.gda`), holding all five emitters and both lights.
+  - So the cone is drawn at the caster's right-hand cast hook, not at a location anchor [I: how the engine turns a type-1030 effect's `EFFECT_INTEGER_VFX` into a visual effect was not read].
+- **Not read:**
+  - 0x0079D880 to its end;
+  - the type-1030 effect's visual;
+  - the projectile maker's sixth argument (0x007E709E);
+  - the aiming effect's row (UpdateAim, 0x00711322);
+  - scripts that build the vfx id in a variable.
+
 ###### The attachment, for fxa_mana_conj_c
 
 `fxa_mana_conj_c.mmh` (patch002.erf) has no `crst` node and no `MMHNodeCrustHookID` field: GOB, then emitters `NewEmitter_0` … at about 1 m from the origin in the XY plane (0, 0.91), (0, −1.01), (−1.08, 0.01), (1.05, 0.01), and under `NewDummy_5` (rotation animated) more of them, all at z 0 [C]. A ring at the feet.
