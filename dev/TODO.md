@@ -73,4 +73,5 @@ Read, built and seen in play; what is left of each is small, and kept here.
 - **Inventory and items.** Much is scriptable already (`GetItemsInInventory`, `CreateItemOnObject`). Native work waits for a need scripts cannot meet.
 - **Party and follower AI.** Members, tactics presets.
 - **Saves.** Why one quicksave in play wrote its files without `SaveGame::Write` (`dev/SAVES.md`).
+- **A template written from nothing** (DAOLib #106): only if a tool must make one with no template to copy. The toolset's own GFF V3.2 writer orders each kind's fields by labels of its own (`dev/FILES.md`, "Templates"): read its order in the toolset's managed code (`toolset\extract\tools\DragonAgeToolset.exe` or `GffEditor.exe`, decompiled with ILSpy) and reproduce it, as the talk tables', archives' and data tables' writers reproduce theirs.
 - **The examples.** `src/plugins/example/` checks many parts at once; each part moves to a focused example in `examples/`, and writing each reviews its API.
