@@ -277,6 +277,22 @@ partyMoney += oldMoney; creature.+0xBF0 = partyInventory; delete old; G.flags = 
 - Party ctor 0x0063A3C0: `[esi+0x20C] = 0x007405E0(new 0x50 bytes, ownerId = [esi+4] via 0x53CC40, 9, 0xC)` (0x0063A98D-0x0063A9AC). 0x007405E0 sets vtable 0xB1B974 and builds sub-locations; the Backpack is `0x0080D220(owner, 9, 0xC)` -> `0x007CAAE0(owner)` -> `0x00761170`, which stores `[loc+4] = owner` (0x0076117C). Backpack max (+0x28) = 0x60 (0x007CAB47).
 - 0x00762240 tail 0x00762558-0x00762598: `[item+0x4E8] = this`, vslot 0x54, `GetObjectById([this+4])`, vslot 0x1C(item). Stack merge branch 0x0076232B-0x00762365 (0x00755CB0/0x00755D10 can-merge, then destroys the moved item with vslot 0x198(0)); skipped if global flag 1 is set (0x007622E4 `and al,1`, 0x00762316).
 - 0x00740950 (Inventory::Add) routes before the Backpack: items with `+0x2C4` -> sub-location +0x18; base-item type word `+0x464` == 0x11 (money) and inventory owner == `[app->party]+4` -> amount `[item+0x5F0]` added to the money location (+0x28, 0x007C9FE0) and the item deleted (so party money never takes a slot); `+0x4EC` == 0x6C -> 0x007408B0; else Backpack at +8. CanAdd on the Inventory 0x0073F600 is true for `+0x2C4` items and money, else Backpack::CanAdd.
+- **Recipes and who has an Inventory** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **Recipes** [C]:
+    - The branch after copper: an item whose attribute +0x4EC (registered as "BaseItemID", 0x007546F0) is 108 (0x6C) is not added. `LearnRecipe` 0x007408B0 takes its attribute +0x670 instead.
+    - +0x670 is registered as "RecipeID" (0x007551EA). The template's and the save's name for it is "CraftingRecipeID" (0x0075760F, in the template load 0x007572D0).
+    - The item is then deleted (its vtable slot 0 with 1, the deleting destructor).
+    - There is no INVENTORY_ADDED and no alert.
+  - **`LearnRecipe` 0x007408B0** [C]:
+    - It finds the id in the Inventory's list at +0x38 (0x00768B80), appends it if absent (0x005E3880), and notifies the list (its vtable +0x24).
+    - There is no owner test.
+  - **Who has an Inventory** [C]: the Inventory's vtable 0x00B1B974 is referenced only by its destructor and constructor. The constructor 0x007405E0 has three callers: CCParty (0x0063A995, kept at party +0x20C) and creature +0xBF0 (0x006A29EE, 0x006B448E). So a placeable or a store never learns.
+  - [I] what the join's move does with a creature's own recipe list (0x00762E90 moves items).
+- **The rune detach** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **`HandleMessage_DetachRuneFromItemMessage` 0x00759C60** [C]: it sets the global inventory flags `|= 0x14` around 0x00762B90(record, rune, party +0x20C), restoring them after. 0x00762B90 adds `|= 8` around 0x00762010.
+  - **The add goes to the party's Inventory** [C]: 0x00762010 calls the location's vtable slot 1 (0x00762096–0x007620A5). Party +0x20C is the party's Inventory, so that is `Inventory::Add` 0x00740950.
+  - **So** a detached rune raises no "Items received" alert, because of flag 4. Whether the party's ADDED is raised depends on 0x00763100, which returns only on flag 2. The meaning of 0x10 and 8 on this path was not found [I].
+  - **0x00763390 is `ItemPossessor::OnItemAdded`** (ID 18204): it sets the item's owner and then calls 0x00763100 [C]. The raise is in 0x00763100, not 0x00763390. ITEMS.md's pseudo-code comment "// 0x00763390 -> 0x00763100" stands.
 - Backpack::CanAdd 0x007CA890: flag **0x10** (`test [0xC371B4],0x10`) returns true; else true if size < max (+0x28) (max -1 = unlimited), or the item is stackable (0x00753C60) and an existing stack found (0x00761260 -> vslot 0x48) accepts it (0x00755CB0). The generic wrappers 0x007611A0 (CanAdd) / 0x007611E0 (CanRemove) skip the check when flag **0x100** is set, else call location vslot 0x30/0x34.
 - 0x00762990: item's location (`+0x4E8`) == dst -> a slot move; otherwise `CanRemove(old)` and `CanAdd(dst, slot)`, then `0x00762100` (Remove, `-1` = whole stack) and `0x00762010` (Add); either check failing falls to 0x00762B30 and nothing moves. 0x00762C40 sets flag 0x8 and picks the slot with 0x00761340. 0x00762D60 loops 0x00762C40 over the list and ANDs the result into `*out` (0x00762E29).
 - 0x006A8C10: 0x006A8C49 `lea ebp,[ecx+0xBF0]`; flag 2 at 0x006A8C67-0x006A8C6E; 0x00762E90 at 0x006A8C85; money 0x006A8C8D-0x006A8CB3 (`old+0x28 -> +0x90` into `party+0x28`'s money via 0x007C9FE0); setter vslot 0x54 at 0x006A8CC1; old deleted `vslot 0 (1)` at 0x006A8CC9-0x006A8CCF; flags restored 0x006A8CE2.

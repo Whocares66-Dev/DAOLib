@@ -762,7 +762,24 @@ The sound manager (singleton getter 0x005B9020) keeps the renderer at +0x90 and 
   - So a cutscene's own sound project (`bhm500cs_harrowing`, `bhm_intro`, ...) and its lines' VO banks load as its actions are built, and go when the cutscene is torn down (the timing of action creation against the cutscene's start was not read).
 - **A pin past the owner's end**: `0x005BAF30` (instance, `(bool)`) takes, once, the project of the instance's own event path (0x005B6860, to the first `/`) with `LoadProject(..., false)` into +0xBC, so the destructor releases it (checked). Only the cutscene's sound handlers `0x007D91A0` and `0x007D97A0`/`0x007D9760` pass true, and only when the cutscene's +0x1B4 byte is 0. PlaySound and the others pass false. Inferred: a cutscene sound that outlives its cutscene keeps its project loaded until it ends.
 - **A creature's sound set** (checked):
-  - `CCCreature::ForScript_SetSoundSet` `0x006BD0E0` (also called by the creature's loads, `0x006BDC70` ×4, `0x006C04C0`, `0x007C0B60` ×2, and others) releases the old name at +0x96C (when +0x980 says it has one), stores the new one, and calls `LoadProject(name, false)`.
+  - `CCCreature::ForScript_SetSoundSet` `0x006BD0E0` (also called by the creature's loads; corrected 2026-10-23 by lib-agent-2: the earlier counts `0x006BDC70` ×4 and `0x007C0B60` ×2 were not borne out by an E8 scan, BuildModel 0x006BDC70 calls it twice; callers and the full function below) releases the old name at +0x96C (when +0x980 says it has one), stores the new one, and calls `LoadProject(name, false)`.
+- **0x006BD0E0 in full** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **`SetSoundSet` (0x00664350)** pops the object, then the string, and calls 0x006BD0E0(name, 1) [C].
+  - **0x006BD0E0(name, setDefault)** [C]:
+    - It does nothing when the name equals +0x96C. The compare is 0x004C0DE0: exact and case-sensitive (a wstring compare through 0x00413800).
+    - Otherwise it releases the old project, stores the name at +0x96C, and stores it at +0x988 too when setDefault is set.
+    - An empty name stops there.
+    - Otherwise it loads the project (0x005BA220); if that fails, nothing more is done.
+    - With the project loaded: the VO property `Disable2DAProbabilities` == 1 sets +0x969 = 1, which is never cleared here. The `sse_<name>` StrID rows are prefetched into the set at +0x9A4.
+  - **Its callers** [C, an E8 scan]:
+    - **SETSOUNDSET**, with flag 1.
+    - **The template load 0x006C06F0:** the template's `SoundSet` resource name, cut at the first '.' (0x006C0972–0x006C099A), into +0x988, then the call with flag 0 (0x006C09DE). This answers ":1491 Whether the template's `SoundSet` reaches `SetSoundSet` at load": it does.
+    - **The save load 0x006BE980:** field 16952 into +0x988, defaulting to +0x96C; field 16951 through the call with flag 0.
+    - **The GUI's `HandleMessage_SetSoundSetMessage` 0x0060B9C0:** it calls 0x006BD0E0 directly (0x0060BA02).
+    - **The creature's message handler 0x006BE480:** flag 0, and it also assigns +0x988.
+    - **BuildModel 0x006BDC70:** two calls (0x006BE02C, 0x006BE078), gated by a byte argument. When the appearance's words +0x5A and +0x58 are equal it uses +0x988; otherwise apr_base's `Default_Sound_Set` (0x1F6B90F1) for the new appearance.
+    - **0x007662A0 and 0x007C0BF0**, which copy another creature's +0x96C with flag 0.
+  - [I]: what +0x58 and +0x5A of the appearance are; what the +0x9A4 set is used for.
   - The creature's destructor `0x006BAFE0` releases it (0x006BB3E4).
   - So each sound set's own `.fev` (the `ss_*` barks) is loaded per creature that has it, counted (inferred: the sound set name is a project name, as it is passed straight to LoadProject).
 
@@ -1488,7 +1505,7 @@ Stealth's −12 dB on the foot and foley instances is in `%TEMP%\lib-agent-2-aud
 - The meaning of instance+0xBD and the start's second argument in 0x005BAC80, beyond the distance/occlusion test in 0x005B7220.
 - Attack result 8, 0x006A0180/0x006972A0 (the "current target" of the ability-cast hit), and the slot-0 item being the chest.
 - The spider's per-step instance after a failed start (the +0x890 list).
-- Whether the template's `SoundSet` reaches `SetSoundSet` at load, 0x005B9620's project load in full, and the `sse_` face pre-fetch (+0x9A4).
+- Whether the template's `SoundSet` reaches `SetSoundSet` at load is answered (read 2026-10-23 by lib-agent-2: it does, cut at the first '.', see "0x006BD0E0 in full"); 0x005B9620's project load in full, and the `sse_` face pre-fetch (+0x9A4).
 - The global flag [0x00C32510] in the ambient-VO test, and `sound_settings` row 18.
 - `MMHNodeSoundMaterial`'s consumer (presumably occlusion, question 5).
 - CCPlaceable's 27 handler past the lookup; 0x006A05B0.
