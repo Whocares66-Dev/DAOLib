@@ -518,12 +518,12 @@ obj.AddToArea(area, pos)           // not Loading: a creature may then be moved 
 ```
 // creature has a capsule: radius cr, cylinder height ch, centre offset co  (below)
 step(creature, target /* new x,y,(z unchanged) from the movement controller or root motion */, dt):
-    if capsule.collisionEnabled == false:  creature.SetPosition(target)          // 0x006B68BD: no ground follow
+    if capsule.collisionEnabled == false:  /* the byte +0xF that slot +0x18 reads; slot +0x4C is a trigger flag, not "collision on" (corrected 2026-10-23 by lib-agent-2) */  creature.SetPosition(target)          // 0x006B68BD: no ground follow
     saved = capsule.position                                                    // GetDebugPosition 0x00838380 (centre)
     disp  = (target.x - creature.x, target.y - creature.y, -9.81)               // NOT times dt
     n     = groundNormalAt(creature)                                            // 0x006954C0 -> GroundHeight's 3rd out
-    if n.z <= cos(60deg) + 1e-6:                                                // steeper than 60 deg: slide
-        slide = min(slide + dt*5.0, 20.0); if slide > 0.01: disp.xy += downhill(n) * slide * dt   // inferred direction
+    if n.z < 0.5000017:                                                         // steeper than 60 deg: slide (strict, 0x006B692E; cos(1.0471967) + 1e-6, held as a float; corrected 2026-10-23 by lib-agent-2: it was <= cos(60deg) + 1e-6)
+        slide = min(slide + dt*5.0, 20.0); if slide > 0.01: disp.xy += unit(n.x, n.y) * slide * dt   // [C] 0x006B6993-0x006B69E4 (corrected 2026-10-23 by lib-agent-2: it was an inferred downhill direction)
     else:
         slide *= clamp(1 - 3*dt, 0.1, 0.9)                                      // decays
     flags = capsule.move(disp, mask=0x2011134, minDist=0.001, sharpness=1.0)    // NxController::move, slot +0x10
@@ -556,6 +556,65 @@ The 0.1 is the gap under the capsule: feet z = centre - co.
 - **r** = `apr_base` `PerSpace` (`[[creature+0x7B0]+0x60]`, 0x006B1FD6) [C].
 - **The "big kind" is not a kind** [C]: `0x006A2CE0` is "in the active party". It returns `0x00631830(party, id) == 1`, with the party from `0x006A2CC0`, and `0x00631830` is `IsFollower` on the active party map `+0x234` (PARTY.md:13, :139). So every member of the active party gets h = max(h, 1.426) and r = max(r, 0.35) (the floats 0x00B0F280 and 0x00B0F284; the doubles compared are 0x00B0FEE0 and 0x00B0FED8). These are floors, so a bear's PerSpace of 1.0 stays 1.0.
 - cr = max(0.6·r, 0.1) [C 0x006B2024..0x006B207A, stored at +0x77C]. `ch` (+0x780) and `co` (+0x784, `ch` × 0.5 at 0x006B20B7) are as the block says [C for the stores and the 0.5; the order of the x87 sums was not re-traced].
+
+#### The controller's descriptor and its move (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2)
+
+The DLL is `bin_ship
+xcharacter.dll`, PhysX 2.8 NxCharacter: 131,072 bytes, SHA-256 728D8351394AC2DE11946A088DFD0A6111FB6D9687BA0E20CC5F16C45C94A025, link stamp 0x49CC0AED (2009-03-26), image base 0x10000000, no version resource. Its addresses below are its own and belong in no address library; only facts about its behaviour are written here, never its code (it is NVIDIA's binary). Offsets: the Controller base is at +8 of the NxController object and the SweepTest at base +0x28.
+
+- The controller's slot +0x4C is not "collision on" (corrected 2026-10-23 by lib-agent-2): it is 0x008385F0, which calls the shape's slot +0x14 with (7, arg), a trigger flag [I for flag 7's name]. The byte +0xF that slot +0x18 reads is the collision switch.
+- **The descriptor** [C] (`CCCreature::CreatePhysicsController` 0x006B1ED0 → `Physics::PhysicsScene::CreateController` 0x00821B40, an `NxCapsuleControllerDesc`):
+  - **The values:** slope limit 0.5000017 (0x006B2032; engine desc +0x24 → NX +0x2C), skin width 0.1 (+0x28 → +0x30), step offset 0.5 (+0x2C → +0x34), and up axis 2 (z).
+  - **The size:** the radius and height start as 1e-6 placeholders and are set afterwards.
+  - **Climbing:** climbingMode is 1, CLIMB_CONSTRAINED (NX capsule desc +0x50). It is 0x00821B40's own constant, never overwritten.
+  - **The hit report** is 0x00837D30. Its owner stays 0, so `onShapeHit` 0x00837C00 and `onControllerHit` 0x00837C60 return 0 [I that nothing stores the owner later]. NxCharacter ignores the returns anyway (below).
+  - **After creation** (0x006B2160–0x006B21A4): slot +0x4C(1), the trigger flag above; the actor's user data (the creature); actor and shapes group 4; groups mask 0x10; then 0x0069EBD0.
+- **Whether a creature blocks other creatures' controllers** [C]:
+  - **The flag:** 0x0069EB60(bool) calls the controller's SetInteraction (slot +0x2C, 0x00838460). It passes 0, INCLUDE, when the argument is true and the creature's byte +0x1AC is set; otherwise 1, EXCLUDE.
+  - **The counter +0x778:** 0x0069EBD0 passes `[+0x778] > 0`. 0x0069EBB0(v) sets +0x778 first. 0x006A0E30(bool) adds ±1 and re-applies when the sign changes. The constructor sets +0x778 to 1 (0x006BA3A4).
+  - **Its writers:**
+    - 0x006A0DF0 sets 0, sets +0x420 = 1 and sets `[[this+0x154]+0xEA]` = 1. It is called from `OnAnimationEvent` 0x006C0CC6 and from 0x007A2F86.
+    - 0x006A0E10 sets 1, from 0x006C0CCF and 0x00747347.
+    - CCCreature's vfunctions 29 and 30 (0x006B9170 sets 0, 0x006B9330 restores 1).
+    - SetObjectProperty (0x0066C076, 0x0066C091).
+    - Sub-actions 37 and 51, by ±1.
+    - 0x0069EBB0's callers 0x006BA793, 0x006C2074, 0x00746EBC, 0x0074727F, 0x00747309, 0x007473E7 and 0x007A7130 (sets 0, then +0x420 = 1).
+  - **+0x1AC:** it is set by CCObject vfunction 80 (0x0069A950), which also adds the object to its area's physics. CCCreature's override (0x006AA890) re-applies the interaction. [I]: +0x1AC means "in the world"; 0x006A0DF0's event is the death's.
+- **The move wrapper 0x00838240** [C]:
+  - It pushes the scene's filter (`PushFilter` 0x0082D900 with 1 and the 4-dword mask {0x2011134, 0, 0, 0} twice), then 0x0082A150 with three zeros.
+  - It calls NxController::move(disp, activeGroups 0x2011134, minDist 0.001, &flags, sharpness 1.0, &mask), and stores DOWN (bit 2) at +0xC, SIDES (bit 0) at +0xD and UP (bit 1) at +0xE.
+- **What nxcharacter.dll does with the move** [C, the DLL's own addresses, file pinned above]:
+  - **`CapsuleController::move`** (vtable 0x1001633C slot 1, 0x100065A0) sweeps a capsule with half-height = height × 0.5 + radius, and passes constrained climbing on.
+  - **`Controller::move` 0x10005FC0, the other controllers:** every other controller of the manager is an obstacle.
+    - One whose interaction is EXCLUDE (1) is skipped; one whose interaction is USE_FILTER (2) counts only if activeGroups has its actor's group.
+    - A capsule counts as its own radius and height about its position, with no skin (0x1000613D–0x1000623E).
+    - So a creature blocks others while its +0x778 > 0 and +0x1AC is set.
+  - **`Controller::move`, the rerun:** after `moveCharacter` it reruns once in a "walk experiment" when the first run hit something it may not walk on (below). With sharpness < 0 the position is put back.
+  - **`moveCharacter` 0x100059D0:**
+    - **The step:** step = step offset, but 0 when dir.z > 0. The up pass is (0, 0, max(dir.z, 0)), plus the step when there is any sideways motion. The side pass is (dir.x, dir.y, 0). The down pass is min(dir.z, 0), minus the step when there was sideways motion.
+    - **The passes:** the up pass (skipped in the walk experiment; maxIter 10) lowers the step to what was actually climbed. Then the side pass (maxIter 10), then the down pass (maxIter 1).
+    - **The climb and slope tests,** both run when the down pass touched something (handleSlope is always on here):
+      - **Constrained climbing:** if the contact's height is above the capsule's original bottom + step, the move is marked non-walkable.
+      - **The slope:** if the touch was not another controller, dir.z < 0 and 0 ≤ n.z < slope limit, the move is marked non-walkable.
+      - Outside the walk experiment it then returns without writing the flags, and the caller reruns it.
+    - **In the walk experiment:** the normals are laid level, so the slope is a wall to the side pass, and there is no up pass. Then a sweep down by what was climbed plus |dir.z|, with normalised slides.
+  - **`DoSweepTest` 0x10005010, each of maxIter steps:**
+    - **The stops:** it stops when what is left is under minDist, or no longer points along the original direction.
+    - **The sweep:** it sweeps |left| + skin, advances to the touch less the skin (0.1 m), and keeps the contact's height.
+    - **The touched normal:** a mesh triangle's face normal, or the hit normal otherwise. In the walk experiment the normal's z is set to 0 and the normal renormalised (0x10005595–0x10005635).
+    - **The slide:** what is left is turned along the touched surface (reflect, then the tangent), but only while it is under 0.5 m (0x10016390). Otherwise the volume stops at the touch.
+  - **What is swept** (0x10008880): the scene's overlapAABBShapes, static and dynamic, by the move's groups. It skips controllers' own shapes (user data 'CCTS'), triggers and disabled shapes, and keeps spheres, boxes, capsules, convexes, meshes and heightfields.
+- **So, for a moving creature** [C]:
+  - It slides along walls up to 10 sweeps a frame, stopping 0.1 m short.
+  - It steps up at most 0.5 m.
+  - It treats a surface steeper than 60° as a wall.
+  - A head hit gets the exe's retry with step offset 0.
+  - Nothing in the controller re-plans a path: the creature stops or slides, and the path follower aims at its waypoint again the next frame. A move that stands still is failed by 0x007A9130's standing counter with −4 (TURN_BASED.md). Sub-action 14 (0x007A99B0, at 0x007A9BB9, with flags 7 and stop distance 0.05) and sub-action 52 (0x007A9BD0) both use it.
+- **Not read** [I]:
+  - PhysX's own sweeps of a capsule against a triangle, box, sphere and capsule (the table at 0x1001B178, in NxUtilLib/PhysXLoader): whether triangles are one-sided, and what a start inside reports;
+  - the order of the triangle normal's cross product;
+  - the |sharpness| < 1 smoothing;
+  - the box-obstacle branch.
 
 #### GroundHeight 0x00685430(this = area, pos, byte* hitOut, vec4* normalOut) -> z, checked
 
