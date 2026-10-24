@@ -683,3 +683,26 @@ TEST_CASE("a generic field holding one value reads as that value's type, and as 
     CHECK(other->Root()->String(17003) == L"plt_main");
     CHECK_FALSE(other->Root()->Get<std::int32_t>(17003));
 }
+
+// A talk-table string's text word is 0 where the field has no text of its own, as the game's
+// conversations leave it: none, not an offset to the data's start, which is the top struct
+// (DAOLib #106's round trip found it read so).
+TEST_CASE("a talk-table string with no text of its own has none, one with its own text has it", "[gff4]")
+{
+    constexpr std::uint16_t kTlk = 17;
+    Builder b = dao::test::Start("TEST", {{"TOP", 16, {{1, kTlk, 0, 0}, {2, kTlk, 0, 8}}}});
+    const std::size_t top = dao::test::Struct(b, 16);
+    b.U32(top, 5);
+    b.U32(top + 4, 0);
+    b.U32(top + 8, 6);
+    b.U32(top + 12, b.String(u"own"));
+    const auto file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const auto root = file->Root();
+    REQUIRE(root);
+    REQUIRE(root->Tlk(1));
+    CHECK(root->Tlk(1)->strref == 5);
+    CHECK(root->Tlk(1)->text == 0);
+    CHECK(root->TlkText(1) == L"");
+    CHECK(root->TlkText(2) == L"own");
+}

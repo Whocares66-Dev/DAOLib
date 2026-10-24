@@ -370,10 +370,21 @@ std::optional<TlkString> Struct::Tlk(std::uint32_t label) const
     return TlkString{*strref, *text};
 }
 
+// The text word is 0 where the field has no text of its own, as the game's files leave it and SetTlk
+// writes it: the data's first bytes are the top struct, never a string. Read as an offset, it gave the
+// top struct's bytes as a string, which an edit there changed (DAOLib #106's round trip, 2026-10-23).
 std::optional<std::wstring> Struct::TlkText(std::uint32_t label) const
 {
     const auto slot = Slot(label, Type::TlkString);
-    return slot ? file_->StringAt(*slot + 4) : std::nullopt;
+    if (!slot)
+    {
+        return std::nullopt;
+    }
+    if (file_->U32(*slot + 4) == std::optional<std::uint32_t>(0))
+    {
+        return std::wstring();
+    }
+    return file_->StringAt(*slot + 4);
 }
 
 std::optional<Struct> Struct::Child(std::uint32_t label) const

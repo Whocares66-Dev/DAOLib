@@ -31,6 +31,7 @@ add_executable(
     test_gdafile.cpp
     test_gff3.cpp
     test_gff4.cpp
+    test_gff4_roundtrip.cpp
     test_savegame.cpp
     test_gfxmovie.cpp
     test_heldevents.cpp

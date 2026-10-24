@@ -432,6 +432,12 @@ MUTANTS: list[Mutant] = [
     # and the crash log's parse of whatever buffer a stack word points at. Damaged
     # bytes must never be read past or misread.
     Mutant(
+        "gff4-tlk-text-none: a talk-table string's text word of 0 is no text, not an offset to the top struct",
+        GFF4,
+        "    if (file_->U32(*slot + 4) == std::optional<std::uint32_t>(0))",
+        "    if (file_->U32(*slot + 4) == std::optional<std::uint32_t>(0xFFFFFFFE))",
+    ),
+    Mutant(
         "gff4-string-count-bounded: a damaged string count is refused, not allocated",
         GFF4,
         "if (!count || *count > (bytes_.size() - std::min(bytes_.size(), p + 4)) / 2)",
