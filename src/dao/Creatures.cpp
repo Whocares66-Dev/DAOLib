@@ -26,13 +26,17 @@
 // knight), 2.1 s before the scripts' EVENT_TYPE_DEATH, and two killed by the Eluvian server's
 // stage_kill, which deals its damage from no one, with no killer. The siege's walking corpses rise
 // again, and each rising came as a revival. A Ser Perth made by the Eluvian server's stage_spawn
-// was ready with 499 of 499 health.
+// was ready with 499 of 499 health. The Eluvian server saw, the same day, three hunters a save
+// restored dead come as deaths mid-load, Tamlen their killer (their saved death effect's
+// creator), so a health change while the game is loading tells nothing; a death or revival then
+// is the save's or the area's, not this session's.
 #include "dao/Creatures.h"
 
 #include "dao/Addresses.h"
 #include "dao/ClientExoApp.h"
 #include "dao/Effects.h"
 #include "dao/Events.h"
+#include "dao/GameModes.h"
 #include "dao/Guard.h"
 #include "dao/Hook.h"
 #include "dao/Objects.h"
@@ -71,13 +75,23 @@ ObjectId KillerOf(ObjectId creature)
     return kInvalidObject;
 }
 
+// Whether the game is loading: a save restoring a creature dead sets its health to 0 then
+// (0x006BEBA3, its saved death effect), as does an area building a creature placed dead, and
+// neither is a death of this session.
+bool Loading()
+{
+    const CClientExoApp *app = CClientExoApp::Get();
+    const GameModeController *modes = app != nullptr ? app->GameModes() : nullptr;
+    return modes != nullptr && modes->Mode() == GameMode::Loading;
+}
+
 using OnHealthChangedFn = void(__fastcall *)(CCCreature *creature, int edx, float oldHealth, std::uint32_t flag);
 Detour<OnHealthChangedFn> g_onHealthChanged;
 
 void __fastcall OnHealthChanged(CCCreature *creature, int edx, float oldHealth, std::uint32_t flag)
 {
     g_onHealthChanged.Original()(creature, edx, oldHealth, flag);
-    if (creature == nullptr)
+    if (creature == nullptr || Loading())
     {
         return;
     }

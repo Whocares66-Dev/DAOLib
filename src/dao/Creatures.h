@@ -21,8 +21,9 @@ namespace dao::creatures
 // the creature itself when no one killed it (a script's SetCurrentHealth(0)), or kInvalidObject
 // if it has no death effect
 //
-// Callbacks run on the game thread, inside the engine's change of the health: they can read the
-// creature, but should not kill, revive or destroy anything.
+// Not while the game is loading: a creature a save restores dead, or an area places dead, does
+// not die again. Callbacks run on the game thread, inside the engine's change of the health:
+// they can read the creature, but should not kill, revive or destroy anything.
 void OnDeath(std::function<void(ObjectId creature, ObjectId killer)> observer);
 
 // Calls `observer` on the frame a dead creature comes back: its health rises from 0 or below to

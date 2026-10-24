@@ -301,7 +301,8 @@ void OnModeChanged(std::function<void(GameMode before, GameMode now)> observer);
 
 // Calls `observer` once per load, as the loading screen goes: a save loaded, an area
 // transition, a new game. The area is loaded, the party stands in it where the engine placed it,
-// and the area's and module's load scripts have run. A save's own loading screen is not a load.
+// and the area's and module's load scripts have run. The loading screen shown while the game is
+// saved is not a load.
 // If a load script starts a cutscene or a conversation, it comes before that plays.
 void OnAreaLoaded(std::function<void()> observer);
 
