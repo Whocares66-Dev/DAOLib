@@ -154,6 +154,7 @@ SAVEGAME = "src/dao/core/Savegame.cpp"
 SAVEGAME_H = "src/dao/core/Savegame.h"
 SAVEGAME_WRITE = "src/dao/core/SavegameWrite.cpp"
 CTAB = "src/dao/core/Ctab.cpp"
+FACEFX = "src/dao/core/FaceFx.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -1969,6 +1970,12 @@ MUTANTS: list[Mutant] = [
         INSTALL,
         "name.ends_with(extension) && !copies.empty() && copies.front().unused == Unused::No)",
         "name.ends_with(extension) && !copies.empty() && copies.front().unused != Unused::Level)",
+    ),
+    Mutant(
+        "facefx-magic-face: an actor with FaceFX's own magic is read",
+        FACEFX,
+        '&& std::memcmp(bytes_.data(), "FACE", 4) != 0))',
+        '&& std::memcmp(bytes_.data(), "BIOE", 4) != 0))',
     ),
     Mutant(
         "ctab-register-index: a constant's first register is its +6, not its count at +8",

@@ -43,10 +43,13 @@ class Cursor
         ok_ = false;
     }
 
-    // Takes the magic, which every file starts with.
+    // Takes the magic, which every file starts with: BioWare's "BIOE", or FaceFX's own "FACE", which
+    // five of the game's actors have (human.fxa, werewolf, qunarimale, succubus, sylvan), laid out
+    // the same after it (DAOLib #252).
     bool Magic()
     {
-        if (bytes_.size() < 4 || std::memcmp(bytes_.data(), "BIOE", 4) != 0)
+        if (bytes_.size() < 4 ||
+            (std::memcmp(bytes_.data(), "BIOE", 4) != 0 && std::memcmp(bytes_.data(), "FACE", 4) != 0))
         {
             ok_ = false;
             return false;

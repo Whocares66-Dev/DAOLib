@@ -261,6 +261,24 @@ TEST_CASE("an .fxa's bones, face graph, name map and phonemes", "[facefx]")
     CHECK(actor->phonemeNames[0] == "AA");
 }
 
+// FaceFX's own magic: five of the game's actors start "FACE" where the rest start BioWare's "BIOE",
+// laid out the same after it (DAOLib #252).
+TEST_CASE("an .fxa with FaceFX's own magic \"FACE\" reads as one with \"BIOE\"", "[facefx]")
+{
+    auto bytes = MakeFxa();
+    std::memcpy(bytes.data(), "FACE", 4);
+    const auto actor = facefx::ReadActor(bytes);
+    REQUIRE(actor);
+    CHECK(actor->name == "actor");
+    CHECK(actor->bones.size() == 1);
+    CHECK(actor->nodes.size() == 3);
+    // Neither magic, read as a near miss of both.
+    std::memcpy(bytes.data(), "BIOF", 4);
+    CHECK_FALSE(facefx::ReadActor(bytes));
+    std::memcpy(bytes.data(), "FACF", 4);
+    CHECK_FALSE(facefx::ReadActor(bytes));
+}
+
 TEST_CASE("cut, damaged and foreign bytes are refused without a crash", "[facefx]")
 {
     const auto fxe = MakeFxe();
