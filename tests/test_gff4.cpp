@@ -640,9 +640,10 @@ TEST_CASE("a field read as the wrong type gives nothing")
 namespace
 {
 
-// A campaign's variable as singleplayer.cif lays it out (tools/gff4.py --templates): its name, its
-// type and its value, the value a generic field held by reference, whose element names the
-// value's own type.
+// A campaign's variable as the game's .cif files lay it out (tools/gff4.py --templates): its name,
+// its type and its value, the value a generic field held by reference, whose element names the
+// value's own type. A number is at the data plus the element's value; a string is there itself, as
+// an ordinary string field's offset names it (all 90 of the install's string variables, DAOLib #106).
 std::vector<std::byte> Variable(std::uint16_t type, bool asString)
 {
     Builder b = dao::test::Start(
@@ -652,16 +653,16 @@ std::vector<std::byte> Variable(std::uint16_t type, bool asString)
     b.U32(root, b.String(u"LOG_ACTIVE"));
     b.U8(root + 12, asString ? 12 : 1);
     b.U32(root + 4, type);
-    const std::size_t value = dao::test::Struct(b, 4);
     if (asString)
     {
-        b.U32(value, b.String(u"plt_main")); // a string's value is an offset to it
+        b.U32(root + 8, b.String(u"plt_main"));
     }
     else
     {
+        const std::size_t value = dao::test::Struct(b, 4);
         b.U32(value, 42);
+        b.U32(root + 8, static_cast<std::uint32_t>(value - b.data));
     }
-    b.U32(root + 8, static_cast<std::uint32_t>(value - b.data));
     return b.bytes;
 }
 

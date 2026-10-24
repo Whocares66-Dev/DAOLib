@@ -67,7 +67,14 @@ std::optional<Element> GenericElement(const File &file, std::size_t slot, const 
     Element element{.type = static_cast<std::uint16_t>(*word & 0xFFFF),
                     .flags = static_cast<std::uint16_t>(*word >> 16),
                     .at = slot + 4};
-    if ((field.flags & kReference) != 0)
+    // A string's slot holds its offset whether the field is a reference or not, as an ordinary
+    // string field's does: so a string element is not followed through the reference. Every one
+    // of the install's 90 string variables (a campaign's .cif, 17003) has the string itself at the
+    // data plus the element's value (2026-10-24, DAOLib #106 step 6: tools/gff4.py as a second
+    // reader read them as garbage, and this as none).
+    const bool string =
+        element.type == static_cast<std::uint16_t>(Type::String) && (element.flags & (kList | kStruct)) == 0;
+    if ((field.flags & kReference) != 0 && !string)
     {
         const auto offset = file.U32(element.at);
         if (!offset || *offset == kNull)

@@ -3,6 +3,10 @@
 #include "dao/core/Savegame.h"
 #include "gff4_builder.h"
 
+#include <windows.h>
+
+#include <shlobj.h>
+
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -2077,4 +2081,46 @@ TEST_CASE("a plain event goes on the script template when the file has no plain 
     CHECK(made.target == 6);
     CHECK(made.label == "ESCR");
     CHECK_FALSE(made.script);
+}
+
+// The player's own saves, read only: each read and written back unchanged is its own bytes, its
+// string variables among what is written (DAOLib #106 step 6: a save keeps a string variable in an
+// SVS1, typed, where a campaign's .cif keeps one in a generic field). Hidden, as the saves are the
+// player's: run it by its tag, dao_core_tests "[install-real]".
+TEST_CASE("the player's saves, read and written back unchanged, are their own bytes", "[.][install-real]")
+{
+    PWSTR documents = nullptr;
+    std::filesystem::path characters;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &documents)))
+    {
+        characters = std::filesystem::path(documents) / L"BioWare/Dragon Age/Characters";
+    }
+    CoTaskMemFree(documents);
+    if (!std::filesystem::is_directory(characters))
+    {
+        SKIP("no Documents/BioWare/Dragon Age/Characters here");
+    }
+    std::size_t saves = 0;
+    std::size_t strings = 0;
+    for (const auto &item : std::filesystem::recursive_directory_iterator(characters))
+    {
+        if (!item.is_regular_file() || item.path().extension() != L".das")
+        {
+            continue;
+        }
+        INFO(item.path().string());
+        const auto bytes = FileBytes(item.path());
+        const auto save = sg::Read(bytes);
+        REQUIRE(save);
+        const auto out = sg::Write(bytes, *save);
+        REQUIRE(out);
+        CHECK(out->bytes == bytes);
+        for (const auto &variable : save->campaign.variables)
+        {
+            strings += std::holds_alternative<std::wstring>(variable.value) ? 1 : 0;
+        }
+        ++saves;
+    }
+    CHECK(saves > 0);
+    WARN(saves << " saves written back as they were, " << strings << " string variables among them");
 }

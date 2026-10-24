@@ -505,6 +505,12 @@ MUTANTS: list[Mutant] = [
     # and the crash log's parse of whatever buffer a stack word points at. Damaged
     # bytes must never be read past or misread.
     Mutant(
+        "gff4-generic-string: a generic string by reference is the string at its offset, not one more hop",
+        GFF4,
+        "if ((field.flags & kReference) != 0 && !string)",
+        "if ((field.flags & kReference) != 0 && (string || !string))",
+    ),
+    Mutant(
         "gff4-tlk-text-none: a talk-table string's text word of 0 is no text, not an offset to the top struct",
         GFF4,
         "    if (file_->U32(*slot + 4) == std::optional<std::uint32_t>(0))",

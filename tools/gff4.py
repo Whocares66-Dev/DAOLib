@@ -287,7 +287,10 @@ class Gff4:
         tf = self.u32(at)
         t, flags = tf & 0xFFFF, tf >> 16
         slot = at + 4
-        if is_ref:
+        # A string's slot holds its offset whether the field is a reference or not, as an
+        # ordinary string field's does: all 90 of the install's string variables (a .cif's
+        # 17003) have the string at the data plus the element's value (DAOLib #106, step 6).
+        if is_ref and not (t == 14 and not flags & (STRUCT | LIST)):
             off = self.u32(slot)
             if off == NULL:
                 return None

@@ -228,6 +228,8 @@ if(PROJECT_IS_TOP_LEVEL)
         dao_gda_schema
         PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
     )
+    add_executable(dao_gff4_leaves tools/second_reader/Gff4Leaves.cpp)
+    target_link_libraries(dao_gff4_leaves PRIVATE daolib_core)
     add_executable(dao_gff3_schema tools/gff3_schema/Gff3Schema.cpp)
     target_link_libraries(dao_gff3_schema PRIVATE daolib_core)
     target_compile_definitions(

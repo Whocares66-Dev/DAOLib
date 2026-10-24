@@ -87,6 +87,11 @@ TEST_CASE("the single player campaign's script, entry, variables and areas", "[c
         for (const auto &variable : other->variables)
         {
             strings += std::holds_alternative<std::wstring>(variable.value) ? 1 : 0;
+            // A string variable's value, the string at the generic element's offset (DAOLib #106).
+            if (entry.path().filename() == "dao_prc_cp_3.cif" && variable.name == L"VAL_ROCK_NAME")
+            {
+                CHECK(std::get<std::wstring>(variable.value) == L"hjn197a872skksaeiil");
+            }
         }
     }
     CHECK(files == 41);

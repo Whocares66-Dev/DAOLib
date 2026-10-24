@@ -23,16 +23,18 @@ def build():
 
     # The data block, offsets from its start.
     s_off, l_off, r_off, g_off = 36, 48, 60, 64
-    x_off, y_off, v_off = 84, 88, 92
+    x_off, v_off = 84, 92  # and at 88 the unused word below
     top = struct.pack("<II3fIIII", 7, s_off, 1.0, 2.0, 3.0, l_off, r_off, g_off, v_off)
     string = (
         struct.pack("<I", 3) + "hi\0".encode("utf-16-le") + b"\0\0"
     )  # 3 chars, padded to 12
     elements = struct.pack("<Iii", 2, -1, 5)
     referenced = struct.pack("<i", 42)
-    generics = struct.pack("<IIIII", 2, 4, x_off, 14, y_off)
+    # A string element names the string itself, its offset whether the list is a reference or
+    # not, as the game's files have it (DAOLib #106, step 6); a number's names where it is.
+    generics = struct.pack("<IIIII", 2, 4, x_off, 14, s_off)
     x = struct.pack("<I", 99)
-    y = struct.pack("<I", s_off)  # a string element's slot: the string's offset
+    y = struct.pack("<I", 0)  # unused, kept so the offsets after it stay
     vectors = struct.pack("<I8f", 2, 1.0, 2.0, 3.0, 9.0, 4.0, 5.0, 6.0, 9.0)
     data = top + string + elements + referenced + generics + x + y + vectors
     assert len(top + string) == l_off and len(top + string + elements) == r_off
