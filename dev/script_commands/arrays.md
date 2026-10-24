@@ -180,11 +180,16 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
     - `GameModeGUI::Leave` 0x007188C0: with +0x95 set, slot 0x40 (0x0060F240) pops the stack +0x1E4 one id at a time through 0x0060F1E0.
   - **So** the travel state and +0x100 do not outlive the scene through any of these hides [C]. Toggling the screen's visibility (HideScreen) is not a hide [I], and whether the shutdown unload (0x005151F0) sends WorldMapClosed was not read.
 - **WorldMapStartTravelling opens the map** through scene 0x10, fetched by GUI slot 0x60 (0x00700A37), with no null test on the scene (0x00700A3E reads its +0xBC directly) [C].
+- **A save's world map** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **The saver:** MapObject's 0x007C61B0 (vtable 0x00B22E04 index 21) writes field 16785 (`0x4191`, 0x007C638B–0x007C63AF) from the player pin's area tag (+0x158).
+  - **The loader 0x007C7DD0, in order:** the pins (16786 and 16787, through 0x007C6110 and 0x007F7090); then 16796 replacing +0xFC and 16797 replacing +0x118, the route being travelled (each point through 0x007C66E0, constructed by 0x007C5A90; the list notified through its vtable +0x24); then 16785 through 0x007C5D60.
+  - **0x007C5D60** walks the pins (+0xD0) and makes the first whose area tag (+0x158) equals the saved one the player pin (+0x16C, through slot +0x54). The compare is 0x004C0DE0, exact and case-sensitive. With no match it changes nothing.
+  - **So** a save keeps the route and the player pin by its area tag.
 - **Not read** (more):
   - 0x00716A00 (scene 0x3B on the map's show and hide);
   - 0x00717BA0;
   - what a GUIScene's +0x54 is;
-  - whether a save keeps +0xA8, +0x100 or the route.
+  - whether a save keeps +0xA8 or +0x100 [I: they are not among the offsets the loader writes; the loader past the player pin, and the template 0x007C7CB0, were not read]. The route is answered (read 2026-10-24 by lib-agent-2): a save keeps it, with the player pin (below).
 - **Not read:** whether the movie's message reaches the engine in the same frame; field 16793.
 
 ### The click, and where the maps come from (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169)

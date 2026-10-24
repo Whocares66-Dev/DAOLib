@@ -20,7 +20,8 @@ The area's load is a machine of steps (`0x006c8ef0`, steps 1 to 8):
 - Step 6 waits for the area's rooms.
 - Step 8 queues `EVENT_TYPE_AREALOAD_POSTLOADEXIT` (39; 43 from a save) to the area and runs the queue again.
 - **Step 7, before it** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C, 0x006C91A0–0x006C9247]:
-  - Step 7 first polls a module count (`[module+0x658]`, through 0x005CA1B0/0x005C84D0). Above 0 it pauses (SetPaused(1, 0)) and stays in step 7. What the count is was not read.
+  - Step 7 first polls the current area's count, not the module's (corrected 2026-10-24 by lib-agent-2; it was lib-agent-2's own reading of 2026-10-23) [C, 0x006C91A0–0x006C91E4]: `GetModule` (0x005D4FC0), then `CCModule::CurrentArea` (0x005FE470), then +0x658 through 0x005CA1B0 and 0x005C84D0. Above 0 it pauses (SetPaused(1, 0), the call at 0x006C91D8) and stays in step 7. What the count counts is [I].
+  - Both of step 7's ways on to step 8 pass through `SetPaused(0, 0)` (0x006C91E4, or 0x006C9242 after the map test), so every area load leaves the game unpaused as it passes step 7 [C for the calls; I that SetPaused 0x005D6740 acts unconditionally].
   - Otherwise it unpauses (0x006C91E4) and tests the loading screen (+0x14C). When that is not 0x10 it goes to step 8.
   - When it is 0x10, the load holds, paused, while all of these hold: scene 0x10's +0xBC is set, and `GUI::GUIWorldMap::PollTravelDone` (0x0072EDC0) answers "not done". Otherwise it unpauses again (0x006C9238) and goes to step 8.
   - `GUIWorldMap::PollTravelDone` (0x0072EDC0) finds the "WorldMap" movie; with none it is done. It invokes `GetTravelling` and `GetAnimating`, and when the map is travelling and not animating it invokes `AreaLoadedNotify`. It is done only when the map is not travelling. Nothing is stored: the movie is asked at every poll.
