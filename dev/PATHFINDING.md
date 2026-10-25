@@ -995,7 +995,7 @@ State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's j
 |---|---|---|---|
 | 0x00A639CF / 0x00A639DC | `SetMoving(bool run)` 0x00A639C0 (ID 33603) | 2 if run, else 1 | start a walk / run |
 | 0x007A8E7E | sub-action 16 (drive) 0x007A8C20 (ID 19880), after `0xA638B0` (desired facing) | 1 or 2 by its `run` byte | a driven move |
-| 0x007A93D0 | the move update 0x007A9130 (ID 19882), used by the melee and range approach and walk-to | 1 or 2: run = (sub-action bool 1 set, or creature+0xC60's first dword nonzero) and creature byte +0xB25 == 0 and `0xA62E00(2.0)` true (the path is long: 5+ legs, or farther than 2.0 m; inferred from its head) | a creature walks to a goal and runs when far |
+| 0x007A93D0 | the move update 0x007A9130 (ID 19882), used by the melee and range approach and walk-to | 1 or 2: run = (sub-action bool 1 set, or creature+0xC60's first dword nonzero) and creature byte +0xB25 == 0 and `0xA62E00(2.0)` true (the path is long by `0xA62E00(2.0)`, below; corrected 2026-10-25 by lib-agent-2, from paragon-agent-2's reading) [C] | a creature walks to a goal and runs when far |
 | 0x00A6398D | `SetDesiredFacing` 0x00A638B0 (ID 33602), its end | 4 | turn in place (when not already moving and no root-motion clip, `cmp [[ctrl+0x70]+0x10]+0xC0`) |
 | 0x00A63AD7 | stop request 0x00A63AC0 (ID 33605): called from 0x006A944E (0x006A9430, ID 14630), 0x00746A1D (0x00746900, the shared command end), 0x007A5403 (TurnToward 0x007A51F0) | state 1 or 2 -> **3**; state 4 -> **0** | a command ends or a turn finishes: stop |
 | 0x00763829 | 0x00763810 (ID 18211) | 3 if the state is not 0 or 3 | stop now |
@@ -1006,6 +1006,33 @@ State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's j
 | 0x00745EC4 | the melee attack's set-up 0x00745E10 (ID 17720) | 0 | an attack stops the walk |
 | 0x00746E52 | 0x00746E10 (ID 17733), after SetDesiredFacing | 0 | a facing command (turn, then idle) |
 | 0x00A60BF6, 0x00A633AF | constructor 0x00A60B50; reset 0x00A632D0 | 0 | initial / reset |
+
+- **When the move update decides walk or run** (0x007A935F–0x007A93D0) [C, read 2026-10-25 by paragon-agent-2, checked by lib-agent-2]:
+  - **When:** only when the path has made no progress (NextWaypoint 0x00A625E0, `[path+0x88]`: 0 after Cancel, 1 when a path is accepted, then counted up, is 0) or the controller is not moving (0x00A630E0). That is, when a walk starts on a new path. A re-path while moving keeps the state [I for the meaning]. 0x00A630E0 is +0x76 (state ≠ 0, set by SetState at 0x00A63833), or'd with `[[+0x70]+0x70]` when +0x74 is set; +0x75 is always 1, from the constructor. So stopping (3) and turning (4) count as moving, and a move restarted while stopping keeps that state until the next decision [I].
+  - **What:** it clears +0xB24, then `SetMoving(run)` (0x00A639C0) with `run = (the sub-action's flag 1 || the combat state [[+0xC60]] ≠ 0) && +0xB25 == 0 && 0xA62E00(2.0)`.
+  - So any walk in combat runs when its path is long. With the combat trees on, run and walk both move at `Game_CbtSpeed` (ANIMATION.md), so out of combat is where it shows: 1.54 against 6.0 for a human.
+  - Creature +0xB24 and +0xB25 are the controller's +0xF4 and +0xF5. +0xF4, "driven", is set only by the drive, sub-action 16 (0x007A8C20, at 0x007A8E77), and cleared by the constructor, by SetState(0) (0x00A63854) and by the move update (0x007A937D); the shared end (0x00746A0C) skips its stop for a driven creature; the drive is started by 0x00745870 (ID 17709, unnamed), whose command was not identified. +0xF5 is written only by the constructor, so the run test's `+0xB25 == 0` never blocks [C by a scan of stores; a block copy not excluded].
+- **The length test** `0xA62E00(limit)` (ID 33580), over the path's n points (`[ctrl+0x14]`, vector +0x74/+0x78, stride 0xC) [C]:
+  - **No vector, or n < 2:** false.
+  - **n ≥ 5** (four legs or more): true.
+  - **2 to 4 points:** true when the ground distance² from the controller's start (+0x60, SetStart 0x00A62990) to its goal (+0x30, SetGoal 0x00A629C0) is over limit² (strict).
+  - **Otherwise** true as soon as the sum of the legs' **squared** ground lengths passes limit² (0x00A62EA8–0x00A62F16; no square root).
+  - So with 2.0, two legs of 1.5 m (4.5) run, and three legs of 1.0 m (3.0) do not.
+- **Flag 1 of each walk's sub-action** (`SetFlag` 0x00A5B890 on the data; the move update reads it with 0x00A5A280) [C]:
+
+  | Command | Start | Sub-action | Flag 1 |
+  |---|---|---|---|
+  | Attack (1), melee | `Commands::AttackStep` 0x00742FD0 | 4 | set (0x007431C0) |
+  | Attack (1), ranged | 0x00742FD0 | 15 | not set (flag 7 and int 2 only, 0x0074311B): runs only in combat |
+  | UseAbility (25) | 0x00743F50 (ID 17696) | 4, 14 (ground) or 15 | set in each branch (0x007442B6, 0x007443D8) |
+  | UseObject (31) | 0x00745920 | 4, then 21 | set, with flag 2 (0x007459C8, 0x007459D3) |
+  | StartConversation (18) | 0x007452A0 (ID 17706) | 15, or 14 | set before the branch (0x00745350) |
+  | Interact (37), the reposition | 0x00743690 (ID 17689) | 15 or 14 | not set |
+  | MoveToObject (21) | 0x00746F00 | 4 for a placeable, else 15 | the command's own (its data copied, 0x00A5B4A0): the script's bRun |
+  | MoveToLocation (20) | 0x00745630 | 36, 14, 42 | the command's own: bRun; the group move's party +0x4A8; the follow's 1 (PARTY.md) |
+  | MoveToMultiLocations (22) | 0x007457C0 | 52 | the command's own |
+
+- **Not read:** how each script command turns bRun into flag 1; whether sub-action 52 decides again at each place.
 
 Consumers that treat the value: stamps ("soft" for 1 and 2, dev/PATHFINDING.md:116), the walk/run ramp for footsteps (0x006AD8F0, AUDIO.md:1281), the follow rule (PARTY.md:229/:233: the leader standing is 0 or 4), the equip overlay when moving (ANIMATION.md:49), and the tilt's rate.
 

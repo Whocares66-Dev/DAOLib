@@ -609,6 +609,8 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools
 
 Target speed, `0xA63120`: state 0, 3, 4 give 0; state 1 `(Game_WalkSpeed + [+0xDC]) * [+0xD4]`; state 2 the same with `Game_RunSpeed`; with the combat flag [+0xF9] `Game_CbtSpeed`, or `Game_CbtStrFSpeed` when [+0xF8] (strafe-lock). `0xA635D0` ramps the current speed [+0xE0]: **+8.0 m/s per second up and down** (double 0xB1B7C8 = 8.0, times dt in seconds, clamped to the target); in state 4 of the anim controller (a transition clip plays) the speed is set to the target at once; a stop with the heading reversed (dot of [+0x80] and [+0x90] below 0) sets it to the target (0) at once. The distance moved per frame is `speed * dt` (0xA63100). Run with no combat: `0xA63450` slows the step at path corners, `factor = max(0, 1 - d)`, `d = -dot(prevHeading, dir) * 0.65` (double 0xB596D8 = 0.65; no slowdown when d <= 0), kept in [+0xD8]; the speed given to the animation is `speed * factor`.
 
+The combat flag +0xF9 is set by 0x00A631D0 (ID 33589), whose only caller is the tree switch 0x006A7F30 (0x006A7F97) [C, read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2]. Once it is set, states 1 and 2 both take `Game_CbtSpeed` (`Game_CbtStrFSpeed` when strafing, +0xF8), chosen before the jump table at 0x00A63169. Which walks run, and when, is the move update's decision (PATHFINDING.md, the movement-state writers).
+
 ##### The play rate formula (checked), `0xA6AA70(x)` called from `0xA6B5D0` with x = [+0x134]
 
 ```
