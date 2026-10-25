@@ -76,6 +76,8 @@ add_daolib_plugin(example_store SOURCES store/Store.cpp)
 dao_apply_warnings(example_store)
 add_daolib_plugin(example_crafting SOURCES crafting/Crafting.cpp)
 dao_apply_warnings(example_crafting)
+add_daolib_plugin(example_items SOURCES items/Items.cpp)
+dao_apply_warnings(example_items)
 
 add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
 dao_apply_warnings(example_attack)

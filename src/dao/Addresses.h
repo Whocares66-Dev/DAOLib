@@ -359,6 +359,14 @@ DAO_ADDRESS(kStore_WillBuy, 21206)
 // the party (the app's +0xD0, its +0x58), whose inventory at +0x20C knows the recipes. Read
 // 2026-10-25 (DAOLib #259).
 DAO_ADDRESS(kCClientExoApp_GetParty, 10504)
+// An item's requirements (dao/Items.h), each __thiscall: on the item, IgnoresRequirements (a bool),
+// GetRequirementCount (0 to 2) and GetRequirement (index, int* property, float* value, CCCreature*),
+// `ret 0x10`; on the creature, MeetsItemRequirement (CCItem*, index), `ret 8`, a bool. Read
+// 2026-10-25 (DAOLib #259).
+DAO_ADDRESS(kCCItem_IgnoresRequirements, 18012)
+DAO_ADDRESS(kCCItem_GetRequirementCount, 17983)
+DAO_ADDRESS(kCCItem_GetRequirement, 18004)
+DAO_ADDRESS(kCCCreature_MeetsItemRequirement, 14705)
 // And its test of a recipe known, as Inventory::CraftRecipe makes it (0x0073FE45 to 0x0073FE6B):
 // the id wrapped by the int attribute's constructor, __thiscall (const int*), `ret 4`; Contains,
 // __thiscall on the vector (the inventory's +0x38 attribute's value) with the wrapped id, `ret 4`,
