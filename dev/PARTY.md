@@ -225,6 +225,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset scrip
      - vectors 0 and 1 = spot;
      - flag 3 = 1, flag 1 (run) = 1, flag 6 = 0;
      - via `CDataArrays` `0xA5A9B0`/`0xA5B890`.
+     - Added 2026-10-24 (read, checked by lib-agent-2) [C]: the type test is the follow's own (0x00761038–0x0076103D). 0x0069EF30 only builds the new move. A second test (0x0076104B) reads the current move's sub-action count. With none left, the follow does nothing: a finished move is neither retargeted nor replaced, and the head ends it at the follower's next step.
      - **What the move does with it** (read 2026-10-24, checked by lib-agent-2) [C unless marked]: from its second run, sub-action 14 goes straight to the move update with flags 7 (0x007A9BA9), which reads vector 1 as the goal. Flag 3 then stops, frees and searches afresh from call 1 in that update (PATHFINDING.md, "A retarget is a fresh search").
        - So every re-follow of a follower already walking is a new search. The move update has no "keep walking" case.
        - A re-follow over open ground passes the straight walk on call 1 and walks at once. A non-straight one stands while the setup runs (one or two updates).

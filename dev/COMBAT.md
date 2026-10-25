@@ -540,7 +540,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - ClearAllCommands(x, y) calls it as (−2, 0, x, y). So ClearAllCommands(1, 1) ends ExecuteEffect, and QueueCommand's (1, 0) does not.
 - Queued commands that are not static are freed, with no End and no COMMAND_COMPLETE.
 - The current command, if not static, is cleared even mid-sub-action: `ClearCurrentCommand(-2, 0, 1, 0)` → `Commands::End(cmd, -2)`.
-- End's shared handler (0x00746900) **queues** COMMAND_COMPLETE (`AIMaster::AddEventDeltaTime`, not run at once). Its int 0 is the command's type and int 1 is -2 (`COMMAND_FAILED_COMMAND_CLEARED`).
+- For a clear (ClearCurrentCommand's immediate argument 0, as ClearAllCommands passes), End's shared handler (0x00746900) **queues** COMMAND_COMPLETE (`AIMaster::AddEventDeltaTime`, not run at once). A command ended at its step (success or failure) has it run at once (commands.md, "Running a command") (corrected 2026-10-24 by lib-agent-2) [C]. Its int 0 is the command's type and int 1 is -2 (`COMMAND_FAILED_COMMAND_CLEARED`).
 - An Attack's end handler (0x00746B30) also plays animation 1, Pause, first, for a ranged weapon only (`0x006A2AD0`: the weapon's `bitm_base` Type 5 or 6; refined 2026-10-18).
 - 0x007A12E0 and 0x007AAC10 clear nothing themselves.
 - ExecuteEffect is static, and its sub-action never finishes for a death, so the dead creature keeps it as its current command (inferred: until the effect goes).

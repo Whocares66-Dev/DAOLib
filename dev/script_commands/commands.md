@@ -16,7 +16,30 @@ Shared facts, all checked:
   - Every end chains to the shared end 0x00746900. It clears the sub-actions, stores the command as the object's previous command (+0x2C8, through 0x0073CB20) and, if command+8 is set, sends EVENT_TYPE_COMMAND_COMPLETE (0x00743DD0: int 0 the type, int 1 the result).
   - **A start handler that adds no sub-actions makes its command complete with COMMAND_RESULT_SUCCESS (1) on the next step.** Its return value is ignored (`StartNextCommand` 0x0073C7D0).
   - Read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 [C]:
-    - **The head:** when the current command has no sub-actions left (the list's size, cmd record +0x14, 0x0073D360), it is ended with `ClearCurrentCommand(1, 1, 1, 0)` (0x0073C730: success, COMMAND_COMPLETE queued), and the next command is started (0x0073C7D0). Then the current command is run (0x0073D3AC).
+    - **The head:** when the current command has no sub-actions left (the list's size, cmd record +0x14, 0x0073D360), it is ended with `ClearCurrentCommand(1, 1, 1, 0)` (0x0073C730: success; its COMMAND_COMPLETE is run at once, inside the end, below) (corrected 2026-10-24 by lib-agent-2), and the next command is started (0x0073C7D0). Then the current command is run (0x0073D3AC).
+      - Added 2026-10-24 by lib-agent-2, from paragon-agent-2's reading [C]:
+      - **The gate:** the whole of StepCommands is gated on the object's active byte +0x2C5 (0x0073D34D). An inactive object takes no step, so its finished command stays current.
+      - **The empty queue:** after the head's clear, it returns without running anything when the queue is empty (+0x2D4, 0x0073D37C–0x0073D383). The count is read after the clear, so a command queued by the COMMAND_COMPLETE handler is started and run in the same step.
+      - **Where a command starts:** `StartNextCommand` (0x0073C7D0) has one caller, 0x0073D38B. So a command is started only at a step's head, whenever it was queued.
+      - **Who calls StepCommands:** it is the last call of each object's Update (slot 87):
+        - `CCCreature::Update` 0x006BE4B0, at 0x006BE958;
+        - CCPlaceable's 0x0074DA40 (ID 17888);
+        - CCItem's 0x00752B40 (ID 17964);
+        - CCTrigger's 0x00798DB0 (ID 19507, its subclasses' too);
+        - CCAreaOfEffectObject's 0x007E4AF0 (ID 21061).
+      - **COMMAND_COMPLETE** (0x00743DD0, from the shared end 0x00746900, only when the command's +8 is set, 0x007469EA):
+        - With the end's immediate flag (+0x4C, ClearCurrentCommand's second argument, stored by `Commands::End` 0x00742190) at 1, the event is run at once on the owner's event script (`RunEventScript` 0x00698960, 0x00743EFA). Otherwise it is queued (`AIMaster::AddEventDeltaTime(0, 0, self, self, 10, ev)`, 0x00743F2C) for the next drain. (The rule is also at "Order against COMMAND_COMPLETE" below; skipped here: its text. The table is new.)
+        - Ended by / ClearCurrentCommand / COMMAND_COMPLETE:
+          - the step's head, success: (1, 1, 1, 0), 0x0073D377, at once;
+          - the step's failure end: (answer, 1, 1, 0), 0x0073D436, at once;
+          - ClearAllCommands: (−2, 0, x, y), 0x0073C9C6, queued;
+          - RemoveCommand: (−2, 0, 1, 0), 0x0073CA0D, queued;
+          - command 540, ClearCurrentCommand: (−2, 0, 1, 0), 0x0065BF8A, queued.
+        - So a success and a failure are handled inside the owner's step, and a command its handler queues runs in that step. A clear's COMMAND_COMPLETE comes at the next drain.
+      - **ClearCurrentCommand (a1 result, a2 immediate, a3, a4):**
+        - A static command (+0xC == 1) is cleared only when a2 == 1 or a4 != 0.
+        - Otherwise it is cleared when its sub-action list is empty (0x00697BF0's first element null), or a3 == 1, or a3 == 0 and the first sub-action's byte +4 is 0.
+        - So a finished command is taken by any clear, a soft one too. A clear of a finished command ends it with −2, never with 1.
     - **After the run:** an answer of 1 or 0 does nothing more. Any other answer ends the command with that status.
     - **So a command whose last sub-action answers 1 ends at its next step,** after that frame's event drain. An event its last sub-action queued (an impact, a USE) is delivered while it is still current. If that event queues a clearing command, such as ExecuteEffect's 32, the command ends with -2 (COMMAND_FAILED_COMMAND_CLEARED) and not with 1. RunCurrentCommand has one caller (0x0073D3AC) and never clears the command itself. The other callers of 0x0073C730 are 0x0065BF8A (its context not read), 0x0073C9C6, 0x0073CA0D, 0x0073D377 and 0x0073D436, so only an explicit clear, from a handler or an event, ends a command sooner.
     - **The runner, `CCObject::RunCurrentCommand`** (0x0073CB60), walks the sub-action list with the frame's dt and a running total of the time used:

@@ -18,7 +18,7 @@ Read in the GOG exe, the scripts and the tables by lib-agent-2 (with subagents) 
 
 ### The command's steps
 
-The start handler (0x00745920) adds, for a creature user, sub-action 4 (`ApproachMelee`, 0x007AA560: the target, the user's `PersonalSpace`, walk or run). It then adds sub-action **21** (0x007A78F0), the use, with a copy of the command's data. No turn is queued, and nothing turns the user to face the placeable. The end is the shared one (0x00746900): COMMAND_COMPLETE is queued with int 1 = the result.
+The start handler (0x00745920) adds, for a creature user, sub-action 4 (`ApproachMelee`, 0x007AA560: the target, the user's `PersonalSpace`, walk or run). It then adds sub-action **21** (0x007A78F0), the use, with a copy of the command's data. No turn is queued, and nothing turns the user to face the placeable. The end is the shared one (0x00746900): COMMAND_COMPLETE is run at once at the use's next step (commands.md) with int 1 = the result; the success ends at the head (corrected 2026-10-24 by lib-agent-2).
 
 ### (a) Where the user walks to
 
@@ -62,7 +62,7 @@ Added (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with 
     - The door's script runs in the drain. `placeable_core.nss`:38–39 → `Placeable_HandleUsed`; the OPEN case (`placeable_h.nss`:198) has no delay and ends in `SetPlaceableActionResult` (:550), which reaches SetPlaceableState in the same call.
     - **SetPlaceableState** (0x0074F9D0) calls ApplyWalkPatch (0x0074DBA0) with (old state, 1), then, in an area, 0x0074E850(0), then (new state, 0). So the grid is open when the drain ends. (0x0073D710 runs only when its third parameter is 0; it loops GetCreatureById over a party vector and discards the result, so it has no effect.)
   - **Frame N+1, the user's update:** `CCObject::StepCommands` (0x0073D320) first, when the current command has no sub-actions left (record +0x14 == 0, 0x0073D360):
-    - clears it (`ClearCurrentCommand(1, 1, 1, 0)` 0x0073C730, which ends it with success and queues COMMAND_COMPLETE);
+    - clears it (`ClearCurrentCommand(1, 1, 1, 0)` 0x0073C730, which ends it with success and runs COMMAND_COMPLETE at once, so rules_core's handler runs inside the user's step, before the next command starts) (corrected 2026-10-24 by lib-agent-2);
     - starts the next command (0x0073C7D0) when the queue has one (+0x2D4);
     - and then runs the current command (`RunCurrentCommand` 0x0073CB60, at 0x0073D3AC) in the same call. It returns when that answers 1.
     - So a command finished in frame N has its successor started in N+1. Its sub-actions run on in that call, down to the walk's first RequestPath, which sees the door open. The walk sub-action's walking is also gated by bit 2 of its parameter byte.
@@ -106,7 +106,7 @@ Every case but DESTROY ends with `SetPlaceableActionResult(self, nAction, result
 
 ### (c) When it completes, and the codes
 
-A failed sub-action ends the command with its code (`StepCommands` 0x0073D320 → `ClearCurrentCommand(code)` → COMMAND_COMPLETE, queued).
+A failed sub-action ends the command with its code (`StepCommands` 0x0073D320 → `ClearCurrentCommand(code)` → COMMAND_COMPLETE, run at once (immediate 1)) (corrected 2026-10-24 by lib-agent-2).
 - **The approach:**
   - -3 `INVALID_DATA`: no user or area.
   - -7 `TARGET_DESTROYED`: the target gone, dead, in another area, or the user itself.
