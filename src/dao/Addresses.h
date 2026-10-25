@@ -382,6 +382,12 @@ DAO_ADDRESS(kPartyTactics_ListCommands, 19993)
 DAO_ADDRESS(kPartyTactics_ListAbilities, 19974)
 DAO_ADDRESS(kPartyTactics_ListModalAbilities, 19975)
 DAO_ADDRESS(kPartyTactics_ListItems, 19984)
+// The Chanter's board (dao/Board.h): GetJournal, __thiscall on the app, no argument; the journal's
+// BuildChanterBoard (board), `ret 4`, and ClearChanterBoard, no argument, each __thiscall. Read
+// 2026-10-25 (DAOLib #259).
+DAO_ADDRESS(kCClientExoApp_GetJournal, 10506)
+DAO_ADDRESS(kJournal_BuildChanterBoard, 15737)
+DAO_ADDRESS(kJournal_ClearChanterBoard, 15698)
 // And its test of a recipe known, as Inventory::CraftRecipe makes it (0x0073FE45 to 0x0073FE6B):
 // the id wrapped by the int attribute's constructor, __thiscall (const int*), `ret 4`; Contains,
 // __thiscall on the vector (the inventory's +0x38 attribute's value) with the wrapped id, `ret 4`,
