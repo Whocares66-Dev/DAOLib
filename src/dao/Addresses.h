@@ -347,6 +347,14 @@ DAO_ADDRESS(kAbilityChains_Find, 12208)
 // select branch of HandleMessage_SelectPartyMemberUnderCursorMessage (18342, at 0x00768B50), whose
 // own check is only fewer than four chosen. Read 2026-10-24 (DAOLib #259).
 DAO_ADDRESS(kGameModePartyPicker_SelectEntry, 18307)
+// A store's prices and its test of a sale (dao/Store.h), each __thiscall on the store object:
+// GetBuyPrice and GetSellPrice (item, count), `ret 8`, what it charges and pays, by MarkUp or
+// MarkDown as the item was just traded; WillBuy (item, seller creature, count), `ret 0xC`, a
+// bool, its WillNotBuy and WillOnlyBuy lists, its money and MaxBuyPrice. Read 2026-10-25 (DAOLib
+// #259).
+DAO_ADDRESS(kStore_GetBuyPrice, 21193)
+DAO_ADDRESS(kStore_GetSellPrice, 21192)
+DAO_ADDRESS(kStore_WillBuy, 21206)
 // CCCreature's vtable slot 44 (+0xB0), __thiscall (anim_base row, float speed, float blend, byte
 // flag), `ret 0x10`, no return value (every caller overwrites eax), read 2026-10-21 (dev/ANIMATION.md). It plays an
 // animation on the base layer through 0x0069B3D0. Only CCCreature's vtable holds it.

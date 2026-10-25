@@ -320,6 +320,7 @@ add_library(
     src/dao/WorldMap.cpp
     src/dao/Loot.cpp
     src/dao/PartyPicker.cpp
+    src/dao/Store.cpp
     src/dao/Frame.cpp
     src/dao/Camera.cpp
     src/dao/Clock.cpp
