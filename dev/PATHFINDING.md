@@ -318,6 +318,87 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
   - Each A* call restarts the clock and stops when the limit is below the time elapsed, with no resume. The super and first levels then answer 5; a fine leg counts as failed (path +0x48 += 1), and two in a row answer 1 (section 8). There is no cap on a whole search's time, nodes or length.
   - So vanilla's give-up on a long route depends on the machine's speed. A port wanting vanilla's results without that can replace the clock with a fixed expansion count large enough never to trip, and keep the two-failed-legs rule [I].
 - **The penalties' switch,** the fine environment's +8 [C]: it gates every penalty term of the step cost (0x00A45AA0); the base distance (so h) and the push's turn cost are not affected. With it clear, and b not the goal and the distance not 0: +7 for a kind-5 cell when the mover's stamps stop it, else +7 for kind 6 and +3 for each creature ring on the cell; +8 for kind 7; +1 for each of the four diagonal neighbours of kind 8 or more, and +1 once if any is kind 7; +2 for a placeable's counter on the cell. The leg sets the switch (0x00A4D3F3) when path +0x48 > 0, so a retry after a failed leg runs without penalties and without the wide filter, until a leg succeeds and +0x48 goes back to 0.
+- **A creature in the walker's way** (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2 with three subagents, for DAOParagonEngine #213/#169) [C unless marked]:
+  - **Where it runs:** in the move update (0x007A9130)'s walk part (parameter bit 2), after the frame's step along the path. `delta` is the next waypoint (0x00A62620) less the creature's position.
+    - **Out of combat** (0x006A2580, `[[+0xC60]] != 1`): `r = 0x007A3810(data, creature, &delta, &list)` (ID 19828, at 0x007A95DF).
+      - r == 1 → the reaction 0x007A3A20 (0x007A95F6).
+      - r == 2 → the update returns `0x007A3190(creature, 1)`, done.
+      - r == 0 → nothing.
+    - **In combat:** only while the byte 0x00C0F6C4 is set (it is 1 in the image). 0x007A8FF0 builds the same probe and list and calls the reaction at once, with no party ranking, no push and no flag 12. It has no ghost test (only 0x007A3810 has one), but it does test for a null area.
+    - **Then:** 0x007A3B90 (below), the band test, the line-of-sight cut and the standing counter.
+    - **Steering:** the direct-control sub-action 0x007A8C20 also calls 0x007A3810, with the facing (0x007A8F3A), and ignores its answer.
+  - **The probe** (0x007A3810's head):
+    - A ghost (+0xC90) or a mover with no area answers 0.
+    - The step is d = min(|delta| in x and y, 0.25) (0x00C0F69C), along the 3-D unit direction (0x00451A30), so the probe's z moves too. The length is in x and y only (0x00679FB0, and 0x007A8FF0's own sqrt, both zero z). A length² of 1e-6 or less gives the direction (1, 0, 0) (0x00AE7094). probe = position + d × direction.
+    - Then `0x0073F230(area, mover, &probe, 0, &list)` (ID 17576, `ret 0x10`).
+  - **Who is in the way** (0x0073F230):
+    - **The mover's measures:** r is its stamp radius, `[[+0xA40]+0x10]+4` (section 12). side = r × (dir.y, −dir.x, 0). end = probe + r × dir.
+    - **The candidates:** `0x0073F0E0(mover, PersonalSpace + 1.0, 0, list)`.
+      - It uses the room at the mover's position (RoomAt 0x0067B3A0); with none, the list is empty.
+      - Its query is `CCArea::SpatialQuerySphere` (0x00686F70 → 0x00685B50): the entry's position within the radius of the mover's, 3-D and inclusive, the entry's size not counted. The entry also needs flag bit 2 set and bit 0 clear, a room (+0x41C), and its room bit in the mover room's visible mask (COMBAT.md, the candidates).
+      - It skips the mover itself and any object whose local int {0, 4} (CREATURE_SPAWN_DEAD, COMBAT.md) is 1 or more.
+      - That the entries are all creatures is [I]; no type is tested.
+    - **For each candidate B** (rB its stamp radius):
+      - **Ahead** ((B − mover) · dir ≥ 0, 3-D; a NaN goes behind, 0x0073F3D0): B is in the way when the segment mover → end meets B's sphere (`0x004EE730(&B.pos, rB, mover, end)`, its first argument B's position (B +0x120): the roots with t in [0, 1], at most 2, a tangent 1).
+      - **The side segments:** failing that, and only when r > 0.2 (0x00AF7608, strict), the same test on mover + side → end + side, then on mover − side → end − side.
+      - **The near test:** otherwise (and for any B behind), B stays when its disc of rB holds the mover or the probe, in x and y (a NaN keeps it).
+      - Anything else is erased (0x004E9640).
+    - So the list is the creatures whose disc the mover's next stretch crosses (at most 0.25 m plus its own radius ahead, widened by its radius on each side when that is over 0.2 m), and those it already overlaps.
+  - **The ranking** (0x007A3810's loop, each B in order; a null or ghost B is skipped):
+    - **The mover's measures:** moverInParty is 0x0069F140 (+0xC95). moverBump is the mover's apr_base **BumpLevel** (`0x004E1140(0x00C0CB78, [[+0x7B0]+0x58])` +0xA4, loaded by 0x00748370 from hash 0x744DFB70).
+    - **The mover not in the party:**
+      - B not in the party: blocked.
+      - B in the party with BumpLevel(B) ≤ moverBump: the push (below). B is blocked if the push fails, and otherwise does not count. A greater BumpLevel blocks (signed compare, 0x007A3979–0x007A3983).
+    - **The mover in the party:**
+      - B not in the party: blocked.
+      - B in the party and not the controlled creature (0x006A7D30): the push, with no BumpLevel compare.
+      - B the controlled creature: with the move's flag 12 (a follow move; PARTY.md), `0x006A9430(1)` and the answer 2 at once. Otherwise blocked. What `0x006A9430(1)` does: it clears the walker's data (0x00A62F30), changes the movement state (0x00A63AC0), then calls 0x006A3BC0, whose end was not read [I].
+    - **The answer:** 1 when any B was blocked, else 0.
+    - **BumpLevel values** (apr_base):
+      - 100: human, elf, dwarf, Qunari, the party's dog;
+      - Mabari 80, wolf 90;
+      - 120: the ogre, golems, drakes, the Archdemon;
+      - bears 110–111, spiders 104–106;
+      - dragons 130–131;
+      - the Nug 50, the pig and the goat 30, other small animals 7–33, the wisp 10.
+  - **The push** (0x006AC0A0, ID 14698, `mover.push(B, &probe)`):
+    - **B must be pushable** (0x006A8D10). It is not when B is the controlled creature and in combat. Otherwise B needs all of these:
+      - to be in the party (+0xC95);
+      - an empty queue (+0x2D4 == 0, tested first);
+      - a current command (`[[B+0x2DC]]`) that is none, Wait (13) or PlayAnimation (14).
+      - That the command's byte +2 is its type is [I].
+    - **The spot:**
+      - P is B's position projected on the line mover → probe (0x004EE610, t not clamped; the mover's position when the line has no length).
+      - away = normalize(normalize(B − P) + normalize(B − mover)).
+      - spot = P + away × (PersonalSpace(mover) + PersonalSpace(B)).
+    - **The safe place:** `CCArea::GetSafeLocation(spot, 5.0 × PersonalSpace(B), B's movement controller, reachable 0, out, snap 1, creatureCheck 0, minRadius 0.0)` (0x006AC19C–0x006AC1E3). The area is the mover's.
+    - **Found:** B is given `0x0069EF30(out, run 1, 0.0, flag 6 = 0, int 0 = 0, front 1, static 0, player 1, override 2, flag 9 = 1, flag 12 = 0)` (0x006AC20B): a MoveToLocation in front with the hard clear (COMBAT.md, "Queuing it clears the queue"). The push answers 1.
+    - **Otherwise** it answers 0.
+    - **Flag 9** has no reader through 0x00A5A280 (all of about 85 call sites scanned); it is only written (0x0069EFD2). A direct read of the flag array was not excluded [I].
+  - **The reaction** (0x007A3A20, ID 19829). The movement record P = `[creature+0xA40]` keeps a state at P+0 and a timer in ms at P+4: 0 clear, 2 re-path asked, 3 settling after a search, 4 waiting.
+    - **When it acts:** only when the mover is not a ghost, P exists with state 0, and the list's first entry B (0x0062F560(0), pushed creatures still in the list) is neither null nor a ghost.
+    - **Unless both are active party members** (0x006A2CE0): roll = rand() % 100 (0x0053DF70, the CRT's LCG at 0x00C31994).
+      - **Re-path, state 2:** when roll ≤ 50 − 20 × (n − 1) (0x00C0F6A0, 0x00C0F6A4).
+      - **Wait, state 4:** otherwise, with the timer 200 + (its own LCG at 0x00C4C364) % 200 ms (0x00A62AE0: 0x00C1CEC4, 0x00C1CEC8).
+      - So one creature in the way: re-path 51 %; two: 31 %; three: 11 %; four or more: always wait.
+    - **Both active party members** (C the controlled creature, 0x00606F10):
+      - the mover is C: state 2;
+      - B is C: state 4 with the timer;
+      - else the lower formation slot (0x00631D90) re-paths and the other waits.
+  - **The clock** (`CCCreature` vfunction69 0x006BB890, for the living), with ms = ftol(dt × 1000):
+    - **State 4:** when the timer is below 1 it becomes state 2. Otherwise the timer counts down, and a moving creature (+0xB20 ≠ 0) is stopped by 0x006A2A20: its path's waypoints are cleared (0x00A62F30) and its movement state set to 0 (0x00A63800). It stands, with no stop clip.
+    - **State 3:** when the timer is below 1 it becomes state 0. Otherwise the timer counts down.
+    - **Then** the controller's step (0x00A644E0), behind its gate 0x00A630E0 (the move gate above).
+    - 0x006A2A20 is also called at 0x00746D7D, 0x00746DED, 0x007A4636 and 0x007A6728.
+  - **The move update's side:**
+    - **State 4** answers at its head (0x007A9190), through `0x007A3190(creature, 0)`: 0, or −8 when 0x007A2AE0 says the command is done. No search, no walk, no standing count.
+    - **State 2** forces the fresh-search block like flag 3. Its `int 1 = 0; flag 8 = 1` is skipped only when the state is 2, so a re-path for a blocker keeps the standing count.
+    - **Every fresh search with flag 3 or state 2** stops the walker, then, with the byte 0x00C0F6C4 set, sets **state 3 with a timer of 200 ms** (0x007A92A1–0x007A92A7). So for 200 ms after any search the reaction does nothing. Without flag 3 the block calls Cancel and sets no state.
+    - No writer of state 1 was found; 0x00A63E10 only turns 1 into 2 (0x00A63E67) [I: state 1 unused].
+  - **A second writer of state 4:** 0x007A3B90 (ID 19830, unnamed), called at 0x007A961A on every walking update after the reaction.
+    - It acts only in game mode 4, a conversation, and only when the mover is outside the dialogue mode's rectangle (+0x2D0..+0x2E4, tested by 0x0068CCF0) and the point 2 × PersonalSpace ahead is inside it.
+    - It then sets state 4 with the timer 0x7FFFFFFF and adds the creature's id to the mode's set at +0x2F0 (0x0068F820).
+    - So walkers are kept out of a conversation's area [I for the meaning].
 - Not read: the corner pass's fallback cut as run; the rounding of Collapse's point count (0x008E34F0); the append helper's length sum (0x00A4C630); the long-route tail at the 10th call (0x00A4DDA0); whether the 3 or 6 ms clock trips on a normal machine at 290 to 370 m; 0x0074DC40 (the blocker's footprint test) and what fills creature +0x690.
 
 ### 12. A creature's stamp: when, its footprint, who reads it (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine #130; C checked, I inferred)

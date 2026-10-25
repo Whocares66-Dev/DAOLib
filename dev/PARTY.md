@@ -862,7 +862,7 @@ Read by the forked subagent; checked unless marked.
     - Added 2026-10-25 (read, checked by lib-agent-2) [C unless marked]:
       - **The retarget in place** also sets the existing move's player flag to 1.
       - **The queued move** passes flag 9 = 0 and flag 12 = 0, with override −1, so row 20's hard clear applies: a Wait or a PlayAnimation is ended with −2 at once, and a static command is kept.
-      - **A third caller of 0x0069EF30,** 0x006AC20B, queues a move with front 1, player 1, override 2 and flag 9 = 1. What it is was not read [I].
+      - **A third caller of 0x0069EF30,** 0x006AC20B, queues a move with front 1, player 1, override 2 and flag 9 = 1. It is the push of a party member out of a walker's way (0x006AC0A0; PATHFINDING.md, "A creature in the walker's way") [C] (corrected 2026-10-25 by lib-agent-2).
   - **ON_ORDER_RECEIVED goes to the controlled creature only**, not to the members moved in formation.
 - **The formation table:** 0x007605B0 picks by the global 0x00C371B0: 1 → 0x00C0D3A0, 2 → 0x00C0D450, 3 → 0x00C0D500, 4 → 0x00C0D2F0, else 0x00C0D240; with the arrival flag, 0x00C0D2F0 (`dev/LOAD_EVENTS.md`). Nothing writes 0x00C371B0 by its address (read only at 0x0076061B), so a move uses **0x00C0D240** (inferred: the global stays 0): (∓1.5, −1), (0, −2.5), (∓1.5, −4), (∓3, −2), (∓1, −3), (∓3.5, −1) m (right, forward), turned to the leader's movement. With +0x450 = 0, left and right swap (slot 0↔1; from slot 3, odd↔even). The others are scaled variants, e.g. 0x00C0D450: (∓1.25, −0.75), (0, −1.75), (∓1.75, −2.5), (∓3, −1.5), (∓1, −2.5), (∓3.25, −1.5).
 - **The primary click 0x00712830(target, action, arg)**, a switch on action − 3 (table 0x00712DC4) over 0x006360C0(mask 0x80):
