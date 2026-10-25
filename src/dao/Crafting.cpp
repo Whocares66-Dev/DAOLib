@@ -17,6 +17,15 @@
 // counts a thing crafted for the achievement and the statistics; so the screen's tests are made
 // here first, and the making is told by the first ingredient's count falling.
 //
+// The names, as the screen's recipes have them (GUI::GUICrafting::OnShow, 16819): a recipe's its
+// StrRef's text, or "?" and its Label where its StrRef is 0; the product's and each ingredient's
+// those of an item's template, ItemTemplate::ReadDisplay (17987) reading <resref>.uti's
+// LocalizedName, an ingredient's resref its tag (GUI::Recipe 0x00726BE0, GUI::Ingredient
+// 0x00725E70). A template's localised string is its own text if it has any, else its strref's.
+// Seen the same day against the open screen's GUICrafting.Recipes: the nine recipes' names
+// "?Mabari Crunch" and the like (every row's StrRef is 0), the products' ("Lesser Health
+// Poultice", the Rope Trap's "Spring Trap") and the ingredients' ("Elfroot", "Flask") as it has them.
+//
 // Seen in play 2026-10-25 (examples/crafting), Lyna in Redcliffe village, who has Poison-Making
 // (100071) alone, with the screen opened by ShowCraftingGUI: the party's 9 known recipes listed
 // with the backpack's counts, the four of traps and three of herbalism not her rank; an unknown
@@ -34,11 +43,16 @@
 #include "dao/Gda.h"
 #include "dao/Messages.h"
 #include "dao/Module.h"
+#include "dao/Resources.h"
 #include "dao/SafeRead.h"
+#include "dao/Tlk.h"
+#include "dao/core/Gff3.h"
+#include "dao/core/generated/Gff3Schema.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <array>
 #include <cstddef>
+#include <filesystem>
 #include <format>
 #include <optional>
 
@@ -112,6 +126,30 @@ bool Knows(std::int32_t recipe)
     return known;
 }
 
+// An item's own name, from its template, as ItemTemplate::ReadDisplay reads it; empty for a
+// template the game has not.
+std::wstring ItemName(std::wstring resref)
+{
+    if (!resref.ends_with(L".uti"))
+    {
+        resref += L".uti";
+    }
+    const auto bytes = resources::Read(resref);
+    const auto file = bytes ? core::gff3::File::Parse(*bytes) : std::nullopt;
+    const auto item = file ? core::templates::uti::Item::Of(*file) : std::nullopt;
+    const auto text = item ? item->LocalizedName() : std::nullopt;
+    if (!text)
+    {
+        return {};
+    }
+    if (!text->strings.empty())
+    {
+        const std::string &own = text->strings.front().second;
+        return std::filesystem::path(std::u8string(own.begin(), own.end())).wstring();
+    }
+    return text->strref != 0xFFFFFFFF ? tlk::String(text->strref) : std::wstring();
+}
+
 // A row as the screen shows it to a crafter; the backpack's counts are the party's.
 Recipe Read(std::int32_t row, ObjectId crafter)
 {
@@ -119,6 +157,10 @@ Recipe Read(std::int32_t row, ObjectId crafter)
     recipe.id = row;
     recipe.skill = gda::GetInt(Table::Crafting, row, "Skill").value_or(0);
     recipe.product = gda::GetString(Table::Crafting, row, "ItemCreated").value_or(L"");
+    const std::int32_t strref = gda::GetInt(Table::Crafting, row, "StrRef").value_or(0);
+    recipe.name = strref != 0 ? tlk::String(static_cast<std::uint32_t>(strref))
+                              : L"?" + gda::GetString(Table::Crafting, row, "Label").value_or(L"");
+    recipe.productName = ItemName(recipe.product);
     const ObjectId hero = api::GetHero();
     recipe.ingredientsHeld = true;
     for (std::int32_t i = 1; i <= kMostIngredients; ++i)
@@ -130,7 +172,7 @@ Recipe Read(std::int32_t row, ObjectId crafter)
             continue;
         }
         const std::int32_t have = api::CountItemsByTag(hero, tag);
-        recipe.ingredients.push_back({tag, need, have});
+        recipe.ingredients.push_back({tag, ItemName(tag), need, have});
         recipe.ingredientsHeld = recipe.ingredientsHeld && have >= need;
     }
     recipe.rank = api::HasAbility(crafter, recipe.skill) != 0;

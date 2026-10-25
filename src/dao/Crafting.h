@@ -28,7 +28,8 @@ enum class Craft : std::uint8_t
 // An ingredient of a recipe, and how many of it the party's backpack holds.
 struct Ingredient
 {
-    std::wstring tag; // the item's tag
+    std::wstring tag;  // the item's tag
+    std::wstring name; // as the screen shows it: the item's own name; empty for a tag no template has
     std::int32_t need = 0;
     std::int32_t have = 0;
 };
@@ -36,9 +37,11 @@ struct Ingredient
 // A recipe the party knows, as the screen shows it to a crafter.
 struct Recipe
 {
-    std::int32_t id = 0;    // its row of crafting_recipes
-    std::int32_t skill = 0; // the rank of its craft it needs: an ability, 100062 for Improved Herbalism
-    std::wstring product;   // the item it makes, its template's name: "gen_im_qck_dogfood_101.uti"
+    std::int32_t id = 0;      // its row of crafting_recipes
+    std::int32_t skill = 0;   // the rank of its craft it needs: an ability, 100062 for Improved Herbalism
+    std::wstring name;        // as the screen shows it: its text, or "?" and its label where it has none
+    std::wstring product;     // the item it makes, its template's name: "gen_im_qck_dogfood_101.uti"
+    std::wstring productName; // the item's own name, as the screen shows it
     std::vector<Ingredient> ingredients;
     bool rank = false;            // the crafter has the skill it needs
     bool ingredientsHeld = false; // the backpack holds all it needs

@@ -33,7 +33,7 @@ void Log()
             std::string needs;
             for (const crafting::Ingredient &ingredient : recipe.ingredients)
             {
-                needs += fmt::format(" {} {}/{}", dao::Utf8(ingredient.tag), ingredient.have, ingredient.need);
+                needs += fmt::format(" {} {}/{}", dao::Utf8(ingredient.name), ingredient.have, ingredient.need);
             }
             std::string_view verdict;
             if (recipe.makeable)
@@ -44,8 +44,8 @@ void Log()
             {
                 verdict = ", not the rank";
             }
-            spdlog::info("{} {}: {}{}{}", static_cast<int>(craft), recipe.id, dao::Utf8(recipe.product), needs,
-                         verdict);
+            spdlog::info("{} {} {}: {}{}{}", static_cast<int>(craft), recipe.id, dao::Utf8(recipe.name),
+                         dao::Utf8(recipe.productName), needs, verdict);
         }
     }
 }
