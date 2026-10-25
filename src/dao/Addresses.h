@@ -343,6 +343,10 @@ DAO_ADDRESS(kCCCreatureStats_CanUseAbility, 16539)
 // Read 2026-10-24 (DAOLib #259).
 DAO_ADDRESS(kCCCreatureStats_IsAbilityAvailable, 16521)
 DAO_ADDRESS(kAbilityChains_Find, 12208)
+// The party picker's choice (dao/PartyPicker.h): SelectEntry, __thiscall (entry), `ret 4`, the
+// select branch of HandleMessage_SelectPartyMemberUnderCursorMessage (18342, at 0x00768B50), whose
+// own check is only fewer than four chosen. Read 2026-10-24 (DAOLib #259).
+DAO_ADDRESS(kGameModePartyPicker_SelectEntry, 18307)
 // CCCreature's vtable slot 44 (+0xB0), __thiscall (anim_base row, float speed, float blend, byte
 // flag), `ret 0x10`, no return value (every caller overwrites eax), read 2026-10-21 (dev/ANIMATION.md). It plays an
 // animation on the base layer through 0x0069B3D0. Only CCCreature's vtable holds it.
