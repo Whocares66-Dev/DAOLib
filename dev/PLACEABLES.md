@@ -66,7 +66,7 @@ Added (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with 
     - starts the next command (0x0073C7D0) when the queue has one (+0x2D4);
     - and then runs the current command (`RunCurrentCommand` 0x0073CB60, at 0x0073D3AC) in the same call. It returns when that answers 1.
     - So a command finished in frame N has its successor started in N+1. Its sub-actions run on in that call, down to the walk's first RequestPath, which sees the door open. The walk sub-action's walking is also gated by bit 2 of its parameter byte.
-    - That +0x14 is 0 on the update after the last sub-action finished is [I]. No other place starts a command.
+    - +0x14 is the sub-action list's size, and RunCurrentCommand pops each sub-action that answers 1. So the list is empty after the use's last sub-action, and the next update's head ends the use [C] (read 2026-10-24, checked by lib-agent-2; was [I]). No other place starts a command.
     - This fits vanilla's trace: the use's success and the resumed attack's start are 0.2 ms apart (DAOParagonEngine #263, Lyna/Slot_304).
   - **The drain's cap** (0x0064AE30):
     - The first due event is always delivered.

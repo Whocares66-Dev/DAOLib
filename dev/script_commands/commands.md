@@ -15,6 +15,21 @@ Shared facts, all checked:
   - Ends go through slot 3 (0x00742190) to an end handler per type (table `+0x58`). Both tables are filled at 0x00747480.
   - Every end chains to the shared end 0x00746900. It clears the sub-actions, stores the command as the object's previous command (+0x2C8, through 0x0073CB20) and, if command+8 is set, sends EVENT_TYPE_COMMAND_COMPLETE (0x00743DD0: int 0 the type, int 1 the result).
   - **A start handler that adds no sub-actions makes its command complete with COMMAND_RESULT_SUCCESS (1) on the next step.** Its return value is ignored (`StartNextCommand` 0x0073C7D0).
+  - Read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 [C]:
+    - **The head:** when the current command has no sub-actions left (the list's size, cmd record +0x14, 0x0073D360), it is ended with `ClearCurrentCommand(1, 1, 1, 0)` (0x0073C730: success, COMMAND_COMPLETE queued), and the next command is started (0x0073C7D0). Then the current command is run (0x0073D3AC).
+    - **After the run:** an answer of 1 or 0 does nothing more. Any other answer ends the command with that status.
+    - **So a command whose last sub-action answers 1 ends at its next step,** after that frame's event drain. An event its last sub-action queued (an impact, a USE) is delivered while it is still current. If that event queues a clearing command, such as ExecuteEffect's 32, the command ends with -2 (COMMAND_FAILED_COMMAND_CLEARED) and not with 1. RunCurrentCommand has one caller (0x0073D3AC) and never clears the command itself. The other callers of 0x0073C730 are 0x0065BF8A (its context not read), 0x0073C9C6, 0x0073CA0D, 0x0073D377 and 0x0073D436, so only an explicit clear, from a handler or an event, ends a command sooner.
+    - **The runner, `CCObject::RunCurrentCommand`** (0x0073CB60), walks the sub-action list with the frame's dt and a running total of the time used:
+      - **The fields:** a sub-action's +0x18 is its start delay left, +0x14 its step's length and +0xC its time spent. 0x004F25A0 sets +0x18.
+      - **The delay:** with a delay and a length, the time used becomes at least the delay, and the delay drops by dt, not below 0.
+      - **The skip:** a sub-action is skipped while the time used has reached dt or its delay is not yet out.
+      - **The run:** otherwise its time spent advances, the time used rises (at most to dt), and its handler runs (`[[app+0x1AC]+0x70]` slot 2).
+      - **The answer:**
+        - A command cleared under the handler (+0x2DC → +4) makes the answer -2.
+        - A non-zero answer pops the sub-action (0x00745240, 0x0073C810).
+        - On 1 the walk restarts at the list's head (0x0073CC84–0x0073CC97), not at the next element. Any other non-zero answer is returned.
+        - On 0 the time used is set to dt (0x0073CC9D), so the later sub-actions are skipped this frame by the time test; their start delays are still counted down.
+      - **It returns the last answer,** starting at 1. An empty list, or one whose remaining sub-actions were skipped for time, gives 1, so a returned 1 does not mean the list is empty.
 - Sub-actions are added by `CCObject::AddSubAction` (0x0073D4D0; names ours): `__thiscall (type, CDataArrays *, a3, byte flag, duration)`. The handler table is `CSSubActionHandler`'s, filled at 0x007AB8D0.
 - `CDataArrays::GetInteger` and `GetFloat` (0x00A5A220, 0x00A5A250) answer 0 for an index out of range, compared unsigned. `SetInteger` and `SetFloat` grow the array to index+1.
 
