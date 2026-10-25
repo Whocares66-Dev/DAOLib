@@ -53,32 +53,36 @@ struct Placed
     std::vector<Variable> variables;
 };
 
+// A creature placed in an area. Each of its own fields is none where the instance lacks it: the
+// engine then keeps its template's value.
 struct Creature
 {
     Placed placed;
-    std::int32_t teamId = -1;
-    std::int32_t rank = 0;
-    std::int32_t treasureCategory = 0;
-    float interactRadius = 0;
-    bool isSelectable = true;
-    std::int32_t trackable = 1;
-    bool weaponsDrawn = false;
+    std::optional<std::int32_t> teamId;
+    std::optional<std::int32_t> rank;
+    std::optional<std::int32_t> treasureCategory;
+    std::optional<float> interactRadius;
+    std::optional<bool> isSelectable;
+    std::optional<std::int32_t> trackable;
+    std::optional<bool> weaponsDrawn;
 };
 
+// A placeable placed in an area. Each of its own fields is none where the instance lacks it, as a
+// creature's, but for the rooms, whose -1 is the engine's own.
 struct Placeable
 {
     Placed placed;
-    std::int32_t teamId = -1;
-    std::int32_t rank = 0;
-    std::int32_t pickLock = 0;
-    std::int32_t treasureCategory = 0;
-    float interactRadius = 0;
-    std::int32_t trapDetection = 0;
-    std::int32_t trapDisarm = 0;
-    bool useable = true;
+    std::optional<std::int32_t> teamId;
+    std::optional<std::int32_t> rank;
+    std::optional<std::int32_t> pickLock;
+    std::optional<std::int32_t> treasureCategory;
+    std::optional<float> interactRadius;
+    std::optional<std::int32_t> trapDetection;
+    std::optional<std::int32_t> trapDisarm;
+    std::optional<bool> useable;
     std::int32_t roomId1 = -1; // the rooms it stands between, by the layout's numbers; -1 for none
     std::int32_t roomId2 = -1; // a door's other side; roomId1 again for one in a room
-    std::int32_t initialState = 0;
+    std::optional<std::int32_t> initialState;
 };
 
 // A sound placed in an area, or in a trigger of Type 4.

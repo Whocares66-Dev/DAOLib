@@ -666,6 +666,18 @@ MUTANTS: list[Mutant] = [
         'Number(in, "WOrientation", 0.0F)',
     ),
     Mutant(
+        "area-instance-lacks-placeable: a placeable's field the instance lacks is none, the template's then standing",
+        AREA,
+        '.pickLock = in.Get<std::int32_t>("PickLock"),',
+        '.pickLock = in.Get<std::int32_t>("PickLock").value_or(0),',
+    ),
+    Mutant(
+        "area-instance-lacks-creature: a creature's flag the instance lacks is none, the template's then standing",
+        AREA,
+        '.isSelectable = Flag(in, "IsSelectable"),',
+        '.isSelectable = Flag(in, "IsSelectable", true),',
+    ),
+    Mutant(
         "area-room-none: a placeable with no RoomID1 is in no room, -1, as the engine constructs it",
         AREA,
         'Number<std::int32_t>(in, "RoomID1", -1)',

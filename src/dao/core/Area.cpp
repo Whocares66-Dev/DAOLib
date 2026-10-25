@@ -23,7 +23,7 @@ template <class T> T Number(const gff3::Struct &in, std::string_view label, T ot
     return in.Get<T>(label).value_or(otherwise);
 }
 
-bool Flag(const gff3::Struct &in, std::string_view label, bool otherwise)
+std::optional<bool> Flag(const gff3::Struct &in, std::string_view label)
 {
     if (const auto byte = in.Get<std::uint8_t>(label))
     {
@@ -33,7 +33,12 @@ bool Flag(const gff3::Struct &in, std::string_view label, bool otherwise)
     {
         return *word != 0;
     }
-    return otherwise;
+    return std::nullopt;
+}
+
+bool Flag(const gff3::Struct &in, std::string_view label, bool otherwise)
+{
+    return Flag(in, label).value_or(otherwise);
 }
 
 std::uint32_t StrRef(const gff3::Struct &in, std::string_view label)
@@ -88,17 +93,23 @@ Placed PlacedOf(const gff3::Struct &in)
     };
 }
 
+// A placed creature's and placeable's own fields are each none where the instance lacks it
+// (DAOLib #263, asked by paragon-agent-2): the engine loads the template, then reads the instance
+// over it (CCCreature::ReadFields 0x006C06F0, CCPlaceable::ReadFields 0x00750370, both from
+// CCObject::ReadFields 0x0069AAD0 for TeamId and InteractRadius), each field with the template's
+// value as its default, so a field the instance lacks keeps the template's. The game's own 238
+// areas have every one (paragon-agent-2's survey of 5,581 placeables and 6,332 creatures).
 Creature CreatureOf(const gff3::Struct &in)
 {
     return {
         .placed = PlacedOf(in),
-        .teamId = Number<std::int32_t>(in, "TeamId", -1),
-        .rank = Number<std::int32_t>(in, "Rank", 0),
-        .treasureCategory = Number<std::int32_t>(in, "TreasureCategory", 0),
-        .interactRadius = Number(in, "InteractRadius", 0.0F),
-        .isSelectable = Flag(in, "IsSelectable", true),
-        .trackable = Number<std::int32_t>(in, "Trackable", 1),
-        .weaponsDrawn = Flag(in, "WeaponsDrawn", false),
+        .teamId = in.Get<std::int32_t>("TeamId"),
+        .rank = in.Get<std::int32_t>("Rank"),
+        .treasureCategory = in.Get<std::int32_t>("TreasureCategory"),
+        .interactRadius = in.Get<float>("InteractRadius"),
+        .isSelectable = Flag(in, "IsSelectable"),
+        .trackable = in.Get<std::int32_t>("Trackable"),
+        .weaponsDrawn = Flag(in, "WeaponsDrawn"),
     };
 }
 
@@ -112,17 +123,17 @@ Placeable PlaceableOf(const gff3::Struct &in)
 {
     return {
         .placed = PlacedOf(in),
-        .teamId = Number<std::int32_t>(in, "TeamId", -1),
-        .rank = Number<std::int32_t>(in, "Rank", 0),
-        .pickLock = Number<std::int32_t>(in, "PickLock", 0),
-        .treasureCategory = Number<std::int32_t>(in, "TreasureCategory", 0),
-        .interactRadius = Number(in, "InteractRadius", 0.0F),
-        .trapDetection = Number<std::int32_t>(in, "TrapDetection", 0),
-        .trapDisarm = Number<std::int32_t>(in, "TrapDisarm", 0),
-        .useable = Flag(in, "Useable", true),
+        .teamId = in.Get<std::int32_t>("TeamId"),
+        .rank = in.Get<std::int32_t>("Rank"),
+        .pickLock = in.Get<std::int32_t>("PickLock"),
+        .treasureCategory = in.Get<std::int32_t>("TreasureCategory"),
+        .interactRadius = in.Get<float>("InteractRadius"),
+        .trapDetection = in.Get<std::int32_t>("TrapDetection"),
+        .trapDisarm = in.Get<std::int32_t>("TrapDisarm"),
+        .useable = Flag(in, "Useable"),
         .roomId1 = Number<std::int32_t>(in, "RoomID1", -1),
         .roomId2 = Number<std::int32_t>(in, "RoomID2", -1),
-        .initialState = Number<std::int32_t>(in, "InitialState", 0),
+        .initialState = in.Get<std::int32_t>("InitialState"),
     };
 }
 

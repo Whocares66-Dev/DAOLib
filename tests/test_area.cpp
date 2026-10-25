@@ -195,16 +195,17 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
     CHECK(jowan.rank == 4);
     CHECK(jowan.treasureCategory == 2);
     CHECK(jowan.interactRadius == 1.5F);
-    CHECK_FALSE(jowan.isSelectable);
-    CHECK(jowan.weaponsDrawn);
+    CHECK(jowan.isSelectable == false);
+    CHECK(jowan.weaponsDrawn == true);
 
     REQUIRE(read->placeables.size() == 1);
     const auto &chest = read->placeables[0];
     CHECK(chest.pickLock == 30);
     CHECK(chest.roomId1 == 65537);
     CHECK(chest.roomId2 == 65538);
-    CHECK_FALSE(chest.useable);
+    CHECK(chest.useable == false);
     CHECK(chest.initialState == 2);
+    CHECK_FALSE(chest.teamId.has_value());                    // the instance has none: the template's stands
     CHECK(chest.placed.turn == area::Quaternion{0, 0, 0, 1}); // none written: unturned
 
     REQUIRE(read->triggers.size() == 2);
@@ -241,6 +242,43 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
 
 // The Circle's basement's second door between rooms 1325 and 1103, as bhm700ar_tower_basement.are
 // has it, and a placeable whose instance has no RoomIDs.
+TEST_CASE("a placed object's own fields it lacks are none, the template's then standing", "[area]")
+{
+    // As the engine reads them (CCPlaceable::ReadFields 0x00750370, CCCreature::ReadFields
+    // 0x006C06F0): each over the template's value, which stands where the instance lacks it.
+    Builder b("ARE");
+    const auto top = b.Struct(0xFFFFFFFF, {});
+    const auto creature = b.Struct(4, {{"TemplateResRef", kResRef, b.ResRef("gen00fl_dog")}});
+    const auto placeable = b.Struct(9, {{"TemplateResRef", kResRef, b.ResRef("genip_chest")}});
+    b.Set(top, {{"CreatureList", kList, b.List({creature})}, {"PlaceableList", kList, b.List({placeable})}});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto read = area::AreaOf(*file);
+    REQUIRE(read);
+    REQUIRE(read->creatures.size() == 1);
+    const auto &dog = read->creatures[0];
+    CHECK_FALSE(dog.teamId.has_value());
+    CHECK_FALSE(dog.rank.has_value());
+    CHECK_FALSE(dog.treasureCategory.has_value());
+    CHECK_FALSE(dog.interactRadius.has_value());
+    CHECK_FALSE(dog.isSelectable.has_value());
+    CHECK_FALSE(dog.trackable.has_value());
+    CHECK_FALSE(dog.weaponsDrawn.has_value());
+    REQUIRE(read->placeables.size() == 1);
+    const auto &chest = read->placeables[0];
+    CHECK_FALSE(chest.teamId.has_value());
+    CHECK_FALSE(chest.rank.has_value());
+    CHECK_FALSE(chest.pickLock.has_value());
+    CHECK_FALSE(chest.treasureCategory.has_value());
+    CHECK_FALSE(chest.interactRadius.has_value());
+    CHECK_FALSE(chest.trapDetection.has_value());
+    CHECK_FALSE(chest.trapDisarm.has_value());
+    CHECK_FALSE(chest.useable.has_value());
+    CHECK_FALSE(chest.initialState.has_value());
+    CHECK(chest.roomId1 == -1); // the engine's own default, not the template's
+}
+
 TEST_CASE("a placeable's rooms are its RoomIDs, and -1 where it has none", "[area]")
 {
     Builder b("ARE");
