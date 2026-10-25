@@ -660,7 +660,7 @@ It is the only builder of event 60, so every real switch sends it, whoever asked
   - `BeginSlideshow` 4, `LoadCutscene` 5, `ShowDeathScreen` 2, `StartCharGen` 11.
 - **Combat (1) and explore (0) are the scripts' alone:**
   - `rules_core.nss`:1085–1113, a party member perceiving a hostile, sets GM_COMBAT;
-  - `module_core.nss`:310–356, `EVENT_TYPE_DELAYED_GM_CHANGE`, goes back to explore every 2 s until no hostile is perceived.
+  - `module_core.nss`:308–352, `EVENT_TYPE_DELAYED_GM_CHANGE` (queued 3 s after a DISAPPEAR leaves the party perceiving no hostile), goes back to explore once `CheckResurrection()` has raised every dead member, retrying every 1 s in combat (2 s otherwise). With a hostile perceived it does nothing and is not retried; a later DISAPPEAR queues it again (ANIMATION.md, "Combat state 0") (corrected 2026-10-25 by lib-agent-2) [C].
   - Both go through `WR_SetGameMode` → SET_GAME_MODE (1021) → `module_core`:370 → the command.
 
 `module_core.nss`:185–296 handles event 60: it returns early for a new GUI, FLYCAM, INVALID or PREGAME, and sets the party's combat state from new == COMBAT (:246).

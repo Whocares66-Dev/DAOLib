@@ -37,10 +37,20 @@ Read 2026-10-18 in the GOG exe. Not seen in play. A creature's perceived set is 
 ### TriggerPerception (166)
 - **Handler:** 0x0065A7B0 (not shared). `GetCreatureById`, a flag read 0x006A2CE0, the area's lookup 0x0067B430, then `CCCreature` 0x006B32A0.
 - **Described in:** `dev/COMBAT.md` ("Perception"), which describes the update that fills the set; this command is not named there.
-- **Does:** pops oPerceivingCreature, then oPerceivedCreature (an id, not looked up here). The perceiver must be a creature with an area, and the area must answer 0x0067B430(area, creature +0x150) non-null (the creature's room or tile; inferred). Then 0x006B32A0(perceived id, a flag, area, that result, &position) runs: it returns 0 for the creature itself, for one already in the set (0x008704D0), or when 0x006A2BB0 refuses; otherwise the perceived must exist as a creature (`GetCreatureById`), it is put in the set (0x006B3240) and the answer is **1**. The script gets that 1 or 0. (checked; 0x006A2BB0 and 0x006B3240 not read)
+- **Does:** pops oPerceivingCreature, then oPerceivedCreature (an id, not looked up here). The perceiver must be a creature with an area, and the area must answer 0x0067B430(area, creature +0x150) non-null (the creature's room or tile; inferred). Then 0x006B32A0(perceived id, a flag, area, that result, &position) runs: it returns 0 for the creature itself, for one already in the set (0x008704D0), or when 0x006A2BB0 refuses; otherwise the perceived must exist as a creature (`GetCreatureById`), it is put in the set (0x006B3240) and the answer is **1**. The script gets that 1 or 0. (checked; 0x006A2BB0 read below, 2026-10-25; 0x006B3240 not read)
 - **State:** the perceiver's +0xC18 set and the APPEAR event (below).
 - **Edge cases:** an invalid perceiver or a non-creature gives 0 (the push is of `ebx`, zero). A perceived id that is not a creature gives 0. It does not run the line-of-sight and range test of the normal update (inferred from the call path: the test, if any, is 0x006A2BB0's).
 - **It raises APPEAR** [C, read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; 0x006B32A0 → 0x006B3240 → 0x006AFCF0]: 0x006B32A0(perceived id, flag, area, room, &position) returns 0 for the creature itself (`cmp esi, [this+4]`), for one already in the +0xC18 set (0x008704D0) and when `0x006A2BB0` refuses (COMBAT.md:135); else the perceived object must exist (`GetCreatureById` 0x005D58C0), then `0x006B3240(this, perceived, flag')` where `flag'` = `0x006A44D0(perceived, perceiver id)`: the perceived's stealth +0x7F0 is non-zero AND `0x006A2B80(perceiver id)` (the hostility test, the int 0 of the event) is non-zero. `0x006B3240` inserts the id into +0xC18 (`0x006B1120`) only when flag' is 0, then ALWAYS calls `0x006AFCF0(this, perceived, 0, 0)` (the APPEAR event, COMBAT.md:64), then `0x006A2CE0(this)`'s test sets the perceived's byte +0xB80 = 1. The command pushes 1. So a script-triggered perception announces `EVENT_TYPE_PERCEPTION_APPEAR` at once, as the update's newcomers do (COMBAT.md:60), and a stealthed hostile is announced with bStealthed = 1 but is not put in the set (COMBAT.md:59), still answering 1.
+- **`CCCreature::CanPerceive` 0x006A2BB0 read** [C] (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2): `this` the perceiver, the other by id; it answers 1 only when all of these hold, tested in this order:
+  1. the area and the room arguments are not null;
+  2. the other is a creature (`GetCreatureById`) in the same area (+0x254);
+  3. the room test: `0x00A285D0(other +0x41C)` with the perceiver's room, which is 0x0067A3C0 on the two rooms' masks, the area query's test (COMBAT.md, the candidates). An other in no room fails;
+  4. **the perceiver is not dead** (its slot 0x1D0, 0x006A2C14–0x006A2C23);
+  5. the other is active (its +0x70 slot 0x6C);
+  6. the other is not dead (0x006A2C38–0x006A2C47);
+  7. the 2D distance (0x0067A000) from the perceiver's +0x120 is strictly under 60.0 (0x00B03BF8). An equal or NaN distance fails.
+- So TriggerPerception gives a dead perceiver nothing. A corpse struck takes no attacker into its set and gets no APPEAR.
+- An attacker already perceived answers 0 earlier (0x006B32A0, 0x008704D0), with no event.
 
 ### IsPerceiving (170)
 - **Handler:** 0x0066E040, shared with `IsInAOE` (336); the branch on command 0xAA (170) at 0x0066E08E.
@@ -90,4 +100,4 @@ Read 2026-10-18 in the GOG exe. Not seen in play. A creature's perceived set is 
   - **The look:** `EffectConeCasting(vfx_impact0)` on the caster for 1.5 s.
 
 ## Not read
-- 0x006A2BB0 (the perception test TriggerPerception relies on), 0x0067B430's use of creature +0x150.
+- 0x0067B430's use of creature +0x150.

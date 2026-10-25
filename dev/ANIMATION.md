@@ -135,6 +135,24 @@ It first sets combat data +4 = -1 (checked: the attack target, which `GetAttackT
 - **Non-party creatures:** `combat_h.nss`:1337, `Combat_HandleCreatureDisappear` on PERCEPTION_DISAPPEAR, when no hostile is perceived.
 - **The party:** combat_h:1325 delays `EVENT_TYPE_DELAYED_GM_CHANGE` 3.0 s. Then module_core:310-352 sets GM_EXPLORE (retrying every 1-2 s until `CheckResurrection()`), and the mode change sets the party's state to 0.
 - Also a follower's death (`player_core.nss`:418) and a roamer back home (rules_core:743).
+- **`CCCreature::SetCombatState` (0x006AE0A0) has three callers** [C] (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2):
+  - the script command (0x0065DDBF);
+  - 0x006D4D20 (at 0x006D4D75), the handler at slot +0xBC of `CClientVirtualMachineCommands::InitializeCommands` (ID 15424, 0x006DB64D), the client VM's command table;
+  - the creature's combat setup 0x006B4070 (0x006B4597), which clears +0xC18 and sets state 0.
+  - So no engine path ends combat: the scripts write the state.
+- **A creature not in the party** sets no state at its death (creature_core only clears its set), so a corpse keeps state 1 [C for the scripts; I that nothing reads it].
+- **From the last kill to explore** [C]:
+  1. Each living member's next update drops the dead hostile and raises DISAPPEAR. `player_core.nss`:96–133 calls `Combat_HandleCreatureDisappear` when the corpse is still hostile, and with a 1.0 s delay for a destroyed one.
+  2. `combat_h.nss`:1323–1325: the follower's sound, then, when `!IsPartyPerceivingHostiles` and `!IsPartyDead`, `DelayEvent(3.0, module, DELAYED_GM_CHANGE)`.
+  3. `module_core.nss`:308–352 checks first: with a hostile perceived, or the party dead, nothing is done and nothing is retried.
+  4. In GM_COMBAT it calls `CheckResurrection()`. Each dead member needs a living one strictly closer than `RULES_RESURRECTION_DISTANCE`, 7.5 m (`effect_resurrection_h.nss`:29), and is raised then.
+     - TRUE only when every dead member was raised: then `WR_SetGameMode(GM_EXPLORE)`.
+     - Otherwise it retries in 1.0 s.
+     - GM_EXPLORE with dead members, and any other mode, retry in 2.0 s.
+     - `CheckResurrection` reads IsDead as it goes, so a chain of bodies near each other can be raised in turn. It raises the members in range even when it answers FALSE overall.
+  - Also, from the check (lib-agent-2, 2026-10-25) [C]: `rules_core.nss`:627–631 wraps the ATTACKED trigger in `!IsStealthy`, and the ability impact's handler (around :600) also triggers perception both ways. For a creature not in the party, `combat_h.nss`:1341 also signals COMBAT_END. `IsNoExploreArea` is true only for the tag `cli220ar_fort_roof_1`.
+  5. GAMEMODE_CHANGE (`module_core.nss`:246) sets `SetCombatStateParty(new == GM_COMBAT)` on the whole party, the dead included.
+- **So combat does not end while a fallen companion lies 7.5 m or more from every living member** [C for the scripts; seen in Paragon's tower run, not in vanilla]. The party stays in GM_COMBAT until someone walks near the body.
 
 **Scripts that queue a sheathe themselves:** only `placeable_h.nss`:676 (`CommandWait(2.0)` then `CommandSheatheWeapons()` for the killer of a placeable in explore) and `proving_core.nss`:221 (on leaving the Proving). No script calls `CommandUnsheatheWeapons`, and no AI script draws.
 
