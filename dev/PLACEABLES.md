@@ -262,7 +262,31 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
   - In `CCPlaceable::SetLocation` (slot 62, +0xF8, 0x00750B10; the override of `CCObject::SetLocation` 0x00696F90, which it calls at 0x00750C96; corrected 2026-10-24 by lib-agent-2: "the area's add, slot 63" was Ghidra's count from 1, and the function is SetLocation, not an add), a placeable with a blocking state and two different `RoomID`s is registered as a door between those rooms (0x0068C190).
   - **SetLocation stamps the current state's patch** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
     - After the placement call (0x00696F90, which sets the position through 0x00695540 and calls 0x0068BF90), SetLocation asks whether the placeable is active (its +0x70 interface's slot 0x6C, GetObjectActive). If it is, it calls 0x0074DBA0(word +0x658, 0), which stamps the patch of the current state (+0x690[state]) into the area's grid through 0x00A46CC0. It then recomputes the room (`CCObject::UpdateRoom` 0x00695D70).
-    - So every SetLocation of an active placeable stamps its current state's patch, and the door registration (0x0068C190) also runs there. That it runs whenever a placeable is put somewhere, into an area at load among them, is [I]: SetLocation's callers were not listed. An inactive one stamps nothing until it is changed.
+    - So every SetLocation of an active placeable stamps its current state's patch, and the door registration (0x0068C190) also runs there. That it runs whenever a placeable is put somewhere, into an area at load among them, is [I]: SetLocation's callers were not listed. An inactive one stamps nothing until it is changed. (corrected 2026-10-25 by lib-agent-2: for a placeable that is not a door the stamp is skipped here until model-ready sets +0x6D8, and for good without a physics object; the next bullet.)
+    - **The mask is set at model-ready** (CCPlaceable slot 66, 0x0074F7A0; read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]. The stamp's tests are in "0x0074DBA0 does nothing" below; the one that matters here is bit 0 (Items) of +0x6D8 with +0x638 ≠ 1:
+      - It reads the `placeable_types` row's `EnableCollisionEvent` (column hash 0xE19F98B1).
+      - **When:** the read succeeds, and EnableCollisionEvent is non-zero or +0x6D8 is still −1, and the model has a physics object (`[[+0x70 slot 0x60]+0x18]+4` − 8, its +0x1BC).
+      - With EnableCollisionEvent non-zero it calls the physics object's slot 0x5C(0.2) (not followed).
+      - Then, only while +0x6D8 is −1, it sets +0x6D8 to the physics object's slot 0x50 (the OR of the shapes' bits0) and stamps the current state's patch, `0x0074DBA0(+0x658, 0)` (0x0074F867), with no active test.
+    - **So until model-ready, and for good without a physics object, a placeable that is not a door is never on the grid.** +0x6D8 starts at −1, whose bit 0 is set, so every earlier stamp (SetLocation, SetPlaceableState) is skipped.
+      - A door is stamped either way.
+      - A model whose shapes include the Items flag never stamps.
+      - A `.phy` whose shapes carry no mask gives 0 and stamps [I: that such a model still makes a physics object].
+    - **Example, Jarvia's hideout** (`orz230ar_gangsters_hideout`) [paragon-agent-2's reading of the files]:
+      - The tripwires (`genip_tripwire`, appearance 45, `plc_wiretr_0.phy`: two posts at 0x81000004) and their oil barrels (`PLC_BarrelOil01_0`, 0x81000004) have no Items bit, so they stamp.
+      - The tripwire's patch (`plc_wiretr_0_45.pwk`, 26 × 1 cells of 1/6 m) is kind 8 only at the posts, with kind 1 between, so the wire itself is walkable.
+    - **The rows that never stamp** [S, paragon-agent-2's survey of `placeable_types`: every row with a `.pwk` has a `.phy`]: 24 rows that are not doors have a shape with the Items flag, so they never go on the grid:
+      - 38, the blade trap;
+      - 44, 188 and 376, corpse knight;
+      - 139 and 520, coin bag;
+      - 142, a wild flower;
+      - 145, the trash pile;
+      - 175–177, bone piles;
+      - 181–183, 191 and 192, corpses;
+      - 245, the large anvil;
+      - 256 and 262–264, herbalism plants;
+      - 372 and 373, slum bridges;
+      - 474, invisible small item.
     - **Slot 63** (+0xFC, 0x00750A60, ID 17922) is the other way: it takes the current state's patch out (0x0074DBA0(+0x658, state, 1)) before its CCObject base 0x00697060 (ID 14143), which calls 0x0068B050 ("A placeable destroyed takes its current state's walk patch out" below). That 0x00697060 takes the object out of its area is [I].
     - The placeable keeps no copy of the grid itself: what the grid holds is the stamp, and a later state change or removal takes it out again (above).
   - **Example, from paragon-agent-2's reading of the files** (not re-read here): the Gauntlet's `urn230` doors (BaseType 1, Closed_Locked) have a `.pwk` whose state 0 patch is kind 7 and whose states 1–5 are kind 8.
@@ -299,7 +323,7 @@ Read 2026-10-18 in the GOG exe, the game's files and the scripts by lib-agent-2 
   - **Event 0xB** (0x00698B41): when the byte +0x2BC is non-zero it calls slot +0xFC, then the deleting destructor (slot 0 with 1); when it is 0, nothing. Where +0x2BC is set was not read.
   - **`CCPlaceable`'s slot +0xFC** (0x00750A60) calls 0x0074DBA0(word +0x658, the current state, remove 1) at 0x00750AB9. It then calls 0x0067FB70(area, id) and goes on to `CCObject`'s 0x00697060. The destructor (0x007515B0) has no stamp work of its own.
   - **0x0074DBA0 does nothing** when the state is at or past the patch count (+0x694), or the patch pointer (+0x690[state]) is null, or bit 0 of +0x6D8 is set and the byte +0x638 is not 1, or health (+0x66C) is ≤ 0 and 0x0074D1B0 returns true [C for the tests; I that the last is a dead state without a patch].
-  - **Its other callers** (a scan of `.text` for calls to it): remove in `SetHealth` at ≤ 0 (0x0074E921), in `SetActive` (0x0074F21E, 0x0074F234), in `SetPlaceableState` the old state out and the new in (0x0074FB27, 0x0074FB4E), stamp in on adding to an area (0x00750CB6); 0x0074F867 in slot +0x104 (0x0074F7A0) not read.
+  - **Its other callers** (a scan of `.text` for calls to it): remove in `SetHealth` at ≤ 0 (0x0074E921), in `SetActive` (0x0074F21E, 0x0074F234), in `SetPlaceableState` the old state out and the new in (0x0074FB27, 0x0074FB4E), stamp in on adding to an area (0x00750CB6); 0x0074F867 in slot +0x104 (0x0074F7A0) is the model-ready stamp (read 2026-10-25, the SetLocation bullet above; corrected 2026-10-25 by lib-agent-2: "not read").
   - **The mage origin's bricked doorway**: `bhm000pt_tranquility.nss`, `case CANNON_FIRED`, finds `bhm700ip_brick_wall` and calls `WR_DestroyObject` (`DestroyObject(obj, 0)`), with no state set and no `SetObjectActive`. Its appearance is 50, "Doorway, Bricked" (`plc_bdoor01_0`, `StateCnt_Door_Secret`, `GeneratePathInfo` 1). So in vanilla its cells open through the destroy's slot +0xFC, unless a guard above holds [I for this wall's patches and +0x2BC].
 - **SetActive(false) does hide** (`CCObject` +0x13C, 0x0069A950, for creatures and placeables alike):
   - **In explore or combat**, it sets the visibility target (+0x18D, 0x00695C00), and 0x00695A90 fades the alpha (+0x190) at 1/500 a millisecond (0x00B03AA8), so 0.5 s. At 0 it unregisters the object (0x00649C30; the flag tested is +0x431, 0x0069AA2D, 0x00695B52) and calls slot +0x108. The model's alpha is +0x198 × +0x190 (0x00695080).

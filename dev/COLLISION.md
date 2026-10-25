@@ -127,7 +127,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
     - Whether the pick takes the door, rather than passing over it to what lies behind, is decided by its placeable slots: rooms in view, interactive, and +0x6CC (GUI.md, "The cursor's pick").
   - An area exit of BaseType 1 (appearance 159, "Area Transition, Invisible, Wide", `PLC_invisowide_01_0`: one box at z 1.7, Placeables and Nonwalkable, 0x81000004) is a door to this code. Blocking or not, its box stays in the cursor's mask.
 - Every other placeable keeps its `.phy` mask in every state, so a crate or statue always blocks sight.
-- Side note: the walk-patch stamp `0x0074DBA0` skips placeables whose +0x6D8 has bit 0x1, unless +0x638 == 1.
+- Side note: the walk-patch stamp `0x0074DBA0` skips placeables whose +0x6D8 has bit 0x1, unless +0x638 == 1. +0x6D8 is −1 until model-ready, and stays −1 without a physics object, so such a placeable is skipped too (PLACEABLES.md, the stamp's tests) [C, 2026-10-25, lib-agent-2].
 
 ## 3. Rooms: the walk grid's byte is not the room (checked)
 
