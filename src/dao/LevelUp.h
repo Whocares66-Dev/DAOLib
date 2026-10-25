@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dao::levelup
@@ -52,6 +53,11 @@ std::vector<Offer> Offers(ObjectId creature, Kind kind);
 // the engine's availability test passes, else Locked. Whether it has a point for one is PointsOf's.
 // @return none for an object that is no creature
 std::vector<Offer> Specializations(ObjectId creature);
+
+// Returns a specialization's name as the screen shows it ("Bard"), its class's in Classes: the
+// ability's own name in the abilities' table is a hidden one ("HIDDEN_BARD").
+// @return empty for an ability that is no specialization
+std::wstring SpecializationName(std::int32_t ability);
 
 // A creature's points to spend.
 struct Points

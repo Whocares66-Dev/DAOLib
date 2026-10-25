@@ -39,6 +39,8 @@
 // the main campaign at level 16, the same four, Ranger had; and in Awakening (Vigil's Keep, the
 // hero a rogue), six, Awakening's Legionnaire Scout (401004) and Shadow (401005) after the four, as
 // the screen listed them.
+// SpecializationName, the same day: Assassin, Bard, Ranger and Duelist for both rogues, where
+// abilities::Name gives the abilities' table's HIDDEN_ASSASSIN and the like (eluvian-agent's find).
 #include "dao/LevelUp.h"
 
 #include "dao/Addresses.h"
@@ -47,6 +49,7 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
+#include "dao/Tlk.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <array>
@@ -170,29 +173,37 @@ struct Specialization
     std::int32_t ability = 0;
 };
 
-// The specializations the screen offers the creature's class, in its order: the rows of Classes,
-// by their index, for players (PlayerClass 1) whose BaseClass is the creature's base class (its
-// class's own BaseClass, or the class itself where that is 0), each with its StartingAbility1
-// (ClassSpecializationScene.GrabSpecializations, levelup.gfx). An add-in's rows are among them.
-std::vector<Specialization> SpecializationsOf(const CCCreature &creature)
+// The specializations of a base class (0 for every one), in the screen's order: the rows of
+// Classes, by their index, for players (PlayerClass 1) with that BaseClass, each with its
+// StartingAbility1 (ClassSpecializationScene.GrabSpecializations, levelup.gfx). An add-in's rows
+// are among them.
+std::vector<Specialization> SpecializationsOfClass(std::int32_t base)
 {
     using script::Table;
     const auto table = static_cast<std::int32_t>(Table::RulesClasses);
-    const auto own = static_cast<std::int32_t>(creature.Property(kClass).value_or(0));
-    const std::int32_t parent = gda::GetInt(Table::RulesClasses, own, "BaseClass").value_or(0);
-    const std::int32_t base = parent != 0 ? parent : own;
     std::vector<Specialization> found;
     const std::int32_t rows = api::GetM2DARows(table);
     for (std::int32_t index = 0; index < rows; ++index)
     {
         const std::int32_t row = api::GetM2DARowIdFromRowIndex(table, index);
-        if (gda::GetInt(Table::RulesClasses, row, "PlayerClass").value_or(0) == 1 &&
-            gda::GetInt(Table::RulesClasses, row, "BaseClass").value_or(0) == base)
+        const std::int32_t parent = gda::GetInt(Table::RulesClasses, row, "BaseClass").value_or(0);
+        if (gda::GetInt(Table::RulesClasses, row, "PlayerClass").value_or(0) == 1 && parent != 0 &&
+            (base == 0 || parent == base))
         {
             found.push_back({row, gda::GetInt(Table::RulesClasses, row, "StartingAbility1").value_or(0)});
         }
     }
     return found;
+}
+
+// The specializations the screen offers the creature's class: those of its base class (its
+// class's own BaseClass, or the class itself where that is 0).
+std::vector<Specialization> SpecializationsOf(const CCCreature &creature)
+{
+    const auto own = static_cast<std::int32_t>(creature.Property(kClass).value_or(0));
+    const std::int32_t parent = gda::GetInt(script::Table::RulesClasses, own, "BaseClass").value_or(0);
+    const std::int32_t base = parent != 0 ? parent : own;
+    return base != 0 ? SpecializationsOfClass(base) : std::vector<Specialization>{};
 }
 
 // The class a specialization's ability makes the creature, if the screen offers it.
@@ -278,6 +289,19 @@ std::vector<Offer> Specializations(ObjectId creature)
         offers.push_back({offered.ability, state});
     }
     return offers;
+}
+
+std::wstring SpecializationName(std::int32_t ability)
+{
+    for (const Specialization &offered : SpecializationsOfClass(0))
+    {
+        if (offered.ability == ability)
+        {
+            const auto strref = gda::GetInt(script::Table::RulesClasses, offered.row, "NameStrRef");
+            return strref ? tlk::String(static_cast<std::uint32_t>(*strref)) : std::wstring();
+        }
+    }
+    return {};
 }
 
 std::optional<Points> PointsOf(ObjectId creature)

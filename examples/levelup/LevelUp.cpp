@@ -55,7 +55,13 @@ void Log()
     spdlog::info("  talents: {}", Listed(levelup::Offers(who, levelup::Kind::Talents)));
     spdlog::info("  spells: {}", Listed(levelup::Offers(who, levelup::Kind::Spells)));
     spdlog::info("  skills: {}", Listed(levelup::Offers(who, levelup::Kind::Skills)));
-    spdlog::info("  specializations: {}", Listed(levelup::Specializations(who)));
+    const auto specializations = levelup::Specializations(who);
+    std::string named;
+    for (const levelup::Offer &offer : specializations)
+    {
+        named += fmt::format(" {}", dao::Utf8(levelup::SpecializationName(offer.ability)));
+    }
+    spdlog::info("  specializations: {};{}", Listed(specializations), named);
 }
 
 } // namespace
