@@ -367,6 +367,21 @@ DAO_ADDRESS(kCCItem_IgnoresRequirements, 18012)
 DAO_ADDRESS(kCCItem_GetRequirementCount, 17983)
 DAO_ADDRESS(kCCItem_GetRequirement, 18004)
 DAO_ADDRESS(kCCCreature_MeetsItemRequirement, 14705)
+// A follower's tactics (dao/Tactics.h), each cdecl: PartyTactics::Of (creature id) and EntryOf
+// (creature id, row from 0), null for none; and the screen's lists, each filling the engine's
+// std::vector<unsigned> and answering a bool: ListTargets (creature, types, objects),
+// ListBaseConditions (target, bases), ListConditions (base, target, conditions, objects),
+// ListCommands and ListAbilities (creature, target, base, out), ListModalAbilities (creature,
+// out), ListItems (target, out). Read 2026-10-25 (DAOLib #259).
+DAO_ADDRESS(kPartyTactics_Of, 19942)
+DAO_ADDRESS(kPartyTactics_EntryOf, 19956)
+DAO_ADDRESS(kPartyTactics_ListTargets, 20010)
+DAO_ADDRESS(kPartyTactics_ListBaseConditions, 19983)
+DAO_ADDRESS(kPartyTactics_ListConditions, 19973)
+DAO_ADDRESS(kPartyTactics_ListCommands, 19993)
+DAO_ADDRESS(kPartyTactics_ListAbilities, 19974)
+DAO_ADDRESS(kPartyTactics_ListModalAbilities, 19975)
+DAO_ADDRESS(kPartyTactics_ListItems, 19984)
 // And its test of a recipe known, as Inventory::CraftRecipe makes it (0x0073FE45 to 0x0073FE6B):
 // the id wrapped by the int attribute's constructor, __thiscall (const int*), `ret 4`; Contains,
 // __thiscall on the vector (the inventory's +0x38 attribute's value) with the wrapped id, `ret 4`,

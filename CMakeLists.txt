@@ -323,6 +323,7 @@ add_library(
     src/dao/Store.cpp
     src/dao/Crafting.cpp
     src/dao/Items.cpp
+    src/dao/Tactics.cpp
     src/dao/Frame.cpp
     src/dao/Camera.cpp
     src/dao/Clock.cpp
