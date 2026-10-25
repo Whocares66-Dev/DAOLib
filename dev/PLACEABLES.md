@@ -140,6 +140,19 @@ The animation's name (`anim_placeables.AnimName`) is played from the type's `Ble
 
 The door's closed patches are 7 (unlocked) and 8 (locked); open is a turned strip of 8s. Inferred: 8 blocks, 7 is a shut door the pathfinder may plan through.
 
+**Example, the Circle tower's level 2** (`cir210ar_tower_level_2`, layout lak504d; read 2026-10-25 by paragon-agent-2, checked by lib-agent-2 in the scripts and the files; the walks are paragon-agent-2's in vanilla through Eluvian) [C unless marked]:
+- **The Metal Door** `genip_door_tev_lrg_r` at (−19.88, 6.2), between rooms 139 (the hall) and 3298 (the stairs), has InitialState 1 (locked) and Useable 0. Its `.pwk` (`plc_lrgrfrcdrr_01_0_93.pwk`) has six patches:
+  - 0: a 17 × 2 strip of kind 7 (shut);
+  - 1: the same strip of kind 8 (locked);
+  - 2: a 2 × 17 strip of kind 8 elsewhere (open);
+  - 3–5: mixed cells of kinds 1 and 8.
+  - So the locked door's kind 8 strip keeps every walker out.
+- **The two barriers** `cir210ip_blood_mage_barrier` (template `cir210ip_barrier`, appearance 233, team 134, Active 1, at (25.08, 0.05) and (26.34, 0.05)) close the other way round, through room 3297.
+- **What drops the barriers:** `cir210ar_tower_level_2.nss`:111–130, on TEAM_DESTROYED (1019) for team 22 (the blood mages), **only while plot flag 11 (`BLOOD_MAGE_1_KILLED` of `plt_cir000pt_main`) is FALSE**; it does not set the flag, and with the flag already TRUE nothing drops the barriers there.
+  - It resurrects blood_mage_02 (`EffectResurrection`), starts its conversation (`UT_Talk`), and calls `UT_TeamAppears(134, FALSE, OBJECT_TYPE_PLACEABLE)` (`utility_h.nss`:1672), which sets each barrier inactive (`WR_SetObjectActive`). That takes its patch out (SetActive, PARTY.md).
+  - TEAM_DESTROYED goes to the area: `creature_core.nss` (about :328–340) takes the dying creature out of its team (`SetTeamId(self, −1)`), and when `GetTeam` then has none left calls `SendEventTeamDestroyed(GetArea(OBJECT_SELF), team)` (`events_h.nss` about :989): `Event(1019)` with int 0 the team.
+- **In vanilla** a direct move from the hall to the stairs fails (COMMAND_FAILED_INVALID_PATH, beside the locked door). The way round through 3297, 3432 and the open door at (−21.88, 20.64) reaches them [paragon-agent-2's play].
+
 ### (e) Containers and the loot panel
 
 - **Opening.** `statecnt_container` (and `statecnt_bodybag`, `gen_ip_bodybag` being Appearance 16) row 0 offers only OPEN_INVENTORY (11), with Success -1. The panel is the script's: USE with action 11 → OPENED → `OpenInventory(self, user)`.

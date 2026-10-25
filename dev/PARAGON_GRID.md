@@ -13,7 +13,7 @@ A note from `C:\project\DAOParagonEngine` (paragon-agent, 2026-10-17), for DAOLi
 | 3086 | AreaGridNbColumns | int | columns (x) |
 | 3087 | AreaGridNbRows | int | rows (y) |
 | 3088 | AreaGridCellSize | float | metres a cell, 0.5 in lak303d and den000d |
-| 3089 | AreaGridClearance | float | 2.1 in both; how it is used not read |
+| 3089 | AreaGridClearance | float | 2.1 in both; the most a WalkLine segment may climb (0x0067C950 → 0x00A46830; PATHFINDING.md, section 1); 0 when absent (2026-10-25, lib-agent-2) [C] |
 | 3090 | AreaGridBasePos | vector | the corner of cell (row 0, column 0) in the level's space; its z (9.83 in lak303d) is not the floor's |
 | 3091 | AreaGridNormal | vector | (0, 0, 1) |
 | 3092 | AreaGridData | uint8 list | one byte a cell, row by row: cell (row, column) is at row * columns + column |
@@ -41,7 +41,7 @@ The loader is 0x00A48B..: it takes each field by label (`push 0xC14` at 0x00A48B
 
 - The abstraction: 952 sectors for lak303d's 218 x 213 cells at a sector size of 8 (28 x 27 is 756, so a sector is not simply an 8 x 8 block, or there are more than one per block); each sector's `AreaGridLinks` is an offset into `AreaGridAbstractMemory` (values seen: 0, 4, 25, 3320, 3364, 4252 = its end). This is the hierarchical A*'s coarse graph (MapAbstractionSearchEnvironment).
 - The three arrays at +0x44 to +0x4C (room ids, links, and one more).
-- What AreaGridClearance and the base's z are for.
+- What the base's z is for.
 
 ## What Paragon would call
 

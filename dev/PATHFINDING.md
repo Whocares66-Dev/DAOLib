@@ -11,7 +11,7 @@ Addresses GOG. "checked" = read in disassembly or data; "inferred" = reasoned fr
 ### Short answers
 
 1. **A blocked start is neither snapped by the pathfinder nor refused outright.** RequestPath (0x0073EA80) tests `MovementController::IsFree(start)`. If not free it first tries a randomised fan search within 5.0 m toward the goal (0x0073DF70); if that fails it takes `CCArea::NearestFree` (0x0073E7F0) with reach 5.0 and, if that finds a place, moves the creature there (SetPosition 0x00695540). If neither finds anything the start stays where it is and the search runs from the blocked cell (checked). A goal that is not free gets `NearestFree` with reach 2.0 back toward the start (the result is ignored: if none is found the goal stays) (checked).
-2. **From a blocked start cell the search then fails**: the straight-walk test fails on a blocked centre cell, and the coarse level gives "no region" for a cell of kind >= 9 (code 8, "no mesh"; inferred for the multi-region block case, see below). But RequestPath has a last fallback that rescues the wolves' case: if the search answered anything but {1,2,3,4,6,7} and |start z - goal z| < 0.5, it asks the physics walk test (0x00685920, the mover's radius) for a straight line; if clear the straight line is the path, answer 1; otherwise answer 5 (checked).
+2. **From a blocked start cell the search then fails**: the straight-walk test fails on a blocked centre cell, and the coarse level gives "no region" for a cell of kind >= 9 (code 8, "no mesh"; inferred for the multi-region block case, see below). But RequestPath has a last fallback that rescues the wolves' case: if the search answered anything but {1,2,3,4,6,7} and |start z - goal z| ≤ 0.5 (0x0073EEA2–0x0073EEAD: skipped only above 0.5 or NaN; corrected 2026-10-25 by lib-agent-2), it asks the physics walk test (0x00685920, the mover's radius) for a straight line; if clear the straight line is the path, answer 1; otherwise answer 5 (checked).
 3. **The walkable predicate is not one comparison.** IsFree (the end test): a cell blocks if kind >= 8 or kind == 7 (so kinds 0-6 free; stamps 5/6 never block with RequestPath's flags), and even then only if its centre is within max(r, one cell) of the point. Straight walk: kind >= 7 blocks (and stamps of the mover's own class). Coarse level: kinds 0-8 passable, 9+ not. Fine search: step from a cell of kind < 9 to a cell of kind < 8, kinds 5/6/7 only cost extra.
 4. **The Wilds cell**: (927.14, 977.53) is in ost100d.arl (the Wilds; the cell's stored height -29/16 = -1.8125 m matches the wolves' z -1.81). Its cell is row 676, column 320, **kind 9** (byte 0x09, counters 0), the edge of a band of 9s one row above a row of 1s. Vanilla's own grid calls it blocked, and `IsFree` there answers not free (cell centre (927.33, 977.44) is 0.21 m from the point).
 
@@ -47,12 +47,35 @@ if ctl.Direct(0,0):                                      // 0x00A626F0 -> world 
 else:
     r = ctl.Step(timeslice)                              // 0x00A62640 -> 0x00A473F0 -> 0x00A467A0 -> env request 0x00A4E1B0
     if r in {1,2,3,4,6,7}: pass through
-    else if |start.z - goal.z| < 0.5 (0x00B1B7B4):
+    else if |start.z - goal.z| <= 0.5 (0x00B1B7B4; 0x0073EEA2–0x0073EEAD: skipped only above 0.5 or NaN; corrected 2026-10-25 by lib-agent-2):
         if area.WalkLine(start, goal, radius=ctl.params+4, ...) == 1:   // 0x00685920, physics (CWalkHitInfo)
             straight path, answer 1
         else answer 5
 creature.PlaceObstacle() and PlaceObstacle(target)       // 0x006A3BC0, put the stamps back, whatever the answer
 ```
+
+The fallback (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
+- **`CCArea::WalkLine`** (0x00685920; `this` the area; from, to, &r, lift, hit info):
+  - **The call:** RequestPath (0x0073EEFF) passes r = the stamp radius (`[ctl+0x10]+4`), lift = 0.5 (0x00B1B7B4, as a float), and a `CWalkHitInfo` (constructor 0x006A43F0).
+  - **The three lines:** d is the xy direction from → to, normalised. o = r × (−d.y, d.x, 0) / 2 (0x004D47E0). WalkLine walks three parallel lines: from → to, from + o → to + o, and from − o → to − o. It returns the first that fails (−1), else 1. The side lines are r / 2 from the centre.
+  - **On 1:** 0x00A62F30, SetStart, SetGoal, and the two points (0x00A62B90 each), and the answer is 1. Otherwise the answer is 5.
+- **A line** (0x00685790), one cast:
+  - **The start** is from with z + lift.
+  - **The end** is the ground height under to + 2 × lift (`GroundHeight` 0x00685430), or to.z where none is found, plus lift.
+  - **The climb limit:** when the end is higher than the start by more than the clearance (0x0067C950), the end's z is clamped to start + clearance. Both compares are strict.
+  - **The cast** `0x006851D0(start, end)` then decides. Its done test (1e-6, 0x00AE09B0) always holds after one pass, so the loop never repeats.
+- **The cast** (0x006851D0):
+  - With no physics world (area +0x62C) or no scene, it answers 1.
+  - Otherwise it calls the scene's slot 6, `Physics::PhysicsScene::RaycastAllSegment` (0x0082E420, ID 22522; vtable 0x00B272D4 +0x18), with mask 0x24.
+  - The report callback (0x00828400) keeps a shape only when its mask AND 0x24 is non-zero (Placeables, StaticGeometry), as the eye ray's filter does (COLLISION.md section 1). The second test, AND 0, excludes nothing.
+  - **Any hit answers 0.** The first record (0x005CFC70(0)) fills the hit info: point, normal, flags 1|2|4|8, +0x40 = +0x44 = 1.
+  - **No hit answers 1.**
+- **The clearance** (0x0067C950, `ret 4`, its argument unused → 0x00A46830):
+  - It is 1.0 when the world has no grid for the area, or the grid has no columns or rows.
+  - Otherwise it is the grid's +0x34, **AreaGridClearance** (GFF 3089). The grid's load (0x00A48900, 0x00A48A90–0x00A48AC9) reads it there, with 0 when the field is absent; the constructor (0x00A48F00) first sets 1.0.
+  - So a grid file without 3089 has clearance 0, and every rise is clamped flat.
+  - The same load reads the cell size into +0x30, clamped to at least 0.01, and 3120 (`AreaGridCellPadding`) into +0x38, by default half the cell.
+- **So the fallback** lets a move whose search fails go in a straight line when the ends differ by 0.5 m or less in height. Three parallel lines of the walker's width must meet no static geometry and no placeable shape, climbing at most the grid's clearance (2.1 in the files seen).
 
 Notes:
 - IsFree radius: `ctl.params[+4] * 0.5` (0x00A62A90). The world's version is 0x00A46FC0 (below).
@@ -492,7 +515,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - GetSafeLocation's ring walk order past the first two sides (NearestFree's lateral row is read, 2026-10-22).
 - The meaning of controller byte +8, and 0x00A62F30 / 0x00A62B90 (what the found-path finish does).
 - Where the environment's wide flag (env +4) is set; 0x00A49CC0's array layout (taken as region count); 0x00C4C0C0's value (a runtime sanity limit in IsFree).
-- 0x00685920's body past the first calls (the physics walk test); 0x0073D780; 0x0067CFA0.
+- 0x0073D780; 0x0067CFA0.
 - Which creatures have `+0xC90 != 0` (the class byte) and what states `+0xB20` 1 and 2 are.
 - That ost100d is the area the wolves were in (it fits the coordinates, grid extent and the height, not confirmed by area name).
 
@@ -569,7 +592,7 @@ When nothing is found: the loop exits at 0x73E74C -> `xor eax,eax; ret 0x20` wit
 
 #### IsLocationSafe 0x0073DE70 `(pos, mc, creatureCheck)`
 
-1. `mc->IsFree(pos, areaNo, 0, 0)` (0x00A62A90): forwards to the grid, `GridIsFree(pos, areaNo, r = personalSpace*0.5, includeStamp6 = 0, crowdCheck = 0)` = 0x00A46FC0 (checked). Its rule: the cells overlapping the box pos +- r (cell indices of the box's corners). For each cell with kind >= 8 or == 7 (6 too if includeStamp6; or a crowd count > 0 if crowdCheck; kind 9 is also what an off-grid cell reads as): the spot is blocked if that cell's centre is within r of pos (xy, 0x004EB010), or within one cell size (`grid+0x30`) of pos. A non-finite position (NaN/inf against the +inf at 0xC4C0C0) or an empty index range answers free. The cell's height is NOT used. Kinds 0-6 are free, including a creature's stamp (5, 6). (checked, except exactly how the box indices clamp)
+1. `mc->IsFree(pos, areaNo, 0, 0)` (0x00A62A90): forwards to the grid, `GridIsFree(pos, areaNo, r = the stamp radius × 0.5 (`[ctl+0x10]+4` = max(0.6 × PersonalSpace, 0.1), section 12; the double 0x00AE70F8 at 0x00A62AB7) (corrected 2026-10-25 by lib-agent-2), includeStamp6 = 0, crowdCheck = 0)` = 0x00A46FC0 (checked). Its rule: the cells overlapping the box pos +- r (cell indices of the box's corners). For each cell with kind >= 8 or == 7 (6 too if includeStamp6; or a crowd count > 0 if crowdCheck; kind 9 is also what an off-grid cell reads as): the spot is blocked if that cell's centre is within r of pos (xy, 0x004EB010), or within one cell size (`grid+0x30`) of pos. A non-finite position (NaN/inf against the +inf at 0xC4C0C0) or an empty index range answers free. The cell's height is NOT used. Kinds 0-6 are free, including a creature's stamp (5, 6). (checked, except exactly how the box indices clamp)
 2. **One diagonal ray** (read 2026-10-22 by lib-agent-2, for DAOParagonEngine #144; this said "from one point to another ... not decoded") [C 0x0073DEA1..0x0073DF06]:
    - s = `[[mc+0x10]+4]`, the movement params' +4 (max(0.6 × PerSpace, 0.1), :249, :306). The call is `0x0067CFA0(from = pos + (−s, −s, 0), to = pos + (+s, +s, 2s), mc, 0)`: one ray across the footprint's diagonal, rising 2s.
    - `0x0067CFA0` lifts both ends by 0.500001 (the double 0xB0DAA0) and casts the scene's `RaycastClosestSegment` (slot 4) with mask **0x2011134** for flag 0, or 0x2011124 for any other flag (0x0067CFF0..0x0067D03A). IsLocationSafe passes 0 itself (0x0073DEAE).

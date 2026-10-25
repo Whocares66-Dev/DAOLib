@@ -130,7 +130,7 @@ struct Grid
     std::int32_t columns = 0;
     std::int32_t rows = 0;
     float cellSize = 0;  // metres
-    float clearance = 0; // as written; its use not read
+    float clearance = 0; // the most a WalkLine segment may climb; dev/PATHFINDING.md
     float padding = 0;   // a cell's point from its corner, across and up
     Point base{};        // cell (0, 0)'s corner in the level's space; its z is not the floor's
     Point normal{};
