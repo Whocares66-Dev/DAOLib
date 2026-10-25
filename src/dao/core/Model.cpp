@@ -234,6 +234,111 @@ void TransformOf(const gff4::Struct &from, Node &node)
     }
 }
 
+// A float field the file may keep as a whole number.
+float Real(const gff4::Struct &from, std::uint32_t label)
+{
+    if (const auto value = from.Get<float>(label))
+    {
+        return *value;
+    }
+    return static_cast<float>(Number(from, label).value_or(0));
+}
+
+bool Flag(const gff4::Struct &from, std::uint32_t label)
+{
+    return Number(from, label).value_or(0) != 0;
+}
+
+std::optional<std::array<float, 3>> Triple(const gff4::Struct &from, std::uint32_t label)
+{
+    const std::vector<float> values = from.Floats(label);
+    if (values.size() < 3 || !std::isfinite(values[0]) || !std::isfinite(values[1]) || !std::isfinite(values[2]))
+    {
+        return std::nullopt;
+    }
+    return std::array<float, 3>{values[0], values[1], values[2]};
+}
+
+// A mesh group of a cloth: a chunk with its own vertex and index bytes. One whose counts are the
+// file's null (0xFFFFFFFF), as an unused MMHClothMeshGroupStruct is, is none.
+std::optional<Chunk> RestOf(const gff4::Struct &group)
+{
+    if (group.Label() != "msgr" || U32(group, kChunkVertexCount) == 0xFFFFFFFF || U32(group, kChunkVertexCount) == 0)
+    {
+        return std::nullopt;
+    }
+    return ChunkOf(group, group.ListBytes(kMeshVertices, gff4::Type::U8),
+                   group.ListBytes(kMeshIndices, gff4::Type::U8));
+}
+
+// Read 2026-10-24 (DAOLib #261, asked by paragon-agent for DAOParagonEngine #265) in
+// prp_bannerred_04_0.mmh: the node's MMHClothMeshGroupStruct has every field at its null, and its
+// mesh at rest is an msgr among its children, with a .msh chunk's fields and its own
+// MeshVertexData and MeshIndexData (16 vertices of 72 bytes, 42 32-bit indices). The group field is
+// taken where the children have none.
+Cloth ClothOf(const gff4::Struct &from)
+{
+    Cloth cloth;
+    cloth.material = from.String(kMaterialObject).value_or(L"");
+    cloth.part = from.String(kNodeId).value_or(L"");
+    std::array<float *, 11> reals{&cloth.thickness,
+                                  &cloth.density,
+                                  &cloth.bendingStiffness,
+                                  &cloth.stretchingStiffness,
+                                  &cloth.dampingCoefficient,
+                                  &cloth.friction,
+                                  &cloth.pressure,
+                                  &cloth.tearFactor,
+                                  &cloth.collisionResponseCoefficient,
+                                  &cloth.attachmentResponseCoefficient,
+                                  &cloth.attachmentTearFactor};
+    for (std::size_t i = 0; i < reals.size(); ++i)
+    {
+        *reals[i] = Real(from, kClothThickness + static_cast<std::uint32_t>(i));
+    }
+    cloth.solverIterations = U32(from, kClothSolverIterations);
+    cloth.externalAcceleration = Triple(from, kClothExternalAcceleration).value_or(std::array<float, 3>{});
+    cloth.wakeUpCounter = Real(from, kClothWakeUpCounter);
+    cloth.sleepLinearVelocity = Real(from, kClothSleepLinearVelocity);
+    std::array<bool *, kClothFlagLast - kClothFlagFirst + 1> flags{
+        &cloth.flags.pressure,        &cloth.flags.isStatic,          &cloth.flags.disableCollision,
+        &cloth.flags.selfCollision,   &cloth.flags.visualization,     &cloth.flags.gravity,
+        &cloth.flags.bending,         &cloth.flags.bendingOrtho,      &cloth.flags.damping,
+        &cloth.flags.collisionTwoWay, &cloth.flags.triangleCollision, &cloth.flags.tearable,
+        &cloth.flags.hardware,        &cloth.flags.comDamping};
+    for (std::size_t i = 0; i < flags.size(); ++i)
+    {
+        *flags[i] = Flag(from, kClothFlagFirst + static_cast<std::uint32_t>(i));
+    }
+    for (const gff4::Struct &child : from.Structs(kChildren))
+    {
+        if (child.Label() == "catl")
+        {
+            for (const gff4::Struct &held : child.Structs(kChildren))
+            {
+                cloth.attachments.push_back(ClothAttachment{.type = U32(held, kClothAttachmentType),
+                                                            .twoWay = Flag(held, kClothAttachmentTwoWay),
+                                                            .tearable = Flag(held, kClothAttachmentTearable),
+                                                            .shape = held.String(kClothAttachmentShape).value_or(L""),
+                                                            .vertex = U32(held, kClothAttachmentVertex),
+                                                            .localPosition = Triple(held, kClothAttachmentLocalPos)});
+            }
+        }
+        else if (!cloth.rest)
+        {
+            cloth.rest = RestOf(child);
+        }
+    }
+    if (!cloth.rest)
+    {
+        if (const std::optional<gff4::Struct> group = from.Child(kClothMeshGroup))
+        {
+            cloth.rest = RestOf(*group);
+        }
+    }
+    return cloth;
+}
+
 bool IsNode(const gff4::Struct &from)
 {
     return from.Shape().Find(kChildren) != nullptr && from.Shape().Find(kMmhName) != nullptr;
@@ -264,6 +369,10 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
                                  .segmentLength = from.Get<float>(kTrailSegmentLength).value_or(0.0F),
                                  .duration = from.Get<float>(kTrailDuration).value_or(0.0F),
                                  .useVariationTint = Number(from, kUseVariationTint).value_or(0) != 0};
+    }
+    if (node.kind == "nclt")
+    {
+        node.cloth = ClothOf(from);
     }
     if (const auto bone = Number(from, kBoneIndex); bone && *bone >= 0)
     {

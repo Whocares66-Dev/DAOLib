@@ -62,6 +62,22 @@ inline constexpr std::uint32_t kBoundsBoxMin = 8017;
 inline constexpr std::uint32_t kBoundsBoxMax = 8018;
 inline constexpr std::uint32_t kBoundsSphere = 8019;
 inline constexpr std::uint32_t kChunkBounds = 8020;
+// An nclt node's cloth: NxClothDesc's fields, 6195 to 6224 in order, then its attachments' (an att
+// under a catl child) and the msgr child that holds its mesh at rest.
+inline constexpr std::uint32_t kClothThickness = 6195;
+inline constexpr std::uint32_t kClothFlagFirst = 6211; // MMHClothFlagPressure, the flags to 6224
+inline constexpr std::uint32_t kClothFlagLast = 6224;  // MMHClothFlagComdamping
+inline constexpr std::uint32_t kClothSolverIterations = 6206;
+inline constexpr std::uint32_t kClothExternalAcceleration = 6207;
+inline constexpr std::uint32_t kClothWakeUpCounter = 6208;
+inline constexpr std::uint32_t kClothSleepLinearVelocity = 6209;
+inline constexpr std::uint32_t kClothAttachmentType = 6225;
+inline constexpr std::uint32_t kClothAttachmentTwoWay = 6227;
+inline constexpr std::uint32_t kClothAttachmentTearable = 6228;
+inline constexpr std::uint32_t kClothAttachmentShape = 6229;
+inline constexpr std::uint32_t kClothAttachmentVertex = 6230;
+inline constexpr std::uint32_t kClothAttachmentLocalPos = 6231;
+inline constexpr std::uint32_t kClothMeshGroup = 6233;
 
 } // namespace dao::core::model
 

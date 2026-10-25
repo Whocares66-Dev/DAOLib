@@ -195,6 +195,65 @@ struct WeaponTrail
     bool useVariationTint = false; // MMHUseVariationTint
 };
 
+// A cloth's attachment (an att under its catl): what holds the cloth, as PhysX 2.x's attachments.
+struct ClothAttachment
+{
+    std::uint32_t type = 0;                            // MMHClothAttachmentType: 1 in the banners
+    bool twoWay = false;                               // MMHClothAttachmentFlagTwoWayAttachment
+    bool tearable = false;                             // MMHClothAttachmentFlagTearableAttachment
+    std::wstring shape;                                // MMHClothAttachmentShapeName, empty for none
+    std::uint32_t vertex = 0;                          // MMHClothAttachmentVertexID, 0xFFFFFFFF for none
+    std::optional<std::array<float, 3>> localPosition; // MMHClothAttachmentLocalPos, when the file has one
+};
+
+// The flags of PhysX 2.x's NxClothDesc as the file keeps them, one field each.
+struct ClothFlags
+{
+    bool pressure = false;
+    bool isStatic = false;
+    bool disableCollision = false;
+    bool selfCollision = false;
+    bool visualization = false;
+    bool gravity = false;
+    bool bending = false;
+    bool bendingOrtho = false;
+    bool damping = false;
+    bool collisionTwoWay = false;
+    bool triangleCollision = false;
+    bool tearable = false;
+    bool hardware = false;
+    bool comDamping = false;
+};
+
+// A cloth node's cloth (nclt): a banner's or a flag's, simulated by PhysX 2.x in the game. Its
+// parameters are NxClothDesc's, each MMHCloth* field of the node; its mesh at rest is a chunk of
+// its own, read as a .msh chunk is. The cooked stream the game simulates from is not read.
+struct Cloth
+{
+    std::wstring material; // MMHMaterialObject, the .mao with no extension: "Banners"
+    std::wstring part;     // MMHID
+    float thickness = 0;
+    float density = 0;
+    float bendingStiffness = 0;
+    float stretchingStiffness = 0;
+    float dampingCoefficient = 0;
+    float friction = 0;
+    float pressure = 0;
+    float tearFactor = 0;
+    float collisionResponseCoefficient = 0;
+    float attachmentResponseCoefficient = 0;
+    float attachmentTearFactor = 0;
+    std::uint32_t solverIterations = 0;
+    std::array<float, 3> externalAcceleration{};
+    float wakeUpCounter = 0;
+    float sleepLinearVelocity = 0;
+    ClothFlags flags;
+    std::vector<ClothAttachment> attachments;
+    // The cloth at rest, in the node's own frame: its vertices and indices are its own, not the
+    // model's .msh's. nullopt when the node has none whole.
+    std::optional<Chunk> rest;
+};
+
 struct Node
 {
     std::wstring name;
@@ -211,6 +270,8 @@ struct Node
     std::optional<MeshRef> mesh;
     // A wtrl node's weapon trail: the streak a swung weapon or a flying arrow draws behind this node.
     std::optional<WeaponTrail> trail;
+    // An nclt node's cloth: a banner's or a flag's, which has no mesh of the .msh's.
+    std::optional<Cloth> cloth;
     // Its exports, its children of kind xprt: a clip's channel names one of them, not the node
     // ("doorlow_rotation" for the node DoorLow).
     std::vector<Export> exports;

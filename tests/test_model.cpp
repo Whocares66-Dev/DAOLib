@@ -212,6 +212,147 @@ TEST_CASE("a weapon trail's node has its material, its segment's length and its 
     CHECK(node.trail->useVariationTint);
 }
 
+TEST_CASE("a cloth node has its cloth's parameters, attachments and mesh at rest", "[model]")
+{
+    // As prp_bannerred_04_0.mmh has it (DAOLib #261): under GOB, the nclt Plane28, material
+    // Banners, thickness 0.1, five solver iterations, gravity and no collision, one attachment, and
+    // among its children an msgr of its own vertices (a Float4 place, a Float2 texture coordinate)
+    // and 32-bit indices; here three vertices and one triangle.
+    namespace g = dao::core::gff4;
+    const std::uint16_t children = g::kList | g::kReference;
+    dao::test::Builder b = dao::test::Start(
+        "MMH ",
+        {{"mdlh", 16, {{6000, 14, 0, 0}, {6005, 14, 0, 4}, {6256, 4, 0, 8}, {6999, dao::test::kGeneric, children, 12}}},
+         {"node", 12, {{6000, 14, 0, 0}, {6254, 5, 0, 4}, {6999, dao::test::kGeneric, children, 8}}},
+         {"nclt",
+          40,
+          {{6000, 14, 0, 0},
+           {6001, 14, 0, 4},
+           {6004, 14, 0, 8},
+           {6195, 8, 0, 12},
+           {6206, 4, 0, 16},
+           {6207, 10, 0, 20},
+           {6213, 0, 0, 32},
+           {6216, 0, 0, 33},
+           {6999, dao::test::kGeneric, children, 36}}},
+         {"catl", 4, {{6999, dao::test::kGeneric, children, 0}}},
+         {"att", 16, {{6225, 4, 0, 0}, {6227, 0, 0, 4}, {6229, 14, 0, 8}, {6230, 4, 0, 12}}},
+         {"msgr",
+          32,
+          {{8000, 4, 0, 0},
+           {8001, 4, 0, 4},
+           {8002, 4, 0, 8},
+           {8003, 4, 0, 12},
+           {8004, 4, 0, 16},
+           {8022, 0, g::kList, 20},
+           {8023, 0, g::kList, 24},
+           {8025, 6, g::kList | g::kStruct, 28}}},
+         {"vtdl",
+          24,
+          {{8026, 5, 0, 0}, {8027, 5, 0, 4}, {8028, 4, 0, 8}, {8029, 4, 0, 12}, {8030, 4, 0, 16}, {8031, 4, 0, 20}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    const std::size_t gob = dao::test::Struct(b, 12);
+    const std::size_t cloth = dao::test::Struct(b, 40);
+    const std::size_t holder = dao::test::Struct(b, 4);
+    const std::size_t held = dao::test::Struct(b, 16);
+    const std::size_t rest = dao::test::Struct(b, 32);
+    b.U32(root, b.String(u"prp_test.mmh"));
+    b.U32(root + 4, b.String(u"prp_test.msh"));
+    b.U32(root + 12, dao::test::Children(b, {{1, gob}}));
+    b.U32(gob, b.String(u"GOB"));
+    b.U32(gob + 4, 0xFFFFFFFF);
+    b.U32(gob + 8, dao::test::Children(b, {{2, cloth}}));
+    b.U32(cloth, b.String(u"Plane28"));
+    b.U32(cloth + 4, b.String(u"Banners"));
+    b.U32(cloth + 8, b.String(u"_37m"));
+    dao::test::Float(b, cloth + 12, 0.1F);
+    b.U32(cloth + 16, 5);
+    dao::test::Floats(b, cloth + 20, {0, -1, 0});
+    b.U8(cloth + 32, 1);
+    b.U8(cloth + 33, 1);
+    b.U32(held, 1);
+    b.U8(held + 4, 1);
+    b.U32(held + 8, b.String(u""));
+    b.U32(held + 12, 0xFFFFFFFF);
+    b.U32(holder, dao::test::Children(b, {{4, held}}));
+    std::vector<std::uint8_t> vertices;
+    const float places[3][4] = {{0, 0.5F, 2, 1}, {0, -0.5F, 2, 1}, {0, 0.5F, -2, 1}};
+    const float uvs[3][2] = {{0, 0}, {1, 0}, {0, 1}};
+    for (int i = 0; i < 3; ++i)
+    {
+        for (const float value : places[i])
+        {
+            dao::test::Append(vertices, value);
+        }
+        for (const float value : uvs[i])
+        {
+            dao::test::Append(vertices, value);
+        }
+    }
+    std::vector<std::uint8_t> indices;
+    for (const std::uint32_t index : {2U, 0U, 1U})
+    {
+        dao::test::Append(indices, index);
+    }
+    b.U32(rest, 24);
+    b.U32(rest + 4, 3);
+    b.U32(rest + 8, 3);
+    b.U32(rest + 12, 0);
+    b.U32(rest + 16, 1);
+    b.U32(rest + 20, dao::test::Bytes(b, vertices));
+    b.U32(rest + 24, dao::test::Bytes(b, indices));
+    const std::size_t declared = b.bytes.size();
+    const std::uint32_t rows[3][5] = {{0, 0, 3, 0, 0}, {0, 16, 1, 5, 0}, {0, 0, 0xFFFFFFFF, 0, 0}};
+    b.U32(declared, 3);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        for (std::size_t j = 0; j < 5; ++j)
+        {
+            b.U32(declared + 4 + (24 * i) + (4 * j), rows[i][j]);
+        }
+        b.U32(declared + 4 + (24 * i) + 20, 0);
+    }
+    b.U32(rest + 28, static_cast<std::uint32_t>(declared - b.data));
+    b.U32(cloth + 36, dao::test::Children(b, {{3, holder}, {5, rest}}));
+
+    const std::optional<gff4::File> file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*file);
+    REQUIRE(tree);
+    REQUIRE(tree->nodes.size() == 2);
+    CHECK_FALSE(tree->nodes[0].cloth);
+    const model::Node &node = tree->nodes[1];
+    CHECK(node.kind == "nclt");
+    CHECK_FALSE(node.mesh);
+    REQUIRE(node.cloth);
+    const model::Cloth &read = *node.cloth;
+    CHECK(read.material == L"Banners");
+    CHECK(read.part == L"_37m");
+    CHECK(read.thickness == Approx(0.1F));
+    CHECK(read.solverIterations == 5);
+    CHECK(read.externalAcceleration[1] == Approx(-1));
+    CHECK(read.flags.disableCollision);
+    CHECK(read.flags.gravity);
+    CHECK_FALSE(read.flags.tearable);
+    REQUIRE(read.attachments.size() == 1);
+    CHECK(read.attachments[0].type == 1);
+    CHECK(read.attachments[0].twoWay);
+    CHECK(read.attachments[0].vertex == 0xFFFFFFFF);
+    CHECK_FALSE(read.attachments[0].localPosition);
+    REQUIRE(read.rest);
+    const model::Chunk &chunk = *read.rest;
+    CHECK(chunk.vertexCount == 3);
+    const model::Element *place = chunk.Find(model::Usage::Position);
+    REQUIRE(place);
+    const std::vector<model::Value> places3 = model::Floats(chunk, *place);
+    REQUIRE(places3.size() == 3);
+    CHECK(places3[2][2] == Approx(-2));
+    const model::Element *uv = chunk.Find(model::Usage::TexCoord);
+    REQUIRE(uv);
+    CHECK(model::Floats(chunk, *uv)[1][0] == Approx(1));
+    CHECK(model::Indices(chunk) == std::vector<std::uint32_t>{2, 0, 1});
+}
+
 TEST_CASE("a mesh node is cut away when its MMHMeshCutAway is set", "[model]")
 {
     // As the levels' MshFade_ meshes have it: a byte at the mshh struct's +52.

@@ -82,3 +82,24 @@ Read 2026-10-22 by lib-agent with subagents, for DAOLib #244 (the library's `dao
 - **The material's name** [S]: `[[instance+4]+0x1C]`, a `std::wstring`, the .mao's name without extension (`W_DGR_DG06a_0`, `uh_hed_masa`).
 - **Seen** [S], release, `dao::render`'s draw check: Redcliffe castle, 2,120 draws a frame, 1,911 with their material, 1,517 of them trees, 349 of the other 394 with their node; the village by night, 1,050 draws, 810 with their material, 246 trees, 445 of the other 564 with their node.
 - **Not read**: the emitters' and terrain's renders' own material and node, so their draws give the material only.
+
+## 8. A cloth node in the file (DAOLib #261, read 2026-10-24)
+
+Banners and flags are cloth: a node of kind `nclt` in the model's `.mmh`, not a mesh of its `.msh`. Asked by paragon-agent for DAOParagonEngine #265, whose reading (with ghilana) this is, checked by lib-agent-3 against `prp_bannerred_04_0.mmh` through core's reader. Redcliffe has 25 of them placed: `prp_bannerred_04_0` 8 times in lak200d, `prp_flagchantry_01_0` 17 times. The node class is ObjectNodeCloth (kind 0xA, above).
+
+- **The node's fields** [C]:
+  - MMHName, MMHMaterialObject (6001, `Banners`, a `.mao` of the model's) and MMHID (6004), and no MMHMeshGroupName. Core's reader gives it no `mesh`.
+  - The fields of PhysX 2.x's `NxClothDesc`, one each: MMHClothThickness 6195 to MMHClothSleepLinearVelocity 6209, then the flags MMHClothFlagPressure 6211 to MMHClothFlagComdamping 6224. The banner's values: thickness 0.1, density 1, bending 0.1, stretching 1, damping 0.001, friction 0, pressure 1, tear 1.5, collision and attachment response 0.2, attachment tear 1.5, 5 solver iterations, external acceleration 0, wake-up 10, sleep velocity 0.01. Gravity, bending, damping and disable-collision are set; the rest are clear.
+  - MMHClothCookedDataStream (6232): a byte list, PhysX's cooked cloth (`NXS`, `CLTH`), 1,194 bytes in the banner. It is the simulation's, and core does not read it.
+  - MMHClothMeshGroupStruct (6233): an `msgr` with every field at the file's null (0xFFFFFFFF) in the banner.
+- **Its children** [C]:
+  - `attr` BaseLight, `trsl` (0.021, 0.099, -1.973) and `rota` (identity).
+  - A `catl` holding one `att`: type 1, two-way, no shape, vertex 0xFFFFFFFF, no local position.
+  - An `msgr` holding the cloth's mesh at rest, with a `.msh` chunk's fields and its own MeshVertexData and MeshIndexData. The banner's: 16 vertices of 72 bytes, a Float4 place at 0, a Float2 texture coordinate at 16, then tangent, binormal and normal as Float4 (not the half floats of the model's `.msh` chunks). It has 42 32-bit indices, 14 triangles, in the node's own frame: x about 0, y -0.607 to 0.569, z -2.387 to 2.081. With the node's translation, the top edge lies at z 0.11, under the pole, and the banner hangs 4.4 m down.
+- **The model's `.phy`** has a capsule on GOB alone; the cloth is not in it.
+- **Core**: `model::Node::cloth` (`dao/core/Model.h`) holds the material, the id, the parameters, the flags, the attachments, and `rest`. `rest` is the `msgr` child read as a `Chunk` over its own bytes, which `Floats` and `Indices` read; the group field is taken where no child has one.
+- **The exe** (paragon-agent's reading, not checked here) [I where not marked]:
+  - ObjectNodeClothBlueprint (vftable 0x00AFEA6C) makes the node in its instantiate, 0x005B36C0, with the blueprint's cloth description at +0x64 and its `Physics::ClothMeshPrototype` at +0x68 (vftable 0x00AFC09C).
+  - `Physics::PhysicsManager::CookClothMesh` (0x008196F0) cooks it, and `PhysicsObject::CreateCloth` (0x00839F10) makes the NxCloth.
+  - Not read: how the simulated vertices reach the draw, and whether the rest pose is drawn before the simulation runs.
+- **Not asked yet**: the wind. Some models' nodes carry MMHClothWind* (6257 to 6276), and a level's `.wnd` has a cloth response (core's `Wind`).
