@@ -127,6 +127,26 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
     - The statue `plc_tevstatu03_0`'s `Capsule07` (above): its centre is at z 1.234, against its box's middle of 1.234.
   - **The level's static capsules** (`.opf`, NXU) carry their localPose as written; this is for model `.phy` capsules only.
   - **For core** (2026-10-25): `Collision.cpp`'s `Overlaps` (about :1089–:1129) and `SweepAll` (about :1189–:1260) pose a placeable's capsule as `placed ∘ file` alone. They should pose it as `placed ∘ file ∘ (R_x(−π/2), (0, 0, r + h/2))`. Boxes and spheres are right, and `PoseOf`'s convention matches the engine's.
+- **The model node's frame enters through the actor** (read 2026-10-25 by lib-agent-2 with a subagent, from dev/PARAGON_PHY_NODE.md's ask) [C unless marked]:
+  - **A `.phy` shape is in its model node's frame:** the actor carries the node's world matrix, and the shape its own pose under it.
+    - **The overlay:** `ReadPHYNode` calls `PHYToBlueprintBuilder::BeginNode` (0x005B01F0), which takes the current node's child of the same name, or makes one. So a `.phy` node overlays the `.mmh` node of its name [I that the builder starts on the `.mmh`'s blueprint root].
+    - **The cobj:** `EndCollisionObject` (0x005B00D0) keeps the `cobj`'s prototype on that node. `ReadPHYShape` (0x00589DB0) reads only the shape's own pose; no node pose is read there.
+    - **The actors:** they are made when the model's physics is attached (`Object::AttachPhysics` 0x0054D730). The root node's slot 0x54 (0x0055E310) walks the tree. Each node with a collision prototype calls `PhysicsObject::CreateActor` (0x00839DA0) with its own name.
+    - **The actor's pose:** `CreateActor` finds that node in the Object's tree by name (0x005426C0 → 0x0055E8E0 → 0x0055E280) and calls `PhysicsActor::Create` (0x00820470) with it.
+      - Create takes the node's slot 1 (0x0055DFB0). That updates the Object's tree (0x00542700) and copies the node's world matrix from node +0x5C. 0x00837AE0 makes it the actor's `globalPose`.
+      - So the actor's pose is the node's world matrix, the object's place included.
+    - **The shapes' local poses** come from their prototypes alone (0x0081B420: the file pose, and a capsule's inner pose). The node's frame enters through the actor.
+  - **Example, `PLC_LrgWdDrR_01_0`** [C, ghilana]:
+    - The `.phy`'s tree is `GOB` > `mshh DoorLow` > `cobj` > `shap Box21`.
+    - The `.mmh`'s `DoorLow` has `trsl` (−0.585, 0, −0.024) and no turn, so Box21 (1.386, 0, 1.994) is at (0.80, 0, 1.97) in the model. That matches the model's box, x −0.585 to 2.193.
+    - paragon-agent's cursor hits on the Dust Town door (`PLC_DoorLgDwf_03_0`, `DoorLow` at (−1, 0, 0)) fit the same (dev/PARAGON_PHY_NODE.md).
+  - **Not read:**
+    - Whether anything moves the actor after it is made, for instance a door's `DoorLow` turning as it opens. `PhysicsObject` slots 15 and 16 (0x008393B0, 0x00839470) move each actor not of kind 1 by position or orientation, but their callers, and `PhysicsActor::SetGlobalPose` (0x0081E860)'s, were not found. As read, the node's pose is taken when the actor is made [I that it is not followed afterwards; a cursor hit on an opened door in play would settle it].
+    - Whether the name compare (0x004C0A50, 0x004C0DE0) is case-sensitive.
+  - **For core:** `ShapesOf` should compose the node chain. A shape's pose in the model is `chain(shape.node) × shape_local`.
+    - **The chain:** the `.mmh` nodes' `trsl` and `rota` from the root down to the node named by `shape.node`, matched by name, the first match depth-first. The engine's node matrix would also carry scale; the doors' nodes have none, so scale may be left out [I for other models].
+    - **A `.phy` node no `.mmh` node has** leaves the shape as the `.phy` gives it.
+    - **A capsule** still takes its own inner pose under its file pose (COLLISION.md, "A capsule stands on its file position").
 - **Not read:** 0x0081B330, a second `ShapePrototype` constructor that zeroes both poses; whether NxMat33 is stored by rows [I]; and the actor's own pose (a separate reading).
 - **placeable+0x6D8:**
   - It is −1 at creation (`0x0074EFA6`).
