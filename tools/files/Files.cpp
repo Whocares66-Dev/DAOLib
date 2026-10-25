@@ -6,6 +6,9 @@
 //       every entry of the archive matching any pattern (* and ?, in any case; none, all of them)
 //       written as FOLDER\<its name>, byte for byte; a line a file in the archive's order, then the
 //       count. Exits 1 where a pattern with no wildcard names no entry.
+//   dao_files list ARCHIVE
+//       each entry of the archive in its order, a line each: its name, its size, and whether it
+//       reads ("read") or not ("enciphered" or "compressed"); then the count.
 //   dao_files json [--names CSV] FOLDER INPUT ...
 //       each GFF4 file given, a path or ARCHIVE|PATTERN, written as FOLDER\<its name>.json: a struct
 //       {"@": template, "Name": value, ...} in its template's order, a list an array, a vector's
@@ -164,6 +167,23 @@ int Extract(const fs::path &file, const fs::path &folder, const std::vector<std:
         }
     }
     return result;
+}
+
+int List(const fs::path &file)
+{
+    const auto opened = archive::Archive::Open(file);
+    if (!opened)
+    {
+        std::cerr << "no archive at " << file.string() << "\n";
+        return 1;
+    }
+    const char *state = opened->Readable() ? "read" : opened->Head().Encryption() != 0 ? "enciphered" : "compressed";
+    for (const archive::Entry &entry : opened->Entries())
+    {
+        std::cout << Narrow(entry.name) << "\t" << entry.size << "\t" << state << "\n";
+    }
+    std::cout << opened->Entries().size() << " entries\n";
+    return 0;
 }
 
 std::map<std::uint32_t, std::string> ReadNames(const fs::path &path)
@@ -412,6 +432,10 @@ int main(int argc, char **argv)
         }
         return Extract(Wide(args[1]), Wide(args[2]), patterns);
     }
+    if (args.size() == 2 && args[0] == "list")
+    {
+        return List(Wide(args[1]));
+    }
     if (args.size() >= 3 && args[0] == "json")
     {
         std::size_t at = 1;
@@ -425,6 +449,7 @@ int main(int argc, char **argv)
                       names);
     }
     std::cerr << "dao_files extract ARCHIVE FOLDER [PATTERN ...]\n"
+                 "dao_files list ARCHIVE\n"
                  "dao_files json [--names CSV] FOLDER INPUT ...    INPUT a file, or ARCHIVE|PATTERN\n";
     return 2;
 }

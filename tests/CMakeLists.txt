@@ -183,4 +183,17 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${PROJECT_SOURCE_DIR}/tools/object_casts.py" --check
     )
+    # The tools that read the game's archives do it through the build's own dao_files
+    # (tools/archive.py).
+    set_tests_properties(
+        python_tools
+        generated_fields
+        gda_schema
+        gff3_schema
+        script_constants
+        script_api
+        message_handlers
+        object_casts
+        PROPERTIES ENVIRONMENT "DAO_FILES=$<TARGET_FILE:dao_files>"
+    )
 endif()

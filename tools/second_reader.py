@@ -20,8 +20,8 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import archive  # noqa: E402
 import gff4  # noqa: E402
-import script_commands  # noqa: E402
 
 GAME = "C:/Program Files (x86)/GOG Galaxy/Games/Dragon Age Origins"
 OUT = os.path.join(
@@ -210,7 +210,7 @@ def sample(game=GAME):
                 with open(path, "rb") as fh:
                     if fh.read(16) != "ERF V2.0".encode("utf-16-le"):
                         continue
-                for name, data in sorted(script_commands.erf_entries(path).items()):
+                for name, data in sorted(archive.read(path).items()):
                     kind = os.path.splitext(name)[1].lower()
                     if (
                         len(by_kind[kind]) < PER_KIND
@@ -280,10 +280,10 @@ def compare():
 
 
 def show(where):
-    archive, name = where.split("|", 1)
+    where_archive, name = where.split("|", 1)
     data = (
-        script_commands.erf_entries(archive)[name]
-        if archive
+        archive.read(where_archive, name)[name]
+        if where_archive
         else open(name, "rb").read()
     )
     for t in canonical(gff4.Gff4(data)):

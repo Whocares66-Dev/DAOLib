@@ -42,6 +42,7 @@ import sys
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import archive  # noqa: E402
 import gff4  # noqa: E402
 import script_commands  # noqa: E402
 
@@ -106,7 +107,7 @@ def properties():
     if not os.path.exists(TABLE_ARCHIVE):
         return None
     table = gff4.Gff4(
-        script_commands.erf_entries(TABLE_ARCHIVE)["properties.gda"]
+        archive.read(TABLE_ARCHIVE, "properties.gda")["properties.gda"]
     ).walk()
     at = {c[COLUMN_HASH]: i for i, c in enumerate(table[COLUMN_LIST])}
     ident, stat, tool = (
@@ -147,7 +148,7 @@ def property_notes(constants, table):
 def script_ldf():
     erf = os.path.join(script_commands.GAME, "packages", "core", "data", "scripts.erf")
     if os.path.exists(erf):
-        return script_commands.erf_entries(erf)["script.ldf"].decode(
+        return archive.read(erf, "script.ldf")["script.ldf"].decode(
             "latin-1"
         ), "script.ldf"
     return None, None

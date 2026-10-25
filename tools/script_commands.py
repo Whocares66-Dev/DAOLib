@@ -35,6 +35,7 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import archive  # noqa: E402
 import daoexe  # noqa: E402
 
 OUT = os.path.join(
@@ -92,23 +93,6 @@ DECLARATION = re.compile(
 )
 
 
-def erf_entries(path):
-    """{name: bytes} of an ERF V2.0 archive: a UTF-16 magic, a count, then per
-    entry a 32-character UTF-16 name, an offset and a length."""
-    with open(path, "rb") as f:
-        d = f.read()
-    if d[:16].decode("utf-16le", errors="replace") != "ERF V2.0":
-        raise ValueError(f"{path} is not an ERF V2.0 archive")
-    count = struct.unpack_from("<I", d, 16)[0]
-    out = {}
-    for i in range(count):
-        o = 32 + 72 * i
-        name = d[o : o + 64].decode("utf-16le").split("\0")[0]
-        off, length = struct.unpack_from("<II", d, o + 64)
-        out[name] = d[off : off + length]
-    return out
-
-
 def declarations(game=GAME):
     """{id: (script name, "ret Name(args)")} from the game's script.ldf, the
     engine functions as the toolset's script compiler knows them, each with
@@ -116,7 +100,7 @@ def declarations(game=GAME):
     erf = os.path.join(game, "packages", "core", "data", "scripts.erf")
     if not os.path.exists(erf):
         return {}
-    text = erf_entries(erf)["script.ldf"].decode("latin-1")
+    text = archive.read(erf, "script.ldf")["script.ldf"].decode("latin-1")
     out = {}
     for m in DECLARATION.finditer(text):
         ret, name, args, cid = m.groups()
