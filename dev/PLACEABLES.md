@@ -28,7 +28,7 @@ The spot is the placeable's melee-ring spot (`CCPlaceable` slot 38, 0x0074F240 â
   - The extra is 0, except for a door (`placeable_types.BaseType` 1): 0.25, or 0.75 Ã— the long side up to 2.5.
   - A user already nearer than the edge stays where it is.
 - **Fallbacks.** Spots in front of and behind the placeable along its facing, then a safe location nearby.
-  - Each spot must be free (`MovementController::IsFree`); a door's also needs line of sight.
+  - Each spot must be free (the path object's IsFree, B, 0x00A62A90; corrected 2026-10-25 by lib-agent-2); a door's also needs line of sight.
   - If none is found: -5 (`COMMAND_FAILED_NO_SPACE_IN_MELEE_RING`).
 - **The spot function** (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169; 0x0074F240, CCPlaceable slot 38; it calls 0x0074DFB0 for the rectangle and the line spot) [C]: its two calls of `CCArea::GetSafeLocation` (0x0073E370, `(pos, maxRadius, controller, reachable, out, snapToGround, creatureCheck, minRadius)`) pass:
   - **After a spot is accepted** (0x0074F591): pos = the spot, maxRadius = 1.5 for a door (`this[0x638] == 1`), else 3.0, **reachable = 0**, out = the spot, **snapToGround = 1**, creatureCheck = 0, minRadius = 0.0.

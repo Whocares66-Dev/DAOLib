@@ -250,11 +250,11 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset scrip
 
 **`ShouldMove`, `0x00760980`** (ID 18153, checked). It returns false unless the distance test passes:
 - **The reference point** is the leader's position (+0x120). It is the leader's path destination when all three hold (inferred: the destination):
-  - the leader's MovementController (+0xA40) holds a path of more than one 12-byte point (`[mc+0x14]` vector at +0x74..+0x78);
+  - the leader's path object B (creature +0xA40, `Movement()`) has a Path (B+0x14) whose waypoint vector (Path +0x74..+0x78) holds more than one point (corrected 2026-10-25 by lib-agent-2);
   - the leader's byte +0xB24 is 0;
   - the leader's +0xB20 is neither 0 nor 4 (+0xB20 is what `IsMoving` reads, `!= 0`).
 
-  In that case the point is `mc+0x30`.
+  In that case the point is `mc+0x30`, B's goal (corrected 2026-10-25 by lib-agent-2).
 - **The distance** is 2D (x, y), from the follower to that point.
 - **The threshold** is `PerSpace(follower)` (vtable +0x9C, `apr_base` PerSpace, 0.35 for humanoids) + `slotLength[slot]` + 2.0 (`0xC0D230`). Add 2.0 more (`0xAE7108`) when the leader's +0xB20 is 0 or 4 (standing).
 - **The follower moves only when the distance ≥ the threshold.** For a humanoid in slot 0 (length 1.80): **4.15 m** from the leader's destination while the leader moves, **6.15 m** from a standing leader.
@@ -332,7 +332,7 @@ There are three more tables between the two, progressively tighter: `0xC0D3A0` (
   - So **while the leader moves, the formation is turned by its movement direction; when it stands, by its facing.**
   - `0xA38A40` turns the slot's offset by the direction and adds it to the origin.
 - **Slot > 10:** a safe location (`CCArea::GetSafeLocation` `0x0073E370`) within 4.0 m (`0xADEF1C`) of the leader.
-- **Cleanup, walking:** if the spot is not free (`MovementController::IsFree` `0xA62A90`, the follower's own controller), it moves to the nearest free cell within 2.0 m back toward the leader (`0x0073E7F0`). There is no reachability test and no ground snap.
+- **Cleanup, walking:** if the spot is not free (B's IsFree `0xA62A90`, the follower's own path object; corrected 2026-10-25 by lib-agent-2), it moves to the nearest free cell within 2.0 m back toward the leader (`0x0073E7F0`). There is no reachability test and no ground snap.
 - **Cleanup, arrival:** additionally a straight-walk test to the leader (`0xA626F0`). Failing it, `GetSafeLocation` around the leader within 5.0 m, starting from both personal spaces summed (`dev/LOAD_EVENTS.md`).
 - `GetFollowerWouldBeLocation` (`0x00632640` → `0x00760810(…, arrival = 0)`) is the walking answer.
 
@@ -643,7 +643,7 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
     - Placeables have their own chooser, 0x0074D840, giving −1 or 1.
   - **What the level changes** [C]: mainly how often the creature is updated, through the AIMaster pass's time slice (TURN_BASED.md, "The throttle is the AIMaster's time slice"). `CCCreature::Update`, `StepCommands` and perception do not read it. The other readers of `+0x2B0` are:
     - the idle twitch (0x006AB73E): below level 2 it needs a party member within 50 m;
-    - `RequestPath` (0x0073EDEA): level 4 doubles a step factor passed to `MovementController::Step` [I: a search time slice];
+    - `RequestPath` (0x0073EDEA): level 4 doubles a step factor passed to B's Step (corrected 2026-10-25 by lib-agent-2) [I: a search time slice];
     - the approach's standing counter (0x007A97DA): skipped at levels 0 and 1, so such an approach never fails with −4 for standing still;
     - 0x007F6506: it sets a level-0 creature to 1 [I for when];
     - `GetAILevel`'s handler 0x00659DE0;

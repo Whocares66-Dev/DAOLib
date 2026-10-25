@@ -10,7 +10,7 @@ Addresses GOG. "checked" = read in disassembly or data; "inferred" = reasoned fr
 
 ### Short answers
 
-1. **A blocked start is neither snapped by the pathfinder nor refused outright.** RequestPath (0x0073EA80) tests `MovementController::IsFree(start)`. If not free it first tries a randomised fan search within 5.0 m toward the goal (0x0073DF70); if that fails it takes `CCArea::NearestFree` (0x0073E7F0) with reach 5.0 and, if that finds a place, moves the creature there (SetPosition 0x00695540). If neither finds anything the start stays where it is and the search runs from the blocked cell (checked). A goal that is not free gets `NearestFree` with reach 2.0 back toward the start (the result is ignored: if none is found the goal stays) (checked).
+1. **A blocked start is neither snapped by the pathfinder nor refused outright.** RequestPath (0x0073EA80) tests the path object B's IsFree(start) (corrected 2026-10-25 by lib-agent-2). If not free it first tries a randomised fan search within 5.0 m toward the goal (0x0073DF70); if that fails it takes `CCArea::NearestFree` (0x0073E7F0) with reach 5.0 and, if that finds a place, moves the creature there (SetPosition 0x00695540). If neither finds anything the start stays where it is and the search runs from the blocked cell (checked). A goal that is not free gets `NearestFree` with reach 2.0 back toward the start (the result is ignored: if none is found the goal stays) (checked).
 2. **From a blocked start cell the search then fails**: the straight-walk test fails on a blocked centre cell, and the coarse level gives "no region" for a cell of kind >= 9 (code 8, "no mesh"; inferred for the multi-region block case, see below). But RequestPath has a last fallback that rescues the wolves' case: if the search answered anything but {1,2,3,4,6,7} and |start z - goal z| ≤ 0.5 (0x0073EEA2–0x0073EEAD: skipped only above 0.5 or NaN; corrected 2026-10-25 by lib-agent-2), it asks the physics walk test (0x00685920, the mover's radius) for a straight line; if clear the straight line is the path, answer 1; otherwise answer 5 (checked).
 3. **The walkable predicate is not one comparison.** IsFree (the end test): a cell blocks if kind >= 8 or kind == 7 (so kinds 0-6 free; stamps 5/6 never block with RequestPath's flags), and even then only if its centre is within max(r, one cell) of the point. Straight walk: kind >= 7 blocks (and stamps of the mover's own class). Coarse level: kinds 0-8 passable, 9+ not. Fine search: step from a cell of kind < 9 to a cell of kind < 8, kinds 5/6/7 only cost extra.
 4. **The Wilds cell**: (927.14, 977.53) is in ost100d.arl (the Wilds; the cell's stored height -29/16 = -1.8125 m matches the wolves' z -1.81). Its cell is row 676, column 320, **kind 9** (byte 0x09, counters 0), the edge of a band of 9s one row above a row of 1s. Vanilla's own grid calls it blocked, and `IsFree` there answers not free (cell centre (927.33, 977.44) is 0.21 m from the point).
@@ -20,7 +20,7 @@ Addresses GOG. "checked" = read in disassembly or data; "inferred" = reasoned fr
 Args (this = area, creature, goal*, start* or null); returns the answer code. Pseudo-code:
 
 ```
-ctl = creature.Movement()                 // 0x006A2570; null -> return 8
+ctl = creature.Movement()                 // 0x006A2570; null -> return 8. ctl is B, the path object at [creature+0xA40], not the MovementController A (corrected 2026-10-25 by lib-agent-2)
 if ctl.found (+0x9D) == 1: return 1
 world = app+0x118; world.+0xC4 = (creature.+0xC90 != 0); world.+0xC8 = creature size (vslot 0x9C)
 if ctl has a path in progress (0x0073D6E0: path+0 set, or path vector +0x18..+0x1C non-empty):
@@ -56,7 +56,7 @@ creature.PlaceObstacle() and PlaceObstacle(target)       // 0x006A3BC0, put the 
 
 The fallback (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
 - **`CCArea::WalkLine`** (0x00685920; `this` the area; from, to, &r, lift, hit info):
-  - **The call:** RequestPath (0x0073EEFF) passes r = the stamp radius (`[ctl+0x10]+4`), lift = 0.5 (0x00B1B7B4, as a float), and a `CWalkHitInfo` (constructor 0x006A43F0).
+  - **The call:** RequestPath (0x0073EEFF) passes r = the stamp radius (`[ctl+0x10]+4`, B's +0x10 being A's params block; corrected 2026-10-25 by lib-agent-2), lift = 0.5 (0x00B1B7B4, as a float), and a `CWalkHitInfo` (constructor 0x006A43F0).
   - **The three lines:** d is the xy direction from → to, normalised. o = r × (−d.y, d.x, 0) / 2 (0x004D47E0). WalkLine walks three parallel lines: from → to, from + o → to + o, and from − o → to − o. It returns the first that fails (−1), else 1. The side lines are r / 2 from the centre.
   - **On 1:** 0x00A62F30, SetStart, SetGoal, and the two points (0x00A62B90 each), and the answer is 1. Otherwise the answer is 5.
 - **A line** (0x00685790), one cast:
@@ -92,7 +92,7 @@ Notes:
 
 ### 2. The world's IsFree (0x00A46FC0), the end test (checked)
 
-Called `world.IsFree(areaNumber, pos, r, flagA, flagB)`, from the controller with r = radius * 0.5, flagA = flagB = 0 (RequestPath and IsLocationSafe both pass 0, 0).
+Called `world.IsFree(areaNumber, pos, r, flagA, flagB)`, from the path object B with r = radius * 0.5 (corrected 2026-10-25 by lib-agent-2), flagA = flagB = 0 (RequestPath and IsLocationSafe both pass 0, 0).
 
 ```
 grid = world.areas[areaNumber]; if no grid / cols<=0 / rows<=0: return true      // no mesh -> free
@@ -299,13 +299,13 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
     - the sub-action is new (flag 0 clear);
     - flag 3 (a new goal) is set;
     - flag 4 (a search under way) is set;
-    - the controller's state is 2, which forces flag 3 in the local.
+    - B's state (+0x18, not A+0xF0) is 2, which forces flag 3 in the local (corrected 2026-10-25 by lib-agent-2).
   - **With flag 3** it runs, in order:
     - 0x00A62BC0, if flag 0 is set;
-    - `MovementController::Free` (0x00A625B0), which deletes the path object at controller +0x14;
+    - B's Free (0x00A625B0), which deletes the Path at B+0x14 (corrected 2026-10-25 by lib-agent-2);
     - 0x00A62890, which puts a new empty one there;
     - the stop 0x006A9430(flag 0 clear).
-  - **Without flag 3** it calls `MovementController::Cancel` (0x00A62960). Cancel acts only when controller +0x18 is 2 and the path's active byte is set. It then drops two waypoints and resets the path's +0x88 and the controller's +0x18, and always keeps the path object. So a search under way keeps its ends (0x0073D6E0 answers 1). What sets +0x18 to 2 was not read [I].
+  - **Without flag 3** it calls B's Cancel (0x00A62960). Cancel acts only when B+0x18 is 2 and the path's active byte is set. It then drops two waypoints and resets the path's +0x88 and B's +0x18 (corrected 2026-10-25 by lib-agent-2), and always keeps the path object. So a search under way keeps its ends (0x0073D6E0 answers 1). What sets +0x18 to 2 was not read [I].
   - **Then RequestPath runs, and flag 3 is cleared** (0x007A9307).
   - **The answers:**
     - **5 or 8:** stop, −4. RequestPath's fallback (0x0073EE88–0x0073EF5E) can turn a 5 or 8 into 1 or 5 first [I for its conditions].
@@ -490,7 +490,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 **While walking** [C by enumerating every direct caller of 0x00A4BB80, 0x00A46710, 0x00A46760, 0x00A46FC0, 0x00A62A90 and 0x00A626F0; I for indirect calls]:
 - Nothing re-tests a walking creature's path against stamps.
 - A blocked walker is caught only by the stuck counter (1000 ms, answer −4; TURN_BASED.md).
-- The melee approach's look-ahead (0x00A62C90) uses flags (1, 1), so it ignores stamps. It is a thiscall on the creature's MovementController (start, target, a time budget of 0.003 s from 0x00B211B0, `ret 0xC`), called only from ApproachMelee at 0x007AA9FB. From the last waypoint down to the next it tests each waypoint's line to the target, under the budget, and rewrites the path in place through 0x00A483A0 (a waypoint set and everything after it erased): the waypoints past the first whose line to the target is clear are replaced by the target, or the whole path by start and target when the line from the start is clear too. A plain move's path is never cut after its search: its two-waypoint walks are RequestPath's straight test (0x00A626F0) passing (read 2026-10-24 by lib-agent-3's subagent, DAOLib #254, after `Pathfind` and a creature's own path were compared in play).
+- The melee approach's look-ahead (0x00A62C90) uses flags (1, 1), so it ignores stamps. It is a thiscall on B (`Movement()`; corrected 2026-10-25 by lib-agent-2) (start, target, a time budget of 0.003 s from 0x00B211B0, `ret 0xC`), called only from ApproachMelee at 0x007AA9FB. From the last waypoint down to the next it tests each waypoint's line to the target, under the budget, and rewrites the path in place through 0x00A483A0 (a waypoint set and everything after it erased): the waypoints past the first whose line to the target is clear are replaced by the target, or the whole path by start and target when the line from the start is clear too. A plain move's path is never cut after its search: its two-waypoint walks are RequestPath's straight test (0x00A626F0) passing (read 2026-10-24 by lib-agent-3's subagent, DAOLib #254, after `Pathfind` and a creature's own path were compared in play).
 
 **For a port** [I]:
 1. Stamp at every position change, with lift-then-place.
@@ -513,7 +513,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 ### Not read
 
 - GetSafeLocation's ring walk order past the first two sides (NearestFree's lateral row is read, 2026-10-22).
-- The meaning of controller byte +8, and 0x00A62F30 / 0x00A62B90 (what the found-path finish does).
+- The meaning of B's byte +8 (corrected 2026-10-25 by lib-agent-2), and 0x00A62F30 / 0x00A62B90 (what the found-path finish does).
 - Where the environment's wide flag (env +4) is set; 0x00A49CC0's array layout (taken as region count); 0x00C4C0C0's value (a runtime sanity limit in IsFree).
 - 0x0073D780; 0x0067CFA0.
 - Which creatures have `+0xC90 != 0` (the class byte) and what states `+0xB20` 1 and 2 are.
@@ -550,7 +550,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 
 ### CCArea::GetSafeLocation 0x0073E370 exactly
 
-Signature (`__thiscall`, `ret 0x20`, this = CCArea; the CCArea+4 attribute gives the area number via 0x0053CC40): `GetSafeLocation(const Vec4 *pos, float maxRadius, MovementController *mc, bool reachable, Vec4 *out, bool snapToGround, bool creatureCheck, float minRadius)`. The third argument is the movement controller (the creature's `+0xA40`, from 0x006A2570), not the creature. Checked from callers' pushes.
+Signature (`__thiscall`, `ret 0x20`, this = CCArea; the CCArea+4 attribute gives the area number via 0x0053CC40): `GetSafeLocation(const Vec4 *pos, float maxRadius, MovementPath *mc, bool reachable, Vec4 *out, bool snapToGround, bool creatureCheck, float minRadius)`. The third argument, and every `mc` below, is the path object B (the creature's `+0xA40`, from 0x006A2570; `Movement()`), not the creature and not A, the MovementController (corrected 2026-10-25 by lib-agent-2). The moving test 0x00A630E0 is A's. Checked from callers' pushes.
 
 ```
 if (!mc or !out) return 0
@@ -959,6 +959,36 @@ Note the first-order picture for a hand check: with a unit normal n and heading 
 - Whether the corpse (State 1) case matters for a port that has no death-animation rows; the dead creature's GroundHeight mask (the area flag at 0x0067B4D0) was not revisited.
 - Nothing was run in the game.
 
+##### Two movement objects, not one
+
+(read 2026-10-25 by lib-agent-2 with a subagent, at addr-lib-agent's question) [C unless marked]. The exe has no name for B (no vftable, no RTTI, no string), so `MovementPath` is ours (proposed): it holds one walk's request and its result, and each creature has a primary and, for sub-action 52's look-ahead, an alternate. The notes below say A or B where "the controller" was once ambiguous.
+
+- **A, the `MovementController`** (RTTI; vftable 0x00B596C0, one slot, its destructor), embedded at creature +0xA30:
+  - **Constructor:** 0x00A632D0, called from the creature's constructors (0x006BA51C, 0x006BAE26).
+  - **+0x10:** the current B; **+0x14:** the primary B; **+0x18:** an alternate B; **+0x1C:** a byte, the alternate in use.
+  - **+0x20..+0x6F:** the 0x50-byte params block (constructor 0x00A62830). Its +0 is the mover's object id, +4 the stamp radius, and +0x48/+0x4C the stamp record.
+  - **+0x70 onward:** the animation controller, speeds and facings; the state at +0xF0 (creature +0xB20); the flags at +0xF4..+0xF9.
+  - **Its methods:** SetState 0x00A63800 and SetMoving 0x00A639C0 (callers pass `lea ecx, [creature+0xA30]`, 0x006A2A31, 0x007A93CA), 0x00A630E0, GetSpeed 0x00A63120, the step 0x00A644E0, FollowPath 0x00A64350, the stop request 0x00A63AC0.
+- **B, the walk's path object** (proposed `MovementPath`; 0xA0 bytes, no vftable):
+  - **Construction:** made by A's constructor (`operator new(0xA0)`, then B's constructor 0x00A62B20(0, &A+0x20)) and stored at A+0x14 and A+0x10 (0x00A63413, 0x00A63416).
+  - **Where it is found:** `CCCreature::Movement` (0x006A2570) returns `[creature+0xA40]` = A+0x10, that is B, never A.
+  - **The alternate:** 0x00A63240 (from 0x007AA017, in sub-action 52) builds a second B at A+0x18 and sets A+0x1C. 0x00A63210 swaps the two, which is sub-action 52's look-ahead swap, and 0x00A632C0 reselects the primary.
+  - **On the stack:** some script commands make a temporary B there (GetSafeLocation, 0x0065AFF4, 0x0065B191).
+  - **Its fields:** +0 the in-the-way state; +4 its timer; +8 a byte (not read); +0xC the pathfinding world (its writer not found); +0x10 A's params block; +0x14 the Path; +0x18 a state (2: a search under way; its writer not found); +0x20 a vector4; +0x30, +0x40, +0x50 the goal, its direction, its area number; +0x60, +0x70, +0x80 the start, its direction, its area number; +0x94 the walk-to target's id; +0x9D found.
+  - **Its methods:**
+    - Free 0x00A625B0, NextWaypoint 0x00A625E0, Step 0x00A62640, Direct 0x00A626F0;
+    - SetRadius 0x00A62730, LiftObstacle, Cancel 0x00A62960, SetStart 0x00A62990, SetGoal 0x00A629C0, IsFree 0x00A62A90;
+    - 0x00A62890 (the reset, which allocates the Path), 0x00A62B90, 0x00A62BC0, 0x00A62C90;
+    - IsLongPath 0x00A62E00, 0x00A62F30, and `HasPathSearch` 0x0073D6E0.
+- **The Path** (`[B+0x14]`, 0x90 bytes, constructor 0x00A482D0):
+  - **+0:** the active byte.
+  - **+0x18/+0x1C:** a vector of 4-byte entries, which HasPathSearch reads.
+  - **+0x74/+0x78:** the 12-byte waypoint vector.
+  - **+0x80:** a pointer (Step writes the radius to its +8).
+  - **+0x88:** the waypoint index, which NextWaypoint reads as `[[B+0x14]+0x88]`.
+  - **+0x8C, +0x8D:** bytes.
+- **A third object, the capsule:** the PhysX character capsule at creature +0x770 is neither A nor B (the "ctl slot +0x38" lines in the PhysX section below, now written "capsule").
+
 ##### The tilt's three inputs: probe distance, the "modelKind" test, the rate mode (read 2026-10-19, GOG exe, read-only) (lib-agent-2)
 
 "checked" = read in disassembly or data. "inferred" = from control flow or a constant's meaning. Extends `%TEMP%\lib-agent-2-ground-walk.md` (tilt section, 0x006A7AE0 -> 0x006A7520). Prefix tiltb. Prior notes: dev/TURN_BASED.md:136 (PerSpace), dev/ANIMATION.md:472, :1140, :1386 and dev/script_commands/objects.md:154 (State column 0xE991BD51), dev/AUDIO.md:1263 and :1281 (+0xB20 as the movement state), dev/PATHFINDING.md:116 (soft stamps on +0xB20 in {1,2}), dev/PARTY.md:229/:233. The sibling projects hold nothing on the tilt itself.
@@ -967,7 +997,8 @@ Note the first-order picture for a hand check: with a unit normal n and heading 
 
 1. **Probe distance = the creature's own PersonalSpace, apr_base `PerSpace`.** The virtual at +0x9C is called on the creature itself (`this`, esi), CCCreature vtable 0x00B10484 slot 39 = 0x006A21A0 = `CCCreature::PersonalSpace` (ID 14451): `[creature+0x7B0] ? [[creature+0x7B0]+0x60] : 0.0`, the size record's PerSpace (checked, 0x006A21A0, 0x006B1FD6 reads the same field). It is read once per creature from apr_base's `PerSpace` column (dev/TURN_BASED.md:136; not re-read by me). Not a bounding box, not a constant. The two probe points are `pos + facing * PS` and `pos - facing * PS` (checked structure: `0x008D8B00` is vec*scalar, out = v * s; facing is the unit vector at creature+0x130, position creature+0x120). **Wolf: PerSpace 0.45 m, so probes at +-0.45 m, a 0.9 m baseline** (apr_base row "Wolf", ghilana: PerSpace 0.45, Height 1.29, TerrainFollowPitch 16, TerrainFollowRoll 4, Precision 1, ModelType W). Same 0.45 for Mabari/party dog/Wolf, Blight; Witherfang 0.60; Bear, Black 1.0; Great Bear 1.1; Bronto 1.5; Drake 1.4; Deer 0.6; Cat 0.24.
 2. **"modelKind" is not a model or appearance field. It is the `State` column of the creature's current animation row**, and `== 1` means a dying / dead / downed animation. `0x006956B0` returns the animation set's current animation id (`[[creature+0x154]+0x13C]`), and `0x005CA710(id)` looks column `State` (hash 0xE991BD51) up in the animations table (table 0, anim_*.gda; the key 0 is the table, `[0x00C1D090]`, `0x00A2CCC0`), returning -1 if missing. State 1 rows (62 in the tables ghilana reads): every `die`/`dieloop` clip (die, die_v2, die_v3, dieloop, dieLoop_v2/v3, the db_* death-blow families, db_c_all_pos_die_1..5, sleep, ambdyingonfloor, ambwoundedfloor) and the talent "Charge Reaction"/"Overwhelm Reaction" enter+loop clips. So: **while a creature lies in a death/knocked-down loop, its limits become `Pitch = max(Pitch, 60)`, `Roll = max(Roll, 60)` and Precision = 1 (two probes)**, so a corpse lies along the slope with up to 60 degrees of tilt (and a biped's 0 limit becomes 60). Corrects `ground-walk.md`'s "a size class" guess.
-3. **The rate mode +0xB20 is the MovementController's state, mirrored by address, not copied.** The `MovementController` is embedded in the creature at **creature+0xA30** (`lea ecx,[esi+0xA30]` at 0x006A2A31, 0x00745EBC, 0x007A93CA, 0x00763818), and its state dword is at controller+0xF0 = **creature+0xB20**. There is no store to creature+0xB20 anywhere: a whole-.text byte scan for `20 0B 00 00` finds 23 hits, all reads, and one setter writes the state: **`MovementController::SetState` 0x00A63800** (`if new != [+0xF0]: [+0xF0]=new; [anim ctrl +0x13C]=new via 0x00A69C90; then per state`), plus two resets to 0 (the constructor 0x00A60B50 at 0x00A60BF6, a reset 0x00A632D0 at 0x00A633AF). States: **0 idle, 1 walk, 2 run, 3 stopping, 4 turning in place** (checked from writers; walk/run naming inferred from AUDIO.md:1281 where 2 raises "walk/run" and 1/4 lowers it). Rates (floats checked): **mode 2 -> 0.2, mode 1 -> 0.8, mode 0 with a root-motion clip -> 0.1 (0x00C021EC), else (0 without, 3, 4) -> 1.0** (0x006A7AF7-0x006A7B26; the rate multiplies the slew speed, so a running creature tilts at a fifth of the idle rate). Writers listed below.
+
+3. **The rate mode +0xB20 is the MovementController's state, mirrored by address, not copied.** The `MovementController` is embedded in the creature at **creature+0xA30** (`lea ecx,[esi+0xA30]` at 0x006A2A31, 0x00745EBC, 0x007A93CA, 0x00763818), and its state dword is at controller+0xF0 = **creature+0xB20**. There is no store to creature+0xB20 anywhere: a whole-.text byte scan for `20 0B 00 00` finds 23 hits, all reads, and one setter writes the state: **`MovementController::SetState` 0x00A63800** (`if new != [+0xF0]: [+0xF0]=new; [anim ctrl +0x13C]=new via 0x00A69C90; then per state`), plus two resets to 0 (the constructor 0x00A632D0's line 0x00A633AF; 0x00A60B50 at 0x00A60BF6 is another class's constructor; corrected 2026-10-25 by lib-agent-2). States: **0 idle, 1 walk, 2 run, 3 stopping, 4 turning in place** (checked from writers; walk/run naming inferred from AUDIO.md:1281 where 2 raises "walk/run" and 1/4 lowers it). Rates (floats checked): **mode 2 -> 0.2, mode 1 -> 0.8, mode 0 with a root-motion clip -> 0.1 (0x00C021EC), else (0 without, 3, 4) -> 1.0** (0x006A7AF7-0x006A7B26; the rate multiplies the slew speed, so a running creature tilts at a fifth of the idle rate). Writers listed below.
 
 ###### Pseudo-code a port can copy
 
@@ -1005,17 +1036,17 @@ State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's j
 | 0x006A2A37 | creature function 0x006A2A20 (ID 14464): `Movement()->0xA62F30()` then | 0 | movement cleared |
 | 0x00745EC4 | the melee attack's set-up 0x00745E10 (ID 17720) | 0 | an attack stops the walk |
 | 0x00746E52 | 0x00746E10 (ID 17733), after SetDesiredFacing | 0 | a facing command (turn, then idle) |
-| 0x00A60BF6, 0x00A633AF | constructor 0x00A60B50; reset 0x00A632D0 | 0 | initial / reset |
+| 0x00A60BF6, 0x00A633AF | 0x00A632D0 is A's constructor and 0x00A633AF a line in it; 0x00A60B50 is another class's constructor (corrected 2026-10-25 by lib-agent-2) | 0 | initial / reset |
 
 - **When the move update decides walk or run** (0x007A935F–0x007A93D0) [C, read 2026-10-25 by paragon-agent-2, checked by lib-agent-2]:
-  - **When:** only when the path has made no progress (NextWaypoint 0x00A625E0, `[path+0x88]`: 0 after Cancel, 1 when a path is accepted, then counted up, is 0) or the controller is not moving (0x00A630E0). That is, when a walk starts on a new path. A re-path while moving keeps the state [I for the meaning]. 0x00A630E0 is +0x76 (state ≠ 0, set by SetState at 0x00A63833), or'd with `[[+0x70]+0x70]` when +0x74 is set; +0x75 is always 1, from the constructor. So stopping (3) and turning (4) count as moving, and a move restarted while stopping keeps that state until the next decision [I].
+  - **When:** only when the path has made no progress (B's NextWaypoint 0x00A625E0, reading the Path's `[path+0x88]`; corrected 2026-10-25 by lib-agent-2: 0 after Cancel, 1 when a path is accepted, then counted up, is 0) or the controller is not moving (0x00A630E0). That is, when a walk starts on a new path. A re-path while moving keeps the state [I for the meaning]. 0x00A630E0 is +0x76 (state ≠ 0, set by SetState at 0x00A63833), or'd with `[[+0x70]+0x70]` when +0x74 is set; +0x75 is always 1, from the constructor. So stopping (3) and turning (4) count as moving, and a move restarted while stopping keeps that state until the next decision [I].
   - **What:** it clears +0xB24, then `SetMoving(run)` (0x00A639C0) with `run = (the sub-action's flag 1 || the combat state [[+0xC60]] ≠ 0) && +0xB25 == 0 && 0xA62E00(2.0)`.
   - So any walk in combat runs when its path is long. With the combat trees on, run and walk both move at `Game_CbtSpeed` (ANIMATION.md), so out of combat is where it shows: 1.54 against 6.0 for a human.
   - Creature +0xB24 and +0xB25 are the controller's +0xF4 and +0xF5. +0xF4, "driven", is set only by the drive, sub-action 16 (0x007A8C20, at 0x007A8E77), and cleared by the constructor, by SetState(0) (0x00A63854) and by the move update (0x007A937D); the shared end (0x00746A0C) skips its stop for a driven creature; the drive is started by 0x00745870 (ID 17709, unnamed), whose command was not identified. +0xF5 is written only by the constructor, so the run test's `+0xB25 == 0` never blocks [C by a scan of stores; a block copy not excluded].
-- **The length test** `0xA62E00(limit)` (ID 33580), over the path's n points (`[ctrl+0x14]`, vector +0x74/+0x78, stride 0xC) [C]:
+- **The length test** `0xA62E00(limit)` (ID 33580), over the Path's n points (`[B+0x14]`, vector +0x74/+0x78, stride 0xC; IsLongPath is B's; corrected 2026-10-25 by lib-agent-2) [C]:
   - **No vector, or n < 2:** false.
   - **n ≥ 5** (four legs or more): true.
-  - **2 to 4 points:** true when the ground distance² from the controller's start (+0x60, SetStart 0x00A62990) to its goal (+0x30, SetGoal 0x00A629C0) is over limit² (strict).
+  - **2 to 4 points:** true when the ground distance² from B's start (+0x60, SetStart 0x00A62990) to its goal (+0x30, SetGoal 0x00A629C0) (corrected 2026-10-25 by lib-agent-2) is over limit² (strict).
   - **Otherwise** true as soon as the sum of the legs' **squared** ground lengths passes limit² (0x00A62EA8–0x00A62F16; no square root).
   - So with 2.0, two legs of 1.5 m (4.5) run, and three legs of 1.0 m (3.0) do not.
 - **Flag 1 of each walk's sub-action** (`SetFlag` 0x00A5B890 on the data; the move update reads it with 0x00A5A280) [C]:
@@ -1100,7 +1131,7 @@ SETPOSITION(obj, pos, bSafe):
   if !bSafe or obj.type != creature:
       obj.SetPositionBase(pos, force=0)                    // 0x00695540 at 0x00655698, the plain path (see D)
       return 0
-  mc = creature.controller                                  // 0x006A2570
+  mc = creature.Movement()                                  // 0x006A2570; B, the path object (corrected 2026-10-25 by lib-agent-2)
   if creature is in the party but not the controlled one (0x0069F140 true, 0x006A7D30 false)
      and |pos - controlled.pos| < 0.01 [0xAF7498]:
         0x006AA440(creature, controlled, &pos)              // party formation spot, see LOAD_EVENTS.md:128-133
@@ -1129,11 +1160,11 @@ JumpToLocation.execute(creature, cmd):                      // 0x007A4100
   pos, facing, area = cmd.location
   fail (-1) if no creature / dead / area null
   creature.vtable[0xB0](..)                                  // clears whatever it was doing
-  creature.controller.ownerArea = area
+  creature.controller.ownerArea = area                       // [I] unverified: no store to B+0xC was found, and B+0x10's params +0 is the mover's object id; check 0x00655634's caller before keeping it (2026-10-25 by lib-agent-2)
   if party member but not the controlled one and |pos - controlled.pos| < 0.01: 0x006AA440 (formation spot)
   if GetSafeLocation(area, pos, maxRadius = 20.0 [0xAE72FC], mc, reachable = 1, &out, snap = 1,
                      creatureCheck = 1, 0) != 1:
-        controller reset (0x00A62F30); return -1             // command FAILS, creature unmoved
+        B's reset (0x00A62F30; corrected 2026-10-25 by lib-agent-2); return -1             // command FAILS, creature unmoved
   (same state clear as A)
   if creature.area == area:  creature.SetPositionBase(out, 0)           // 0x00695540 at 0x007A42FE
   else:                      LiftObstacle; creature.AddToArea(area, out, 0)   // vtable +0xF8 at 0x007A4337
@@ -1236,7 +1267,7 @@ For the port's bug: take z = GroundHeight(x, y, inputZ) with that two-ray rule i
      - overlap: `NearestFree` 0x0073E7F0 if the movement controller is active (0x00A630E0), else `GetSafeLocation` 0x0073E370 (10.0 m, snap to ground, reachable 0), the creature MOVED there with SetPosition (flag +0x774 = 1 around it), capsule size re-applied, then controller set to that spot's ground. If the search finds nothing the creature stays.
    So the engine's answer to "creature under the mesh": the next move frame lifts it to **GroundHeight(x, y, z)**, i.e. a surface found from z+3.0 downward (any Walkable-mask hit below z+3 in the column, nearest to the ray's start going down) and, if that ray hits nothing (every surface is more than 3 m above), the second ray's hit nearest in z to the input z (PATHFINDING.md:285 / GroundHeight pseudo-code). For z 0..1 and surfaces at 2.3 and 15.8: ray 1 starts at z+3 = 3..4, above the 2.3 surface, so it hits 2.3 first; the 15.8 surface is never chosen unless 2.3 is absent in that column.
 3. **The controller moves only while the movement controller is active, not for an idle creature (NEW, checked).** Both calls of 0x006B6880 are inside the creature's per-frame update (0x006BB890, vtable slot; the second, 0x006BBC93, in the adjacent virtual 0x006BBB70). In 0x006BB890 the call at 0x006BBA39 sits behind `0x00A630E0(MovementController at creature+0xA30)` (0x006BB911: false jumps to 0x006BBB55, past the move) and then `0xA644E0` (the controller's update) true and `0x00695670` false. 0x00A630E0 = `[ctl+0x75] ? ([ctl+0x76] | (anim ctl at +0x70 && [+0x74] ? [anim+0x70] : 0)) : 0` (read 2026-10-22 by lib-agent-2 with a subagent):
-   - **The objects** [C]: `ctl` is the `MovementController` (vtable 0x00B596C0, ctor 0x00A632D0) at creature+0xA30. `ctl+0x70` is a `MovementAnimController` (vtable 0x00B59AC0, ctor 0x00A69EC0), made lazily at 0x00A63A1A..0x00A63A4F.
+   - **The objects** [C]: `ctl` is the `MovementController` A (vtable 0x00B596C0, ctor 0x00A632D0) at creature+0xA30 (this `ctl` is A, unlike the pseudo-code's above). `ctl+0x70` is a `MovementAnimController` (vtable 0x00B59AC0, ctor 0x00A69EC0), made lazily at 0x00A63A1A..0x00A63A4F.
    - **+0x76 is "the movement state is not 0"** [C]: `setne` of `ctl+0xF0` (creature+0xB20: 0 idle, 1 walk, 2 run, 3 stopping, 4 turning in place). Only the ctor (0x00A63326) and SetState 0x00A63800 (0x00A63833) write it. PATHFINDING.md's "Movement state: every writer" lists SetState's callers.
    - **+0x75 is an enable flag** [C]: the ctor sets it to 1 (0x00A63322). Binding the creature to a conversation or staged scene (0x007F2460, at 0x007F25BD) clears it, and the release (0x007F2800, at 0x007F2A9D) sets it again. No other store was found.
    - **+0x74 is only ever written 0** (0x00A6331F, 0x00A630D9, creature-side 0x006AA8E2) [C for the stores found; I that no store of 1 escaped the scan]. So the `[anim+0x70]` term (set at 0x00A69CAA from SetState, cleared at 0x00A69E1F when the movement clip's weight is ≤ 1e-6) does not count in practice.
@@ -1266,11 +1297,11 @@ For the Ostagar case: a port that wants the engine's result puts a creature at z
 
 ### Evidence (GOG addresses)
 
-- 0x006B6880: gate `[esi+0x770]` null or `[0xC353B5]` set -> no-controller path 0x006B6B1D; `[ctl+0x18](1)` false (collision off) -> `SetPosition(target, 0)` 0x006B68BD. Displacement (target.xy - pos.xy, 0) at 0x006B68CA-0x006B68DE, then z = -9.81 (0x00B0F274) at 0x006B6A3B-0x006B6A47; mask 0x2011134 at 0x006B6A4B and 0x006B6A84 (move = slot +0x10, min dist 0.001 = 0x00B0F278, sharpness 1.0); `[ctl+0x40]` (up) at 0x006B6A98 -> restore via slot +0x1C, step offset 0 (slot +0x24), second move 0x006B6AF5, step offset 0.5 (0x00B0F28C); then 0x006B2220.
+- 0x006B6880: gate `[esi+0x770]` null or `[0xC353B5]` set -> no-controller path 0x006B6B1D; `[capsule+0x18](1)` false (collision off; "ctl" here and below is the PhysX capsule at creature +0x770, not A or B; corrected 2026-10-25 by lib-agent-2) -> `SetPosition(target, 0)` 0x006B68BD. Displacement (target.xy - pos.xy, 0) at 0x006B68CA-0x006B68DE, then z = -9.81 (0x00B0F274) at 0x006B6A3B-0x006B6A47; mask 0x2011134 at 0x006B6A4B and 0x006B6A84 (move = slot +0x10, min dist 0.001 = 0x00B0F278, sharpness 1.0); `[capsule+0x40]` (up) at 0x006B6A98 -> restore via slot +0x1C, step offset 0 (slot +0x24), second move 0x006B6AF5, step offset 0.5 (0x00B0F28C); then 0x006B2220.
 - Slope branch uses `0x008E6020(pi/3 = 1.0471976)` + 1e-6 (0x00AE09B0) against the ground normal z from 0x006954C0 (cos 60 deg; the call is read, "cos" inferred).
-- 0x006B2220: skipped if `[esi+0x420] != 0` (unnamed flag) or no controller; centre z - `[+0x784]`; `(+0x780 - ctl.height)*0.5` when `[+0x780] != -1`; `ctl slot +0x38` (colliding down) false -> 0x006B22B3 branch (SetPosition(x, y, creature+0x128), then 0x006B1790(0) at 0x006B22DF).
+- 0x006B2220: skipped if `[esi+0x420] != 0` (unnamed flag) or no controller; centre z - `[+0x784]`; `(+0x780 - capsule.height)*0.5` when `[+0x780] != -1`; `capsule slot +0x38` (colliding down) false -> 0x006B22B3 branch (SetPosition(x, y, creature+0x128), then 0x006B1790(0) at 0x006B22DF).
 - 0x006B1790(flag): reads creature +0x120/+0x124/+0x128, 0x006954C0, z = `[esi+0x1C0]` (0x006B17C8-0x006B17D7); flag 0 -> 0x006B1600 (call 0x006B17E4; false -> 0x006B1979); area `[vtable+0xA0]`; moving test 0x00A630E0 at 0x006B1838-0x006B1840 -> `NearestFree` 0x0073E7F0 (call 0x006B18A9, ecx = area) else `GetSafeLocation` 0x0073E370 with radius 10.0 (0x00B0F298) (call 0x006B18DE); success -> `SetPosition(out, 0)` 0x006B18FD with `[esi+0x774]` = 1 around it; sizes re-read from the controller 0x006B1902-0x006B1977; final `controller.setPosition(x, y, [esp+0x18] + [esi+0x784])` 0x006B1979-0x006B1997.
-- 0x006B1600: area `[+0x62C]` physics world (0x00537D60(0)), `ctl slot +0x64` (radius) and `+0x6C` (height) read, centre = given pos (or the controller's position) with z + `[+0x784]` (0x006B16D4-0x006B16EA), height * 0.5 (0x00AE70F8) added/subtracted, mask 0x2011134 at 0x006B1725, `scene vtable +0x34` = 0x0082EC20 (`Physics::PhysicsScene::OverlapCapsule`, ID 22526) at 0x006B174D. Its result is the bool the snap tests; true = overlap (checked: `OverlapCapsule` returns its count > 0, COLLISION.md section 5).
+- 0x006B1600: area `[+0x62C]` physics world (0x00537D60(0)), `capsule slot +0x64` (radius) and `+0x6C` (height) read, centre = given pos (or the controller's position) with z + `[+0x784]` (0x006B16D4-0x006B16EA), height * 0.5 (0x00AE70F8) added/subtracted, mask 0x2011134 at 0x006B1725, `scene vtable +0x34` = 0x0082EC20 (`Physics::PhysicsScene::OverlapCapsule`, ID 22526) at 0x006B174D. Its result is the bool the snap tests; true = overlap (checked: `OverlapCapsule` returns its count > 0, COLLISION.md section 5).
 - Creation 0x006B1ED0: desc up axis 2, slope/skin/step values at 0x006B20DC-0x006B212A (1e-6 at 0x00B0F2A4 added to the slope), `scene vtable +0xC` (CreateController, 0x00821B40) at 0x006B214A-0x006B2156 -> `creature+0x770`; then controller settings (slots +0x4C/+0x50/+0x54/+0x58/+0x5C: collision on, user data = creature, groups 4, 4, mask 0x10); then `[0xC327EC]+0x114 -> +0x78 == 9` ? direct setPosition(x, y, z + 0x784) at 0x006B21C9-0x006B21FD : `0x006B1790(1)` at 0x006B21C2. Callers of 0x006B1ED0 (scanned E8 calls): 0x0066C06D, 0x006B36BB, 0x006B5ECD (from 0x006B5E90, the physics on/off toggle: creates it when switched on), 0x006B6DC4, 0x006B754C, 0x006BC034, 0x007F2B00. Callers of 0x006B1790: 0x006B21C2, 0x006B22DF, 0x006B5F80 (SetPosition 0x006B5EF0, not Loading), 0x006BA882.
 - Move gate: 0x006BB890 (`push ebp` at 0x006BB890; vtable data at file 0x710594, next slot 0x006BB BB70 at file 0x7105A0); 0x006BB911 `call 0xA630E0` / `je 0x6BBB55`; call 0x006BBA39.
 - Cache: 0x006954C0 computes GroundHeight only when byte +0x1C4 is 0 and sets it; 0x00695540 (SetPosition) clears it (PATHFINDING.md:266).
