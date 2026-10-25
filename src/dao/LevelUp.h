@@ -47,6 +47,12 @@ struct Offer
 // Call it on the game thread, in a module. An open level-up or creation screen redraws from it.
 std::vector<Offer> Offers(ObjectId creature, Kind kind);
 
+// Returns the specializations the screen offers a creature's class, in the screen's order, an
+// add-in's among them: Have if it has one, Learnable if it is unlocked (a manual or a trainer) and
+// the engine's availability test passes, else Locked. Whether it has a point for one is PointsOf's.
+// @return none for an object that is no creature
+std::vector<Offer> Specializations(ObjectId creature);
+
 // A creature's points to spend.
 struct Points
 {

@@ -34,6 +34,11 @@
 // achievement are here. With them: Arcane Warrior refused NotOffered, Bard (hers) Held, Ranger
 // taken (HasAbility 1, the point spent), Duelist and Assassin then NoPoints, Ranger again Held. Her
 // profile had every rogue's specialization unlocked, so a locked achievement was not seen refused.
+// Specializations, the same day: Leliana's were Assassin, Bard (had), Ranger and Duelist, in that
+// order, as the open level-up screen listed them (the Eluvian server's levelup offers); a rogue of
+// the main campaign at level 16, the same four, Ranger had; and in Awakening (Vigil's Keep, the
+// hero a rogue), six, Awakening's Legionnaire Scout (401004) and Shadow (401005) after the four, as
+// the screen listed them.
 #include "dao/LevelUp.h"
 
 #include "dao/Addresses.h"
@@ -158,24 +163,46 @@ bool Shown(const CCCreature &creature, Kind kind)
     return mana == (kind == Kind::Spells);
 }
 
-// The class a specialization's ability makes the creature, if the screen offers it to the
-// creature's class: a row of Classes for players (PlayerClass 1) whose BaseClass is the
-// creature's base class (its class's own BaseClass, or the class itself where that is 0) and whose
-// StartingAbility1 is the ability (ClassSpecializationScene.GrabSpecializations, levelup.gfx).
-std::optional<std::int32_t> SpecializationRow(const CCCreature &creature, std::int32_t ability)
+// A specialization the screen offers: its class's row of Classes and the ability it gives.
+struct Specialization
+{
+    std::int32_t row = 0;
+    std::int32_t ability = 0;
+};
+
+// The specializations the screen offers the creature's class, in its order: the rows of Classes,
+// by their index, for players (PlayerClass 1) whose BaseClass is the creature's base class (its
+// class's own BaseClass, or the class itself where that is 0), each with its StartingAbility1
+// (ClassSpecializationScene.GrabSpecializations, levelup.gfx). An add-in's rows are among them.
+std::vector<Specialization> SpecializationsOf(const CCCreature &creature)
 {
     using script::Table;
+    const auto table = static_cast<std::int32_t>(Table::RulesClasses);
     const auto own = static_cast<std::int32_t>(creature.Property(kClass).value_or(0));
     const std::int32_t parent = gda::GetInt(Table::RulesClasses, own, "BaseClass").value_or(0);
     const std::int32_t base = parent != 0 ? parent : own;
-    const std::int32_t rows = gda::Rows(Table::RulesClasses).value_or(0);
-    for (std::int32_t row = 0; row < rows; ++row)
+    std::vector<Specialization> found;
+    const std::int32_t rows = api::GetM2DARows(table);
+    for (std::int32_t index = 0; index < rows; ++index)
     {
+        const std::int32_t row = api::GetM2DARowIdFromRowIndex(table, index);
         if (gda::GetInt(Table::RulesClasses, row, "PlayerClass").value_or(0) == 1 &&
-            gda::GetInt(Table::RulesClasses, row, "BaseClass").value_or(0) == base &&
-            gda::GetInt(Table::RulesClasses, row, "StartingAbility1").value_or(0) == ability)
+            gda::GetInt(Table::RulesClasses, row, "BaseClass").value_or(0) == base)
         {
-            return row;
+            found.push_back({row, gda::GetInt(Table::RulesClasses, row, "StartingAbility1").value_or(0)});
+        }
+    }
+    return found;
+}
+
+// The class a specialization's ability makes the creature, if the screen offers it.
+std::optional<std::int32_t> SpecializationRow(const CCCreature &creature, std::int32_t ability)
+{
+    for (const Specialization &offered : SpecializationsOf(creature))
+    {
+        if (offered.ability == ability)
+        {
+            return offered.row;
         }
     }
     return std::nullopt;
@@ -225,6 +252,30 @@ std::vector<Offer> Offers(ObjectId creature, Kind kind)
         {
             offers.push_back({*id, static_cast<State>(*state)});
         }
+    }
+    return offers;
+}
+
+std::vector<Offer> Specializations(ObjectId creature)
+{
+    std::vector<Offer> offers;
+    const CCCreature *found = CreatureOf(creature);
+    if (found == nullptr || found->Stats() == nullptr)
+    {
+        return offers;
+    }
+    for (const Specialization &offered : SpecializationsOf(*found))
+    {
+        State state = State::Locked;
+        if (api::HasAbility(creature, offered.ability) != 0)
+        {
+            state = State::Have;
+        }
+        else if (Unlocked(offered.row) && Available(*found, offered.ability))
+        {
+            state = State::Learnable;
+        }
+        offers.push_back({offered.ability, state});
     }
     return offers;
 }
