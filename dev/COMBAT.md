@@ -626,6 +626,44 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - the stats' load, abilities and `PerceptionClass` among them.
 - The Harrowing's instances carry `TeamId`, `Rank`, `TreasureCategory`, `Trackable` and others as type 5.
 - Nothing at load derives a value from Rank. What reads it: `GetCreatureRank`, the client VM's copy, and the save. Scaling by rank is the scripts'.
+- **The readers** `(struct, label, &present, default)` take a field only of their own GFF3 type: Int 0x00A37050 type 5, Float 0x00A370C0 type 8, Byte 0x00A36E90 type 0, Dword 0x00A36FE0 type 4 (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C]. A missing field, or one of another type, leaves `present` = 0 and the default, which is the current value. Core's `Gff3` `Get<T>` is strict on type too.
+  - With a null struct or label, Int, Byte and Dword return the address of `present`, not the default; only the Float reader returns the default there. No caller passes null, so this is harmless [C].
+- **CCObject's reader** (slot 23, vtable +0x5C, 0x0069AAD0), run first by both kinds, in order [C]:
+
+  | Field | Where it goes |
+  |---|---|
+  | position, orientation | defaults: the current value, or 0 (W 1) |
+  | LocName, Tag | |
+  | Active | +0x2C5, only if present |
+  | TemplateResRef, EventScript | only if present |
+  | IsDestroyable | +0x2BC |
+  | Plot | +0x2C4 |
+  | Immortal | +0x2C0 |
+  | the event lists | EnabledEvents/EventId, EventListeners |
+  | LastHostileActor | +0x3B4 |
+  | GroupOverridden | +0x3B8 |
+  | GroupForceHsti | +0x3BC |
+  | GroupId | +0x3C0 |
+  | TeamId | +0x3C4, and the same value also at +0x3C8 (0x0069B154–0x0069B15A) |
+  | AILevel | only if present: vslot 0x150, and +0x2B4 = 1 |
+  | InteractRadius | a Float, +0x3CC (0x0069B1B3) |
+  | the variables (0x00704240), Conversation | |
+
+- **The creature's reader** (0x006C06F0) adds, among the fields listed above [C]:
+  - `Importance` (an Int at +0xCF8);
+  - **`IsSelectable`**, read with the interactive byte (+0x42C) as its default and passed to `SetObjectInteractive` (0x0069BA70). So an instance's `IsSelectable` 0 makes the creature not interactive.
+- **What the install's areas carry** [S, paragon-agent-2's survey of 238 `.are` files: 5,581 placeables, 6,332 creatures; arl100ar spot-checked with ghilana]:
+  - **Every creature instance** has TeamId, Rank, TreasureCategory, Trackable, WeaponsDrawn, IsSelectable, Active and InteractRadius (0), and none of the other fields.
+  - **Instances that differ from their template:**
+
+    | Field | Creatures that differ |
+    |---|---|
+    | TeamId | 2,805 |
+    | Rank | 802 |
+    | TreasureCategory | 590 |
+    | IsSelectable | 139 |
+
+  - So with the game's own files the default never stands in. A mod's `.are` that leaves a field out would keep the template's.
 
 **The template's ability lists add each entry plainly.** 0x0071ECD0 reads one INT per entry (`SpellNumber`, `TalentNumber` or `SkillID`) and skips only -1 or a failed read. It then calls 0x0071EAC0(id, type, -1), the same function `AddAbility` (0x00669AB0) calls.
 - `AddAbility` checks the `ABI_base` row first and refuses AbilityType 4.

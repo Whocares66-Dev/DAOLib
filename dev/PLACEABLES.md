@@ -212,7 +212,18 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
 
 - **The field.** The `.are`'s placeable instance has `InitialState`; the `.utp` has none. The `.utp`'s `AnimContState` is not in the exe (inferred: the toolset copies it into the `.are`).
 - **The load, in order** (0x00683380 → 0x0074EFE0):
-  1. The placeable's field reader (slot 23, 0x00750370) runs over the `.utp`, then the instance, as creatures' does. Its fields: `Useable`, `Static`, `Appearance`, `BaseType`, `TurnRate`, `StateController`, `RoomID1`/`RoomID2`, `InitialState` → +0x658.
+  1. The placeable's field reader (slot 23, 0x00750370) runs over the `.utp`, then the instance, as creatures' does. Its fields include `Useable`, `Static`, `Appearance`, `RoomID1`/`RoomID2` and `InitialState` → +0x658; `BaseType`, `TurnRate` and `StateController` are `placeable_types` columns, not GFF fields (corrected 2026-10-25 by lib-agent-2; the full list below). 0x00750370 first runs CCObject's reader (COMBAT.md, "A placed creature's load"), then reads these fields, in order [C]:
+     - **The lock and key:** AutoRemoveKey (+0x5E8), MaxHealth, KeyName (+0x574), LocPopupText (+0x5B8).
+     - **The trap:** TrapDisarmable (+0x5F8), TrapDetectable (+0x62C), **TrapDisarm** (+0x648), **TrapDetection** (+0x644), TrapFlag (+0x628), TrapOneShot (+0x630), TrapType (+0x64C), TrapCreator (+0x660).
+     - **The body bag and state:** IsBodyBag (0x0074BD70), LootableObjectId (+0x664), **InitialState** (a u16, +0x658).
+     - **Useable,** with the interactive byte (+0x42C) as its default, then `SetObjectInteractive` (0x0069BA70).
+       - The inventory load saves and restores +0x42C, so Useable's choice survives it.
+     - **Static** (+0x620, forced 0 when +0x624 is 1).
+     - **The appearance and lock:** ArtMode, Appearance (+0x4F0), **PickLock** (+0x5E0), KeyRequired (+0x5E4), DieWhenEmpty (+0x614).
+     - **GroundPile:** read, then +0x5FC is set to 1 whatever was read.
+     - **`placeable_types` by Appearance:** BaseType, TurnRate and StateController are those table columns (hashes 0x5010EDC3, 0x5F75A070, 0x9A320A51), not GFF fields.
+     - **The inventory** (0x00761EC0, under a flag test).
+     - **The rest:** Rank (+0x6BC), TreasureCategory (+0x6C0), RoomID1 (+0x6A8), RoomID2 (+0x6AC).
   2. The state is 0 until the instance gives one.
   3. The load step (slot 113, 0x007528D0) calls `SetPlaceableState(+0x658, 1)` (0x00752A88). When the model loads later, the model-ready callback makes the same call (0x00752076).
 - **The value** is the row of the type's `statecnt_*` table, the `PLC_STATE_*` constants in `2da_constants_h.nss`: for a door 0 Closed_Unlocked, 1 Closed_Locked, 2 Open, 3 Dead, 4 Open_2, 5 Dead_2.
@@ -220,6 +231,21 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents) for `de
 - **Out of range.** A state of -1 (0xFFFF) or out of range is stored as 0, and its animation lookup gives none.
 - **A save** keeps the state as `SavegameAreaPlaceableState` (16100, the u16 +0x658). It is restored into +0x658 (slot 34) and snapped the same way by the load step.
 - `0x0074FBC0`, the third flag-1 caller, is not a load: it re-snaps the state when a conversation or staged scene releases its actors (0x007F2800).
+- **What the install's areas carry** [S, paragon-agent-2's survey of 238 `.are` files; arl100ar spot-checked]:
+  - **Every placeable instance** has TeamId, Rank, PickLock, TreasureCategory, TrapDetection, TrapDisarm, Useable, InitialState, Active, RoomID1/RoomID2 and InteractRadius (0), and none of the other fields.
+  - **Instances that differ from their template:**
+
+    | Field | Placeables that differ |
+    |---|---|
+    | Rank | 1,031 |
+    | TreasureCategory | 731 |
+    | TeamId | 659 |
+    | Useable | 293 |
+    | PickLock | 201 |
+    | TrapDetection | 111 |
+    | TrapDisarm | 106 |
+
+  - **For a port:** a placeable's lock, trap difficulties, treasure, team, rank and interactivity come from the instance.
 
 ### The statecnt_* tables
 
