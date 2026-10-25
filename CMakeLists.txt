@@ -316,6 +316,7 @@ add_library(
     src/dao/Resources.cpp
     src/dao/Creatures.cpp
     src/dao/Events.cpp
+    src/dao/LevelUp.cpp
     src/dao/Frame.cpp
     src/dao/Camera.cpp
     src/dao/Clock.cpp

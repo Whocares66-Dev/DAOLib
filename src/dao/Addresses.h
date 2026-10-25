@@ -337,6 +337,12 @@ DAO_ADDRESS(kCooldownManager_Tick, 16532)
 // the ability being cast already (395779). One failing path (0x0071CF69)
 // gives 0 for the reason. The name is ours.
 DAO_ADDRESS(kCCCreatureStats_CanUseAbility, 16539)
+// The level-up screen's tests (dao/LevelUp.h): IsAbilityAvailable, __thiscall on the stats (ability),
+// `ret 4`, a bool, the screen's and the script command's (13096 calls it at 0x0065A6FA); and
+// AbilityChains::Find, cdecl (stats, kind, mode), which builds the party data's lists of offers.
+// Read 2026-10-24 (DAOLib #259).
+DAO_ADDRESS(kCCCreatureStats_IsAbilityAvailable, 16521)
+DAO_ADDRESS(kAbilityChains_Find, 12208)
 // CCCreature's vtable slot 44 (+0xB0), __thiscall (anim_base row, float speed, float blend, byte
 // flag), `ret 0x10`, no return value (every caller overwrites eax), read 2026-10-21 (dev/ANIMATION.md). It plays an
 // animation on the base layer through 0x0069B3D0. Only CCCreature's vtable holds it.
