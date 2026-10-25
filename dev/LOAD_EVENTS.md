@@ -199,6 +199,9 @@ Read in the GOG exe and the scripts by lib-agent-2 (with a subagent) for paragon
 ### Delivery and its script
 
 - The queue is drained only in `AIMaster::UpdateState` (0x0064AE30, from `AIMaster::Update` 0x0064AF00), called by the per-frame AI update (0x0064B047), the loading states and a few others; never by a script command. So nothing queued while a script runs is delivered before the script returns.
+  - The drain is capped in time (read 2026-10-24 by lib-agent-2's subagent) [C]: it delivers every due event (time ≤ now, 0x0064A850) up to 1,000 µs plus 100 µs per ten queued events. The first event is always delivered.
+  - With more than 500 queued, or while loading, it delivers all.
+  - A delay-0 event (`AddEventDeltaTime` 0x0064ACE0 → `AddEventNow` 0x0064A630) is due at once and delivered in the next frame's drain, unless the cap holds it back.
 - A non-immediate `SignalEvent` (0x00657E40) queues the same way (0x00657EDE); only an immediate one is delivered at once (`DeliverNow`, 0x00657EFC).
 - **First, the engine's own events go to their script.** `RunEventScript` looks the event type up in `engineevents.gda` (table 114, `0x006989BD`) and takes its Script column (hash 0xF333FE09, `0x006989D4`), which sends events 33–36 and 65 to `rules_core` whatever script the object has (checked the table and column; the list of events read by lib-agent-2's subagent, 2026-10-18).
 - **The script run is the object's at delivery.** Otherwise `RunEventScript` (0x00698960) uses the event's own script (+0x2C) only when the event's +0x40 is set; otherwise it reads the object's +0x26C (0x006989F0), which `SetEventScript` (0x00658AA0) writes. +0x288 marks the script as overridden for the save.

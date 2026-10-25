@@ -17,6 +17,8 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
     - The impact 0x006AF430 agrees: it uses +4 as the target and passes +0x3C to 0x006A0DA0 as the item. This matches ABILITIES.md's "object 1 the item, object 2 the target".
   - **The record's defaults** [C]: its constructor 0x00696690 and reset 0x00695420 set +0 to 0, +4 to −1, +8 to 0x80000000, +0xC to 1, the vector to 0, +0x20 to an empty wstring, +0x3C to −1 and +0x40 to 0.
   - **Reset at every command's end** [C]: the shared end 0x00746AB8–0x00746ABF calls 0x006A0180, then the reset 0x00695420.
+    - Added (read 2026-10-24, checked by lib-agent-2's subagent) [C unless marked]: the reset is inside the shared end's branch for a creature owner. Its only other caller is the launch 0x006B6F60 (0x006B72B0), for a command of type 25, after the record is copied to the projectile.
+    - The end handlers that 0x00747480 puts in its +0x58 array (the starts are in +0x54) are either 0x00746900 itself or handlers that call it: 0x00746B30, 0x00746BA0 (UseAbility), 0x00746D60, 0x00746DD0, 0x00746E10, 0x00746E70, 0x00746E80, 0x00747250 (ExecuteEffect), 0x007472E0 (37, call at 0x0074731F), 0x00747330 (42, call at 0x00747354) and 0x00747360 (the deathblow) [I for every early exit of 0x00747250 and 0x00747360].
 - **Edge cases:** pops object, int, then a third int only when given (arg count > 2), else +0x40 = 0 (checked). Not a creature, or no current command → returns **1** with nothing written (checked; positive, so not a script failure). No range check on either int.
 
 ### SetCreatureRank (766)

@@ -54,6 +54,31 @@ Sub-action 21 does this in one tick, with no animation and no wait:
    - Otherwise **EVENT_TYPE_USE (14)**: creator the user, **int 0 = 1 if the user stands on the placeable's front side** (dot of user − placeable with its facing ≥ 0). No other ints or objects. **The action is not in the event**: the script reads it with `GetPlaceableAction`.
 7. The sub-action answers 1, and the command completes with COMMAND_SUCCESSFUL.
 
+Added (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with subagents, for DAOParagonEngine #263) [C unless marked]:
+- **A door opened by its use, and the next command, frame by frame:**
+  - **Frame N, the user's update:** sub-action 21 queues USE with delay (0, 0). `AIMaster::AddEventDeltaTime` (0x0064ACE0) tail-calls `AddEventNow` (0x0064A630). Its due time is the world clock now, first in, first out among equal times. The sub-action answers 1, and `StepCommands` returns.
+  - **Frame N+1, the event drain:** World_Update (0x0064B010) runs `AIMaster::Update` (0x0064AF00, at 0x0064B047) before the objects' loop.
+    - An event is due when its time is ≤ now (0x0064A850, compare 0x00A35BE0). The world clock moves once a frame, so a delay-0 event queued in N is delivered at N+1's drain.
+    - The door's script runs in the drain. `placeable_core.nss`:38–39 → `Placeable_HandleUsed`; the OPEN case (`placeable_h.nss`:198) has no delay and ends in `SetPlaceableActionResult` (:550), which reaches SetPlaceableState in the same call.
+    - **SetPlaceableState** (0x0074F9D0) calls ApplyWalkPatch (0x0074DBA0) with (old state, 1), then, in an area, 0x0074E850(0), then (new state, 0). So the grid is open when the drain ends. (0x0073D710 runs only when its third parameter is 0; it loops GetCreatureById over a party vector and discards the result, so it has no effect.)
+  - **Frame N+1, the user's update:** `CCObject::StepCommands` (0x0073D320) first, when the current command has no sub-actions left (record +0x14 == 0, 0x0073D360):
+    - clears it (`ClearCurrentCommand(1, 1, 1, 0)` 0x0073C730, which ends it with success and queues COMMAND_COMPLETE);
+    - starts the next command (0x0073C7D0) when the queue has one (+0x2D4);
+    - and then runs the current command (`RunCurrentCommand` 0x0073CB60, at 0x0073D3AC) in the same call. It returns when that answers 1.
+    - So a command finished in frame N has its successor started in N+1. Its sub-actions run on in that call, down to the walk's first RequestPath, which sees the door open. The walk sub-action's walking is also gated by bit 2 of its parameter byte.
+    - That +0x14 is 0 on the update after the last sub-action finished is [I]. No other place starts a command.
+    - This fits vanilla's trace: the use's success and the resumed attack's start are 0.2 ms apart (DAOParagonEngine #263, Lyna/Slot_304).
+  - **The drain's cap** (0x0064AE30):
+    - The first due event is always delivered.
+    - After it, the loop goes on while the elapsed time is at most 1,000 µs plus 100 µs per ten queued events (0xC01384 = 100, 0xC01380 = 10).
+    - With more than 500 events queued (0xC0137C), or while loading, every due event is delivered.
+    - So behind slow events the door's USE can wait a frame or more [I how often].
+    - Even then, the first search call answers 4 from the setup unless both ends are one first-level node (PATHFINDING.md, "The setup's answers"); there the one-node case can still answer 6 on its first call.
+  - **The objects' loop** updates each object at most once per World_Update. Its budgets per AI level are 3,000, 1,200, 480, 192 and 128 µs (0x00B06B0C..0x00B06AFC). The first object of a level always runs, and all objects run while loading. A skipped creature only waits longer.
+  - **The scripts' side** (`rules_core.nss`:756–771, `ai_main_h_2.nss`:240–300):
+    - On COMMAND_COMPLETE with −9 (a shut door), AI_DeterminePathBlockedAction is run for a controlled creature, or for a non-follower unless AI_DISABLE_PATH_BLOCKED_ACTION is set.
+    - For an unlocked door it queues `CommandUseObject(door, PLACEABLE_ACTION_OPEN)`, then `GetPreviousCommand` with COMMAND_ADDBEHAVIOR_DONTCLEAR. So the use is done first and the command put back runs after it, in the order above.
+
 **The user plays no animation natively.** The only use animation in the scripts is the disarm's `CommandPlayAnimation(904)` (`wicrouch_activate`, `placeable_h.nss`:289).
 
 **The placeable's animation is native, driven by its state controller.** `placeable_types` (table 93) gives each type a `StateController` (a `statecnt_*` table) and a `BlendTree` (.anb). A state controller row is a from-state, with:
