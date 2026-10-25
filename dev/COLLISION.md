@@ -116,6 +116,18 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
   - The crate's `Box12` has dims (0.567, 0.390, 0.326) at z 0.326.
   - The statue's `Capsule07` has r 0.687, h 1.778.
   - All three have Placeables = 1 and Nonwalkable = 1, so bits0 = **0x81000004**.
+- **A capsule stands on its file position** (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]. A `.phy` capsule's `MMHShapePosition` and `MMHShapeRotation` are not its PhysX pose: its prototype adds a pose of its own, applied first.
+  - **The prototype:** `ReadPHYShape` (0x00589DB0) drives a `GraphicsStructures::PHYToBlueprintBuilder`. Its slot 0x3C, `SetShapeType` 0x005AF600, makes `CapsuleShapePrototype` 0x005AF440 for type 3. The base `Physics::ShapePrototype` (0x0052D160) holds an inner translation (+0x30) and quaternion (+0x40). The capsule's are R_x(−π/2) = (−0.7071, 0, 0, 0.7071) (0x004CBC40 gives (axis × sin(a/2), cos(a/2))) and (0, 0, 1.5).
+  - **The lift:** `SetShapeRadius` (0x005AF750, slot 0x48; field 6072) and `SetShapeHeight` (0x005AF7E0, slot 0x4C; field 6073) store r (+0xE0) and h (+0xE4). For a capsule, each sets the inner translation to (0, 0, r + h / 2). A sphere's radius setter sets +0xE0 only.
+  - **The file pose:** the builder's slot 0x54 (0x005AEDC0 → `SetPose` 0x0081B3D0) stores it: position (6061) at +0x50, quaternion (6060) at +0x60, dirty +0x70.
+  - **Composed:** 0x0081B420 builds A from the file pose and B from the inner one (0x004D3D00, row-major, translation in m[3], m[7], m[11]) and caches A × B (0x00451B60) at +0x90. With column vectors p′ = A(B p), so the inner pose is applied first.
+  - **To PhysX:** `PhysicsActor::Create` (0x00820470) → 0x00820300's case 3 → 0x0081F540. It refuses r ≤ 0 or h ≤ 0, and otherwise fills an `NxCapsuleShapeDesc`: radius (+0x6C) and height (+0x70) as the file has them, and localPose from `0x00837AE0(0x0081B420(prototype))`.
+  - **So**, with PhysX's capsule centred along its local y [I: the SDK's convention], a `.phy` capsule lies along its file frame's z axis. Its centre is r + h / 2 above the file position, and it spans from that position to h + 2r above it. h is between the caps' centres.
+    - `plc_fade_pedestal_0`: position z −0.235, r 0.4676, h 0.7216, so the centre is at z 0.593, against the model's bounding-box middle of 0.5945 [paragon-agent-2's figure].
+    - The statue `plc_tevstatu03_0`'s `Capsule07` (above): its centre is at z 1.234, against its box's middle of 1.234.
+  - **The level's static capsules** (`.opf`, NXU) carry their localPose as written; this is for model `.phy` capsules only.
+  - **For core** (2026-10-25): `Collision.cpp`'s `Overlaps` (about :1089–:1129) and `SweepAll` (about :1189–:1260) pose a placeable's capsule as `placed ∘ file` alone. They should pose it as `placed ∘ file ∘ (R_x(−π/2), (0, 0, r + h/2))`. Boxes and spheres are right, and `PoseOf`'s convention matches the engine's.
+- **Not read:** 0x0081B330, a second `ShapePrototype` constructor that zeroes both poses; whether NxMat33 is stored by rows [I]; and the actor's own pose (a separate reading).
 - **placeable+0x6D8:**
   - It is −1 at creation (`0x0074EFA6`).
   - At model-ready (`0x0074F7A0`), if it is still −1, it becomes `PhysicsObject` slot 20 (`0x00839080` → `PhysicsActor` `0x0081E6C0`): the OR of bits0 over every shape of the model. That is 0x81000004 for these models.
