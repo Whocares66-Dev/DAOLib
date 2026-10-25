@@ -318,6 +318,7 @@ add_library(
     src/dao/Events.cpp
     src/dao/LevelUp.cpp
     src/dao/WorldMap.cpp
+    src/dao/Loot.cpp
     src/dao/Frame.cpp
     src/dao/Camera.cpp
     src/dao/Clock.cpp
