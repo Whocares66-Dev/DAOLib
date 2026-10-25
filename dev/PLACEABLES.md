@@ -78,6 +78,8 @@ Added (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with 
   - **The scripts' side** (`rules_core.nss`:756–771, `ai_main_h_2.nss`:240–300):
     - On COMMAND_COMPLETE with −9 (a shut door), AI_DeterminePathBlockedAction is run for a controlled creature, or for a non-follower unless AI_DISABLE_PATH_BLOCKED_ACTION is set.
     - For an unlocked door it queues `CommandUseObject(door, PLACEABLE_ACTION_OPEN)`, then `GetPreviousCommand` with COMMAND_ADDBEHAVIOR_DONTCLEAR. So the use is done first and the command put back runs after it, in the order above.
+    - **A locked door** (`ai_main_h_2.nss`:285–296) [C, read 2026-10-25, checked by lib-agent-2]: a creature that is not controlled queues a quick wait, then re-queues `GetPreviousCommand` with DONTCLEAR, so it tries again after the wait. A controlled creature gets no action.
+    - **Anything else** (not a door state) answers FALSE, and `rules_core.nss`:777–797 runs `AI_DetermineCombatRound` instead [C].
 
 **The user plays no animation natively.** The only use animation in the scripts is the disarm's `CommandPlayAnimation(904)` (`wicrouch_activate`, `placeable_h.nss`:289).
 
