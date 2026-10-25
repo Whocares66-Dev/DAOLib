@@ -432,6 +432,9 @@ function Invoke-Ea {
                 Logs = Join-Path $documents 'BioWare\Dragon Age\daolib'
             }
             $failed += Invoke-Batch @($row)
+            # Each row leaves a game of EA's running, which the next row's start met: that row ended
+            # before the loader ran in 2 of 4 runs with no settle here, and in none of 6 with it (#260).
+            Close-EaGame $bin
         }
     }
     finally {
@@ -453,7 +456,7 @@ function Close-EaGame([string] $Bin) {
         $runs = @(Get-Process -Name DAOrigins -ErrorAction SilentlyContinue |
                 Where-Object { $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) })
         foreach ($run in $runs) {
-            Show-Info "EA's game still ran after its rows (process $($run.Id)); stopped"
+            Show-Info "EA's game still ran after its row (process $($run.Id)); stopped"
             Stop-Process -Id $run.Id -Force -ErrorAction SilentlyContinue
             $run.WaitForExit(15000) | Out-Null
             $quiet = (Get-Date).AddSeconds(5)
