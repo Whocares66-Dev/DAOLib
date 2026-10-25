@@ -1995,7 +1995,7 @@ DAO_ADDRESS(kCCObject_RunCurrentCommand, 17548)
 DAO_ADDRESS(kCSSubActionHandler_Execute, 19864)
 DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
 // An attack's reach (dao/Attack.h), read 2026-10-04 for the turn-based mod
-// (DAOLib #16). The attack command's step (AttackStep) asks whether the
+// (DAOLib #16). The attack command's start (AttackStart) asks whether the
 // weapon is ranged (HasRangedWeapon, __thiscall, no arguments: a creature passing
 // 0x006A25A0, not read, whose main-hand base item's Type, hash
 // 0x12A02374, is 5, a staff, or 6, a bow or crossbow; corrected, first
@@ -2051,7 +2051,7 @@ DAO_ADDRESS(kCCCreature_IsConjuring, 17541)
 // sub-action) members, `ret 8`, by type at +0x48 (filled by 0x007AB8D0).
 // Corrected by the address library's session, 2026-10-04. The names are
 // ours.
-DAO_ADDRESS(kCommands_AttackStep, 17685)
+DAO_ADDRESS(kCommands_AttackStart, 17685)
 DAO_ADDRESS(kCCCreature_InMeleeReach, 14499)
 DAO_ADDRESS(kCCCreature_MeleeRingSpot, 14620)
 DAO_ADDRESS(kCCCreature_PersonalSpace, 14451)

@@ -666,7 +666,7 @@ std::optional<Walked> WalkBy(ObjectId attacker, ObjectId target, const std::opti
 
 } // namespace
 
-// The attack command's step (AttackStep): a ranged weapon approaches by
+// The attack command's start (AttackStart): a ranged weapon approaches by
 // its Range, no nearer than both personal spaces and in sight; any other by
 // the target's ring.
 std::optional<Approach> ApproachOf(ObjectId attacker, ObjectId target)

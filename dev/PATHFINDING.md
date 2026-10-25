@@ -1022,7 +1022,7 @@ State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's j
 
   | Command | Start | Sub-action | Flag 1 |
   |---|---|---|---|
-  | Attack (1), melee | `Commands::AttackStep` 0x00742FD0 | 4 | set (0x007431C0) |
+  | Attack (1), melee | `Commands::AttackStart` 0x00742FD0 | 4 | set (0x007431C0) |
   | Attack (1), ranged | 0x00742FD0 | 15 | not set (flag 7 and int 2 only, 0x0074311B): runs only in combat |
   | UseAbility (25) | 0x00743F50 (ID 17696) | 4, 14 (ground) or 15 | set in each branch (0x007442B6, 0x007443D8) |
   | UseObject (31) | 0x00745920 | 4, then 21 | set, with flag 2 (0x007459C8, 0x007459D3) |
