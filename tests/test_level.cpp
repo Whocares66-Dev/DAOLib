@@ -303,14 +303,16 @@ std::vector<std::byte> RoomFile()
                                  {3164, 5, gff4::kList, 44}}},
                                {"LMAT", 24, {{3324, 12, 0, 0}, {3323, 14, 0, 16}, {3235, 14, 0, 20}}},
                                {"MDL ",
-                                52,
+                                60,
                                 {{4, 10, 0, 0},
                                  {5, 13, 0, 16},
                                  {3059, 8, 0, 32},
                                  {3063, 14, 0, 36},
                                  {3326, 1, gff4::kList | gff4::kStruct, 40},
                                  {3506, 3, gff4::kList | gff4::kStruct, 44},
-                                 {3109, 0, 0, 48}}},
+                                 {3109, 0, 0, 48},
+                                 {3504, 14, 0, 52},
+                                 {3505, 14, 0, 56}}},
                                {"UPRM", 20, {{3507, 14, 0, 0}, {3508, 12, 0, 4}}}});
     const std::size_t root = Struct(b, 48);
     Floats(b, root, {100, 0, 0});
@@ -320,13 +322,15 @@ std::vector<std::byte> RoomFile()
     b.U32(root + 44, b.Numbers({0xFFFFFFFF}));
     const std::size_t models = b.bytes.size();
     b.U32(models, 1);
-    const std::size_t model = Struct(b, 52);
+    const std::size_t model = Struct(b, 60);
     b.U32(root + 36, static_cast<std::uint32_t>(models - b.data));
     b.U8(model + 48, 2);
     Floats(b, model, {0, 0, 5});
     Floats(b, model + 16, {0, 0, 0, 1});
     Float(b, model + 32, 2.0F);
     b.U32(model + 36, b.String(u"slab"));
+    b.U32(model + 52, b.String(u"slab.turn"));
+    b.U32(model + 56, b.String(u"room_0_0_0"));
     const std::size_t parts = b.bytes.size();
     b.U32(parts, 1);
     const std::size_t part = Struct(b, 24);
@@ -587,6 +591,8 @@ TEST_CASE("a room's models' triangles come out in the level's space with their p
     CHECK(room->models[0].file == L"slab");
     CHECK(room->models[0].scale == 2.0F);
     CHECK(room->models[0].cutAwayOverride == 2);
+    CHECK(room->models[0].defaultAnimation == L"slab.turn");
+    CHECK(room->models[0].blendTree == L"room_0_0_0");
     REQUIRE(room->models[0].userParams.size() == 1);
     CHECK(room->models[0].userParams[0].name == L"fire");
     CHECK(room->models[0].userParams[0].value == std::array<float, 4>{1, 1, 1, 1});

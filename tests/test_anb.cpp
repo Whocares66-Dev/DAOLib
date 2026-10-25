@@ -134,6 +134,35 @@ TEST_CASE("a tree's nodes, each its name, clip and place, the root holding the r
     CHECK_FALSE(tree->Find(L"attk_v1"));
 }
 
+TEST_CASE("a room's tree is its XML's nodes with a clip, found by name", "[anb]")
+{
+    // As lak100d_1_3_0.anb has it, with a second node as some rooms have (DAOLib #262).
+    const std::string xml = R"(<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Exported by EditorLvl --><ModelAnimationTree Name="lak100d_1_3_0">
+	<AnimationTree Name="VectorBlend" Type="Vector3">
+		<AnimationNode Name="RootAnimationNode" WeightType="Dynamic" StartWeight="1.0" EndWeight="1.0" Speed="1.0">
+			<AnimationNode Name="fhec_windmillwhl_0.wind" WeightType="Dynamic" StartWeight="1.0" EndWeight="1.0" Speed="1.0" NoLoop="False" Animation="fhec_windmillwhl_0.wind.ani"/>
+			<AnimationNode Name="boat.rock" Speed="0.5" NoLoop="TRUE" Animation="boat.rock.ani"/>
+		</AnimationNode>
+	</AnimationTree>
+</ModelAnimationTree>)";
+    const auto tree = anb::RoomTreeOf(xml);
+    REQUIRE(tree);
+    CHECK(tree->name == L"lak100d_1_3_0");
+    REQUIRE(tree->nodes.size() == 2); // the root holds no clip
+    const anb::RoomNode *wheel = tree->Find(L"FHEC_WINDMILLWHL_0.WIND");
+    REQUIRE(wheel);
+    CHECK(wheel->file == L"fhec_windmillwhl_0.wind.ani");
+    CHECK(wheel->speed == 1.0F);
+    CHECK_FALSE(wheel->noLoop);
+    const anb::RoomNode *boat = tree->Find(L"boat.rock");
+    REQUIRE(boat);
+    CHECK(boat->speed == 0.5F);
+    CHECK(boat->noLoop);
+    CHECK(tree->Find(L"RootAnimationNode") == nullptr);
+    CHECK_FALSE(anb::RoomTreeOf("<MaterialObject Name=\"x\"/>"));
+}
+
 TEST_CASE("an animation's clip by its AnimName in the first tree with it, else its replacement's", "[anb]")
 {
     const auto bytes = TreeFile({{u"pause", u"mh_m.p.ani", 0, 0, 0, 1}, {u"movement", u"", 0, 0, 1, -1}});

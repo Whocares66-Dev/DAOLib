@@ -273,6 +273,11 @@ struct Placed
     // EnvModelCutAwayOverride: 0 for none (and where the file lacks it); 1 and 2 override its meshes'
     // MMHMeshCutAway for the area's cutoff (dev/CAMERA.md, "The cutoff: what the roof fade fades").
     std::uint8_t cutAwayOverride = 0;
+    // EnvModelDefaultAnimation: the node of its tree it plays from the start, a windmill's wheel
+    // turning (fhec_windmillwhl_0.wind); empty for none.
+    std::wstring defaultAnimation;
+    // EnvModelBlendTreeName: that tree, <name>.anb, the room's own (dao/core/Anb.h's RoomTreeOf).
+    std::wstring blendTree;
 };
 
 // A SpeedTree tree or grass placed in a room, in the room's space.

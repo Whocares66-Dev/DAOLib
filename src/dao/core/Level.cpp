@@ -30,6 +30,10 @@ constexpr std::uint32_t kModelFile = 3063;
 // (0x0053A510, its slot 0x138 at 0x005462F0), whose emitters take a value by name
 // (dev/EFFECTS.md, "An effect a level places").
 constexpr std::uint32_t kModelUserParams = 3506;
+// A placed model's animation from the start (DAOLib #262): the loader (0x0053A510, as Paragon read
+// it) loads <EnvModelBlendTreeName>.anb and plays its node EnvModelDefaultAnimation.
+constexpr std::uint32_t kModelDefaultAnimation = 3504;
+constexpr std::uint32_t kModelBlendTreeName = 3505;
 constexpr std::uint32_t kModelCutAwayOverride = 3109; // a byte in the game's files
 constexpr std::uint32_t kUserParamName = 3507;
 constexpr std::uint32_t kUserParamValue = 3508;
@@ -704,6 +708,8 @@ std::optional<Room> RoomOf(const gff4::File &definition)
         placed.turn = QuaternionOf(model.Floats(kOrientation));
         placed.scale = model.Get<float>(kModelScale).value_or(1.0F);
         placed.cutAwayOverride = model.Get<std::uint8_t>(kModelCutAwayOverride).value_or(0);
+        placed.defaultAnimation = model.String(kModelDefaultAnimation).value_or(L"");
+        placed.blendTree = model.String(kModelBlendTreeName).value_or(L"");
         for (const gff4::Struct &part : model.Structs(kModelLightmaps))
         {
             LightmapPart lightmap;

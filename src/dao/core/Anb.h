@@ -21,7 +21,8 @@
 // exe); weights 1 or 0. Which of a creature's trees the engine looks in first
 // is not read either. A clip's file is named whole, its creature's
 // prefix in it (mh., mh_m., mh_c., fh., c_ogre.); nothing is put before it.
-// The 95 level .anb files (amn120d_0_2_0.anb and kin) are XML and no tree.
+// The 95 level .anb files (amn120d_0_2_0.anb and kin) are another format, XML, read by
+// RoomTreeOf below.
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -82,5 +83,31 @@ struct Clip
 // @return nothing if the animation has no row, or neither it nor its replacements have a node
 std::optional<Clip> ClipOf(const m2da::Merged &animations, std::int64_t animation, std::span<const Tree *const> trees,
                            bool replacements = true);
+
+// A room's animation tree, <room>.anb in its rim: XML, not a creature's GFF4, with the same idea
+// of named nodes each a clip. A room's placed model plays one of its nodes from the start
+// (level::Placed's defaultAnimation and blendTree).
+//
+//   const auto tree = dao::core::anb::RoomTreeOf(xml);
+//   const auto *wheel = tree->Find(L"fhec_windmillwhl_0.wind"); // its file "fhec_windmillwhl_0.wind.ani"
+struct RoomNode
+{
+    std::wstring name; // what a placed model's default animation names
+    std::wstring file; // its clip: "fhec_windmillwhl_0.wind.ani"
+    float speed = 1;
+    bool noLoop = false;
+};
+
+struct RoomTree
+{
+    std::wstring name;
+    std::vector<RoomNode> nodes; // the nodes with a clip, in the file's order
+
+    // Returns the node of a name, in any case; null for none.
+    const RoomNode *Find(std::wstring_view node) const;
+};
+
+// Returns a room's animation tree from its file's text, or nothing for text that is not one.
+std::optional<RoomTree> RoomTreeOf(std::string_view xml);
 
 } // namespace dao::core::anb

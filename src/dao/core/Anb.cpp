@@ -1,7 +1,12 @@
 #include "dao/core/Anb.h"
 
+#include "dao/core/XmlTags.h"
+
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <cwctype>
+#include <filesystem>
 #include <ranges>
 #include <variant>
 
@@ -34,6 +39,48 @@ const Node *Tree::Find(std::wstring_view node) const
 {
     const auto found = std::ranges::find_if(nodes, [&](const Node &n) { return SameName(n.name, node); });
     return found != nodes.end() ? &*found : nullptr;
+}
+
+// Read 2026-10-24 (DAOLib #262) over the 21 level .anb files of hrt000d, lak100c/d/n, lak300d and
+// lak400d: an XML ModelAnimationTree named for its room, holding one AnimationTree (VectorBlend,
+// Vector3), whose RootAnimationNode holds the nodes with a clip, each Name, Animation (the .ani),
+// WeightType Dynamic, StartWeight and EndWeight 1, Speed 1 and NoLoop False in all 27. A placed
+// model's EnvModelDefaultAnimation names a node by its Name. The nodes with no clip are left out.
+const RoomNode *RoomTree::Find(std::wstring_view node) const
+{
+    const auto found = std::ranges::find_if(nodes, [&](const RoomNode &n) { return SameName(n.name, node); });
+    return found != nodes.end() ? &*found : nullptr;
+}
+
+std::optional<RoomTree> RoomTreeOf(std::string_view xml)
+{
+    const auto wide = [](const std::string &utf8) {
+        return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())).wstring();
+    };
+    std::optional<RoomTree> tree;
+    xml::ForEachTag(xml, [&](std::string_view tag) {
+        const std::string_view element = xml::ElementOf(tag);
+        if (element == "ModelAnimationTree")
+        {
+            tree = RoomTree{.name = wide(xml::Attribute(tag, "Name").value_or("")), .nodes = {}};
+        }
+        else if (element == "AnimationNode" && tree)
+        {
+            if (const auto file = xml::Attribute(tag, "Animation"))
+            {
+                std::string loop = xml::Attribute(tag, "NoLoop").value_or("");
+                std::ranges::transform(loop, loop.begin(), [](unsigned char c) { return std::tolower(c); });
+                float speed = 1;
+                const std::string given = xml::Attribute(tag, "Speed").value_or("1");
+                std::from_chars(given.data(), given.data() + given.size(), speed);
+                tree->nodes.push_back(RoomNode{.name = wide(xml::Attribute(tag, "Name").value_or("")),
+                                               .file = wide(*file),
+                                               .speed = speed,
+                                               .noLoop = loop == "true"});
+            }
+        }
+    });
+    return tree;
 }
 
 std::optional<Tree> TreeOf(const gff4::File &file)
