@@ -32,7 +32,7 @@ struct Slot
     std::int32_t index = 0; // from 1, as the scripts number them
     bool on = false;        // its own switch; the AI's is apart (AiOn)
     std::int32_t target = 0;
-    ObjectId targetObject = kInvalidObject; // a follower a "Follower" target names
+    ObjectId targetObject = kInvalidObject; // a follower a "Follower" target names; 0 or none for none
     std::int32_t condition = 0;
     ObjectId conditionObject = kInvalidObject;
     std::int32_t command = 0;
@@ -84,12 +84,15 @@ enum class Refusal : std::uint8_t
     NotOffered,  // the screen offers no such target, condition, command, ability, item or jump there
 };
 
-// Sets a slot's target and condition as the screen's condition picker does: the slot's command
-// then cleared if the condition does not allow it. Target and condition 0 clear the slot.
+// Sets a slot's target and condition as the screen's condition picker does, the engine then
+// checking the command against them. Target and condition 0 are the picker's Clear, which leaves
+// the command: to empty a slot as the screen does, clear its command first (SetCommand with 0),
+// since the screen offers no command to a slot with no target.
 Refusal SetCondition(ObjectId creature, std::int32_t slot, Target target, Condition condition);
 
 // Sets a slot's command as the screen's action picker does, with its ability, its sustained
-// ability, the slot to jump to, or (for kUseItem) its item.
+// ability, the slot to jump to, or (for kUseItem) its item. Command 0 is the picker's Clear.
+// Refused NotOffered for a slot with no target, whose action the screen disables.
 Refusal SetCommand(ObjectId creature, std::int32_t slot, std::int32_t command, std::int32_t parameter = 0,
                    ObjectId item = kInvalidObject);
 

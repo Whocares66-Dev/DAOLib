@@ -15,7 +15,12 @@
 // any. A pick writes the row's attributes and sends DirtyPreset; a condition's then
 // ValidateAction (0x007B0170), which clears the command PartyTactics::IsCommandValid (19994) does
 // not allow; an item's RefreshTacticsData. Jump offers only a later row and never the last's (the
-// movie's rule; the engine checks none). The script command SetTacticEntry is not the screen's
+// movie's rule; the engine checks none). The condition picker's Clear (ConditionPicker.as 34-39)
+// writes target and condition 0 and leaves the command, which ValidateAction keeps (seen in play,
+// sent as the movie's own text too); the action picker's Clear (ActionPicker.as 27-31) writes
+// command 0, offered only to a slot with a target. The switches (a slot's Enabled and the AI's)
+// are bool attributes, the commands ints and CommandItem unsigned, read by their kinds in play.
+// The script command SetTacticEntry is not the screen's
 // path: it passes IsCommandValid a base of 1 and no item, writes no TargetID, ConditionID or
 // CommandItem, and marks nothing changed, so it is not used here.
 //
@@ -28,6 +33,12 @@
 // parameter read, and ability 999999 refused NotOffered; her behaviour set 0 to 3 and back. The
 // game's presets 0 to 3 loaded each its own slots, GetTacticPresetID then 4 to 7; slot 3 set to Use
 // Item with the offered Deep Mushroom, its command 7 and its item read back.
+// Two faults eluvian-agent found the same day, both seen fixed through the scripts' own getters:
+// SetOn and SetAiOn wrote a bool attribute as an int, which it refused, so nothing was written
+// (the first check never switched a slot); now Wynne's slot 2 read IsTacticEnabled 1, 0 off and 1
+// on again, and the AI off made GetNumTactics 0. And the condition's Clear left the command, as the
+// screen's does; the command cleared first (SetCommand 0) read GetTacticCommand 0 and its parameter
+// 0, and a command on the slot with no target was refused NotOffered.
 #include "dao/Tactics.h"
 
 #include "dao/Addresses.h"
@@ -82,13 +93,23 @@ std::int64_t Read(std::uintptr_t object, std::size_t offset)
     return static_cast<std::int64_t>(At(object, offset)->Number());
 }
 
-// Sets an attribute as the movie's SetValue does, of whichever whole type it holds.
+// Sets an attribute as the movie's SetValue does, of whichever type it holds: the switches are
+// bools (an Enabled set as an int wrote nothing, eluvian-agent's find of 2026-10-25), the rest
+// whole numbers.
 void Write(std::uintptr_t object, std::size_t offset, std::int64_t value)
 {
     data::Attribute *attribute = At(object, offset);
-    if (!attribute->Set(static_cast<std::int32_t>(value)))
+    switch (attribute->Kind())
     {
+    case data::Attribute::Type::Bool:
+        attribute->Set(value != 0);
+        break;
+    case data::Attribute::Type::UnsignedInt:
         attribute->Set(static_cast<std::uint32_t>(value));
+        break;
+    default:
+        attribute->Set(static_cast<std::int32_t>(value));
+        break;
     }
 }
 
@@ -313,7 +334,9 @@ Refusal SetCommand(ObjectId creature, std::int32_t slot, std::int32_t command, s
     }
     const auto target = static_cast<std::int32_t>(Read(entry, kTarget));
     const std::int32_t base = BaseOf(static_cast<std::int32_t>(Read(entry, kCondition)));
-    bool offered = target != 0 && Holds(Commands(creature, target, base), command);
+    // The action picker's Clear, command 0, is offered as soon as the slot has a target
+    // (ActionPicker.as 27-31), and nothing before it (TacticRow.as 150-152).
+    bool offered = target != 0 && (command == 0 || Holds(Commands(creature, target, base), command));
     if (offered && command == kUseAbility)
     {
         offered = Holds(Abilities(creature, target, base), parameter);
@@ -335,6 +358,10 @@ Refusal SetCommand(ObjectId creature, std::int32_t slot, std::int32_t command, s
     if (!offered)
     {
         return Refusal::NotOffered;
+    }
+    if (command == 0)
+    {
+        parameter = 0;
     }
     Write(entry, kCommand, command);
     Write(entry, kParameter, parameter);
