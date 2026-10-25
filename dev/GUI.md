@@ -92,6 +92,140 @@ Addition, read 2026-10-18 by lib-agent-2 in `0x005111B0` (corrected 2026-10-18 b
 
 Explore mode's pick (`dao/GameModes.h`) chooses nothing when the interface says the mouse is over an element of one of its movies: the chooser (`0x0070EAA0`) asks the GUI system (its slot 71, on to the Scaleform manager, `0x00511420`) before it looks at what the ray met. A click there is the interface's and not the world's. This holds for a plugin's movie as for the game's. Seen in play, 2026-10-01: the turn-based mod's layer-1 movie drew a path's end on the cursor's pixel, and the mode's ground point was nothing in half the reads and six of nine clicks to move were lost; with nothing drawn on that pixel the pick was steady. So a movie that draws in the world's part of the screen keeps its shapes off the cursor's pixel, or makes its clip one the mouse does not meet (Scaleform's `hitTestDisable`, with `_global.gfxExtensions` set as the game's own movies set it). The turn-based mod did both at once, the property and a line ending 14 pixels short of the cursor, and the pick was steady; which of the two did it was not told apart.
 
+## The cursor's pick (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with subagents, for DAOParagonEngine #256)
+
+[C unless marked]. Nothing was played. Not checked: RaycastAllRay's internals (0x0082E830: the filter ops and the NxScene arguments, as COLLISION.md section 1 has them), the comparator's tail, and the shape flags at actor creation (0x00820470, 0x0081ED00).
+
+### The ray: `GameModeExplore::CastCursorRay` (0x0070B590, ID 16179)
+
+- It clears the count (+0x6E0) and reads the cursor's pixel. A negative x or y casts nothing.
+- The camera's slot 0x44 turns the pixel into a near and a far point; the direction is far − near, normalised (0x00451A30).
+- `World::Raycast(explore+0xE0, 0x20, &near, &unit, 0x2607, 1, null)`, the count to +0x6E0.
+- `qsort(explore+0xE0, count, 0x30, 0x0070B1A0)`. The comparator (ID 16169) orders the records' points by squared distance from the camera's position (the scene camera's slot 0x38), nearer first. So the hits are nearest the camera first, not in PhysX's order.
+
+### `World::Raycast` (0x006497A0, ID 12713)
+
+- **The scene and the buffer:** with no scene given, it uses the current scene. The physics hits go to a static vector (0x00C347B0), reserved to 0x20 (0x00648F90).
+- **The selection flag** (6th argument) ORs the mask with **0x20000** (0x00649841). So the cursor's mask is **0x22607**: Items 0x1, Creatures 0x2, Placeables 0x4, 0x200, 0x400, non-fadeable static 0x2000 and the selection group 0x20000.
+- **The ray** is the scene's slot 0x20, `Physics::PhysicsScene::RaycastAllRay` (0x0082E830, ID 22524). It uses the same AND filter as the eye-to-eye ray (COLLISION.md section 1), at any distance. So **a shape is met when `bits0 & 0x22607` is non-zero** [C for the mask; the filter's internals as COLLISION.md has them, not re-read here].
+  - Fadeable static geometry (0x81000020) is not met: the mask has 0x2000, not 0x20. DAOLib's `PickAt` saw "at a cave wall: nothing" [I that those walls are fadeable].
+  - A tree's capsule (0x01001020) and a creature's controller (0x10) are not met.
+- **One hit per object** (0x006498A0–0x006498D8):
+  - A hit is dropped when an earlier kept record has the same object id (+0x14, not −1).
+  - The exception: the flag is set and either the hit's groups or the kept record's (+0x24) have 0x20000.
+  - So an object keeps one body hit and its selection hits. Level shapes (id −1) are all kept.
+  - Which of an object's shapes is kept is the first PhysX reports [I].
+  - At most 0x20 hits are kept.
+- **A record** (0x30 bytes, filled from the physics hit h, 0x40 bytes, 0x006498E0–0x0064993F):
+  - **+0x00..+0x0C** is the point (h+0x08..+0x10).
+  - **+0x10, the kind, and +0x14, the id**, come from the classifier. Then +0x14 = h+0x28, the owner's id, whatever the kind.
+  - **+0x18 walkable:** `~(byte h+0x23) & 1`, so 1 unless the shape's bit 24 (Nonwalkable) is set.
+  - **+0x1C** is 0 and **+0x20** is h+0x24.
+  - **+0x24** is the shape's groups (h+0x20).
+  - **+0x28** is the sound material (h+0x38; COLLISION.md, "A hit's sound material").
+- **The classifier** (0x00648B70, ID 12700; COMBAT.md has it for the projectile):
+  - **Object (kind 2):** if `g & 3`, `g & 0x20000` or `g & 4`, kind 2 and the id, **only when the id (h+0x28) is not −1**.
+  - **Static (kind 1):** otherwise, `g & 0x20` or `g & 0x8`.
+  - **Nothing written:** any other hit, and an object-group hit with id −1.
+  - **The kind is never cleared:** Raycast writes +0x10 only through the classifier. A hit it writes nothing for keeps the kind already in that record of the caller's buffer [I whether the explore buffer is zeroed elsewhere].
+
+### The pick (0x0070EAA0, ID 16269, unnamed)
+
+`__fastcall(explore)`, returning the chosen record or null.
+
+- **Over the interface** (the GUI system's slot 71, `MouseOverInterface` 0x00511420): null (above).
+- **Flag B:**
+  - B is true when the GameModeController's (`[app+0x114]`) +0x60, the `CameraControllerExplore`, is null or its slot 0x38 (0x0076F6E0, the roof-fade test, CAMERA.md) answers true.
+  - So B is false with the low, close camera.
+- **No area** (0x005D6B30): null.
+- **The walk** goes over the records in order, nearest first. It keeps G, a ground candidate, and S, a selection candidate, both none at the start.
+  - **Kind 1, ground:** R = `CCArea::RoomAt(point)` (0x0067B3A0, ID 13596).
+    - **R in a never-seen room** (R+0x100 == 0; COLLISION.md, "Rooms seen"): with B and the hit not walkable, G = this record and the walk goes on. Otherwise the walk stops with G unchanged.
+    - **No room, or a room seen:** G = this record. The walk goes on only with B and the hit not walkable. Otherwise it stops.
+  - **Any other kind:** with no party, return null.
+    - **Kind not 2** (a record the classifier left alone): +0x6E8 = its id, and **this record is returned**. It is neither object nor ground, so the cursor has nothing.
+    - **Kind 2 with no object by its id:** the same.
+  - **Kind 2, an object O:** O is passed over unless all of these hold:
+    - +0x58 is 0, or 0x006C37A0(&id) is false;
+    - O+0x23C is set;
+    - O's slot 0x190 answers true.
+    - What +0x58 and 0x006C37A0 are was not read [I]; 0x006C37A0 is a membership test on a container at its +0xA8.
+  - **Not a creature** (O's slot 0x10 null): O's slot 0x194 decides.
+    - **False:** +0x6E8 = −1, and the pick **returns null**. That is nothing at all, the ground included.
+    - **True:** +0x6E8 = id, and this record is returned.
+  - **A creature C** (slot 0x10, which returns itself, 0x0079AF30):
+    - **Passed over** when all of these hold:
+      - 0x0067D390() == 1;
+      - C's attribute +4 equals 0x005C1770(0)'s;
+      - the camera controller's slot 0x3C (0x0076EF50, `ctl+0x90 == 1`, CAMERA.md's view flag) is false;
+      - `g_abilityTargeting` is 0 (the pick reads its +0xC, `GameModes.h` its +0x14).
+      - That is, with exactly one creature selected and the camera on the close side, the cursor passes through it outside targeting [I for 0x0067D390 and 0x005C1770's meaning].
+    - **Otherwise, when** (C's slot 0x1D0, dead, is not 1, or `CCCreature::HasLootableBodyBag` 0x006AB100) and (0x0070ABE0's targeting flags lack 0x20, or `GameModeExplore::ValidTarget(C, flags)`):
+      - **A body hit** (no 0x20000) goes to the slot-0x194 test above and ends the walk.
+      - **A selection hit** (0x20000) makes S this record when C is not dead and (S is none, or the id is the last cursor object +0x6E8). The walk then goes on.
+    - Otherwise the walk goes on.
+- **After the walk:**
+  - **With S:** +0x6E8 = S's id. If its object's slot 0x194 is false, null; else S.
+  - **Else G,** leaving +0x6E8 as it was.
+  - **Else null,** +0x6E8 = −1.
+- **So** [C]:
+  - **With B:** the first walkable ground stops the walk, and an object behind it is never reached. Unwalkable ground (a wall the mask meets, 0x81002020) is passed and remembered: an object behind it is picked, and with none the unwalkable ground is the answer, which the move refuses (CanMoveTo 0x0070C840; LIBRARY.md).
+  - **Without B** (the close camera): any ground stops the walk.
+  - **Creatures:** a creature's body ends the walk. Its selection volume counts only if nothing ends the walk first, and it beats the ground. The creature already under the cursor is kept.
+
+### The slots the pick asks
+
+- **CCObject** (vtable 0x00B0EE9C):
+  - Slots 0x190 and 0x194 are both 0x0069A020 (ID 14199), `return +0x42C`, the interactive byte (`SetObjectInteractive` 0x0069BA70).
+  - Slot 0x10 is 0x004137B0, `return 0`.
+- **CCCreature:** slot 0x190 is 0x006BA810, `(+0x42C && !stealth +0x7F0) || +0x4F8`. Slot 0x1D0 is "dead": no stats attribute, or health ≤ 0.
+- **CCPlaceable** (vtable 0x00B1C084):
+  - **slot 0x190 = 0x00750ED0** (ID 17928): `+0x42C != 0 && +0x6E4 == 1`.
+  - **slot 0x194 = 0x00750F90** (ID 17935): `+0x6CC == 0 & +0x42C`.
+  - **+0x6E4** is written by 0x0074BDE0 (ID 17847, which calls 0x006965E0 on a change). The constructor sets it to 1 (0x0074EFB2) and the copy constructor copies it (0x007525DC). Its only other writer is 0x0074D8C0 (below).
+  - **+0x6CC** is 0 in the constructor (0x0074EEF0) and the death handler (0x0074D20A).
+    - In `SetPlaceableState` (0x0074F9D0) it is set to 1 when 0x00695390, with the new state's animation (slot 0xB0), answers false (0x0074FA5D–0x0074FA66), and cleared when it answers true.
+    - 0x00695390 calls 0x00A5E940, an animation-tree query not read. So what +0x6CC marks is [I].
+    - While it is 1, slot 0x194 is false, so a click on the placeable gives null, with the ground behind it discarded too.
+- **CCPlaceable slot 0x160, 0x0074D8C0** (ID 17887, unnamed), the placeable's rooms in view:
+  - **Which room state:**
+    - With +0x610 == 0, it takes the two RoomIDs (+0x6A8, +0x6AC). Each one that is not −1 is looked up (0x0067B430) and its room's +0x100 read. The state is 1 if either is 1, else 2 if either is 2, else 0.
+    - With +0x610 set, it uses its own room (+0x150), that room's +0x100. Its darkness (slot 0x6C) goes to the model when it changes.
+    - +0x610 is set at 0x0074EC9A and cleared by SetLocation (0x00750B10) when the model has a physics object.
+  - **What it writes:**
+    - It clears +0x6CD.
+    - It calls slot 0x134 (0x0074BDC0, ID 17846: `+0x23C = b`, then the effects' emit bit 0x0069A7A0, EFFECTS.md). b is 0 when the state is 0, or when +0x41C is null and +0x610 is set. Otherwise b is 1, followed by 0x00695080(0).
+    - Then +0x6E4 = the state (0x0074BDE0), then 0x0074CE50.
+  - **Who runs it:** the object pass 0x0064A2D0 (ID 12730, at 0x0064A457), once per object of its list (+0x10). The pass is called from the GameModeController's update 0x00641F90 (0x00641FC0) when the current mode's slot 18 is true (explore, combat, dialogue; not a cutscene) and `app+0xC4` is set. With `app+0x100` set, 0x0064A100 runs instead and does not call slot 0x160. The controller's update runs each frame from `CClientExoApp::FrameUpdate` (0x005D75BA), and on a fixed step from the loading pump 0x005D5EC0 [I that every placeable is in that list].
+  - **So a placeable is picked only while one of its rooms is in view** (state 1). It is passed over while its rooms are only seen before.
+- **A creature's +0x23C** is recomputed each update (EFFECTS.md: its room under 0.7 dark).
+
+### UpdateCursor (0x0070F270, ID 16280) over the pick's answer
+
+- CastCursorRay, then the pick. Then the cursor object (+0xCC) is set to −1, the ground (+0xD0) to null and +0xD4 to 0.
+- **GUITargetedPlayer** (the attribute 0x00C35FF0), when it is neither 0 nor −1, becomes the cursor object whatever the pick answered (0x0070F2A2–0x0070F2C0).
+- **Otherwise, by the record's kind:**
+  - **Kind 2:** +0xCC = its id.
+  - **Kind 1:** +0xD0 = the record, and +0xD4 = `GameModeExplore::CanMoveTo(record)` (0x0070C840).
+  - **Anything else:** nothing.
+
+### Creatures in the cursor's mask
+
+- The controller (groups 0x10, COLLISION.md) is outside 0x22607.
+- **0x006A1730** (ID 14442, unnamed; called from 0x006A700A in the creature code and 0x0076644E in the party picker's stage) makes a **"CoarseSelectionActor"** when the model has none:
+  - The actor is a capsule (0x0081C210, ID 22176), sized from the creature's slot 0x1B0 and placed at the creature's position plus (0, 0, slot 0x1B0(0)).
+  - Its groups are set to **0x20000** (0x006A1978), and its room is taken (`Physics::GetActorRoomId`).
+  - Which arguments make the radius and height was not read [I].
+- So a creature is met by its selection capsule (0x20000) and, as `PickAt` saw ("a creature is in a pick twice running, its body and its pick volume"), by a body [I: which shapes of the creature's model].
+
+### Not read
+
+- What explore +0x58 and 0x006C37A0 are, and what 0x0067D390 and 0x005C1770 answer.
+- ValidTarget's flags.
+- 0x00A5E940.
+- The selection capsule's size, and the creature body's shapes.
+- PhysX's report order.
+
 ## What Scaleform's own documentation adds
 
 Autodesk's Scaleform help (help.autodesk.com, for Scaleform 4.x) and the UDK's pages on its GFx 3 integration describe the same interface a generation later. They're good for what things mean, not for names or layouts. They confirmed four points, 2026-09-30:
@@ -1912,7 +2046,7 @@ Who defines a right handler (grep over all 56 movies, `function onRight...`): `P
 
 - The input table binds the right button twice, in different contexts: the movie-side event `GUICursorRightButtonDown` (code 0xD, string at 0xB12C90, bound at 0x006E4D56) and the action `PerformPrimaryAction` (code 0xD, no modifier; 0x006E3019-0x006E304D) which is mapped to the message `PerformPrimaryActionOnTargetUnderCursor` (string 0xB12AD8, mapping at 0x006E6AC5-0x006E6AF1). The same click therefore produces both; the movie gets its event regardless, the world message is gated below. (checked the bindings; that both fire for one click and are not exclusive by context is inferred)
 - The gate is not on the message but on the target the cursor update computes. `GameModeExplore::UpdateCursor` (0x0070F270, ID 16280, per frame): calls the pick `0x0070EAA0`, then clears `explore+0xCC` (cursor object id = -1), `+0xD0` (ground hit) and `+0xD4`. The pick begins by asking the GUI system's slot 71 (offset 0x11C of the object at `[app+0x158]`); true -> returns 0 (0x0070EABF-0x0070EAC3). Slot 71 goes to `ScaleformManager::MouseOverInterface` 0x00511420: false when the manager is not running; true when the movie hit list at +0x80 is not empty (the list the manager fills each frame with `HitTest` hits, GUI.md "Mouse input"); when empty, true only if the capture movie at +0xA0 is set. (checked; dev/GUI.md "A movie under the cursor")
-- With no pick result (`edi = 0`): `UpdateCursor` then reads the attribute object at the static 0xC35FF0 with `SmartData::Attribute::Get` 0x0053CC40 (`mov eax,[ecx+0xC]`): if it is nonzero and not -1 it becomes `explore+0xCC` directly (0x0070F2A2-0x0070F2C0). The static 0xC35FF0 is the one `GameModeExplore`'s constructor registers under the name `GameModeExplore.GUITargetedPlayer` (wide string 0xB162C4, registrations at 0x0070B2CD and 0x00713A6F, with 0xC35FF0 pushed at 0x00713AA4). (checked the code; that 0xC35FF0 is that attribute's storage is read from the constructor's registration order)
+- Whatever the pick answered (corrected 2026-10-24 by lib-agent-2: not only with no pick result), `UpdateCursor` reads the attribute object at the static 0xC35FF0 with `SmartData::Attribute::Get` 0x0053CC40 (`mov eax,[ecx+0xC]`): if it is nonzero and not -1 it becomes `explore+0xCC` directly, and the pick's record is ignored (0x0070F2A2-0x0070F2C0; "The cursor's pick" above). The static 0xC35FF0 is the one `GameModeExplore`'s constructor registers under the name `GameModeExplore.GUITargetedPlayer` (wide string 0xB162C4, registrations at 0x0070B2CD and 0x00713A6F, with 0xC35FF0 pushed at 0x00713AA4). (checked the code; that 0xC35FF0 is that attribute's storage is read from the constructor's registration order)
 - `PerformPrimaryActionOnTargetUnderCursor` (0x007132B0): looks up `explore+0xCC` with `0x005D5BE0`; null -> returns false; else calls `0x00712830(target, kind = 0x0070CAD0(target), 0)`. The ground-move path needs `+0xD0/+0xD4`, set only when the pick found ground (record kind 1), so it too is empty over the GUI (dev/PARTY.md "Move click", dev/PLACEABLES.md "A placeable clicked"). (checked)
 - **What the click does by target** (read 2026-10-23 by lib-agent-2 with subagents, for DAOParagonEngine; static reading, nothing played) [C unless marked]:
   - **The kind** [C]: 0x0070CAD0 gives the primary kind and 0x0070CC50 the secondary, by the object's type byte.

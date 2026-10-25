@@ -121,6 +121,11 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
   - At model-ready (`0x0074F7A0`), if it is still −1, it becomes `PhysicsObject` slot 20 (`0x00839080` → `PhysicsActor` `0x0081E6C0`): the OR of bits0 over every shape of the model. That is 0x81000004 for these models.
   - A model with no `.phy` has no physics object and never blocks (inferred).
 - **Doors only** (`0x0074D350`) switch masks with their state through `PhysicsObject` slot 22 → `PhysicsActor` slot 24 (`0x0081E5F0`), which writes {mask, 0, 0, 0} to every shape. A blocking state restores +0x6D8 (bit 0x4 included, so it blocks); any other state sets 1 (Items, so it does not).
+- **What a door's switch changes, and the cursor** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - **That is all it changes:** 0x0074D350 calls the physics object's slot 0x58 (0x008398A0), which runs 0x0081E5F0 over each actor, writing {mask, 0, 0, 0} to every shape. No shape is removed or disabled. Neither the PhysicsObject (29 slots) nor the actor wrapper has a shape-flag, raycast-disable or actor-disable setter. The open door's 0.6 alpha (0x00699F60) is a plain float store on the model.
+  - **So an open door's shapes keep group 1 (Items).** They are out of the walkers' 0x02011134, sight's 0x24, an arrow's 0x1024 and the dynamic 0x20002. They are still met by the cursor's 0x22607, as kind 2 (`g & 3`).
+    - Whether the pick takes the door, rather than passing over it to what lies behind, is decided by its placeable slots: rooms in view, interactive, and +0x6CC (GUI.md, "The cursor's pick").
+  - An area exit of BaseType 1 (appearance 159, "Area Transition, Invisible, Wide", `PLC_invisowide_01_0`: one box at z 1.7, Placeables and Nonwalkable, 0x81000004) is a door to this code. Blocking or not, its box stays in the cursor's mask.
 - Every other placeable keeps its `.phy` mask in every state, so a crate or statue always blocks sight.
 - Side note: the walk-patch stamp `0x0074DBA0` skips placeables whose +0x6D8 has bit 0x1, unless +0x638 == 1.
 
