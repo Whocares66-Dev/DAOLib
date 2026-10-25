@@ -11,8 +11,10 @@
 #include "dao/Party.h"
 
 #include "dao/ClientExoApp.h"
+#include "dao/Data.h"
 #include "dao/Frame.h"
 #include "dao/Guard.h"
+#include "dao/Messages.h"
 #include "dao/SafeRead.h"
 #include "dao/core/Msvc8.h"
 #include "dao/generated/ScriptApi.h"
@@ -89,6 +91,55 @@ std::vector<ObjectId> Selected()
 // party at +0x58; the scripts' GetMainControlled reads it. Read 2026-10-04 (DAOLib #22). Seen in
 // play the same day: changes by an Eluvian order, a move order handing control over and the party
 // bar's key, each both ways, and at a load from nobody to the hero.
+// Notes on the screens' character: read 2026-10-25 (DAOLib #259) in the GOG exe and CharSelect.as
+// (the inventory's, the character record's, the abilities' and the tactics' arrows), after the
+// Eluvian server's, which took control of a member to have the screens act on it. It is the GUI
+// system's attribute GUI.SelectedChar (app +0x158, its +0x15C), set only by 0x0060C830: to the
+// controlled creature by the party's OnSelectionChanged (0x00637220) and as a full screen opens
+// (0x0060C890), and by the arrows' GUI.SelectNextCharacterMessage and
+// GUI.SelectPreviousCharacterMessage (0x0060F3B0, 0x0060F3C0), which step it through the active
+// party (the pool at camp, by Party.InCamp) by 0x0060EE60, skipping those a list at party +0x100
+// holds and those whose follower state is not 3, then raise an event on the module. Nothing sets it
+// to a creature by name; SetScreenCharacter steps as the arrows do until it is there.
+//
+// Seen in play 2026-10-25 (examples/party), Lyna at Redcliffe with the inventory opened by its
+// binding: it acted on Lyna, then on each of the four set in turn, Alistair, Wynne and Leliana, the
+// control staying with Lyna; the module, which the arrows never reach, refused, the choice left on
+// Leliana where it was.
+ObjectId ScreenCharacter()
+{
+    if (EngineObject() == 0)
+    {
+        return kInvalidObject;
+    }
+    const auto id = data::Number(L"GUI.SelectedChar.ID");
+    return id ? static_cast<ObjectId>(*id) : Controlled();
+}
+
+bool SetScreenCharacter(ObjectId creature)
+{
+    const ObjectId start = ScreenCharacter();
+    if (start == kInvalidObject)
+    {
+        return false;
+    }
+    // The arrows come back to where they began after the party, and so does this, if the creature
+    // is not among those they step through.
+    constexpr int kMostSteps = 32;
+    for (int step = 0; ScreenCharacter() != creature; ++step)
+    {
+        if (step == kMostSteps || !messages::SendText(L"GUI.SelectNextCharacterMessage"))
+        {
+            return false;
+        }
+        if (ScreenCharacter() == start && ScreenCharacter() != creature)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 ObjectId Controlled()
 {
     // GetMainControlled asks only once the party is there.
