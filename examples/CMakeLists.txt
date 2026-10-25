@@ -66,6 +66,8 @@ dao_apply_warnings(example_moments)
 
 add_daolib_plugin(example_levelup SOURCES levelup/LevelUp.cpp)
 dao_apply_warnings(example_levelup)
+add_daolib_plugin(example_worldmap SOURCES worldmap/WorldMap.cpp)
+dao_apply_warnings(example_worldmap)
 
 add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
 dao_apply_warnings(example_attack)
