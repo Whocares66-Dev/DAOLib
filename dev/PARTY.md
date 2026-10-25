@@ -238,6 +238,15 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset scrip
      - float 0 = 1e-6 (`0xB1CE64`);
      - flag 6 = 0;
      - flag 12 = 1.
+   - Added 2026-10-25 (read, checked by lib-agent-2) [C unless marked]:
+     - **The call** (0x007610A4–0x007610D0) passes `0x0069EF30(spot, run 1, float 0 = 1e-6, flag 6 = 0, int 0 = 0, front 0, static 0, player 0, override −1, flag 9 = 0, flag 12 = 1)`.
+       - With override −1, row 20's add behaviour 2 applies (COMBAT.md, "Queuing it clears the queue"; dev/ANIMATION.md, "How a newly queued command affects a running one"). So the new follow move ends a current PlayAnimation (which ShouldMove lets through) with −2, and keeps a static command current.
+     - **Flag 12** has one writer (0x0069EFE4) and one reader, 0x007A39F4. The reader is in the loop of 0x007A3810 (ID 19828), the move update's walk over the creatures in the way (0x0073F230's list).
+       - It acts when the mover is in the party and the blocker is the controlled creature (0x0069F140, 0x006A7D30). A move with flag 12 then calls 0x006A9430(1), which resets the movement controller, and answers 2, so the move ends as done, not blocked.
+       - So a follow move ends when the controlled creature is in its way [I for the meaning; C for the code].
+     - **Followers always run.** The follow passes run 1 and never reads the party's run/walk byte (+0x4A8).
+       - That byte's readers on a party are the constructor, `ToggleRunWalk` (0x0062EC60), the save (0x006347EC), the load (0x006380FD) and the steering (0x00763A3C). This comes from a scan of all 50 `+0x4A8]` operands; the rest belong to other classes.
+       - So a walking leader's followers run.
 
 **`ShouldMove`, `0x00760980`** (ID 18153, checked). It returns false unless the distance test passes:
 - **The reference point** is the leader's position (+0x120). It is the leader's path destination when all three hold (inferred: the destination):
@@ -646,6 +655,12 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
 - `rules_core.nss`:700–800, `EVENT_TYPE_COMMAND_COMPLETE`: for any follower, controlled or not, `AI_DetermineCombatRound` runs (:777–797).
 - `AI_DetermineCombatRound` (`ai_main_h_2.nss`:487) — a follower with party AI off (`IsPartyAIEnabled`) gets `_Partial`; :632 **a controlled creature returns at once out of combat, and in combat gets `AI_DetermineCombatRound_Partial`**; everyone else gets the tactics.
 - `AI_DetermineCombatRound_Partial` (:959): attack the selected target (`GetAttackTarget`) or the last target when it is in melee reach with a melee weapon, or in range with a ranged one after an attack; **for the controlled creature nothing else** (:1022, it returns with no command), so it stands until the player orders it.
+  - Added 2026-10-25 (read by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+    - **The party's Wait(1.0):** `AI_SetPartyAllowedToAttack(TRUE)` (`ai_main_h_2.nss`:3357–3370) queues `CommandWait(AI_DO_NOTHING_DELAY_QUICK)` (1.0 s, `ai_constants_h.nss`:183) on each party member other than the caller that has no current command and an empty queue.
+      - **Its callers:** `rules_core.nss`:663 (EVENT_TYPE_ATTACKED on a follower), :175 and :209 (COMMAND_PENDING of the controlled creature's attack or hostile ability), and `ai_main_h_2.nss`:1037 (Partial with a hostile target) and :2079 (a controlled creature's tactic on a hostile while not yet allowed).
+      - So the controlled creature gets the Wait only through another member's call (:663, :1037).
+      - A queued move (row 20's hard clear) ends that Wait with −2.
+    - With nothing to do, Partial returns with no Wait for the controlled creature (:1016–1022, "keeping queue empty"), and so does `_AI_DoNothing` (:3224–3229).
 - `rules_core.nss`:662–683, `EVENT_TYPE_ATTACKED`: a follower in combat with no current command runs `AI_DetermineCombatRound(attacker)`, so a controlled creature that is struck while idle attacks back.
 - Elsewhere `IsControlled` gates: avoiding hostile AoEs (`ai_main_h_2`:422), the follower's hidden range tactics (:507), the path-blocked action (`rules_core`:758, allowed only for the controlled or a non-follower), the perception reaction (`rules_core`:951, 1073, 1109).
 
@@ -837,6 +852,10 @@ Read by the forked subagent; checked unless marked.
   - Each other mover: slot = 0x00631D90(member, controlled) (its active-party index less one; non-party followers after); spot = 0x007605B0(…, slot, …, arrival 0); 0x006ADF70(spot, run, 0.0, 1, delay), **delay = min(slot + 1, count) × 300 ms**, +300 ms when the controlled creature is farther from the point than the last mover, ÷5 when the controlled creature's +0xC60 word 0 is 1 (0x006A2580; meaning inferred).
   - A move against the leader's facing flips the left/right byte party+0x450 (0x0062EB50), at most once per 0.26 s (timer party+0x228).
   - 0x006ADF70: a current move (type 20, MoveToLocation) is retargeted in place; else 0x0069EF30 → `QueueNewCommand(20, …, front 0, static 0, playerIssued 1, override -1)` with vector 0 the spot, flag 1 run, float 0, **flag 6 = 1 (a player's group move)**, int 0 the delay.
+    - Added 2026-10-25 (read, checked by lib-agent-2) [C unless marked]:
+      - **The retarget in place** also sets the existing move's player flag to 1.
+      - **The queued move** passes flag 9 = 0 and flag 12 = 0, with override −1, so row 20's hard clear applies: a Wait or a PlayAnimation is ended with −2 at once, and a static command is kept.
+      - **A third caller of 0x0069EF30,** 0x006AC20B, queues a move with front 1, player 1, override 2 and flag 9 = 1. What it is was not read [I].
   - **ON_ORDER_RECEIVED goes to the controlled creature only**, not to the members moved in formation.
 - **The formation table:** 0x007605B0 picks by the global 0x00C371B0: 1 → 0x00C0D3A0, 2 → 0x00C0D450, 3 → 0x00C0D500, 4 → 0x00C0D2F0, else 0x00C0D240; with the arrival flag, 0x00C0D2F0 (`dev/LOAD_EVENTS.md`). Nothing writes 0x00C371B0 by its address (read only at 0x0076061B), so a move uses **0x00C0D240** (inferred: the global stays 0): (∓1.5, −1), (0, −2.5), (∓1.5, −4), (∓3, −2), (∓1, −3), (∓3.5, −1) m (right, forward), turned to the leader's movement. With +0x450 = 0, left and right swap (slot 0↔1; from slot 3, odd↔even). The others are scaled variants, e.g. 0x00C0D450: (∓1.25, −0.75), (0, −1.75), (∓1.75, −2.5), (∓3, −1.5), (∓1, −2.5), (∓3.25, −1.5).
 - **The primary click 0x00712830(target, action, arg)**, a switch on action − 3 (table 0x00712DC4) over 0x006360C0(mask 0x80):

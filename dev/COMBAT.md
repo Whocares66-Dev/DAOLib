@@ -539,6 +539,9 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - It ends a static one (+0xC == 1) only when a2 == 1 or a4 != 0.
   - ClearAllCommands(x, y) calls it as (−2, 0, x, y). So ClearAllCommands(1, 1) ends ExecuteEffect, and QueueCommand's (1, 0) does not.
 - Queued commands that are not static are freed, with no End and no COMMAND_COMPLETE.
+- Added 2026-10-25 (read by paragon-agent-2's helper, checked by lib-agent-2) [C]:
+  - The choice of column for override −1 (AddBehaviorSelf or AddBehavior, 0x0073CDD8–0x0073CDEA) is in dev/ANIMATION.md, "How a newly queued command affects a running one"; only the current command's type is looked at (0x0073C600), not the queue. The player-issued flag only raises event 94 (PLAYER_COMMAND_ADDED).
+  - **Row 20 (Move To Point)** has AddBehavior 2 and AddBehaviorSelf 2. So every queued move hard-clears (statics kept), the click's and the follow's included (dev/PARTY.md).
 - The current command, if not static, is cleared even mid-sub-action: `ClearCurrentCommand(-2, 0, 1, 0)` → `Commands::End(cmd, -2)`.
 - For a clear (ClearCurrentCommand's immediate argument 0, as ClearAllCommands passes), End's shared handler (0x00746900) **queues** COMMAND_COMPLETE (`AIMaster::AddEventDeltaTime`, not run at once). A command ended at its step (success or failure) has it run at once (commands.md, "Running a command") (corrected 2026-10-24 by lib-agent-2) [C]. Its int 0 is the command's type and int 1 is -2 (`COMMAND_FAILED_COMMAND_CLEARED`).
 - An Attack's end handler (0x00746B30) also plays animation 1, Pause, first, for a ranged weapon only (`0x006A2AD0`: the weapon's `bitm_base` Type 5 or 6; refined 2026-10-18).
