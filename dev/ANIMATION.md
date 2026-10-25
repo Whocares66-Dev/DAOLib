@@ -337,7 +337,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, b
 ### Short answers
 
 1. **nLoops = -1 never holds the queue for ever. The command ends by itself with COMMAND_LOOPING (2)** as soon as the looping clip is reached, and the clip goes on looping on the creature with no command (inferred for the visual part). For Lily (pattern 32: `650.99` = animation 650 "Crouch Pray Enter", loops 98 ≥ 90 → -1, bPlayNext 1, bBlendIn 1), the command holds her for the enter clip, moves on to 652 "Crouch Pray Loop" (650's TransitionTo), and ends one step later with result 2. `Ambient_CommandComplete` returns at once on COMMAND_LOOPING and leaves AMBIENT_SYSTEM_RUNNING (0x40) set, so the engine sends her no AMBIENT_CONTINUE (`dev/AI.md`). When the plot later calls `Rubber_JumpHome`, she has no current command and the jump starts on her next command step. Even if the animation were still current, the jump would clear it: `CommandJumpToLocation` is type 10, whose `AddBehavior` in `commands.gda` is 2, a hard `ClearAllCommands` inside `QueueCommand`. **No code anywhere yields a running animation because something is queued behind it.** Neither the scripts (`Ambient_Stop` only clears the ENABLED bit, and the plot calls no ClearAllCommands) nor sub-action 37 do it. What frees the creature is the command's own end, or the add behaviour of the new command.
-2. **A missing animation never waits, and there is no default duration.** Its length is 0, so the step is untimed. The command ends on its first step, which is the same frame it starts:
+2. **A missing animation never waits, and there is no default duration.** Its length is −1000 ms (a clip no tree holds, "Its length" below; corrected 2026-10-25 by lib-agent-2, it said 0), and a step of zero or less is untimed. The command ends on its first step, which is the same frame it starts:
    - **1 (success)** for a one-shot animation, or for a looping one with nLoops ≥ 0;
    - **2 (COMMAND_LOOPING)** for a looping one with nLoops < 0;
    - **-3 (COMMAND_FAILED_INVALID_DATA)** when the id is 0 or has no row with an AnimName in table 0, the anim_ tables.
@@ -370,7 +370,10 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
 - **First run** (flag 0 clear):
   - **Length.** It uses `CCCreature::AnimationStepLength` (0x006957A0: the clip plus what it runs on into, up to the first loop) when `next` is false, and `CCCreature::AnimationLength` (0x00694E50: one clip) when `next` is true.
     - If float 3 > 0, the length is divided by it (the speed); scripts give 0, so 1.0.
-    - If flag 3 is set, a tail is cut off (0x00694FE0); scripts never set it.
+    - If flag 3 is set, the step is len − `0x00694FE0(len, −2.0)` = len − len × 20 / 100 (integers). Scripts never set it, but **sub-action 8 does** for every cast (ABILITIES.md) (corrected 2026-10-25 by lib-agent-2; it said "a tail is cut off; scripts never set it") [C].
+    - **A step length of zero or less** (a missing clip, see "A missing animation (Q2)") leaves no time: `SubAction::RemainingMs` (0x007A1AE0) answers 0 when `[sub+0x14] <= 0`, signed [C].
+      - So the sub-action reaches its phase switch in the run that played the clip.
+      - A PlayAnimation of a row the creature has no node for therefore ends at the command's next step. In vanilla, the arcane horror's taunt 149, which it lacks, took 0.05 s [paragon-agent-2's trace; I for the switch's answer, 0x007A478B not re-read].
   - **Looping clip** (`0x00695390`, which is the creature's animation set (0x00A5E940) or else table 0's `Type` & 1, column hash 0x12A02374): duration = length × **int 2 (nLoops)**, and int 3 = 1.
   - **One-shot clip:** duration = length, ignoring nLoops.
   - If int 4 ≠ 0 and is not the clip's TransitionTo, int 5 = max(int 5, 100). Scripts give int 4 = 0.
@@ -457,8 +460,16 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
 - **Its length.**
   - `AnimationLength`/`AnimationStepLength` → 0x00A5F7A0 on the creature's animation set (+0x154): 0 for id 0 or no set. Otherwise it gives the node's length when one of the creature's trees has the id (0x00A5E390, the same test as `HasAnimation` 0x00694E70) (checked).
   - Otherwise it asks the animation system for the clip by the row's AnimName (0x005CB720 → 0x00A5EE50, × 1000.0 to ms), or 0 if the row has none (checked).
-  - What that fallback answers for a clip no tree holds, and whether the Replacement chain (`core/Anb.h` `ClipOf`) is followed in this lookup, was **not read**. The answer below assumes it gives 0 (inferred).
-- **The step with length 0.** The duration is 0 (× nLoops for a looping row), so the step is untimed and reaches the switch on its first run. The results are those in the short answers (checked from the code above):
+  - **A clip no tree holds counts −1.0 s** (corrected 2026-10-25 by lib-agent-2, from paragon-agent-2's reading; it was "not read, assumed to give 0 (inferred)") [C unless marked]:
+    - **The object:** 0x00A5EE50 takes `[[set+0x18]+4]->vf[0x4C]()`, the `GraphicsStructures::Object`. That is its +8 interface (vtable 0x00AF8434), whose slot 19 (0x0054F790) returns the Object.
+    - **The call:** it calls the Object's slot 0x6C (0x00547210) with the name and the root tree's name (0x00A5E730), or an empty one.
+    - **0x00547210** starts at −1.0 (0x00AE2E00). With a tree name it asks that tree alone (vf[0x14]). With none it asks each tree of Object +0x180 (vf[0x44]) while the answer is still −1.0.
+    - **The tree's slot 0x44** (`ModelAnimationTree` slot 17, 0x00813E60) starts at −1.0. It finds the clip's index by name (vf[0x70]): −1 answers −1.0, otherwise the clip's length in seconds.
+    - **So** a name no tree has gives −1.0 s, × 1000.0 (0x00AEBC00) → **−1000 ms**. That Object +0x180 holds `ModelAnimationTree`s is [I] (its filler not traced).
+  - **AnimationStepLength's sum is signed** (`add ebp, eax`). A missing node on a TransitionTo chain shortens the step by a second, and a missing row alone makes it −1000 ms.
+  - **AnimationStepLength has a branch before the sum:** when 0x00A5E500(id) answers and its property 0x1F or 0x20 is not −1, it also adds another animation's length (0x006A9140 / 0x006BF8A0; unread). Whether the horror's 247, 246 and 292 have it was not read; the vanilla fit says not [I].
+  - Whether the Replacement chain (`core/Anb.h` `ClipOf`) is followed in this lookup is still **not read** (see "Not read").
+- **The step with length 0 or less.** The duration is −1000 ms for a missing clip (× nLoops for a looping row; corrected 2026-10-25 by lib-agent-2, it said 0), and a step of zero or less is untimed and reaches the switch on its first run. The results are those in the short answers (checked from the code above):
   - one-shot: 1;
   - looping with nLoops ≥ 0: 1;
   - looping with nLoops < 0: 2;
@@ -471,7 +482,7 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
 ### Not read
 
 - Sub-action 33 (the jump) and sub-action 5 (the string 0 follow-up); 0x007A3370 (the step's vector and float 1/2 use); 0x00694FE0 (flag 3's cut); the slot-44 player and its blend values' meaning.
-- 0x00A5EE50's answer for a clip found in no tree, and whether table 0's Replacement is applied in 0x00A5E390 or the per-tree maps it reads.
+- Whether table 0's Replacement is applied in 0x00A5E390 or the per-tree maps it reads.
 - Which engine code sets flag 7 on a type-14 command (an interruptible animation) or flag 6 (don't replay).
 - AddBehavior 3's +0xC60 test in detail.
 - Nothing here was seen in play: Lily's COMMAND_COMPLETE with 2, and the -3 after a play-next with no TransitionTo, are both from the code.

@@ -49,6 +49,18 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset's scr
 ### Sub-action 37: play an animation (`0x007A4390`)
 
 - Read: a general player of an animation (int 0 the `anim_base` row; int 2 loops; float 3 a speed; flags 3 and 4 shortening and looping). Its duration is the animation's length (less a part where flag 3 is set, `0x00694FE0`), times the loops for a looping one. The cast's 1,707 ms for Chain Lightning (`dev/TURN_BASED.md`) is this.
+- **The cast's length** (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
+  - Sub-action 8 queues the cast clip as sub-action 37 with int 0 = CastAnim and flag 3 = 1, nothing else (`AddSubAction(0x25, data, 0, 1, 0)`, 0x007A7660–0x007A7693). Float 3 stays 0, so the speed is 1.
+  - So a cast lasts `AnimationStepLength(CastAnim)` (the clip and what it runs on into, up to the first loop) less 20 %, with a missing node counting −1000 ms (`dev/ANIMATION.md`, "A missing animation (Q2)").
+  - **Example, the arcane horror** (apr_base 12; its trees have `ua_acast` 247 = 2.267 s, `ua_dcast` 246 = 1.300 s, `ua_dcast_end` 290 = 0.767 s and `ua_instant` 292 = 1.567 s, but no `ua_acast_end` 291 and no `talent_threaten` 149) [C for the code; the clip lengths and the vanilla times are paragon-agent-2's]:
+
+    | Cast | Step | Less 20 % | Vanilla |
+    |---|---|---|---|
+    | Cast Area, 247 → 291 | 2267 − 1000 = 1267 ms | 1014 ms | 1.05–1.17 s |
+    | Cast Direct, 246 → 290 | 2067 ms | 1654 ms | 1.69–1.83 s |
+    | Instant, 292 | 1567 ms | 1254 ms | 1.34 s |
+
+    - paragon-agent-2's survey of apr_base found no other appearance with a missing node on a cast's chain [S].
 
 ### Which script runs an ability
 
