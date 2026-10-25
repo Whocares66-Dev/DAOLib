@@ -74,6 +74,8 @@ add_daolib_plugin(example_partypicker SOURCES partypicker/PartyPicker.cpp)
 dao_apply_warnings(example_partypicker)
 add_daolib_plugin(example_store SOURCES store/Store.cpp)
 dao_apply_warnings(example_store)
+add_daolib_plugin(example_crafting SOURCES crafting/Crafting.cpp)
+dao_apply_warnings(example_crafting)
 
 add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
 dao_apply_warnings(example_attack)

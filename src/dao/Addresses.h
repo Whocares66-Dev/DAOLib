@@ -355,6 +355,17 @@ DAO_ADDRESS(kGameModePartyPicker_SelectEntry, 18307)
 DAO_ADDRESS(kStore_GetBuyPrice, 21193)
 DAO_ADDRESS(kStore_GetSellPrice, 21192)
 DAO_ADDRESS(kStore_WillBuy, 21206)
+// Crafting's party (dao/Crafting.h): GetParty, __thiscall on the app with no argument, returns
+// the party (the app's +0xD0, its +0x58), whose inventory at +0x20C knows the recipes. Read
+// 2026-10-25 (DAOLib #259).
+DAO_ADDRESS(kCClientExoApp_GetParty, 10504)
+// And its test of a recipe known, as Inventory::CraftRecipe makes it (0x0073FE45 to 0x0073FE6B):
+// the id wrapped by the int attribute's constructor, __thiscall (const int*), `ret 4`; Contains,
+// __thiscall on the vector (the inventory's +0x38 attribute's value) with the wrapped id, `ret 4`,
+// a bool; the wrapper's destructor, __thiscall with no argument.
+DAO_ADDRESS(kSmartDataAttributeInt_Attribute, 119)
+DAO_ADDRESS(kECDynArray_Contains, 17611)
+DAO_ADDRESS(kSmartDataAttributeInt_Destroy, 143)
 // CCCreature's vtable slot 44 (+0xB0), __thiscall (anim_base row, float speed, float blend, byte
 // flag), `ret 0x10`, no return value (every caller overwrites eax), read 2026-10-21 (dev/ANIMATION.md). It plays an
 // animation on the base layer through 0x0069B3D0. Only CCCreature's vtable holds it.
