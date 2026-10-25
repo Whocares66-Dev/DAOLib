@@ -150,9 +150,9 @@ It first sets combat data +4 = -1 (checked: the attack target, which `GetAttackT
      - Otherwise it retries in 1.0 s.
      - GM_EXPLORE with dead members, and any other mode, retry in 2.0 s.
      - `CheckResurrection` reads IsDead as it goes, so a chain of bodies near each other can be raised in turn. It raises the members in range even when it answers FALSE overall.
-  - Also, from the check (lib-agent-2, 2026-10-25) [C]: `rules_core.nss`:627–631 wraps the ATTACKED trigger in `!IsStealthy`, and the ability impact's handler (around :600) also triggers perception both ways. For a creature not in the party, `combat_h.nss`:1341 also signals COMBAT_END. `IsNoExploreArea` is true only for the tag `cli220ar_fort_roof_1`.
   5. GAMEMODE_CHANGE (`module_core.nss`:246) sets `SetCombatStateParty(new == GM_COMBAT)` on the whole party, the dead included.
 - **So combat does not end while a fallen companion lies 7.5 m or more from every living member** [C for the scripts; seen in Paragon's tower run, not in vanilla]. The party stays in GM_COMBAT until someone walks near the body.
+- Also, from the check (lib-agent-2, 2026-10-25) [C]: `rules_core.nss`:627–631 wraps the ATTACKED trigger in `!IsStealthy`, and the ability impact's handler (around :600) also triggers perception both ways. For a creature not in the party, `combat_h.nss`:1341 also signals COMBAT_END. `IsNoExploreArea` is true only for the tag `cli220ar_fort_roof_1`.
 
 **Scripts that queue a sheathe themselves:** only `placeable_h.nss`:676 (`CommandWait(2.0)` then `CommandSheatheWeapons()` for the killer of a placeable in explore) and `proving_core.nss`:221 (on leaving the Proving). No script calls `CommandUnsheatheWeapons`, and no AI script draws.
 
