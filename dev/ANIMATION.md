@@ -1487,12 +1487,64 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - **commands.gda row 32:** AddBehavior 2 and AddBehaviorSelf 2, so queuing it runs ClearAllCommands(1, 0). The UseAbility under way ends −2 (COMMAND_FAILED_COMMAND_CLEARED) [I: that the use command is not static, which ClearCurrentCommand's rule needs (COMBAT.md, "the static rule")].
     - **So** a cone's caster shows 258 while the effect stands, then 290. That 290's length makes up the 2.3 s seen is [I]: the clip was not measured.
     - **Paralysis's handler** 0x007A05B0 also sets its effect's flags (+0x3C) to 0xFF, beside the priority 998 [C].
+  - **Who queues it, the start, each tick, the end, and an example** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with subagents; the INSTANT test and fill in 0x00695F20 and the creature update's re-queue re-read by lib-agent-2) [C unless marked]. The slot 0x1C conditions, the INSTANT-only fill and the new-effect resets are above and not repeated.
+    - **Who queues it:**
+      - **Slot 0x1C** (0x006977C0) queues for each of its three callers: the apply (0x007A129E, after its +0x48 test and the lengthening), the death handler (0x007A13EC) and the paralysis handler (0x007A05DE, mid-function, right after +0x3C = 0xFF and +0x38 = 998).
+        - It needs the new effect's priority above 0.
+        - It also needs either no 32 current or queued (0x0073C650(0x20)), or this: a top effect exists, the new one is INSTANT, and its priority is not below the top's (0x006977E1–0x006977FA).
+      - **Two more callers of 0x00695F20 skip those tests:**
+        - `CCCreature::Update` (0x006BE6FF–0x006BE720) queues a 32 for the top effect when that effect is valid (+0x48 == 0) and no 32 is current or queued. So a creature whose 32 was cleared while an effect still stands gets a new one on its next update.
+        - 0x006978F0 (ID 14155, unnamed) calls it at 0x0069791F for the top effect, with no test. Its callers were not traced [I].
+    - **The queuing:** `QueueNewCommand(0x20, data, 1, 1, 0, −1, 1)` (0x0073D000). The 1 and the −1 go to QueueCommand: in front, with override −1, so commands.gda's 2 applies and `ClearAllCommands(1, 0)` runs. The second 1 is the static flag (cmd +0xC), the 0 goes to +0x10, and the last 1 to byte +8 [I for what +0x10 and +8 mean].
+    - **The start** (0x00742B70, ID 17675): for a creature with parameters, it copies the data, sets the copy's int 0 = 0, adds sub-action 51 (`AddSubAction(0x33, data, 0, 0, 0)` 0x0073D4D0) and answers 1. A non-creature, or no parameters, answers 0 and adds nothing.
+    - **Each tick:**
+      - **Shown** is a top effect (0x004621C0 on +0x158) whose priority is at least int 2 (0x007AAC99–0x007AACBB). A null +0x158 answers 0 for ever, so the command never ends on its own.
+      - **The same type, sub flag 0 not 1:** nothing is replayed.
+      - **A new effect** also resets ints 1 and 2, objects 0 and 1 and flags 0–2 (0x007AAEF2–0x007AAF3A), so the INSTANT data is spent on the first new effect.
+        - **Animation 0:** answers −1.
+        - **A loop:** played with −2.0, step +0x14 = 0.
+        - **A one-shot:** played with 2.5 (−3.0 for appearance 0x4E29), step +0x14 = elapsed (+0xC) + AnimationStepLength.
+        - **A sync effect:** goes through 0x007A7290, which plays through 0x007A4D50 with a zeroed record, so a blend of −1.0.
+        - **Effect flag 0 set:** only the step is set; no clip is played (0x007AB24E).
+        - **Paralysis (8):** paused through slot 0x4C(1), and the creature's own current clip (0x00695700) is replayed with 2.5, not the effect's +0x34 (corrected 2026-10-24 by lib-agent-2).
+        - **A disabled creature** (GetEffectsFlags & 5) in a clip of State 1 is held in Dead, clip 3 (0x007AB077).
+      - **Every shown path ends at 0x007AB313** (the join, not the death branch; corrected 2026-10-24 by lib-agent-2), where the duration-type-6 test runs: health 0, Dead held, and DEATH once `SubAction::RemainingMs` (0x007A1AE0, +0x14 − +0xC, 0 if +0x14 ≤ 0) is below 1. The same-type path passes the test on every tick, which is how a dying creature holds Dead and counts down to DEATH; animation 0, which answers −1, also comes there. The answer is 0 throughout, so a dead creature keeps its 32. A loop death animation has step 0, so DEATH comes on the first tick.
+      - **Not shown** (0x007AB5D8; no top, or the top ranks below int 2):
+        - **int 2 > 0:** the INSTANT clip plays once (`0x007A5E80(sub, creature, int 1, object 1, 0, 0, 0)`). The apply makes an INSTANT effect with a clip TEMPORARY before slot 0x1C (0x007A1202), so this is rare [I].
+        - **int 0 == 0** (nothing ever shown): answers 1 (0x007AB7F0).
+        - **Otherwise the end** (0x007AB61F):
+          - **Paralysis:** resumed through slot 0x4C(0).
+          - **The end clip, with sub flag 0 clear:** TransitionTo of the current animation (0x006956B0, `[+0x154]+0x13C`, → 0x005CA6B0; corrected 2026-10-24 by lib-agent-2, not 0x00695700 +0x140), and once more if that is a loop. Clip 1, the pause, when the creature has no such clip (`CCCreature::HasAnimation` 0x00694E70). The end path also has a branch for sub flag 0 set.
+          - **The get-up:** with a held partner that 0x007C1AA0 answers for (the partner test, [I: "free to get up"]), the clip is 263 (0x107, the get-up) and the sub-action's flag 3 is cleared. Otherwise, except for type 8 or with a held partner, int 4 is set to 3 (corrected 2026-10-24 by lib-agent-2). Then int 4 is decremented, floored at 0, so for three ticks a partner that becomes ready late still gets the get-up.
+          - **A one-shot end clip:** answers `0x007A5E80(sub, creature, clip, −1, 0, 1, 0)`, 0 until its step is out, then 1. Its first call sets sub flag 0, so later ticks do not recompute the clip.
+          - **A loop end clip:** played with −2.0, looping, and the answer is 1 at once.
+          - **On answer 1 with sub flag 5:** the flag is cleared (SetFlag(5, 0)), then 0x006A0E30(1) and slot 0x178.
+    - **The one-shot step** (0x007A5E80, ID 19846):
+      - With no data it answers −3.
+      - With data flag 0 clear, it sets the flag and runs the placement 0x007A5A30, then 0x007A4D50.
+      - 0x007A4D50 (ID 19838): the length is AnimationStepLength(clip), then 0x007A3370 runs. The clip is played through slot 0xB0, speed 1.0, with blend 3.0 when the record's seconds (+0x24) are at least 0.01 (0x00B1B7D8) and −1.0 otherwise, looping by the record's +0x28. The step is +0x14 = +0xC + the length.
+      - It answers 1 once +0x14 ≤ +0xC.
+    - **AnimationStepLength** (0x006957A0):
+      - 0 with no animation set (+0x154).
+      - A loop answers its own length (0x00A5F7A0).
+      - A sync pair goes through 0x00A5E500 (not traced).
+      - Otherwise it is the sum along TransitionTo up to the first loop, five steps at most, the loop not counted. `pause` (row 1, Type 1) counts as a loop.
+    - **The end** (`Commands::ExecuteEffectEnd` 0x00747250), for a creature with parameters:
+      - 0x0069EBB0(1), slot 0x178, then 0x007C1A30 and 0x007C1EA0 on +0x744, which lets the sync partner go.
+      - When the top effect is paralysis, slot 0x4C(0) resumes the animation. So a 32 ended under a paralysis by `ClearAllCommands(1, 1)` leaves the creature unfrozen.
+      - Every path then reaches `Commands::EndShared` 0x00746900 (a null creature jumps to 0x007472CB). This settles the [I] in spells_combat.md's "Reset at every command's end" for 0x00747250.
+    - **Example, Overwhelm's caster** (anim_combat: 2019 one-shot → 2053 loop → 2054 one-shot → 1; `OVERWHELM_DURATION` 2.0) [C for the code and the rows, I for the clip lengths]:
+      - The caster's 1043 is TEMPORARY for 2.0 s. The apply lengthens it by 2019's length, 3.567 s; the 1.100 s loop is not added.
+      - When it goes, the end clip is 2054. Its step length is 4.767 s, since `pause` stops the sum.
+      - So the 32 lasts 2.0 + 3.567 + 4.767 = 10.33 s. paragon-agent-2 measured 10.37–10.44 s in vanilla.
+      - The last punch comes at 5.56 s, when the effect ends. `effects_h` then removes the victim's 1042 with the caster's 1043, so the exit clip's impacts do no damage.
+      - Overwhelm's script: hit 1 only applies 1042 (PERMANENT, on the victim), and the punches start at hit 2. The victim's 1042 shows 2055 (`talent_overwhelm_dmg`, TransitionTo 2057), so the victim's 9.1 s chain is [I] (corrected 2026-10-24 by lib-agent-2).
   - A one-shot start clip is played with a blend of 2.5 (a 0.4 s fade), and the step lasts its length. A loop (anim_base Type bit 0) is played with −2.0 (20 % of the step) and no timer.
   - When the effect ends, the sub-action plays the current animation's TransitionTo (0x005CA6B0) through 0x007A5E80, which grows the step by that clip's length; a loop ends in a crossfade into `pause`.
   - **Knockdown on a humanoid:** 148 (1.367 s) → by its TransitionTo, 151 `talent_charge_react_loop` (`mh_c.rct_kdwn_lp_v1`, one frame looped) while the effect stands → on removal 152 `talent_charge_react_getup` (`mh_c.rct_kdwn_up_v1`, 2.133 s) → pause. The step is 1,366 ms while the effect stands and 3,499 ms with the get-up, as DAOTurnBased saw in play ("51 (1366 of 3499 ms)").
   - **The knockdown's own duration is the script's.** Fireball (`spell_aoe_instant.nss`:205–209) applies it for `RandomFloat()` seconds, after a failed physical resistance check. `RandomFloat` (767, 0x0064EB20) is an LCG with its own seed at 0xC349AC: s = s·214013 + 2531011, then ((s >> 16) & 0x7FFF) / 32767, so 0 to 1 s. Neither `effects.gda` nor `effect_knockdown_h` changes it, and ageing starts at the effect's first update (0x007A0B10 sets +0x50). The fall's 1,367 ms step plays out even when the effect has already ended, so the creature is down about 1.4 s and then gets up (read 2026-10-21 by lib-agent-2).
     - **The get-up comes after the script's duration plus the fall's clip; settled 2026-10-21 by lib-agent-2.** The cause was found while reading #144 (COMBAT.md, "An instant effect with an animation becomes temporary").
-      - **The engine lengthens the effect** [C, the apply 0x007A0E30 at 0x007A1235..0x007A125D]. For an effect with priority > 0 (knockdown 981) and duration type 2 (TEMPORARY), after the APPLY_EFFECT script has run, it adds the length of the effect's animation in the target's tree (`0x00A5F7A0`, ms) to the duration (+0x2C).
+      - **The engine lengthens the effect** [C, the apply 0x007A0E30 at 0x007A1235..0x007A125D]. For an effect with priority > 0 (knockdown 981) and duration type 2 (TEMPORARY), after the APPLY_EFFECT script has run, it adds the length of the effect's animation in the target's tree (`0x00A5F7A0`, ms) to the duration (+0x2C). (corrected 2026-10-24 by lib-agent-2) [C]: the apply adds one clip's length (`0x00A5F7A0`, AnimationLength) to the effect's duration, not a step sum (0x007A1244–0x007A1255). It is skipped when 0x00A5E940 is true.
       - **One exception** [C for the test, I for its meaning]: the length is not added when `0x00A5E940(anim)` answers true, which looks like a looping-clip test.
       - **So a knockdown of d seconds stands for d + 1.367 s on a human male.** Paragon-agent's log fits: a 0.5 s knockdown played 152 (get-up) at 1.85 s against 0.5 + 1.367 = 1.867 s. DAOTurnBased's 1.4–2.3 s for Shield Bash's 0–1 s fits too.
       - **What the code read earlier still holds**: ageing starts at once, and sub-action 51 writes none of the effect's clock. The duration itself is longer.

@@ -528,7 +528,8 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
 - It reads the effect's animation priority (0x00A65380: 999 for duration type 6, else +0x38).
 - If that is above 0 and the creature has no command 32 current or queued (0x0073C650(0x20)), it queues one (0x00695F20). Checked.
   - The command is 32, `ExecuteEffect` in `commands.gda`, put at the front as static and not player-issued.
-  - Its ints are the death animation (effect +0x34) and the priority; its object is the killer.
+  - **Its data is empty** (corrected 2026-10-24 by lib-agent-2, from paragon-agent-2's reading) [C]. 0x00695F20 fills int 1 (the animation), int 2 (the priority) and object 1 (the creator) only for an INSTANT effect (`cmp [edi+0x28], 1`, 0x00695F71).
+  - The death effect is duration type 6 (0x007A131F), so its 32 carries nothing. Sub-action 51 finds the death through the creature's top effect (+0x158), as it does for any lasting effect (ANIMATION.md).
 - ExecuteEffect's start (0x00742B70) adds sub-action 51. Sub-action 51 is the handler 0x007AAC10, the knockback's too.
 - Where the death effect is put in the creature's effect list was not read.
 
