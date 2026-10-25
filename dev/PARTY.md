@@ -225,6 +225,12 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset scrip
      - vectors 0 and 1 = spot;
      - flag 3 = 1, flag 1 (run) = 1, flag 6 = 0;
      - via `CDataArrays` `0xA5A9B0`/`0xA5B890`.
+     - **What the move does with it** (read 2026-10-24, checked by lib-agent-2) [C unless marked]: from its second run, sub-action 14 goes straight to the move update with flags 7 (0x007A9BA9), which reads vector 1 as the goal. Flag 3 then stops, frees and searches afresh from call 1 in that update (PATHFINDING.md, "A retarget is a fresh search").
+       - So every re-follow of a follower already walking is a new search. The move update has no "keep walking" case.
+       - A re-follow over open ground passes the straight walk on call 1 and walks at once. A non-straight one stands while the setup runs (one or two updates).
+       - The only filters come before the move update, in the follow: `ShouldMove`, and the spot being more than 1.0 m away.
+       - A follower with the player's order (flag 6) is not retargeted.
+       - Whether its walk cycle visibly plays in place while it stands is [I].
    - **Otherwise**, `RemoveCommand(20)` (`0x0073C9E0`) is run first. Then `0x0069EF30` builds a fresh MoveToLocation and queues it with `CCObject::QueueNewCommand` (`0x0073D000`). Its parameters:
      - location 0 = spot;
      - flag 1 = 1, **always run**;

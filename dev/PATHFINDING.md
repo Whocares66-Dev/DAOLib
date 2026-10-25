@@ -255,6 +255,63 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
     - **2, 3, 7:** walk.
     - **4:** sets the sub-action's flags 0 (started) and 4 (search in progress), vector 2 and int 0, and returns 0. The sub-action goes on, but it neither walks nor reaches the standing counter. On the next run, flag 4 takes the same branch (0x007A9240), and RequestPath is asked again.
   - The walk part is gated by bit 2 of the sub-action's parameter byte.
+- **Every walk's search, its answers and a retarget** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2 with subagents, for DAOParagonEngine #263/#259) [C unless marked]:
+  - **Every walk searches through the move update.**
+    - RequestPath (0x0073EA80) has one caller, 0x007A92F8 in the move update, and no pointer in the image holds its address.
+    - The move update has five callers:
+      - 0x007A9BB9, in sub-action 14 (`MoveToLocation`, 0x007A99B0);
+      - 0x007A9E46 and 0x007AA05D, in sub-action 52 (`MoveToMultiLocations`, 0x007A9BD0);
+      - 0x007AA546, in sub-action 15 (`ApproachRanged`, 0x007AA200);
+      - 0x007AA7CC, in sub-action 4 (`ApproachMelee`, 0x007AA560).
+    - Each calls it with flags 7 from its first run, in the command's own update.
+    - Sub-actions 4, 15 and 14 answer 1 before that call when the creature is already in reach (slot 33, or the band 0x007A3090).
+    - Sub-actions 4 and 15 can stop with −10 (0x007A2210) before the move update; 14 and 52 cannot.
+  - **Which command uses which:**
+    - **UseObject** (0x00745920): 4, then 21.
+    - **MoveToObject** (0x00746F00): 4 for a `CCPlaceable` (the test is vtable slot 9, non-null only there), and 15 for anything else.
+    - **StartConversation** (0x007452A0): 15 when the target's InteractRadius is 0, and 14 otherwise.
+    - **MoveToLocation** (0x00745630): 36, 14, then 42.
+    - **MoveToPoints** (0x007457C0): 52.
+  - **The block at 0x007A9240** is entered when any of these holds:
+    - the sub-action is new (flag 0 clear);
+    - flag 3 (a new goal) is set;
+    - flag 4 (a search under way) is set;
+    - the controller's state is 2, which forces flag 3 in the local.
+  - **With flag 3** it runs, in order:
+    - 0x00A62BC0, if flag 0 is set;
+    - `MovementController::Free` (0x00A625B0), which deletes the path object at controller +0x14;
+    - 0x00A62890, which puts a new empty one there;
+    - the stop 0x006A9430(flag 0 clear).
+  - **Without flag 3** it calls `MovementController::Cancel` (0x00A62960). Cancel acts only when controller +0x18 is 2 and the path's active byte is set. It then drops two waypoints and resets the path's +0x88 and the controller's +0x18, and always keeps the path object. So a search under way keeps its ends (0x0073D6E0 answers 1). What sets +0x18 to 2 was not read [I].
+  - **Then RequestPath runs, and flag 3 is cleared** (0x007A9307).
+  - **The answers:**
+    - **5 or 8:** stop, −4. RequestPath's fallback (0x0073EE88–0x0073EF5E) can turn a 5 or 8 into 1 or 5 first [I for its conditions].
+    - **1:** clears flag 4 and walks.
+    - **6:** sets flag 4, stops (0x00A62BC0, 0x006A9430(0)), −9.
+    - **4:** sets flags 0 and 4, vector 2 = the creature's place, int 0 = 0, returns 0.
+    - **2, 3, 7:** set flag 4 and walk.
+    - The walk part runs only with bit 2 of the parameter flags.
+  - **The first walk is the first leg's call.** RunLeg (0x00A4D1F0) answers 3 on every successful leg, 6 only at 0x00A4D726, and 5 on failure, and the driver returns its answer as it is.
+    - So a path that is not straight is first walked on call 2 (one level, or the same parent) or call 3 (two levels, differing parents).
+    - It is call 1 for one node, or when the straight walk passes. Until then the walker stands.
+  - **A retarget is a fresh search.** A new goal with flag 3 (the follow, a click, `ApproachMelee`'s retry, `ApproachRanged`'s re-path through 0x007A6CA0) is stopped, freed and asked afresh in the same update, from call 1.
+    - 0x007A6CA0 sets flag 3 (0x007A6D82) only when the goal chooser succeeds.
+    - The stop's argument is (flag 0 clear), so a started walk's movement state is not set to stopping (0x00A63AC0); only its data is zeroed. Nothing steers until the walk part runs, since the new path has no waypoints.
+  - **What each walk does with −9:**
+    - **ApproachMelee (4),** used for a use and for MoveToObject to a placeable, retries when `CCCreature::PathBlocker` is the target itself and the target is not a creature.
+      - It asks the use spot (CCPlaceable slot 38, 0x0074F240) again with its 5th argument 1, which skips the first candidate's free-and-sight test. That this is "the far side" is [I].
+      - It then sets the goal and flag 3, sets int 3 = 1500 and answers 0 (0x007AA7D1).
+      - int 3 is a countdown in ms between asks of the spot (TURN_BASED.md, the melee ring).
+      - Nothing counts the retries. They end when the spot refuses (−5), the blocker changes, or the timeout (−10) comes.
+    - **ApproachRanged (15)** and **MoveToLocation (14)** return the move update's answer as it is. 15 re-paths through 0x007A50F0 unless its flag 5 is set (0x007AA4D0). 4 has no such test.
+    - **MoveToMultiLocations (52):**
+      - **First run:** it sets flags 3, 4 and 14.
+      - **Each run:** it returns the main call's answer when that is non-zero (0x007A9F4D).
+      - **The look-ahead:** while the creature walks and is not yet within max(float 2, 1.5) of the point, it searches the next point ahead. That is the move update with flags 9: bit 8 takes vector 4, the current point, as the start, and bit 2 is clear, so it does not walk.
+      - **At a point:** it raises event 0x4F on its own script, with int 0 the index and int 1 the count. It then advances int 5, and swaps in the look-ahead's path if that is ready (0x007A23A0, 0x00A63210). Otherwise it sets flags 3 and 4 for a fresh search.
+      - **A 6 in the look-ahead does not fail the command.** The move update stops the walker, but the sub-action discards the −9 and returns the main call's 0.
+        - The next run re-searches from the creature's place to the current point and walks on.
+        - At the point, the swap fails and the next point is searched afresh. Its 6 then comes back as −9 and ends the command [I for the order: 0x007A23A0's test was not read].
 - **The corner pass settles** [C for the test; I for the counts] when W.3C − W.44 > 5 or W.3C == W.30 (0x00A4BA70). Each step (0x00A4D110) advances W.3C by 5: after one call if it changed nothing, or after 11 calls if it keeps cutting. So the first window takes 2 to 22 driver calls, and a straight path about 2.
 - **The time budget** [C]:
   - The search object at world +4 has a stopwatch at +0xCC (made at the world's construction, kept at world +0xE0 and copied in at each step by 0x00A467A0) and the limit in seconds at +0xD0, the step's one argument. RequestPath (from 0x0073EDEA) passes 0.003 × (AI level ≤ 3 ? 1 : 2) (0xB1B7E0 = 0.003).
