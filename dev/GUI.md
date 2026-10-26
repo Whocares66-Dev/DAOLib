@@ -212,18 +212,46 @@ Explore mode's pick (`dao/GameModes.h`) chooses nothing when the interface says 
 ### Creatures in the cursor's mask
 
 - The controller (groups 0x10, COLLISION.md) is outside 0x22607.
-- **0x006A1730** (ID 14442, unnamed; called from 0x006A700A in the creature code and 0x0076644E in the party picker's stage) makes a **"CoarseSelectionActor"** when the model has none:
-  - The actor is a capsule (0x0081C210, ID 22176), sized from the creature's slot 0x1B0 and placed at the creature's position plus (0, 0, slot 0x1B0(0)).
-  - Its groups are set to **0x20000** (0x006A1978), and its room is taken (`Physics::GetActorRoomId`).
-  - Which arguments make the radius and height was not read [I].
-- So a creature is met by its selection capsule (0x20000) and, as `PickAt` saw ("a creature is in a pick twice running, its body and its pick volume"), by a body [I: which shapes of the creature's model].
+- (read 2026-10-25 by lib-agent-2 with subagents, for DAOParagonEngine #289) [C unless marked]. (Corrected 2026-10-25 by lib-agent-2: this replaces the earlier bullet on 0x006A1730, which said the actor was "sized from the creature's slot 0x1B0 and placed at the creature's position plus (0, 0, slot 0x1B0(0))" and that "which arguments make the radius and height was not read [I]", and the closing line that a creature is met by a body "[I: which shapes of the creature's model]".) Called from 0x006A700A in the creature code and 0x0076644E in the party picker's stage.
+- **The coarse selection capsule** (`CCCreature` 0x006A1730, ID 14442):
+  - **When it is made:** it returns at once when the model's physics object (model +0x1BC) already has an actor named `CoarseSelectionActor` (its slot 0x10, by name). Which model would carry one was not found; the stone golem's `.phy` has none [I that none do].
+  - **The capsule:** otherwise it makes one through 0x0081C210, with r = PersonalSpace (`[[creature+0x7B0]+0x60]`) and h = Height (slot 0x1B0(0), apr_base `Height`).
+    - Its shape is the same capsule prototype as a `.phy`'s (0x0052D380), with its inner turn and its lift of r + h / 2 (COLLISION.md, "A capsule stands on its file position"). So it spans from the actor's origin to h + 2r above it.
+    - Its actor is kinematic (prototype +0x50 = 1) with groups 0x20000.
+  - **Each update** (0x006A6FF0, which also remakes the capsule if it is gone) sets its pose with `SetGlobalPose` to a translation at (x, y, z′), z the creature's position:
+
+    | The creature | z′ (the capsule's bottom) | Its top |
+    |---|---|---|
+    | dead (slot 0x1D0) | z − H | z + 2·PS |
+    | alive, 2·PS > H | z − 1.8·PS (0x00B004D8) | z + H + 0.2·PS |
+    | alive, 2·PS ≤ H | z − 1.6·PS (0x00B010F0) | z + H + 0.4·PS |
+
+    - A human (PS 0.35, H 1.75) reaches H + 0.14, as paragon-agent measured.
+    - A stone golem (PS 0.85, H 2.0) reaches z + 2.34.
+    - That 0x006A6FF0 runs every frame, and that its matrix (0x004D3B80) is a translation alone, are [I].
+- **The body capsules:** a creature's body model's `.phy` (`cn_bdy_*_<n>.phy`) carries a cobj and a capsule under each of its main bones (Root, LowerBack, Chest, the hips, the knees …), each with the Creatures and Nonwalkable masks (0x81000002).
+  - Each cobj has `MMHNodeCollisionObjType` 1, so the actors are kinematic and follow their bones (COLLISION.md, "A kinematic actor follows its node").
+  - The cursor's 0x22607 meets them through 0x2.
+  - So a creature is picked by its posed body, as well as its upright capsule. This is how a stone golem is picked up to 2.6–2.8 m and lopsided, above its capsule's 2.34 [I for the golem's exact figure; C that its bones carry such capsules, `cn_bdy_snga_0.phy`].
+- **Both carry the creature's id.**
+  - A hit's id is the actor's owner (`GetActorObjectId` 0x0081C970, the first dword of the actor's user record).
+  - `PhysicsActor::Create` takes it from the owner's slot 0x20 (for the body Object 0x0055CBD0: Object +0x34; its setter is slot 0x1C, 0x0054F750). The coarse capsule takes its id from the same slot.
+  - `PhysicsObject::CreateActor` classes an actor kind 3 when `GetCreatureById` finds that id.
+  - The writer of the creature's id into Object +0x34 was not found [I].
+- **In the pick** (above): World::Raycast keeps one body hit per object plus its selection hits, nearest the camera first.
+  - A body hit of an eligible creature ends the walk.
+  - A selection hit counts only for a creature that is not dead. So a corpse is picked only by a bone capsule, and only when `HasLootableBodyBag` (0x006AB100) holds.
+- **A corpse clicked becomes its body bag.**
+  - **The pick** returns the creature's record and maps nothing.
+  - **The click** (0x00712830, at 0x00712C14–0x00712C55) does it: when the target is a creature, dead (slot 0x1D0), with a bag (+0x790 ≠ −1) that `GetPlaceableById` (0x005D5B40) finds, the target becomes the bag. Its Action0 (slot 0x100(0)) goes to `Orders::UseObject`.
+  - **The link:** the creature's +0x790 is the bag, and the bag's +0x664 is the creature, with +0x600 = 1 (PLACEABLES.md's +0x600/+0x664). The physics owner is never changed at death [I: no such call found].
+  - **The bag's own shape:** `plc_corpsehmn_01_0`'s `.phy` is one box with Items and Nonwalkable (0x81000001), met through Items with the bag's own id. So a click on a corpse reaches the bag by either route.
 
 ### Not read
 
 - What explore +0x58 and 0x006C37A0 are, and what 0x0067D390 and 0x005C1770 answer.
 - ValidTarget's flags.
 - 0x00A5E940.
-- The selection capsule's size, and the creature body's shapes.
 - PhysX's report order.
 
 ## What Scaleform's own documentation adds
