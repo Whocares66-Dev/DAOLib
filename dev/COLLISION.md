@@ -140,8 +140,27 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
     - The `.phy`'s tree is `GOB` > `mshh DoorLow` > `cobj` > `shap Box21`.
     - The `.mmh`'s `DoorLow` has `trsl` (−0.585, 0, −0.024) and no turn, so Box21 (1.386, 0, 1.994) is at (0.80, 0, 1.97) in the model. That matches the model's box, x −0.585 to 2.193.
     - paragon-agent's cursor hits on the Dust Town door (`PLC_DoorLgDwf_03_0`, `DoorLow` at (−1, 0, 0)) fit the same (dev/PARAGON_PHY_NODE.md).
+  - **A kinematic actor follows its node** (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2; it settles this note's earlier [I] on actors moved after creation) [C unless marked].
+    - **The update:** `ObjectNode::UpdateWorldTransform` (node vtable 0x00AF9764 slot 0x44, 0x0055E9D0; it recurses over the children at 0x0055EC5C) reads the node's actor (+0x15C) and the actor's type (slot 0x34, 0x00875210: actor +0x40).
+    - **Type 0, dynamic:** while the node's dirty byte (+0x160, set by `FetchResults` through the node's slot 5) is set, the node takes the actor's pose (`GetGlobalPose`). Physics drives the picture.
+    - **Otherwise** the node computes its world matrix: the parent's × its own translation and rotation, then its scale.
+    - **Type 1, kinematic:** the matrix's 3×3 is divided by the owner's scale (`owner->slot 0xE0`) and handed to `PhysicsActor::SetGlobalPose` (0x0081E860, actor slot 0xC; the call at 0x0055EC33). This is the caller that 1f7fc9d did not find.
+    - **Type 2, static:** never moved.
+  - **How the pose is applied:** SetGlobalPose converts the matrix (0x00837AE0) and makes a `PhysicsNxActorVariableSet<NxMat34>` command for each NxActor of the actor.
+    - **While the scene steps** (scene +0xAC; `Simulate` 0x0082CCC0 and `FetchResults` 0x00822E20 test it), the command sets cmd+0x38 = 1 (0x0082C480) and its Apply (0x00838C50) calls NxActor slot 0x34, `moveGlobalPose`.
+    - **Otherwise** it is 0 (0x0082C580) and Apply calls slot 0x14, `setGlobalPose`.
+    - **When:** with no step in flight (scene +0xD0 = 0) it is applied at once. Otherwise it is queued (scene +0x104) for after the step.
+  - **When the node is updated:** `Object`'s IRenderable slot 0 (0x00548ED0) re-runs the root's slot 0x44 when the object's transform is dirty, or when any of its animation controllers (0x005D2480, each one's slot 0x10, ORed) reports a change. It does nothing for a hidden object (flag 2).
+    - Reading a node's world matrix (node slot 1, 0x0055DFB0 → 0x00542700) runs it first, and so does the object's own move (`Object` slot 7, 0x00547940).
+    - So while a placeable's state animation plays, each update moves its kinematic actors with the animated node. When the idle holds its last key, the actor stays there [I that slot 0 runs every frame for a visible, animated object: its frame-loop caller was not traced].
+  - **The actor's type comes from the `.phy`'s cobj:**
+    - `ReadPHYCollisionObject` (0x0058B7E0) reads `MMHNodeCollisionObjType` (6057) into the builder's slot 0x28 (0x005AF560, prototype +0x50). It also reads the density (6056, default 10.0), a float 6236, and `MMHCollisionGroup` (6245).
+    - `PhysicsActor::Create` copies the type to actor +0x40, raises NX_BF_KINEMATIC (0x80, slot 0x164) for type 1, and gives a body unless the type is 2. The tests are `IsDynamic` 0x0081CE50 (0), `IsKinematic` 0x0081F0D0 (1) and `IsStatic` 0x0081F0E0 (2).
+    - **The promotion:** `PhysicsObject::CreateActor` (0x00839DA0) turns a static prototype into a kinematic one (0x00839E2A) when the scene's +0x18A is set and no shape is of type 6. Whether the game's scene sets it is [I]; that 6 is a mesh is [I].
+    - **No other mover:** `PhysicsObject::SetPosition` / `SetOrientation` (slots 15 and 16, 0x008393B0 / 0x00839470) skip kinematic actors. So a kinematic actor is moved only through its node.
+  - **Example, Haven's bricked doorway** (`plc_bdoor01_0.phy`): its cobj under `PLC_BDoor01_M` has `MMHNodeCollisionObjType` 1 [C, ghilana]. So its box slides with the wall through the 2.85 m animation, and the passage opens as the bricks move. The doors' cobjs read so far (COLLISION.md's `cobj` fields: type 1) are kinematic the same way.
+  - **For a port:** a kinematic placeable's shapes follow the animated node's pose. The state idle's last key gives the end pose; during the transition the shapes move with the clip.
   - **Not read:**
-    - Whether anything moves the actor after it is made, for instance a door's `DoorLow` turning as it opens. `PhysicsObject` slots 15 and 16 (0x008393B0, 0x00839470) move each actor not of kind 1 by position or orientation, but their callers, and `PhysicsActor::SetGlobalPose` (0x0081E860)'s, were not found. As read, the node's pose is taken when the actor is made [I that it is not followed afterwards; a cursor hit on an opened door in play would settle it].
     - Whether the name compare (0x004C0A50, 0x004C0DE0) is case-sensitive.
   - **For core:** `ShapesOf` should compose the node chain. A shape's pose in the model is `chain(shape.node) × shape_local`.
     - **The chain:** the `.mmh` nodes' `trsl` and `rota` from the root down to the node named by `shape.node`, matched by name, the first match depth-first. The engine's node matrix would also carry scale; the doors' nodes have none, so scale may be left out [I for other models].
