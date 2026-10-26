@@ -54,7 +54,8 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - **An area's EXIT (9) and ENTER (8) go to the area, for the player's creature only** (read 2026-10-25 by paragon-agent, checked by lib-agent-2) [C unless marked].
   - **EXIT:** the area's object removal (0x0068B050, ID 13857, unnamed) queues `EVENT_TYPE_EXIT` with the removed object as its creator. It does so only when that object is the player's creature: its id equals that of `[app+0xD0]`'s 0x0069D2E0 (0x0068B0E2–0x0068B115). It also needs the area's disabled-event gate (0x006800F0(9)) to pass, and it queues through `AIMaster::AddEventDeltaTime(0, 0, …)` (0x0068B187).
   - **ENTER:** the area's object add (0x0068BF90, ID 13861; `CCObject::SetLocation`'s area add) queues `EVENT_TYPE_ENTER` the same way, behind the same gate (0x0068C063).
-  - **The objects' side:** the object's slot +0xFC (`CCObject` 0x00697060, ID 14143, which sets +0x254 to −1) calls the removal (script_commands/objects.md).
+    - AddObject first removes an object already in the area's list (+0x690; 0x0068BFFA, 0x0068C006), so re-placing the player's creature in its own area queues EXIT then ENTER (lib-agent-2, 2026-10-25, from addr-lib-agent's naming pass b9708ec) [C for the calls; I for 0x008663A0 as the list's find].
+  - **The objects' side:** the object's slot +0xFC (`CCObject` 0x00697060, ID 14143, which sets +0x254 to −1) calls the removal (script_commands/objects.md). Before the removal it calls 0x00687A50 (ID 13797) on the area with (object, +0x3C4, the team) (0x00697093) [C].
 - **In a list swap, EXIT comes first and is handled before the area is saved.**
   - The swap's state 1 (0x006C8800) calls 0x006C8720 (0x006C8AF0). That walks the party (0x005D57C0) and takes each creature out of its area through slot +0xFC (0x006C87C7), and so 0x0068B050.
   - It then runs `AIMaster::Update` (0x006C8B06), which delivers the EXIT before step 3 writes the list's areas into the save.
