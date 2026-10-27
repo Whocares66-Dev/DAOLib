@@ -119,3 +119,12 @@ Then in play, the zip's `dinput8.dll`, `dinput8.pdb` and address files in GOG's 
 
 2026-10-24, the debug build of master at `e44851a` (after #255 to #258), `play_matrix.ps1 -EaApp -SwitchPath` with `example` and `probe`: GOG's and Steam's four rows passed, and EA's with no setting. EA's `DISABLEDXMAXIMIZEDWINDOWEDMODE` row failed once, "the game ended by itself; no loader.log written", so the game was gone before the loader ran; both EA rows passed when run again at once (`-Exes @() -EaApp -SwitchPath`). Not reproduced; taken as the EA app's start, not the build's.
 2026-10-27, two unexplained closes (lib-agent-3, #259): lib-agent-3's own instance (game\gogrun) closed twice, at 13:09:40 and 13:13:08, each a minute or two into an origin after character creation. Each time `loader.log` has the window activated, Alt keydowns within 2 s, then `WM_SYSCOMMAND SC_CLOSE` (lParam 0x768, then 0x77f) and `WM_CLOSE` sent by the game's own thread, and `ExitProcess(0)`: a close by Alt+F4 or the window menu, not a crash. Every agent playing then said it sent no keys or close. elgara-agent3's Eluvian test build may have handed the front to the window (activation only, since changed not to). The cause is not known; the same run at 13:37 went untouched.
+
+2026-10-27, the release build of 0.7.0 (`6fa5f08`, the address library at its 0.7.0, `f4fcd92`), `play_matrix.ps1 -Preset release -All` with `example` and `probe`, then EA's with `-EaApp -SwitchPath -All` after `deploy.ps1 -Install ea -Preset release`:
+
+| Build | Settings | Result |
+|---|---|---|
+| GOG, Steam, Steamless, Steamless with the 4GB flag, the Nexus exe, and it with the 4GB flag | all twelve | every one of the 72 passed, answering at 30 to 52 s |
+| EA | all twelve | five passed: no setting, `DISABLEDXMAXIMIZEDWINDOWEDMODE`, `HIGHDPIAWARE`, `DPIUNAWARE` and `GDIDPISCALING DPIUNAWARE`. The seven compatibility modes, `WINXPSP2` to `WIN8RTM`, kept no game up, as at 0.6.0 |
+
+Then in play, the zip's `dinput8.dll` (SHA-256 `13703D57...71F3D14`), `dinput8.pdb` and address files in GOG's private copy (`game\gogrun`, instance `lib-agent`), with `eluvian` and the release build's `example` and `probe`: `loader (daolib 0.7.0)`, "address library: 103187 IDs for this build", the three plugins loaded, the main menu, and a save of Redcliffe Castle loaded into explore. `DAOLIB_PROBE_CRASH_TEST=1` and `=2` each wrote a crash log naming `SetPaused+0xe6 (Probe.cpp:159)` (the release build inlines `CrashIfTesting` into the hook), the second with 4089 of 4096 MiB in use and the reserve's line.
