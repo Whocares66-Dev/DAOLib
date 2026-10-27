@@ -687,6 +687,21 @@ Also direct Invokes (checked): `FloatyLayer.DisplayStatusMessage(text:wstring, c
 ### Minimap and world map (checked)
 
 Function `0x00610D50` (called from `GUIMap` vtable 0x00B19FB0 slot 5 = 0x0072F410, and one more call site; scene id 0x2A = Minimap is tested first): SetArraySize then SetArray for `SharedLibrary.SharedMap.BatchCreatureIDs`(int, one per creature), `SharedLibrary.SharedMap.BatchCreaturePositionsOrientations`(float, 3 per creature: world x, y, orientation; element 0..2 is also the camera icon), `SharedLibrary.SharedMap.BatchCreatureFlags`(int bit flags: hostile, in party, show-as-ally, player, within map radius, from `CreatureMapIcon.as`), then `Invoke MiniMap.Instance.UpdateMinimap()`. Frequency: on the map object's update; I did not trace its caller to a per-frame loop (inferred per frame while the minimap is shown). The world map: `WorldMap.GetTravelling`, `WorldMap.GetAnimating`, `WorldMap.AreaLoadedNotify` Invokes (event; `0x0072EDA0`, `ForScript_AddGeneralScoreboardEntry`'s neighbour).
+- **The secondary map is saved and restored by the engine** (read 2026-10-27 by lib-agent-2 with a subagent, for DAOParagonEngine #295) [C unless marked].
+  - **The struct:** the save's `SavegameWorldmap` (16780, WRLD) holds `SavegameWorldmapPrimaryMap` 16781, **`SavegameWorldmapSecondaryMap` 16782** (the map's tag, empty when none is set), `SavegameWorldmapMapList` 16783, `GUIStatus` 16790 and the last pin clicked 16791.
+  - **The writer** is 0x00701C10 (ID 15972, unnamed). 0x00700FE0 (ID 15953) also touches 16782 and 16783; it was not read.
+  - **The loader** (0x00701250) reads 16781 into `WorldMap` +0x68 and 16782 into +0x78, each tag looked up among the module's world maps and stored through the attribute's Set, which notifies the interface. It also reads 16790 into +0x98 and 16791 into +0xB8.
+    - It does not run the refresh 0x00700A90 that the script commands run after their Set [C for the calls; I for what the refresh adds].
+    - A tag that matches no map of the module gives no map [I from the lookup].
+  - **The script command:** `SetWorldMapSecondary` (756, handler 0x00664F90 → `ScriptBackend::ForScript_SetWorldMapSecondary` 0x00700DB0) sets +0x78 and runs the refresh.
+  - **No script restores the map after a load:** no AREALOADSAVE handler calls the command. The scripts that set it are:
+    - `denpt_map.nss`:42–60, on `DEN_MAP__ACTIVATE_CITY_MAP`, which sets the primary `denerim` and the secondary `wide_open_world`, and on `DEN_MAP__ACTIVATE_WORLD_MAP`;
+    - `den200ar_market.nss`:121 (AREALOAD_PRELOADEXIT);
+    - `denpt_main.nss`:156;
+    - `sp_module_travel.nss`:91, :106–108, :382, :388–389;
+    - the Circle, the climax and Orzammar's `orz_functions_h.nss`.
+  - **Example:** Lyna's save Slot_71, made in Denerim after the Landsmeet, holds primary `denerim` and secondary `wide_open_world`.
+  - **So a port** takes the secondary from 16782, as core's `Savegame` reader gives it (`campaign.worldMap.secondaryMap`).
 
 #### Where `Area.MinimapLeft`, `Right`, `Top`, `Bottom`, `Width` and `Height` come from (read 2026-10-19 by lib-agent-2)
 
