@@ -26,6 +26,25 @@
 //   <hero> <old> <new> <update>", the choices' row ids, 0 for none; the voice's
 //   "GUICharGen.CharGenSelectAppearanceAndSoundSet <hero> 0 <sound set>", as the appearance page's
 //   Next sends it (AppearanceSoundSetScene.as 564, 575), after "GUI.SetSoundSet <sound set>" (40-45).
+// - The finish (CharGen.as 161-186; dev/CHARGEN.md, "CharGenEnd"): Quick Play
+//   (AppearanceSoundSetScene's play button) and the last page's Play (SpellsTalentsScene.as
+//   209-225) prompt for the difficulty; its OK sends "ClientOptions.SetClientOptionMessage
+//   GameOptions.DifficultyLevel <picked>" and "ClientOptions.CommitOptions", then CompleteChargen
+//   and "GUI.HideFullScreenGUI". CompleteChargen sends the voice again for Quick Play (303-306),
+//   then the name (AppearanceSoundSetScene.as 332-336: GUICharGen.TempCharName set through the
+//   movie's ExternalCommands.SetValueUnicode, an FSCommand no message reaches, then
+//   "GUICharGen.CharGenSelectName <hero>"), and sets CharGen.nExitPoint and CharGen.bUserExit. The
+//   movie's FinishScene, run as the screen closes, sends "GUICharGen.CharGenEnd <CreatureID> 0
+//   <exit point>" only with bUserExit set (187-229); a hide with it unset closed the screen with no
+//   CharGenEnd and the game crashed under DragonAgeGUISystem at 0x0072BB11 (Eluvian, 2026-10-18),
+//   and the movie's CharGen.CreatureID was 0 there, so it is set to the hero too.
+// - The rules: a name is not empty (IsValidName, 77-84) and at most MAX_NAME_LENGTH, 10 (21,
+//   147); it starts as table 1001's DefaultNameMale or DefaultNameFemale in the row race * 1000 +
+//   class * 100 + background (CreatureUtils.as 7-27). The points pages' Next is greyed while
+//   points are left (AttributesScene.as 248-258, AbilityScene.as 57-67: properties 34, 35 and 36),
+//   so the full finish wants none. The voice resent is the one chosen, or the first offered, as
+//   the appearance page sets it when none is (308-311); a gender chosen clears it
+//   (RaceGenderScene.as 426). The difficulties are table 211's rows (OptionsUtils.as 491-506).
 // The choices are the screen's own, not the hero's: the movie keeps its gender, race, class and
 // background (RaceGenderScene's m_n*, the gender male and the rest none at its start,
 // ResetChoices 240-244) and greys by them, while the hero starts with properties of its own. So
@@ -39,11 +58,23 @@
 // and background 3 (city), a female city elf rogue; dexterity raised by one through levelup's
 // RaiseAttribute, base 14 to 15, and a skill taken through levelup's Take with Mode::CharGen,
 // held a frame later, the points spent.
+// The finish, seen in play 2026-10-27 on new games: before a background, refused Disabled; names of
+// 11 letters and of none BadName; a dwarf noble warrior's full finish with its points unspent
+// PointsLeft, and difficulty 99 NotOffered; with every point spent through levelup, the full
+// finish at difficulty 2 closed the screen into the origin's cutscene, and in
+// bdn120ar_royal_palace the hero read as Brosca, the name given, race 1, gender 1, class 1,
+// background 5, attributes 15 15 11 11 11 16 and the skills and talents taken, the difficulty
+// option 2. A female elf mage's quick finish, no name
+// or voice given, went into the Harrowing (bhm500ar_tower_harrowing): the hero read as Neria, the
+// origin's default, race 2, gender 2, class 2, background 4, its points spent by the game, with
+// spells 200254, 10001 and 11106. No difficulty popup was shown or needed: the picker's OK is
+// what Finish sends.
 #include "dao/CharGen.h"
 
 #include "dao/Data.h"
 #include "dao/Gda.h"
 #include "dao/Gui.h"
+#include "dao/LevelUp.h"
 #include "dao/Messages.h"
 #include "dao/Tlk.h"
 #include "dao/core/GdaHash.h"
@@ -69,6 +100,9 @@ constexpr std::int32_t kBackgrounds = 97;
 constexpr std::int32_t kBackgroundNames = 210;
 constexpr std::int32_t kSoundSets = 212;
 constexpr std::int32_t kClassesFilter = 20035;
+constexpr std::int32_t kBackgroundDefaults = 1001;
+constexpr std::int32_t kDifficulties = 211;
+constexpr std::size_t kMaxNameLength = 10;
 
 // The choices made on the screen, as the movie keeps them, for the hero they were made for.
 struct Chosen
@@ -78,6 +112,8 @@ struct Chosen
     std::int32_t race = 0;
     std::int32_t characterClass = 0;
     std::int32_t background = 0;
+    std::wstring voice; // none until one is chosen, as the movie's SelectedSoundSet
+    std::wstring name;  // none until one is given: the field's default
 };
 constexpr std::array<std::wstring_view, 3> kExpansionModules{L"DAO_PRC_EP_1", L"DAO_PRC_GIB", L"DAO_PRC_STR"};
 
@@ -126,7 +162,8 @@ Chosen &ChosenFor(ObjectId hero)
     static Chosen chosen;
     if (chosen.hero != hero)
     {
-        chosen = Chosen{.hero = hero};
+        chosen = Chosen{};
+        chosen.hero = hero;
     }
     return chosen;
 }
@@ -199,6 +236,34 @@ const Choice *Find(const std::vector<Choice> &choices, std::int32_t id)
 {
     const auto found = std::ranges::find_if(choices, [&](const Choice &choice) { return choice.id == id; });
     return found != choices.end() ? &*found : nullptr;
+}
+
+// The name the screen's field starts with, the origin's default for the gender.
+std::wstring DefaultName(const Chosen &chosen)
+{
+    const std::int32_t row = (chosen.race * 1000) + (chosen.characterClass * 100) + chosen.background;
+    return StrRefText(
+        Int(kBackgroundDefaults, row, chosen.gender == kMale ? "DefaultNameMale" : "DefaultNameFemale").value_or(0));
+}
+
+bool PointsLeft(ObjectId hero)
+{
+    const auto points = levelup::PointsOf(hero);
+    return points && (points->attributes > 0 || points->skills > 0 || points->talentsOrSpells > 0);
+}
+
+// The name as the movie sends it: written to GUICharGen.TempCharName by its own command, then the
+// message that reads it.
+bool SendName(gui::Movie &movie, ObjectId hero, const std::wstring &name)
+{
+    const std::array<gui::Value, 2> args{gui::Value::String("GUICharGen.TempCharName"),
+                                         gui::Value::WString(name.c_str())};
+    if (!movie.Invoke("ExternalCommands.SetValueUnicode", args))
+    {
+        return false;
+    }
+    messages::SendText(std::format(L"GUICharGen.CharGenSelectName {}", hero));
+    return true;
 }
 
 Refusal Check(const std::vector<Choice> &choices, std::int32_t id)
@@ -336,6 +401,7 @@ Refusal SelectGender(std::int32_t gender)
     Chosen &chosen = ChosenFor(*hero);
     Send(L"CharGenSelectGender", *hero, chosen.gender, gender);
     chosen.gender = gender;
+    chosen.voice.clear();
     return Refusal::None;
 }
 
@@ -434,6 +500,75 @@ Refusal SelectVoice(const std::wstring &soundSet)
     }
     messages::SendText(std::format(L"GUI.SetSoundSet {}", soundSet));
     messages::SendText(std::format(L"GUICharGen.CharGenSelectAppearanceAndSoundSet {} 0 {}", *hero, soundSet));
+    ChosenFor(*hero).voice = soundSet;
+    return Refusal::None;
+}
+
+Refusal SetName(const std::wstring &name)
+{
+    const auto hero = Hero();
+    if (!hero)
+    {
+        return Refusal::NoScreen;
+    }
+    if (name.empty() || name.size() > kMaxNameLength)
+    {
+        return Refusal::BadName;
+    }
+    ChosenFor(*hero).name = name;
+    return Refusal::None;
+}
+
+Refusal Finish(Exit exit, std::optional<std::int32_t> difficulty)
+{
+    const auto hero = Hero();
+    auto movie = gui::ScreenMovie(L"CharGen");
+    if (!hero || !movie)
+    {
+        return Refusal::NoScreen;
+    }
+    const Chosen chosen = ChosenFor(*hero);
+    if (chosen.background == 0)
+    {
+        return Refusal::Disabled;
+    }
+    if (exit == Exit::Full && PointsLeft(*hero))
+    {
+        return Refusal::PointsLeft;
+    }
+    if (difficulty && (*difficulty < 0 || *difficulty >= api::GetM2DARows(kDifficulties)))
+    {
+        return Refusal::NotOffered;
+    }
+    const std::wstring name = chosen.name.empty() ? DefaultName(chosen) : chosen.name;
+    if (name.empty())
+    {
+        return Refusal::BadName;
+    }
+    // The movie's own order: the difficulty, then CompleteChargen, then the hide.
+    if (difficulty)
+    {
+        messages::SendText(
+            std::format(L"ClientOptions.SetClientOptionMessage GameOptions.DifficultyLevel {}", *difficulty));
+        messages::SendText(L"ClientOptions.CommitOptions");
+    }
+    if (exit == Exit::Quick)
+    {
+        std::wstring voice = chosen.voice;
+        if (const auto voices = Voices(); voice.empty() && !voices.empty())
+        {
+            voice = voices.front().soundSet;
+        }
+        messages::SendText(std::format(L"GUICharGen.CharGenSelectAppearanceAndSoundSet {} 0 {}", *hero, voice));
+    }
+    if (!SendName(*movie, *hero, name) ||
+        !movie->SetVariable("CharGen.CreatureID", gui::Value::Number(static_cast<double>(*hero))) ||
+        !movie->SetVariable("CharGen.nExitPoint", gui::Value::Number(static_cast<double>(exit))) ||
+        !movie->SetVariable("CharGen.bUserExit", gui::Value::Bool(true)))
+    {
+        return Refusal::NoScreen;
+    }
+    messages::SendText(L"GUI.HideFullScreenGUI");
     return Refusal::None;
 }
 
