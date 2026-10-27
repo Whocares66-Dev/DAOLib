@@ -34,6 +34,14 @@ enum class State : std::int32_t
     Locked = 3,    // its level, a prerequisite or its training is not met
 };
 
+// Which screen's offers: the level-up screen's or the creation screen's. The creation screen also
+// offers only what its ShowInCharGen allows.
+enum class Mode : std::int32_t
+{
+    CharGen = 1,
+    LevelUp = 2,
+};
+
 // An ability the screen shows, with how it shows it.
 struct Offer
 {
@@ -46,7 +54,7 @@ struct Offer
 // none of the kind the screen does not show it: spells for a class without mana, talents for one with
 //
 // Call it on the game thread, in a module. An open level-up or creation screen redraws from it.
-std::vector<Offer> Offers(ObjectId creature, Kind kind);
+std::vector<Offer> Offers(ObjectId creature, Kind kind, Mode mode = Mode::LevelUp);
 
 // Returns the specializations the screen offers a creature's class, in the screen's order, an
 // add-in's among them: Have if it has one, Learnable if it is unlocked (a manual or a trainer) and
@@ -85,7 +93,7 @@ enum class Refusal : std::uint8_t
 
 // Takes a skill, talent or spell, as a click on its icon does. Refused unless the screen shows it
 // learnable and the creature has a point of its kind.
-Refusal Take(ObjectId creature, std::int32_t ability);
+Refusal Take(ObjectId creature, std::int32_t ability, Mode mode = Mode::LevelUp);
 
 // Takes a specialization by its ability (Bard 4015, Champion 4013, ...), as the screen's choice
 // does. Refused NotOffered unless it is one of the creature's base class's, Locked unless it is

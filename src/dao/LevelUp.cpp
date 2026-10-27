@@ -67,7 +67,6 @@ constexpr std::size_t kListBegin = 0x10;   // in a list's attribute: the vector'
 constexpr std::size_t kInfoAbility = 0x64; // in an AbilityGUIInfo: its ability record
 constexpr std::size_t kRecordId = 0x64;    // in an ability record: its id
 constexpr std::size_t kInfoState = 0x94;   // in an AbilityGUIInfo: its display state
-constexpr std::int32_t kLevelUp = 2;       // the builder's mode for the level-up screen
 constexpr std::size_t kMostOffers = 1024;
 
 constexpr std::int32_t kAttributePoints = 34;
@@ -137,11 +136,11 @@ bool Available(const CCCreature &creature, std::int32_t ability)
 }
 
 // Which page shows the ability, and how.
-std::optional<std::pair<Kind, Offer>> Find(ObjectId creature, std::int32_t ability)
+std::optional<std::pair<Kind, Offer>> Find(ObjectId creature, std::int32_t ability, Mode mode)
 {
     for (const Kind kind : {Kind::Skills, Kind::Talents, Kind::Spells})
     {
-        for (const Offer &offer : Offers(creature, kind))
+        for (const Offer &offer : Offers(creature, kind, mode))
         {
             if (offer.ability == ability)
             {
@@ -231,7 +230,7 @@ bool Unlocked(std::int32_t row)
 
 } // namespace
 
-std::vector<Offer> Offers(ObjectId creature, Kind kind)
+std::vector<Offer> Offers(ObjectId creature, Kind kind, Mode mode)
 {
     std::vector<Offer> offers;
     const CCCreature *found = CreatureOf(creature);
@@ -249,7 +248,7 @@ std::vector<Offer> Offers(ObjectId creature, Kind kind)
     }
     using FindFn = void(__cdecl *)(void *stats, std::int32_t kind, std::int32_t mode);
     reinterpret_cast<FindFn>(Module::Address(addr::kAbilityChains_Find))(stats, static_cast<std::int32_t>(kind),
-                                                                         kLevelUp);
+                                                                         static_cast<std::int32_t>(mode));
     const std::uintptr_t list = party + ListOf(kind);
     const auto begin = TryRead<std::uintptr_t>(list + kListBegin).value_or(0);
     const auto end = TryRead<std::uintptr_t>(list + kListBegin + 4).value_or(0);
@@ -315,14 +314,14 @@ std::optional<Points> PointsOf(ObjectId creature)
                   PointsIn(*found, kSpecializationPoints)};
 }
 
-Refusal Take(ObjectId creature, std::int32_t ability)
+Refusal Take(ObjectId creature, std::int32_t ability, Mode mode)
 {
     const CCCreature *found = CreatureOf(creature);
     if (found == nullptr || found->Stats() == nullptr)
     {
         return Refusal::NoCreature;
     }
-    const auto offer = Find(creature, ability);
+    const auto offer = Find(creature, ability, mode);
     if (!offer)
     {
         return Refusal::NotOffered;
@@ -340,7 +339,7 @@ Refusal Take(ObjectId creature, std::int32_t ability)
         return Refusal::NoPoints;
     }
     Raise(kAssignAbilities, creature, ability, 0);
-    Offers(creature, offer->first); // an open screen redraws the page
+    Offers(creature, offer->first, mode); // an open screen redraws the page
     return Refusal::None;
 }
 

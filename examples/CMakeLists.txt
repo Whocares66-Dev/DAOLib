@@ -82,6 +82,8 @@ add_daolib_plugin(example_tactics SOURCES tactics/Tactics.cpp)
 dao_apply_warnings(example_tactics)
 add_daolib_plugin(example_board SOURCES board/Board.cpp)
 dao_apply_warnings(example_board)
+add_daolib_plugin(example_chargen SOURCES chargen/CharGen.cpp)
+dao_apply_warnings(example_chargen)
 
 add_daolib_plugin(example_attack SOURCES attack/Attack.cpp)
 dao_apply_warnings(example_attack)
