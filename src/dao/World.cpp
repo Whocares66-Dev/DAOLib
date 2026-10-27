@@ -538,8 +538,8 @@ class OwnSearch
         if (made_)
         {
             using Fn = void *(__fastcall *)(void *, int, std::uintptr_t, void *);
-            reinterpret_cast<Fn>(Module::Address(addr::kMovementController_Constructor))(controller_.data(), 0, world,
-                                                                                         parameters_.data());
+            reinterpret_cast<Fn>(Module::Address(addr::kMovementPath_Constructor))(controller_.data(), 0, world,
+                                                                                   parameters_.data());
         }
     }
     ~OwnSearch()
@@ -547,7 +547,7 @@ class OwnSearch
         if (made_)
         {
             using Fn = void(__fastcall *)(void *);
-            reinterpret_cast<Fn>(Module::Address(addr::kMovementController_Free))(controller_.data());
+            reinterpret_cast<Fn>(Module::Address(addr::kMovementPath_Free))(controller_.data());
         }
     }
     OwnSearch(const OwnSearch &) = delete;
@@ -626,7 +626,7 @@ void LiftObstacle(std::uintptr_t controller)
     if (controller != 0)
     {
         using Fn = void(__fastcall *)(std::uintptr_t);
-        reinterpret_cast<Fn>(Module::Address(addr::kMovementController_LiftObstacle))(controller);
+        reinterpret_cast<Fn>(Module::Address(addr::kMovementPath_LiftObstacle))(controller);
     }
 }
 
@@ -964,12 +964,12 @@ class Searcher
     const Vector4 &goal_;
     PathSearch &answer_;
     std::chrono::steady_clock::time_point started_;
-    IsFreeFn isFree_ = reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementController_IsFree));
+    IsFreeFn isFree_ = reinterpret_cast<IsFreeFn>(Module::Address(addr::kMovementPath_IsFree));
     NearestFn nearestFree_ = reinterpret_cast<NearestFn>(Module::Address(addr::kCCArea_NearestFree));
-    SetEndFn setStart_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetStart));
-    SetEndFn setGoal_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementController_SetGoal));
-    DirectFn direct_ = reinterpret_cast<DirectFn>(Module::Address(addr::kMovementController_Direct));
-    StepFn step_ = reinterpret_cast<StepFn>(Module::Address(addr::kMovementController_Step));
+    SetEndFn setStart_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementPath_SetStart));
+    SetEndFn setGoal_ = reinterpret_cast<SetEndFn>(Module::Address(addr::kMovementPath_SetGoal));
+    DirectFn direct_ = reinterpret_cast<DirectFn>(Module::Address(addr::kMovementPath_Direct));
+    StepFn step_ = reinterpret_cast<StepFn>(Module::Address(addr::kMovementPath_Step));
 };
 
 } // namespace

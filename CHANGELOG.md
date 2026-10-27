@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.7.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.7.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **The game's screens as functions:** a plugin levels a character up, picks a specialization, travels on the world map, loots, buys and sells, crafts, sets tactics, chooses the party, takes a Chanter's board quest, reads an item's requirements and makes a character in the creation screen, each by the engine's own path and refused wherever the screen would grey the choice out (`dao/LevelUp.h`, `WorldMap.h`, `Loot.h`, `Store.h`, `Crafting.h`, `Tactics.h`, `PartyPicker.h`, `Board.h`, `CharGen.h`, `Items.h`, #259).
+- **Moments as callbacks, not polling:** a death and a revival as they happen, a made creature ready, a game mode's change, a load's end with the party placed, and the game taking input again (`dao::creatures`, `dao::modes`, #255); and what holds a creature, an approach's own verdict and a creature's movement rate (#257).
+- **The engine's messages typed:** the abilities', party's, items', conversations', popups' and journal's messages read and sent with named fields (`dao/Messages.h`, #253).
+- **The renderer as data:** the scene as a tree of graphics objects and nodes (`dao/Scene.h`, #244), a frame's draws with the node, model, mesh and material each one draws (`dao/Render.h`, #246, #247), and the area's point lights and probes with their place, reach and irradiance (`dao/Lights.h`, #256).
+- **The game's files written back byte for byte, with no game running:** talk tables, data tables, GFF3 templates and ERF archives, each tested over every file of the install; typed views of data tables and creature, item, placeable, store and trigger templates; a cloth node and a room's animated models; and a model's collision shapes posed as the engine poses them (`daolib_core`, #106, #258, #261, #262, #264).
+
 ## 0.6.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.6.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.6.0). The loader and its contract with plugins are as in 0.3.0.

@@ -490,7 +490,7 @@ DAO_ADDRESS(kAnimationManager_AddEvent, 21851)
 DAO_DATA(kCreatureShowDistance, 96798)
 DAO_DATA(kObjectShowDistance, 96799)
 DAO_ADDRESS(kCCObject_RequestPath, 17573)
-DAO_ADDRESS(kMovementController_Step, 33560)
+DAO_ADDRESS(kMovementPath_Step, 33560)
 // A search apart from any creature's (dao/World.h, FindPath), read
 // 2026-09-30. The controller is a plain record, about 0xA0 bytes: the
 // pathfinding world at +0x0C (the application's +0x118), the mover's
@@ -550,21 +550,21 @@ DAO_ADDRESS(kMovementController_Step, 33560)
 DAO_ADDRESS(kCCCreature_PathBlocker, 14603)
 DAO_ADDRESS(kCCPlaceable_Covers, 17891)
 DAO_ADDRESS(kMovementParameters_Constructor, 33566)
-DAO_ADDRESS(kMovementController_Constructor, 33575)
-DAO_ADDRESS(kMovementController_Free, 33555)
-DAO_ADDRESS(kMovementController_IsFree, 33573)
-DAO_ADDRESS(kMovementController_SetStart, 33570)
-DAO_ADDRESS(kMovementController_SetGoal, 33571)
-DAO_ADDRESS(kMovementController_LiftObstacle, 33563)
-DAO_ADDRESS(kMovementController_Direct, 33561)
+DAO_ADDRESS(kMovementPath_Constructor, 33575)
+DAO_ADDRESS(kMovementPath_Free, 33555)
+DAO_ADDRESS(kMovementPath_IsFree, 33573)
+DAO_ADDRESS(kMovementPath_SetStart, 33570)
+DAO_ADDRESS(kMovementPath_SetGoal, 33571)
+DAO_ADDRESS(kMovementPath_LiftObstacle, 33563)
+DAO_ADDRESS(kMovementPath_Direct, 33561)
 DAO_ADDRESS(kCCCreature_PlaceObstacle, 14494)
 DAO_ADDRESS(kCCArea_NearestFree, 17572)
 // Lets a finished search go before a new one (__thiscall, no arguments):
 // the move update calls it first, then puts the mover's id in the
 // controller's parameters (+0x10, its first word), the target's id at
 // +0x94 when the command has one, and the range, 0.05 m, at +0x90.
-DAO_ADDRESS(kMovementController_Cancel, 33569)
-DAO_ADDRESS(kMovementController_NextWaypoint, 33556)
+DAO_ADDRESS(kMovementPath_Cancel, 33569)
+DAO_ADDRESS(kMovementPath_NextWaypoint, 33556)
 DAO_ADDRESS(kPathSearch_Waypoint, 33026)
 
 // Visual effects in the world (dao/Vfx.h), read 2026-09-30 from explore
