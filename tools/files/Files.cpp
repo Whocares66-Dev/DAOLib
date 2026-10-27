@@ -15,15 +15,21 @@
 //       floats an array, a talk-table string {"strref": id}, nothing null, a NaN null. The names
 //       are dev/gff4_fields.csv's (xoreos'), by default the one two folders above this tool; a
 //       field with no name keeps its number.
+//   dao_files ncs INPUT ...
+//       each compiled script given, a path or ARCHIVE|PATTERN, disassembled as core's
+//       ncs::Disassemble writes it under a line "== <its name>" (DAOLib #265); a file that is no
+//       script is said so and skipped.
 #include "dao/core/Erf.h"
 #include "dao/core/Gff4.h"
 #include "dao/core/Gff4Walk.h"
+#include "dao/core/Ncs.h"
 
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <optional>
@@ -367,26 +373,11 @@ std::vector<std::byte> ReadFile(const fs::path &path)
     return bytes;
 }
 
-int ToJson(const fs::path &folder, const std::vector<std::string> &inputs, const fs::path &namesFile)
+// Hands each input's files to `one` by name: a path, or every entry of ARCHIVE|PATTERN that reads.
+// False where an archive is not there.
+bool ForEachInput(const std::vector<std::string> &inputs,
+                  const std::function<void(const std::wstring &, const std::vector<std::byte> &)> &one)
 {
-    const auto names = ReadNames(namesFile);
-    if (names.empty())
-    {
-        std::cerr << "no field names at " << namesFile.string() << " (--names CSV)\n";
-    }
-    fs::create_directories(folder);
-    std::size_t written = 0;
-    const auto one = [&](const std::wstring &name, const std::vector<std::byte> &bytes) {
-        if (JsonOf(bytes, folder / (name + L".json"), names))
-        {
-            std::cout << Narrow(name) << "\n";
-            ++written;
-        }
-        else
-        {
-            std::cout << Narrow(name) << "\tnot GFF4: skipped\n";
-        }
-    };
     for (const std::string &input : inputs)
     {
         const auto bar = input.find('|');
@@ -400,7 +391,7 @@ int ToJson(const fs::path &folder, const std::vector<std::string> &inputs, const
         if (!opened)
         {
             std::cerr << "no archive at " << input.substr(0, bar) << "\n";
-            return 1;
+            return false;
         }
         const std::vector<std::wstring> patterns{Wide(input.substr(bar + 1))};
         for (const archive::Entry &entry : opened->Entries())
@@ -414,8 +405,51 @@ int ToJson(const fs::path &folder, const std::vector<std::string> &inputs, const
             }
         }
     }
+    return true;
+}
+
+int ToJson(const fs::path &folder, const std::vector<std::string> &inputs, const fs::path &namesFile)
+{
+    const auto names = ReadNames(namesFile);
+    if (names.empty())
+    {
+        std::cerr << "no field names at " << namesFile.string() << " (--names CSV)\n";
+    }
+    fs::create_directories(folder);
+    std::size_t written = 0;
+    const bool read = ForEachInput(inputs, [&](const std::wstring &name, const std::vector<std::byte> &bytes) {
+        if (JsonOf(bytes, folder / (name + L".json"), names))
+        {
+            std::cout << Narrow(name) << "\n";
+            ++written;
+        }
+        else
+        {
+            std::cout << Narrow(name) << "\tnot GFF4: skipped\n";
+        }
+    });
+    if (!read)
+    {
+        return 1;
+    }
     std::cout << written << " files written\n";
     return 0;
+}
+
+int Disassemble(const std::vector<std::string> &inputs)
+{
+    const bool read = ForEachInput(inputs, [](const std::wstring &name, const std::vector<std::byte> &bytes) {
+        std::cout << "== " << Narrow(name) << "\n";
+        if (const auto script = dao::core::ncs::ScriptOf(bytes))
+        {
+            std::cout << dao::core::ncs::Disassemble(*script);
+        }
+        else
+        {
+            std::cout << "not a compiled script: skipped\n";
+        }
+    });
+    return read ? 0 : 1;
 }
 
 } // namespace
@@ -448,8 +482,13 @@ int main(int argc, char **argv)
         return ToJson(Wide(args[at]), std::vector<std::string>(args.begin() + static_cast<std::ptrdiff_t>(at) + 1, args.end()),
                       names);
     }
+    if (args.size() >= 2 && args[0] == "ncs")
+    {
+        return Disassemble(std::vector<std::string>(args.begin() + 1, args.end()));
+    }
     std::cerr << "dao_files extract ARCHIVE FOLDER [PATTERN ...]\n"
                  "dao_files list ARCHIVE\n"
-                 "dao_files json [--names CSV] FOLDER INPUT ...    INPUT a file, or ARCHIVE|PATTERN\n";
+                 "dao_files json [--names CSV] FOLDER INPUT ...    INPUT a file, or ARCHIVE|PATTERN\n"
+                 "dao_files ncs INPUT ...\n";
     return 2;
 }
