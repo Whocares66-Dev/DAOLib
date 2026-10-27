@@ -426,6 +426,87 @@ TEST_CASE("a placeable's shapes are read under their nodes with the masks the en
     CHECK(capsule.volume == Approx(0.0343F));
 }
 
+TEST_CASE("a capsule stands on its position along its own z, as the engine poses it", "[collision]")
+{
+    // dev/COLLISION.md section 2 (DAOLib #264): plc_fade_pedestal_0's capsule, at z -0.235 with radius
+    // 0.467582 and height 0.721572, is centred at z 0.5934, as its model's bounding box (middle 0.5945).
+    collision::Shape pedestal;
+    pedestal.kind = collision::Kind::Capsule;
+    pedestal.radius = 0.467582F;
+    pedestal.height = 0.721572F;
+    pedestal.position = {0, 0, -0.235F};
+    const collision::Pose pose = collision::LocalPoseOf(pedestal);
+    CHECK(pose.translation[0] == Approx(0).margin(1e-5));
+    CHECK(pose.translation[1] == Approx(0).margin(1e-5));
+    CHECK(pose.translation[2] == Approx(0.593368F).margin(1e-5)); // -0.235 + r + h/2
+    // PhysX's capsule lies along its own y, which the inner turn takes to the file frame's z.
+    CHECK(std::abs(pose.rotation[7]) == Approx(1).margin(1e-5));
+    CHECK(pose.rotation[1] == Approx(0).margin(1e-5));
+    // plc_tevstatu03_0's: at (0.004, -0.262, -0.342), radius 0.687 and height 1.778, centred at z 1.234.
+    collision::Shape statue = pedestal;
+    statue.radius = 0.687F;
+    statue.height = 1.778F;
+    statue.position = {0.004F, -0.262F, -0.342F};
+    const collision::Pose stands = collision::LocalPoseOf(statue);
+    CHECK(stands.translation[0] == Approx(0.004F).margin(1e-5));
+    CHECK(stands.translation[1] == Approx(-0.262F).margin(1e-5));
+    CHECK(stands.translation[2] == Approx(1.234F).margin(1e-4));
+    // A box and a sphere carry no inner pose.
+    collision::Shape box = statue;
+    box.kind = collision::Kind::Box;
+    CHECK(collision::LocalPoseOf(box).translation[2] == Approx(-0.342F));
+}
+
+TEST_CASE("a capsule is met above its position, not to its side", "[collision]")
+{
+    collision::Shape upright;
+    upright.kind = collision::Kind::Capsule;
+    upright.radius = 0.5F;
+    upright.height = 1;
+    upright.mask = 0xFFFFFFFF;
+    const std::vector<collision::Shape> shapes{upright};
+    const collision::Pose placed;
+    // Its axis runs from z 0.5 to 1.5: a probe at z 1.4 meets it, one 0.9 along y does not, which the
+    // file's pose alone, along y, would have met.
+    const auto probe = [](float x, float y, float z) { return dao::core::Capsule{{x, y, z}, {x, y, z}, 0.1F}; };
+    CHECK(collision::Overlaps(shapes, placed, probe(0, 0, 1.4F), 0xFFFFFFFF));
+    CHECK_FALSE(collision::Overlaps(shapes, placed, probe(0, 0.9F, 0), 0xFFFFFFFF));
+    CHECK(collision::SweepAll(shapes, placed, probe(0, 0.9F, 0), {0, 0, 0}, 0xFFFFFFFF).empty());
+}
+
+TEST_CASE("a shape stands in its node's place in the model, its rest pose", "[collision]")
+{
+    // dev/COLLISION.md section 2: PLC_LrgWdDrR_01_0's Box21, at (1.386, 0, 1.994) under the .mmh's
+    // DoorLow at (-0.585, 0, -0.024), lands at (0.80, 0, 1.97).
+    const std::vector<std::byte> bytes = Door();
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    dao::core::model::Hierarchy model;
+    dao::core::model::Node gob;
+    gob.name = L"GOB";
+    dao::core::model::Node doorLow;
+    doorLow.name = L"DoorLow";
+    doorLow.parent = 0;
+    doorLow.translation = {-0.585F, 0, -0.024F};
+    model.nodes = {gob, doorLow};
+    const std::vector<collision::Shape> shapes = collision::ShapesOf(*file, model);
+    REQUIRE(shapes.size() == 2);
+    const collision::Pose box = collision::LocalPoseOf(shapes[0]);
+    CHECK(box.translation[0] == Approx(0.80054F).margin(1e-4));
+    CHECK(box.translation[2] == Approx(1.9699F).margin(1e-4));
+    // The capsule under GOB, at the identity, keeps its own place; a node the model has not leaves it so.
+    CHECK(shapes[1].frame.translation == std::array<float, 3>{0, 0, 0});
+    // A turned node turns the shape's place with it: DoorLow a quarter turn about z takes Box21's
+    // (1.386, 0, 1.994) to (0, 1.386, 1.994) before the node's own place is added.
+    model.nodes[1].rotation = {0, 0, 0.70710678F, 0.70710678F};
+    const collision::Pose turned = collision::LocalPoseOf(collision::ShapesOf(*file, model)[0]);
+    CHECK(turned.translation[0] == Approx(-0.585F).margin(1e-4));
+    CHECK(turned.translation[1] == Approx(1.38554F).margin(1e-4));
+    CHECK(turned.translation[2] == Approx(1.9699F).margin(1e-4));
+    model.nodes[1].name = L"Other";
+    CHECK(collision::ShapesOf(*file, model)[0].frame.translation == std::array<float, 3>{0, 0, 0});
+}
+
 TEST_CASE("a robe's shapes, when hm_rob_tmpa_0.phy is in game/models, all take spawns, with their volumes",
           "[collision][game]")
 {

@@ -35,6 +35,7 @@
 #pragma once
 
 #include "dao/core/Gff4.h"
+#include "dao/core/Model.h"
 #include "dao/core/RayCast.h"
 
 #include <array>
@@ -186,10 +187,22 @@ struct Shape
     // its volume (MMHShapeVolume, cubic metres) among the shapes that allow it.
     bool allowEmitterSpawn = false;
     float volume = 0;
+    // Its node's place in the model: the .mmh's nodes' poses from the root down to the node of its
+    // name, as ShapesOf with the model gives them; none without the model. The rest pose: in the game
+    // a kinematic placeable's actor (a door's) follows its node as its state's animation moves it.
+    Pose frame{};
 };
 
 // Returns a placeable model's shapes, in the file's order; none for a file that is no .phy.
 std::vector<Shape> ShapesOf(const gff4::File &phy);
+
+// Returns a placeable model's shapes, each in its node's place in the model (Shape::frame): a door's
+// leaf where the .mmh's node puts it. A shape under a node the model has not keeps its own pose.
+std::vector<Shape> ShapesOf(const gff4::File &phy, const model::Hierarchy &model);
+
+// Returns a shape's pose in its model, as the engine hands it to PhysX: its node's frame, then its
+// own pose, and for a capsule its inner pose, which stands it up along its own z on its position.
+Pose LocalPoseOf(const Shape &shape);
 
 // Returns the OR of shapes' masks: what the engine keeps at a placeable's +0x6D8.
 std::uint32_t MaskOf(std::span<const Shape> shapes);

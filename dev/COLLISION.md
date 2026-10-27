@@ -126,7 +126,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
     - `plc_fade_pedestal_0`: position z −0.235, r 0.4676, h 0.7216, so the centre is at z 0.593, against the model's bounding-box middle of 0.5945 [paragon-agent-2's figure].
     - The statue `plc_tevstatu03_0`'s `Capsule07` (above): its centre is at z 1.234, against its box's middle of 1.234.
   - **The level's static capsules** (`.opf`, NXU) carry their localPose as written; this is for model `.phy` capsules only.
-  - **For core** (2026-10-25): `Collision.cpp`'s `Overlaps` (about :1089–:1129) and `SweepAll` (about :1189–:1260) pose a placeable's capsule as `placed ∘ file` alone. They should pose it as `placed ∘ file ∘ (R_x(−π/2), (0, 0, r + h/2))`. Boxes and spheres are right, and `PoseOf`'s convention matches the engine's.
+  - **In core** (DAOLib #264): `collision::LocalPoseOf(shape)` is the pose the engine hands PhysX, `frame ∘ file ∘ (R_x(−π/2), (0, 0, r + h/2))` for a capsule and `frame ∘ file` for a box or sphere; `Overlaps` and `SweepAll` over a placeable's shapes pose each by it. Boxes and spheres were right before, and `PoseOf`'s convention matches the engine's.
 - **The model node's frame enters through the actor** (read 2026-10-25 by lib-agent-2 with a subagent, from dev/PARAGON_PHY_NODE.md's ask) [C unless marked]:
   - **A `.phy` shape is in its model node's frame:** the actor carries the node's world matrix, and the shape its own pose under it.
     - **The overlay:** `ReadPHYNode` calls `PHYToBlueprintBuilder::BeginNode` (0x005B01F0), which takes the current node's child of the same name, or makes one. So a `.phy` node overlays the `.mmh` node of its name [I that the builder starts on the `.mmh`'s blueprint root].
@@ -162,7 +162,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
   - **For a port:** a kinematic placeable's shapes follow the animated node's pose. The state idle's last key gives the end pose; during the transition the shapes move with the clip.
   - **Not read:**
     - Whether the name compare (0x004C0A50, 0x004C0DE0) is case-sensitive.
-  - **For core:** `ShapesOf` should compose the node chain. A shape's pose in the model is `chain(shape.node) × shape_local`.
+  - **In core** (DAOLib #264): `ShapesOf(phy, model)` composes the node chain into each shape's `frame`, and `LocalPoseOf` puts it outside the shape's own pose: a shape's pose in the model is `chain(shape.node) × shape_local`. It is the rest pose; a kinematic actor, a door's, follows its node's animation in the game.
     - **The chain:** the `.mmh` nodes' `trsl` and `rota` from the root down to the node named by `shape.node`, matched by name, the first match depth-first. The engine's node matrix would also carry scale; the doors' nodes have none, so scale may be left out [I for other models].
     - **A `.phy` node no `.mmh` node has** leaves the shape as the `.phy` gives it.
     - **A capsule** still takes its own inner pose under its file pose (COLLISION.md, "A capsule stands on its file position").

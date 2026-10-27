@@ -974,6 +974,58 @@ std::uint32_t MaskOf(const gff4::Struct &shap)
     return mask;
 }
 
+// A model .phy shape's pose (DAOLib #264, dev/COLLISION.md section 2, read 2026-10-25 by
+// paragon-agent-2 and lib-agent-2). A capsule's prototype (CapsuleShapePrototype 0x005AF440, its
+// radius and height set by 0x005AF750 and 0x005AF7E0) carries an inner pose, a turn of -pi/2 about
+// x and the translation (0, 0, r + h/2), which 0x0081B420 composes inside the file's pose (file x
+// inner, the inner first) for its NxCapsuleShapeDesc (0x0081F540); PhysX's capsule lies along its
+// own y, so the capsule stands along the file frame's z, from its position up. A box's and a
+// sphere's prototypes carry none. The actor is posed by its .mmh node's world matrix, the .phy's
+// node overlaying the .mmh's of its name (CreateActor, PhysicsActor::Create from node +0x5C), the
+// shapes under it keeping their own poses; a kinematic actor (cobj type 1, a door) follows its
+// node's animated matrix through SetGlobalPose, unscaled (0f567fd's reading). The level's static
+// capsules come from NXU's stream with their localPose as written and need none of this.
+Pose LocalPoseOf(const Shape &shape)
+{
+    Pose own = PoseOf(shape.rotation, shape.position);
+    if (shape.kind == Kind::Capsule)
+    {
+        constexpr float kHalfRoot2 = 0.70710678F;
+        own = Compose(own, PoseOf({-kHalfRoot2, 0, 0, kHalfRoot2}, {0, 0, shape.radius + (shape.height / 2)}));
+    }
+    return Compose(shape.frame, own);
+}
+
+std::vector<Shape> ShapesOf(const gff4::File &phy, const model::Hierarchy &model)
+{
+    std::vector<Shape> shapes = ShapesOf(phy);
+    for (Shape &shape : shapes)
+    {
+        // The first node of the name in the file's order, its parents' poses composed from the root
+        // down, unscaled as the engine poses the actor.
+        const auto found =
+            std::ranges::find_if(model.nodes, [&](const model::Node &node) { return node.name == shape.node; });
+        if (found == model.nodes.end())
+        {
+            continue;
+        }
+        std::vector<const model::Node *> chain;
+        for (int at = static_cast<int>(found - model.nodes.begin());
+             at >= 0 && std::cmp_less(at, model.nodes.size()) && chain.size() <= model.nodes.size();
+             at = model.nodes[static_cast<std::size_t>(at)].parent)
+        {
+            chain.push_back(&model.nodes[static_cast<std::size_t>(at)]);
+        }
+        Pose frame;
+        for (auto node = chain.rbegin(); node != chain.rend(); ++node)
+        {
+            frame = Compose(frame, PoseOf((*node)->rotation, (*node)->translation));
+        }
+        shape.frame = frame;
+    }
+    return shapes;
+}
+
 std::vector<Shape> ShapesOf(const gff4::File &phy)
 {
     std::vector<Shape> out;
@@ -1125,7 +1177,7 @@ bool Overlaps(std::span<const Shape> shapes, const Pose &placed, const Capsule &
 {
     return std::ranges::any_of(shapes, [&](const Shape &shape) {
         return Meets(shape.mask, mask) && Overlaps(capsule, shape.kind, shape.dimensions, shape.radius, shape.height,
-                                                   Compose(placed, PoseOf(shape.rotation, shape.position)));
+                                                   Compose(placed, LocalPoseOf(shape)));
     });
 }
 
@@ -1255,7 +1307,7 @@ std::vector<ShapeHit> SweepAll(std::span<const Shape> shapes, const Pose &placed
             continue;
         }
         const auto hit = Sweep(capsule, motion, shape.kind, shape.dimensions, shape.radius, shape.height,
-                               Compose(placed, PoseOf(shape.rotation, shape.position)));
+                               Compose(placed, LocalPoseOf(shape)));
         if (hit)
         {
             hits.push_back(ShapeHit{*hit, shape.mask, -1, -1, static_cast<std::int32_t>(s)});

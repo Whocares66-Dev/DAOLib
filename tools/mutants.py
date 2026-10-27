@@ -678,6 +678,18 @@ MUTANTS: list[Mutant] = [
         '.isSelectable = Flag(in, "IsSelectable", true),',
     ),
     Mutant(
+        "collision-capsule-inner: a model capsule stands along its own z on its position, the engine's inner pose",
+        COLLISION,
+        "if (shape.kind == Kind::Capsule)",
+        "if (shape.kind == Kind::Unknown)",
+    ),
+    Mutant(
+        "collision-node-frame: a shape is in its node's frame, the node outside its own pose",
+        COLLISION,
+        "return Compose(shape.frame, own);",
+        "return Compose(own, shape.frame);",
+    ),
+    Mutant(
         "area-room-none: a placeable with no RoomID1 is in no room, -1, as the engine constructs it",
         AREA,
         'Number<std::int32_t>(in, "RoomID1", -1)',
