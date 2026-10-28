@@ -382,7 +382,7 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
     - blend -1.0 when int 7 = 2, that is bBlendIn = 0 (0xAE2E00);
     - blend 3.0 when int 7 = 1 (0xAE7130).
     
-    The meaning of these blend values is inferred. Then 0x007A3370 runs (floats 1 and 2, flags 1 and 2, vector 1; not read).
+    The meaning of these blend values is inferred. Then 0x007A3370 runs (floats 1 and 2, flags 1 and 2, vector 1; read 2026-10-27 by lib-agent-2: "Who carries out the placement", under "Sync abilities").
   - For a creature it calls 0x006A2A20 (inferred: stop moving). Then it sets flag 0.
 - **Every run.** `remaining = duration > 0 ? duration - elapsed : 0` (0x007A1AE0). While remaining > int 5 it answers **0** (running). **A duration ≤ 0 counts as untimed, so remaining is 0 at once.** Then it switches on int 3:
   - **int 3 = 0 (a one-shot ended):**
@@ -481,7 +481,7 @@ It runs with the parameters: int 0 the animation, int 2 the loops, int 3 the pha
 
 ### Not read
 
-- Sub-action 33 (the jump) and sub-action 5 (the string 0 follow-up); 0x007A3370 (the step's vector and float 1/2 use); 0x00694FE0 (flag 3's cut); the slot-44 player and its blend values' meaning.
+- Sub-action 33 (the jump) and sub-action 5 (the string 0 follow-up); 0x00694FE0 (flag 3's cut); the slot-44 player and its blend values' meaning.
 - Whether table 0's Replacement is applied in 0x00A5E390 or the per-tree maps it reads.
 - Which engine code sets flag 7 on a type-14 command (an interruptible animation) or flag 6 (don't replay).
 - AddBehavior 3's +0xC60 test in detail.
@@ -1559,7 +1559,7 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - **The one-shot step** (0x007A5E80, ID 19846):
       - With no data it answers −3.
       - With data flag 0 clear, it sets the flag and runs the placement 0x007A5A30, then 0x007A4D50.
-      - 0x007A4D50 (ID 19838): the length is AnimationStepLength(clip), then 0x007A3370 runs. The clip is played through slot 0xB0, speed 1.0, with blend 3.0 when the record's seconds (+0x24) are at least 0.01 (0x00B1B7D8) and −1.0 otherwise, looping by the record's +0x28. The step is +0x14 = +0xC + the length.
+      - 0x007A4D50 (ID 19838): the length is AnimationStepLength(clip), then 0x007A3370 runs (read 2026-10-27 by lib-agent-2: "Who carries out the placement", under "Sync abilities"). The clip is played through slot 0xB0, speed 1.0, with blend 3.0 when the record's seconds (+0x24) are at least 0.01 (0x00B1B7D8) and −1.0 otherwise, looping by the record's +0x28. The step is +0x14 = +0xC + the length.
       - It answers 1 once +0x14 ≤ +0xC.
     - **AnimationStepLength** (0x006957A0):
       - 0 with no animation set (+0x154).
@@ -1639,6 +1639,39 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
       - then it plays the animation through slot 0xB0 (animation, 1.0, −2.0, loop 1): the plain play, with no placement.
     - **Then:** it sets the effect's flag 0. If the effect's int 0 is 1, it also sets flag 2, calls 0x0069EBB0(0) (creature +0x778 = 0) and sets creature +0x420 = 1.
     - Who calls slot 29 was not read.
+- **Who carries out the placement: the root motion, and only for some clips** (read 2026-10-27 by paragon-agent-2's helper, checked by lib-agent-2) [C unless marked]:
+  - **0x007A3370** hands the record to the creature's animation object, its AnimBase (owner +0x70's slot 0x60 = 0x0069A000, creature +0x154). On it:
+    - 0x00695720 stores the target position (+0xD0, the root-motion object's +0x50) and its flag (+0xE8);
+    - 0x00695750 stores the yaw (+0xE0, flag +0xE9) and then calls `MovementController::SetDesiredFacing` (0x00A638B0);
+    - 0x00695780 stores the end time in ms (+0xE4): `ftol(record +0x24 × the step's ms)`, at least 101.
+  - **The root-motion update** 0x00A65ED0 is called by `CCCreature` slot 0x118 (0x006A3150) and by CCObject's 0x00695980. It returns at once unless:
+    - the root-motion object holds a gob clip (+0x40, set only for a clip with GFF field 4008 `AnimationHasGobAnim`, 0x00A38F20), or
+    - its byte +0x6A is set (0x00A65F28–0x00A65F35).
+    - The position's flag alone does not move anyone.
+  - **+0x6A is set in two places** [C by a byte search]:
+    - `CCCreature::DisableControllerCollision` 0x006A0DF0, at death [I];
+    - 0x006A3C50, a melee swing's lunge: from `CSSubActionHandler::Swing` 0x007A87C0 (at 0x007A8BA7), with +0x68 = 1 and the end at 500 ms, unless 0x00A64740's bit 0.
+    - It is cleared at a held clip's end (0x00A65CF0) and by 0x007C1690(0).
+  - **So the victim of a knockdown or a deathblow is turned, not moved.** Their clips have no field 4008 (`mh_c.rct_kdwn_lp_v1`, `rct_kdwn_up_v1`, every `*dblow*` clip of core [C, paragon-agent-2's parse of 46 files]), and nothing sets +0x6A. So the stored spot is never used. Only the yaw takes effect, through SetDesiredFacing.
+    - Whether any other sync ability's clips (table 0x65's rows) carry field 4008 is not read [I].
+    - The deathblow's attacker goes through the same 0x007A3370 [I]. So "the attacker slides over 0.15 s" (the deathblow bullet below) needs a gob clip or a sync record (0x007C1600: the partner's appearance kind 3 and table 0x65's column 0xE639A8C5 > 0) [I]. Seeing it in play would settle it.
+  - **When the root motion runs** (`CCCreature` slot 0x118, 0x006A3150, each update):
+    - **The step:** 0x00A65ED0(dt in ms) adds the time (+0x3C). While it is before the end (+0x64): pos += (target − pos) × min(1, ms / (end − time)), all four components, and the yaw likewise toward +0x60.
+      - With a gob clip, the output is the position plus the clip's translation at that time (× +0x34), turned (0x00A39260).
+      - Without one, it is the position (with +0x68) and the yaw (with +0x69).
+    - **A sync record** (creature +0x744, its record at +0x750, made by 0x007C1600 for a sync attacker) can replace the output with a pose relative to the partner: 0x007C1B70, or 0x007C1880, which steps toward a goal and on arrival clears through 0x007C1690(0) [I for their maths].
+    - **The new z** is the ground under the creature's position before this step (0x006954C0 → `GroundHeight` 0x00685430, cached at +0x1C0 until `SetPosition` clears +0x1C4).
+    - **Moving:**
+      - With creature +0x420 clear, the move goes through slot 0x11C (0x006BBB70) to the controller's step (0x006B6880; PATHFINDING.md, "How a walking creature gets its z"): it collides, slides and takes its z from the capsule.
+      - With +0x420 set, it is a plain `CCObject::SetPosition` (0x00695540, no collision) at that ground z.
+      - Then `SetOrientation` (0x00694CE0) takes the yaw.
+  - **+0x420, the controller turned off:**
+    - **Set by:** the death (0x006A0DF0); the deathblow's start on the attacker (0x00745E10, at 0x007463D9); 0x007A6EA0 (0x007A7139); and sub-action 51 (0x007AB2BC). The last is for an effect whose flag 2 is clear and whose engine int 0 is 1 (`EFFECT_INTEGER_DISABLE_PHYSICS`, effect_access.md), and it also sets +0x778 = −1 and sub flag 5.
+    - **Cleared by** `CCCreature` slot 0x178 (0x006BA870), then 0x006B1790(0):
+      - it sets z to the ground (`GroundHeight`);
+      - if the controller's capsule overlaps there (0x006B1600, mask 0x2011134), it moves the creature with `CCArea::GetSafeLocation` (or `NearestFree` while moving).
+    - **Slot 0x178 is called** at ExecuteEffect's end (0x00747250: 0x0074728E, 0x00747318), at sub-action 51's end with flag 5, and at the deathblow's end (0x007473EE).
+  - **Not read:** 0x007A6EA0, 0x00A63F40 (slot 0x11C's path clamp), 0x007C1B70's maths, and which scripts set `EFFECT_INTEGER_DISABLE_PHYSICS`.
 
 #### The deathblow
 
@@ -1651,7 +1684,7 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
   - **What follows** [I, from the code and the data, not played]: a humanoid killed with a blunt weapon gets V1 or V2 at random; with a blade, always V3, or with gore and a neck always the decapitation row; a blunt weapon with gore and a neck matches no row and falls back. A beast's kill is fixed by weapon style and blade or blunt. Ogres have `ValidDeathBlows` 1 (the beast rows); the positional ones (2) are the brood mother, Wild Sylvan, high dragon, pride demon, archdemon and Grand Oak.
 - **No row, or no valid victim:** the attacker plays anim 107, and the target gets table 103's row 1 (SIMPLE_DEATH_V2, React 250) as a plain death.
 - **The two sides:** the target is given a death EFFECT of type 7, not a command (corrected 2026-10-23 by lib-agent-2), whose handler (0x007A12E0) queues command 32, ExecuteEffect, which plays the row's `React` through 0x005CA740; the start handler gives the target no command of its own and never command 38, which is made once, by the script, on the attacker (combat_h.nss:957) [C]. The target plays the row's `React`, or table 103's for the fallback. The attacker plays the row's `CastAnim` through sub-action 37 (0x007A5FC0 → `AddCommand(0x25)`) with a placement record, and is added to the slow-motion set (0x00745DF0).
-- **The placement** (0x007A5A30): **the target is not moved or turned.** The attacker slides over **0.15 s** (0x0074639D) to the point on the line between them at PersonalSpaces(target, attacker) + 1.2 m from the target (0x00695320; 1.2 at 0x00AFEBC0), or, for a large creature with a row in tables 118–122, to that row's spot in the target's frame (Percentage, Distance, AngleATK, AngleTarg). No walk-grid or collision test was seen. The vector's maths is [I].
+- **The placement** (0x007A5A30): **the target is not moved or turned.** The attacker slides over **0.15 s** (0x0074639D) [I since 2026-10-27: the slide needs a gob clip or a sync record, "Who carries out the placement" above; not seen in play] to the point on the line between them at PersonalSpaces(target, attacker) + 1.2 m from the target (0x00695320; 1.2 at 0x00AFEBC0), or, for a large creature with a row in tables 118–122, to that row's spot in the target's frame (Percentage, Distance, AngleATK, AngleTarg). No walk-grid or collision test was seen. The vector's maths is [I].
 - Closed 2026-10-23 by lib-agent-2 [C]: the guard 0x0073C5F0 sends a target already in command 32 to the plain death row (0x00745F54–0x00745F68), and the second `AddCommand(…, 5, …)` at 0x007462C7 is `AddSubAction(5)` (0x0073D4D0) on the attacker, which only drops temporary trees.
 - Not read: 0x0079F4A0, 0x006956B0 → 0x005CA710, 0x006A51C0 and 0x007EED00 (when `Position` is set); 0x006A3780's numbers; whether sub-action 37's move is cut by the grid; no row choice was played.
 
