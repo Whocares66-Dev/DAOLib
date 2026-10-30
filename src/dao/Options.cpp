@@ -137,6 +137,7 @@
 // library in another plugin, which reads a button as a checkbox's height
 // and so may put a row into its lower part.
 #include "dao/Options.h"
+#include "dao/OptionsDetail.h"
 
 #include "dao/Addresses.h"
 #include "dao/Frame.h"
@@ -176,6 +177,9 @@ constexpr std::string_view kSetMessage = "ClientOptions.SetClientOptionMessage "
 // of that group (0x005E49C0) and leaves this library's alone, so the message goes on to it and
 // each control of the tab with a default is given it here, through the click's path.
 constexpr std::string_view kRestoreMessage = "ClientOptions.RestoreDefaults ";
+// OK's: OptionsMenu.CommitOptions sends it before it hides the screen; Cancel hides the screen
+// alone (OptionsMenu.as, read 2026-10-30 for DAOLib #272).
+constexpr std::string_view kCommitMessage = "ClientOptions.CommitOptions";
 // An option's name in the movie: the plugin's, marked as the library's.
 constexpr std::string_view kOptionPrefix = "DAOLib";
 
@@ -248,6 +252,11 @@ std::vector<std::uint32_t> g_asked; // observers to tell their option's value, b
 std::vector<Click> g_clicks;
 std::vector<Delivery> g_deliveries;
 std::uint32_t g_observerCount = 0;
+// Cancel's revert (DAOLib #272): each option's value as the screen opened, taken on the first frame
+// it is shown, and whether OK's ClientOptions.CommitOptions went by before it closed.
+bool g_screenShown = false;
+bool g_committed = false;
+std::vector<std::optional<std::int32_t>> g_opened; // by entry; none for a button
 
 // Under g_mutex: the entry an option's name in the movie is, if it is ours.
 std::optional<std::size_t> EntryOf(std::string_view option)
@@ -277,6 +286,7 @@ std::int32_t MovieColumn(Column column)
     return core::options_movie::kEitherColumn;
 }
 
+// A section is never on Controls or Audio (AddSection refuses them).
 core::options_movie::Tab MovieTab(Tab tab)
 {
     switch (tab)
@@ -286,6 +296,8 @@ core::options_movie::Tab MovieTab(Tab tab)
     case Tab::Online:
         return core::options_movie::Tab::Online;
     case Tab::Game:
+    case Tab::Controls:
+    case Tab::Audio:
         break;
     }
     return core::options_movie::Tab::Game;
@@ -299,6 +311,10 @@ std::string_view NameOf(Tab tab)
         return "Video";
     case Tab::Online:
         return "Online";
+    case Tab::Controls:
+        return "Controls";
+    case Tab::Audio:
+        return "Audio";
     case Tab::Game:
         break;
     }
@@ -495,6 +511,12 @@ void QueueDefaults(Tab tab)
 
 bool OnSendMessage(void * /*owner*/, std::string_view args)
 {
+    if (args == kCommitMessage)
+    {
+        const std::lock_guard lock(g_mutex);
+        g_committed = true;
+        return false; // the game's own options are the game's to keep
+    }
     if (args.starts_with(kRestoreMessage))
     {
         if (const auto tab = TabOfGroup(args.substr(kRestoreMessage.size())))
@@ -576,8 +598,62 @@ std::int32_t Apply(const Entry &entry, std::int32_t wanted)
     return value;
 }
 
+// Cancel's revert (DAOLib #272, the user's word through lib-agent, 2026-10-30): as the screen
+// opens, each option's value is taken; when it closes with no commit since, an option that changed
+// is given that value back through its set, as a click back to it would. On the game thread.
+void WatchScreen()
+{
+    const auto shown = gui::ShownScreens();
+    const bool now = std::ranges::any_of(shown, [](const gui::Screen &screen) { return screen.name == L"Options"; });
+    std::vector<Entry> entries;
+    std::vector<std::optional<std::int32_t>> opened;
+    {
+        const std::lock_guard lock(g_mutex);
+        if (now == g_screenShown)
+        {
+            return;
+        }
+        g_screenShown = now;
+        entries = g_entries;
+        if (now)
+        {
+            g_committed = false;
+        }
+        else if (!g_committed)
+        {
+            opened = g_opened;
+        }
+    }
+    if (now)
+    {
+        std::vector<std::optional<std::int32_t>> values;
+        values.reserve(entries.size());
+        for (const Entry &entry : entries)
+        {
+            values.push_back(entry.button ? std::nullopt : std::optional(ValueOf(entry)));
+        }
+        const std::lock_guard lock(g_mutex);
+        g_opened = std::move(values);
+        return;
+    }
+    std::vector<std::pair<std::size_t, std::int32_t>> values;
+    for (std::size_t i = 0; i < entries.size() && i < opened.size(); ++i)
+    {
+        if (opened[i] && *opened[i] != entries[i].last)
+        {
+            values.emplace_back(i, Apply(entries[i], *opened[i]));
+        }
+    }
+    const std::lock_guard lock(g_mutex);
+    for (const auto &[entry, value] : values)
+    {
+        g_entries[entry].last = value;
+    }
+}
+
 void Frame()
 {
+    WatchScreen();
     std::vector<Observer> asked;
     std::vector<Click> clicks;
     std::vector<Entry> entries;
@@ -734,7 +810,7 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
                 std::vector<Button> buttons)
 {
     const auto names = NamesOf(toggles, choices, buttons);
-    if (!names || !Attach())
+    if (!names || tab == Tab::Controls || tab == Tab::Audio || !Attach())
     {
         return false;
     }
@@ -771,6 +847,47 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
     return true;
 }
 
+std::vector<EntryState> Entries(Tab tab)
+{
+    std::vector<EntryState> found;
+    if (!IsOpen())
+    {
+        return found;
+    }
+    const std::lock_guard lock(g_mutex);
+    for (const Entry &entry : g_entries)
+    {
+        const Section &section = g_sections[entry.section];
+        if (section.tab != tab || section.state != SectionState::Shown)
+        {
+            continue;
+        }
+        EntryState state;
+        state.name =
+            std::wstring(entry.option.begin() + static_cast<std::ptrdiff_t>(kOptionPrefix.size()), entry.option.end());
+        state.tab = tab;
+        if (entry.toggle)
+        {
+            state.label = entry.toggle->label;
+            state.value = entry.last;
+        }
+        else if (entry.choice)
+        {
+            state.label = entry.choice->label;
+            state.kind = Kind::Choice;
+            state.value = entry.last;
+            state.values = entry.choice->values;
+        }
+        else if (entry.button)
+        {
+            state.label = entry.button->label;
+            state.kind = Kind::Button;
+        }
+        found.push_back(std::move(state));
+    }
+    return found;
+}
+
 SectionState StateOf(std::wstring_view title)
 {
     const std::lock_guard lock(g_mutex);
@@ -785,3 +902,48 @@ SectionState StateOf(std::wstring_view title)
 }
 
 } // namespace dao::options
+
+namespace dao::detail
+{
+
+std::optional<OptionControl> PlacedOption(std::wstring_view name)
+{
+    std::string option(options::kOptionPrefix);
+    for (const wchar_t c : name)
+    {
+        if (c > 0x7F)
+        {
+            return std::nullopt; // a name is letters and digits
+        }
+        option.push_back(static_cast<char>(c));
+    }
+    const std::lock_guard lock(options::g_mutex);
+    const auto index = options::EntryOf(option);
+    if (!index)
+    {
+        return std::nullopt;
+    }
+    const options::Entry &entry = options::g_entries[*index];
+    const options::Section &section = options::g_sections[entry.section];
+    if (section.state != options::SectionState::Shown)
+    {
+        return std::nullopt;
+    }
+    OptionControl control{.option = std::move(option), .tab = section.tab};
+    if (entry.toggle)
+    {
+        control.values = 2;
+    }
+    else if (entry.choice)
+    {
+        control.kind = options::Kind::Choice;
+        control.values = static_cast<std::int32_t>(entry.choice->values.size());
+    }
+    else
+    {
+        control.kind = options::Kind::Button;
+    }
+    return control;
+}
+
+} // namespace dao::detail

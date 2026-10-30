@@ -1,9 +1,18 @@
-// Adds a plugin's own settings to the game's options screen.
+// Adds a plugin's own settings to the game's options screen, and drives the screen as a player does.
 //
 // AddSection puts a section on the Game tab of the options screen, or on its Video or Online tab:
 // a heading, then checkboxes (Toggle), choices of a few named values (Choice), each a slider with
 // stops or a dropdown, and buttons (Button), that look and behave like the game's own. The game
 // does not save these settings, so the plugin must store them itself.
+//
+// Open, ShowTab, Set, Ok and Cancel work the screen through its own buttons, as the player's
+// clicks do, for a tool or a test:
+//
+//   dao::options::Open();                       // from the start menu or Escape's menu
+//   // ...frames later, once IsOpen():
+//   dao::options::ShowTab(dao::options::Tab::Video);
+//   dao::options::Set(L"ElgaraSharpness", 2);
+//   dao::options::Ok();
 //
 //   dao::options::AddSection(L"Turn-based", {{
 //       .name = L"TurnBasedCombat",
@@ -29,8 +38,8 @@ namespace dao::options
 // `get` runs each time the screen opens. `set` runs when the player clicks the box, and returns
 // the option's value after the click: `wanted` to accept the change, or the old value to refuse
 // it. The box shows whatever `set` returns. Both run on the game thread (dao/Frame.h), so they
-// may call script commands. A change takes effect at the click, and the screen's Cancel button
-// does not undo it.
+// may call script commands. A change takes effect at the click; the screen's Cancel then gives
+// `set` back the value the option had as the screen opened, and OK keeps the change.
 struct Toggle
 {
     // The option's name: letters and digits, starting with a letter. Prefix it with the
@@ -110,12 +119,14 @@ enum class Column
     Right,
 };
 
-// The tab of the options screen a section is on.
+// A tab of the options screen.
 enum class Tab
 {
-    Game,   // five free rows in its left column, six in its right
-    Video,  // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
-    Online, // nine free rows in its left column, seven in its right
+    Game,     // five free rows in its left column, six in its right
+    Video,    // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
+    Online,   // nine free rows in its left column, seven in its right
+    Controls, // the key bindings; no room for a section
+    Audio,    // no room for a section
 };
 
 // Adds a section of settings to a tab of the options screen.
@@ -127,8 +138,8 @@ enum class Tab
 // @param tab the tab the section is on
 // @param buttons the buttons, listed after the choices in the order given
 // @return false, with nothing added, if the section has no toggles, choices or buttons, a name
-//  is not letters and digits or is already taken, a callback is missing, or a choice has fewer
-//  than two values
+//  is not letters and digits or is already taken, a callback is missing, a choice has fewer
+//  than two values, or the tab is Controls or Audio
 //
 // Call it from DAOLib_Load, before the game first opens its options screen. A tab's free rows are
 // shared by every plugin. A heading takes two rows, a checkbox one and a dropdown two; sliders
@@ -153,5 +164,82 @@ enum class SectionState
 
 // Returns what became of the section with that title.
 SectionState StateOf(std::wstring_view title);
+
+// Why a step on the options screen was refused, or None if it was taken.
+enum class Refusal : std::uint8_t
+{
+    None,
+    NotShown,   // the screen is not open; for Open, nothing to open it from; for Set, its tab is not shown
+    AlreadySo,  // the screen is open already, or the tab shown already
+    Disabled,   // the tab's button is disabled
+    NotOffered, // no control of a plugin's by that name is on the screen
+    OutOfRange, // a checkbox given other than 0 or 1, or a choice an index it has not
+};
+
+// Returns whether the options screen is open.
+//
+// Call it, and the rest below, on the game thread.
+bool IsOpen();
+
+// Opens the options screen as the player does: the start menu's Options button, or Escape's menu's,
+// with that menu opened first in the game. The screen comes with the menu's backing panel.
+// @return None once it is asked for, NotShown where neither menu can be had (a conversation, a
+//  cutscene, a loading screen, another full screen), AlreadySo if it is open
+//
+// The screen opens a few frames later: IsOpen says when.
+Refusal Open();
+
+// One of the screen's tabs.
+struct TabState
+{
+    Tab tab = Tab::Game;
+    std::wstring name;    // as its button shows it
+    bool enabled = false; // its button takes a click
+    bool current = false; // its page is shown
+};
+
+// Returns the screen's tabs in their order, or none if it is not open.
+std::vector<TabState> Tabs();
+
+// Shows a tab as a click on its button does: the button lit, the page shown, and Restore
+// Defaults acting on it.
+Refusal ShowTab(Tab tab);
+
+// What a plugin's control is.
+enum class Kind : std::uint8_t
+{
+    Toggle,
+    Choice,
+    Button,
+};
+
+// A plugin's control on the screen. The game's own controls are not listed.
+struct EntryState
+{
+    std::wstring name; // the name the plugin gave it
+    std::wstring label;
+    Kind kind = Kind::Toggle;
+    std::int32_t value = 0;           // a checkbox's 0 or 1, a choice's index; 0 for a button
+    std::vector<std::wstring> values; // a choice's values' names
+    Tab tab = Tab::Game;
+};
+
+// Returns the plugins' controls placed on a tab, each plugin's that links this library, or none
+// if the screen is not open.
+std::vector<EntryState> Entries(Tab tab);
+
+// Sets a plugin's control as a click on it does: a checkbox to 0 or 1, a choice to an index of
+// its values, a button pressed (its value is ignored). The plugin's `set` or `pressed` runs a
+// frame later.
+// @return NotShown unless the screen is open with the control's tab shown
+Refusal Set(std::wstring_view name, std::int32_t value);
+
+// Presses OK as the player does: the changes kept and the screen closed. A change the game needs
+// a restart or a confirmation for opens the game's message box first (dao/Gui.h, CurrentPopup).
+Refusal Ok();
+
+// Presses Cancel as the player does: the screen closed, and each plugin's control given back, through
+// its `set`, the value it had when the screen opened.
+Refusal Cancel();
 
 } // namespace dao::options
