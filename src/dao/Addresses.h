@@ -2841,4 +2841,21 @@ DAO_ADDRESS(kGUICharacterRecord_OnShow, 17530)
 DAO_ADDRESS(kEmitterSprite_Fill, 8074)
 DAO_ADDRESS(kEmitterRibbon_Fill, 9125)
 DAO_ADDRESS(kEmitterRibbonPhysics_Fill, 9127)
+
+// The draw distances (DAOLib #266, for DAOElgaraShaders; read by the address
+// library's session, its issue #2, named in its d7275ce, 2026-10-29). An outdoor
+// chunk tile chooses its level of detail by the viewer's distance
+// (EC::ChunkTile::ChooseDetail, 0x005CCFE0, __thiscall (tile, viewer, layout),
+// `ret 8`); LodManager::BandDistance (0x006170F0) gives a band's distance. The
+// emitters' three level-of-detail distances (0x00BF22CC..0x00BF22D4) are floats
+// in metres, and the trees' factor (0x00BF22D8) a float. After a change to the
+// trees', CClientExoApp::RemakeTreeBounds (0x005D6C20, __thiscall (app)) remakes
+// their bounds.
+DAO_ADDRESS(kEC_ChunkTile_ChooseDetail, 10319)
+DAO_ADDRESS(kLodManager_BandDistance, 11669)
+DAO_DATA(kEmitterLodDistance0, 95756)
+DAO_DATA(kEmitterLodDistance1, 95757)
+DAO_DATA(kEmitterLodDistance2, 95758)
+DAO_DATA(kTreeLodFactor, 95759)
+DAO_ADDRESS(kCClientExoApp_RemakeTreeBounds, 10551)
 } // namespace dao::addr
