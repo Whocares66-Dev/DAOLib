@@ -38,7 +38,6 @@ Read, built and seen in play; what is left of each is small, and kept here.
 
 ## Also
 
-- **A plugin's element over a game screen** (asked 2026-10-05 by the turn-based mod, its issue 46): a checkbox of the game's own art with a caption on the tactics screen, following the party member it shows, and a click heard. To read: whether the tactics movie exposes its selected character, and whether a child clip can be attached to it at run time without changing its file (dao::gui::OnMovieLoad patches a movie's bytes as it opens, as the options screen's section is added).
 - **A portrait kept as a picture** (read 2026-10-05 for the turn-based mod's portraits, parked at the user's word: a live render per appearance, nothing kept on disk). Saving: the game imports `D3DXSaveTextureToFileW` and `D3DXSaveSurfaceToFileW` (d3dx9_36.dll; it writes each save's screen.dds), and a portrait is a 146x146 render target the texture manager made by name (`0x00847330`, its singleton `0x008472C0`), so a save wants name to texture to IDirect3DTexture9. Loading: the movies' image loader (`EclipseGFxImageLoader::LoadImage`, `0x00516A20`) takes `img://FILE:<path>` as a file on disk (`0x00846990`: .dds, .tga, .png or .jpg by its extension), so a picture needs no registering to be shown. Other `img://` names go to the texture manager by name (`0x00845D80`), after the interface atlases' named sub-images (`0x00523580`).
 
 - **Inventory and items.** Much is scriptable already (`GetItemsInInventory`, `CreateItemOnObject`). Native work waits for a need scripts cannot meet.
