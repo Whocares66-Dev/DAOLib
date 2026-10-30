@@ -60,7 +60,7 @@ Shared facts, all checked:
 - **Registered commands** (checked by a scan of every call; read 2026-10-29 by lib-agent-2 with a subagent): `AddCommand` is 0x00842E60 (lower-cases the name, inserts into the map at +4) and `RegisterConsoleCommand` 0x00844920 (builds a command object with 0x00844D10, vtable 0x00B2B274, and calls AddCommand). Its three call sites register only:
   - `refreshmoduleresources` (0x00616A90): returns "Module Resources Refreshed".
   - `addrecipe` (0x00616C70): usage "AddRecipe [recipe ID]", returns "Added recipe %d".
-  - `runscript` (0x006D8130): appends ".ncs" and runs the script (`CVirtualMachine::RunScript`). It returns "Failure: No such script" on a miss and "FAILURE" on a failed run.
+  - `runscript` (0x006D8130): appends ".ncs" and runs the script (`CVirtualMachine::RunScript`). It returns "Failure: No such script" on a miss, "FAILURE" (0x00B03B0C) only when it cannot start (no module and the like, the exits at 0x006D8178–0x006D81CD), and "Success" (0x00ADE42C, 0x006D8458) after any run (0x00A31E70 at 0x006D8409), whatever the script did. Before the run it sets a module local string through the module's variables (+0x394, 0x00703E30 at 0x006D83ED), whose name was not read [I] (corrected 2026-10-30 from paragon-agent's helper, checked by lib-agent-2).
 - **State:** the console's static result string, overwritten per call. (checked)
 - **Edge cases:** the debug scripts use it for "textfield", "textbutton … runscript …", "ButtonGroup", "removebuttongroup"; none of the four is registered in the shipped exe, so each gets the error (checked by the scan and a search for their names as UTF-16; inferred against an indirect registration). A failed push returns -638. (checked)
 
