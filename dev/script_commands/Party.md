@@ -130,7 +130,17 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 
 ### SetTacticEntry (319)
 - **Handler:** 0x006615F0; validity 0x007B0040 (named `ForScript_SetTacticEntry` in the library but a check returning bool); entry 0x007ADCF0 (checked).
-- **Does:** pops all seven arguments, nCommandParam included, unconditionally (checked). Index 1-based. It reads column `FollowerAI` (hash 0x2A1AF533) for: nCondition in table 137 (`TacticsConditions`), its `ConditionBase` (0x56BB2EC7) in table 139 (base conditions), nTargetType in table 140 and nCommandType in table 141 (checked). It writes only if all four are non-zero and 0x007B0040(creature, targetType, base FollowerAI value, commandType, param, -1) says the command is valid for them (checked). For command 4 (Use Ability) the param must be in the creature's valid ability list, and for 7 (Use Item) with param ≠ -1, in its item list (checked: the branches; the lists' builders 0x007AFE80/0x007AED50/0x007AF6C0 not read). It then sets entry +0x58 enabled (nEnabled != 0), +0x68 target type, +0x88 condition, +0xA8 command type, +0xB8 command param (checked).
+- **Does:** pops all seven arguments, nCommandParam included, unconditionally (checked). Index 1-based. It reads column `FollowerAI` (hash 0x2A1AF533) for: nCondition in table 137 (`TacticsConditions`), its `ConditionBase` (0x56BB2EC7) in table 139 (base conditions), nTargetType in table 140 and nCommandType in table 141 (checked). It writes only if all four are non-zero and 0x007B0040(creature, targetType, base FollowerAI value, commandType, param, -1) says the command is valid for them (checked). It then sets entry +0x58 enabled (nEnabled != 0), +0x68 target type, +0x88 condition, +0xA8 command type, +0xB8 command param (checked).
+- **Quirks** (read 2026-10-29 by lib-agent-2 with a subagent; checked):
+  - The third argument to 0x007B0040 is the base condition's FollowerAI flag (always 1 on a write), not its row. So the abilities' `FilterAOE` test, which reads table 139's row 1, is never on through the script command; the tactics screen's list handler (0x00714FD0) passes the real row.
+  - The item argument is always -1 (0x0066179D), so the item test never runs from the script.
+  - The ability parameter is in effect never compared: command 4 is valid as soon as any ability qualifies, and 7 as soon as any item does.
+  - Not checked by the handler: the base condition's `ValidForTarget` against the target's `Type`, the condition's `ShowOnSelf` and `GeneratePerFollower`, that the creature is a follower, and the ability's cost or cooldown.
+- **The validity test** (0x007B0040, through `CommandsValid` 0x007AFE80; checked): for the table-141 row it needs FollowerAI set, and its `ValidForTarget` AND the target row's `Type` bitmask non-zero (0x12A02374; Self 1, Ally 2, Enemy 4, Hero 16, Follower 32, Main Controlled 131072). Then by its UseType: 0 valid; 4 valid when the ability list is not empty, or the item list when `UseItem` is set; 2 valid when the modal list is not empty; any other never valid. So Attack (ValidForTarget 68) is valid only for an Enemy target.
+- **The lists** (checked unless marked):
+  - **Abilities** (0x007AED50): the creature's talents, spells and skills (stats +0x150, +0x160, +0x170), not its item abilities (+0x180). Each must have UseType 4 and `ShowIntactics`, and `AOE_Type` non-zero when the filter is on. The ability's TargetType is not compared with the tactic's target: 0x007AC000 gives bit 1, 4 or 2, so its `& 7` test is always true.
+  - **Modal abilities** (0x007AEF50): the same walk with UseType 2. Whether the mode is on is not tested.
+  - **Items** (0x007AF6C0): the party inventory (party +0x20C). The item's ability (item +0x660) needs `ShowIntactics` and `TargetType & bit` non-zero, so here the target type is tested [I that the list is the shared inventory without equipped items].
 - **State:** tactics +0x6C entry +0x58/+0x68/+0x88/+0xA8/+0xB8 (checked). The target/condition objects (+0x78/+0x98) and the item tag are not set here (checked).
 - **Edge cases:** an invalid row, a row with FollowerAI 0 (e.g. command 1 INVALID, 8, 9, 13, 14), an invalid combination, or an index out of range → silently nothing, returns 0 (checked). The preset is not marked customized here (checked: no write to +0xE4).
 
@@ -193,7 +203,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 - Who reads FollowerInfo's substate, locked and follow-leader bytes (movement, the party GUI); where map entries are created (0x0063A020, per dev/PARTY.md) and their initial values.
 - 0x00635B60 (four-slot rebuild after SetPartyLeader).
 - The notification queue's consumer on party+0x330 (types 6 and 8).
-- SetTacticEntry's valid-list builders (0x007AFE80, 0x007AED50, 0x007AF6C0); who sets tactics +0xE4 (customized), +0xD4's other values, +0x5C (party AI on); the class at creature +0xC00 (`PartyTactics` inferred from its message handlers).
+- Who sets tactics +0xE4 (customized), +0xD4's other values, +0x5C (party AI on); the class at creature +0xC00 (`PartyTactics` inferred from its message handlers).
 - The stealth visuals' function 0x005B9450, the config at 0x005B9020+0x28, and app state 9.
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)

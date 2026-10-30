@@ -833,7 +833,7 @@ See pseudo-code. Order rule on death: with a sole selected hero the next is the 
 #### Not read
 
 - The meaning of creature+0x610 (the bar's skip) and slot 0x190 in the bar build. The byte at creature+0x504 is read: `IsInParty`, in the active party list (the run/walk subsection below; corrected 2026-10-23 by lib-agent-2: it said ACTIVE).
-- Who sets creature+0x7D4 on the hero before 0x0063B9A0 runs (the insert-at-0 branch also fires through "id == leader"; with an empty list either branch gives the same result).
+- Which path the save load takes to set creature+0x7D4 on a loaded hero (the save has no CharType). A new hero gets it from 0x0069D910 at 0x0069DA05, before 0x0069E008 (`script_commands/players.md`, IsHero; read 2026-10-29 by lib-agent-2). The insert-at-0 branch also fires through "id == leader"; with an empty list either branch gives the same result.
 - The 0x0069DF10 loop at 0x0069E01C-0x0069E023 (it re-tests a party state after the join; might create more than one member) and 0x0069DBB0's purpose (a load, inferred).
 - Whether the loader of kind-7 requests (new game, area transition) runs any step that calls SetSelection indirectly (I used the caller list: none).
 - Whether the leader attribute or the selection is re-set at the Fade's end and the Harrowing by other engine paths (e.g. CCCreature slot 86 0x006A8AC0 re-adding a PC as ACTIVE, PARTY.md:~432; its flow after the join was not followed).
@@ -1101,10 +1101,10 @@ No shipped script is known to use the client VM (I).
 | `ListTacticTargets` | 0x00714860 [16336] | 0x007B0A80 [20010]: table 140 `ID`, `FollowerAI`, `GeneratePerFollower`; a target with at least one valid action (calls 0x007AFE80) |
 | `ListTacticBaseConditions` | 0x00714A00 [16337] | 0x007AF570 [19983]: 139 `FollowerAI`, `ValidForTarget` & 140 `Type` |
 | `ListTacticConditions` | 0x00714AF0 [16338] | 0x007AEB50 [19973]: 137 `ConditionBase`, `FollowerAI`, `GeneratePerFollower`, `ShowOnSelf` |
-| `ListTacticActions` | 0x00714E20 [16340] | 0x007AFE80 [19993]: 141 `FollowerAI`, `ValidForTarget`, `UseType`, `UseItem`; for Use Ability it needs a non-empty ability list, for modes the modal list, for Use Item the item list |
-| `ListTacticAbilities` | 0x00714FD0 [16341] | 0x007AED50 [19974]: the creature's abilities whose `ABI_base` `ShowIntactics`, `TargetType` and `UseType` fit the target type, and whose `AOE_Type` fits 139.`FilterAOE` |
+| `ListTacticActions` | 0x00714E20 [16340] | 0x007AFE80 [19993]: 141 `FollowerAI`, `ValidForTarget`, `UseType`, `UseItem`; for Use Ability it needs a non-empty ability list, for modes the modal list, for Use Item the item list; a UseType other than 0, 2 and 4 never validates, and Attack (ValidForTarget 68) is valid only for an Enemy target |
+| `ListTacticAbilities` | 0x00714FD0 [16341] | 0x007AED50 [19974]: the creature's talents, spells and skills whose `ABI_base` `UseType` is 4 and `ShowIntactics` non-zero, and with 139.`FilterAOE` on, `AOE_Type` non-zero; the ability's `TargetType` is not compared with the target |
 | `ListTacticModalAbilities` | 0x00714D30 [16339] | 0x007AEF50 [19975]: `ShowIntactics`, `UseType` |
-| `ListTacticItems` | 0x00714770 [16335] | 0x007AF6C0 [19984]: the party's usable items by `TargetType` and `ShowIntactics` |
+| `ListTacticItems` | 0x00714770 [16335] | 0x007AF6C0 [19984]: the party inventory's items (+0x20C) whose ability has `ShowIntactics` and a `TargetType` bit fitting the target |
 
 ### 3. Does the engine evaluate tactics? No (C)
 
@@ -1166,7 +1166,7 @@ No shipped script is known to use the client VM (I).
 
 - **Store per follower:** Enabled, the rows (Target u8, TargetID, Condition u16, ConditionID, Command, CommandParam, item tag and resref), PresetIdList, PresetIndex, PresetType, Dirty, and 3 custom slots. Start with 4 rows; the scripts resize the list.
 - **Give the scripts** the twelve getters and setters above, with their odd defaults: 372 → 0, 373 → -1, `GetNumTactics` → 0 when disabled, and `IsTacticEnabled` requiring Target, Condition and Command all non-zero.
-- **Validate `SetTacticEntry`** with the same FollowerAI/ValidForTarget/UseType rules the list builders use.
+- **Validate `SetTacticEntry`** with the same FollowerAI/ValidForTarget/UseType rules the list builders use, with the engine's quirk: the script command hands the validity test the base condition's FollowerAI flag (1) for the base condition's row, so the AOE filter is never on (`script_commands/Party.md`, SetTacticEntry).
 - **Run event 83 synchronously** from `SetTacticPresetID` after resetting the rows.
 - **Leave all evaluation** to `ai_main_h_2`/`ai_conditions_h`.
 

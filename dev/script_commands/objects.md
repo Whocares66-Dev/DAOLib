@@ -21,7 +21,11 @@ Projectiles:
 - A projectile is a `CProjectile` (vftable 0x00B23BB4, 0x510 bytes, constructor 0x007E8410), allocated by 0x00679670 and registered by 0x00679EA0, both `__thiscall` on `[g_clientExoApp+0x104]`. That object has the layout of `CProjectileManager` (vftable 0x00B0D928, constructor 0x00679A90; lists at +0x1C and +0x2C, which 0x00679EA0 fills with the projectile's id). (checked) It adds the projectile to this manager, not to the area as `dev/ABILITIES.md` had it (corrected there the same day).
 - The constructor's defaults (checked, 0x007E84F3–0x007E8580): +0x4A4 prj row 0, +0x4AC 0, +0x4B0 0, +0x4B4 2, +0x4B8 from-an-ability 0, +0x4B9 wide angle 0, +0x4BA 0, +0x4F4 custom event null, and **owner +0x4BC, target +0x4C0 and event target +0x4C4 all -1**.
 - The fields the script handler writes (checked, 0x00661D9D–0x00661DE3): +0x4A4 nType (the `prj_base` row), +0x4D0 the source position, +0x4E0 the target point, +0x4C0 the target object, +0x4AC nCrustEffectId, +0x4B9 bWideAngle (a byte, `!= 0`), +0x4C4 oEventTarget. After registering, it sets +0x448 = 2 (inferred: a state, "launched"). The owner +0x4BC is never set, so it stays -1.
-- **The crust's field is not settled.** The script handler stores the crust at +0x4AC. The ability path (`0x006B70C5`–`0x006B7111`) writes both +0x4AC (a value from 0x00702E90) and +0x4B4, and `dev/ABILITIES.md` names +0x4B4 the crust. One of the two names is wrong (`dev/ABILITIES.md` says so, corrected the same day). (checked: the writes; which field is the crust: not read)
+- **The crust is two fields** (read 2026-10-29 by lib-agent-2 with a subagent) [C]:
+  - **+0x4AC** is the projectile's crust effect. The start (0x007E7062) makes the effect from it and keeps it at +0x480. The script handler writes only this (0x00661DCB, `nCrustEffectId`).
+  - **+0x4B4** is the caster's crust hook (2 Right Cast, 3 Left Cast, 5 Head), read only by the hold-node function 0x007E6DA0; with 0 it uses the caster's `Prop01`. A script projectile keeps the constructor's 2, but it has no caster (owner −1), so it has no hold node and its model sits at its source position (+0x4D0).
+  - An ability's projectile (0x006B6F60) sets +0x4B4 from `abi_base.Crust_ID` (0x006B71E6) and +0x4AC from the ammo item's `ITEM_CRUST` local (`dev/COMBAT.md`).
+- **A projectile is put in no area** (read 2026-10-29 by lib-agent-2 with a subagent) [C]: the handler discards the area it looks up and 0x00679EA0 takes none. The flight's wall sweep (0x007E8C10, ray 0x00648C60, mask 0x1024) uses `[g_clientExoApp+0x10C]`, the module's current area's scene (`dev/COLLISION.md`), so it meets whichever area is current [I that it is the player's].
 - **Impact** is `0x007E89F0` (`__thiscall (hit list)`, `ret 4`; checked):
   - The event target is +0x4C4, or the owner +0x4BC when +0x4C4 is -1. It is looked up with `GetObjectById` 0x005D5BE0. **If there is no such object, nothing is sent.**
   - A custom event (+0x4F4) whose type (+0x20) is non-zero is sent instead of the default. Its creator (+0x24) is set to the projectile's id. It is queued to the event target with `AIMaster::AddEventDeltaTime(0, 0, target, target, 10, event)` (0x0064ACE0), and +0x4F4 is cleared (ownership passes with the queue).
@@ -202,7 +206,6 @@ Not read: the other eleven tag-index removers' classes, one by one; the order of
 - +0x254 for items held in an inventory.
 - 0x007E71C0, an ability projectile's impact; what fills the hit list and the +0x4F8 list; how 0x007E6D80 builds location 1.
 - The flight itself: how bWideAngle shapes the arc, homing's steering, `ImpactTimeout`.
-- The area a script projectile is placed in.
 - What the model's slot 0x58 parameters (1.0, 0.0, 1.0, 5.0) are, and what the Animations table's `State` 1 means.
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)

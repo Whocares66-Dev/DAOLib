@@ -156,7 +156,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). 
 - **GetAbilityList** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
     - **Which vectors:** type 0 appends vectors 1, 2 and 3 in turn (0x0071D410); types 1–3 give that vector alone. Type 4 and above return false and leave the output untouched.
     - **With bOnCooldownOnly:** it walks i from the end down to 0. When `ForScript_GetRemainingCooldown(ability, "")` (an empty source-item tag) is ≤ 0, it removes element i by swapping in the last (0x0071D580). So the order left is permuted, not kept.
-  - **The tactics' list 0x007AED50** (PARTY.md's ListTacticAbilities) [C]: it walks vectors 1, 2 and 3 in order, each in its own order, and keeps an ability only when its UseType is 4 (with ShowInTactics, TargetType and the AOE filter).
+  - **The tactics' list 0x007AED50** (PARTY.md's ListTacticAbilities) [C]: it walks vectors 1, 2 and 3 in order, each in its own order, and keeps an ability only when its UseType is 4 and ShowIntactics is non-zero, and AOE_Type is non-zero when the AOE filter is on (read 2026-10-29 by lib-agent-2 with a subagent); the ability's TargetType is not tested, and vector 4 (item abilities) is not walked.
 
 ### GetCreatureMana (242)
 - **Handler:** 0x0066CC30, the same handler as `GetCreatureStamina` (238) (checked).

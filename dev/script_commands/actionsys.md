@@ -56,9 +56,13 @@ Shared facts, all checked:
 
 ### DEBUG_ConsoleCommand (704)
 - **Handler:** 0x0064E990. It calls 0x008445D0 (the console's singleton at 0x00C39B20, built on first use by 0x00843F90; vtable 0x00B2B174, no RTTI) and its slot 4 (0x008425C0). (checked)
-- **Does:** pops sArg, calls `console->Execute(sArg, 0)` and pushes the string it returns. Slot 4 (checked in part): an empty line answers "" (the static result 0x00C39C78); otherwise the line is split at the first whitespace (0x00AF029C), the command word lowercased and looked up in the console's map at +4 (0x006003E0). An unknown command with the flag 0 answers `ERROR: Cannot execute function "…"` (pieces 0x00B2B128, 0x00B2B16C; the exact text built inferred). What a known command does is not read.
+- **Does:** pops sArg, calls `console->Execute(sArg, 0)` and pushes the string it returns. Slot 4 (checked in part): an empty line answers "" (the static result 0x00C39C78); otherwise the line is split at the first whitespace (0x00AF029C), the command word lowercased and looked up in the console's map at +4 (0x006003E0). A known command has its object's slot 1 called with the text after the first whitespace; its string is the result, or "" for null; with the flag 0 the console's slot 12 prints it (read 2026-10-29 by lib-agent-2 with a subagent). An unknown command answers `ERROR: Cannot execute function "<the whole line>"`, the quotes holding the raw line with its arguments (pieces 0x00B2B128 and 0x00B2B16C, joined at 0x008427D4), and prints it too unless quiet; the script command passes quiet 0. (checked)
+- **Registered commands** (checked by a scan of every call; read 2026-10-29 by lib-agent-2 with a subagent): `AddCommand` is 0x00842E60 (lower-cases the name, inserts into the map at +4) and `RegisterConsoleCommand` 0x00844920 (builds a command object with 0x00844D10, vtable 0x00B2B274, and calls AddCommand). Its three call sites register only:
+  - `refreshmoduleresources` (0x00616A90): returns "Module Resources Refreshed".
+  - `addrecipe` (0x00616C70): usage "AddRecipe [recipe ID]", returns "Added recipe %d".
+  - `runscript` (0x006D8130): appends ".ncs" and runs the script (`CVirtualMachine::RunScript`). It returns "Failure: No such script" on a miss and "FAILURE" on a failed run.
 - **State:** the console's static result string, overwritten per call. (checked)
-- **Edge cases:** the debug scripts use it for "textfield", "textbutton … runscript …", "ButtonGroup", "removebuttongroup"; whether those commands are registered in the shipped exe is not read. A failed push returns -638. (checked)
+- **Edge cases:** the debug scripts use it for "textfield", "textbutton … runscript …", "ButtonGroup", "removebuttongroup"; none of the four is registered in the shipped exe, so each gets the error (checked by the scan and a search for their names as UTF-16; inferred against an indirect registration). A failed push returns -638. (checked)
 
 ### GetCurrentScriptName (145)
 - **Handler:** 0x00654D40. (checked)
@@ -71,7 +75,6 @@ Shared facts, all checked:
 - **Edge cases:** if the name already had an extension it would be doubled (inferred not to happen, since the load appends the extension itself). A failed push returns -638. (checked)
 
 ## Not read
-- What a known console command does in slot 4 of the console, and which commands the shipped exe registers.
 - Where the talk table's gender byte +0x1C selects the male or female form, and so which of the scripts' GENDER_* values gives which text.
 - The module's +0x194 and who reads the VM's +0x196C (the debugger request).
 - That `ClientOptions`' +0x68 and +0x4F0 are the attributes named `DifficultyLevel` and `GraphicsDetailLevel` (the names are where the options are saved, not where the attributes are built).

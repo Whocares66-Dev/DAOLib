@@ -375,7 +375,7 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - A two-handed weapon (`0x00A664C0`) unequips what the other hand holds; equipping the off hand (slot 1) while a two-hander is in the main hand unequips the main hand. Read.
 - The item's +0x4A8 is set to the creature's id (its owner). Read.
 - **Stats:** unless the creature's +0xC58 is set, `0x0071B3C0(item, +1.0)` adds the item's stats to the creature's property modifiers: for each row of `itemstatdefines` (109) with a creature property, the stat named by its `Label` is read from `itemstats` (110) at the item's base item row and multiplied by the same stat of `materialrules` (159) at the item's material (`materialtypes`' `Material`, from the item's MaterialType +0x4FC; 1 when not above 0), times +1.0; `0x0071B2D0(property, value)` adds it. Then `0x00759A40(creature, item)` (inferred: the item's own properties). Unequipping calls the same with −1.0. Read in outline; which factor is the material's is inferred from the tables named.
-- The appearance's slot (`0x00748DA0(slot, item)`), heraldry for slots 0–2, the wield (`0x006A6640(slot)`), and the stats recomputed (`0x0071B970`). Read.
+- The appearance's slot (`0x00748DA0(slot, item)`), heraldry for slots 0–2, the wield (`0x006A6640(slot)`), then for slots other than 0–2 the item's recorded effects replayed (holder slot 5, 0x007A17D0), and the stats recomputed (`0x0071B970`). Read.
 - **`EVENT_TYPE_EQUIP` (11):** when event 11 is not in the creature's disabled set, +0x28C (`0x00698490`; only `EnablevEvent` changes it and no shipped script calls it; corrected 2026-10-18 by lib-agent-2, `dev/LOAD_EVENTS.md`) and the item is not being destroyed, delivered at once (`AIMaster::DeliverNow`) to the creature (caller the item): creator the creature, object 0 the item, int 0 the slot, int 1 a bit of a global flag word (`DAT_00C371B4` bit 7; the equip sets 0x52 and 0x10 there, meaning not read). Read.
 - If the creature is the hero, the party's +0x4AA is set (inferred: the inventory screen to refresh). Read.
 - **What equipping does, more exactly** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
@@ -384,9 +384,10 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
     - **0x006AB100's bag check:** the bag's slot +0x100(0) is CCPlaceable 0x0074C720 (PLACEABLES.md): column 0 of the state +0x658 in the controller +0x654. With no controller it gives 0; a 4 becomes 0 when +0x2C4 is set [C]. What a body bag answers is [I].
     - **Item +0x4A8, its owner's id:**
       - It is written by the on-equip (0x006C17B0) and set to −1 by the on-unequip (0x006C1A28), by 0x00752F5C (an item reset) and by CCItem::CopyFrom (0x00758B7F) [C].
-      - ADDITEMVFX (0x0065D4A0) reads it [C]: at −1 the effect goes only to the item's pending record (+0x158, 0x00A64900); otherwise it is applied through the item's own holder (0x007A1A20).
-      - Only the active set's items have an owner, so an item in the inactive set takes the pending path.
-      - The effect it makes is type 3, where EFFECTS.md has 4 for ApplyEffectVisualEffect. Who reads the pending list +0x158 was not read [I].
+      - ADDITEMVFX (0x0065D4A0) reads it [C]: at −1 the effect is only stored in the item's effect record (+0x158, 0x00A64900); otherwise it is applied through the item's own holder (0x007A1A20).
+      - Only the active set's items have an owner, so an item in the inactive set has its effect stored, to play when equipped.
+      - The effect it makes is type 3, where EFFECTS.md has 4 for ApplyEffectVisualEffect.
+      - +0x158 is the object's ordinary effect record, not a pending list. Its reader is the on-equip: for slots other than 0–2, holder slot 5 (0x007A17D0, at 0x006C1859) replays its effects after the appearance and the wield, and the on-unequip's slot 6 stops them (`script_commands/effect_access.md`, AddItemVisualEffect; read 2026-10-29 by lib-agent-2 with a subagent). The weapon slots' replay is 0x006A0F10, whose trigger was not read [I].
 
 ### Unequipping (`0x006C19F0`, the matching on-unequip)
 

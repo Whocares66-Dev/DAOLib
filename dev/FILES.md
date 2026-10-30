@@ -14,6 +14,8 @@ The resource manager keeps its sources in one list, ordered by:
 
 An archive found inside a folder source (the game's own `packages\core\data\*.erf`, an `.erf` in a plugin's `override\`) is a source of its own at the folder's priority, so a loose file beats an archive beside it, and of two archives in one folder the later name wins (`patch004.erf` before `patch000.erf`).
 
+**A name asked of `Resources::Find`** (0x004D5BA0 → manager 0x004C5C80; read 2026-10-29 by lib-agent-2 with a subagent) [C unless marked]: the name is lower-cased in ASCII (0x004C3A50) and truncated nowhere; its last three characters are the type's key, looked up in a map at manager +0x14 (0x004C5D02) without being stripped; and each source of that type is asked for the whole lower-cased name, extension included. The type argument the callers pass (3 for a script, at 0x00AF046C) is no filter: it goes to the handle's load (0x004BECD0) [I for its meaning]. So `foo.ncs.ncs` finds the type and no source, and returns an empty handle.
+
 ## The priorities
 
 Read from `AddSource`'s 57 callers (`SetUpSources` and its kin, the add-ins' and the campaign's loaders) and seen in GOG's game, the private copy `game\gogrun`, at the main menu (488 sources) and in Forest Clearing with a save loaded (859), 2026-10-12. The alias before a `:` stands for a folder (the engine's alias table, `kFileAliases_Path`).

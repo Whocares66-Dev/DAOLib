@@ -5,7 +5,12 @@ Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.
 ### IsHero (500)
 - **Handler:** 0x00660A20 (`ScriptCommand::ISHERO`, not shared). Calls `GetObjectById` (0x005D5BE0) and the object's vtable +0x10 (as-creature). (checked)
 - **Does:** pushes TRUE when the creature's byte +0x7D4 is exactly 1, else FALSE. (checked)
-- **State:** creature+0x7D4 is the template's/save's `CharType` byte: the creature load reads GFF field `CharType` (string 0x00B10710) and stores it through the setter 0x0069E480 (`mov [ecx+0x7D4], al`) at 0x006C0A41. (checked) Other writers: the constructor sets 0xFF (0x006B419A) and a reset sets 0 (0x006B453E); 0x0069D910 sets 1 on a creature it creates (inferred: the player character); `GUICharGen::HandleMessage_CharGenStartAppearanceSceneMessage` sets 1 on the chargen creature (0x0073A076); 0x007662A0 copies one creature's value to another and then sets 0 (0x007663DA, 0x007663F5; inferred: a copy of the hero made for a scene). (checked for the writes)
+- **State:** creature+0x7D4 is the template's/save's `CharType` byte: the creature load reads GFF field `CharType` (string 0x00B10710) and stores it through the setter 0x0069E480 (`mov [ecx+0x7D4], al`) at 0x006C0A41. (checked) Other writers: the constructor sets 0xFF (0x006B419A) and a reset sets 0 (0x006B453E); 0x0069D910, the hero maker, sets 1 on the creature it builds (0x0069DA05; below); `GUICharGen::HandleMessage_CharGenStartAppearanceSceneMessage` sets 1 on the chargen creature (0x0073A076); 0x007662A0 copies one creature's value to another and then sets 0 (0x007663DA, 0x007663F5; inferred: a copy of the hero made for a scene). (checked for the writes)
+- **Where the byte comes from** (read 2026-10-29 by lib-agent-2 with a subagent; a scan of `.text` for every store to +0x7D4: the three writers above and the setter's five callers 0x0069DA05, 0x006C0A41, 0x0073A076, 0x007663DA and 0x007663F5) [C unless marked]:
+  - **The template's load** reads `CharType` with the current value as its default (0x006C0A16), so a template without it leaves the constructor's 0xFF. Of 2,486 readable `.utc`, only `aluviandarkstar.utc` has it (= 1); `default_player.utc` has none. 112 enciphered add-in templates were not searched. So a creature spawned from a template (a script's CreateObject) is not a hero unless the template has `CharType` 1; a mod's can [I].
+  - **The hero** is built from `default_player` by 0x0069D910 (constructor 0x006B9ED0, size 0xD20), which sets 1 in code (`push 1; call 0x0069E480` at 0x0069DA05). It is called from chargen's end (0x0069DFB8, in 0x0069DF10) and from 0x0069DD16 (in 0x0069DA70, which has no direct caller).
+  - **The save does not keep `CharType`:** neither the creature's writer (0x006B2470; `dev/SAVE_WRITER.md`) nor `gff4_fields.csv` has it. So a loaded hero gets its 1 only by a re-make through 0x0069D910's path [I: which path the save load takes was not read].
+  - **Core:** `Gff3Schema.h` gives the `.utc`'s `CharType()`; `Savegame` has no such field, as the save has none.
 - **Edge cases:** invalid id or non-creature → FALSE, script goes on. (checked) Any CharType other than 1 (0, 0xFF, other values) → FALSE. (checked) It is the stored flag, not "the controlled creature" or "the party leader": a follower being controlled is not the hero, and a copy of the hero keeps 1 only if not reset (inferred from the writers above).
 
 ### DoAutoSave (513)
@@ -22,7 +27,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.
 
 ## Not read
 - `SaveLoadProxy::HandleMessage_SaveGameMessage` (0x006D1C60)'s autosave branch beyond `dev/SAVES.md`, and `0x006CB740`'s per-mode answer.
-- What 0x0069D910 is (a creature made with `CharType` 1).
+- Which of 0x0069D910's two callers the save load takes (0x0069DA70's own callers; probably a vtable).
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
