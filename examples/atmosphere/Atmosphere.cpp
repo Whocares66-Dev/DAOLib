@@ -15,7 +15,7 @@
 // back; the sun's disc, its glow and the shadows going round the sky
 // together (DAOLib #222); the log has the share of night every ten seconds, and a line when
 // the area has its own look again. The trees darken and go blue with the
-// sunlight; grass and buildings keep the light their level was made with
+// sunlight, and so does the grass; buildings keep the light their level was made with
 // (dev/TODO.md). At the start the log has the trees' light beside the
 // sunlight, which the area's load lit them by. A plugin that wants
 // the whole picture darker or greyer as well has the framebuffer's colour

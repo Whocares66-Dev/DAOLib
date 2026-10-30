@@ -239,6 +239,11 @@ std::optional<TreeLight> CurrentTreeLight()
     return light;
 }
 
+// Seen in play 2026-10-30 (DAOLib #269), Redcliffe's day village: the trees' light read at the
+// load as the sunlight, colour and direction; the night village's sunlight set paused took the
+// pines dark and blue in the next picture; a low sun set behind the camera, then ahead of it, lit
+// the party's backs and the trees together, then left both dark. SpeedTree's branch and leaf
+// shaders take N . g_vLightDir, so the global points to the light: the API's way, turned round.
 bool SetTreeLight(const TreeLight &light)
 {
     if (!Module::IsKnownExecutable())
