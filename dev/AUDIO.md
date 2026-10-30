@@ -873,9 +873,9 @@ The music-volume trigger goes in no list of its own: `SetMusicVolumeStateByTag` 
 
 ##### Enter and leave: who calls them
 
-- A creature keeps the set of triggers it stands in at +0xBA8. `0x006AE100` (creature, called from 0x006B3028 and 0x006B31C2, two position updates: inferred) diffs that set against the triggers at its new position: each trigger left gets vtable +0x17C(0, ...), each entered +0x17C(1, ...). (checked)
+- A creature keeps the set of triggers and AOEs it stands in at +0xBA8. `0x006AE100` (creature; called from 0x006B3028 in 0x006B2F70, its position's change, and from 0x006B31C2 in 0x006B3070, an area change or a jump) diffs that set against the objects of the area's +0x1C0 vector at its new position: each one left gets vtable +0x17C(0, ...), each entered +0x17C(1, ...) (`dev/script_commands/aoe.md`, A creature walking in). `AddToArea` 0x0079B6B0 leaves the reverb and volume triggers (+0x1D4 or +0x1D8 answers) off +0x1C0, so only the music-volume trigger is reached by a crossing (checked 2026-10-30 by lib-agent). (checked)
 - `CCTrigger` +0x17C is 0x00799850: it first raises the script event (0x00698850: `EVENT_TYPE_ENTER` 8 or `EVENT_TYPE_EXIT` 9 to the trigger's script, through the disabled-set gate 0x00698490, and not while the area's +0x234 is set) and then calls slot +0x1E4 (enter) or +0x1E8 (leave) with one byte: **whether the creature is the controlled creature** (`0x006A7D30`: its id equals the app's controlled id, 0x005D5CA0). (checked)
-- So any creature's crossing reaches the audio slots, but all three audio triggers act only when that byte is true (each starts `cmp byte [esp+4], 0; je return`). Followers, enemies and the camera do nothing to reverb or music. (checked)
+- So any creature's crossing reaches the music-volume trigger's slots, which, like the reverb and volume triggers' (whose caller is then another path, not found [inferred]), act only when that byte is true (each starts `cmp byte [esp+4], 0; je return`). Followers, enemies and the camera do nothing to reverb or music. (checked)
 - Whether switching the controlled party member re-runs enter/leave for the new leader is not read.
 
 ##### CCTriggerAudioReverb (and the sounds region): reverb on enter and leave
