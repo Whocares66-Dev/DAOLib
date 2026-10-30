@@ -145,4 +145,15 @@ struct RunningEffect
 // Call it on the game thread.
 std::vector<RunningEffect> RunningEffects();
 
+// Runs the particles of the scene's fires, torches and other sprite emitters, ribbons among them, again from
+// nothing: each one's particles are emptied and simulated for `seconds` from a random seed of its
+// own place, so a paused frame shows them the same in every launch. Each emitter is run again in
+// the engine's next frame that draws it.
+// @param seconds how long to simulate, as the engine's own warm-up does: in steps of 1/15 s
+// @return how many such emitters the scene has
+//
+// Call it on the game thread with the game paused. Emitters of physics or mesh particles are left
+// as they are.
+int ReplayEmitters(float seconds);
+
 } // namespace dao::vfx

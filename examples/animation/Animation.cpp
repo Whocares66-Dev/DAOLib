@@ -12,8 +12,9 @@
 // (OnPlayed), with its speed and blend.
 //
 // A key the player binds ("DAOLib example: hold everyone's pose") pauses the game and sets every
-// one of the 64 creatures nearest to the start of its animations (SetPhase), so the same frame can be taken
-// again; pressed again, it unpauses. DAOLib #131.
+// one of the 64 creatures nearest to the start of its animations (SetPhase), and runs the fires'
+// and torches' particles again from a fixed seed (dao/Vfx.h, ReplayEmitters), so the same frame can
+// be taken again; pressed again, it unpauses. DAOLib #131.
 //
 // What it sees goes to example_animation.log.
 #include "dao/Animation.h"
@@ -24,6 +25,7 @@
 #include "dao/Log.h"
 #include "dao/Plugin.h"
 #include "dao/String.h"
+#include "dao/Vfx.h"
 #include "dao/generated/ScriptApi.h"
 
 #include <spdlog/spdlog.h>
@@ -118,7 +120,9 @@ void TogglePose()
     {
         held += dao::animation::SetPhase(near.Object(i), 0.0F) ? 1 : 0;
     }
-    spdlog::info("paused; {} of {} creatures near held at their animations' start", held, near.Size());
+    const int emitters = dao::vfx::ReplayEmitters(2.0F);
+    spdlog::info("paused; {} of {} creatures near held at their animations' start, {} emitters run again", held,
+                 near.Size(), emitters);
 }
 
 } // namespace

@@ -411,6 +411,19 @@ DAO_ADDRESS(kCCCreature_Play, 14670)
 // advanced by its rate (+0x20) times the time and wrapping (0x00811BE0);
 // the tree keeps the last at +0x30 before it advances.
 DAO_DATA(kModelAnimationTree_Vftable, 69616)
+// The particles' four random generators' states, each a word, read 2026-10-23 and 2026-10-30
+// for DAOLib #131 (dao/Vfx.h, ReplayEmitters). Each draw is MSVC's state = state * 0x343FD +
+// 0x269EC3, the high word's 15 bits, inline or through 0x0053DF30 and 0x0053DF70. The first
+// serves a particle's birth (0x0053F980) and the emitters' helpers about it; the second the
+// sprite emitter's update and spawn (0x00552CF0, 0x00552AF0, 0x005525B0) and the physics
+// sprite's (0x005534C0); the third a particle's movement spread (0x0057C340, 0x0057C4F0); the
+// fourth a ribbon's (below).
+// The names are ours.
+DAO_DATA(kParticleRandomSeed, 100580)
+DAO_DATA(kParticleRandomSeedSpawn, 100598)
+DAO_DATA(kParticleRandomSeedSpread, 100707)
+// A ribbon's own: its spawn's spin and size (0x00584A90) and its start frame (0x00586134).
+DAO_DATA(kParticleRandomSeedRibbon, 100736)
 DAO_ADDRESS(kCCCreature_Movement, 14455)
 // A creature's animations (dao/Animation.h), read 2026-10-02: its
 // animation set (+0x154) answers whether it has an animation and how long
@@ -2839,6 +2852,14 @@ DAO_ADDRESS(kGUICharacterRecord_OnShow, 17530)
 // emitter has no such multiplier and none of these. dao/GraphicsNodes.h reads
 // an emitter's model.
 DAO_ADDRESS(kEmitterSprite_Fill, 8074)
+// A sprite emitter's update, its slot 34 (+0x88), __thiscall (bool presimulate, float seconds),
+// `ret 8`; for SpriteParticle and the linked sprite's too. Run each frame in the emitter's own
+// task (its +0x4E8, an EmitterUpdateTask), which the renderer's collect of a drawn object
+// queues (0x0046DE10). Read 2026-10-30 for DAOLib #131 (dev/EFFECTS.md, "The emitter
+// presimulation"; dao/Vfx.h, ReplayEmitters). The name is ours.
+DAO_ADDRESS(kEmitterSprite_Update, 8120)
+DAO_DATA(kEmitterSprite_Vftable, 63985)
+DAO_DATA(kEmitterSpriteLinked_Vftable, 64249)
 DAO_ADDRESS(kEmitterRibbon_Fill, 9125)
 DAO_ADDRESS(kEmitterRibbonPhysics_Fill, 9127)
 

@@ -320,7 +320,7 @@ p'.z += -9.8*Gravity*0.5*(T^2 - (T - h)^2)    // gravity never enters v
 
 **Space** (0x00542440, 0x0053EBC0): particles are kept in world space. With `ParticleInheritance` ≠ 0 (and not InheritVelocity), each step carries them with a frame: `p = R_now·R_prev⁻¹·(p − framePrev) + frameNow`, the velocity turned too. The frame is 1 the emitter node, 2 its parent, 3 the model's root; 4 and 5 weren't read.
 
-**Random numbers:** MSVC's LCG (`s = s·0x343FD + 0x269EC3; r = (s >> 16) & 0x7FFF`), three global streams (0x00C31994, 0x00C31A6C, 0x00C31FC4), never seeded and shared by every emitter. So the distributions can be matched but not the sequence (checked at 0x0053DF30).
+**Random numbers:** MSVC's LCG (`s = s·0x343FD + 0x269EC3; r = (s >> 16) & 0x7FFF`), four global streams, never seeded and shared by every emitter: 0x00C31994 a particle's birth (0x0053F980), 0x00C31A6C the sprite's update and spawn (0x00552CF0, 0x00552AF0, 0x005525B0) and the physics sprite's, 0x00C31FC4 the movement spread (0x0057C340, 0x0057C4F0), 0x00C32234 a ribbon's spawn and start frame. So the distributions can be matched but not the sequence (checked at 0x0053DF30). `dao::vfx::ReplayEmitters` seeds all four for a replay (below, section 9).
 
 **Time:** dt = min(now − last, 0.1 s) × the time scale (0x008107F0), 0 while paused unless the model animates when paused, × the model's speed. A presimulation runs max(1, trunc(T / 0.0666)) steps of 0.0666 s (0x00AF8A3C), T the model's `MMHEmitterPresimulateTime` (6333); its caller wasn't traced.
 
@@ -703,6 +703,14 @@ Read in the GOG exe (capstone, `daoexe.py`, direct-call and vtable scans), and t
   - It is also skipped when its opacity +0x4E0 ≤ 0. The opacity is initialised to 1.0 (0x00542018) [C].
   - The owner's flags are initialised to 0x4001 (0x0054FCAE, in `Object`'s constructor). So emission is on at add time [C].
 - **The animation is not stepped** during the presim [I: nothing in the loop advances the model's clips]. The particles are run with the emitter's live values as they stand when the effect is added: the blueprint's, since no `vfxcast`/`vfxduration` clip has been applied yet.
+
+###### Where the update runs, and a paused frame (read 2026-10-30 for DAOLib #131)
+
+- **In the engine's frame, as tasks** [C]: the renderer's collect of a drawn object (0x0046DE10) walks its emitters (+0xA0..), sets each one's +0x4E4 to the frame's context, which the fill takes its vertex buffer from, and queues the emitter's own `EmitterUpdateTask` (+0x4E8, made with the emitter at 0x005420BD; its run 0x0053E340 is `Update(false, -1)`). The tasks run on the engine's task group's threads, several at once.
+- **So a fill outside the frame crashes**: called from the game thread it wrote 0x3EB0 (2026-10-23), with no context.
+- **A paused frame still updates and fills** [seen in play, Denerim market, 2026-10-30]: 6,100 sprite fills a second paused or not, with no time passed, so the vertices are made again from the particles every frame.
+- **What else a launch leaves in an emitter**: the spawn count's carry (+0x398; the update zeroes it itself on its skip path), and a ribbon's ring, UV counter (+0x528) and start frame (+0x52C, a draw of the ribbon's stream at construction). The update's visibility gate (above) also makes a presimulation in a frame before the emitter's object has been seen produce nothing.
+- **A replay that holds** (`dao::vfx::ReplayEmitters`, DAOLib #131): in each sprite or ribbon's own update task, under one lock, the four streams seeded from the emitter's place, its own clear (slot 41), the carry and the ribbon's fields reset, the presimulation, then the frame's update. Two launches of the same save, posed and paused, Denerim market, the torch in view (`fxe_fire_small_p`, whose flame is the ribbon `Flame`): its tile differed by 14.1/255 without the replay, 9.4 with the plain sprites replayed, and 2.2 and 4.3 with ribbons too (the rest the wall's light).
 
 ###### Who turns it on: being added to a scene
 

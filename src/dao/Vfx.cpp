@@ -83,6 +83,8 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -531,6 +533,204 @@ std::vector<RunningEffect> RunningEffects()
         effects.push_back(std::move(effect));
     });
     return effects;
+}
+
+// Read 2026-10-23 and 2026-10-30 for DAOLib #131 (dev/EFFECTS.md, "How an emitter spawns and
+// moves its particles", "The emitter presimulation" and "Ribbons").
+//
+// The update runs inside the engine's frame, not on the game thread: the renderer's collect of a
+// drawn object (0x0046DE10) walks its emitters, gives each the frame's context at +0x4E4, which
+// the fill takes its vertex buffer from, and queues the emitter's own task (+0x4E8, an
+// EmitterUpdateTask, whose run 0x0053E340 is Update(false, -1)) for the engine's task group's
+// threads. The update, slot 34, __thiscall (bool presimulate, float seconds), `ret 8`, the same
+// for a plain sprite and a ribbon, runs a presimulation in steps of 0.0666 s when its first
+// argument is set and builds no vertices then; a normal update ends in the vertex fill (slot 43)
+// whether it stepped the particles or not. Called from the game thread the fill crashed, writing
+// 0x3EB0 (2026-10-23): no frame, no context. While paused the tasks go on with no time passed:
+// in play, Denerim market 2026-10-30, 6,100 sprite fills a second, paused or not. So the replay
+// is done in an emitter's own task, the next time it is updated: the emitter emptied, the
+// presimulation, then the frame's own update, which fills the vertices.
+//
+// What a replay must hold still, each found by a pair of launches that still differed:
+// - The random draws. They come from four linear congruential generators of the engine's
+//   (dao/Addresses.h, kParticleRandomSeed), shared by every emitter: a particle's birth, the
+//   sprite's spawn, the movement spread, a ribbon's own. The tasks run on several threads at
+//   once, so each replay holds a lock and seeds all four from the emitter's own place first:
+//   what it draws does not hang on the order the threads take them in.
+// - The spawn count's carry, the part of a particle not yet spawned (+0x398; the update clears
+//   it itself when it skips an emitter).
+// - The frame it is done in: an emitter updated only while seen is skipped by the update until
+//   its object has been seen (Held), and a presimulation then makes nothing.
+// - A ribbon's ring, UV counter and start frame: the torch's flame in the market is one
+//   (fxe_fire_small_p's Flame, an ObjectNodeEmitterSpriteLinked), and its ring keeps a dead
+//   particle's angle for the next born in its slot.
+// Physics and mesh particles hold engine objects, so those emitters are left as they are.
+namespace
+{
+
+constexpr std::size_t kParticles = 0x500; // in a sprite emitter: its particles, 0x80 bytes each
+constexpr std::size_t kParticleSize = 0x80;
+constexpr std::size_t kRibbonSlots = 0x101; // a ribbon's ring of particles, made once with the emitter
+constexpr std::size_t kRibbonUv = 0x528;    // a ribbon's UV counter, -1 as made
+constexpr std::size_t kRibbonFrame = 0x52C; // and its flipbook's start frame
+constexpr std::size_t kSpawnCarry = 0x398;  // the part of a particle the spawn count carries to the next update
+constexpr std::size_t kBlueprint = 0x310;   // in an emitter: its blueprint
+constexpr std::size_t kClearSlot = 41;      // an emitter's own clear of its particles
+
+using SpriteUpdateFn = void(__fastcall *)(std::uintptr_t emitter, int edx, std::int32_t presimulate, float seconds);
+Detour<SpriteUpdateFn> g_spriteUpdate;
+
+std::mutex g_replayMutex;
+std::uint32_t g_replayAsked = 0;                              // the last replay asked for; 0 none
+float g_replaySeconds = 0;                                    // its time
+std::unordered_map<std::uintptr_t, std::uint32_t> g_replayed; // each emitter's last replay done
+
+enum class Kind : std::uint8_t
+{
+    Sprite,
+    Ribbon,
+    Other
+};
+
+// A plain sprite or a ribbon of SpriteParticle, by its vftable.
+Kind KindOf(std::uintptr_t emitter)
+{
+    const auto vftable = *reinterpret_cast<const std::uintptr_t *>(emitter);
+    if (vftable == Module::Address(addr::kEmitterSprite_Vftable))
+    {
+        return Kind::Sprite;
+    }
+    return vftable == Module::Address(addr::kEmitterSpriteLinked_Vftable) ? Kind::Ribbon : Kind::Other;
+}
+
+// The generators' state for an emitter: from its place, so the same emitter draws the same in every launch.
+std::uint32_t SeedOf(std::uintptr_t emitter)
+{
+    const Vector place = NodePosition(emitter);
+    std::uint32_t seed = 2166136261U; // FNV-1a over the place's bits
+    for (const float value : {place.x, place.y, place.z})
+    {
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof bits);
+        for (int i = 0; i < 4; ++i)
+        {
+            seed = (seed ^ ((bits >> (8 * i)) & 0xFFU)) * 16777619U;
+        }
+    }
+    return seed;
+}
+
+// Whether the update would leave the emitter as it is this frame, as its own first test has it
+// (0x00552D00 to 0x00552D57): an emitter updated only while seen, while the graphics cull and its
+// owner has not been seen (its flag 0x20), or one with no opacity.
+bool Held(std::uintptr_t emitter)
+{
+    constexpr std::size_t kBlueprintFlags = 0x131; // in the blueprint: 2 UpdateOnlyWhenVisible
+    constexpr std::size_t kEmitterOwner = 0x154;   // in an emitter: its GraphicsStructures::Object
+    constexpr std::size_t kOwnerBase = 8;          // in the object: the base whose slot 41 answers its flags
+    constexpr std::size_t kOpacity = 0x4E0;
+    constexpr std::size_t kCullsSlot = 0xF8 / 4;
+    constexpr std::size_t kFlagsSlot = 0xA4 / 4;
+    using BoolFn = bool(__fastcall *)(void *self, int edx);
+    using FlagsFn = std::uint32_t(__fastcall *)(void *self, int edx);
+    if (*reinterpret_cast<const float *>(emitter + kOpacity) <= 0.0F)
+    {
+        return true;
+    }
+    auto *graphics = *reinterpret_cast<void **>(Module::Address(addr::kGraphics));
+    const auto blueprint = *reinterpret_cast<const std::uintptr_t *>(emitter + kBlueprint);
+    const bool culls = reinterpret_cast<BoolFn>((*static_cast<void ***>(graphics))[kCullsSlot])(graphics, 0);
+    if (!culls || (*reinterpret_cast<const std::uint8_t *>(blueprint + kBlueprintFlags) & 2U) == 0)
+    {
+        return false;
+    }
+    auto *owner =
+        reinterpret_cast<void *>(*reinterpret_cast<const std::uintptr_t *>(emitter + kEmitterOwner) + kOwnerBase);
+    return (reinterpret_cast<FlagsFn>((*static_cast<void ***>(owner))[kFlagsSlot])(owner, 0) & 0x20U) == 0;
+}
+
+// Empties the emitter as it was made, once the generators are seeded: its own clear, the spawn
+// count's carry, and a ribbon's ring, UV counter and start frame as its constructor sets them
+// (0x00586090: the start frame rand01 of the ribbon's generator with RandomStartFrame, else 0).
+void Clear(std::uintptr_t emitter, Kind kind)
+{
+    constexpr std::size_t kRandomStartFrame = 0x203; // in the blueprint
+    using ClearFn = void(__fastcall *)(std::uintptr_t self, int edx);
+    reinterpret_cast<ClearFn>((*reinterpret_cast<const std::uintptr_t *const *>(emitter))[kClearSlot])(emitter, 0);
+    *reinterpret_cast<float *>(emitter + kSpawnCarry) = 0.0F;
+    if (kind != Kind::Ribbon)
+    {
+        return;
+    }
+    if (auto *ring = *reinterpret_cast<std::byte **>(emitter + kParticles))
+    {
+        std::memset(ring, 0, kRibbonSlots * kParticleSize);
+    }
+    *reinterpret_cast<std::int32_t *>(emitter + kRibbonUv) = -1;
+    const auto blueprint = *reinterpret_cast<const std::uintptr_t *>(emitter + kBlueprint);
+    float frame = 0.0F;
+    if (*reinterpret_cast<const std::uint8_t *>(blueprint + kRandomStartFrame) != 0)
+    {
+        auto &state = *reinterpret_cast<std::uint32_t *>(Module::Address(addr::kParticleRandomSeedRibbon));
+        state = (state * 0x343FDU) + 0x269EC3U;
+        frame = static_cast<float>(static_cast<double>((state >> 16) & 0x7FFFU) / 32767.0);
+    }
+    *reinterpret_cast<float *>(emitter + kRibbonFrame) = frame;
+}
+
+void __fastcall SpriteUpdate(std::uintptr_t emitter, int edx, std::int32_t presimulate, float seconds)
+{
+    const Kind kind = KindOf(emitter);
+    if (presimulate == 0 && kind != Kind::Other)
+    {
+        const std::lock_guard lock(g_replayMutex);
+        if (g_replayAsked != 0 && g_replayed[emitter] != g_replayAsked && !Held(emitter))
+        {
+            g_replayed[emitter] = g_replayAsked;
+            const std::uint32_t seed = SeedOf(emitter);
+            for (const AddressId generator : {addr::kParticleRandomSeed, addr::kParticleRandomSeedSpawn,
+                                              addr::kParticleRandomSeedSpread, addr::kParticleRandomSeedRibbon})
+            {
+                *reinterpret_cast<std::uint32_t *>(Module::Address(generator)) = seed;
+            }
+            Clear(emitter, kind);
+            g_spriteUpdate.Original()(emitter, edx, 1, g_replaySeconds);
+            g_spriteUpdate.Original()(emitter, edx, presimulate, seconds);
+            return;
+        }
+    }
+    g_spriteUpdate.Original()(emitter, edx, presimulate, seconds);
+}
+
+} // namespace
+
+int ReplayEmitters(float seconds)
+{
+    // The classes as dao::TypeName gives a template's, decorated (seen in play, Denerim market: 83
+    // plain sprites, 18 ribbons and one of physics particles).
+    constexpr std::string_view kSprite =
+        ".?AV?$ObjectNodeEmitterSprite@VSpriteParticle@GraphicsStructures@@@GraphicsStructures@@";
+    constexpr std::string_view kRibbon =
+        ".?AV?$ObjectNodeEmitterSpriteLinked@VSpriteParticle@GraphicsStructures@@@GraphicsStructures@@";
+    if (!Module::IsKnownExecutable() || CClientExoApp::Get() == nullptr)
+    {
+        return 0;
+    }
+    {
+        const std::lock_guard lock(g_replayMutex);
+        if (!g_spriteUpdate.IsAttached() && !g_spriteUpdate.Attach(addr::kEmitterSprite_Update, &SpriteUpdate))
+        {
+            return 0;
+        }
+        g_replayed.clear();
+        g_replaySeconds = std::max(seconds, 0.0F);
+        g_replayAsked = g_replayAsked + 1 != 0 ? g_replayAsked + 1 : 1;
+    }
+    int emitters = 0;
+    scene::ForEach(scene::Kind::Emitter, [&](const scene::Object &, const scene::Node &node) {
+        emitters += node.address != 0 && (node.type == kSprite || node.type == kRibbon) ? 1 : 0;
+    });
+    return emitters;
 }
 
 } // namespace dao::vfx
