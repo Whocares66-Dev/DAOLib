@@ -606,6 +606,16 @@ Registered in the second routine; `DAExternalCommands.as` gives the argument sha
 
 EI additions (same routine): `IgnoreItemRequirements(itemId:Number)` 0x00713F00 returns bool (the item's flag, via 0x755E50); `CanLevelUpFromCharacterSheet(creatureId)` 0x00713FE0 returns bool (creature method 0x6ACBC0); `GetGender(creatureId)` 0x007140C0 returns number (3) (0x6A3650); `AbilityExists(abilityId)` 0x0051D130 returns number (ability table 0x62C730); `GetAbilityAttributes(tokenPath)` 0x00714570 sets `_root.ReturnedAbilityAttributes` = [ID, UseType, Icon, GUIType, PrereqAbilityID, DisplayState] (index order read in Ability.as; the engine side read for the six attribute reads); `GetItemAttributes(...)` 0x007141F0 sets `_root.ReturnedItemAttributes` (no movie in the 56 uses it; fields not read).
 
+- **`CanLevelUpFromCharacterSheet`: a specialisation counts only once its achievement is unlocked** (read 2026-10-29 by lib-agent-2 with a subagent, for DAOParagonEngine #302) [C unless marked]. Among its tests, 0x006ACBC0 counts a specialisation point available only when a row of table 3 (`Classes`, `cla_`) meets all three of these:
+  - its `BaseClass` (0x37760E31) is the creature's class (property 0x1B);
+  - the creature lacks its `StartingAbility1` (0x4D8C23AB; 0x0071BEC0);
+  - its `Achievement` (0x1E6721D3) is unlocked: `OnlineFeatures` 0x0047A610 answers the record's byte +0x10C, and **0 for a name it does not have**.
+- **The specialisation rows** (`cla_data.gda`): rows 4–15, from Shapeshifter (4018) to Duelist (4030), each with its `SPC_*` achievement.
+  - Awakening's come from add-in files that ghilana cannot read.
+  - The base classes (1 Warrior, 2 Wizard, 3 Rogue) and the monster, Shale and dog rows have no `Achievement`.
+- **So with a fresh profile** (no unlocks), no specialisation row counts. The unlocks are per profile, not per character or save (`dev/script_commands/item_prop.md`, "The online features object").
+- **Not read:** the part of 0x006ACBC0 above 0x006ACD00, which sets one of the two flags it ends on.
+
 ### 6. Environment / module
 
 `GetCurrentModuleName()` 0x0051EE10 -> RetVal wstring of `app->GetModule()->GetName()` (the AS compares to `DAConstants.DAO_MODULE_NAME` / `EP1_MODULE_NAME`); `GetMainModuleName(0|1)` 0x0051EF50 -> wstring, the base campaign's / expansion's module name (chooses DAO_PRC_EP_1 via a CRC/resource check and, in the expansion, the module record name); `SendTelemetryInfo(module, group, payload)` 0x0051C660 (3 args) -> `SendOnlineTelemetry` script backend; `FilterKeyboardInput(illegalChars)` 0x0051C760 (1 arg) -> sets the illegal-character filter on the input group "GUITextInput" (0x5110F0, inferred); EI `SendMessage(name, a1..a5)` 0x0051C800 (arg 0 must be a string) -> 0x524E30 builds a message from the name and typed args, `Messages::Send` (the typed form of FS SendMessage; used by the shared library's `SendMessageValues`).
