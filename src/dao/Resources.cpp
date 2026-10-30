@@ -204,23 +204,51 @@ bool ReadArchive(std::uintptr_t source, std::uint32_t offset, std::vector<std::b
            ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &read, &at) != 0 && read == bytes.size();
 }
 
-// A RIM's bytes, from its file opened again: a RIM closes its one file once its task has read
-// it whole (dao/Addresses.h, "A RIM's file"). The path is the engine's, asked of its alias table
-// as its own opener of an archive asks. Nothing for a packed RIM, whose files' offsets are into
-// the unpacked block.
-bool ReadRim(std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+// A source name's path, asked of the engine's alias table as its own opener of an archive asks
+// (dao/Addresses.h, kFileAliases_Path). The resolver gives an alias it has not back before its
+// ':', and a name with no ':' as it is; an alias it has becomes its folder, a full path, so only a
+// full path is an answer.
+// Seen in play 2026-10-29 (examples/resources, DAOLib #267), at the main menu of a private copy
+// of the GOG install: WRITE_OVERRIDE:, WRITE_DATA: and ADDINS: became the instance's Documents
+// folders (packages\core\override\, packages\core\data\, AddIns\); OVERRIDE:, DATA:, PATCH:,
+// ENV:, TEXTURES: (textures\high\), AUDIO_SOUND:, AUDIO_VO: (audio\vo\en-us\), BUILD_ADDINS: and
+// BUILD_OFFERS: the install's, as dev/FILES.md has them, each there on disk but the install's
+// override, which that copy has not; "BUILD_ADDINS:DAO_PRC_PROMO_WKD\core\..." came back with the
+// rest lower-cased. NO_SUCH_ALIAS:x.rim and a bare rules_core.ncs gave no path.
+std::optional<std::filesystem::path> PathOfName(const core::WStringRep *name)
 {
     using GetFn = std::uintptr_t(__cdecl *)();
     using PathFn = core::WStringRep *(__fastcall *)(std::uintptr_t, int, core::WStringRep *, const core::WStringRep *);
+    if (!Module::IsKnownExecutable())
+    {
+        return std::nullopt;
+    }
     const std::uintptr_t aliases = reinterpret_cast<GetFn>(Module::Address(addr::kFileAliases_Get))();
-    if (aliases == 0 || TryRead<std::uint32_t>(source + kRimUnpacked).value_or(1) != 0)
+    if (aliases == 0)
+    {
+        return std::nullopt;
+    }
+    WString path;
+    reinterpret_cast<PathFn>(Module::Address(addr::kFileAliases_Path))(aliases, 0, path.Engine(), name);
+    std::filesystem::path answer(path.View());
+    return answer.is_absolute() ? std::optional(std::move(answer)) : std::nullopt;
+}
+
+// A RIM's bytes, from its file opened again: a RIM closes its one file once its task has read
+// it whole (dao/Addresses.h, "A RIM's file"). Nothing for a packed RIM, whose files' offsets are
+// into the unpacked block.
+bool ReadRim(std::uintptr_t source, std::uint32_t offset, std::vector<std::byte> &bytes)
+{
+    if (TryRead<std::uint32_t>(source + kRimUnpacked).value_or(1) != 0)
     {
         return false;
     }
-    WString path;
-    reinterpret_cast<PathFn>(Module::Address(addr::kFileAliases_Path))(
-        aliases, 0, path.Engine(), reinterpret_cast<const core::WStringRep *>(source + kSourceName));
-    std::ifstream file(std::filesystem::path(path.View()), std::ios::binary);
+    const auto path = PathOfName(reinterpret_cast<const core::WStringRep *>(source + kSourceName));
+    if (!path)
+    {
+        return false;
+    }
+    std::ifstream file(*path, std::ios::binary);
     return file && file.seekg(offset) &&
            file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
@@ -728,6 +756,12 @@ std::vector<Source> Sources()
         node = TryRead<std::uintptr_t>(node).value_or(0);
     }
     return sources;
+}
+
+std::optional<std::filesystem::path> PathOf(std::wstring_view sourceName)
+{
+    WString name(sourceName);
+    return PathOfName(name.Engine());
 }
 
 std::optional<Source> SourceOf(std::wstring_view file)

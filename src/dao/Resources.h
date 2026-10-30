@@ -127,6 +127,16 @@ std::vector<Source> Sources();
 // It loads the file to find out, as Exists does, so call it on the game thread.
 std::optional<Source> SourceOf(std::wstring_view file);
 
+// Returns the file on disk an engine source name stands for, through the engine's alias table:
+// L"WRITE_OVERRIDE:my mod\\x.rim" is the file under the override folder the game writes to. The
+// part after the ':' comes back in lower case, as the engine makes it. Seen with ENV:, OVERRIDE:,
+// WRITE_OVERRIDE:, ADDINS: and BUILD_ADDINS:.
+// @return nullopt before the table is made, for an alias the table has not, and for a name that is
+// no path; a full path comes back as it is
+//
+// Call it on the game thread.
+std::optional<std::filesystem::path> PathOf(std::wstring_view sourceName);
+
 // A patch to a file as the game reads it. It is given the file's name, in lower case with its
 // extension, and its bytes as the game found them, and returns the changed bytes, or nullopt to
 // leave them.

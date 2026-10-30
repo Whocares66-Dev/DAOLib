@@ -23,6 +23,10 @@
 // place it is taken from, and the start of what it holds, so that test files
 // of one name put in several places show which the game reads.
 //
+// Where a source name is on disk: with the sources, the first source of each alias (the part
+// before its ':') is logged with the path the engine's alias table makes of it and whether that is
+// there, then each bare alias, an alias the table has not and a name with none.
+//
 // Patching a type as the game reads it (DAOLib #124): every material object
 // (.mao) the game reads gets an XML comment after its last line, counted and
 // the first few named in the log, and one is read back on the first frame
@@ -118,6 +122,44 @@ const char *KindName(dao::resources::SourceKind kind)
 
 // Every place the game finds its files in, in the order it looks; then where each file
 // where.txt names comes from.
+void LogPath(const std::wstring &name)
+{
+    const auto path = dao::resources::PathOf(name);
+    if (!path)
+    {
+        spdlog::info("  {} is no path", dao::Utf8(name));
+        return;
+    }
+    std::error_code error;
+    spdlog::info("  {} is {}, {}", dao::Utf8(name), dao::Utf8(path->wstring()),
+                 std::filesystem::exists(*path, error) ? "there" : "not there");
+}
+
+void LogPaths(const std::vector<dao::resources::Source> &sources)
+{
+    spdlog::info("the sources' paths:");
+    std::vector<std::wstring> aliases;
+    for (const dao::resources::Source &source : sources)
+    {
+        const auto colon = source.name.find(L':');
+        if (colon == std::wstring::npos || colon < 2)
+        {
+            continue;
+        }
+        const std::wstring alias = source.name.substr(0, colon + 1);
+        if (std::ranges::find(aliases, alias) == aliases.end())
+        {
+            aliases.push_back(alias);
+            LogPath(source.name);
+        }
+    }
+    for (const wchar_t *name : {L"ENV:", L"OVERRIDE:", L"WRITE_OVERRIDE:", L"ADDINS:", L"BUILD_ADDINS:",
+                                L"NO_SUCH_ALIAS:x.rim", L"rules_core.ncs"})
+    {
+        LogPath(name);
+    }
+}
+
 void LogSources(const char *when)
 {
     const std::vector<dao::resources::Source> sources = dao::resources::Sources();
@@ -127,6 +169,7 @@ void LogSources(const char *when)
         spdlog::info("  {:5} {:7} {:6} {}", i, sources[i].priority, KindName(sources[i].kind),
                      dao::Utf8(sources[i].name));
     }
+    LogPaths(sources);
     std::ifstream list(dao::Module::OwnFolder() / L"where.txt");
     for (std::string line; std::getline(list, line);)
     {
