@@ -22,6 +22,15 @@
 // - OK and Cancel are buttons in an unnamed clip of the screen (_level0.instance16 that day). OK
 //   shows the game's message box for a change it must restart for, else commits
 //   (ClientOptions.CommitOptions) and hides the screen; Cancel hides it alone.
+// - The game's own controls (DAOLib #273) are made by OptionsUtils' helpers (MakeOptionToggleInit,
+//   MakeSliderInit, MakeSliderPickerInit, MakePickerInit and the two FromListAttribute forms), which
+//   keep what a control is in the set-up function they return. The recorder the movie is patched
+//   with (tools/options_record/frame_1/DoAction.as) wraps them, so each control keeps it on its clip
+//   too, and lists them (DAOLibOptionList). A control sends "ClientOptions.SetClientOptionMessage
+//   <option> <value>" at a click or a drag, a slider of numbers its number, and Set sends the same.
+//   Seen in play 2026-10-30: the Audio tab's music volume and its sound effects' checkbox set so,
+//   the screen's slider and box following; the game put both back after Cancel and kept them after
+//   OK, as a player's would be.
 // A clip whose name is unknown is found by its children's names: a container's children are walked
 // by getInstanceAtDepth, as Eluvian's movie tool walks them, the designer's at depths from -16384
 // and the script's from 0. A button's own clip reads as "undefined" (its class's toString), so the
@@ -33,10 +42,13 @@
 #include "dao/Messages.h"
 #include "dao/Options.h"
 #include "dao/OptionsDetail.h"
+#include "dao/String.h"
 #include "dao/Tlk.h"
 
 #include <algorithm>
 #include <array>
+#include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <deque>
 #include <optional>
@@ -149,6 +161,140 @@ void FinishOpening()
     }
 }
 
+// A value as the movie's controls write it in their message: an integer without a point, a
+// number with up to six places.
+std::string Number(double value)
+{
+    if (value == std::floor(value) && std::abs(value) < 1e9)
+    {
+        return std::to_string(static_cast<std::int64_t>(value));
+    }
+    std::string text = std::to_string(value);
+    text.erase(text.find_last_not_of('0') + 1);
+    return text;
+}
+
+// A label or value name as the recorder gives it: the number of one of the game's strings, which
+// the movie's SetText shows, or text.
+std::wstring Shown(std::string_view text)
+{
+    std::uint32_t strref = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), strref);
+    if (error == std::errc{} && end == text.data() + text.size() && !text.empty())
+    {
+        return tlk::String(strref);
+    }
+    return Wide(text);
+}
+
+std::vector<std::string_view> Split(std::string_view text, char by)
+{
+    std::vector<std::string_view> parts;
+    std::size_t from = 0;
+    while (from <= text.size())
+    {
+        const std::size_t to = text.find(by, from);
+        parts.push_back(text.substr(from, to == std::string_view::npos ? std::string_view::npos : to - from));
+        if (to == std::string_view::npos)
+        {
+            break;
+        }
+        from = to + 1;
+    }
+    return parts;
+}
+
+double ToNumber(std::string_view text)
+{
+    double number = 0;
+    std::from_chars(text.data(), text.data() + text.size(), number);
+    return number;
+}
+
+// One of the game's controls as the recorder lists it (tools/options_record/frame_1/DoAction.as,
+// DAOLibOptionList): its clip's path, the helper that made it, and what it shows.
+struct GameControl
+{
+    std::string clip;
+    EntryState state;
+};
+
+std::optional<double> CurrentGroup();
+
+// The game's controls the screen shows now, as the recorder the options movie was patched with
+// lists them; none without it. Their tab is the one shown, the only one whose controls exist.
+std::vector<GameControl> GameControls()
+{
+    std::vector<GameControl> controls;
+    auto movie = gui::ScreenMovie(kScreen);
+    const auto list = movie ? movie->Call("DAOLibOptionList") : std::nullopt;
+    if (!list || list->type != gui::Value::Type::String)
+    {
+        return controls;
+    }
+    const auto group = CurrentGroup();
+    const auto tab = std::ranges::find_if(kTabButtons, [&](const TabButton &button) {
+        return group && static_cast<std::int32_t>(*group) == button.group;
+    });
+    for (const std::string_view line : Split(list->text, '\n'))
+    {
+        const auto fields = Split(line, '\t');
+        constexpr std::size_t kFields = 7;
+        if (fields.size() < kFields)
+        {
+            continue;
+        }
+        GameControl control;
+        control.clip = std::string(fields[0]);
+        const std::string_view maker = fields[1];
+        EntryState &state = control.state;
+        state.name = Wide(fields[2]);
+        state.label = Shown(fields[3]);
+        state.value = ToNumber(fields[4]);
+        state.enabled = fields[5] == "1";
+        state.game = true;
+        state.tab = tab != kTabButtons.end() ? tab->tab : Tab::Game;
+        if (maker == "MakeOptionToggleInit")
+        {
+            state.kind = Kind::Toggle;
+        }
+        else if (maker == "MakeSliderInit")
+        {
+            state.kind = Kind::Slider;
+            state.least = ToNumber(fields[6]);
+            state.most = fields.size() > kFields ? ToNumber(fields[kFields]) : state.least;
+        }
+        else
+        {
+            state.kind = Kind::Choice;
+            for (const std::string_view value : Split(fields[6], '\x01'))
+            {
+                state.values.push_back(Shown(value));
+            }
+        }
+        controls.push_back(std::move(control));
+    }
+    return controls;
+}
+
+// Whether a value is one a control takes: a checkbox's 0 or 1, a choice's index, a slider's number
+// from its least to its most.
+bool InRange(const EntryState &state, double value)
+{
+    switch (state.kind)
+    {
+    case Kind::Toggle:
+        return value == 0 || value == 1;
+    case Kind::Choice:
+        return value >= 0 && value < static_cast<double>(state.values.size()) && value == std::floor(value);
+    case Kind::Slider:
+        return value >= state.least && value <= state.most;
+    case Kind::Button:
+        break;
+    }
+    return true;
+}
+
 std::optional<double> CurrentGroup()
 {
     auto movie = gui::ScreenMovie(kScreen);
@@ -164,6 +310,7 @@ bool IsOpen()
 
 Refusal Open()
 {
+    detail::AttachOptions(); // the movie patched as it loads, the recorder in
     static const bool watched = [] {
         OnFrame(&FinishOpening);
         return true;
@@ -237,34 +384,76 @@ Refusal ShowTab(Tab tab)
     return movie && movie->Invoke(push.c_str()) ? Refusal::None : Refusal::NotShown;
 }
 
-Refusal Set(std::wstring_view name, std::int32_t value)
+std::vector<EntryState> Entries(Tab tab)
 {
+    detail::AttachOptions();
+    std::vector<EntryState> found;
+    if (!IsOpen())
+    {
+        return found;
+    }
+    found = detail::PluginEntries(tab);
+    const auto tabs = Tabs();
+    const auto shown = std::ranges::find_if(tabs, &TabState::current);
+    if (shown != tabs.end() && shown->tab == tab)
+    {
+        for (const GameControl &control : GameControls())
+        {
+            found.push_back(control.state);
+        }
+    }
+    return found;
+}
+
+Refusal Set(std::wstring_view name, double value)
+{
+    detail::AttachOptions();
     if (!IsOpen())
     {
         return Refusal::NotShown;
     }
-    const auto control = detail::PlacedOption(name);
-    if (!control)
-    {
-        return Refusal::NotOffered;
-    }
     const auto tabs = Tabs();
     const auto shown = std::ranges::find_if(tabs, &TabState::current);
-    if (shown == tabs.end() || shown->tab != control->tab)
+    std::string option;
+    if (const auto control = detail::PlacedOption(name))
     {
-        return Refusal::NotShown;
+        if (shown == tabs.end() || shown->tab != control->tab)
+        {
+            return Refusal::NotShown;
+        }
+        if (control->kind == Kind::Button)
+        {
+            value = 1; // what a button's click sends
+        }
+        else if (value < 0 || value >= control->values || value != std::floor(value))
+        {
+            return Refusal::OutOfRange;
+        }
+        option = control->option;
     }
-    if (control->kind == Kind::Button)
+    else
     {
-        value = 1; // what a button's click sends
+        // The game's own: on the screen only while its tab is shown.
+        const auto controls = GameControls();
+        const auto game = std::ranges::find(controls, name, [](const GameControl &c) { return c.state.name; });
+        if (game == controls.end())
+        {
+            return Refusal::NotOffered;
+        }
+        if (!game->state.enabled)
+        {
+            return Refusal::Disabled;
+        }
+        if (!InRange(game->state, value))
+        {
+            return Refusal::OutOfRange;
+        }
+        option = Utf8(game->state.name);
     }
-    else if (value < 0 || value >= control->values)
-    {
-        return Refusal::OutOfRange;
-    }
-    // The message the control itself sends at a click (OptionsUtils' toggle, a picker's
-    // PickEntryCallBack, a slider's change), sent through the movie's own ExternalCommands.
-    const std::string message = "ClientOptions.SetClientOptionMessage " + control->option + " " + std::to_string(value);
+    // The message the control itself sends at a click or a drag (OptionsUtils' toggle, a
+    // picker's PickEntryCallBack, a slider's change), sent through the movie's own
+    // ExternalCommands; a slider of numbers sends its number, the others an integer.
+    const std::string message = "ClientOptions.SetClientOptionMessage " + option + " " + Number(value);
     auto movie = gui::ScreenMovie(kScreen);
     const gui::Value args[] = {gui::Value::String(message.c_str())};
     return movie && movie->Invoke("ExternalCommands.SendMessage", args) ? Refusal::None : Refusal::NotShown;

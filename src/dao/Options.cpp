@@ -138,6 +138,8 @@
 // and so may put a row into its lower part.
 #include "dao/Options.h"
 #include "dao/OptionsDetail.h"
+#include "dao/core/GfxMovie.h"
+#include "dao/generated/OptionsRecord.h"
 
 #include "dao/Addresses.h"
 #include "dao/Frame.h"
@@ -384,7 +386,21 @@ void Became(Section &section, SectionState state, std::size_t rows, std::size_t 
     }
 }
 
-// The options movie as the game opens it: the sections placed.
+// The movie with the recorder of the screen's own controls on its first frame (DAOLib #273,
+// tools/options_record/frame_1/DoAction.as): each control the movie's helpers make keeps on its
+// clip what it was made with, and DAOLibOptionList lists them. Nothing if the movie is not as read.
+std::optional<std::vector<std::byte>> WithRecorder(std::span<const std::byte> movie)
+{
+    const auto plain = core::gfx::Unpack(movie);
+    if (!plain)
+    {
+        return std::nullopt;
+    }
+    const auto recorder = std::as_bytes(std::span(generated::kOptionsRecord));
+    return core::gfx::AppendDoAction(*plain, recorder);
+}
+
+// The options movie as the game opens it: the sections placed, and the recorder.
 std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
 {
     std::vector<core::options_movie::Section> sections;
@@ -413,7 +429,8 @@ std::optional<std::vector<std::byte>> Patch(std::span<const std::byte> movie)
         }
         Became(g_sections[i], state, core::options_movie::RowsOf(sections[i]), slots ? slots->size() : 0);
     }
-    return patched;
+    auto recorded = WithRecorder(patched ? std::span<const std::byte>(*patched) : movie);
+    return recorded ? recorded : patched;
 }
 
 // The movie's helper asks to be told an option's value: ExternalInterface's
@@ -847,13 +864,20 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
     return true;
 }
 
-std::vector<EntryState> Entries(Tab tab)
+} // namespace dao::options
+
+namespace dao::detail
 {
+
+bool AttachOptions()
+{
+    return options::Attach();
+}
+
+std::vector<options::EntryState> PluginEntries(options::Tab tab)
+{
+    using namespace options;
     std::vector<EntryState> found;
-    if (!IsOpen())
-    {
-        return found;
-    }
     const std::lock_guard lock(g_mutex);
     for (const Entry &entry : g_entries)
     {
@@ -887,6 +911,11 @@ std::vector<EntryState> Entries(Tab tab)
     }
     return found;
 }
+
+} // namespace dao::detail
+
+namespace dao::options
+{
 
 SectionState StateOf(std::wstring_view title)
 {

@@ -49,4 +49,18 @@ std::string Utf8(std::wstring_view text)
     return out;
 }
 
+std::wstring Wide(std::string_view text)
+{
+    if (text.empty())
+    {
+        return {};
+    }
+    const char *characters = text.data(); // NOLINT(bugprone-suspicious-stringview-data-usage)
+    const int size = static_cast<int>(text.size());
+    const int count = MultiByteToWideChar(CP_UTF8, 0, characters, size, nullptr, 0);
+    std::wstring out(static_cast<std::size_t>(count), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, characters, size, out.data(), count);
+    return out;
+}
+
 } // namespace dao

@@ -205,34 +205,43 @@ std::vector<TabState> Tabs();
 // Defaults acting on it.
 Refusal ShowTab(Tab tab);
 
-// What a plugin's control is.
+// What a control is.
 enum class Kind : std::uint8_t
 {
-    Toggle,
-    Choice,
-    Button,
+    Toggle, // a checkbox: 0 or 1
+    Choice, // a slider with named stops or a dropdown: an index of its values
+    Slider, // a slider of numbers from `least` to `most`, the game's own volumes, gamma and mouse
+    Button, // a plugin's button
 };
 
-// A plugin's control on the screen. The game's own controls are not listed.
+// A control on the screen: a plugin's, or the game's own.
 struct EntryState
 {
-    std::wstring name; // the name the plugin gave it
+    // A plugin's control: the name the plugin gave it. The game's: its option, such as
+    // L"GameOptions.AutoPauseCombat" or L"AudioOptions.MusicVolume", which has a dot.
+    std::wstring name;
     std::wstring label;
     Kind kind = Kind::Toggle;
-    std::int32_t value = 0;           // a checkbox's 0 or 1, a choice's index; 0 for a button
+    double value = 0;                 // a checkbox's 0 or 1, a choice's index, a slider's number; 0 for a button
+    double least = 0;                 // a slider's least
+    double most = 0;                  // and most
     std::vector<std::wstring> values; // a choice's values' names
+    bool enabled = true;              // takes a change; a volume is not while its sound is disabled
+    bool game = false;                // the game's own control
     Tab tab = Tab::Game;
 };
 
-// Returns the plugins' controls placed on a tab, each plugin's that links this library, or none
-// if the screen is not open.
+// Returns the controls on a tab: the plugins' placed there, each plugin's that links this library,
+// and, while the tab is shown, the game's own. None if the screen is not open.
 std::vector<EntryState> Entries(Tab tab);
 
-// Sets a plugin's control as a click on it does: a checkbox to 0 or 1, a choice to an index of
-// its values, a button pressed (its value is ignored). The plugin's `set` or `pressed` runs a
-// frame later.
-// @return NotShown unless the screen is open with the control's tab shown
-Refusal Set(std::wstring_view name, std::int32_t value);
+// Sets a control as the player's click or drag on it does: a checkbox to 0 or 1, a choice to an
+// index of its values, a slider to a number from its least to its most, a plugin's button pressed
+// (its value is ignored). A plugin's `set` or `pressed` runs a frame later; the game's own option
+// changes as its control's would, and OK keeps it or Cancel puts it back as the game does.
+// @return NotShown unless the screen is open with the control's tab shown; Disabled for a control
+//  that takes no change now
+Refusal Set(std::wstring_view name, double value);
 
 // Presses OK as the player does: the changes kept and the screen closed. A change the game needs
 // a restart or a confirmation for opens the game's message box first (dao/Gui.h, CurrentPopup).

@@ -53,4 +53,7 @@ static_assert(sizeof(WString) == sizeof(core::WStringRep), "a WString is the eng
 // Converts UTF-16 text, which the game uses, to UTF-8, for example for a log.
 std::string Utf8(std::wstring_view text);
 
+// Converts UTF-8 text, a Flash movie's for one, to UTF-16.
+std::wstring Wide(std::string_view text);
+
 } // namespace dao
