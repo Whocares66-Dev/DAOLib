@@ -74,6 +74,7 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/Scene.h"
+#include "dao/String.h"
 #include "dao/World.h"
 
 #include <algorithm>
@@ -147,7 +148,7 @@ void Turn(void *object, const Vector4 &facing)
 // the set-up hands to the model (its slot 69) in place of the row's own
 // Tint column (a packed colour, made into the same four floats). So one
 // row might be placed in any colour. In play it has not been: see below
-// before relying on it.
+// before relying on it. (Since 2026-10-30 it does: SetTint, DAOLib #271.)
 //
 // Which do, read 2026-10-01 after play showed one that does not. The
 // model's slot 69 (0x00546700) sets the material parameter
@@ -183,8 +184,13 @@ void Turn(void *object, const Vector4 &facing)
 // Nor is it the moment. A second play test set the tint after placing,
 // every other frame (SetTint): the ring's model had its one part from the
 // frame it was placed, the call answered each time, and the ring was pale
-// gold still. So a caller's tint has not been seen to colour anything,
-// and a reticle is not to be had in another colour this way.
+// gold still. It was the node's flag, read 2026-10-30 (DAOLib #271, at
+// TintEveryNode below): slot 69 colours only nodes whose model sets
+// MMHUseVariationTint, which the rings' and the auras' planes do not. With
+// every such node given the colour, in play 2026-10-30 in Redcliffe's day
+// village, the aura (93052) and the aiming ring (30017) placed red were red
+// beside their untinted twins' pale gold, and the row's own Tint (93052's
+// blue) had not shown either before.
 //
 // What the tint may be for. The game's auras (fxa_aura_p: rows 93052 and
 // 93054 are one model, blue and orange by their Tint) are built as the
@@ -212,6 +218,11 @@ void Turn(void *object, const Vector4 &facing)
 // ring for a texture; SR_HLT (30001) is four small arrows of 18 vertices
 // each. A line on the ground is a row of small effects, or a model made
 // for it.
+namespace
+{
+void TintEveryNode(void *effect);
+} // namespace
+
 ObjectId Place(std::int32_t vfx, const Vector &at, float scale, const std::optional<Vector> &facing,
                const std::optional<Tint> &tint)
 {
@@ -229,8 +240,13 @@ ObjectId Place(std::int32_t vfx, const Vector &at, float scale, const std::optio
     constexpr std::int32_t kMode = 2;
     using Fn = ObjectId(__fastcall *)(void *, int, const Descriptor *, ObjectId, std::int32_t, const Vector4 *,
                                       const Vector4 *, std::uint32_t);
-    return reinterpret_cast<Fn>(Module::Address(addr::kVfxManager_Place))(
+    const ObjectId placed = reinterpret_cast<Fn>(Module::Address(addr::kVfxManager_Place))(
         Manager(), 0, &descriptor, kInvalidObject, kMode, &where, facing ? &direction : nullptr, 0);
+    if (void *object = tint && placed != kInvalidObject ? Find(placed) : nullptr)
+    {
+        TintEveryNode(object); // the set-up's SetTint gave the colour only to nodes flagged for it
+    }
+    return placed;
 }
 
 bool Move(ObjectId effect, const Vector &at, const std::optional<Vector> &facing)
@@ -266,6 +282,69 @@ bool SetScale(ObjectId effect, float scale)
     return true;
 }
 
+namespace
+{
+
+// The engine's SetTint (the graphics object's slot 69, 0x00546700), read 2026-10-30 for DAOLib
+// #271: it keeps the colour at the object's +0x2CC, then walks the object's drawable nodes (the
+// list of their interfaces at +0x5C, each the node's +0x180) and gives each mesh, sprite emitter,
+// emitter of meshes or weapon trail (its interface's slot 7: kinds 1, 6, 7 and 19 to 21, the byte
+// table 0x00546834) that has a material instance (+0x150) the parameter mml_vUserColorMultiplier
+// pointing at that colour, through kMaterialObjectInstance_SetParameter. But only a node whose
+// blueprint's slot 10 is true: MMHUseVariationTint, which 69 of the game's 2,927 emitters have and
+// the aiming ring's and the auras' planes have not. So a tint, the row's own Tint column too,
+// showed on none of them. This gives every such node the colour, as slot 69 does those with the
+// flag; a node whose shader has no such parameter takes no colour from it.
+void TintEveryNode(void *effect)
+{
+    constexpr std::size_t kModelSlot = 0x60 / 4; // the effect's +0x70 base: its model
+    constexpr std::size_t kObjectOfModel = 0x18; // in the model: the graphics object's holder, its +4
+    constexpr std::size_t kNodesBegin = 0x5C;    // in the graphics object
+    constexpr std::size_t kNodesEnd = 0x60;
+    constexpr std::size_t kColor = 0x2CC;       // the colour SetTint keeps
+    constexpr std::size_t kKindSlot = 0x1C / 4; // a node interface's kind
+    constexpr std::size_t kInterface = 0x180;   // in a node: the interface the list holds
+    constexpr std::size_t kMaterialInstance = 0x150;
+    using ModelFn = std::uintptr_t(__fastcall *)(void *self, int edx);
+    using KindFn = std::int32_t(__fastcall *)(void *self, int edx);
+    using SetFn =
+        void(__fastcall *)(void *instance, int edx, const core::WStringRep *name, const float *value, std::int32_t one);
+    auto *base = static_cast<std::byte *>(effect) + 0x70;
+    const auto model = reinterpret_cast<ModelFn>((*reinterpret_cast<void ***>(base))[kModelSlot])(base, 0);
+    const auto holder = model != 0 ? *reinterpret_cast<const std::uintptr_t *>(model + kObjectOfModel) : 0;
+    const auto object = holder != 0 ? *reinterpret_cast<const std::uintptr_t *>(holder + 4) : 0;
+    if (object == 0)
+    {
+        return;
+    }
+    WString name(L"mml_vUserColorMultiplier");
+    const auto *color = reinterpret_cast<const float *>(object + kColor);
+    const auto set = reinterpret_cast<SetFn>(Module::Address(addr::kMaterialObjectInstance_SetParameter));
+    const auto *const begin = *reinterpret_cast<void *const *const *>(object + kNodesBegin);
+    const auto *const end = *reinterpret_cast<void *const *const *>(object + kNodesEnd);
+    for (auto *const *slot = begin; begin != nullptr && slot < end; ++slot)
+    {
+        void *interface = *slot;
+        if (interface == nullptr)
+        {
+            continue;
+        }
+        const std::int32_t kind =
+            reinterpret_cast<KindFn>((*static_cast<void ***>(interface))[kKindSlot])(interface, 0);
+        if (kind != 1 && kind != 6 && kind != 7 && (kind < 19 || kind > 21))
+        {
+            continue;
+        }
+        const auto node = reinterpret_cast<std::uintptr_t>(interface) - kInterface;
+        if (auto *instance = *reinterpret_cast<void **>(node + kMaterialInstance))
+        {
+            set(instance, 0, name.Engine(), color, 1);
+        }
+    }
+}
+
+} // namespace
+
 bool SetTint(ObjectId effect, const Tint &tint)
 {
     void *object = Find(effect);
@@ -275,6 +354,7 @@ bool SetTint(ObjectId effect, const Tint &tint)
     }
     using Fn = void(__fastcall *)(void *, int, const Tint *);
     reinterpret_cast<Fn>(Module::Address(addr::kVfxObject_SetTint))(object, 0, &tint);
+    TintEveryNode(object);
     return true;
 }
 

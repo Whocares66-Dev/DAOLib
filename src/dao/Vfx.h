@@ -48,8 +48,10 @@ struct Tint
 // @param tint a colour to use in place of the row's own Tint column, if given
 // @return the effect's id, or kInvalidObject if no area is loaded
 //
-// So far a tint has not visibly changed any effect's colour in the game, the aiming rings
-// included.
+// A tint multiplies the colour of every part of the effect whose material takes a user colour:
+// the aiming rings (30017 to 30019), the auras' glyphs and most effects on VFX.mat. Parts drawn
+// with the reticles' plain material, the selection reticles and the move marker (30000), keep
+// their own colour.
 ObjectId Place(std::int32_t vfx, const Vector &at, float scale = 1.0F,
                const std::optional<Vector> &facing = std::nullopt, const std::optional<Tint> &tint = std::nullopt);
 
@@ -77,7 +79,7 @@ bool SetScale(ObjectId effect, float scale);
 // Changes a placed effect's tint without removing and placing it again.
 // @return false if the effect no longer exists
 //
-// As with Place, a tint has so far not visibly changed an effect's colour in the game.
+// The tint shows on the parts Place says.
 bool SetTint(ObjectId effect, const Tint &tint);
 
 // Excludes an effect from the cursor's pick, which decides what is under the cursor, or includes

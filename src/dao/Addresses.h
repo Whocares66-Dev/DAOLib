@@ -603,6 +603,12 @@ DAO_ADDRESS(kVfxManager_Remove, 19704)
 // whose model is not loaded yet. The names are ours.
 DAO_ADDRESS(kVfxObject_SetScale, 21152)
 DAO_ADDRESS(kVfxObject_SetTint, 21153)
+// A material instance's parameter set by name (Graphics::MaterialObjectInstance, the class by
+// its RTTI), __thiscall (const std::wstring *name, const float *value, int), `ret 0xC`; the
+// graphics object's SetTint (its slot 69, 0x00546700) gives it mml_vUserColorMultiplier and the
+// colour the object keeps at +0x2CC, with 1. Read 2026-10-30 for DAOLib #271 (dao/Vfx.h,
+// SetTint). The function's name is ours.
+DAO_ADDRESS(kMaterialObjectInstance_SetParameter, 5804)
 DAO_ADDRESS(kCCObject_SetPosition, 14084)
 DAO_ADDRESS(kGameModeExplore_AimRingEffect, 16149)
 DAO_ADDRESS(kGameModeExplore_UpdateAim, 16294)
