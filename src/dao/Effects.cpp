@@ -7,7 +7,9 @@
 // elapsed. This hooks AddElapsed, so the engine's own check still ends an
 // effect, on its owner's next update after its time runs out. An effect's
 // own figures are CGameEffect::Duration, Remaining and SetRemaining
-// (dao/Structures.h).
+// (dao/Structures.h). A plugin's time left is set there too, on the live
+// effect: what On and the scripts' GetEffects give are the VM's copies
+// (dao/Script.h), and OnAgeing's is const (DAOLib #278).
 //
 // What this does not reach: regeneration of health, mana and stamina,
 // which dao/Clock.h holds and advances with the effects, and anything a
@@ -28,11 +30,13 @@
 #include "dao/core/OwedTime.h"
 #include "dao/generated/ScriptApi.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -50,7 +54,11 @@ std::atomic<bool> g_held{false};
 // it.
 std::mutex g_lock;
 core::OwedTime<std::uint32_t> g_owed;
-std::vector<std::function<std::int32_t(const CGameEffect &, std::int32_t)>> g_ageing;
+using Ageing = std::function<std::int32_t(const CGameEffect &, ObjectId, std::int32_t)>;
+std::vector<Ageing> g_ageing;
+// The time left SetRemaining asked for, in seconds, by the effect's id,
+// until the effect next ages.
+std::unordered_map<std::uint32_t, float> g_remaining;
 // Effects end and their ids go unused; forgetting them all now and then
 // only means an effect seen again waits for the next Advance.
 constexpr std::size_t kForgetAfter = 20000;
@@ -86,19 +94,28 @@ void __fastcall AddElapsed(CGameEffect *effect, int edx, std::int32_t ms)
 {
     if (effect != nullptr)
     {
-        std::vector<std::function<std::int32_t(const CGameEffect &, std::int32_t)>> ageing;
+        std::vector<Ageing> ageing;
         {
             const std::lock_guard lock(g_lock);
             if (g_owed.Items() > kForgetAfter)
             {
                 g_owed.ForgetItems();
+                g_remaining.clear();
             }
             ms = (g_held.load(std::memory_order_relaxed) ? 0 : ms) + g_owed.Owed(effect->Id(), t_owner);
+            // A time left set stands as it was asked for, this update's
+            // time not taken from it.
+            if (const auto set = g_remaining.find(effect->Id()); set != g_remaining.end())
+            {
+                effect->SetRemaining(set->second);
+                g_remaining.erase(set);
+                ms = 0;
+            }
             ageing = g_ageing;
         }
         for (const auto &decide : ageing)
         {
-            detail::Guard("an effect ageing callback", [&] { ms = decide(*effect, ms); });
+            detail::Guard("an effect ageing callback", [&] { ms = decide(*effect, t_owner, ms); });
         }
     }
     g_addElapsed.Original()(effect, edx, ms);
@@ -157,7 +174,9 @@ void AdvanceObject(ObjectId owner, float seconds)
     g_owed.Advance(owner, static_cast<double>(seconds) * 1000);
 }
 
-void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t ms)> ageing)
+// The owner is the one AgeEffect is handed (t_owner), as AdvanceObject's
+// clock is (DAOLib #278).
+void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, ObjectId owner, std::int32_t ms)> ageing)
 {
     Attach();
     const std::lock_guard lock(g_lock);
@@ -194,6 +213,22 @@ std::vector<Standing> On(ObjectId object)
         out.push_back(standing);
     }
     return out;
+}
+
+bool SetRemaining(ObjectId owner, std::uint32_t effect, float seconds)
+{
+    const auto effects = On(owner);
+    const bool temporary = std::ranges::any_of(effects, [effect](const Standing &standing) {
+        return standing.id == effect && standing.durationType == script::EffectDurationType::Temporary;
+    });
+    if (!temporary)
+    {
+        return false;
+    }
+    Attach();
+    const std::lock_guard lock(g_lock);
+    g_remaining[effect] = seconds;
+    return true;
 }
 
 } // namespace dao::effects
