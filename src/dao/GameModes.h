@@ -117,22 +117,31 @@ class GameModeExplore
         reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
     }
 
-    // Notes on Targeting: read 2026-10-02 from BeginTargeting and explore mode's aiming
-    // (dao/Addresses.h, kAbilityTargeting), which test the same two fields. Not yet seen in play.
+    // Notes on Targeting: read 2026-10-02 from BeginTargeting, and corrected 2026-10-31
+    // (DAOLib #282): an aim is its ability, +0x40, not 0, as the engine's GetAimTargetType tests it;
+    // +0x14 is the aim's shape, which until then was taken for "aiming" and so let only circles
+    // through (dao/Addresses.h, kAbilityTargeting).
 
+    // What an aim covers: the engine's 0, 1 and 2 at kAbilityTargeting's +0x14.
+    enum class AimShape : std::int32_t
+    {
+        Creature = 0, // a creature or object, picked by the cursor
+        Circle = 1,   // an area round a point, as Fireball's
+        Cone = 2,     // a cone from the caster, as Cone of Cold's
+    };
     // An ability the player is aiming, and the creature that will use it.
     struct Aim
     {
         std::int32_t ability = 0;         // the ability's id
         ObjectId caster = kInvalidObject; // the creature that will use it
+        AimShape shape = AimShape::Creature;
     };
     // Returns the ability the player is aiming while the targeting cursor is up. That happens
-    // after a quickbar ability is pressed with no valid target, or after RequestTarget. Not yet
-    // tested in the game.
-    // @return the ability and its caster, or nullopt if no ability is being aimed
+    // after a quickbar ability is pressed with no valid target, or after RequestTarget.
+    // @return the ability, its caster and the aim's shape, or nullopt if no ability is being aimed
     static std::optional<Aim> Targeting()
     {
-        constexpr std::size_t kActive = 0x14;
+        constexpr std::size_t kShape = 0x14;
         constexpr std::size_t kAbility = 0x40;
         constexpr std::size_t kCaster = 0x50;
         const auto *state = reinterpret_cast<const std::byte *>(Module::Address(addr::kAbilityTargeting));
@@ -140,13 +149,13 @@ class GameModeExplore
         {
             return std::nullopt;
         }
-        const auto active = *reinterpret_cast<const std::int32_t *>(state + kActive);
         const auto ability = *reinterpret_cast<const std::int32_t *>(state + kAbility);
-        if (active != 1 || ability == 0)
+        if (ability == 0)
         {
             return std::nullopt;
         }
-        return Aim{ability, *reinterpret_cast<const ObjectId *>(state + kCaster)};
+        return Aim{ability, *reinterpret_cast<const ObjectId *>(state + kCaster),
+                   *reinterpret_cast<const AimShape *>(state + kShape)};
     }
 
     // Returns the selected target. The cycle-target keys choose it, and a quickbar ability is

@@ -2339,10 +2339,16 @@ DAO_ADDRESS(kGameModeExplore_ValidTarget, 16234)
 // What BeginTargeting keeps, read 2026-10-02: one object, the "globals from
 // 0x00C35FA0" above being its fields. BeginTargeting resets it (0x0070AB60)
 // and then sets +0x40 the ability, +0x44 its AbilityType and +0x4C its
-// TargetType (abi_base), +0x48 the target passed, +0x50 the caster, and
-// through its slot 21 +0x14, 1 while the targeting cursor is up; the
-// reset puts 0 in +0x14, +0x40 and +0x44 and -1 in +0x50. Explore mode's
-// aiming (0x00711054) tests +0x40 not 0 and +0x14 1. The name is ours.
+// TargetType (abi_base), +0x48 the target passed and +0x50 the caster; the
+// reset puts 0 in +0x10, +0x14, +0x40 and +0x44 and -1 in +0x50. An aim is
+// +0x40 not 0. Corrected 2026-10-31 (DAOLib #282, paragon-agent's reading for
+// its #340, through the address library, e919377): +0x14 is the aim's shape,
+// 0 a creature, 1 a circle, 2 a cone, compared with each in 0x00710F80 and
+// 0x00710B90 and with 2 in PerformAbilityOnTargetUnderCursorMessage's
+// handler, and written 1 in 0x0070BB70 and PerformAbilityMessage's handler;
+// the test at 0x00711054 (+0x40 not 0, +0x14 1) is the circle's branch, not
+// one of aiming. +0x10 is the AoE's row, +0x18 its size, +0x1C its length,
+// +0x20 its centre and +0x30 its direction. The name is ours.
 DAO_DATA(kAbilityTargeting, 101587)
 DAO_DATA(kSelectedTarget, 97479)
 // The one setter of the selected target: __thiscall on explore mode (id),

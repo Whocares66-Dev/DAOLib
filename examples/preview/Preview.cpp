@@ -7,8 +7,9 @@
 // preview, measured as the crow flies: a path's length waits on a path
 // search a plugin can ask for (dev/TODO.md, item 5). The ring is placed
 // once and moved; it is placed afresh when its colour changes, and taken
-// away when the cursor leaves the ground. What it does goes to
-// example_preview.log.
+// away when the cursor leaves the ground. An ability being aimed is
+// logged as its aim begins and ends, with its caster and the aim's shape:
+// a creature, a circle or a cone. What it does goes to example_preview.log.
 #include "dao/ClientExoApp.h"
 #include "dao/Frame.h"
 #include "dao/GameModes.h"
@@ -49,12 +50,48 @@ float Distance(const dao::Vector &a, const dao::Vector &b)
     return std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 }
 
+const char *ShapeName(dao::GameModeExplore::AimShape shape)
+{
+    switch (shape)
+    {
+    case dao::GameModeExplore::AimShape::Creature:
+        return "a creature";
+    case dao::GameModeExplore::AimShape::Circle:
+        return "a circle";
+    case dao::GameModeExplore::AimShape::Cone:
+        return "a cone";
+    }
+    return "an unknown shape";
+}
+
+void LogAim()
+{
+    static std::optional<dao::GameModeExplore::Aim> last;
+    const auto aim = dao::GameModeExplore::Targeting();
+    const bool same =
+        aim.has_value() == last.has_value() && (!aim || (aim->ability == last->ability && aim->shape == last->shape));
+    if (same)
+    {
+        return;
+    }
+    if (aim)
+    {
+        spdlog::info("aiming ability {} of 0x{:x} at {}", aim->ability, aim->caster, ShapeName(aim->shape));
+    }
+    else
+    {
+        spdlog::info("the aim ended");
+    }
+    last = aim;
+}
+
 void Frame()
 {
     if (dao::FrameCount() % kFramesBetween != 0)
     {
         return;
     }
+    LogAim();
     const dao::GameModeExplore *explore = dao::CClientExoApp::CurrentExplore();
     const auto ground = explore != nullptr ? explore->CursorGround() : std::nullopt;
     const dao::CCObject *self = dao::CClientExoApp::Get() != nullptr
