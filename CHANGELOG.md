@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.8.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.8.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.8.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **The options screen driven as a player drives it:** a plugin opens it from the game's menu, shows a tab as its button does, lists and sets the game's own controls and plugins' alike, and presses OK or Cancel, each refused where the screen would refuse it (`dao/Options.h`, #272, #273). Cancel now gives a plugin's own options back to their values when the screen opened, as it does the game's.
+- **Visual effects:** a tint now shows on an effect's every part whose material takes a colour, the aiming rings and auras among them (`dao::vfx::SetTint`, #271); and a paused frame's fire and spell effects come out the same each launch, their particles run again from fixed seeds (`dao::vfx::ReplayEmitters`, #131).
+- **The light on trees and grass** follows `SetSunlight` and `SetTreeLight` from the next frame, lit on the sun's side (#269).
+- **Files on disk:** an engine source name's file through the engine's alias table (`dao::resources::PathOf`, #267); and a data table's row found by its ID and a column by its hash at once, and a row read whole (`daolib_core`, #274).
+- **For graphics mods:** the draw-distance functions and globals in the address library (#266).
+
 ## 0.7.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.7.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.7.0). The loader and its contract with plugins are as in 0.3.0.

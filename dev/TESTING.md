@@ -128,3 +128,12 @@ Then in play, the zip's `dinput8.dll`, `dinput8.pdb` and address files in GOG's 
 | EA | all twelve | five passed: no setting, `DISABLEDXMAXIMIZEDWINDOWEDMODE`, `HIGHDPIAWARE`, `DPIUNAWARE` and `GDIDPISCALING DPIUNAWARE`. The seven compatibility modes, `WINXPSP2` to `WIN8RTM`, kept no game up, as at 0.6.0 |
 
 Then in play, the zip's `dinput8.dll` (SHA-256 `13703D57...71F3D14`), `dinput8.pdb` and address files in GOG's private copy (`game\gogrun`, instance `lib-agent`), with `eluvian` and the release build's `example` and `probe`: `loader (daolib 0.7.0)`, "address library: 103187 IDs for this build", the three plugins loaded, the main menu, and a save of Redcliffe Castle loaded into explore. `DAOLIB_PROBE_CRASH_TEST=1` and `=2` each wrote a crash log naming `SetPaused+0xe6 (Probe.cpp:159)` (the release build inlines `CrashIfTesting` into the hook), the second with 4089 of 4096 MiB in use and the reserve's line.
+
+2026-10-30, the release build of 0.8.0 (`ac57eb9`, the address library at its 0.8.0, `fe66b22`), `play_matrix.ps1 -Preset release -All` with `example` and `probe`, then EA's with `-EaApp -SwitchPath -All` after `deploy.ps1 -Install ea -Preset release`:
+
+| Build | Settings | Result |
+|---|---|---|
+| GOG, Steam, Steamless, Steamless with the 4GB flag, the Nexus exe, and it with the 4GB flag | all twelve | every one of the 72 passed, answering at 30 to 51 s |
+| EA | all twelve | five passed: no setting, `DISABLEDXMAXIMIZEDWINDOWEDMODE`, `HIGHDPIAWARE`, `DPIUNAWARE` and `GDIDPISCALING DPIUNAWARE`. The seven compatibility modes, `WINXPSP2` to `WIN8RTM`, kept no game up, as at 0.6.0 and 0.7.0 |
+
+Then in play, the zip's `dinput8.dll` (SHA-256 `07A7C6D9...C30F1D8`), `dinput8.pdb` and address files in GOG's private copy (`game\gogrun`, instance `lib-agent`), with the current `eluvian` and the release build's `example` and `probe`: `loader (daolib 0.8.0)`, "address library: 103187 IDs for this build", the three plugins loaded, the main menu, and a save of Redcliffe Castle loaded into explore. `DAOLIB_PROBE_CRASH_TEST=1` wrote a crash log naming `SetPaused+0xe6 (Probe.cpp:159)`; `=2` wrote a whole log with 4089 of 4096 MiB in use and the reserve's line, its first frame `probe.dll+238D6` unnamed: the probe's PDB (14 MB) did not fit the 16 MiB reserve this run, as `dev/CRASHES.md` has it for a plugin on the stack in a full space.
