@@ -718,11 +718,15 @@ m2da::Merged MergedSheet(const Index &index, const m2da::Worksheet &sheet)
 
 const m2da::Merged *Index::Worksheet(std::int64_t id) const
 {
-    const std::scoped_lock held(worksheetsLock_);
-    if (const auto found = worksheets_.find(id); found != worksheets_.end())
     {
-        return found->second.get();
+        const std::scoped_lock held(worksheetsLock_);
+        if (const auto found = worksheets_.find(id); found != worksheets_.end())
+        {
+            return found->second.get();
+        }
     }
+    // Merged outside the lock, as Table parses, so that a thread merging one worksheet does not
+    // hold up another's reads (Paragon's workers held its main thread so, DAOLib #283).
     std::unique_ptr<const m2da::Merged> made;
     if (const auto base = Table("m2da_base.gda"))
     {
@@ -732,6 +736,8 @@ const m2da::Merged *Index::Worksheet(std::int64_t id) const
             made = std::make_unique<const m2da::Merged>(MergedSheet(*this, *sheet));
         }
     }
+    // Two threads may both merge one worksheet; the first kept is the one every caller gets.
+    const std::scoped_lock held(worksheetsLock_);
     return worksheets_.emplace(id, std::move(made)).first->second.get();
 }
 

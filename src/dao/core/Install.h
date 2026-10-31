@@ -259,7 +259,9 @@ class Index
     // Returns a worksheet merged as the game merges it: every table file m2da_base's row `id` takes,
     // in the order the game lists them (dao/core/M2da.h). Made once and kept. Null where
     // m2da_base.gda has no such row.
-    // Thread safe; the first call for a worksheet merges it, so ask early, from any thread.
+    // Thread safe; the first call for a worksheet merges it, so ask early, from any thread. A merge
+    // holds up no other thread's asking, though two threads asking one worksheet first may both
+    // merge it.
     const m2da::Merged *Worksheet(std::int64_t id) const;
 
     // Returns whether an add-in is installed, enabled in AddIns.xml, and has every copy readable:

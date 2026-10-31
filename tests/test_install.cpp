@@ -9,8 +9,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace files = dao::test::files;
 namespace install = dao::core::install;
@@ -792,6 +797,68 @@ TEST_CASE("a table is parsed once and kept, and a worksheet merged from its file
     CHECK(dao::core::m2da::Taken(*merged, 3) != nullptr);
     CHECK(index->Worksheet(7) == merged);
     CHECK(index->Worksheet(8) == nullptr);
+}
+
+// A worksheet is merged outside its lock, so threads asking at once may each merge it; every one is
+// given the one kept, which stays (DAOLib #283).
+TEST_CASE("threads asking for worksheets at once are each given the one kept", "[install]")
+{
+    files::TempFolder root;
+    const std::vector<std::uint32_t> baseHashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label"),
+                                                dao::core::GdaColumnHash("Worksheet")};
+    root.Write(
+        L"game/packages/core/override/m2da_base.gda",
+        files::Gda({"ID", "Label", "Worksheet"},
+                   {{7, std::string("Abilities"), std::string("ABI_")}, {9, std::string("Items"), std::string("ITM_")}},
+                   baseHashes));
+    const std::vector<std::uint32_t> hashes{dao::core::GdaColumnHash("ID"), dao::core::GdaColumnHash("Label")};
+    root.Write(L"game/packages/core/override/abi_base.gda",
+               files::Gda({"ID", "Label"}, {{1, std::string("one")}, {2, std::string("two")}}, hashes));
+    root.Write(L"game/packages/core/override/itm_base.gda",
+               files::Gda({"ID", "Label"}, {{5, std::string("five")}}, hashes));
+    const auto index = install::Index::Build(root.path / L"game", {});
+
+    constexpr std::size_t kThreads = 8;
+    std::array<const dao::core::m2da::Merged *, kThreads> abilities{};
+    std::array<const dao::core::m2da::Merged *, kThreads> items{};
+    std::atomic<std::size_t> ready{0};
+    std::vector<std::thread> threads;
+    threads.reserve(kThreads);
+    for (std::size_t i = 0; i < kThreads; ++i)
+    {
+        threads.emplace_back([&, i] {
+            ++ready;
+            while (ready.load() < kThreads)
+            {
+                std::this_thread::yield();
+            }
+            // Half ask the abilities first and half the items, so each is merged against the other.
+            if (i % 2 == 0)
+            {
+                abilities[i] = index->Worksheet(7);
+                items[i] = index->Worksheet(9);
+            }
+            else
+            {
+                items[i] = index->Worksheet(9);
+                abilities[i] = index->Worksheet(7);
+            }
+        });
+    }
+    for (std::thread &thread : threads)
+    {
+        thread.join();
+    }
+    REQUIRE(abilities[0] != nullptr);
+    REQUIRE(items[0] != nullptr);
+    CHECK(abilities[0]->rows.size() == 2);
+    CHECK(items[0]->rows.size() == 1);
+    for (std::size_t i = 0; i < kThreads; ++i)
+    {
+        CHECK(abilities[i] == abilities[0]);
+        CHECK(items[i] == items[0]);
+    }
+    CHECK(index->Worksheet(7) == abilities[0]);
 }
 
 // A type's files in the order the game lists them (ListNames, 0x004C56B0): the world map takes its
