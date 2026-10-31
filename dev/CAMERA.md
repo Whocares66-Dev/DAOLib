@@ -24,11 +24,17 @@ How the engine runs the explore camera: its two zooms and the switch between the
 ## Distance, pivot, pitch and field of view
 
 - **The radius** (0x006C2360): r = s × close + (1 − s) × far, with close 3.0 (0x00C0E010) and far 20.0 (0x00C0E00C), written into the controller every frame. It is linear in s, with no table or curve.
-- **The pivot** is the focus plus (0, 0, h). The camera sits on the sphere of radius r about the pivot, and looks at the pivot (the look-at behaviour, type 3, 0x006C3039). The focus is the creature's position (+0x120, its feet) plus the controller's offsets (+0xF0, +0x100), with no height of its own.
+- **The pivot** is the focus plus (0, 0, h). The camera sits on the sphere of radius r about the pivot, and looks at the pivot (the look-at behaviour, type 3, 0x006C3039). The focus is the creature's position (+0x120, its feet) plus the controller's offsets (+0xF0, +0x100), with no height of its own in the close view.
   - **h is the creature's height:** its slot 108 (`CCCreature` 0x006A1A30), the appearance's `Height` (`apr_base`, hash 0x0DD1F4C1, default 1.8). Human 1.75, elf 1.60, dwarf 1.426. With no appearance, it is the `head` bone's height (fallback 1.75).
   - `ctl+0x2C` eases toward it: step = min(|d| × dt / 0.15, |d|) (0x007EEA70; 0.15 at 0x00C11C30).
   - **Blended toward 1.8 in the band** (slot 13, 0x0076F640, checked): `t = zc < 0.5 ? (0.5 − zc)/1.5 : 0` (= 1 − s/0.75), `h = (1 − t)·h + t·1.8` (0x00C0E028).
   - So the tactical camera is √(20² + 1.8² + 2·20·1.8·cos 45°) = 21.31 m from the focus, the 21.3 seen. Close in, √(3² + h² + 2·3·h·cos p) is 3.8 m at p ≈ 77° for h 1.75.
+  - Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagent [C unless marked]:
+  - **In the band and the tactical view the focus's z is the party's height.** UpdateFocus (0x00771250) blends it: for zc < 0.5, z = (1 − t)·z + t·`ctl+0xE8`, with t the pitch's (0x0076EAB0(1), from the scene camera's eased zoom, 0x007EE7E0) (0x00771306–0x0077133E).
+    - **`ctl+0xE8`** eases (0x00770030, each frame at the tactical step's head, 0x00771079) toward T = max(maxZ − m, meanZ) over the active party's creatures (party +0x234, built by 0x00770E80), with m = 0.25 × 20 × cos 45° = 3.54 m (20.0 at 0x00C0E00C, 45.0 at 0x00C0E014, 0.75 at 0x00C0E034). Step min(|gap| / 0.33 × dt, |gap|) (0.33 at 0x00C0E03C).
+    - **A reset snaps it:** the explore reset (slot 9, 0x00770FF0, at 0x00771041) passes dt = 65505.0 (0x00B07ECC) in the tactical view.
+    - So the 21.31 m below holds with the party on level ground; on a slope the focus is the party's height, at most 3.54 m below the highest.
+  - **While a retarget ease runs** (`ctl+0x1AC`), h is that ease's height, `ctl+0x19C`, not `ctl+0x2C` (0x0076F657–0x0076F66B; "A new target" below).
 - **The pitch** is from straight above.
   - **Close view (s ≥ 0.75):** the player's, clamped to 30°..150° every frame (0x0076F1B0; `cam+0x0C`, `cam+0x08`; 0x00C0E050, 0x00C0E054).
   - **Zooming out through the band:** `SetPitch((1 − t)·kept + t·45°)` every frame (45 at 0x00C0E014).
@@ -39,7 +45,7 @@ How the engine runs the explore camera: its two zooms and the switch between the
 
 ## The controls
 
-**The default bindings** (`ResetKeys` 0x006E9510, `RegisterActions` 0x006E30D0; matching `KeyBindings.ini`):
+**The default bindings** (`ResetKeys` 0x006EA9F0, whose defaults function is 0x006E9510 and which makes the 56 SetKey calls [C], `RegisterActions` 0x006E30D0; matching `KeyBindings.ini`; INPUT.md has the bindings and the ini):
 
 | Input | Default |
 |---|---|
@@ -67,6 +73,18 @@ Left drag is box selection (48, 49 with Shift); it doesn't move the camera.
 2. The base update (0x007EEB70) reads the input (0x007EDC60) as three rates.
 3. It writes `cam+0x44` = −yaw and `cam+0x48` = −pitch (0 in tactical), and the setting += zoom × `ctl+0x4C`, clamped to [-1, 1].
 4. The scene camera's manager (0x006C4C60) caps dt at 0.15 s (0x00C038F4), runs the behaviours in substeps of at most 0.015 s, then zeroes `cam+0x44`/`+0x48`.
+
+Read 2026-10-31, checked by lib-agent-2 with a subagent [C]:
+- **The explore update's order** (0x007714B0):
+  1. `ctl+0x4C`, close 3, far 20.
+  2. The zoom switch 0x0076FBF0, which ends with the view flag, the pitch (0x0076F1B0) and the FOV (0x0076F120).
+  3. The base update 0x007EEB70: the reset if `ctl+0x25`, then the height ease, the input, the zoom, the place.
+  4. UpdateFocus 0x00771250: the party's height, the tactical step, the focus.
+  5. The orbit and look-at set-up 0x0076EFA0.
+  6. The roof fade's switch 0x0076F5A0(0).
+  7. The scene camera's mode 0x0076F0B0 (0x006C2890).
+  8. 0x0076FBC0, which lifts a blocked tactical setting back to −1 once 0x0076F380(1) passes.
+  9. The usage count 0x0076F750: once a second in modes 0 and 1, counting seconds zoomed in or out and summing the setting. They go out as telemetry ('GAME'/'GCMD', 'GCTP') by slot 19 (0x0076EC50) when a telemetry object exists.
 
 **Zoom:**
 - **A wheel notch** is a message (0x0070BD70/0x0070BD90) adding ±1 to `ctl+0x44`, so the setting moves by ±2 × 0.05 = **0.1** (0.05 of s).
@@ -118,6 +136,17 @@ These pan only when the setting is all the way out (`TacticalStep` 0x00771060). 
 
 **Back to the close view** (0x0076F470): both offsets are zeroed. The focus eases from where it was to the leader over max(0.3, 0.6 × (1 − d/60)) s for d ≤ 60 m (60 at 0x00B03BF8), and snaps beyond that.
 
+Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagent [C unless marked]:
+- **A new target** (`SetTarget` 0x007EE840, then slot 0, `OnTargetChanged` 0x007709B0, with the new and old creatures):
+  - **Tactical view:** the offset `ctl+0x100` becomes the focus minus the new target's position, its z set to 0, so the view stays where it was.
+  - **Close view, with an old target:** `BeginFocusEase` (0x007707D0). For d = the distance between the old and new targets' positions (or from the eased place `ctl+0x160` while an ease runs) ≤ 15 m (0x00C0E04C), the focus eases over max(0.3, 0.6 × (1 − d/15)) s (vector record at `ctl+0x130`, current `ctl+0x160`, active `ctl+0x188`). A height record at `ctl+0x190` (current `ctl+0x19C`, active `ctl+0x1AC`) eases from the live height to the new creature's slot-108 height. Each frame its end is set to the live `ctl+0x2C` (0x0076FB60). Beyond 15 m the camera cuts. (`Camera.h` has the 15 m ease; this is a different one from the 60 m one above.)
+  - While the ease runs, the scene camera's `cam+0x3C` is 0, and the pull-in's release (0x006C35A0, which tests it at 0x006C35AC) is skipped.
+- **The zoom input's details:**
+  - The wheel and PageUp/PageDown reach the setting through 0x007EDBD0: p = d × `ctl+0x4C`, the setting += p, then slot 1 (`OnZoomChanged` 0x0076FAA0 in explore, `ClampZoom` 0x007EE680 in the base). So a held key moves the setting by `MouseZoomSensitivity`² × 0.25 a second (1.0 at the default 2.0).
+  - **`ctl+0x26`**, set by the tactical mode's sphere test (0x006C3180 → 0x006C2930; "Collision" below), lets a zero change through. In the tactical view it then lifts the setting to 0.5, with no input.
+  - **ClampZoom** clamps to [−1, 1], clears `ctl+0x26`, and for a positive change (or a setting at 1) sends the tutorial event 0x429 (`TrainingTutorial::SendEvent` 0x00693290, module +0x498).
+- **Mouse y in the tactical view:** `ReadInput` (0x007EDC60) asks slot 3 (0x0076EF10, `ctl+0x90 != 0`; the table's `MouseYZooms` is a misnomer) at 0x007EDEBF and 0x007EDF91. When it is true, mouse y adds neither to the drag's latch nor to the pitch.
+
 ### The mouse buttons, and a click in the world (read 2026-10-23 by lib-agent-2 with subagents, for DAOParagonEngine; static reading, nothing played)
 
 - **The codes are DirectInput's button offsets** [C, `ReadMouse` 0x0087FF40 and the polled query 0x0087E0E0]: 0x0C is button 0, the left; 0x0D is button 1, the right; 0x0E is button 2, the middle.
@@ -140,6 +169,38 @@ These pan only when the setting is all the way out (`TacticalStep` 0x00771060). 
   - On bare ground the left button does nothing else.
 - **The middle button** pans, and latches the same way as the orbit.
 - **Over the interface:** while the mouse is over any movie element, the world pick returns nothing (`MouseOverInterface`, gated at 0x0070EAAC; GUI.md). A portrait's click is the Flash UI's.
+
+## The scene camera's behaviours (read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2 with subagents)
+
+- **One object:** the controller's `cam` (`ctl+4`) is the scene camera and its manager both. `SceneCameraManager::Update` 0x006C4C60 runs every behaviour with its own `this`.
+- **The behaviours** are records in a vector at `cam+0x104`, found by (kind, key) (0x006C2A90; 0x006C29F0 answers whether one exists). Each updater is `__thiscall(cam, dt, record)` and its true return removes the record. The dispatch is at 0x006C4EA4:
+  - 0, the position blend (0x006C2580), key 0: `cam+0x80` lerps from record +0x20 to +0x10.
+  - 1, the rotation blend (0x006C2680): between the quaternions at +0x70 and +0x60, into `cam+0x90`; it ends at +0x60 [I for which is the start].
+  - 2, the orbit (0x006C2C20), key 0.
+  - 3, the look-at (0x006C3010), key 1.
+  - 4, the cutscene's camera (0x006C27B0; CUTSCENES.md). It writes the position, orientation and FOV and never ends.
+  - 5, the scalar blend (0x006C2220), key 3 the FOV (`cam+0xA0`, SetFOV 0x006C4B20).
+  - Blends 0, 1 and 5 end at progress ≥ 1; 5 also at a duration of 0.
+- **The easing:** the record's mode word +0x90 picks:
+  - 1: table(p);
+  - 2: (table(p) + p) / 2;
+  - 3: 2·(table(p/2 + 0.5) − 0.5);
+  - anything else: linear.
+  - The table is 1001 floats at 0x00AF16A8, (1 − cos(π·i/1000)) / 2, indexed by p × 1000 (0x004EDF40). The rotation blend always uses table(p).
+- **The orbit and the look-at as explore sets them** (0x0076EFA0, each frame):
+  - **When they are rebuilt:** unless both exist, StartOrbit (0x006C4790) and StartLookAt (0x006C4A00) are run with id −1.
+  - **SetOrbit** (0x006C30D0): (pivot offset (0, 0, h) from slot 13, close `ctl+0x1C`, far `ctl+0x0C`, `ctl+0x20`, focus `ctl+0x70`). It writes `orbit+0x10` offset, **+0x30 far, +0x40 close**, +0x48, +0x50 focus, and `cam+0x4C` far.
+  - **SetLookAt** (0x006C3130): (offset, focus) into +0x10 and +0x20. The look-at aims at the object with id `record+0x90` (its +0x120), else +0x20, plus the offset +0x10.
+  - **The orbit's centre** (0x006C2950) is formed the same way. So the first vector argument is the offset; the focus is the last.
+- **The final position** (0x006C4E1F–0x006C4E6A): `cam+0x70` = `cam+0x80` + `cam+0x34` × the unit vector from `cam+0x80` toward the orbit's centre (0x006C31F0). `+0x34` is the pull-in ("Collision" below).
+- **The shake** is its own object at `cam+0x114` (0x006C2440, with the full dt):
+  - **Its output:** x = sin(f·fx)·ax·(1 − f), y = cos(f·fy)·ay·(1 − f), with f the elapsed fraction.
+  - **Its start:** 0x006C2390, from 0x0079D519, only once the previous shake is over.
+  - **Its use:** `CClientExoApp::FrameUpdate` reads it (0x005D7607, 0x005D7718) as a view jitter; it is never added to the position [I for its full effect].
+- **Not the camera's:** `CCameraFixedPolicy` (vtable 0x00AFFE7C) is a layout policy (thresholds by distance) that the retail game never builds. The factory's one call (0x005C8FF7) passes kind 4, `EC::IndoorStreamPolicy`.
+- **The controllers' vtables:**
+  - **Explore:** 0x00B1D954, 20 slots. 0 OnTargetChanged, 1 OnZoomChanged, 3 0x0076EF10, 4 the deleting destructor, 5 0x0076FD70, 7 Update, 9 the reset, 11 the mode name L"Exploration Mode", 12 the focus (0x0076EC30, no caller), 13 the pivot offset, 14 0x0076F6E0, 19 the telemetry. `Addresses.h`:1750's "25 slots" is 20 by `daoexe.py --vtables`.
+  - **Base:** 0x00B2456C. 1 ClampZoom, 5 0x007EE980, 7 the update, 9 the turn behind the target (0x007EE9A0 → 0x007EE880 with the target id `ctl+8`), 13 the pivot offset (0x007EDC40, which returns its out pointer). The base constructor 0x007EE9B0 sets `ctl+0x4C` 0.4, `+0x50` −9999, `+0x64` −1, `+0x68` 1, `+0x5C` 1 and `+0x1C` 1.0.
 
 ## On a load, and after a scene
 
