@@ -99,6 +99,7 @@ m2da::Merged Animations()
     row(640, L"pausetwitch_v1", 1);
     row(900, L"no_such_node", 1);
     row(901, L"nor_this", 0);
+    m2da::Index(table);
     return table;
 }
 

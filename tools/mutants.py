@@ -146,6 +146,7 @@ DDS = "src/dao/core/Dds.cpp"
 GFF3 = "src/dao/core/Gff3.cpp"
 GDAFILE = "src/dao/core/GdaFile.cpp"
 M2DA = "src/dao/core/M2da.cpp"
+SORTEDINDEX = "src/dao/core/SortedIndex.h"
 ADDINS = "src/dao/core/AddIns.cpp"
 INSTALL = "src/dao/core/Install.cpp"
 TALKTABLES = "src/dao/core/TalkTables.cpp"
@@ -682,6 +683,20 @@ MUTANTS: list[Mutant] = [
         COLLISION,
         "if (shape.kind == Kind::Capsule)",
         "if (shape.kind == Kind::Unknown)",
+    ),
+    Mutant(
+        "gda-row-first: a table's row by its ID is the first of that ID's rows, as a scan found it",
+        SORTEDINDEX,
+        "    std::ranges::sort(index);",
+        "    std::ranges::sort(index, [](const auto &a, const auto &b) {\n"
+        "        return a.first != b.first ? a.first < b.first : a.second > b.second;\n"
+        "    });",
+    ),
+    Mutant(
+        "m2da-indexed: a merged worksheet comes with its lookups, or Taken finds nothing",
+        M2DA,
+        "    Index(merged);\n    return merged;",
+        "    return merged;",
     ),
     Mutant(
         "collision-node-frame: a shape is in its node's frame, the node outside its own pose",
@@ -1574,8 +1589,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "m2da-taken-row: a table's lookup answers the row the game takes, not a dropped one of its ID",
         M2DA,
-        "return row.taken && row.id == id; });",
-        "return row.id == id; });",
+        "if (table.rows[r].taken && table.rows[r].id)",
+        "if (table.rows[r].id)",
     ),
     Mutant(
         "effect-volume-stride: a mesh spawn volume's points are 16 bytes apart, the fourth float junk",

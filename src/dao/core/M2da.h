@@ -16,6 +16,7 @@
 #pragma once
 
 #include "dao/core/GdaFile.h"
+#include "dao/core/SortedIndex.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -77,7 +78,14 @@ struct Merged
     std::size_t conflicts = 0;            // IDs parts give different rows
     std::vector<std::size_t> skipped;     // parts the game takes no row from: their first column is
                                           // not ID (0x004ECA10)
+    // The lookups Taken and CellOf use, which Merge makes and Index makes again: each column's place by
+    // its hash, and each ID's taken row.
+    SortedIndex<std::uint32_t> columnOf;
+    SortedIndex<std::int64_t> takenOf;
 };
+
+// Makes a table's lookups from its columns and rows, for a table made other than by Merge.
+void Index(Merged &table);
 
 // Returns the parts merged as the game merges them: rows keyed by their ID column, a row parts
 // give alike given once, different rows for one ID each given and marked a conflict, and of each
@@ -86,7 +94,8 @@ struct Merged
 // takes, sorted by install::Index::SortFiles (their sources' order, then by name); none may be null
 Merged Merge(std::span<const GdaFile *const> parts);
 
-// Returns the row the game takes for an ID, or null for an ID no row has.
+// Returns the row the game takes for an ID, or null for an ID no row has: every cell in the
+// columns' order.
 const Row *Taken(const Merged &table, std::int64_t id);
 
 // Returns a row's cell of a column, by the column's name in any case; null where the table has no

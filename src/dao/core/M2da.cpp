@@ -73,15 +73,7 @@ std::wstring Lower(std::wstring_view text)
 
 std::optional<std::int64_t> IdOf(const GdaFile::Cell &cell)
 {
-    if (const auto *integer = std::get_if<std::int64_t>(&cell))
-    {
-        return *integer;
-    }
-    if (const auto *real = std::get_if<double>(&cell); real != nullptr && std::floor(*real) == *real)
-    {
-        return static_cast<std::int64_t>(*real);
-    }
-    return std::nullopt;
+    return GdaFile::IdOf(cell);
 }
 
 // Every part's columns, by hash, in the order first met; each hash's place.
@@ -280,13 +272,33 @@ Merged Merge(std::span<const GdaFile *const> parts)
         }
     }
     merged.rows = std::move(kept);
+    Index(merged);
     return merged;
+}
+
+void Index(Merged &table)
+{
+    table.columnOf.clear();
+    table.takenOf.clear();
+    for (std::size_t i = 0; i < table.columns.size(); ++i)
+    {
+        table.columnOf.emplace_back(table.columns[i].hash, i);
+    }
+    KeepFirstOfEach(table.columnOf);
+    for (std::size_t r = 0; r < table.rows.size(); ++r)
+    {
+        if (table.rows[r].taken && table.rows[r].id)
+        {
+            table.takenOf.emplace_back(*table.rows[r].id, r);
+        }
+    }
+    KeepFirstOfEach(table.takenOf);
 }
 
 const Row *Taken(const Merged &table, std::int64_t id)
 {
-    const auto found = std::ranges::find_if(table.rows, [&](const Row &row) { return row.taken && row.id == id; });
-    return found != table.rows.end() ? &*found : nullptr;
+    const auto found = PlaceOf(table.takenOf, id);
+    return found ? &table.rows[*found] : nullptr;
 }
 
 const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_view column)
@@ -296,14 +308,8 @@ const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::string_vie
 
 const GdaFile::Cell *CellOf(const Merged &table, const Row &row, std::uint32_t hash)
 {
-    for (std::size_t i = 0; i < table.columns.size() && i < row.cells.size(); ++i)
-    {
-        if (table.columns[i].hash == hash)
-        {
-            return &row.cells[i];
-        }
-    }
-    return nullptr;
+    const auto found = PlaceOf(table.columnOf, hash);
+    return found && *found < row.cells.size() ? &row.cells[*found] : nullptr;
 }
 
 } // namespace dao::core::m2da

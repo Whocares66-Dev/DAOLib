@@ -28,7 +28,10 @@
 #include "dao/core/GdaFile.h"
 
 #include "dao/core/GdaHash.h"
+#include "dao/core/SortedIndex.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <map>
 #include <utility>
@@ -263,6 +266,7 @@ std::optional<GdaFile> GdaFile::Parse(std::span<const std::byte> bytes)
         }
         table.rows_.push_back(std::move(cells));
     }
+    table.Index();
     // The layout, for Bytes. A file of another shape keeps none, and Bytes gives nothing for it.
     const auto &templates = file->Templates();
     const gff4::Field *columnList = root->Shape().Find(kColumnList);
@@ -312,14 +316,58 @@ std::optional<GdaFile> GdaFile::Parse(std::span<const std::byte> bytes)
     return table;
 }
 
-std::optional<std::size_t> GdaFile::ColumnOf(std::uint32_t hash) const
+// The lookups the readers make many of (DAOLib #274: DAOParagonEngine asked some 277,000 cells
+// in an area's load, each a scan of the rows for its ID), made once as the table is read. The
+// first column of a hash and the first row of an ID, as the scans found them.
+void GdaFile::Index()
 {
+    columnOfHash_.clear();
+    rowOfId_.clear();
     for (std::size_t i = 0; i < columns_.size(); ++i)
     {
-        if (columns_[i].hash == hash)
+        columnOfHash_.emplace_back(columns_[i].hash, i);
+    }
+    KeepFirstOfEach(columnOfHash_);
+    const auto id = ColumnOf("ID");
+    if (!id)
+    {
+        return;
+    }
+    for (std::size_t r = 0; r < rows_.size(); ++r)
+    {
+        if (const auto value = IdOf(rows_[r][*id]))
         {
-            return i;
+            rowOfId_.emplace_back(*value, r);
         }
+    }
+    KeepFirstOfEach(rowOfId_);
+}
+
+std::optional<std::size_t> GdaFile::ColumnOf(std::uint32_t hash) const
+{
+    return PlaceOf(columnOfHash_, hash);
+}
+
+std::optional<std::size_t> GdaFile::RowOf(std::int64_t id) const
+{
+    return PlaceOf(rowOfId_, id);
+}
+
+const std::vector<GdaFile::Cell> *GdaFile::Row(std::int64_t id) const
+{
+    const auto row = RowOf(id);
+    return row ? &rows_[*row] : nullptr;
+}
+
+std::optional<std::int64_t> GdaFile::IdOf(const Cell &cell)
+{
+    if (const auto *integer = std::get_if<std::int64_t>(&cell))
+    {
+        return *integer;
+    }
+    if (const auto *real = std::get_if<double>(&cell); real != nullptr && std::floor(*real) == *real)
+    {
+        return static_cast<std::int64_t>(*real);
     }
     return std::nullopt;
 }

@@ -223,6 +223,7 @@ m2da::Merged Effects()
     };
     row(false, L"fxc_dropped");
     row(true, L"fxc_wisp_c");
+    m2da::Index(table);
     return table;
 }
 
@@ -471,6 +472,7 @@ static m2da::Merged EventKinds()
     row(4, L"Equip Left", L"EquipL", 1, 0, 0, 0);
     row(6, L"Unequip Left", L"UnequipL", 0, 1, 0, 0);
     row(17, L"Movement sound", L"MovementSound", 0, 0, 0, 1);
+    m2da::Index(table);
     return table;
 }
 

@@ -47,6 +47,7 @@ m2da::Merged Table(std::initializer_list<std::string_view> columns,
     {
         table.rows.push_back({.part = 0, .cells = cells, .id = id, .conflict = false, .taken = true, .alike = {}});
     }
+    m2da::Index(table);
     return table;
 }
 

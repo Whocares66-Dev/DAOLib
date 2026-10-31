@@ -9,6 +9,7 @@
 #pragma once
 
 #include "dao/core/Gff4.h"
+#include "dao/core/SortedIndex.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -50,6 +52,17 @@ class GdaFile
     std::optional<std::size_t> ColumnOf(std::uint32_t hash) const;
     std::optional<std::size_t> ColumnOf(std::string_view name) const;
 
+    // Returns the place of the row whose ID column holds `id`, the first if several do.
+    // @return none for an ID no row has, or a table with no ID column
+    std::optional<std::size_t> RowOf(std::int64_t id) const;
+    // Returns the row whose ID column holds `id`, every cell in the columns' order, or null as for
+    // RowOf.
+    const std::vector<Cell> *Row(std::int64_t id) const;
+
+    // Returns a cell as an ID: an integer, or a float that is a whole number; none for anything
+    // else.
+    static std::optional<std::int64_t> IdOf(const Cell &cell);
+
     // Returns the table as a file, laid out byte for byte as the game's own are: its columns and
     // their layout as read, its rows.
     std::vector<std::byte> Bytes() const;
@@ -69,8 +82,13 @@ class GdaFile
     static constexpr std::uint32_t kFirstCell = 10005;
 
   private:
+    // Makes the lookups by a column's hash and a row's ID, once the columns and rows are read.
+    void Index();
+
     std::vector<Column> columns_;
     std::vector<std::vector<Cell>> rows_;
+    SortedIndex<std::uint32_t> columnOfHash_; // the first column of each hash
+    SortedIndex<std::int64_t> rowOfId_;       // the first row of each ID
     // The layout as read, for Bytes: the header and templates; the top struct's size and where its
     // two lists' offsets are; the column structs as they are; version 0.1's column names and
     // where a column struct holds its name; each column's field in a row, and a row's size.

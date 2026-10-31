@@ -128,6 +128,9 @@ TEST_CASE("a part whose first column is not ID gives no row", "[gda][m2da]")
     const auto taken = std::ranges::find_if(merged.rows, [](const m2da::Row &row) { return row.taken; });
     REQUIRE(taken != merged.rows.end());
     CHECK(taken->part == 1);
+    // The skipped part's row of the ID comes first among the rows; the lookup answers the taken one.
+    REQUIRE(m2da::Taken(merged, 1) != nullptr);
+    CHECK(m2da::Taken(merged, 1)->part == 1);
 }
 
 TEST_CASE("tables merge by ID: a row parts give alike once, different rows each a conflict", "[gda][m2da]")
@@ -295,4 +298,47 @@ TEST_CASE("texts start on four bytes after 0xFF, and a table of no rows has no r
     REQUIRE(table);
     CHECK(table->Rows().empty());
     CHECK(table->Columns().size() == 2);
+}
+
+TEST_CASE("a GDA table's row is found by its ID, the first of an ID's rows, and read whole", "[gda]")
+{
+    const auto table =
+        Table({"ID", "Label"}, {{5, std::string("five")}, {7, std::string("seven")}, {5, std::string("again")}});
+    CHECK(table.RowOf(7) == 1U);
+    CHECK(table.RowOf(5) == 0U);
+    CHECK_FALSE(table.RowOf(9));
+    const auto *row = table.Row(7);
+    REQUIRE(row != nullptr);
+    REQUIRE(row->size() == 2);
+    CHECK(Int((*row)[0]) == 7);
+    CHECK(std::get<std::wstring>((*row)[1]) == L"seven");
+    CHECK(table.Row(9) == nullptr);
+    const auto unkeyed = Table({"Label", "Cost"}, {{std::string("x"), 1}});
+    CHECK_FALSE(unkeyed.RowOf(1));
+}
+
+TEST_CASE("a merged worksheet's taken row and a row's cell are found by its index, which Index makes for a "
+          "table made by hand",
+          "[gda][m2da]")
+{
+    const auto mod = Table({"ID", "Label"}, {{2, std::string("mod's")}, {3, std::string("new")}});
+    const auto core = Table({"ID", "Label", "Cost"}, {{1, std::string("a"), 4}, {2, std::string("core's"), 6}});
+    const std::vector<const GdaFile *> parts{&mod, &core};
+    const auto merged = m2da::Merge(parts);
+    const auto *taken = m2da::Taken(merged, 2);
+    REQUIRE(taken != nullptr);
+    CHECK(std::get<std::wstring>(*m2da::CellOf(merged, *taken, "Label")) == L"mod's");
+    const auto *one = m2da::Taken(merged, 1);
+    REQUIRE(one != nullptr);
+    CHECK(Int(*m2da::CellOf(merged, *one, GdaColumnHash("Cost"))) == 4);
+    CHECK(m2da::Taken(merged, 9) == nullptr);
+    CHECK(m2da::CellOf(merged, *one, "Nothing") == nullptr);
+
+    m2da::Merged byHand;
+    byHand.columns = merged.columns;
+    byHand.rows = merged.rows;
+    CHECK(m2da::Taken(byHand, 2) == nullptr);
+    m2da::Index(byHand);
+    REQUIRE(m2da::Taken(byHand, 2) != nullptr);
+    CHECK(std::get<std::wstring>(m2da::Taken(byHand, 2)->cells[1]) == L"mod's");
 }
