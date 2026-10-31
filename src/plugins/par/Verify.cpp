@@ -270,7 +270,24 @@ HRESULT STDMETHODCALLTYPE SetVertexDeclarationHook(Dev *d, IDirect3DVertexDeclar
     {
         return g_setVertexDeclaration(d, declaration);
     }
-    const auto v = reinterpret_cast<std::uint64_t>(declaration);
+    // the declaration's elements, not its address: two objects with the same elements are one declaration to the GPU
+    std::uint64_t v = 0;
+    if (declaration != nullptr)
+    {
+        D3DVERTEXELEMENT9 elements[MAXD3DDECLLENGTH + 1];
+        UINT count = 0;
+        if (SUCCEEDED(declaration->GetDeclaration(elements, &count)))
+        {
+            for (UINT i = 0; i < count; ++i)
+            {
+                v = Mix(i, v ^ (static_cast<std::uint64_t>(elements[i].Stream) << 48 ^
+                                static_cast<std::uint64_t>(elements[i].Offset) << 32 ^
+                                static_cast<std::uint64_t>(elements[i].Type) << 24 ^
+                                static_cast<std::uint64_t>(elements[i].Method) << 16 ^
+                                static_cast<std::uint64_t>(elements[i].Usage) << 8 ^ elements[i].UsageIndex));
+            }
+        }
+    }
     Put(kGeometry, 101, g_shadow.single[2], v);
     g_shadow.single[2] = v;
     return g_setVertexDeclaration(d, declaration);
@@ -335,6 +352,10 @@ HRESULT STDMETHODCALLTYPE SetScissorRectHook(Dev *d, const RECT *rect)
 
 void Record(std::uint64_t draw)
 {
+    if (g_current.size() > 200000) // a frame that never ends (no Present seen) must not grow without bound
+    {
+        g_current.clear();
+    }
     g_current.push_back(DrawRecord{g_shadow.hash, draw});
     if (g_capture.load(std::memory_order_relaxed) == 2)
     {

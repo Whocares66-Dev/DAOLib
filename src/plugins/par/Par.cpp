@@ -22,6 +22,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <new>
 #include <thread>
 #include <vector>
@@ -54,6 +55,8 @@ std::atomic<std::uint64_t> g_programFrames{0};
 std::atomic<std::uint64_t> g_chunkedGroups{0};
 std::atomic<std::uint64_t> g_chunkedWithPre{0}; // chunked groups that had pre-state objects
 std::atomic<std::uint64_t> g_chunkedWithPost{0};
+std::atomic<std::uint64_t> g_mostChunkBytes{0};
+std::atomic<std::uint64_t> g_preStateSerial{0}; // groups drawn serially because their pre-state set tracked states
 
 // ---- Recorders, the material state and the splice (GOG addresses, #280) ------------------------------------
 //
@@ -233,21 +236,142 @@ Chunk *ChunkAt(std::size_t i)
     return g_chunks[i];
 }
 
-// Runs items [0, n) of a draw loop in `chunks` pieces, each recorded into a recorder of its own from a copy of
-// the render context and an unknown material state, then spliced into the engine's stream in order (mode 2).
-// `body(context, i)` draws item i. The engine's own state is unknown afterwards, and the context is what the
-// last chunk left, as the serial loop would leave it.
+
+// ---- Shared state a draw writes (read in 0x0046BC40, 0x00506550) -----------------------------------------------
+
+// The light provider (0x0046BC40, __thiscall, ret 0x10): the object's light state filled once per pass use, then
+// three 64-byte blocks copied into one global scratch (0x00C1F3D0, 0xC0 bytes) that the caller is handed. On a
+// chunk's thread the scratch is the thread's own.
+using LightFn = void(__fastcall *)(void *lights, int, std::uint32_t p2, void **out, std::uint32_t *size, void *p5);
+LightFn g_lightConstants = nullptr;
+thread_local std::uint8_t t_lightScratch[0xC0 + 16];
+
+void __fastcall LightConstants(void *lights, int edx, std::uint32_t p2, void **out, std::uint32_t *size, void *p5)
+{
+    if (t_recorder == nullptr)
+    {
+        g_lightConstants(lights, edx, p2, out, size, p5);
+        return;
+    }
+    auto *l = static_cast<std::uint8_t *>(lights);
+    if (*reinterpret_cast<volatile std::int32_t *>(0x00C1F374) != *reinterpret_cast<std::int32_t *>(l + 0x1FC))
+    {
+        reinterpret_cast<void(__fastcall *)(void *, int, void *)>(0x0046B260)(lights, 0, p5);
+    }
+    auto **blocks = *reinterpret_cast<void ***>(l + 0x120);
+    const std::size_t n =
+        blocks == nullptr ? 0 : static_cast<std::size_t>(*reinterpret_cast<void ***>(l + 0x124) - blocks);
+    auto *scratch =
+        reinterpret_cast<std::uint8_t *>((reinterpret_cast<std::uintptr_t>(t_lightScratch) + 15) & ~std::uintptr_t{15});
+    for (std::size_t k = 0; k < 3; ++k)
+    {
+        const void *from = n > k ? blocks[k] : *reinterpret_cast<void *const *>(0x00C1F378);
+        std::memcpy(scratch + k * 64, from, 64);
+    }
+    *out = scratch;
+    *size = 0xC0;
+}
+
+// MaterialPass slot 3 (0x00506550, __thiscall, ret 0x14): draws with the pass, writing the pass's own state
+// (its parity bit, its one-shot blocks, its parameter references). One lock per pass (striped by address),
+// taken only while chunks run on several threads.
+using PassFn = std::uint32_t(__fastcall *)(void *pass, int, std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t,
+                                           std::uint32_t);
+PassFn g_pass = nullptr;
+std::atomic<bool> g_parallel{false};
+std::array<CRITICAL_SECTION, 64> g_passLocks;
+
+std::uint32_t __fastcall PassDraw(void *pass, int edx, std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t d,
+                                  std::uint32_t e)
+{
+    if (!g_parallel.load(std::memory_order_relaxed))
+    {
+        return g_pass(pass, edx, a, b, c, d, e);
+    }
+    CRITICAL_SECTION *lock = &g_passLocks[(reinterpret_cast<std::uintptr_t>(pass) >> 4) % g_passLocks.size()];
+    EnterCriticalSection(lock);
+    const std::uint32_t result = g_pass(pass, edx, a, b, c, d, e);
+    LeaveCriticalSection(lock);
+    return result;
+}
+
+// A model's trees (0x00533140, __stdcall(p1, list, kind), ret 0xC; list[0] is the SpeedTreeModel): it sets the
+// kind in the model's own fields (0x0052DD60: +0xBA0, +0xBA4, +0xD38) and draws the list's instances through
+// 0x00530C20, which read them back. Two groups of one model on two threads wrote over each other (a null +0xBA0
+// on a worker, play 2026-10-31). One lock per model while chunks run on several threads.
+using TreeFn = void(__stdcall *)(std::uint32_t p1, void *list, std::uint32_t kind);
+TreeFn g_tree = nullptr;
+std::array<CRITICAL_SECTION, 64> g_modelLocks;
+
+void __stdcall TreeGroup(std::uint32_t p1, void *list, std::uint32_t kind)
+{
+    if (!g_parallel.load(std::memory_order_relaxed) || list == nullptr)
+    {
+        g_tree(p1, list, kind);
+        return;
+    }
+    const auto model = reinterpret_cast<std::uintptr_t>(*static_cast<void **>(list));
+    CRITICAL_SECTION *lock = &g_modelLocks[(model >> 4) % g_modelLocks.size()];
+    EnterCriticalSection(lock);
+    g_tree(p1, list, kind);
+    LeaveCriticalSection(lock);
+}
+
+// The workers: one thread to a chunk after the first (the update thread runs the first chunk itself). A worker
+// sleeps on its own event, runs its chunk's items, and signals done.
+struct Worker
+{
+    HANDLE wake = nullptr;
+    HANDLE done = nullptr;
+    std::function<void()> job;
+};
+std::vector<Worker *> g_workers;
+
+void WorkerMain(Worker *w)
+{
+    for (;;)
+    {
+        WaitForSingleObject(w->wake, INFINITE);
+        w->job();
+        SetEvent(w->done);
+    }
+}
+
+Worker *WorkerAt(std::size_t i)
+{
+    while (g_workers.size() <= i)
+    {
+        auto *w = new Worker();
+        w->wake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        w->done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        std::thread(WorkerMain, w).detach();
+        g_workers.push_back(w);
+    }
+    return g_workers[i];
+}
+
+// Runs items [0, n) of a draw loop in chunks, each recorded into a recorder of its own from a copy of the
+// render context and an unknown material state, then spliced into the engine's stream in order. With
+// threads (mode 3) the chunks after the first run on workers at once; `body(context, i)` draws item i.
+// The engine's own state is unknown afterwards, and the context is what the last chunk left, as the serial
+// loop would leave it.
 template <class Body> void RunChunked(std::size_t n, std::uint8_t *ctx, Body body)
 {
     g_chunkedGroups.fetch_add(1, std::memory_order_relaxed);
-    const auto chunks = static_cast<std::size_t>(g_chunkCount.load(std::memory_order_relaxed));
+    // At most kPerChunk items to a chunk, so a chunk's recorder (6 MB, about 40 KB used by 100 items) can never
+    // fill: a full recorder would drain and reset the engine's main buffer (0x00527840).
+    constexpr std::size_t kPerChunk = 400;
+    constexpr std::size_t kMostChunks = 16;
+    const auto wanted = static_cast<std::size_t>(g_chunkCount.load(std::memory_order_relaxed));
+    const std::size_t chunks = std::min(kMostChunks, std::max(wanted, (n + kPerChunk - 1) / kPerChunk));
+    ChunkAt(kMostChunks - 1); // every chunk made here, on the update thread, before any is used
     const std::size_t per = (n + chunks - 1) / chunks;
-    Chunk *last = nullptr;
-    std::size_t c = 0;
-    for (std::size_t first = 0; first < n; ++c, first += per)
-    {
+    const bool threaded = g_mode.load(std::memory_order_relaxed) >= 3;
+    const std::size_t used = (n + per - 1) / per;
+    auto run = [&](std::size_t c) {
+        const std::size_t first = c * per;
         const std::size_t count = std::min(per, n - first);
-        Chunk *chunk = ChunkAt(c);
+        Chunk *chunk = g_chunks[c];
         std::memcpy(chunk->context, ctx, kContextBytes);
         chunk->recorder.Reset();
         MakeUnknown(chunk->state);
@@ -259,13 +383,56 @@ template <class Body> void RunChunked(std::size_t n, std::uint8_t *ctx, Body bod
         }
         t_recorder = nullptr;
         t_state = nullptr;
+    };
+    if (threaded && used > 1)
+    {
+        g_parallel.store(true);
+        for (std::size_t c = 1; c < used; ++c)
+        {
+            Worker *w = WorkerAt(c - 1);
+            w->job = [&run, c] { run(c); };
+            SetEvent(w->wake);
+        }
+        run(0);
+        for (std::size_t c = 1; c < used; ++c)
+        {
+            WaitForSingleObject(g_workers[c - 1]->done, INFINITE);
+        }
+        g_parallel.store(false);
+    }
+    else
+    {
+        for (std::size_t c = 0; c < used; ++c)
+        {
+            run(c);
+        }
+    }
+    for (std::size_t c = 0; c < used; ++c)
+    {
+        Chunk *chunk = g_chunks[c];
+        const auto bytes = static_cast<std::uint64_t>(chunk->recorder.Ctrl()->write - chunk->recorder.Base());
+        std::uint64_t most = g_mostChunkBytes.load(std::memory_order_relaxed);
+        while (bytes > most && !g_mostChunkBytes.compare_exchange_weak(most, bytes))
+        {
+        }
         Splice(chunk->recorder);
-        last = chunk;
     }
     MakeUnknown(reinterpret_cast<void *>(kMainState)); // the engine's own state does not know what the chunks left
-    if (last != nullptr)
+    std::memcpy(ctx, g_chunks[used - 1]->context, kContextBytes);
+}
+
+// The loop as the engine runs it, on the update thread and the engine's own material state.
+template <class Body> void RunOrSerial(bool serial, std::size_t n, std::uint8_t *ctx, Body body)
+{
+    if (!serial)
     {
-        std::memcpy(ctx, last->context, kContextBytes);
+        RunChunked(n, ctx, body);
+        return;
+    }
+    g_preStateSerial.fetch_add(1, std::memory_order_relaxed);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        body(ctx, i);
     }
 }
 
@@ -305,6 +472,35 @@ void CopyMatrices(std::uint8_t *ctx, void *item)
     std::memcpy(ctx + 0x80, Call0(item, 0x8), 0x40);
 }
 
+// Whether a recorded stream holds a command that sets a render or sampler state (ops 0xB to 0xF, read in
+// PlayCommand 0x00A1EDA0), or one this does not know the length of. A group whose pre-state sets such a state
+// keeps it for the group's draws; a chunk's material state, made unknown, would restore its default first.
+bool SetsStates(const Recorder &r)
+{
+    // words in each command, from PlayCommand; the inline ones (0x16, 0x27, 0x28) end the walk as unknown
+    static constexpr std::array<std::uint8_t, 0x29> kWords = {1, 1, 1, 2, 5, 2, 2, 2, 7, 5, 2, 2, 2, 2, 3, 3, 3,
+                                                               6, 8, 5, 2, 2, 0, 6, 7, 2, 2, 2, 2, 2, 2, 2, 2,
+                                                               6, 4, 11, 2, 9, 5, 0, 0};
+    const auto *p = reinterpret_cast<const std::uint32_t *>(r.Base());
+    const auto *end = reinterpret_cast<const std::uint32_t *>(r.Ctrl()->write);
+    while (p < end)
+    {
+        const std::uint32_t op = *p;
+        if (op >= kWords.size() || kWords[op] == 0 || (op >= 0xB && op <= 0xF))
+        {
+            return true;
+        }
+        p += kWords[op];
+    }
+    return false;
+}
+
+Recorder g_scratch; // the pre-state's own recorder, to see what it sets
+
+// Runs a group's pre-state into the scratch recorder, then splices it into the stream (it comes first
+// either way). Returns whether it set tracked states.
+bool PreStateSetsStates(void *group);
+
 // A group's pre-state or post-state objects, each told the group's list (slot 1, vf +4).
 void StateObjects(void *group, std::size_t vector)
 {
@@ -314,6 +510,21 @@ void StateObjects(void *group, std::size_t vector)
         reinterpret_cast<void(__fastcall *)(void *, int, void *)>(VSlot(v.begin[i], 4))(
             v.begin[i], 0, static_cast<std::uint8_t *>(group) + 0x10);
     }
+}
+
+bool PreStateSetsStates(void *group)
+{
+    if (g_scratch.driver == nullptr)
+    {
+        g_scratch = MakeRecorder();
+    }
+    g_scratch.Reset();
+    t_recorder = g_scratch.driver;
+    StateObjects(group, 0x24);
+    t_recorder = nullptr;
+    const bool sets = SetsStates(g_scratch);
+    Splice(g_scratch);
+    return sets;
 }
 
 GroupFn g_mode3 = nullptr; // 0x00471440
@@ -338,12 +549,12 @@ void __fastcall Mode3(void *group, int edx, void *ctxPointer)
     {
         g_chunkedWithPost.fetch_add(1, std::memory_order_relaxed);
     }
-    StateObjects(group, 0x24);
+    const bool serial = PreStateSetsStates(group);
     for (std::size_t i = 0; i < items.Size(); ++i)
     {
         Call0(items.begin[i], 0x40);
     }
-    RunChunked(items.Size(), ctx, [&](std::uint8_t *context, std::size_t i) {
+    auto draw = [&](std::uint8_t *context, std::size_t i) {
         void *item = items.begin[i];
         void *material = Call0(item, 0x18);
         if (material == nullptr)
@@ -356,7 +567,8 @@ void __fastcall Mode3(void *group, int edx, void *ctxPointer)
         CopyMatrices(context, item);
         reinterpret_cast<void(__fastcall *)(void *, int, void *, int, int)>(VSlot(item, 0x44))(item, 0, context, pass,
                                                                                                 value);
-    });
+    };
+    RunOrSerial(serial, items.Size(), ctx, draw);
     StateObjects(group, 0x34);
 }
 
@@ -372,8 +584,8 @@ void __fastcall Mode4(void *group, int edx, void *ctxPointer)
     }
     auto *ctx = static_cast<std::uint8_t *>(ctxPointer);
     const Vector4 perItem = VectorAt(group, 0x44);
-    StateObjects(group, 0x24);
-    RunChunked(items.Size(), ctx, [&](std::uint8_t *context, std::size_t i) {
+    const bool serial = PreStateSetsStates(group);
+    auto draw = [&](std::uint8_t *context, std::size_t i) {
         void *item = items.begin[i];
         for (std::size_t s = 0; s < perItem.Size(); ++s)
         {
@@ -382,7 +594,8 @@ void __fastcall Mode4(void *group, int edx, void *ctxPointer)
         }
         CopyMatrices(context, item);
         reinterpret_cast<void(__fastcall *)(void *, int, void *)>(VSlot(item, 0x14))(item, 0, context);
-    });
+    };
+    RunOrSerial(serial, items.Size(), ctx, draw);
     StateObjects(group, 0x34);
 }
 
@@ -491,6 +704,8 @@ void Report()
         spdlog::info("program queue adds {} bytes a frame; chunked groups {} (pre-state {}, post-state {})",
                      g_programBytes.exchange(0) / pf, g_chunkedGroups.exchange(0), g_chunkedWithPre.exchange(0),
                      g_chunkedWithPost.exchange(0));
+        spdlog::info("most bytes a chunk recorded: {}; groups drawn serially for their pre-state: {}",
+                     g_mostChunkBytes.load(), g_preStateSerial.exchange(0));
         spdlog::info("null queue: {} calls, {} items; chunked frames {}", g_nullCalls.exchange(0),
                      g_nullItems.exchange(0), g_chunkedFrames.exchange(0));
     }
@@ -524,6 +739,17 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     g_group = reinterpret_cast<GroupFn>(0x00471CB0);
     g_nullQueue = reinterpret_cast<GroupFn>(0x00469530);
     g_programQueue = reinterpret_cast<GroupFn>(0x0046D0C0);
+    for (CRITICAL_SECTION &lock : g_passLocks)
+    {
+        InitializeCriticalSection(&lock);
+    }
+    for (CRITICAL_SECTION &lock : g_modelLocks)
+    {
+        InitializeCriticalSection(&lock);
+    }
+    g_tree = reinterpret_cast<TreeFn>(0x00533140);
+    g_lightConstants = reinterpret_cast<LightFn>(0x0046BC40);
+    g_pass = reinterpret_cast<PassFn>(0x00506550);
     g_mode3 = reinterpret_cast<GroupFn>(0x00471440);
     g_mode4 = reinterpret_cast<GroupFn>(0x004709B0);
     g_driverNow = reinterpret_cast<DriverNowFn>(0x005278C0);
@@ -534,6 +760,9 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     DetourAttach(reinterpret_cast<PVOID *>(&g_group), reinterpret_cast<PVOID>(&Group));
     DetourAttach(reinterpret_cast<PVOID *>(&g_nullQueue), reinterpret_cast<PVOID>(&NullQueue));
     DetourAttach(reinterpret_cast<PVOID *>(&g_programQueue), reinterpret_cast<PVOID>(&ProgramQueue));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_tree), reinterpret_cast<PVOID>(&TreeGroup));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_lightConstants), reinterpret_cast<PVOID>(&LightConstants));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_pass), reinterpret_cast<PVOID>(&PassDraw));
     DetourAttach(reinterpret_cast<PVOID *>(&g_mode3), reinterpret_cast<PVOID>(&Mode3));
     DetourAttach(reinterpret_cast<PVOID *>(&g_mode4), reinterpret_cast<PVOID>(&Mode4));
     DetourAttach(reinterpret_cast<PVOID *>(&g_driverNow), reinterpret_cast<PVOID>(&DriverNow));
