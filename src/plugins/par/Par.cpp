@@ -13,6 +13,7 @@
 #include <detours/detours.h>
 #include <spdlog/spdlog.h>
 
+#include <intrin.h>
 #include <malloc.h>
 
 #include <algorithm>
@@ -244,7 +245,11 @@ Chunk *ChunkAt(std::size_t i)
 // chunk's thread the scratch is the thread's own.
 using LightFn = void(__fastcall *)(void *lights, int, std::uint32_t p2, void **out, std::uint32_t *size, void *p5);
 LightFn g_lightConstants = nullptr;
-thread_local std::uint8_t t_lightScratch[0xC0 + 16];
+// The constants are handed on by address and read when the command is played, so each draw gets a block of its
+// own from a ring (20,000 blocks to a thread) and not one scratch the next draw would overwrite.
+thread_local std::uint8_t *t_lightRing = nullptr;
+thread_local std::size_t t_lightNext = 0;
+constexpr std::size_t kLightBlocks = 20000;
 
 void __fastcall LightConstants(void *lights, int edx, std::uint32_t p2, void **out, std::uint32_t *size, void *p5)
 {
@@ -261,8 +266,11 @@ void __fastcall LightConstants(void *lights, int edx, std::uint32_t p2, void **o
     auto **blocks = *reinterpret_cast<void ***>(l + 0x120);
     const std::size_t n =
         blocks == nullptr ? 0 : static_cast<std::size_t>(*reinterpret_cast<void ***>(l + 0x124) - blocks);
-    auto *scratch =
-        reinterpret_cast<std::uint8_t *>((reinterpret_cast<std::uintptr_t>(t_lightScratch) + 15) & ~std::uintptr_t{15});
+    if (t_lightRing == nullptr)
+    {
+        t_lightRing = static_cast<std::uint8_t *>(_aligned_malloc(kLightBlocks * 0xC0, 16));
+    }
+    std::uint8_t *scratch = t_lightRing + (t_lightNext++ % kLightBlocks) * 0xC0;
     for (std::size_t k = 0; k < 3; ++k)
     {
         const void *from = n > k ? blocks[k] : *reinterpret_cast<void *const *>(0x00C1F378);
@@ -280,19 +288,153 @@ using PassFn = std::uint32_t(__fastcall *)(void *pass, int, std::uint32_t, std::
 PassFn g_pass = nullptr;
 std::atomic<bool> g_parallel{false};
 std::array<CRITICAL_SECTION, 64> g_passLocks;
+CRITICAL_SECTION g_globalPassLock; // lock mode 1: every pass draw under one lock
+std::atomic<int> g_lockMode{1};   // par.txt's third number: 0 a lock per pass, 1 one lock for all
+std::atomic<std::uint64_t> g_lockedTicks{0}; // time spent inside the lock while chunks ran in parallel
+std::atomic<std::uint64_t> g_lockWaitTicks{0};
+std::atomic<std::uint64_t> g_driverMismatch{0};
+thread_local LARGE_INTEGER t_heldSince;
+
+// Lock mode 0: a lock per pass, taken when the instance attaches the pass to its slot (0x004F4250, which clears
+// and refills the pass's binding list) and let go when the pass has drawn (0x00506550) or the instance's render
+// ends, so the attach, the instance's setup of the pass (0x004F3340) and the draw are one stretch alone.
+thread_local CRITICAL_SECTION *t_heldLock = nullptr;
+
+CRITICAL_SECTION *PassLock(const void *pass)
+{
+    return &g_passLocks[(reinterpret_cast<std::uintptr_t>(pass) >> 4) % g_passLocks.size()];
+}
+
+void ReleaseHeld()
+{
+    if (t_heldLock != nullptr)
+    {
+        LARGE_INTEGER t2;
+        QueryPerformanceCounter(&t2);
+        g_lockedTicks.fetch_add(static_cast<std::uint64_t>(t2.QuadPart - t_heldSince.QuadPart), std::memory_order_relaxed);
+        LeaveCriticalSection(t_heldLock);
+        t_heldLock = nullptr;
+    }
+}
+
+void Hold(CRITICAL_SECTION *lock)
+{
+    ReleaseHeld();
+    LARGE_INTEGER t0;
+    QueryPerformanceCounter(&t0);
+    EnterCriticalSection(lock);
+    QueryPerformanceCounter(&t_heldSince);
+    g_lockWaitTicks.fetch_add(static_cast<std::uint64_t>(t_heldSince.QuadPart - t0.QuadPart), std::memory_order_relaxed);
+    t_heldLock = lock;
+}
 
 std::uint32_t __fastcall PassDraw(void *pass, int edx, std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t d,
                                   std::uint32_t e)
 {
-    if (!g_parallel.load(std::memory_order_relaxed))
+    if (!g_parallel.load(std::memory_order_relaxed) || g_lockMode.load(std::memory_order_relaxed) == 1)
     {
         return g_pass(pass, edx, a, b, c, d, e);
     }
-    CRITICAL_SECTION *lock = &g_passLocks[(reinterpret_cast<std::uintptr_t>(pass) >> 4) % g_passLocks.size()];
-    EnterCriticalSection(lock);
+    if (t_heldLock != PassLock(pass))
+    {
+        Hold(PassLock(pass));
+    }
     const std::uint32_t result = g_pass(pass, edx, a, b, c, d, e);
-    LeaveCriticalSection(lock);
+    ReleaseHeld();
     return result;
+}
+
+using AttachFn = void(__fastcall *)(void *instance, int, void *pass, std::uint32_t index);
+AttachFn g_attach = nullptr; // 0x004F4250, ret 8
+
+void __fastcall AttachPass(void *instance, int edx, void *pass, std::uint32_t index)
+{
+    if (g_parallel.load(std::memory_order_relaxed) && g_lockMode.load(std::memory_order_relaxed) == 0)
+    {
+        Hold(PassLock(pass));
+    }
+    g_attach(instance, edx, pass, index);
+}
+
+// MaterialObjectInstance::Render (0x004F5840, __thiscall, ret 0xC) and RenderPasses (0x004F4AC0, ret 0x14): an
+// instance draws its passes, attaching each pass to its own slot first (0x004F4250 and 0x005063B0 clear and refill
+// the pass's binding list: a crash on two threads in 0x0086E7B0, play 2026-10-31). Everything a pass holds is
+// then written by whoever draws with it, so while chunks run on several threads these run under one lock.
+using InstanceRenderFn = std::uintptr_t(__fastcall *)(void *self, int, std::uintptr_t, std::uintptr_t, std::uintptr_t);
+using InstancePassesFn = std::uintptr_t(__fastcall *)(void *self, int, std::uintptr_t, std::uintptr_t, std::uintptr_t,
+                                                      std::uintptr_t, std::uintptr_t);
+InstanceRenderFn g_instanceRender = nullptr;
+InstancePassesFn g_instancePasses = nullptr;
+
+struct InstanceLock
+{
+    bool held = false;
+    LARGE_INTEGER t1{};
+    InstanceLock()
+    {
+        if (g_parallel.load(std::memory_order_relaxed) && g_lockMode.load(std::memory_order_relaxed) == 1)
+        {
+            LARGE_INTEGER t0;
+            QueryPerformanceCounter(&t0);
+            EnterCriticalSection(&g_globalPassLock);
+            QueryPerformanceCounter(&t1);
+            g_lockWaitTicks.fetch_add(static_cast<std::uint64_t>(t1.QuadPart - t0.QuadPart), std::memory_order_relaxed);
+            held = true;
+        }
+    }
+    ~InstanceLock()
+    {
+        if (held)
+        {
+            LARGE_INTEGER t2;
+            QueryPerformanceCounter(&t2);
+            g_lockedTicks.fetch_add(static_cast<std::uint64_t>(t2.QuadPart - t1.QuadPart), std::memory_order_relaxed);
+            LeaveCriticalSection(&g_globalPassLock);
+        }
+    }
+    InstanceLock(const InstanceLock &) = delete;
+    InstanceLock &operator=(const InstanceLock &) = delete;
+};
+
+std::uintptr_t __fastcall InstanceRender(void *self, int edx, std::uintptr_t a, std::uintptr_t b, std::uintptr_t c)
+{
+    const InstanceLock lock;
+    const std::uintptr_t result = g_instanceRender(self, edx, a, b, c);
+    ReleaseHeld();
+    return result;
+}
+
+std::uintptr_t __fastcall InstancePasses(void *self, int edx, std::uintptr_t a, std::uintptr_t b, std::uintptr_t c,
+                                         std::uintptr_t d, std::uintptr_t e)
+{
+    const InstanceLock lock;
+    const std::uintptr_t result = g_instancePasses(self, edx, a, b, c, d, e);
+    ReleaseHeld();
+    return result;
+}
+
+// The engine's own GetCurrentThreadId (0x004BBD40, a jump through the import): thirteen places compare it with
+// the update thread's id (0x00C2B590) and take another path off that thread (a deferred one, answering "not
+// ready"): seen as constants that came out zero on a worker. On a chunk's thread those places are told it is
+// the update thread, which in effect it is: it does the update thread's draw for it, the update thread waiting.
+// Other callers (the threaded driver's render-thread tests, locks) see the real id.
+using ThreadIdFn = DWORD(__stdcall *)();
+ThreadIdFn g_threadId = nullptr;
+
+DWORD __stdcall ThreadIdHook()
+{
+    if (t_recorder != nullptr)
+    {
+        static constexpr std::array<std::uintptr_t, 13> kUpdateThreadTests = {
+            0x0040E5D6, 0x004D5BD1, 0x00529B46, 0x0052B4D3, 0x005733E9, 0x005771D9, 0x0057836A,
+            0x0057A9D7, 0x00679F03, 0x0079DCC0, 0x0079E9DD, 0x00A6786C, 0x00A67B38};
+        const auto caller = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+        if (std::find(kUpdateThreadTests.begin(), kUpdateThreadTests.end(), caller) != kUpdateThreadTests.end())
+        {
+            return *reinterpret_cast<DWORD *>(kUpdateThreadId);
+        }
+    }
+    return g_threadId();
 }
 
 // A model's trees (0x00533140, __stdcall(p1, list, kind), ret 0xC; list[0] is the SpeedTreeModel): it sets the
@@ -366,7 +508,7 @@ template <class Body> void RunChunked(std::size_t n, std::uint8_t *ctx, Body bod
     const std::size_t chunks = std::min(kMostChunks, std::max(wanted, (n + kPerChunk - 1) / kPerChunk));
     ChunkAt(kMostChunks - 1); // every chunk made here, on the update thread, before any is used
     const std::size_t per = (n + chunks - 1) / chunks;
-    const bool threaded = g_mode.load(std::memory_order_relaxed) >= 3;
+    const bool threaded = g_mode.load(std::memory_order_relaxed) == 3;
     const std::size_t used = (n + per - 1) / per;
     auto run = [&](std::size_t c) {
         const std::size_t first = c * per;
@@ -384,7 +526,20 @@ template <class Body> void RunChunked(std::size_t n, std::uint8_t *ctx, Body bod
         t_recorder = nullptr;
         t_state = nullptr;
     };
-    if (threaded && used > 1)
+    if (g_mode.load(std::memory_order_relaxed) == 4)
+    {
+        // mode 4: every chunk on a worker, one at a time: tells a thread's own effects from races
+        g_parallel.store(true);
+        for (std::size_t c = 0; c < used; ++c)
+        {
+            Worker *w = WorkerAt(c);
+            w->job = [&run, c] { run(c); };
+            SetEvent(w->wake);
+            WaitForSingleObject(w->done, INFINITE);
+        }
+        g_parallel.store(false);
+    }
+    else if (threaded && used > 1)
     {
         g_parallel.store(true);
         for (std::size_t c = 1; c < used; ++c)
@@ -668,7 +823,9 @@ void Poll()
         std::ifstream in(g_dir / "par.txt");
         int mode = 0;
         int chunks = 4;
-        in >> mode >> chunks;
+        int lockMode = 1;
+        in >> mode >> chunks >> lockMode;
+        g_lockMode = lockMode;
         g_chunkCount = std::max(1, chunks);
         if (mode != g_mode.exchange(mode))
         {
@@ -704,6 +861,13 @@ void Report()
         spdlog::info("program queue adds {} bytes a frame; chunked groups {} (pre-state {}, post-state {})",
                      g_programBytes.exchange(0) / pf, g_chunkedGroups.exchange(0), g_chunkedWithPre.exchange(0),
                      g_chunkedWithPost.exchange(0));
+        {
+            LARGE_INTEGER f;
+            QueryPerformanceFrequency(&f);
+            const auto ms = [&](std::uint64_t t) { return static_cast<double>(t) * 1000.0 / static_cast<double>(f.QuadPart); };
+            spdlog::info("pass draws under the lock: {:.1f} ms held, {:.1f} ms waited (5 s, all threads); driver mismatches {}",
+                         ms(g_lockedTicks.exchange(0)), ms(g_lockWaitTicks.exchange(0)), g_driverMismatch.load());
+        }
         spdlog::info("most bytes a chunk recorded: {}; groups drawn serially for their pre-state: {}",
                      g_mostChunkBytes.load(), g_preStateSerial.exchange(0));
         spdlog::info("null queue: {} calls, {} items; chunked frames {}", g_nullCalls.exchange(0),
@@ -739,6 +903,7 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     g_group = reinterpret_cast<GroupFn>(0x00471CB0);
     g_nullQueue = reinterpret_cast<GroupFn>(0x00469530);
     g_programQueue = reinterpret_cast<GroupFn>(0x0046D0C0);
+    InitializeCriticalSection(&g_globalPassLock);
     for (CRITICAL_SECTION &lock : g_passLocks)
     {
         InitializeCriticalSection(&lock);
@@ -747,7 +912,11 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     {
         InitializeCriticalSection(&lock);
     }
+    g_threadId = reinterpret_cast<ThreadIdFn>(0x004BBD40);
     g_tree = reinterpret_cast<TreeFn>(0x00533140);
+    g_attach = reinterpret_cast<AttachFn>(0x004F4250);
+    g_instanceRender = reinterpret_cast<InstanceRenderFn>(0x004F5840);
+    g_instancePasses = reinterpret_cast<InstancePassesFn>(0x004F4AC0);
     g_lightConstants = reinterpret_cast<LightFn>(0x0046BC40);
     g_pass = reinterpret_cast<PassFn>(0x00506550);
     g_mode3 = reinterpret_cast<GroupFn>(0x00471440);
@@ -760,6 +929,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
     DetourAttach(reinterpret_cast<PVOID *>(&g_group), reinterpret_cast<PVOID>(&Group));
     DetourAttach(reinterpret_cast<PVOID *>(&g_nullQueue), reinterpret_cast<PVOID>(&NullQueue));
     DetourAttach(reinterpret_cast<PVOID *>(&g_programQueue), reinterpret_cast<PVOID>(&ProgramQueue));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_attach), reinterpret_cast<PVOID>(&AttachPass));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_instanceRender), reinterpret_cast<PVOID>(&InstanceRender));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_instancePasses), reinterpret_cast<PVOID>(&InstancePasses));
+    DetourAttach(reinterpret_cast<PVOID *>(&g_threadId), reinterpret_cast<PVOID>(&ThreadIdHook));
     DetourAttach(reinterpret_cast<PVOID *>(&g_tree), reinterpret_cast<PVOID>(&TreeGroup));
     DetourAttach(reinterpret_cast<PVOID *>(&g_lightConstants), reinterpret_cast<PVOID>(&LightConstants));
     DetourAttach(reinterpret_cast<PVOID *>(&g_pass), reinterpret_cast<PVOID>(&PassDraw));
