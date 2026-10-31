@@ -1,8 +1,9 @@
-// Example: the world map's pins (dao/WorldMap.h).
+// Example: the world map's and the Fade's pins, and a city's maps swapped (dao/WorldMap.h).
 //
-// Each time the world map opens, its pins are logged with their states, the party's own marked,
-// and a travel to each pin that is not active, which the map refuses as a click would, with its
-// refusal. What it sees goes to example_worldmap.log.
+// Each time the world map or the Fade's opens, the map shown is logged, then its pins with their
+// states, the party's own marked, and a travel to each pin the map's click would refuse, with its
+// refusal. A city's map is swapped for its second once, and the pins logged again. What it sees
+// goes to example_worldmap.log.
 #include "dao/WorldMap.h"
 #include "dao/Gui.h"
 #include "dao/Log.h"
@@ -38,14 +39,23 @@ const char *Named(worldmap::PinState state)
     return "unknown";
 }
 
+bool IsTravelled(worldmap::MapKind kind, worldmap::PinState state)
+{
+    return state == worldmap::PinState::Active ||
+           (kind == worldmap::MapKind::Fade && state == worldmap::PinState::Complete);
+}
+
 void Log()
 {
+    const worldmap::Shown shown = worldmap::ShownMap();
+    spdlog::info("{} map shown, type {}, other {}", shown.kind == worldmap::MapKind::Fade ? "the Fade's" : "a world",
+                 shown.type, shown.other);
     const std::wstring here = worldmap::Here().value_or(std::wstring());
     for (const worldmap::Pin &pin : worldmap::Pins())
     {
         spdlog::info("pin {}: {} ({}), {}{}", pin.index, dao::Utf8(pin.name), dao::Utf8(pin.areaTag), Named(pin.state),
                      pin.areaTag == here ? ", the party's" : "");
-        if (pin.state != worldmap::PinState::Active)
+        if (!IsTravelled(shown.kind, pin.state))
         {
             spdlog::info("  travel refused: {}", static_cast<int>(worldmap::Travel(pin.index)));
         }
@@ -63,9 +73,16 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
         return false;
     }
     dao::gui::OnFullScreen([](std::wstring_view name, bool shown) {
-        if (shown && name == L"WorldMap")
+        if (!shown || (name != L"WorldMap" && name != L"FadeMap"))
         {
+            return;
+        }
+        Log();
+        if (worldmap::ShownMap().other != 0)
+        {
+            spdlog::info("swap: {}", static_cast<int>(worldmap::SwapMaps()));
             Log();
+            spdlog::info("swap back: {}", static_cast<int>(worldmap::SwapMaps()));
         }
     });
     return true;
