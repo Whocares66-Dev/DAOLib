@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: the game no longer waits for the graphics card's answer to an occlusion query when the same object's answer from the frame before is there, and after each area's load it keeps occlusion culling only where that is faster (#281). Denerim's market +11%; the Brecilian Forest +47%, where it turns occlusion culling off.
+
 ## 0.8.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.8.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.8.0). The loader and its contract with plugins are as in 0.3.0.

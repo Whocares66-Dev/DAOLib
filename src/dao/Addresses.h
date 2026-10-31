@@ -2885,4 +2885,27 @@ DAO_DATA(kEmitterLodDistance1, 95757)
 DAO_DATA(kEmitterLodDistance2, 95758)
 DAO_DATA(kTreeLodFactor, 95759)
 DAO_ADDRESS(kCClientExoApp_RemakeTreeBounds, 10551)
+// Umbra's occlusion queries (perf/DelayedOcclusion.h, read 2026-10-31, DAOLib #279,
+// #281). The engine's Umbra commander (EclipseUmbraCommander slot 1, 0x0045C8E0)
+// turns commands 0x80-0x83 into calls on D3DDriver::D3DUmbraRenderer (vtable
+// 0x00B2EB5C), which go to the device itself, not the threaded recorder:
+// BeginQuery (slot 3, __thiscall (int key), `ret 4`) issues the query the key
+// maps to (0x00878DD0); DrawQuery (slot 8, __thiscall (OcclusionQuery*),
+// `ret 4`) draws its box from Umbra's getVertices and getTriangles;
+// GetQueryResult (slot 5, __thiscall bool (int key, DWORD* pixels, bool wait),
+// `ret 0xC`) asks IDirect3DQuery9::GetData, flushing, and spins while S_FALSE
+// when wait is set. The key is the query's OcclusionQuery::getIndex. Umbra's
+// own methods are called through the exe's import slots for them (__thiscall,
+// no arguments).
+DAO_ADDRESS(kD3DUmbraRenderer_BeginQuery, 24023)
+DAO_ADDRESS(kD3DUmbraRenderer_DrawQuery, 23985)
+DAO_ADDRESS(kD3DUmbraRenderer_GetQueryResult, 24025)
+DAO_DATA(kUmbra_OcclusionQuery_GetIndex_Import, 60343)
+DAO_DATA(kUmbra_OcclusionQuery_GetVertices_Import, 60311)
+DAO_DATA(kUmbra_OcclusionQuery_GetVertexCount_Import, 60308)
+// Umbra::Camera::setParameters (__thiscall (int width, int height, unsigned
+// properties, float, float)), each frame for the main view at 0x00466E9F with
+// properties 3 (view frustum 1 | occlusion 2) while the global byte 0x00BF2853
+// is set; 1 gives view-frustum culling alone.
+DAO_DATA(kUmbra_Camera_SetParameters_Import, 60332)
 } // namespace dao::addr

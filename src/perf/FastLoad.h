@@ -30,6 +30,10 @@
 // and 0.14 to 0.27 s with it.
 #pragma once
 
+#include "dao/Options.h"
+
+#include <optional>
+
 namespace perf
 {
 
@@ -40,6 +44,7 @@ namespace perf
 // none), DAOLIB_AREA_ROOMS=0, DAOLIB_LOADING_PACE (ms, 0 for the engine's),
 // DAOLIB_LOADING_PRESENT (ms, 0 for every frame), DAOLIB_LOADING_FADE
 // (times as fast, 0 for the movie's own) and DAOLIB_KEEP_HUD=0.
-void InstallFastLoad();
+// @return the switch for the options screen, or nothing if fast load is left out
+std::optional<dao::options::Toggle> InstallFastLoad();
 
 } // namespace perf

@@ -4,6 +4,7 @@
 #include "dao/Hook.h"
 #include "dao/Log.h"
 #include "dao/Options.h"
+#include "perf/Options.h"
 #include "perf/fastload/AreaLists.h"
 #include "perf/fastload/AreaRooms.h"
 #include "perf/fastload/Hud.h"
@@ -15,7 +16,6 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
-#include <filesystem>
 
 namespace perf
 {
@@ -33,20 +33,14 @@ constexpr const wchar_t *kKey = L"On";
 std::atomic<bool> g_on{false};
 std::int64_t g_lastUpdate = 0;
 
-// The loader's own settings: daolib.ini beside the logs, so an instance of the game has its own.
-std::filesystem::path Settings()
-{
-    return dao::LogDirectory() / "daolib.ini";
-}
-
 void Set(bool on)
 {
     g_on.store(on, std::memory_order_relaxed);
     fastload::screen::Apply();
-    if (WritePrivateProfileStringW(kSection, kKey, on ? L"1" : L"0", Settings().c_str()) == FALSE)
+    if (WritePrivateProfileStringW(kSection, kKey, on ? L"1" : L"0", SettingsFile().c_str()) == FALSE)
     {
         spdlog::warn("fast load: the switch could not be kept in {}; it is {} until the game is closed",
-                     Settings().string(), on ? "on" : "off");
+                     SettingsFile().string(), on ? "on" : "off");
     }
     spdlog::info("fast load: turned {} in the options screen, from the next loading screen", on ? "on" : "off");
 }
@@ -87,40 +81,36 @@ bool fastload::On()
     return g_on.load(std::memory_order_relaxed);
 }
 
-void InstallFastLoad()
+std::optional<dao::options::Toggle> InstallFastLoad()
 {
     if (LeftOut())
     {
         spdlog::info("fast load: DAOLIB_FAST_LOAD=0, so none of it is in: the game loads as it always did");
-        return;
+        return std::nullopt;
     }
     if (!g_update.Attach(dao::addr::kGameModeLoading_Update, &Update))
     {
         spdlog::warn("fast load: the loading mode's update could not be detoured, so none of it is in");
-        return;
+        return std::nullopt;
     }
-    g_on.store(GetPrivateProfileIntW(kSection, kKey, 0, Settings().c_str()) != 0, std::memory_order_relaxed);
+    g_on.store(GetPrivateProfileIntW(kSection, kKey, 0, SettingsFile().c_str()) != 0, std::memory_order_relaxed);
     fastload::lists::Attach();
     fastload::rooms::Attach();
     fastload::screen::Attach();
     fastload::hud::Attach();
-    const bool shown = dao::options::AddSection(
-        L"Performance",
-        {{
-            .name = L"DAOLibFastLoad",
-            .label = L"Fast loading",
-            .tooltip = L"Keeps the places the party has been in memory and loads the rooms next door ahead, so "
-                       L"loading screens are short. Changes from the next loading screen.",
-            .get = [] { return fastload::On(); },
-            .set =
-                [](bool wanted) {
-                    Set(wanted);
-                    return wanted;
-                },
-        }},
-        {}, dao::options::Column::Right); // the left is where a plugin's section goes first
-    spdlog::info("fast load: {} ({}); its switch is {}", g_on.load() ? "on" : "off", Settings().string(),
-                 shown ? "\"Fast loading\" on the options screen's Game tab" : "not on the options screen");
+    spdlog::info("fast load: {} ({})", g_on.load() ? "on" : "off", SettingsFile().string());
+    return dao::options::Toggle{
+        .name = L"DAOLibFastLoad",
+        .label = L"Fast loading",
+        .tooltip = L"Keeps the places the party has been in memory and loads the rooms next door ahead, so "
+                   L"loading screens are short. Changes from the next loading screen.",
+        .get = [] { return fastload::On(); },
+        .set =
+            [](bool wanted) {
+                Set(wanted);
+                return wanted;
+            },
+    };
 }
 
 } // namespace perf

@@ -55,8 +55,10 @@
 #include "loader/Proxy.h"
 #include "loader/WindowLog.h"
 #include "perf/AllProcessors.h"
+#include "perf/DynamicOcclusion.h"
 #include "perf/EngineHeap.h"
 #include "perf/FastLoad.h"
+#include "perf/Options.h"
 
 #include <Windows.h>
 
@@ -224,7 +226,15 @@ void BeforeTheGame()
     fix::InstallSavedFileNameFix();
     fix::InstallMouseRecordsFix();
     fix::InstallLightFlickerFix();
-    perf::InstallFastLoad();
+    std::vector<dao::options::Toggle> performance;
+    for (auto toggle : {perf::InstallDynamicOcclusion(), perf::InstallFastLoad()})
+    {
+        if (toggle)
+        {
+            performance.push_back(std::move(*toggle));
+        }
+    }
+    perf::AddOptions(std::move(performance));
     LoadPlugins();
     loader::asi::LoadAll(SelfPath().parent_path());
     spdlog::debug("starting the game");
