@@ -10,6 +10,7 @@
 //
 // Every five seconds phases.log gets a line per function: calls and milliseconds per frame,
 // inclusive and exclusive, on the root's thread and on others.
+#include "dao/Frame.h"
 #include "dao/Log.h"
 #include "dao/Module.h"
 #include "dao/Plugin.h"
@@ -28,6 +29,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -134,6 +136,7 @@ void __fastcall Command(void *commander, int edx, int code)
 }
 
 std::uint64_t Frames(); // the frames counted so far, defined with the counter below
+bool g_frameLog = false; // "!framelog" (FrameLogWriter, below)
 
 // "!querylag SECONDS": Umbra's occlusion queries answered from the previous frame when the GPU
 // has not answered yet (DAOLib #279). A query is keyed by a hash of its box's vertices, so an
@@ -157,6 +160,9 @@ std::unordered_map<std::uint32_t, LastAnswer> g_lastAnswer; // a box's last answ
 std::atomic<std::uint64_t> g_lagAnswered{0};
 std::atomic<std::uint64_t> g_lagWaited{0};
 std::atomic<std::uint64_t> g_lagReady{0};
+std::unordered_map<int, DWORD> g_given;              // a slot's answer given from last frame, by key, this frame
+std::atomic<std::uint64_t> g_lagMissed{0};           // given hidden, truly visible: an object missing a frame
+std::atomic<std::uint64_t> g_lagExtra{0};            // given visible, truly hidden: drawn a frame too long
 
 std::uint32_t BoxKey(const void *query)
 {
@@ -189,6 +195,19 @@ void __fastcall QueryBegin(void *renderer, int edx, int key)
         if (g_queryResult(renderer, edx, key, &pixels, false)) // the slot's previous query, before it is reused
         {
             Remember(key, pixels);
+            const auto given = g_given.find(key);
+            if (given != g_given.end())
+            {
+                if (given->second == 0 && pixels != 0)
+                {
+                    g_lagMissed.fetch_add(1, std::memory_order_relaxed);
+                }
+                else if (given->second != 0 && pixels == 0)
+                {
+                    g_lagExtra.fetch_add(1, std::memory_order_relaxed);
+                }
+                g_given.erase(given);
+            }
         }
         if (g_lastAnswer.size() > 200000)
         {
@@ -227,6 +246,7 @@ bool __fastcall QueryResultLagged(void *renderer, int edx, int key, DWORD *pixel
         if (last != g_lastAnswer.end() && last->second.frame + 2 >= Frames())
         {
             *pixels = last->second.pixels;
+            g_given[key] = last->second.pixels;
             g_lagAnswered.fetch_add(1, std::memory_order_relaxed);
             return true;
         }
@@ -460,6 +480,11 @@ void ReadList()
                 const auto vtable = object != 0 ? *reinterpret_cast<const std::uintptr_t *>(object) : 0;
                 spdlog::info("== dump {:#x}: object {:#x}, vtable {:#x}", global, object, vtable);
             }).detach();
+            continue;
+        }
+        if (address == "!framelog")
+        {
+            g_frameLog = true;
             continue;
         }
         if (address == "!sample")
@@ -734,6 +759,33 @@ void Sampler()
     }
 }
 
+// "!framelog": each frame's start as wall-clock time (100 ns since 1601, GetSystemTimePreciseAsFileTime),
+// one a line in frames.tsv beside the log, for a video's frame-rate readout drawn after. The flag is
+// declared with the other options' state, above ReadList.
+std::mutex g_framesLock;
+std::vector<std::uint64_t> g_frameTimes;
+
+void FrameLogWriter()
+{
+    const auto file = dao::LogDirectory() / "frames.tsv";
+    std::ofstream(file, std::ios::trunc) << "# frame starts, FILETIME (100 ns since 1601)\n";
+    std::vector<std::uint64_t> taken;
+    for (;;)
+    {
+        Sleep(500);
+        {
+            const std::scoped_lock held(g_framesLock);
+            taken.swap(g_frameTimes);
+        }
+        std::ofstream out(file, std::ios::app);
+        for (const std::uint64_t t : taken)
+        {
+            out << t << '\n';
+        }
+        taken.clear();
+    }
+}
+
 } // namespace
 
 extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo *info)
@@ -826,8 +878,10 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
             for (;;)
             {
                 Sleep(5000);
-                spdlog::info("   queries: ready {}, answered from last frame {}, waited {}", g_lagReady.exchange(0),
-                             g_lagAnswered.exchange(0), g_lagWaited.exchange(0));
+                spdlog::info("   queries: ready {}, answered from last frame {}, waited {}; of those answered, "
+                             "missing a frame {}, drawn a frame too long {}",
+                             g_lagReady.exchange(0), g_lagAnswered.exchange(0), g_lagWaited.exchange(0),
+                             g_lagMissed.exchange(0), g_lagExtra.exchange(0));
             }
         }).detach();
     }
@@ -849,6 +903,16 @@ extern "C" __declspec(dllexport) bool __cdecl DAOLib_Load(const dao::LoaderInfo 
                              g_queryNotReady.exchange(0));
             }
         }).detach();
+    }
+    if (g_frameLog)
+    {
+        dao::OnFrame([] {
+            FILETIME now{};
+            GetSystemTimePreciseAsFileTime(&now);
+            const std::scoped_lock held(g_framesLock);
+            g_frameTimes.push_back((std::uint64_t{now.dwHighDateTime} << 32) | now.dwLowDateTime);
+        });
+        std::thread(FrameLogWriter).detach();
     }
     std::thread(Report).detach();
     return true;
