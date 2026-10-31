@@ -191,7 +191,16 @@ struct Shape
     // name, as ShapesOf with the model gives them; none without the model. The rest pose: in the game
     // a kinematic placeable's actor (a door's) follows its node as its state's animation moves it.
     Pose frame{};
+    // A mesh shape's points and triangles (Kind::Mesh), from its cooked stream (CookedMeshOf), in the
+    // shape's own frame: LocalPoseOf places them, as it places a box. Empty for another kind, or a
+    // stream that does not read.
+    TriangleMesh mesh;
 };
+
+// Returns a triangle mesh from PhysX's cooked form, the MMHShapeCookedDataStream of a .phy's mesh
+// shape: its points and its triangles' indices.
+// @return nothing for bytes that are not a cooked mesh of version 1, or that run out
+std::optional<TriangleMesh> CookedMeshOf(std::span<const std::byte> stream);
 
 // Returns a placeable model's shapes, in the file's order; none for a file that is no .phy.
 std::vector<Shape> ShapesOf(const gff4::File &phy);

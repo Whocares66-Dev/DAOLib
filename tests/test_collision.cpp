@@ -426,6 +426,131 @@ TEST_CASE("a placeable's shapes are read under their nodes with the masks the en
     CHECK(capsule.volume == Approx(0.0343F));
 }
 
+namespace
+{
+
+// A cooked triangle mesh as PhysX writes it: the header, the counts, the points, then each index the width
+// the flags give, and a tail the reader leaves.
+std::vector<std::uint8_t> Cooked(std::uint32_t flags, const std::vector<float> &points,
+                                 const std::vector<std::uint32_t> &indices)
+{
+    std::vector<std::uint8_t> bytes{'N', 'X', 'S', 1, 'M', 'E', 'S', 'H'};
+    dao::test::Append(bytes, std::uint32_t{1});
+    dao::test::Append(bytes, flags);
+    dao::test::Append(bytes, 0.001F);           // the convex edge threshold
+    dao::test::Append(bytes, std::uint32_t{2}); // the height field's axis
+    dao::test::Append(bytes, 0.0F);             // its extent
+    dao::test::Append(bytes, static_cast<std::uint32_t>(points.size() / 3));
+    dao::test::Append(bytes, static_cast<std::uint32_t>(indices.size() / 3));
+    for (const float value : points)
+    {
+        dao::test::Append(bytes, value);
+    }
+    for (const std::uint32_t index : indices)
+    {
+        if ((flags & 0x8) != 0)
+        {
+            bytes.push_back(static_cast<std::uint8_t>(index));
+        }
+        else if ((flags & 0x10) != 0)
+        {
+            dao::test::Append(bytes, static_cast<std::uint16_t>(index));
+        }
+        else
+        {
+            dao::test::Append(bytes, index);
+        }
+    }
+    bytes.insert(bytes.end(), {'O', 'P', 'C', 0});
+    return bytes;
+}
+
+std::optional<collision::TriangleMesh> CookedMesh(const std::vector<std::uint8_t> &bytes)
+{
+    return collision::CookedMeshOf(std::as_bytes(std::span(bytes)));
+}
+
+const std::vector<float> kSquare{0, 0, 0, 2, 0, 0, 2, 3, 0, 0, 3, 0.5F};
+
+} // namespace
+
+TEST_CASE("a cooked mesh's points and triangles are read, its indices a byte, two or four wide by its flags",
+          "[collision]")
+{
+    for (const std::uint32_t flags : {0x8U, 0x12U, 0x0U})
+    {
+        INFO(flags);
+        const std::optional<collision::TriangleMesh> mesh = CookedMesh(Cooked(flags, kSquare, {0, 1, 2, 0, 2, 3}));
+        REQUIRE(mesh.has_value());
+        CHECK(mesh->points == std::vector<Point>{{0, 0, 0}, {2, 0, 0}, {2, 3, 0}, {0, 3, 0.5F}});
+        CHECK(mesh->triangles == std::vector<std::array<std::uint32_t, 3>>{{0, 1, 2}, {0, 2, 3}});
+    }
+    const std::optional<collision::TriangleMesh> wide = CookedMesh(Cooked(0x10, kSquare, {3, 2, 1}));
+    REQUIRE(wide.has_value());
+    CHECK(wide->triangles == std::vector<std::array<std::uint32_t, 3>>{{3, 2, 1}});
+}
+
+TEST_CASE("bytes that are no cooked mesh of version 1, or run out, are no mesh", "[collision]")
+{
+    std::vector<std::uint8_t> bytes = Cooked(0x8, kSquare, {0, 1, 2});
+    CHECK(CookedMesh(bytes).has_value());
+    std::vector<std::uint8_t> other = bytes;
+    other[4] = 'C'; // "CESH"
+    CHECK_FALSE(CookedMesh(other).has_value());
+    other = bytes;
+    other[8] = 2;
+    CHECK_FALSE(CookedMesh(other).has_value());
+    // The tail of four bytes and the three indices, then a point's last float, cut off.
+    for (const std::size_t cut : {std::size_t{4 + 1}, std::size_t{4 + 3 + 1}})
+    {
+        INFO(cut);
+        other.assign(bytes.begin(), bytes.end() - static_cast<std::ptrdiff_t>(cut));
+        CHECK_FALSE(CookedMesh(other).has_value());
+    }
+    other.assign(bytes.begin(), bytes.begin() + 20);
+    CHECK_FALSE(CookedMesh(other).has_value());
+    CHECK_FALSE(CookedMesh({}).has_value());
+}
+
+TEST_CASE("a placeable's mesh shape has its cooked stream's points and triangles", "[collision]")
+{
+    Builder b = Start(
+        "PHY ",
+        {{"mdlh", 8, {{6000, 14, 0, 0}, {6999, dao::test::kGeneric, 0xA000, 4}}},
+         {"node", 12, {{6000, 14, 0, 0}, {6999, dao::test::kGeneric, 0xA000, 4}}},
+         {"cobj", 16, {{6056, 8, 0, 0}, {6057, 4, 0, 4}, {6245, 4, 0, 8}, {6999, dao::test::kGeneric, 0xA000, 12}}},
+         ShapTemplate(),
+         {"mshs", 4, {{6077, 0, gff4::kList, 0}}}});
+    const std::size_t root = Struct(b, 8);
+    const std::size_t gob = Struct(b, 12);
+    const std::size_t object = Struct(b, 16);
+    const std::size_t shape = Struct(b, 0x50);
+    const std::size_t mesh = Struct(b, 4);
+    b.U32(root, b.String(u"plc_bonepile_01_0.mmh"));
+    b.U32(root + 4, Children(b, {{1, gob}}));
+    b.U32(gob, b.String(u"GOB"));
+    b.U32(gob + 4, Children(b, {{2, object}}));
+    b.U32(object + 4, 1);
+    b.U32(object + 12, Children(b, {{3, shape}}));
+    b.U32(shape + 32, 5);
+    Floats(b, shape, {0, 0, 0, 1});
+    Floats(b, shape + 16, {0.5F, 0, 0, 1});
+    b.U32(shape + 36, b.String(u"Mesh01"));
+    FlagOn(b, shape, 6067); // Placeables
+    b.U32(shape + 52, 4 | (std::uint32_t{gff4::kStruct} << 16));
+    b.U32(shape + 56, Ref(b, mesh));
+    b.U32(mesh, dao::test::Bytes(b, Cooked(0x8, kSquare, {0, 1, 2, 0, 2, 3})));
+    const std::optional<gff4::File> file = gff4::File::Parse(b.bytes);
+    REQUIRE(file.has_value());
+    const std::vector<collision::Shape> shapes = collision::ShapesOf(*file);
+    REQUIRE(shapes.size() == 1);
+    CHECK(shapes[0].kind == collision::Kind::Mesh);
+    CHECK(shapes[0].name == L"Mesh01");
+    CHECK(shapes[0].position[0] == Approx(0.5F));
+    CHECK(shapes[0].mesh.points.size() == 4);
+    CHECK(shapes[0].mesh.triangles == std::vector<std::array<std::uint32_t, 3>>{{0, 1, 2}, {0, 2, 3}});
+}
+
 TEST_CASE("a capsule stands on its position along its own z, as the engine poses it", "[collision]")
 {
     // dev/COLLISION.md section 2 (DAOLib #264): plc_fade_pedestal_0's capsule, at z -0.235 with radius
@@ -710,6 +835,8 @@ TEST_CASE("the game's .phy in game/collision, when there, the door's, crate's an
     std::size_t files = 0;
     std::map<collision::Kind, std::size_t> kinds;
     std::map<std::uint32_t, std::size_t> masks;
+    std::size_t mostTriangles = 0;
+    std::string mostFile;
     for (const auto &entry : std::filesystem::directory_iterator(every))
     {
         if (entry.path().extension() != ".phy")
@@ -725,6 +852,22 @@ TEST_CASE("the game's .phy in game/collision, when there, the door's, crate's an
         {
             ++kinds[shape.kind];
             ++masks[shape.mask];
+            if (shape.kind != collision::Kind::Mesh)
+            {
+                CHECK(shape.mesh.triangles.empty());
+                continue;
+            }
+            // Every mesh shape's stream reads, every index one of its points (DAOLib #275).
+            REQUIRE_FALSE(shape.mesh.triangles.empty());
+            for (const std::array<std::uint32_t, 3> &triangle : shape.mesh.triangles)
+            {
+                REQUIRE(std::ranges::all_of(triangle, [&](std::uint32_t i) { return i < shape.mesh.points.size(); }));
+            }
+            if (shape.mesh.triangles.size() > mostTriangles)
+            {
+                mostTriangles = shape.mesh.triangles.size();
+                mostFile = entry.path().filename().string();
+            }
         }
     }
     if (files == 17763)
@@ -738,6 +881,8 @@ TEST_CASE("the game's .phy in game/collision, when there, the door's, crate's an
         CHECK(masks[0x81002020] == 3429);
         CHECK(masks[0x80010000] == 2116);
         CHECK(masks[0x81000004] == 656);
+        CHECK(mostTriangles == 22457);
+        CHECK(mostFile == "lak250d_9_0.phy");
     }
 }
 

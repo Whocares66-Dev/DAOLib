@@ -67,7 +67,8 @@ constexpr std::uint32_t kFadeable = 6252;
 constexpr std::uint32_t kMaskWater = 6277;
 constexpr std::uint32_t kMaskTerrainWall = 6295;
 constexpr std::uint32_t kMaskWalkable = 6305;
-constexpr std::uint32_t kTypeStruct = 6998; // MMHShapeTypeStruct
+constexpr std::uint32_t kTypeStruct = 6998;   // MMHShapeTypeStruct
+constexpr std::uint32_t kCookedStream = 6077; // MMHShapeCookedDataStream, in a mesh shape's mshs
 constexpr std::uint32_t kChildren = 6999;
 
 constexpr std::size_t kActorRecordSize = 16;
@@ -859,6 +860,10 @@ Shape ShapeOf(const gff4::Struct &shap, const std::wstring &node, std::uint32_t 
         shape.dimensions = PointOf(size->Floats(kBoxDim));
         shape.radius = size->Get<float>(kRadius).value_or(0.0F);
         shape.height = size->Get<float>(kHeight).value_or(0.0F);
+        if (shape.kind == Kind::Mesh)
+        {
+            shape.mesh = CookedMeshOf(size->ListBytes(kCookedStream, gff4::Type::U8)).value_or(TriangleMesh{});
+        }
     }
     return shape;
 }
@@ -880,6 +885,78 @@ void Walk(const gff4::Struct &node, const std::wstring &name, std::uint32_t obje
 }
 
 } // namespace
+
+// A .phy's mesh shape (DAOLib #275, read 2026-10-30 for DAOParagonEngine #334): its MMHShapeTypeStruct is
+// an mshs (MMHShapeMeshShapeFlags, MMHShapeMeshHeightFieldAxis and Extent, MMHShapeCookedDataStream), the
+// stream a list of bytes: PhysX 2.x's own cooked NxTriangleMesh. The exe keeps the bytes as it reads the
+// mshs (GraphicsStructures::ReadPHYMeshShape, ID 9419, 0x0059D8F0, its 0x17BD at 0x0059DAFA, copied by 0x006AD590) and
+// PhysX loads them. The stream is "NXS" 1, "MESH", its version (1), its flags, the convex edge threshold (f32), the
+// height field's vertical axis (255 for none, or 2) and extent (f32), the counts of points and of triangles, then the
+// points (three f32 each) and the triangles' indices, a byte each with flag 0x8, two with 0x10, four with neither; what
+// follows (a face remap with 0x2, the collision tree "OPC", "HBM") is the engine's for its queries. Over the install's
+// 17,763 .phy, 7,005 mesh shapes in 4,671 files, every stream read so, its flags 8, 10 or 18, every index below its
+// count of points; the largest lak250d_9_0's, 22,457 triangles. Of placeable_types' 525 rows with a model, 18 have a
+// mesh shape.
+std::optional<TriangleMesh> CookedMeshOf(std::span<const std::byte> stream)
+{
+    constexpr std::array<char, 8> kMagic{'N', 'X', 'S', 1, 'M', 'E', 'S', 'H'};
+    constexpr std::uint32_t kByteIndices = 0x8;
+    constexpr std::uint32_t kShortIndices = 0x10;
+    constexpr std::size_t kCounts = 28; // after the magic, the version, the flags and the three height-field words
+    if (stream.size() < kCounts + 8 || std::memcmp(stream.data(), kMagic.data(), kMagic.size()) != 0 ||
+        ReadAt<std::uint32_t>(stream, 8) != 1U)
+    {
+        return std::nullopt;
+    }
+    const std::uint32_t flags = ReadAt<std::uint32_t>(stream, 12).value_or(0);
+    const std::uint32_t points = ReadAt<std::uint32_t>(stream, kCounts).value_or(0);
+    const std::uint32_t triangles = ReadAt<std::uint32_t>(stream, kCounts + 4).value_or(0);
+    std::size_t width = 4;
+    if ((flags & kByteIndices) != 0)
+    {
+        width = 1;
+    }
+    else if ((flags & kShortIndices) != 0)
+    {
+        width = 2;
+    }
+    const std::size_t pointsAt = kCounts + 8;
+    if ((stream.size() - pointsAt) / 12 < points)
+    {
+        return std::nullopt;
+    }
+    const std::size_t indicesAt = pointsAt + (static_cast<std::size_t>(points) * 12);
+    if ((stream.size() - indicesAt) / (3 * width) < triangles)
+    {
+        return std::nullopt;
+    }
+    TriangleMesh mesh;
+    mesh.points.reserve(points);
+    for (std::size_t i = 0; i < points; ++i)
+    {
+        const std::size_t at = pointsAt + (i * 12);
+        mesh.points.push_back({ReadAt<float>(stream, at).value_or(0.0F), ReadAt<float>(stream, at + 4).value_or(0.0F),
+                               ReadAt<float>(stream, at + 8).value_or(0.0F)});
+    }
+    const auto index = [&](std::size_t n) -> std::uint32_t {
+        const std::size_t at = indicesAt + (n * width);
+        if (width == 1)
+        {
+            return std::to_integer<std::uint32_t>(stream[at]);
+        }
+        if (width == 2)
+        {
+            return ReadAt<std::uint16_t>(stream, at).value_or(0);
+        }
+        return ReadAt<std::uint32_t>(stream, at).value_or(0);
+    };
+    mesh.triangles.reserve(triangles);
+    for (std::size_t t = 0; t < triangles; ++t)
+    {
+        mesh.triangles.push_back({index(3 * t), index((3 * t) + 1), index((3 * t) + 2)});
+    }
+    return mesh;
+}
 
 Pose Compose(const Pose &outer, const Pose &local)
 {

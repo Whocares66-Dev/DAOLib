@@ -699,6 +699,18 @@ MUTANTS: list[Mutant] = [
         "    return merged;",
     ),
     Mutant(
+        "collision-cooked-byte-indices: a cooked mesh with flag 0x8 has its indices a byte wide",
+        COLLISION,
+        "        width = 1;",
+        "        width = 2;",
+    ),
+    Mutant(
+        "collision-cooked-runs-out: a cooked mesh whose indices run past its bytes is no mesh",
+        COLLISION,
+        "(stream.size() - indicesAt) / (3 * width) < triangles",
+        "(stream.size() - indicesAt) / (3 * width) < 0",
+    ),
+    Mutant(
         "collision-node-frame: a shape is in its node's frame, the node outside its own pose",
         COLLISION,
         "return Compose(shape.frame, own);",
