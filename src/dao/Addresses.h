@@ -2891,8 +2891,8 @@ DAO_DATA(kEmitterLodDistance1, 95757)
 DAO_DATA(kEmitterLodDistance2, 95758)
 DAO_DATA(kTreeLodFactor, 95759)
 DAO_ADDRESS(kCClientExoApp_RemakeTreeBounds, 10551)
-// Umbra's occlusion queries (perf/DelayedOcclusion.h, read 2026-10-31, DAOLib #279,
-// #281). The engine's Umbra commander (EclipseUmbraCommander slot 1, 0x0045C8E0)
+// Umbra's occlusion queries (read 2026-10-31, DAOLib #279, #281; no longer
+// hooked since #285). The engine's Umbra commander (EclipseUmbraCommander slot 1, 0x0045C8E0)
 // turns commands 0x80-0x83 into calls on D3DDriver::D3DUmbraRenderer (vtable
 // 0x00B2EB5C), which go to the device itself, not the threaded recorder:
 // BeginQuery (slot 3, __thiscall (int key), `ret 4`) issues the query the key
