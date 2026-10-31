@@ -22,7 +22,7 @@ Args (this = area, creature, goal*, start* or null); returns the answer code. Ps
 ```
 ctl = creature.Movement()                 // 0x006A2570; null -> return 8. ctl is B, the path object at [creature+0xA40], not the MovementController A (corrected 2026-10-25 by lib-agent-2)
 if ctl.found (+0x9D) == 1: return 1
-world = app+0x118; world.+0xC4 = (creature.+0xC90 != 0); world.+0xC8 = creature size (vslot 0x9C)
+world = app+0x118; world.+0xC4 = (creature.+0xC90 != 0); world.+0xC8 = creature size (vslot 0x9C), overwritten on every Step by the stamp radius max(0.6·PersonalSpace, 0.1) (0x00A467A0; see "Why a committed path is sparse")
 if ctl has a path in progress (0x0073D6E0: path+0 set, or path vector +0x18..+0x1C non-empty):
     start,goal,dir = ctl.+0x60, +0x30, +0x40            // ends kept; new ends only when idle
 else:
@@ -113,7 +113,7 @@ So: a blocked cell counts only when its centre is within max(r, cell) of the poi
 
 `Check(start, goal, flagA, flagB)` on the pathfinding world's environment:
 - Samples the segment every 0.5 * cell (first sample = the start itself); the sample's cell = (a49410(y), a49440(x)).
-- `wide = (creature size at world+0xC8) > cellSize` (set by RequestPath from vslot 0x9C).
+- `wide = (world+0xC8) > cellSize`: set by RequestPath from vslot 0x9C, and on every Step by 0x00A467A0 to the stamp radius max(0.6·PersonalSpace, 0.1) (0.21 for the party). The search object is at world+4, so this is its +0xC4, read by the straight walk at 0x00A4BC2D.
 - Per sample: if flagB == 0 and the placeable counter (bits 4-5, 0x00A49160) of the sample cell is non-zero -> **fail**. Then for the 3x3 cells round it: blocked = kind >= 8, or kind == 7, or kind 6 when (mover class byte == 0 and flagA == 0), or kind 5 when (class byte != 0 and flagA == 0). (World+0xC4 = creature.+0xC90 != 0 is the class byte.)
   - any blocked cell and `wide` -> fail. Not wide: the sample's own (centre) cell blocked -> fail; otherwise the blocked neighbour is counted by its direction. The 9 counters are zeroed once (0x00A4BCD8) and accumulate over every sample of the line. After the last sample, and only if any neighbour was blocked, a ring test walks 12 steps over the clockwise ring 0,1,2,5,8,7,6,3 and fails when 4 consecutive directions have a count of 0 (0x00A4BE5E..0x00A4BEF3). A line whose blocked neighbours all lie on one side is refused; a line between walls on both sides passes. Samples run while t ≤ 1. A cell is trunc((v − padding − base)/cell + 0.5) (0x00A49410 for y, 0x00A49440 for x) [C, read 2026-10-21 by lib-agent-2].
   - Height step between consecutive sampled cells > 0.5 (cell heights are sixteenths of a metre; 0x00A49320 returns |dh|/16 and the test is 0.5, 0x00B59324) -> fail.
@@ -253,7 +253,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 
 - **Smoothing, three passes** [C]:
   - **Smooth** (0x00A4C790) grows a run of path points while the polyline's length equals the octile distance between its ends within 0.25 m (0xAE7FE8), then calls Collapse on it.
-  - **Collapse** (0x00A4C2A0) tests the straight line between the run's ends with 0x00A4BB80 (flags 0, 0). If it is clear, it erases the interior and, where the gap is over 2 · `size` (the mover's size, world +0xC8), puts points back every `size`; if not, it halves the run and recurses on each half.
+  - **Collapse** (0x00A4C2A0) tests the straight line between the run's ends with 0x00A4BB80 (flags 0, 0). If it is clear, it erases the interior and, where the gap is over 2 · `size`, puts points back every `size`. `size` is the search object's +0xC8 (world +0xCC), a constant **2.0 m** for every mover (written once by the search object's constructor, 0x00A4E3E2, from 0x00B59318; corrected 2026-10-31, see "Why a committed path is sparse"); if not, it halves the run and recurses on each half.
   - **The corner pass** (0x00A4C930, through 0x00A4D030 and 0x00A4D110) cuts corners; its fallback cut (a 0.5 m setback) is read from the code, not run.
   - Smooth runs inside each leg (0x00A4D1F0), over [0, n − 1] and then over [the old last, the new last]. Between legs the driver (0x00A4E1B0) picks a 10-point window slid along (0x00A4C4A0 and its helpers), a corner pass or a collapse of the tail, by the slice's parity and P +0x88 (the follower's next index). P +0x8C (a large mover near its goal) turns the between-leg passes off; the in-leg Smooth runs regardless. P +0x8D (wide) affects only which cells the fine search takes. The last leg appends the exact goal after its Smooth (0x00A4D888); its goal cell V[0] is never appended (cut 0). done does not end the search: the driver keeps running its passes until 0x00A4C4A0 sees the window and the corner pass at the end, so the goal is inside the window's Smooth (0x00A4CE40) and the tail's Collapse (0x00A4CEE0 → 0x00A4C5E0), unless P+0x8C is set.
   - There is no snapping or pass for points in a line. Cells become positions through 0x00A49B70, in 0x00A4C630.
@@ -481,14 +481,14 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
   - The shipped scripts set it for the Fade's spirits, wisps, the Harrowing's spirits and Hespith (arl300pt_fade, bhm600cr_wisp, cir320cr_darkspawn_sp, den960cr_eerie_girl, orz550cr_hespith).
 - **Everyone else is class 0 and stamps kind 6**. There is no test of team or faction: party members block each other, hostiles block the party, and the party blocks hostiles.
 - Ghosts see only ghosts' kind 5.
-- World +0xC4 (class) and +0xC8 (size) are written only by RequestPath, so other callers of the tests read the last requester's values.
+- World +0xC4 (class) is written only by RequestPath, so other callers of the tests read the last requester's value. World +0xC8 (size) is written by RequestPath and again on every Step by 0x00A467A0, with the stamp radius max(0.6·PersonalSpace, 0.1).
 
 **The readers** [C]:
 
 | test | stamps |
 |---|---|
 | IsFree 0x00A46FC0 | ignores kinds 5 and 6, except with flagA = 1 (one caller, 0x007CB15E, a melee stand-point probe). flagB is the placeable counter |
-| straight walk 0x00A4BB80 | a sample's 3×3 cell blocks on kind 6 (non-ghost mover) or kind 5 (ghost mover) when flagA = 0. `wide` there is the full PersonalSpace > cell (World +0xC8). RequestPath's Direct, Collapse, the corner pass and the driver pass (0, 0). flagA = 1 only in formation (0x00760766), 0x007A2D84 and the look-ahead 0x00A62C90 |
+| straight walk 0x00A4BB80 | a sample's 3×3 cell blocks on kind 6 (non-ghost mover) or kind 5 (ghost mover) when flagA = 0. `wide` there is the stamp radius max(0.6·PersonalSpace, 0.1) > cell (World +0xC8, the search object's +0xC4, written each Step by 0x00A467A0; corrected 2026-10-31). RequestPath's Direct, Collapse, the corner pass and the driver pass (0, 0). flagA = 1 only in formation (0x00760766), 0x007A2D84 and the look-ahead 0x00A62C90 |
 | fine search, cost 0x00A45AA0 | with the penalties on (env+8 = 0): +7 for the mover's own class kind, +3 for a ring (non-ghost movers only). A stamped cell is never refused |
 | fine search, step | a wide mover drops ring cells. Wide (path +0x8D → env+4) is set in `Step` 0x00A62640 (0x00A626B2) when params +4 > cell, i.e. 0.6 × PS > 0.5, PS > 0.83: bears, drakes, bronto; not humans, wolves or Mabari. It is never cleared there |
 | coarse levels (0x00A457E0, 0x00A45670) | only at the destination entrance's cell: +2 × sectorSize for kind 6 (any class) or a ring. The regions are baked; a stamp never changes them |
@@ -524,6 +524,27 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - 0x0073D780; 0x0067CFA0.
 - Which creatures have `+0xC90 != 0` (the class byte) and what states `+0xB20` 1 and 2 are.
 - That ost100d is the area the wolves were in (it fits the coordinates, grid extent and the height, not confirmed by area name).
+
+## Why a committed path is sparse: the smoothing's size is 2.0 m (read 2026-10-31 by lib-agent with a subagent, for DAOParagonEngine #341; GOG exe)
+
+Vanilla's hero path in the Dead Trenches has 13-14 points over 29.4 m and 17 over 44.5 m (Eluvian, measured by paragon-agent-2), where a port that re-spaced by the mover's 0.21 m committed 82-87 points, one every 0.34 m; and since AdvanceAlongPath (0x00A63F40) drops the rest of a frame's step at each waypoint, its creatures ran about 3.5 m/s against vanilla's 6.0.
+
+**Two fields, not one** [R, checked in the exe]:
+- The search object (class of 0x00A4E3A0) is at world+4: 0x00A467A0 does `lea edi,[esi+4]` (0x00A467BC) and hands edi to the driver 0x00A4E1B0. Collapse (0x00A4C2A0), the corner pass (0x00A4C930) and the straight walk (0x00A4BB80) all run on it.
+- 0x00A467A0's `fstp [esi+0xC8]` (0x00A467DB) writes world+0xC8, the search object's +0xC4: the stamp radius max(0.6·PersonalSpace, 0.1), 0.21 for the party, from Step's params+4 (0x00A62640). Its one reader is the straight walk's "wide" test (0x00A4BC2D). It overwrites RequestPath's own store there (0x0073EB5C) on every Step.
+- Collapse reads the search object's +0xC8 (world+0xCC): `fld [edi+0xC8]` at 0x00A4C335, `fdiv [edi+0xC8]` at 0x00A4C389. Its only writer is the search object's constructor, `fld [0x00B59318]; fstp [esi+0xC8]` at 0x00A4E3DC/0x00A4E3E2, and 0x00B59318 holds **2.0**. So the smoothing's size is 2.0 m for every mover.
+
+**What the passes do with it** [R]:
+- Collapse on a run lo..hi: if the straight walk between its ends (flags 0, 0) is clear, the interior is erased, and only where the ends are over 2 · size = **4.0 m** apart (0x00A4C020) are k = trunc(gap / 2.0) points put back, at p1 - (p1 - p0)·j/(k+1): 1.33 to 2.0 m apart. A gap of 4 m or less keeps its two ends alone. Blocked, it halves at hi - n/2 and recurses.
+- The corner pass's collinear branch (cross < 0.01) removes the middle point when |a-c| <= size (2.0 m); before that it removes a point whose neighbours are within 0.5 m, and duplicates. The corner tolerance is 1.5 (0x00A4D110 passes 0x3FC00000); an edge over 3.0 m is cut at its midpoint; a blocked cut uses a 0.5 m setback.
+
+**The passes, from the search's cells to the committed points** [R]:
+1. A leg (0x00A4D1F0): the fine search's cell chain (0.5 m cells) is appended, then Smooth (0x00A4C790) over the new part: a run grows while the octile direction holds (±0.25) and is Collapsed at each break. On a turn of 60 degrees or more at a route entrance (0x00A4C140) only half (or a quarter) of the leg is committed (section 11). The last leg appends the exact goal after its Smooth. A leg ends at the next route-entrance cell of kind below 8, or the goal.
+2. The driver (0x00A4E1B0) on each later call: a replan on call 10 (0x00A4DDA0); a new leg when 0x00A4C520 finds the follower has used enough; the window slide 0x00A4CE40 (Smooth over [W.30, W.30+10]), then the corner window 0x00A4D030/0x00A4D110 (10 points, moving on 5); the tail collapse 0x00A4CEE0/0x00A4C5E0. All the between-leg passes are off while P+0x8C is set.
+
+**Why 2-3 m** [I, fits the counts]: a straight run of 4 m or less has no interior points and a longer one has them 1.33-2.0 m apart; corners and the 0.25 octile tolerance break runs, so a path averages about 2.2 m between points. The first 4-5 points of a path read early (6 points at 0.13 s, 14 at 0.6 s) are cells the passes have not reached yet.
+
+**For a port**: Collapse's spacing and the corner pass's collinear test use the constant 2.0 (0x00B59318), not the mover's size; the mover's stamp radius (0.6·PersonalSpace) is only the straight walk's "wide" test. With points at least 1.33 m apart, a frame's step at 6 m/s (0.1 m to 0.3 m) never crosses two waypoints, so the speed follows without changing AdvanceAlongPath.
 
 ## The away goal: `CommandMoveAwayFromObject` (read 2026-10-22 by lib-agent-2 with a subagent, for DAOParagonEngine #144)
 
