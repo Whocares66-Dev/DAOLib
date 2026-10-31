@@ -285,8 +285,8 @@ class CGameEffect : public CDataArrays
     {
         return static_cast<float>(DurationMs() - ElapsedMs()) / 1000;
     }
-    // Sets how long a temporary effect has left, clamped to its duration. Not yet tested in the
-    // game.
+    // Sets how long a temporary effect has left, clamped to its duration. The effects a plugin is
+    // handed are copies, so it sets one through dao::effects::SetRemaining (dao/Effects.h).
     // @param seconds the time left. Zero or less ends the effect at its owner's next update
     void SetRemaining(float seconds)
     {

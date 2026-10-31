@@ -131,7 +131,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Hold the clock for effects, regeneration and their timers, and spend time at once (a fight in turns) | `dao::clock::Hold(true)`, `Advance(seconds)`; per creature: `OwnClock(id)`, `AdvanceObject(id, seconds)` | `dao/Clock.h` |
 | Run the world faster or slower | `dao::clock::SetSpeed(0.5f)` | `dao/Clock.h` |
 | The world's clock, as a save keeps it (day and ms) | `dao::clock::Now()` | `dao/Clock.h` |
-| Stop effects wearing off, or age them at once | `dao::effects::Hold(true)`, `Advance(seconds)`, `OnAgeing(fn)`; an effect's `Duration()`, `Remaining()`, `SetRemaining(s)` | `dao/Effects.h`, `dao/Structures.h` |
+| Stop effects wearing off, or age them at once | `dao::effects::Hold(true)`, `Advance(seconds)`, `OnAgeing(fn)`, an object's effects with their time left `On(object)`, one's time left set `SetRemaining(object, id, s)` | `dao/Effects.h`, `dao/Structures.h` |
 | List a creature's effects with the time each has left | `dao::effects::On(id)` | `dao/Effects.h` |
 | Hold the scripts' delayed events and deliver them on a clock of your own | `dao::timers::Hold`, `Advance`, `OwnClock(id)`, `AdvanceObject(id, seconds)`, `HoldKind(type)`, `HoldFrom(seconds)`, `Waiting()`, `WaitingFor(id)` | `dao/Timers.h` |
 | Know who is selected in the party bar | `dao::party::Selected()` | `dao/Party.h` |

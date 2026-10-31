@@ -48,11 +48,11 @@ void OwnClock(ObjectId owner, bool own = true);
 void AdvanceObject(ObjectId owner, float seconds);
 
 // Adds a callback that decides how much each temporary effect ages.
-// @param ageing called with the effect and the milliseconds it would age by once Hold and Advance
-//  are taken into account; returns the milliseconds to age it by instead
+// @param ageing called with the effect, the object it is on, and the milliseconds it would age by
+//  once Hold and Advance are taken into account; returns the milliseconds to age it by instead
 //
 // It runs on the game thread for every temporary effect on every update, so keep it quick.
-void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, std::int32_t ms)> ageing);
+void OnAgeing(std::function<std::int32_t(const CGameEffect &effect, ObjectId owner, std::int32_t ms)> ageing);
 
 // One effect on an object, as listed by On.
 struct Standing
@@ -72,5 +72,15 @@ struct Standing
 //
 // Call it on the game thread (dao/Frame.h), since it calls the GetEffects script command.
 std::vector<Standing> On(ObjectId object);
+
+// Sets how long one of an object's temporary effects has left, clamped to its duration.
+// @param owner the object the effect is on
+// @param effect the effect's id, as On lists it
+// @param seconds the time left; zero or less ends the effect
+// @return false if the object has no temporary effect of that id
+//
+// It takes when the effect next ages, on its owner's next update, which is while held too. Call it
+// on the game thread (dao/Frame.h), as On.
+bool SetRemaining(ObjectId owner, std::uint32_t effect, float seconds);
 
 } // namespace dao::effects

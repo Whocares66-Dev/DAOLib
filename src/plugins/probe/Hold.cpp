@@ -286,7 +286,7 @@ void OnFrame()
 // Every temporary effect passes here on every update, on the game thread
 // (dao/Effects.h): a grabbing effect not held before arms the hold, its
 // creator the grabber (the scripts apply it on the grabber, by the grabber).
-std::int32_t OnAgeing(const dao::CGameEffect &effect, std::int32_t ms)
+std::int32_t OnAgeing(const dao::CGameEffect &effect, dao::ObjectId /*owner*/, std::int32_t ms)
 {
     if (g_phase == Phase::kWaiting && effect.Type() == dao::script::EffectType::Grabbing &&
         std::ranges::find(g_heldEffects, effect.Id()) == g_heldEffects.end())

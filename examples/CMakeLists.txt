@@ -38,6 +38,9 @@ dao_apply_warnings(example_audio)
 add_daolib_plugin(example_cooldown SOURCES cooldown/Cooldown.cpp)
 dao_apply_warnings(example_cooldown)
 
+add_daolib_plugin(example_effects SOURCES effects/Effects.cpp)
+dao_apply_warnings(example_effects)
+
 add_daolib_plugin(example_resume SOURCES resume/Resume.cpp)
 dao_apply_warnings(example_resume)
 
