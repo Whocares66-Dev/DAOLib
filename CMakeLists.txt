@@ -471,6 +471,10 @@ if(DAO_BUILD_PLUGINS)
     # The phases plugin: how long each of a list of the game's functions takes per frame (#279).
     add_daolib_plugin(phases SOURCES src/plugins/phases/Phases.cpp)
     dao_apply_warnings(phases)
+
+    # The par plugin: the view's draws recorded on the worker threads (#280).
+    add_daolib_plugin(par SOURCES src/plugins/par/Par.cpp src/plugins/par/Verify.cpp)
+    dao_apply_warnings(par)
     target_include_directories(
         probe
         PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated"
