@@ -182,8 +182,6 @@ constexpr std::string_view kRestoreMessage = "ClientOptions.RestoreDefaults ";
 // OK's: OptionsMenu.CommitOptions sends it before it hides the screen; Cancel hides the screen
 // alone (OptionsMenu.as, read 2026-10-30 for DAOLib #272).
 constexpr std::string_view kCommitMessage = "ClientOptions.CommitOptions";
-// An option's name in the movie: the plugin's, marked as the library's.
-constexpr std::string_view kOptionPrefix = "DAOLib";
 
 // The ids the library gives its observers. The engine's own count down
 // from 0xFFFFFFFF, a movie's own count up from 0 (dao/Addresses.h), so
@@ -835,7 +833,7 @@ bool AddSection(std::wstring title, std::vector<Toggle> toggles, std::vector<Cho
     std::vector<std::string> options;
     for (const std::wstring &name : *names)
     {
-        std::string option(kOptionPrefix);
+        std::string option(detail::kOptionPrefix);
         for (const wchar_t c : name)
         {
             option.push_back(static_cast<char>(c)); // letters and digits
@@ -887,8 +885,8 @@ std::vector<options::EntryState> PluginEntries(options::Tab tab)
             continue;
         }
         EntryState state;
-        state.name =
-            std::wstring(entry.option.begin() + static_cast<std::ptrdiff_t>(kOptionPrefix.size()), entry.option.end());
+        state.name = std::wstring(entry.option.begin() + static_cast<std::ptrdiff_t>(detail::kOptionPrefix.size()),
+                                  entry.option.end());
         state.tab = tab;
         if (entry.toggle)
         {
@@ -937,7 +935,7 @@ namespace dao::detail
 
 std::optional<OptionControl> PlacedOption(std::wstring_view name)
 {
-    std::string option(options::kOptionPrefix);
+    std::string option(kOptionPrefix);
     for (const wchar_t c : name)
     {
         if (c > 0x7F)

@@ -13,6 +13,9 @@
 namespace dao::detail
 {
 
+// An option's name in the movie: the plugin's, marked as the library's.
+inline constexpr std::string_view kOptionPrefix = "DAOLib";
+
 // A plugin's control placed on the screen, as a click on it is sent.
 struct OptionControl
 {

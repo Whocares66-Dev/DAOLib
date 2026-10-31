@@ -211,18 +211,23 @@ double ToNumber(std::string_view text)
     return number;
 }
 
-// One of the game's controls as the recorder lists it (tools/options_record/frame_1/DoAction.as,
-// DAOLibOptionList): its clip's path, the helper that made it, and what it shows.
+// A control as the recorder lists it (tools/options_record/frame_1/DoAction.as, DAOLibOptionList):
+// its clip's path, its option in the movie, and what it shows. The game's own, or a plugin's
+// checkbox or choice: each plugin links its own copy of the library, so another plugin's controls
+// are seen only here (DAOLib #277).
 struct GameControl
 {
     std::string clip;
+    std::string option;
     EntryState state;
 };
 
 std::optional<double> CurrentGroup();
 
-// The game's controls the screen shows now, as the recorder the options movie was patched with
-// lists them; none without it. Their tab is the one shown, the only one whose controls exist.
+// The controls the screen shows now, as the recorder the options movie was patched with lists
+// them; none without it. Their tab is the one shown, the only one whose controls exist. A plugin's
+// is named as its plugin named it, its label and values its own text, where the game's are the
+// numbers of its strings.
 std::vector<GameControl> GameControls()
 {
     std::vector<GameControl> controls;
@@ -246,13 +251,16 @@ std::vector<GameControl> GameControls()
         }
         GameControl control;
         control.clip = std::string(fields[0]);
+        control.option = std::string(fields[2]);
         const std::string_view maker = fields[1];
         EntryState &state = control.state;
-        state.name = Wide(fields[2]);
-        state.label = Shown(fields[3]);
+        const bool plugin = control.option.starts_with(detail::kOptionPrefix);
+        const auto text = [plugin](std::string_view shown) { return plugin ? Wide(shown) : Shown(shown); };
+        state.name = Wide(plugin ? fields[2].substr(detail::kOptionPrefix.size()) : fields[2]);
+        state.label = text(fields[3]);
         state.value = ToNumber(fields[4]);
         state.enabled = fields[5] == "1";
-        state.game = true;
+        state.game = !plugin;
         state.tab = tab != kTabButtons.end() ? tab->tab : Tab::Game;
         if (maker == "MakeOptionToggleInit")
         {
@@ -269,7 +277,7 @@ std::vector<GameControl> GameControls()
             state.kind = Kind::Choice;
             for (const std::string_view value : Split(fields[6], '\x01'))
             {
-                state.values.push_back(Shown(value));
+                state.values.push_back(text(value));
             }
         }
         controls.push_back(std::move(control));
@@ -399,7 +407,11 @@ std::vector<EntryState> Entries(Tab tab)
     {
         for (const GameControl &control : GameControls())
         {
-            found.push_back(control.state);
+            // This plugin's own are listed already, from what it gave.
+            if (control.state.game || !detail::PlacedOption(control.state.name))
+            {
+                found.push_back(control.state);
+            }
         }
     }
     return found;
@@ -433,7 +445,7 @@ Refusal Set(std::wstring_view name, double value)
     }
     else
     {
-        // The game's own: on the screen only while its tab is shown.
+        // The game's own, or another plugin's: on the screen only while its tab is shown.
         const auto controls = GameControls();
         const auto game = std::ranges::find(controls, name, [](const GameControl &c) { return c.state.name; });
         if (game == controls.end())
@@ -448,7 +460,7 @@ Refusal Set(std::wstring_view name, double value)
         {
             return Refusal::OutOfRange;
         }
-        option = Utf8(game->state.name);
+        option = game->option;
     }
     // The message the control itself sends at a click or a drag (OptionsUtils' toggle, a
     // picker's PickEntryCallBack, a slider's change), sent through the movie's own

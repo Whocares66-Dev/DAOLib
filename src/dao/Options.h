@@ -231,8 +231,8 @@ struct EntryState
     Tab tab = Tab::Game;
 };
 
-// Returns the controls on a tab: the plugins' placed there, each plugin's that links this library,
-// and, while the tab is shown, the game's own. None if the screen is not open.
+// Returns the controls on a tab: this plugin's placed there, and, while the tab is shown, the
+// game's own and the other plugins' checkboxes and choices. None if the screen is not open.
 std::vector<EntryState> Entries(Tab tab);
 
 // Sets a control as the player's click or drag on it does: a checkbox to 0 or 1, a choice to an
