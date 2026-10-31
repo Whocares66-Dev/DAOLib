@@ -467,6 +467,10 @@ if(DAO_BUILD_PLUGINS)
     )
     dao_apply_warnings(probe)
     target_link_libraries(probe PRIVATE winmm)
+
+    # The phases plugin: how long each of a list of the game's functions takes per frame (#279).
+    add_daolib_plugin(phases SOURCES src/plugins/phases/Phases.cpp)
+    dao_apply_warnings(phases)
     target_include_directories(
         probe
         PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated"
