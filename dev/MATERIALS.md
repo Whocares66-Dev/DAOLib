@@ -429,6 +429,6 @@ The 40 `.mat` files the renderer loads at start (`LoadStandardMaterials` 0x004F8
 - Who a valid byte belongs to (0x004F6A70) and whose id (0x004F6A90): both are folded getters shared by Material and MaterialSemantic; the walks that use them (0x005032A8, 0x0046E367) read semantics.
 - Whether a pass's "current pass" cache (0x00C30990) skips binds: it does not; the only writes are zeros (0x00459950, 0x00527323), so every draw binds both shaders and the full state. Not a material rule, listed because both readings of `Apply` (0x00506550) differed.
 - Whether an `EffectParameter` outside a pass is deleted: it is not (0x0050CBC9).
-- The object manager's file order: the readings of the object manager agreed with the exe (".xml" first); `dev/FRAME_EFFECTS.md` says otherwise.
+- The object manager's file order: the readings of the object manager agreed with the exe (".xml" first); `dev/FRAME_EFFECTS.md` said otherwise and is corrected.
 - `MaterialEffectPass`: whether the named stages are played. One reading said yes; the pass loader replaces the list (0x0050B1BB, 0x00505EC0).
 - The `RequiresID` substitute: one reading had Default_Black unless a renderer option; the other a global name. Settled to `Default_Black`, or `default_missing` when the graphics object's byte +0x114 is set (0x00500E9E).
