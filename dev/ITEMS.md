@@ -394,6 +394,8 @@ Read 2026-10-18 in the GOG exe by lib-agent-2 (a subagent), for DAOParagonEngine
 - The item's owner (+0x4A8) back to −1, the equipment updated, `0x00757B90`, the stats taken off (`0x0071B3C0(item, −1.0)`), and unless `0x006AB100` answers, the appearance's slot cleared (`0x007489C0`), heraldry and the wield as above, then `0x0071B970`. Read.
 - **`EVENT_TYPE_UNEQUIP` (12):** as EQUIP, to the creature (caller the item): creator the creature, object 0 the item, int 0 the slot. Read.
 
+- **The inventory screen's close equips too** (gui-28, read 2026-11-01; DAOParagonEngine #351); [C] 0x00731855-0x00731881. `GUIInventory::Close` (0x007315E0), for each active party member whose active weapon set has nothing in the main hand and a non-shield (`Type` not 3) item in the off hand, unequips that item and equips it in slot 0, set -1, through the same `Unequip` (`0x006B7690`) and `Equip` (`0x006BC7F0`) as every other path, so their events fire. GUI.md has the rest.
+
 ### Read for DAOParagonEngine #169 (items)
 
 Read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169. All addresses are GOG 1.05. Names are the address library's where it has one; "(unnamed)" where it has none.
