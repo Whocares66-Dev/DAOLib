@@ -17,6 +17,49 @@
 #include <cstdint>
 #include <vector>
 
+// Notes on dynamic occlusion:
+//
+// Umbra decides what the camera can see from the level's cells and, for the
+// objects it is unsure of, occlusion queries: the GPU is asked how many pixels
+// of an object's box would be drawn. That costs its search, an occluder pass
+// and the queries; where little is hidden (the Brecilian Forest, 6.3 ms a frame
+// with it, 4.4 without) that is more than it saves, and where much is
+// (Denerim's market on an RTX 3090, 6.3 ms with it, 8.0 without) far less. On a
+// slower GPU it costs more: the 3090 locked to 600 MHz, Denerim's market too ran
+// faster without it (9.9 ms against 7.8). What is hidden is never seen either
+// way, so the picture is the same: a paused frame in Denerim differed only in
+// the HUD's blinking text and the hovered companion. What pays depends on what
+// the camera sees, which changes as it turns and the party moves, even within one
+// room: in Ostagar the spot the party loads in ran 15% faster without occlusion
+// culling and the camp a few metres on 15-25% slower. So the choice is made all
+// the time (#286): once a second a few frames are run the other way between
+// frames run the way in use, the comparisons are smoothed by exponential decay,
+// and the other way is taken when it is clearly faster, with the same margin to
+// go back, so the way does not flip to and fro. A frame is timed by the interval
+// between frames: whichever of the update thread, the render thread and the GPU
+// holds the frame up, the interval shows it; at a vsync or a frame cap both ways
+// take the cap's interval, the estimate stays and nothing changes that could be
+// seen, and below the cap the difference shows again. Timing the update thread's
+// work alone, less its wait for the render thread (the wait is
+// kIGraphicsInternal_WaitForRenderThread), hid what occlusion culling saves on
+// the GPU (the review of 9f33b51). View-frustum culling alone is Umbra's camera
+// given properties 1 for 3.
+//
+// A choice made once an area, from where the party loaded in (#285), lost 6% in
+// Ostagar; one made once a room the party stands in still lost 3%, an outdoor
+// room being a cell of terrain whose views differ as much. Probing at once when
+// the frames changed, with probes in turn, medians and a dwell after a switch,
+// did worse than a probe a second: the frame time of a party running moves 10%
+// every second or two, so the bursts never stopped (the forest +13% against
+// +22%), and Ostagar's switch back took as long (#286's comments).
+//
+// #281 also gave a query the GPU had not yet answered the same box's answer from
+// the frame before, so as not to wait for it. It was taken out (#285): measured
+// with the party running a route, it gained nothing, on the 3090 (Denerim,
+// six rounds, 5.78 ms against vanilla's 5.80) or at 600 MHz (Orzammar, 91 fps
+// against 92), since the update thread seldom waited on the GPU.
+//
+
 namespace perf
 {
 
@@ -51,9 +94,8 @@ constexpr double kFaster = 0.95;
 constexpr unsigned kFrustumAndOcclusion = 3;
 constexpr unsigned kFrustumOnly = 1;
 
-// The switch is the options screen's, on the game thread; the hook reads it on
-// the update thread, which is the same one: the frame callback runs just before
-// the game's update, and Umbra's camera is set within it.
+// The switch is set from the options screen and read by the frame callback and
+// the camera's hook.
 std::atomic<bool> g_on{true};
 std::atomic<bool> g_frustumOnly{false};
 std::atomic<bool> g_areaLoaded{false}; // set by the load's end, taken by the next frame
@@ -61,23 +103,6 @@ std::atomic<bool> g_areaLoaded{false}; // set by the load's end, taken by the ne
 using SetParametersFn = void(__fastcall *)(void *camera, int edx, int width, int height, unsigned properties, float a,
                                            float b);
 dao::Detour<SetParametersFn> g_setParameters;
-
-// The update thread's wait for the render thread, summed: a frame is timed less it, so
-// the frame's own work is compared, not the interval a vsync or a frame cap holds every
-// frame to whichever way runs (#286).
-using WaitFn = void(__fastcall *)(void *graphics, int edx);
-dao::Detour<WaitFn> g_wait;
-std::atomic<std::int64_t> g_waitTicks{0};
-
-void __fastcall Wait(void *graphics, int edx)
-{
-    LARGE_INTEGER start;
-    LARGE_INTEGER end;
-    QueryPerformanceCounter(&start);
-    g_wait.Original()(graphics, edx);
-    QueryPerformanceCounter(&end);
-    g_waitTicks.fetch_add(end.QuadPart - start.QuadPart, std::memory_order_relaxed);
-}
 
 // A function of umbra.dll's through the exe's import slot for it.
 template <class Fn> Fn Imported(dao::AddressId slot)
@@ -155,8 +180,7 @@ class Chooser
     {
         LARGE_INTEGER now;
         QueryPerformanceCounter(&now);
-        const std::int64_t waited = g_waitTicks.exchange(0, std::memory_order_relaxed);
-        const double ms = last_ == 0 ? 0.0 : static_cast<double>(now.QuadPart - last_ - waited) * msPerTick_;
+        const double ms = last_ == 0 ? 0.0 : static_cast<double>(now.QuadPart - last_) * msPerTick_;
         last_ = now.QuadPart;
         return ms;
     }
@@ -192,8 +216,9 @@ class Chooser
         const double around = Mean(around_);
         const double probe = Mean(probe_);
         End();
-        if (std::ranges::any_of(around_, [&](double each) { return each > around * kOutlier; }) ||
-            std::ranges::any_of(probe_, [&](double each) { return each > around * kOutlier; }))
+        const double typical = Median(around_);
+        if (std::ranges::any_of(around_, [&](double each) { return each > typical * kOutlier; }) ||
+            std::ranges::any_of(probe_, [&](double each) { return each > typical * kOutlier; }))
         {
             return;
         }
@@ -202,10 +227,10 @@ class Chooser
         {
             frustumOnly_ = !frustumOnly_;
             g_frustumOnly.store(frustumOnly_, std::memory_order_relaxed);
-            estimate_ = -estimate_;
-            spdlog::debug("dynamic occlusion: {} (the other way was {:.0f}% slower)",
+            spdlog::debug("dynamic occlusion: {} (the way left was {:.0f}% slower)",
                           frustumOnly_ ? "view-frustum culling alone" : "occlusion culling",
-                          (std::exp(estimate_) - 1.0) * 100.0);
+                          (std::exp(-estimate_) - 1.0) * 100.0);
+            estimate_ = -estimate_;
         }
     }
 
@@ -213,6 +238,13 @@ class Chooser
     {
         position_ = -1;
         g_frustumOnly.store(frustumOnly_, std::memory_order_relaxed);
+    }
+
+    static double Median(std::vector<double> ms)
+    {
+        const auto middle = ms.begin() + static_cast<std::ptrdiff_t>(ms.size() / 2);
+        std::ranges::nth_element(ms, middle);
+        return *middle;
     }
 
     static double Mean(const std::vector<double> &ms)
@@ -268,8 +300,7 @@ bool LeftOut()
 bool Attach()
 {
     const auto setParameters = Imported<SetParametersFn>(dao::addr::kUmbra_Camera_SetParameters_Import);
-    return setParameters != nullptr && g_setParameters.AttachTo(setParameters, &SetParameters) &&
-           g_wait.Attach(dao::addr::kIGraphicsInternal_WaitForRenderThread, &Wait);
+    return setParameters != nullptr && g_setParameters.AttachTo(setParameters, &SetParameters);
 }
 
 } // namespace
@@ -283,10 +314,7 @@ std::optional<dao::options::Toggle> InstallDynamicOcclusion()
     }
     if (!Attach())
     {
-        g_setParameters.Detach();
-        g_wait.Detach();
-        spdlog::warn("dynamic occlusion: Umbra's camera or the wait for the render thread could not be reached, so "
-                     "it is not in");
+        spdlog::warn("dynamic occlusion: Umbra's camera could not be reached, so it is not in");
         return std::nullopt;
     }
     dao::OnFrame([] {
