@@ -82,7 +82,8 @@ Shared facts, all checked:
 An item's value and the prices the store screen shows: see ITEMS.md, "An item's value".
 
 ## Not read
-- 0x005C6650's meaning (the "Store" token binding), `GUI::GUIStore`'s handlers, `CloseStoreMessage`, and what closing does to the token.
+- `GUI::GUIStore`'s handlers' bodies (0x00729980, 0x007299C0; the views are re-filtered by watchers on `Party.Backpack` and `Store.Inventory`), and what `Store::HandleMessage_CloseStoreMessage` (0x007EC8B0) moves with `ItemLocation::AddItemTo`.
+- Answered (gui-24/27, read 2026-11-01; DAOParagonEngine #351); two readings reconciled: 0x005C6650 is `TokenManager::SetRootObject(hash, object)`, the "Store" binding (it sets the object through the attribute's slot +0x54 when the root exists, else makes an `Attribute<SmartObject*>` and `SetRoot`); the store screen's close (0x00729820) sends `CloseStoreMessage` to the bound store, **unbinds the token with `TokenManager::RemoveRootObject` (0x005C6710)**, which does not delete the store, and frees the screen's two item views. See `dev/GUI.md`, "The store screen's views and its close".
 - Whether `SetFullScreenGUIMessage` refuses while another full-screen GUI or a conversation is up.
 - The `WillNotBuy`/`WillOnlyBuy` container's class (0x0086BEE0, 0x008663A0); the buying loop's branch for n > 1 non-stacking items (0x007ED4A0) in detail.
 - The SetStoreMoney stack imbalance's exact effect in a running script.
