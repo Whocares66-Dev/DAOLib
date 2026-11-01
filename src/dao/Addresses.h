@@ -770,7 +770,7 @@ DAO_ADDRESS(kInputModes_Get, 24303)
 // through this: __thiscall (int out[2], const int *input), returning out,
 // both 0 if the input is not allowed now. Its two axes are read from the
 // devices' state (0x0087DA50), not from Windows: the exe's one
-// GetCursorPos (Eclipse::PlatformWin32's slot 17, 0x004139C0) only says
+// GetCursorPos (Eclipse::PlatformWin32's slot 16, 0x004139C0) only says
 // whether the cursor is at the window's edge, for scrolling. The name is
 // ours.
 DAO_ADDRESS(kInput_AxisPair, 24340)
