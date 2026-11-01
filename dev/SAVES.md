@@ -97,7 +97,7 @@ Read 2026-10-22 in the GOG exe (ghidra-dao, read-only) and in a save with tools/
 - [C] It builds the wide string `L"Head_Morph"` (0x004C2480) and calls `GraphicsStructures::Morph` 0x0056FA20 with the type tag 0x20204350 (`"PC  "`) and an out buffer and size.
 - [I] The name passed is the morph file's own name. This rests on the decompile's data flow and on the game's own saves holding `Head_Morph` as the file's name (below).
 - [C] It then calls 0x00643420 to get a struct, takes its field 0x4236 (16950) through 0x00A5A8E0, resizes it with 0x004DD730(size), and copies the bytes one by one with 0x004782F0.
-- [I] The struct from 0x00643420 is the PlayerChar struct that `BuildAppearanceModel` reads (the same call and field are read there).
+- The struct from 0x00643420 (`SaveGame::GetPlayerCharCharStruct`) is field 16208, SavegamePlayerCharChar, inside the PLYR struct (16002), the one `BuildAppearanceModel` reads (corrected 2026-10-31, two readings reconciled: this had it as the PlayerChar struct itself, [I]).
 - [C] When the paperdoll has a hero (this+0x58), it copies the hero's CAppearance (hero+0x7B0, 0x0074A610) and calls `CCCreature::SetAppearance`. In game mode 0xB it first sets hero+0x7B4 = 1.
 - [C] Before all this it runs the paperdoll's queued commands (this+0x2E0..0x2E4) and clears +0x2EC.
 - Unread: which step of character creation calls 0x00803000.
