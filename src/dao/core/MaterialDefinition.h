@@ -14,8 +14,18 @@
 // InternalParameters (Type, Name, SamplerName, Default, Usage, Stage, Size), ParameterSetRefs by
 // name, RequiredStreamData (a vertex stream's name) and EffectParameters. A parameter is
 // repeated in every pass, and its default is not one per file: 797 times it differs between the
-// blocks of one semantic (shader model 2's against 3's), so the tree is kept whole. Which block
-// the engine takes is not read here.
+// blocks of one semantic (shader model 2's against 3's), so the tree is kept whole.
+//
+// Which block the engine takes (read in the GOG exe 2026-11-01, two readings and a check): the
+// first, in file order, whose tests hold and whose technique has every pass valid on the device,
+// a block's own before its nested blocks' (Graphics::MaterialLogicBlock::SelectTechnique
+// 0x005073C0; validity 0x00506E40, cached per technique). A test is bits (0x005095A0, 0x0050ADA0):
+// ShaderModel 3 is 0x1, ShaderModel 2 is 0x2 and drops any Detail, so a Detail (HIGH 0x4, MEDIUM
+// 0x8, LOW 0x10) counts only on shader model 3. They are held (0x00507280) against the device's
+// shader models and the detail level g_graphicsDetailLevel (0x00BF22C8): level 1 takes LOW, 2 LOW
+// or MEDIUM, 3 any, and a test with no Detail any level. At level 0 every shader model 3 block is
+// refused and a shader model 2 block is taken without asking the device. When no block gives a
+// technique the semantic has none (dev/CRASHES.md, #149).
 #pragma once
 
 #include <optional>
