@@ -1648,8 +1648,9 @@ DAO_ADDRESS(kMultithreading_Sleep, 5425)
 // and an answer of 2 puts it back. A task (Multithreading::Task,
 // constructor 0x004C4DA0) keeps its kind at +0xC, and 0x004BE610 queues it
 // for that kind's thread, or runs it where it stands when the kind has
-// none (the task's slot 1, which calls its slot 2 with a sixtieth of a
-// second). The kinds, from the push before each class's call to the
+// none (the task's slot 1, 0x00401C70, which calls its slot 2 with the
+// float 1000.0 at 0x00ADDCB0; read 2026-11-01, where this said a sixtieth
+// of a second). The kinds, from the push before each class's call to the
 // constructor: 5, the streaming thread, for ConstructObjectTask,
 // ConstructMergeObjectTask, ConstructCrustObjectTask, TextureLoadTask,
 // RIMLoadTask, LoadVFXTask and LoadModuleResourcesTask; 3, the file thread,
@@ -2536,7 +2537,11 @@ DAO_ADDRESS(kCCArea_EventHandler, 13685)
 // *lines)) gives the first NPC line of a list to pass it; PlayLine speaks
 // an NPC line and offers its replies (OfferReplies, which keeps the
 // children that are replies and pass); Advance goes on from a chosen
-// reply; End frees the participants. Dialogue mode keeps the conversation
+// reply; the destructor (0x007F0F50; its three callers 0x0068CC0D,
+// 0x006912D0 and 0x006FF148 each delete the object straight after, read
+// 2026-10-31) frees the participants and runs the end action
+// (dev/PLOTS.md), so a conversation ends as it is deleted; this row was
+// kConversation_End. Dialogue mode keeps the conversation
 // on the screen at +0x1C8, the NPC line at +0x2C0 and the replies shown
 // at +0x1A8 (a std::vector of line indices, in the order shown, a
 // fast-path reply first): ShowResponses (__thiscall (list, flag), `ret
@@ -2550,7 +2555,7 @@ DAO_ADDRESS(kConversation_FirstAvailable, 21313)
 DAO_ADDRESS(kConversation_PlayLine, 21328)
 DAO_ADDRESS(kConversation_OfferReplies, 21326)
 DAO_ADDRESS(kConversation_Advance, 21324)
-DAO_ADDRESS(kConversation_End, 21312)
+DAO_ADDRESS(kConversation_Destructor, 21312)
 // Who speaks a line and to whom (dao/Dialogue.h), read 2026-10-03:
 // LineSpeaker and LineListener, __thiscall on the conversation (line),
 // `ret 4`, answering an object's id. Each reads the line's field from the

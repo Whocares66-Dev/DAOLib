@@ -122,9 +122,9 @@ Creature loader against the creature writer (loader table in sav-cre.md):
 - 16475: writer writes it always (`Has`); loader reads it only when the load-state pair is 0 (sav-cre step 31) - the value is dropped on a saved-game load; harmless.
 - 16456 is never written nor read.
 
-### D. The GFF4 write helpers (the struct builder = `ecx`: `[ecx]` file, `[ecx+4]` data base, `[ecx+8]` template index; all `ret 8`, args `(id, &value)`)
+### D. The GFF4 write helpers (the struct builder = `ecx`: `[ecx]` the `Block*`, `[ecx+4]` the struct's byte offset inside that block's data, `[ecx+8]` the template index (corrected 2026-11-01 from 0x004783B0 and 0x00474E10); all `ret 8`, args `(id, &value)`)
 
-Each does: look up the field by id in the builder's template (`0x004D9F10`, `0x004D5230`); if absent, or the type word's bit 31 (list), 30 (struct) or 29 (reference) is set, or the type differs from the helper's: do nothing; else store at `data + field offset`. (C: read for 0x00478340, 0x004783B0 in full, the rest by pattern and by the stored-type compare.)
+Each does: look up the field by id in the builder's template (`0x004D9F10`, `0x004D5230`); if absent, or the type word's bit 31 (list), 30 (struct) or 29 (reference) is set, or the type differs from the helper's: do nothing; else store at `block.data + offset + field offset`. (C: read for 0x00478340, 0x004783B0 in full, the rest by pattern and by the stored-type compare.)
 
 | helper | type (GFF4) | stores via | seen with |
 |---|---|---|---|
@@ -152,7 +152,7 @@ Lists and structs (writer side):
 |---|---|
 | 0x004D9F90(id) | `Has` |
 | 0x004D9F60(id) | the field descriptor (type word at `+4`), used by the name step |
-| 0x004D9FC0(id, &handle) | the struct field's handle `{file, offset, template}` |
+| 0x004D9FC0(id, &handle) | the struct field's handle `{Block*, offset in the block, template}` |
 | 0x00643310(id, &handle) | the **referenced** struct field's handle (`0x2000` ref bit); `0x00642DC0` = the ref is null; `0x00642D90` allocates the referenced struct; `0x00643220` its data; `0x0069F9F0` = `0x004DC680` sets the ref null |
 | 0x004DA040(id, &handle) | a struct-list field's handle; **0x004DD730(handle, n)** sets its count (0 clears it to null); `0x004DB2E0(handle, i)` the i-th element's builder |
 | 0x004DA130(id, &handle) | a generic-list field's handle (variables) |
@@ -234,7 +234,7 @@ Read 2026-10-21 by lib-agent-2 in `game\DAOrigins.exe` (GOG 1.05, base 0x400000)
 
 ### The base writer CCObject 0x00697EE0 (slot 21), in write order (C)
 
-Arguments: `this` = the object, stack = the struct handle {file, offset, template} (a null file does nothing).
+Arguments: `this` = the object, stack = the struct handle {Block*, offset in the block, template} (a null block does nothing).
 
 | order | id | name | type | value / source | condition |
 |---|---|---|---|---|---|

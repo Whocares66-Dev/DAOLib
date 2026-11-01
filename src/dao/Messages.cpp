@@ -1,8 +1,9 @@
 // Sending the engine's messages, and the detour on its dispatch that lets plugins watch and take
 // them.
 //
-// A message class derives from Messages::GameMessage and Messages::Message (RTTI), polymorphic,
-// with 11 virtual functions; slot 0 answers its type id, slot 1 clones it, and the clone copies
+// A message class derives from Messages::Message (RTTI), most through Messages::GameMessage (11
+// virtual functions; 111 classes derive Message directly and have 7), polymorphic; slot 0 answers
+// its type node (a static {id, parent} the registry walks), slot 1 clones it, and the clone copies
 // exactly its fields. The layouts in the header are read from the clone and the handler that uses
 // them; every class's size and field offsets are in dev/messages.csv (tools/messages.py), their
 // meanings not yet. Send, inline in the header, calls the engine's own Messages::Send

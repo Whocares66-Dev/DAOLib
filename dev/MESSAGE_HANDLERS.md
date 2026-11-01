@@ -7,7 +7,7 @@ Messages::Private::MemberFunctionMessageHandler
     <GameModeController, UserTogglePauseMessage, &GameModeController::HandleMessage>
 ```
 
-There are 314 of these in the exe, over 50 owner classes (2026-09-29). So the RTTI alone lists every message each class answers. `tools/message_handlers.py` also finds each handler's method. The template's invoke slot is shared code that calls a member function pointer stored in the handler at `+8`, with a `this` adjustment at `+0xC`. The method's address is therefore where the handler is built, not in any vtable:
+There are 314 of these in the exe, over 50 owner classes (2026-09-29). So the RTTI alone lists every message each class answers. `tools/message_handlers.py` also finds each handler's method. The template's invoke slot is shared code that calls a member function pointer stored in the handler at `+8`, with a `this` adjustment at `+0xC` (0 in every handler). That is the default invoker (0x0060C480). Three others first subtract the owner's `Messages::MessageReceiver` base from the receiver the dispatcher passes: 0x006A4CF0 (−0x18: CCParty, CCCreature, CCPlaceable, CCItem, Store; 38 vftables), 0x0067BC60 (−0xD4: CCArea), 0x004785A0 (−8: OnlineFeatures); a null receiver is passed over. The 13 `GUI::ScaleformManager` handlers use 0x00511350, which calls the function at +4 with no adjustment. So a handler's `this` is always the owner's own address (read 2026-11-01, lib-agent-2). The method's address is therefore where the handler is built, not in any vtable:
 
 ```
 push  0x10 ; call operator new           ; 0x006407B0, in a GameModeController method

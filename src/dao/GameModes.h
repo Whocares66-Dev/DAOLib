@@ -275,17 +275,18 @@ class GameModeController
     // @return the controller, or null if it is not a CameraControllerExplore
     CameraController *Camera() const;
 
-    // Returns the mode before the current one. This meaning is inferred from the value after
-    // loading a save.
+    // Returns the mode before the current one: the number SwitchMode (0x00641D30) stores at +0x88
+    // from the mode it leaves (0x00641DA4), -1 when there was none.
     GameMode PreviousMode() const
     {
         return static_cast<GameMode>(Read<std::int32_t>(kPreviousMode));
     }
 
-    static constexpr std::size_t kModes = 0x58;        // offset of the pointer to the modes' array
-    static constexpr std::size_t kCamera = 0x60;       // offset of the camera controller
-    static constexpr std::size_t kMode = 0x78;         // offset of the current mode
-    static constexpr std::size_t kPreviousMode = 0x7C; // offset of the previous mode
+    static constexpr std::size_t kModes = 0x58;         // offset of the pointer to the modes' array
+    static constexpr std::size_t kCamera = 0x60;        // offset of the camera controller
+    static constexpr std::size_t kMode = 0x78;          // offset of the current mode
+    static constexpr std::size_t kPreviousMode = 0x88;  // offset of the previous mode's number (0x00641DA4)
+    static constexpr std::size_t kRequestedFrom = 0x7C; // the mode current when the switched-to request was made
     // The number of entries in the array of modes, one per GameMode.
     static constexpr std::size_t kMaxModes = 13;
 

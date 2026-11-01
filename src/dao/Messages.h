@@ -92,13 +92,17 @@ inline bool Send(void *receiver, const Message &message)
 // the receiver's vtable). The engine hands a handler its receiver as a Messages::MessageReceiver,
 // and a game object's is at +0x18, after its CGameObject (tools/daoexe.py --bases: CCCreature,
 // CCPlaceable, CCItem, CCObject, CCParty and Store alike), where a game mode's and Journal's is at
-// +0. The observers' receiver is the same pointer, which dao::TypeName names by the object's class.
+// +0. A CCArea is a CGameObject here but its receiver is at +0xD4 (tools/daoexe.py --bases CCArea),
+// and OnlineFeatures' at +8: the handlers' invokers subtract 0x18 for the creature, placeable, item,
+// party and store, 0xD4 for the area and 8 for OnlineFeatures (0x006A4CF0, 0x0067BC60, 0x004785A0;
+// read 2026-11-01). The observers' receiver is the same pointer, which dao::TypeName names by the object's class.
 // Seen in play 2026-10-24: an EquipItemMessage sent so to a creature arrived at its handler and
 // equipped the item.
 
 // Sends a message to a game object: a creature, a placeable or an item, whose handlers take the
 // messages the movies send them ("GUI.SelectedChar.EquipItem", "Container.AcquireItem").
-// @param object the object; null sends nothing and answers false
+// @param object a creature, placeable, item, party or store; not an area, whose receiver is at
+//        +0xD4; null sends nothing and answers false
 // @return as the other Send
 inline bool Send(CGameObject *object, const Message &message)
 {

@@ -40,15 +40,15 @@ The wider probe (`dev/PROBE.md`) ran through startup, the main menu, loading a s
 | Mode | What | Evidence |
 |---|---|---|
 | 0 | Exploring | Unpaused, script commands running |
-| 3 | A menu screen: inventory, character | Entered as `GameModeGUI`'s slot 7 paused the game, left as its slot 8 unpaused it, three times |
-| 4 | Dialogue | Entered as `GameModeDialog`'s slot 7 ran, twice |
+| 3 | A menu screen: inventory, character | Entered as `GameModeGUI`'s slot 6 paused the game, left as its slot 7 unpaused it, three times |
+| 4 | Dialogue | Entered as `GameModeDialog`'s slot 6 ran, twice |
 | 9 | Loading | A save loading, and an area transition |
 | 11 | The main menu | Paused, from start-up until the save was loaded |
 | 8, 10 | Start-up | Briefly, before the main menu |
 
 So the guess from the decompilation that mode 3 was dialogue was wrong. Mode 3 is the menu screens, and the voice categories kept playing there are for a conversation left open under a menu.
 
-**Every game mode has an enter and a leave.** Slot 7 of a `GameMode*` class's vtable runs when the mode is entered and slot 8 when it is left: `GameModeGUI` pauses in its slot 7 (`0x007187D0`) and unpauses in its slot 8 (`0x007188C0`), `GameModeDialog` unpauses in its slot 7 (`0x0068FE40`), `GameModeCharGen` pauses in its slot 7 (`0x00719540`). A turn-based mode can hook these pairs to know when combat, dialogue or a menu starts and ends, or add a mode of its own.
+**Every game mode has an enter and a leave.** Slot 6 of a `GameMode*` class's vtable (counted from 0, as in the rest of this note; corrected 2026-11-01 from slots 7 and 8) runs when the mode is entered and slot 7 when it is left: `GameModeGUI` pauses in its slot 6 (`0x007187D0`, vtable 0x00B172A4) and unpauses in its slot 7 (`0x007188C0`), `GameModeDialog` unpauses in its slot 6 (`0x0068FE40`), `GameModeCharGen` pauses in its slot 6 (`0x00719540`). A turn-based mode can hook these pairs to know when combat, dialogue or a menu starts and ends, or add a mode of its own.
 
 **Pausing stops the scripts.** While exploring, 200 to 300 script commands run a second. While paused on a menu screen, none do: every ten-second window paused all the way through counted zero. So the pause clock stops the script scheduler, and with it any AI that is scripted. That is most of what a turn-based mode needs from a clock, and it is already the engine's own.
 

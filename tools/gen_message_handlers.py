@@ -75,7 +75,7 @@ def header(rows, img):
         "    const char *message;",
         "    AddressId id;             // the function, as dao/Addresses.h has them",
         "    std::uintptr_t address;   // where the GOG build's listing has it",
-        "    std::int32_t thisAdjust;  // added to the owner's address before the call",
+        "    std::int32_t thisAdjust;  // the stored this-adjustment, 0 for every handler: the invoker subtracts the receiver's base (dev/MESSAGE_HANDLERS.md)",
         "    bool trivial;             // a stub the compiler shares: its calls say nothing",
         "    bool confirmed;           // ret 4 read at its end",
         "};",

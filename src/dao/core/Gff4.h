@@ -239,9 +239,10 @@ class Editor
     // the data, and returns the copies, for this Editor's Set calls. Nothing
     // for a field that is no such list, or a struct of another template.
     std::optional<std::vector<Struct>> CopyList(const Struct &in, std::uint32_t label, std::span<const Struct> like);
-    // Appends a blank struct of the template at `templateIndex`, as the game's own blanks are: every list,
-    // string and reference null (0xFFFFFFFF), a talk-table string's reference null and its text 0, a struct
-    // held in place blank in turn, every other byte 0. Returns it for this Editor's Set calls. Nothing for an
+    // Appends a blank struct of the template at `templateIndex`: every list, string and reference null
+    // (0xFFFFFFFF), a talk-table string's reference null and its text 0, a struct held in place blank in
+    // turn, every other byte 0 (the engine's own writer fills its fresh structs with 0xFF throughout, so a
+    // scalar nothing sets reads -1 there; dev/SAVE_WRITER.md). Returns it for this Editor's Set calls. Nothing for an
     // index the file lacks. DAOLib #221.
     std::optional<Struct> New(std::size_t templateIndex);
     // Points a struct field held by reference at a struct of the field's template (as Add and New return),
