@@ -144,7 +144,7 @@ Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagen
 - **The zoom input's details:**
   - The wheel and PageUp/PageDown reach the setting through 0x007EDBD0: p = d × `ctl+0x4C`, the setting += p, then slot 1 (`OnZoomChanged` 0x0076FAA0 in explore, `ClampZoom` 0x007EE680 in the base). So a held key moves the setting by `MouseZoomSensitivity`² × 0.25 a second (1.0 at the default 2.0).
   - **`ctl+0x26`**, set by the tactical mode's sphere test (0x006C3180 → 0x006C2930; "Collision" below), lets a zero change through. In the tactical view it then lifts the setting to 0.5, with no input.
-  - **ClampZoom** clamps to [−1, 1], clears `ctl+0x26`, and for a positive change (or a setting at 1) sends the tutorial event 0x429 (`TrainingTutorial::SendEvent` 0x00693290, module +0x498).
+  - **ClampZoom** clamps to [−1, 1], clears `ctl+0x26`, and for a positive change (or a setting at 1) sends the tutorial event 0x429 (`TutorialControl::SendEvent` 0x00693290, module +0x498, the TutorialControl that 0x006939E0 builds (vftables 0x00B0EAB4 and 0x00B0EA9C, stored at 0x0060487F); corrected 2026-10-31 by lib-agent-2 from TrainingTutorial).
 - **Mouse y in the tactical view:** `ReadInput` (0x007EDC60) asks slot 3 (0x0076EF10, `ctl+0x90 != 0`; the table's `MouseYZooms` is a misnomer) at 0x007EDEBF and 0x007EDF91. When it is true, mouse y adds neither to the drag's latch nor to the pitch.
 
 ### The mouse buttons, and a click in the world (read 2026-10-23 by lib-agent-2 with subagents, for DAOParagonEngine; static reading, nothing played)
