@@ -1049,7 +1049,7 @@ Tally over the VO projects:
 
 ##### `sound_settings.gda` row 14, the "conversation" ×1.8 (checked)
 
-- The settings loader is 0x005B5F20: table 273 into the renderer (0x005B9020's object). The renderer's constructor sets the same defaults (0x005B8E50).
+- The settings loader is 0x005B5F20: table 273 into the renderer (0x005B9020's object). The sound manager's constructor, `SoundManager::SoundManager` (0x005B8DF0..0x005B8F6F), sets defaults of its own on the manager (0x005B8E50 is the `fld`/`fstp` into manager+0x2C inside it); it does not build the renderer, which it leaves null at +0x90 (`mov [esi+0x90], 0` at 0x005B8F1F) for 0x005BD660/0x005BDD40 to make later. That the manager's defaults are "the same" as the settings loader's renderer offsets is not read (corrected 2026-10-31, two readings reconciled: 0x005B8E50 was called the renderer's constructor, but it lies inside SoundManager's constructor and the renderer is the object at manager+0x90).
 
 | Renderer offset | Row | Value |
 |---|---|---|
