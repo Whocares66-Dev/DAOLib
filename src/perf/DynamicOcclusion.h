@@ -1,5 +1,5 @@
 // Dynamic occlusion: Umbra's occlusion culling left out where it costs more
-// than it saves (DAOLib issues #281 and #285, of #279).
+// than it saves (DAOLib issues #281, #285 and #286, of #279).
 //
 // Umbra decides what the camera can see from the level's cells and, for the
 // objects it is unsure of, occlusion queries: the GPU is asked how many pixels
@@ -10,11 +10,26 @@
 // slower GPU it costs more: the 3090 locked to 600 MHz, Denerim's market too ran
 // faster without it (9.9 ms against 7.8). What is hidden is never seen either
 // way, so the picture is the same: a paused frame in Denerim differed only in
-// the HUD's blinking text and the hovered companion. So after each area's load
-// both ways are timed, 60 frames each, and the one with frames 5% shorter kept
-// until the next load, not changed while the party moves about (the user,
-// 2026-10-31); view-frustum culling alone is Umbra's camera given properties 1
-// for 3.
+// the HUD's blinking text and the hovered companion. What pays depends on what
+// the camera sees, which changes as it turns and the party moves, even within one
+// room: in Ostagar the spot the party loads in ran 15% faster without occlusion
+// culling and the camp a few metres on 15-25% slower. So the choice is made all
+// the time (#286): once a second a few frames are run the other way between
+// frames run the way in use, the comparisons are smoothed by exponential decay,
+// and the other way is taken when it is clearly faster, with the same margin to
+// go back, so the way does not flip to and fro. A frame is timed less the
+// update thread's wait for the render thread, so under vsync or a driver's
+// frame cap, which hold every frame to the same length, the frame's own work is
+// still compared. View-frustum culling alone is Umbra's camera given properties
+// 1 for 3.
+//
+// A choice made once an area, from where the party loaded in (#285), lost 6% in
+// Ostagar; one made once a room the party stands in still lost 3%, an outdoor
+// room being a cell of terrain whose views differ as much. Probing at once when
+// the frames changed, with probes in turn, medians and a dwell after a switch,
+// did worse than a probe a second: the frame time of a party running moves 10%
+// every second or two, so the bursts never stopped (the forest +13% against
+// +22%), and Ostagar's switch back took as long (#286's comments).
 //
 // #281 also gave a query the GPU had not yet answered the same box's answer from
 // the frame before, so as not to wait for it. It was taken out (#285): measured

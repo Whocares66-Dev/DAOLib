@@ -2914,4 +2914,13 @@ DAO_DATA(kUmbra_OcclusionQuery_GetVertexCount_Import, 60308)
 // properties 3 (view frustum 1 | occlusion 2) while the global byte 0x00BF2853
 // is set; 1 gives view-frustum culling alone.
 DAO_DATA(kUmbra_Camera_SetParameters_Import, 60332)
+// The update thread's wait for the render thread (read 2026-10-31, DAOLib #286):
+// __thiscall, no arguments, on the graphics object [0x00C31650]; it takes the
+// threaded driver at +0x118 and, if there is one, spins (SwitchToThread) in
+// 0x00A1ECE0 until the commands it recorded are all played. 52 callers, among
+// them scene preparation (0x0052A555), the frame's render (0x0052A63A) and the
+// threaded Present when its 6 MB buffer is full (0x00A228DD). The device's Present runs
+// on the render thread, so under vsync or a driver's frame cap the update
+// thread's frame takes the wait here, not in Present.
+DAO_ADDRESS(kIGraphicsInternal_WaitForRenderThread, 7083)
 } // namespace dao::addr

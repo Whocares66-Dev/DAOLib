@@ -10,9 +10,12 @@
 
 #include <Windows.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace perf
 {
@@ -23,17 +26,26 @@ namespace
 constexpr const wchar_t *kSection = L"DynamicOcclusion";
 constexpr const wchar_t *kKey = L"On";
 
-// The choice, made once after each area's load and kept until the next: the
-// first kSettle frames left out, then kMeasured frames timed with occlusion
-// culling and kMeasured with view-frustum culling alone (after kSettle more);
-// the second way is kept if its frames are kFaster shorter. A frame longer
-// than kLongMs is a hitch and starts the check again, kMostTries times at the
-// most; past that, occlusion culling stays.
+// The choice, made all the time from probes (#286): every kProbeMs of frames, kBlock
+// frames are run the other way between kBlock before and kBlock after run the way in
+// use, so the view is nearly the same for all three, and the probe's mean frame over
+// theirs is one sample of how the other way compares here. A block's first frame after
+// a change of way, which the other way's work may still hold up, is left out; a probe
+// with a frame over kLongMs, or over kOutlier times its neighbours' mean, is a hitch
+// and is dropped. The samples' logarithms are smoothed by exponential decay, each
+// weighted kWeight, so a probe's noise barely moves the estimate while a change of view
+// does within a few seconds; the other way is taken when the estimate says it is
+// kFaster shorter, and the estimate is then turned about, so going back needs the same
+// margin the other way and a view near the line does not flip to and fro (the user,
+// 2026-10-31: "we don't want jittering"). The first kSettle frames after a load are
+// left out, and a load starts again from occlusion culling, as the game does.
 constexpr int kSettle = 60;
-constexpr std::size_t kMeasured = 60;
-constexpr double kFaster = 0.95;
+constexpr int kBlock = 8;
+constexpr double kProbeMs = 1000.0;
 constexpr double kLongMs = 100.0;
-constexpr int kMostTries = 5;
+constexpr double kOutlier = 2.5;
+constexpr double kWeight = 0.3;
+constexpr double kFaster = 0.95;
 
 // Umbra's camera properties: view-frustum culling 1, occlusion culling 2.
 constexpr unsigned kFrustumAndOcclusion = 3;
@@ -49,6 +61,23 @@ std::atomic<bool> g_areaLoaded{false}; // set by the load's end, taken by the ne
 using SetParametersFn = void(__fastcall *)(void *camera, int edx, int width, int height, unsigned properties, float a,
                                            float b);
 dao::Detour<SetParametersFn> g_setParameters;
+
+// The update thread's wait for the render thread, summed: a frame is timed less it, so
+// the frame's own work is compared, not the interval a vsync or a frame cap holds every
+// frame to whichever way runs (#286).
+using WaitFn = void(__fastcall *)(void *graphics, int edx);
+dao::Detour<WaitFn> g_wait;
+std::atomic<std::int64_t> g_waitTicks{0};
+
+void __fastcall Wait(void *graphics, int edx)
+{
+    LARGE_INTEGER start;
+    LARGE_INTEGER end;
+    QueryPerformanceCounter(&start);
+    g_wait.Original()(graphics, edx);
+    QueryPerformanceCounter(&end);
+    g_waitTicks.fetch_add(end.QuadPart - start.QuadPart, std::memory_order_relaxed);
+}
 
 // A function of umbra.dll's through the exe's import slot for it.
 template <class Fn> Fn Imported(dao::AddressId slot)
@@ -69,46 +98,28 @@ void __fastcall SetParameters(void *camera, int edx, int width, int height, unsi
     g_setParameters.Original()(camera, edx, width, height, properties, a, b);
 }
 
-// The choice between the two ways, from the frames' lengths, on the game thread.
+// The way frames run, chosen from probes of the other way, on the game thread.
 class Chooser
 {
   public:
-    // An area has loaded: check again, from occlusion culling.
+    // An area has loaded: occlusion culling, and nothing known of the other way.
     void AreaLoaded()
     {
-        g_frustumOnly.store(false, std::memory_order_relaxed);
-        tries_ = 0;
-        Begin();
+        Reset();
+    }
+
+    // Turned off: on again, the choice starts afresh.
+    void Off()
+    {
+        Reset();
+        last_ = 0;
     }
 
     void Frame()
     {
-        LARGE_INTEGER now;
-        QueryPerformanceCounter(&now);
-        const double ms = last_ == 0 ? 0.0 : static_cast<double>(now.QuadPart - last_) * msPerTick_;
-        last_ = now.QuadPart;
-        if (!g_on.load(std::memory_order_relaxed))
+        const double ms = FrameMs();
+        if (ms <= 0.0)
         {
-            g_frustumOnly.store(false, std::memory_order_relaxed);
-            stage_ = Stage::Done;
-            return;
-        }
-        if (stage_ == Stage::Done)
-        {
-            return;
-        }
-        if (ms <= 0.0 || ms > kLongMs)
-        {
-            g_frustumOnly.store(false, std::memory_order_relaxed);
-            if (++tries_ < kMostTries)
-            {
-                Begin();
-            }
-            else
-            {
-                stage_ = Stage::Done;
-                spdlog::debug("dynamic occlusion: no steady frames to measure; occlusion culling kept");
-            }
             return;
         }
         if (settle_ > 0)
@@ -116,43 +127,102 @@ class Chooser
             --settle_;
             return;
         }
-        sum_ += ms;
-        if (++measured_ < kMeasured)
+        if (position_ < 0)
         {
+            sinceProbe_ += ms;
+            if (sinceProbe_ >= kProbeMs)
+            {
+                sinceProbe_ = 0.0;
+                position_ = 0;
+                around_.clear();
+                probe_.clear();
+            }
             return;
         }
-        const double mean = sum_ / kMeasured;
-        sum_ = 0.0;
-        measured_ = 0;
-        if (stage_ == Stage::Occlusion)
-        {
-            occlusionMs_ = mean;
-            g_frustumOnly.store(true, std::memory_order_relaxed);
-            stage_ = Stage::Frustum;
-            settle_ = kSettle;
-            return;
-        }
-        const bool frustumOnly = mean < occlusionMs_ * kFaster;
-        g_frustumOnly.store(frustumOnly, std::memory_order_relaxed);
-        stage_ = Stage::Done;
-        spdlog::info("dynamic occlusion: {} for this area ({:.2f} ms a frame with occlusion culling, {:.2f} without)",
-                     frustumOnly ? "view-frustum culling alone" : "occlusion culling", occlusionMs_, mean);
+        Probe(ms);
     }
 
   private:
-    enum class Stage
-    {
-        Done,      // the choice holds until the next load
-        Occlusion, // timing occlusion culling
-        Frustum,   // timing view-frustum culling alone
-    };
+    static constexpr int kWindow = 3 * kBlock;
 
-    void Begin()
+    // Whether frame `position` of a probe's window runs the other way: the middle block.
+    static bool OtherWay(int position)
     {
-        stage_ = Stage::Occlusion;
+        return position >= kBlock && position < 2 * kBlock;
+    }
+
+    double FrameMs()
+    {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        const std::int64_t waited = g_waitTicks.exchange(0, std::memory_order_relaxed);
+        const double ms = last_ == 0 ? 0.0 : static_cast<double>(now.QuadPart - last_ - waited) * msPerTick_;
+        last_ = now.QuadPart;
+        return ms;
+    }
+
+    void Reset()
+    {
+        frustumOnly_ = false;
+        g_frustumOnly.store(false, std::memory_order_relaxed);
+        estimate_ = 0.0;
         settle_ = kSettle;
-        sum_ = 0.0;
-        measured_ = 0;
+        sinceProbe_ = 0.0;
+        position_ = -1;
+    }
+
+    // `ms` is frame `position_` of the window, which ran the way set at the last call.
+    void Probe(double ms)
+    {
+        if (ms > kLongMs)
+        {
+            End();
+            return;
+        }
+        // The first frame of a block run after a change of way is left out.
+        if (position_ != kBlock && position_ != 2 * kBlock)
+        {
+            (OtherWay(position_) ? probe_ : around_).push_back(ms);
+        }
+        if (++position_ < kWindow)
+        {
+            g_frustumOnly.store(OtherWay(position_) ? !frustumOnly_ : frustumOnly_, std::memory_order_relaxed);
+            return;
+        }
+        const double around = Mean(around_);
+        const double probe = Mean(probe_);
+        End();
+        if (std::ranges::any_of(around_, [&](double each) { return each > around * kOutlier; }) ||
+            std::ranges::any_of(probe_, [&](double each) { return each > around * kOutlier; }))
+        {
+            return;
+        }
+        estimate_ += kWeight * (std::log(probe / around) - estimate_);
+        if (estimate_ < std::log(kFaster))
+        {
+            frustumOnly_ = !frustumOnly_;
+            g_frustumOnly.store(frustumOnly_, std::memory_order_relaxed);
+            estimate_ = -estimate_;
+            spdlog::debug("dynamic occlusion: {} (the other way was {:.0f}% slower)",
+                          frustumOnly_ ? "view-frustum culling alone" : "occlusion culling",
+                          (std::exp(estimate_) - 1.0) * 100.0);
+        }
+    }
+
+    void End()
+    {
+        position_ = -1;
+        g_frustumOnly.store(frustumOnly_, std::memory_order_relaxed);
+    }
+
+    static double Mean(const std::vector<double> &ms)
+    {
+        double sum = 0.0;
+        for (const double each : ms)
+        {
+            sum += each;
+        }
+        return sum / static_cast<double>(ms.size());
     }
 
     double msPerTick_ = [] {
@@ -161,12 +231,13 @@ class Chooser
         return 1000.0 / static_cast<double>(frequency.QuadPart);
     }();
     std::int64_t last_ = 0;
-    Stage stage_ = Stage::Done;
-    int tries_ = 0;
-    int settle_ = 0;
-    double sum_ = 0.0;
-    std::size_t measured_ = 0;
-    double occlusionMs_ = 0.0;
+    bool frustumOnly_ = false; // the way in use
+    double estimate_ = 0.0;    // the smoothed log of the other way's frame over this way's
+    int settle_ = kSettle;
+    double sinceProbe_ = 0.0;
+    int position_ = -1; // the frame of a probe's window, or -1 between probes
+    std::vector<double> around_;
+    std::vector<double> probe_;
 };
 
 Chooser g_chooser;
@@ -197,7 +268,8 @@ bool LeftOut()
 bool Attach()
 {
     const auto setParameters = Imported<SetParametersFn>(dao::addr::kUmbra_Camera_SetParameters_Import);
-    return setParameters != nullptr && g_setParameters.AttachTo(setParameters, &SetParameters);
+    return setParameters != nullptr && g_setParameters.AttachTo(setParameters, &SetParameters) &&
+           g_wait.Attach(dao::addr::kIGraphicsInternal_WaitForRenderThread, &Wait);
 }
 
 } // namespace
@@ -211,12 +283,16 @@ std::optional<dao::options::Toggle> InstallDynamicOcclusion()
     }
     if (!Attach())
     {
-        spdlog::warn("dynamic occlusion: Umbra's camera could not be reached, so it is not in");
+        g_setParameters.Detach();
+        g_wait.Detach();
+        spdlog::warn("dynamic occlusion: Umbra's camera or the wait for the render thread could not be reached, so "
+                     "it is not in");
         return std::nullopt;
     }
     dao::OnFrame([] {
         if (!g_on.load(std::memory_order_relaxed))
         {
+            g_chooser.Off();
             return; // off: Umbra as it always was, and no check
         }
         if (g_areaLoaded.exchange(false, std::memory_order_relaxed))

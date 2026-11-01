@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: after each area's load the game keeps occlusion culling only where that is faster (#281, #285). With the party running through an area on an RTX 3090: the Brecilian Forest +22%, Redcliffe Castle +21%, the Tower of Ishal +12%; with the card slowed to 600 MHz, Denerim's market +33% and four other areas +10 to +22%.
+- **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: the game keeps occlusion culling only while it is faster for what the camera sees, checking once a second and switching only on a clear difference, with vsync or a frame cap too (#281, #285, #286). With the party running through an area on an RTX 3090: the Brecilian Forest +22%, the Tower of Ishal +10%; areas where culling pays, such as Denerim's market and Ostagar's camp, run within a few percent of vanilla.
 
 ## 0.8.0
 
