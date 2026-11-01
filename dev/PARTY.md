@@ -853,7 +853,7 @@ See pseudo-code. Order rule on death: with a sole selected hero the next is the 
 Read by the forked subagent; checked unless marked.
 - **Move click:** `PreMoveCharacterToLocationMessage` 0x0070AAF0 sets 0x00C35E77; `MoveCharacterToLocationMessage` 0x0070C9A0 needs it (else a feedback message) and orders **only the controlled creature** (0x00694990 → 0x005D5CC0), alive, on walkable ground (explore+0xD4, the point at +0xD0).
   - `GameModeExplore::MoveTo` 0x0070BE80: the point kept at +0xA0; the creature's steering object (+0x764) 0x00764020; `Orders::OrderReceived` (event 90) to the controlled creature alone.
-  - 0x00764020 ignores a repeat within 1000 ms and 0.01 (squared, 0x00AF7498); if the point is more than 0.1 m from the current move's destination, it calls **the party's group move 0x006389F0(point, run)**, run = party+0x4A8 (`ToggleRunWalk` 0x0062EC60).
+  - 0x00764020 ignores a repeat within 1000 ms and 0.01 (squared, 0x00AF7498); if the point is more than 0.1 m from the current move's destination, it calls **the party's group move 0x006389F0(point, 1)**: the second argument is the literal 1 (0x00764122; corrected 2026-11-01 from "run = party+0x4A8"). Whether the group move reads the run toggle party+0x4A8 (`ToggleRunWalk` 0x0062EC60) itself was not read.
 - **The group move 0x006389F0:**
   - The movers: 0x006360C0(mask 0x81), **the selection (+0x194)** less creatures whose effects-holder flags (creature+0x70 → 0x00A64740) meet 0x81. Inferred: bits 0x80 and 0x01 are what 0x0069F200 turns into `Effect_DisableInput` and `Effect_DisableMovement`.
   - The controlled creature: 0x006ADF70(point, run, 0.0, 1, 0).
