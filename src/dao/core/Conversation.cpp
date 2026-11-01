@@ -138,4 +138,27 @@ std::wstring ConversationFile::VoiceBank() const
     return root ? root->String(kVoiceBank).value_or(L"") : std::wstring();
 }
 
+// The end action's fields and their defaults, read in the exe 2026-10-31
+// (0x007EEF90 to 0x007EF290, DAOLib #288): with no 12003 struct, or a field
+// missing from it, the plot and script are empty, the flag 0, the value true
+// and the parameter 0. The script's default is null in the exe (0x007EF05B);
+// empty here. Field 12302 is the value written to the flag when the
+// conversation ends (setnz at 0x007EEE96, then SetPlotFlag), not a test.
+ConversationEnd ConversationFile::End() const
+{
+    ConversationEnd out;
+    const auto root = file_.Root();
+    const auto end = root ? root->Child(kEnd) : std::nullopt;
+    if (!end)
+    {
+        return out;
+    }
+    out.plot = end->String(kPlotGuid).value_or(L"");
+    out.flag = end->Get<std::int32_t>(kPlotFlag).value_or(0);
+    out.value = end->Get<std::uint8_t>(kPlotTest).value_or(1) != 0;
+    out.script = end->String(kScript).value_or(L"");
+    out.parameter = end->Get<std::int32_t>(kScriptParameter).value_or(0);
+    return out;
+}
+
 } // namespace dao::core

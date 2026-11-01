@@ -79,6 +79,16 @@ struct PlotCheck
     }
 };
 
+// What runs when a conversation ends (ConversationFile::End).
+struct ConversationEnd
+{
+    std::wstring plot;          // the plot's GUID; empty for none
+    std::int32_t flag = 0;      // the flag set in that plot
+    bool value = true;          // the value the flag is set to
+    std::wstring script;        // a script's resource name; empty for none
+    std::int32_t parameter = 0; // what the script reads as the conversation's entry parameter
+};
+
 // An object a line activates or deactivates (ConversationLine::switches).
 struct LineSwitch
 {
@@ -139,6 +149,10 @@ class ConversationFile
     // The lines the conversation may open with, first to last.
     std::vector<std::uint32_t> Starts() const;
     std::wstring VoiceBank() const;
+    // The action done when the conversation ends: its script run, then a plot flag set.
+    // A missing end struct, or a field missing from it, reads as the engine's default: no plot, no script, flag 0,
+    // value true, parameter 0.
+    ConversationEnd End() const;
     // Returns the cutscene a line holds in the file (ConversationLine::cutsceneInLine).
     // @return the cutscene, or nothing for a line past the last, or one that holds none
     std::optional<cutscene::Cutscene> LineCutscene(std::uint32_t index) const;

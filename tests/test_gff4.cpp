@@ -167,12 +167,29 @@ void WriteLine(Builder &b, std::size_t at, const LineSpec &l)
     b.U32(at + 0x64, static_cast<std::uint32_t>(list - b.data));
 }
 
-std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, const std::vector<bool> &replies)
+// A conversation's end action, an in-place PLOT-shaped struct at 12003.
+struct EndSpec
+{
+    std::u16string plot;
+    std::int32_t flag;
+    std::uint8_t value;
+    std::u16string script;
+    std::int32_t parameter;
+};
+
+std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, const std::vector<bool> &replies,
+                                        const std::optional<EndSpec> &end = std::nullopt)
 {
     Builder b;
     b.Text(0, "GFF V4.0PC  CONVV0.1");
     const std::vector<std::vector<FieldSpec>> templates = {
-        {{12000, 4, gff4::kList, 0x00}, {12002, 0xFFFF, gff4::kList | gff4::kReference, 0x04}, {12004, 14, 0, 0x1C}},
+        end ? std::vector<FieldSpec>{{12000, 4, gff4::kList, 0x00},
+                                     {12002, 0xFFFF, gff4::kList | gff4::kReference, 0x04},
+                                     {12003, kPlotTemplate, gff4::kStruct, 0x08},
+                                     {12004, 14, 0, 0x1C}}
+            : std::vector<FieldSpec>{{12000, 4, gff4::kList, 0x00},
+                                     {12002, 0xFFFF, gff4::kList | gff4::kReference, 0x04},
+                                     {12004, 14, 0, 0x1C}},
         kLineFields,
         kLineFields,
         {{12303, 14, 0, 0x00}, {12304, 5, 0, 0x04}, {12300, 14, 0, 0x08}, {12301, 5, 0, 0x0C}, {12302, 0, 0, 0x10}},
@@ -223,6 +240,14 @@ std::vector<std::byte> MakeConversation(const std::vector<LineSpec> &lines, cons
     b.U32(root + 0x04, static_cast<std::uint32_t>(list - b.data));
     b.U32(root + 0x00, b.Numbers({0}));
     b.U32(root + 0x1C, b.String(u"vo_test"));
+    if (end)
+    {
+        b.U32(root + 0x08, b.String(end->script));
+        b.U32(root + 0x0C, static_cast<std::uint32_t>(end->parameter));
+        b.U32(root + 0x10, b.String(end->plot));
+        b.U32(root + 0x14, static_cast<std::uint32_t>(end->flag));
+        b.U8(root + 0x18, end->value);
+    }
     return b.bytes;
 }
 
@@ -327,6 +352,29 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK_FALSE(conversation->Line(2));
 }
 
+TEST_CASE("a conversation's end action reads as the file holds it, and as the engine's defaults without one")
+{
+    const auto none = TwoLines();
+    const auto bare = ConversationFile::Parse(none);
+    REQUIRE(bare);
+    const auto defaults = bare->End();
+    CHECK(defaults.plot.empty());
+    CHECK(defaults.script.empty());
+    CHECK(defaults.flag == 0);
+    CHECK(defaults.value);
+    CHECK(defaults.parameter == 0);
+
+    const auto bytes = MakeConversation({}, {}, EndSpec{u"9017B6BE1F3D4677ADC44E19BE9C2C7C", 25, 0, u"end_script", 4});
+    const auto conversation = ConversationFile::Parse(bytes);
+    REQUIRE(conversation);
+    const auto end = conversation->End();
+    CHECK(end.plot == L"9017B6BE1F3D4677ADC44E19BE9C2C7C");
+    CHECK(end.flag == 25);
+    CHECK_FALSE(end.value);
+    CHECK(end.script == L"end_script");
+    CHECK(end.parameter == 4);
+}
+
 namespace
 {
 
@@ -396,6 +444,23 @@ std::optional<LineSwitch::Switch> SwitchOf(const ConversationLine &line, std::ws
     return std::nullopt;
 }
 
+// The end actions of two shipped conversations: Teagan's sets a plot's flag 25 to true, the doomsayer's flag 1 to
+// false.
+void CheckEnd(const std::string &name, const ConversationFile &conversation)
+{
+    if (name != "arl100cr_doomsayer.dlg" && name != "arl110cr_teagan.dlg")
+    {
+        return;
+    }
+    const bool doomsayer = name == "arl100cr_doomsayer.dlg";
+    const auto end = conversation.End();
+    CHECK(end.plot == (doomsayer ? L"9017B6BE1F3D4677ADC44E19BE9C2C7C" : L"EC0948ED98544E25A47CD6790DA71469"));
+    CHECK(end.flag == (doomsayer ? 1 : 25));
+    CHECK(end.value == !doomsayer);
+    CHECK(end.script.empty());
+    CHECK(end.parameter == 0);
+}
+
 } // namespace
 
 TEST_CASE("the game's conversations in game/conversations, when there, each line read with its switches",
@@ -435,6 +500,7 @@ TEST_CASE("the game's conversations in game/conversations, when there, each line
                 }
             }
         }
+        CheckEnd(entry.path().filename().string(), *conversation);
         if (entry.path().filename() == "bhm100_cutscene_blood.dlg")
         {
             // The first two lines' cuts are set on Jowan's attack's stage (DAOLib #179).
