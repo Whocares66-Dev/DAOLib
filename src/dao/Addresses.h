@@ -2179,15 +2179,19 @@ DAO_ADDRESS(kCommands_End, 12732)
 // A second script command table, beside CVirtualMachineCommands: RTTI's
 // CClientVirtualMachineCommands, a CVirtualMachineCmdImplementer, made by
 // the same start-up function (0x005DB7F0). Its InitializeCommands
-// registers 103 handlers of its own, among them an AddCommand and a
-// SetActive that queue commands as the others do. dao::script's table and
+// registers 103 handlers of its own, among them an AddCommand that queues
+// commands as the others do, and client script command 95, SetObjectActive
+// (cscript.ldf line 977; stored at the handler table's +0x17C by
+// 0x006DB89D, called __thiscall (commands, commandId, argumentCount); this row
+// was kCClientVirtualMachineCommands_SetActive, renamed 2026-11-01 with the
+// address library's ClientScriptCommand::SETOBJECTACTIVE). dao::script's table and
 // intercepts are the other table's. Whether single-player runs a script on
 // this one is not known yet: the probe counts its AddCommand's calls.
 // Read 2026-09-30.
 DAO_ADDRESS(kCClientVirtualMachineCommands_Constructor, 15293)
 DAO_ADDRESS(kCClientVirtualMachineCommands_InitializeCommands, 15424)
 DAO_ADDRESS(kCClientVirtualMachineCommands_AddCommand, 15416)
-DAO_ADDRESS(kCClientVirtualMachineCommands_SetActive, 15348)
+DAO_ADDRESS(kClientScriptCommand_SETOBJECTACTIVE, 15348)
 
 // The game's update, as a task on the engine's worker threads: from the
 // deliberate crash of 2026-09-30, whose stack ran CClientExoApp's start-up
