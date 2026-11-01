@@ -485,3 +485,81 @@ The quirks (render-07, read 2026-11-01; DAOParagonEngine #351):
 - **`domain="cinematics"` stays empty without the command-line flag at 0x00C1E8B7** (set from `EclipseGame::ProcessCommandLineOption`, 0x00404DC9 [C by the reading]): the loop pushes state 11 [C 0x0046A0E9..0x0046A11E], so the resources, stages and filters are all skipped, and `</Effect>` still adds the empty effect. **It also leaves the parser in state 1**: `</Effect>` is matched before the state-11 test (0x00469D36 then 0x00469D41), pops once, which removes 11 and leaves the Effect's state 1 on the stack, and a second `<Effect>` needs state 0 (0x0046A1EF) and fails with error 2, **so every effect after a skipped one in the same file is lost** [C by the reading, two readings reconciled; I: whether a shipped .ffx.xml holds more than one Effect was not checked]. That the flag is off in normal play is [I].
 - **A number must start with a digit** in a filter line (`iswdigit`, render-04's line parser, above) [C by the reading, two readings reconciled]. The Effect's own integers go through 0x008E643E (`_wtoi` [I]) and are not tested for digits; `availability` is only `> 0`, so 0, a negative or a non-number leaves the effect unavailable.
 - **`id` is first, `effectid` second, `event` second**, and `material` second or third: a file with the attributes in another order fails with error 3 or 4, or loses its material.
+
+## Material states (.sta): the default state and its overrides, and the material managers (render-14, read 2026-11-01; DAOParagonEngine #351)
+
+How a draw's render state is set, and the three managers around it. Two readings reconciled (marks: [C] read in the GOG exe, [C by the reading] what the reading says it checked, [I] inferred). This is the rule the per-file notes above and in CHARACTERS.md, EFFECTS.md and SKY.md rest on: they name what one .sta sets, and this says what the rest of it is. A core reader of the .sta format is being built as DAOLib #295.
+
+### The rule [C]
+
+**Every pass draws under `DefaultState.sta` plus only what its own .sta names, and the defaults come back when the next state does not name them.** `MaterialStateManager` (singleton 0x00C30A08, 0x5F4 bytes, vftable 0x00AF4018) loads `DefaultState.sta` (name at 0x00AF4024) as the defaults in `LoadDefaults` (0x004FBBD0): a table of 51 device values and one of 16 stages x 12 sampler types (index stage*12 + type), all 0x7FFFFFFF (unset) first, then filled from the default state's pairs. A sampler entry that names a texture parameter instead of a stage (below) does not set a default. `ApplyState` (0x004FBFF0, from `SetState` 0x004FC2C0 = `BeginState` 0x004FBB30 then apply, called by `MaterialState::SetMaterialObject` 0x004FA8C0) does this:
+
+1. A state with the same serial (+0x4C) and generation (+0x50) as the current one returns at once. Otherwise the flag buffers of "what the previous state changed" and "what this one changes" are swapped and the new one cleared (51 bytes for devices, 192 for samplers).
+2. Every device pair (index, value) of the state is sent to the driver, even one equal to the default, and flagged as changed when it differs from the default.
+3. Every sampler entry is sent the same way, by stage, or by the unit the shader gave its texture parameter.
+4. Restore: every device index and every sampler slot that the previous state changed, that has a default and that this state did not change, is sent its default again.
+
+So a .sta never needs to repeat a default, and a state that names a value equal to the default after one that changed it still sends it. The state's self handle and the manager's current-state handle are weak (below), so the manager does not keep a state alive.
+
+A debug byte at +0x5F0, set by nothing found, would force SEPARATEALPHABLENDENABLE 1, BLENDOPALPHA MAX, SRCBLENDALPHA ONE and DESTBLENDALPHA ONE after every apply (the alpha of every draw becomes max(src, dst)). The constructor clears it and no absolute reference to 0x00C30FF8 exists [C], so it is off in play; its setter is unknown [I].
+
+### The file's vocabularies [C]
+
+A .sta (`states.erf`, XML) holds `DeviceState` elements, a `DS_` name and a value, and `SamplerState` elements, a stage (or a texture parameter), a `SAMP_` type and a value. `MaterialState::AddDeviceState` (0x004FA430) takes the name through 0x004F93B0 and the value through 0x004F98B0 and drops the pair when either gives -1, so a misspelt name or value is dropped silently. Names compare without case. A value that is no name is parsed as an integer, then, if that gives 0, as a float whose bit pattern is stored (0x004F9DA6-0x004F9DCD). These are the engine's codes; the driver maps them to Direct3D's [I: not read here].
+
+**The 51 device states** (index, name without the `DS_` prefix): 0 ZENABLE, 1 FILLMODE, 2 SHADEMODE, 3 ZWRITEENABLE, 4 ALPHATESTENABLE, 5 SRCBLEND, 6 DESTBLEND, 7 CULLMODE, 8 ZFUNC, 9 ALPHAREF, 10 ALPHAFUNC, 11 ALPHABLENDENABLE, 12 FOGENABLE, 13 FOGCOLOR, 14 FOGTABLEMODE, 15 FOGSTART, 16 FOGEND, 17 FOGDENSITY, 18 RANGEFOGENABLE, 19 STENCILENABLE, 20 STENCILFAIL, 21 STENCILZFAIL, 22 STENCILPASS, 23 STENCILFUNC, 24 STENCILREF, 25 STENCILMASK, 26 STENCILWRITEMASK, 27 CLIPPING, 28 FOGVERTEXMODE, 29 CLIPPLANEENABLE, 30 MULTISAMPLEANTIALIAS, 31 MULTISAMPLEMASK, 32 COLORWRITEMASK, 33 BLENDOP, 34 SCISSORTESTENABLE, 35 SLOPESCALEDEPTHBIAS, 36 TWOSIDEDSTENCILMODE, 37 CCW_STENCILFAIL, 38 CCW_STENCILZFAIL, 39 CCW_STENCILPASS, 40 CCW_STENCILFUNC, 41 COLORWRITEMASK1, 42 COLORWRITEMASK2, 43 COLORWRITEMASK3, 44 BLENDFACTOR, 45 SRGBWRITEENABLE, 46 DEPTHBIAS, 47 SEPARATEALPHABLENDENABLE, 48 SRCBLENDALPHA, 49 DESTBLENDALPHA, 50 BLENDOPALPHA. The name strings are at 0x00AF370C..0x00AF306C. An unknown name gives -1.
+
+**The value codes** (0x004F98B0):
+
+| Codes | Names |
+|---|---|
+| 0, 1, 2 | `ZBUFFERENABLE_FALSE`, `ZBUFFERENABLE_TRUE`, `ZBUFFER_USEW` |
+| 3, 4, 5 | `FILL_POINT`, `FILL_WIREFRAME`, `FILL_SOLID` |
+| 6, 7 | `SHADE_FLAT`, `SHADE_GOURAUD` |
+| 8 to 18 | `BLEND_ZERO`, `ONE`, `SRCCOLOR`, `INVSRCCOLOR`, `SRCALPHA`, `INVSRCALPHA`, `DESTALPHA`, `INVDESTALPHA`, `DESTCOLOR`, `INVDESTCOLOR`, `SRCALPHASAT` |
+| 21, 22 | `BLEND_BLENDFACTOR`, `BLEND_INVBLENDFACTOR` (19 and 20, Direct3D's both-source-alpha pair, have no name) |
+| 23, 24, 25 | `CULL_NONE`, `CULL_CW`, `CULL_CCW` |
+| 26 to 33 | `CMP_NEVER`, `LESS`, `EQUAL`, `LESSEQUAL`, `GREATER`, `NOTEQUAL`, `GREATEREQUAL`, `ALWAYS` |
+| 34 to 37 | `FOG_NONE`, `FOG_EXP`, `FOG_EXP2`, `FOG_LINEAR` |
+| 38 to 45 | `STENCILOP_KEEP`, `ZERO`, `REPLACE`, `INCRSAT`, `DECRSAT`, `INVERT`, `INCR`, `DECR` |
+| 46 to 50 | `BLENDOP_ADD`, `SUBTRACT`, `REVSUBTRACT`, `MIN`, `MAX` |
+| 1, 0 | `TRUE` (shares `_TRUE`'s return, 0x004F98DB), `FALSE` |
+
+**The 12 sampler types** (0x004F9DE0, index stage*12 + type): 0 `SAMP_ADDRESSU`, 1 `ADDRESSV`, 2 `ADDRESSW`, 3 `MAGFILTER`, 4 `MINFILTER`, 5 `MIPFILTER`, 6 `MIPMAPLODBIAS`, 7 `MAXMIPLEVEL`, 8 `MAXANISOTROPY` (refused, below), 9 `SRGBTEXTURE`, 10 `ELEMENTINDEX`, 11 `BORDERCOLOR`.
+
+**The sampler values** (0x004F9F10): `TEXADD_WRAP` 0, `TEXADD_MIRROR` 1, `TEXADD_CLAMP` 2, `TEXADD_BORDER` 3, `TEXADD_MIRRORONCE` 4, `TEXFILT_NONE` 5, `TEXFILT_POINT` 6, `TEXFILT_LINEAR` 7, `TEXFILT_ANISOTROPIC` 8, `TEXFILT_PYRAMIDALQUAD` 9, `TEXFILT_GAUSSIANQUAD` 10. Anything else is an integer, then float bits, as above (0x004FA025-0x004FA051).
+
+### Quirks
+
+- **`SAMP_MAXANISOTROPY` is refused.** The type matcher compares with the string at 0x00AF3D44 and on a match jumps to the `or eax,-1` return (`jne 0x004F9F05` at 0x004F9EB8) [C, disassembled 2026-11-01]. One reading listed it as type 8, and was wrong. No .sta can set anisotropy; the engine sets it elsewhere.
+- **A sampler state can name a texture parameter instead of a stage.** `AddSamplerState` (0x004FB8B0; stage, type, value, texture) with a texture name stores byTexture = 1 and stage 0, and the name in a narrow string; the entry (0x44 bytes) has its bound unit at +0x10. The unit is found when the shader is bound, and `ApplyState` skips the entry when it is 0xFFFF (the texture is not in the shader) [C]. Such entries set no default.
+- A sampler entry is added only when both its type and its stage are not -1 (0x004FB9CF-0x004FB9E7).
+- Resource names are checked by `IsValidResourceName` (0x004F7AA0): every character is `0-9 a-z A-Z _ - ( ) .`, an empty name is valid. It is called by the material, state and shader loaders (0x004F81DD, 0x004FC7C1, 0x004FE2CC, 0x004FE45C), and the shader loader also requires a length of at most 0x20 [C by the reading].
+
+### MaterialState (0x9C bytes, vftable 0x00AF4004) [C]
+
+Constructor 0x004FB6B0 (device, mostDerived). +8 name (wstring), +0x24 byte 1, +0x28 device-state vector of 8-byte (index, value) pairs, +0x38 sampler vector of 0x44-byte entries, +0x48 device, +0x4C serial (the global counter 0x00C309AC, post-incremented; its only writer), +0x50 generation word, +0x54 second-interface handle, +0x5C self handle, +0x64 the virtual base `SynchSafePointerListBase`. `Clone` (0x004FBA20) copies the name and both vectors, gets a new serial and holds its own self handle weak; its caller 0x004F53F0 gives each pass of a material a state of its own [I]. A sampler entry is +0 stage, +4 type, +8 value, +0xC byTexture, +0x10 bound unit, +0x14 a std::set, +0x28 the narrow texture name. Ghidra's structs for this class and the manager sit low (its `offset_0x40` is +0x48, its `offset_0x5d0` is +0x5F0).
+
+### MaterialStateManager's layout (0x5F4 bytes) [C]
+
++4 vector of state handles; +0x14 default state handle; +0x1C current state handle; +0x24 current generation (-1 at first); +0x28 driver (0x005278C0: the graphics driver manager [0x00C31650] +0xBC on the thread in 0x00C2B590, else +0xB4); +0x2C and +0x5F the two device flag buffers (0x33 each); +0x94 current and +0x98 previous flag pointers; +0x9C deviceDefault[51]; +0x168 samplerDefault[16][12]; +0x468 and +0x528 the two sampler flag buffers (0xC0 each); +0x5E8 current and +0x5EC previous; +0x5F0 the debug flag. Getter 0x004FCB70 (Ghidra labels it `_AfxAygshellState`).
+
+### MaterialManager: the .mat libraries, and the standard list [C unless marked]
+
+`MaterialManager` (vftable 0x00AF305C, +4 a vector of material handles, +0x14 a mutex; constructor 0x004F7FF0) keeps the loaded material libraries (.mat). `LoadStandardMaterials` (0x004F8500, from `Eclipse::IGraphicsInternal::StartRenderer` 0x00529C70 at 0x00529DDD) loads a fixed list when the renderer starts: **40** pointers to wide strings at 0x00BF5598-0x00BF5634, ended by 0x00BF5638 -> 0x00ADEF14 (an empty string) [C, bytes read in the GOG exe 2026-11-01]. The first entry is `Default_BadStream.mat` (0x00BF5598 -> 0x00AF302C), the last `Character.mat` (0x00BF5634 -> 0x00AF2BC0), and `GUIMaterial_MinAlpha.mat` (0x00BF562C -> 0x00AF2BF8) stands between `GUIMaterial_MaxAlpha.mat` and `HairAlpha.mat`. In order: `Default_BadStream`, `Default_Missing`, `Black`, `Canopy`, `Cloth`, `Clouds`, `DABloom`, `DADistortion`, `DADistortionMask`, `dof`, `DistortionMaskDiffuse`, `Eye`, `Face`, `Fade`, `GeneralGui`, `HSLMatrix`, `Lava`, `LightProbeProj`, `MixGUI`, `Prop`, `Sky`, `Static`, `Terrain`, `VFX`, `Vista`, `Water`, `Weapon`, `Weapontrail`, `SPT_Billboards0`, `SPT_Fronds`, `SPT_Branch`, `SPT_LeafCards`, `SPT_LeafMesh`, `ScreenSpace`, `GaussianBlur`, `GUIMaterial`, `GUIMaterial_MaxAlpha`, `GUIMaterial_MinAlpha`, `HairAlpha`, `Character` (each with `.mat`). `GetMaterial` (0x004F8370) finds a name in the vector by the material's name (no case), else loads it (0x004F8150), and if that fails loads the fallback named at 0x00C30974 [I: `Default_Missing.mat`].
+
+- `ReloadShaders` (5890, 0x004F7B20): under the lock it rebuilds the shader manager's two lists (singleton 0x00C31084, getter 0x004FE090) [I: vertex and pixel shaders] and re-resolves every material's techniques (0x005032D0). Its callers are `Renderer::ResetDisplay` 0x004594D0 (at 0x0045952F) and `Renderer::vfunction7` 0x00459460 (at 0x004594B9), each right after `TextureManager::ReloadTextures(true)`.
+- `RebindMaterials` (5891, 0x004F7BF0): under the lock it recreates each shader entry's device object (0x004F6AB0: `entry[0x24] = 0x005073C0(entry[0x20], device)`) and then runs 0x005032D0. **Its only caller is the detail-level path**, `SetGraphicsDetailLevel` 0x00458EB0 at 0x00458FD4, not a device reset.
+- `PurgeExpired` (0x004F7E40, slot 2) erases the null handles from the vector; `ReleaseAll` (0x004F8060, from the renderer shutdown 0x00527C70 at 0x00527D84) clears the vector and drops the default state.
+
+### MaterialObjectManager: the .mao objects [C unless marked]
+
+Singleton 0x00C308C0 (`GetInstance` 0x004F77C0, 26 callers; Ghidra has no function there and the call sites name it `_AfxAygshellState`), vftable 0x00AF2B90, +4 a map by wide name, +0x34 a mutex. `GetObject` (0x004F78E0): a locked lookup (0x004F7230); if absent, load (0x004F72D0): append `.mao` if the name lacks it, open the resource, retry with `.xml` (0x00AF2B74) as the second name, parse the XML and build a 0xF0-byte material object (0x00508110); if still absent and the name is not the fallback at 0x00C30918 [I: `Default_Miss01.mao`, the string at 0x00AF2B98], recurse on the fallback. **A missing material object is drawn with `Default_Miss01.mao`, not skipped.** `CreateInstance` (0x004F79E0, 24 callers) returns a new `MaterialObjectInstance` (0xE0 bytes, 0x004F5080) or 0.
+
+### Weak handles [C]
+
+The engine's handle is an 8-byte `General::SafePointer {T* p; u8 weak}`. 0x004FA0E0 makes a handle **weak**: it sets byte +4 and calls 0x004D7AE0, which **decrements the target's strong count (+0x14) under its +0x18 lock at 0x004D7B29** (`add dword ptr [esi+0x14], -1`, read in the GOG exe 2026-11-01) and, at zero, hands the object to its disposal (0x004CAFD0/0x004CB040). 0x00572810 makes it strong again (the byte to 0; the increment in 0x004D7BA0 is [I]). Weak are the object manager's map entries (`Register` 0x004F7830, so the manager does not keep material objects alive), a cloned state's self handle, and the state manager's current state. `GetObject` ends by making the handle it returns strong, so the caller owns the reference. The other operations: 0x00534A70 constructs from a raw pointer, 0x004F4710 assigns a handle, 0x00458420 a raw pointer, 0x00538F30 releases and nulls, 0x004621C0 gets p, 0x004F71A0 copy-constructs.
+
+### Marks
+
+[C] The 5890/5891 callers, the weak decrement at 0x004D7B29, the refusal at 0x004F9EB8 and the table's end at 0x00BF5638 were read in the GOG exe 2026-11-01. [C by the reading] The apply loop's step addresses (0x004FC0D0-0x004FC25C), the sampler-value parse and the object manager's steps. Two readings reconciled on the 40-entry table (one had 39 starting at `Default.mat`; both missed `GUIMaterial_MinAlpha.mat`), the refusal of `SAMP_MAXANISOTROPY`, the weak direction of 0x004FA0E0 and 5891's role.
