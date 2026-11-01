@@ -1005,7 +1005,7 @@ The save writer is 0x007AD880 (C). It writes the tag and resref only when the st
 
 - **The creature's GFF4 struct** (field defs 0x006B7CF0 [14880]) has `SavegameTacticsHasTable` 16821 (UINT8) and `SavegameTacticsTable` 16822 (struct `PTT1`, def 0x007AF850 [19985]) (C).
 - **`PTT1`** holds `TacticsList` (list PTE1), `TacticsEnabled`, `Dirty`, `PresetType`, `PresetIndex` (UINT8 each), `PresetList` (list of UINT8) and `CustomList` (list of `PTL1`). **`PTL1`** is `{ TacticsList: list PTE1 }` (C).
-- **Save:** 0x006B23B0 [14839] (the creature's save, I) writes HasTable = (+0xC00 ≠ null) and then calls `PartyTactics::Save` 0x007ADF40 [19958] (C).
+- **Save:** the creature's save 0x006B2470 [14840] writes HasTable = (+0xC00 ≠ null) (field 0x41B5 pushed at 0x006B26D1 and 0x006B26F8) and then calls `PartyTactics::Save` 0x007ADF40 [19958] (at 0x006B2716) (C; corrected 2026-11-01: 0x006B23B0 [14839], given here before, is the copy constructor of the item-move record that `ItemLocation::MoveItemTo` builds).
 - **Load:** 0x006BE980 reads HasTable, creates the object, then calls `PartyTactics::Load` 0x007AFBF0 [19992] (C).
 - Preset ids, the preset index and the type are saved as **UINT8**, so an id above 255 does not survive a save (I, from the field type).
 - The behaviour is not here. It is creature property 18 (§2), saved with the properties.
