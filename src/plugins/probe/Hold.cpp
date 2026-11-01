@@ -36,8 +36,9 @@ namespace
 // object's animation rate (a double at +0x2E8, the frame's time multiplied
 // by it in Animation::AnimationTask, 0x008154D0) to 0 when paused and 1 when
 // not, and keeps the rate as a float at the model's +0xEC. CCCreature's own
-// slot 19 (0x0069F590) does that and then pauses (0x006C9E60) or resumes
-// (0x006CAB00) its controller at +0x768. The graphics object is what the
+// slot 19 (0x0069F590) does that and then turns its look-at at +0x768 off
+// (0x006C9E60) or back on (0x006CAB00), a LookAt made at first use
+// (0x0069E9D0; read 2026-11-01, naming batch 08). The graphics object is what the
 // model's +0x18, then +4, answers from its slot 19. Called through the
 // vtable, so no address is needed.
 constexpr std::size_t kInterface = 0x70;

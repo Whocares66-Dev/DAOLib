@@ -298,7 +298,9 @@ Ability OfAbility(ObjectId creature, std::int32_t ability)
 // +4, whose slot 19 (no arguments) answers it. An object's
 // interface at +0x70 gives its model from its slot 24 and pauses it from its
 // slot 19 (CCObject's 0x00695380); CCCreature's slot 19 (0x0069F590) also
-// pauses (0x006C9E60) or resumes (0x006CAB00) its controller at +0x768.
+// turns its look-at at +0x768 off (0x006C9E60) or back on (0x006CAB00):
+// a LookAt of 0x170 bytes made at first use (0x0069E9D0), not an animation
+// controller (read 2026-11-01, naming batch 08).
 // Called through the vtables, so no address is needed.
 //
 // Seen in play (turn-based-agent's runs, GOG, Witch Hunt, an ogre grabbing
