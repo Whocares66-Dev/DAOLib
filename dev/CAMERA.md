@@ -41,7 +41,7 @@ How the engine runs the explore camera: its two zooms and the switch between the
   - **Tactical (s = 0):** `SetPitch(45°)` every frame; the kept pitch is cleared. Mouse pitch and Home/End are zeroed there (`ctl+0x5C` = 1).
   - **Zooming back in:** from 45° toward `ctl+0x94` as s rises, so the close view resumes at about 75° (inferred). `ctl+0x94` starts at 85° (0x00C0E018) and eases toward 85°, or 45° while `ctl+0x9E` is set, in the tactical range (0x0076F337).
 - **The field of view** (0x0076F120), vertical, in degrees, set at once: 60 in the close view (0x00C0E000), `(1 − t)·60 + t·42.5` in the band (0x00C0E004), so 42.5 tactical.
-- **Near and far:** explore sets neither. The fly camera sets 0.25/4000 and puts back 0.01/4000 when it leaves (0x0076D52B), so explore runs at 0.01/4000 (inferred).
+- **Near and far:** explore sets neither. The fly camera sets 0.01/4000 when it is entered (0x0076D530-0x0076D54D: the renderer camera's slot 0x18 with the floats at 0x00AF7498 and 0x00ADEEAC) and puts back 0.25/4000 when it leaves (0x0076D5D9-0x0076D5F6, 0.25 at 0x00AFF3E8), so explore runs at 0.25/4000 (inferred; corrected 2026-11-01, where this had the two the other way round).
 
 ## The controls
 
