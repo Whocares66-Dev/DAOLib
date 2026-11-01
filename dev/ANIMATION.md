@@ -109,7 +109,7 @@ It first sets combat data +4 = -1 (checked: the attack target, which `GetAttackT
   - Each passes a mode from its own parameters (int 6 or int 2: 0 none, 1 draw, 2 sheathe) and overlay 1 (8 passes overlay 0).
   - With overlay set, a creature in the wrong state plays 108 `equip` or 109 `unequip` through 0x00696B50(row, 0, 3.0f) if it has the row; otherwise it calls 0x006A7F30(state).
   - Which move commands set that int is not read.
-- **The idle re-check** 0x006AB6E0 (from CCCreature's vtable slot 87, inferred: the per-tick update) calls 0x006A8580(0, 0) when all of these hold:
+- **The idle re-check** 0x006AB6E0 (called by CCCreature's vtable slot 87, `CCCreature::Update` 0x006BE4B0, at 0x006BE6D2 and 0x006BE884 [C]; corrected 2026-11-01, naming batch 13: this had it as the slot itself) calls 0x006A8580(0, 0) when all of these hold:
   - the creature is out of combat (0x006A2580: [[+0xC60]] ≠ 1);
   - it has no current command;
   - a countdown at `+0x7E0` has run out.
@@ -958,7 +958,7 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools
 
 ##### 1.2 The engine's idle twitch (checked unless marked)
 
-**Where:** `CCCreature` vtable slot 87 (the per-tick idle update), address **0x006AB6E0**. It returns early unless every one of these holds, in this order:
+**Where:** **0x006AB6E0**, which `CCCreature::Update` (vtable slot 87, 0x006BE4B0) calls at 0x006BE6D2 and 0x006BE884 [C] (corrected 2026-11-01, naming batch 13: this had 0x006AB6E0 as slot 87 itself). It returns early unless every one of these holds, in this order:
 
 1. The creature is **not in the combat state** (0x006A2580 false: `[[+0xC60]] != 1`).
 2. Its **current base animation is row 1, `pause`** (0x006956B0 == 1).
