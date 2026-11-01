@@ -145,7 +145,7 @@ The one object (`Get` 0x00895DC0, 0xE8 bytes at 0x00C3B9D8; data-tree name `Inpu
     - 44 of 0x00892850 and 2 of 0x00892DC0;
     - 19 `AddBinding` and 1 `AddBindingPair`.
   - **The defaults function 0x006E9510:** the clear (0x00893D70), 56 `SetKey`, each with report 0, then 0x006E2FD0.
-- **Whether a key may be set** (0x00893840) [C]: each of the action's mappings is asked whether the key word is a valid key of its device (0x00880C40), or 0; the answers are ANDed (combine 0) or ORed.
+- **Whether a key may be set** (0x00893840) [C]: each of the action's mappings is asked whether the key word is a valid key of its device (0x00891100, called at 0x0089390A, which calls the test 0x00880C40 at 0x00891156), or 0; the answers are ANDed (combine 0) or ORed.
 - **`SetKey`** (0x00894CC0) **returns a bool** [C]: false, with nothing changed, when the key is refused; else `TakeKey`, the action's own `SetKey`, and, when asked to report, `RemappingError` set to talk string 387764, or to 387765 + " " + the `Description` of the action that lost the key. Then true.
 - **Remapping from the controls screen** [C]:
   - `EnableKeyRemappingMessage` (0x008947F0) sets the mapper's +0x5C, keeps the action's name at +0xBC, and sets its `RemappingPrimary` to 1 (the message's +0x20 is 0) [I: `RemappingSecondary` for a non-zero +0x20, 0x00894845 not read].
