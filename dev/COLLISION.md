@@ -148,7 +148,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
     - **Type 1, kinematic:** the matrix's 3×3 is divided by the owner's scale (`owner->slot 0xE0`) and handed to `PhysicsActor::SetGlobalPose` (0x0081E860, actor slot 0xC; the call at 0x0055EC33). This is the caller that 1f7fc9d did not find.
     - **Type 2, static:** never moved.
   - **How the pose is applied:** SetGlobalPose converts the matrix (0x00837AE0) and makes a `PhysicsNxActorVariableSet<NxMat34>` command for each NxActor of the actor.
-    - **While the scene steps** (scene +0xAC; `Simulate` 0x0082CCC0 and `FetchResults` 0x00822E20 test it), the command sets cmd+0x38 = 1 (0x0082C480) and its Apply (0x00838C50) calls NxActor slot 0x34, `moveGlobalPose`.
+    - **While the scene's simulation is enabled** (scene +0xAC, set and cleared by PhysicsScene slots 21 and 22, 0x0082D7B0 and 0x0082D7C0; `Simulate` 0x0082CCC0 steps only while it is set, 0x0082CF53, and `FetchResults` 0x00822E20 tests it too; the step in flight is +0xD0, below), the command sets cmd+0x38 = 1 (0x0082C480) and its Apply (0x00838C50) calls NxActor slot 0x34, `moveGlobalPose`.
     - **Otherwise** it is 0 (0x0082C580) and Apply calls slot 0x14, `setGlobalPose`.
     - **When:** with no step in flight (scene +0xD0 = 0) it is applied at once. Otherwise it is queued (scene +0x104) for after the step.
   - **When the node is updated:** `Object`'s IRenderable slot 0 (0x00548ED0) re-runs the root's slot 0x44 when the object's transform is dirty, or when any of its animation controllers (0x005D2480, each one's slot 0x10, ORed) reports a change. It does nothing for a hidden object (flag 2).
