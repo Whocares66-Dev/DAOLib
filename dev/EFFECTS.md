@@ -849,7 +849,7 @@ Read in the GOG exe (`DAOrigins.exe`, base 0x400000) and the game's files (vanil
     emit = obj+0x41C != 0 && obj+0x41C->vcall 0x6C() < 0.7   // 0x00B58750 = 0.7
     ```
     +0x41C is set by 0x00695D10. What that vcall returns is not read: [I] a fade or alpha-like value, so a creature's crusts stop emitting while it is faded past 0.3.
-    - 0x0067C980 / 0x0067CAD0 (IDs 13641/13642) switch a list of creatures to emit off with automatic cleared, and back to emit on with automatic set. Their caller is not read [I: cutscene or conversation staging].
+    - 0x0067C980 / 0x0067CAD0 (IDs 13641/13642) are `CCArea::SuspendForCutscene(emit)` and `ResumeAfterCutscene`: the cutscene player calls the first at its step to state 2 (0x007E3F76) and the second at its teardown (0x007E1784). Suspend sets every non-party object's emit to `emit` (1 from the cutscene) and party members' to 0, clearing their +0x23D, after showing the rooms and clearing the area's update flag +0x3FC; Resume sets +0x3FC and emit 1 on every object (corrected 2026-10-31, two readings reconciled: this had them as off then on with the caller unread).
   - **A projectile with `prj_base` `HideLaunch`**: 0x007E8700 (ID 21121, the effect's start, which also sets phase 1) [C]:
     - It reads table 4's column hash 0x06484B80 (= `HideLaunch`) for the row at +0x4A4 (0x007E875E).
     - If set, it calls the Object's vcall +0x20(0.0, 0) [I: hide] and **clears the emit bit**.

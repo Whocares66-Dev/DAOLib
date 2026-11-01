@@ -19,7 +19,7 @@ What does not read the bit, from the source:
 - **Ambient behaviour** out of combat (`Ambient_CommandComplete`, `rules_core.nss`:802; `Ambient_SpawnStart`, 1325). Its own switch is the local `AMBIENT_SYSTEM_STATE` at 0 (`wrappers_h.nss`:371).
 - **A creature's own script** that handles an event before passing it to `rules_core`.
 
-Two things that are not this switch. `AI_LIGHT_ACTIVE` selects `AI_DetermineCombatRound_Light` (`ai_main_h_2.nss`:403, 767), a cheaper AI that still picks a target and attacks; the off bit is tested before it. `SetAILevel` (command 222) writes `CCObject` +0x2B4 and `GetAILevel` reads +0x2B0, and what the engine does with the level has not been read; the scripts set it only around resurrection (`rules_core.nss`:1197, `effect_resurrection_h.nss`:40) and in one plot script.
+Two things that are not this switch. `AI_LIGHT_ACTIVE` selects `AI_DetermineCombatRound_Light` (`ai_main_h_2.nss`:403, 767), a cheaper AI that still picks a target and attacks; the off bit is tested before it. `SetAILevel` (command 222, 0x0064B480) fails unless `CCObject` +0x2B4 is 0 (`cmp [eax+0x2B4], 0`) and writes the level to +0x2B0 through CCObject slot 0x150 (0x00699FC0), and `GetAILevel` reads +0x2B0 (corrected 2026-10-31, two readings reconciled: this had the write at +0x2B4); and what the engine does with the level has not been read; the scripts set it only around resurrection (`rules_core.nss`:1197, `effect_resurrection_h.nss`:40) and in one plot script.
 
 ## The ambient behaviour's heartbeat (read 2026-10-17)
 
