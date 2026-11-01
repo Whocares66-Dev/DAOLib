@@ -520,11 +520,11 @@ Read in the GOG exe and the files (ghilana); the camera's constants (0x00C0D704 
   - **The update** then waits for the fade (or 2 s), hides screen 0x1B and sets +0x98.
   - **Leave** (0x0076BEC0) deletes the scratch waypoint (+0xE0) and destroys each clone (slot 0x108, then its destructor). It restores the saved camera (position, orientation and FOV, at once) and returns to the saved area's scene (0x00707020). It turns the sound busses back off and pops the input context.
   - The stage is never unloaded.
+- **The marks' order** (read 2026-11-01, two readings reconciled) [C]: the three stature lists (char_short +0xE4, char_med +0xF4, char_tall +0x104) are sorted by one introsort (0x0076AD50) over CCWayPoint pointers whose insertion sort 0x00767D10 compares each waypoint's wstring tag at +0xB8, ascending.
+- **Leave's four `0x00634F20(0)` calls** [C] clear the four mark arrays (+0xE4, +0xF4, +0x104, +0x114) and keep their buffers (an ECDynArray clear with release false).
 - **Not read:**
-  - the marks' order within a list (comparator 0x0076AD50);
   - the equipment copy 0x007B8950;
   - clone +0xCF4's writer;
-  - the four `0x00634F20(0)` calls in leave;
   - who sends the pans;
   - the DLC Shale's row (enciphered).
 
