@@ -23,7 +23,7 @@ How the engine runs an area's frame effects (`da_bloom`, `da_fade`, `da_hsvmatri
     - **Ties come out reversed.** A new element not greater than the first goes to the front (`cmp; ja` at 0x0045692A). Otherwise it is moved back past every element it is not greater than (0x00456950–0x0045695C). So it lands in front of its equals.
   - **So in the Fade** [C for the mechanism, I for the list it runs on]:
     - The `.arl` lists `da_bloom`, `da_hsvmatrix`, `da_fade`. One sort puts `da_fade` in front of `da_bloom`, whether or not `da_copybackbuffer` is already in the vector.
-    - Each further sorted add to the same vector would reverse the pair again [I; which of the two managers, 0x00C1EAB0 or 0x00C1EAC4, holds the area's effects, and what else is added to it later, were not read].
+    - Each further sorted add to the same vector would reverse the pair again [I]. (answered in part 2026-11-01, render-01; DAOParagonEngine #351) The area's effects are in neither manager 0x00C1EAB0 nor 0x00C1EAC4 but in a third list, `area+0x5F4`, so the sort above acts on that list's own vector; see "Run order of the three lists" below. What the two managers hold (da_init's effects are the likely ones [I]) is still unread.
   - **Seen in play** (DAOParagonEngine #206; Eluvian's frame_capture of the Fade) [S]: `da_fade` (RadialBlur, then FadeDistortion) is drawn before `da_bloom`.
 
 **`da_bloom`** (`dabloom.mat.xml`):
@@ -368,3 +368,31 @@ GOG 1.05 addresses. [C] read in the code or the files, [I] inferred, [S] seen in
   - It is drawn right after the grade's HSLMatrix draw (cc_arl100) and before the first Scaleform draw, as a MixGUI.psh draw of `da_vignette.dds`: 4 triangles, 8 vertices, SRCALPHA/INVSRCALPHA, sampled through `smpGUI`.
   - Hiding the HUD (ToggleMainInterfaceMessage) leaves it drawn.
 - **Open** [I]: whether it shows over the start menu, movies and cutscenes.
+
+## Run order of the three lists, the shadow maps, the default colour curve (render-01, read 2026-11-01; DAOParagonEngine #351)
+
+Tags: [C] checked in the disassembly by lib-agent-r01 (2026-11-01), [C by the reading] what the reading says it checked, [I] inferred; "two readings reconciled" is paragon-agent's A and B readers agreeing.
+
+### Run order of the three lists
+
+- **The trigger** `Renderer::FrameBufferEffects::TriggerEvent` (0x00456E70, the body of SOFBEffectEventTrigger 0x0046F440) runs the event (0x00456C10) in the manager 0x00C1EAB0, then in the object in the global 0x00C1E8B0 if it is not null, then in the manager 0x00C1EAC4 [C: `mov ecx, 0xC1EAB0` / `call 0x456C10` at 0x00456EAB, `mov ecx, [0xC1E8B0]` / `test` at 0x00456EB5, `mov ecx, 0xC1EAC4` at 0x00456EC6]. (render-01, read 2026-11-01; DAOParagonEngine #351)
+- **The global 0x00C1E8B0 is the area's own list.** 0x0067B1B0 sets it to `area+0x5F4` when an area is made current and to null otherwise [C: `mov eax, [ecx+0x5F4]` / `mov [0xC1E8B0], eax` at 0x0067B1B7, the null store at 0x0067B1E5]. It is the object `Framebuffer.cpp` asks for an effect by name (FB_SetEffectResource, FB_SetEffectEnabled), so the plugin API already works on the area's list and assumes neither manager (checked: src/dao/Framebuffer.h and .cpp name only 0x00C1E8B0, no 0x00C1EAB0, 0x00C1EAC4 or 0x5F4). (render-01, read 2026-11-01; DAOParagonEngine #351)
+- 0x00456C10 calls each effect's slot 1 with the event when the list is enabled (+0x10) and the effect is active (byte +0x88) or 0x00C1E8B5 is up [C by the reading]. That the .arl's da_bloom, da_fade and da_hsvmatrix are what `area+0x5F4` holds is [I]. The event 2 branch before the three runs rebinds the device surface (0x00459660, 0x00465600) [C by the reading]; that event 2 is EndFrame is [I].
+- **Still open:** what the managers 0x00C1EAB0 and 0x00C1EAC4 hold. The cutscene's da_dof and the GUI blur are added to 0x00C1EAC4 (above), so the area's effects run before them; da_init's effects are probably in one of the two [I]. Startup (0x00458B10) loads `da_init` when no effect file is named and adds it through 0x00457AA0 and 0x004578D0, which manager gets it was not read [C by the reading for the name].
+
+### The sun's shadow maps (Renderer::ShadowMaps; render-01, read 2026-11-01; DAOParagonEngine #351)
+
+Two partitions, near (index 0, 0x00BF2098) and far (1, 0x00BF209C), each a render target of a square size, drawn by the render script's scene ops SOSMStartPartition, SOSMStopPartition, SOSMBlurPartition and SOSMBindBackbuffer. Flags at 0x00C1E7E4: bit 0 created, bit 1 enabled, bit 2 frame set up, bit 3 a partition being drawn [C by the reading].
+
+- **Create** (0x00455580), from StartRenderer (0x00529DD1) and from SetDetailLevel, once the frame-buffer effects have started (0x00C1E8B6) [C by the reading]. The size by the detail `[0x00BF20E0]` (initially 2): 0 makes no maps, 1 and 2 give 0x200, 3 gives 0x400 (the table at 0x004556CC). The partitions are `{10.0, size, format}` and `{30.0 (sqrt of 900), size, format}`, so **the first Create always uses reaches of 10 and 30 whatever the level**. Both maps are put on the list of targets cleared each frame (0x00457B30 into 0x00C1EAD8), with clear colour (1, 1, 1, 1). Two readings reconciled.
+- **SetDetailLevel** (0x004556E0), from SetGraphicsDetailLevel (0x00458FF7): with no maps it only stores the level; 0 or 3 destroys (0x00453AB0) and recreates; 1 or 2 only when the old level was neither 1 nor 2. Then, when the descriptions exist, the near reach is {0, 5, 7, 10}[level] and the far {0, 15, 20, 30}[level], and 0x00BF20B4 is the far reach squared. A level above 3 reads past the tables. Detail 1's 5 and 15 therefore apply only after a change to 1 while running. Two readings reconciled.
+- **Update** (0x00453900), each frame from IGraphicsInternal::EndFrame (0x00528D36): with the maps made and enabled it advances a frame counter (0x00C1E808, wrapping at 50000), sets the camera, takes the sun, sets the light direction, updates the splits and resets the matrices, and resets each partition's two blur widths to 0.35. Two readings reconciled.
+- **The blur** (BlurPartition 0x004518E0, the body of SOSMBlurPartition 0x0046F5C0): it runs only when the graphics detail `[0x00BF22C8]` is 2 or more, the index is 0 and the shadows are on (flags & 3). **Only the near map is blurred, and not at detail 0 or 1**, whatever the render script passes. CreateBlurFilters (0x00454510) builds, per partition, a "Filtering stage" of two GaussianBlur filters, horizontal (HBlurShadow) into a temporary target and vertical (VBlurShadow) back, fBlurWidth 0.35. Two readings reconciled; the gate by the reading [C by the reading].
+- **The sun's fallback.** The sun comes from the scene's light (0x00537F00(scene, 1), its three floats copied by 0x00462290 with w = 1); with no light the vector is **(0, 0, -1, 0)** [C: fldz, `fst` x and y, `fld [0xAE2E00]` (-1.0), `fstp` z, `fst` w at 0x004539A7-0x004539BB, so w is the 0 left on the stack]. The reading's second reader had w = -1 and lost to this. The light's floats being a direction is [I].
+- A SpeedTree light-direction branch (the float 0x00C1E7E0 > 0) is dead as shipped: nothing Ghidra sees writes 0x00C1E7E0 or the floats it reads [I].
+
+### The default colour curve (render-01, read 2026-11-01; DAOParagonEngine #351)
+
+- 0x004560D0 returns the area's curve (global 0x00C1EB18) if it is not null, else the default at 0x00C1EB20 [C: `cmp dword [0xC1EB18], 0` / `mov eax, 0xC1EB20` / `je` / `mov eax, 0xC1EB18`].
+- The default is **`da_defaultcc`**, loaded by Startup (0x00458B10, at 0x00458CDA-0x00458D13); a 256x1 texture in core textures.erf, 1152 bytes [C by the reading, by ghilana]. Whether it is exactly the identity was not read [I]; a look at its 256 texels settles it.
+- SetAreaColorCurve (0x00458990) keeps the area's texture in 0x00C1EB18; 0x0067B1B0 calls it with `area+0x6B8` when `area+0x6CC` is not empty, and ClearAreaColorCurve (0x00458A10) otherwise [C: 0x0067B1C2-0x0067B1DA]. That `area+0x6B8` is the areadata's ColorCurves, the `ColorCurveTexture` above, is [I]. Shutdown releases both curves. Who consumes 0x004560D0 was not followed.
