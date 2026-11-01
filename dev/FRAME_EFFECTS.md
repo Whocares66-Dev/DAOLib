@@ -486,6 +486,8 @@ The quirks (render-07, read 2026-11-01; DAOParagonEngine #351):
 - **A number must start with a digit** in a filter line (`iswdigit`, render-04's line parser, above) [C by the reading, two readings reconciled]. The Effect's own integers go through 0x008E643E (`_wtoi` [I]) and are not tested for digits; `availability` is only `> 0`, so 0, a negative or a non-number leaves the effect unavailable.
 - **`id` is first, `effectid` second, `event` second**, and `material` second or third: a file with the attributes in another order fails with error 3 or 4, or loses its material.
 
+The reader of this grammar is `src/dao/core/FrameEffect.{h,cpp}` (`dao::core::ffx::Read`, DAOLib #292, tested in `tests/test_frameeffect.cpp`): the engine's quirks kept, each with the address it was read at, and the 14 shipped files read whole.
+
 ## Material states (.sta): the default state and its overrides, and the material managers (render-14, read 2026-11-01; DAOParagonEngine #351)
 
 How a draw's render state is set, and the three managers around it. Two readings reconciled (marks: [C] read in the GOG exe, [C by the reading] what the reading says it checked, [I] inferred). This is the rule the per-file notes above and in CHARACTERS.md, EFFECTS.md and SKY.md rest on: they name what one .sta sets, and this says what the rest of it is. A core reader of the .sta format is being built as DAOLib #295.

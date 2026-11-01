@@ -187,6 +187,7 @@ add_library(
     src/dao/core/Ldf.cpp
     src/dao/core/LightProbes.cpp
     src/dao/core/M2da.cpp
+    src/dao/core/FrameEffect.cpp
     src/dao/core/MaterialDefinition.cpp
     src/dao/core/MaterialObject.cpp
     src/dao/core/Morph.cpp

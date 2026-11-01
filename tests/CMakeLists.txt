@@ -52,6 +52,7 @@ add_executable(
     test_level.cpp
     test_model.cpp
     test_model_write.cpp
+    test_frameeffect.cpp
     test_materialdefinition.cpp
     test_materialobject.cpp
     test_morph.cpp
