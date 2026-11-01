@@ -284,7 +284,7 @@ The destructors undo more: PlayAnimation's removes its clip (`RemoveAnimation`, 
     - **2** (`0x007DE220`): re-pitches the camera, not its yaw, and moves its height, from LookingFrom to the primary. It uses both places' ground deltas, the actors' heights over 1.75, and an atan2 of the vertical difference over the horizontal distance. The exact formula was not reduced.
     - Any other value: nothing.
   - **The secondary is a list of tags in one string,** split at the delimiters at `0x00AF0CA4` (space, backslash and colon first; the rest not read). The files read had it empty. Type 2 ignores it.
-  - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is.
+  - Not read: type 2's exact terms, what the actor height object (`0x007CE5A0`'s +0x64) is: answered 2026-11-01 (naming batch 17, two readings reconciled): 0x007CE5A0 returns the mapped creature's appearance record (creature +0x7B0, 0x007CE5BB) [C], whose +0x64 is its `Height` (TURN_BASED.md, with `PerSpace` at +0x60), default 1.75 (0x00B0F44C); for an unmapped actor with an entity it returns actor +0x1F0 instead (0x007CE5CB) [C], a block taken as the same record [I].
 - **Shake** (type 20) is not a camera-only effect. (corrected 2026-10-31 by paragon-agent's readers, two readings reconciled, and checked in the exe; DAOParagonEngine #351): its update (0x007D0ED0) turns or moves the actor by the noise, and a turn also feeds the active conversation camera's offset (below, "The actions' interface").
 - **Depth of field** is the `FrameBufferEffect` (type 19) `da_dof`, not a camera property. Its passes and maths, its focal plane (the camera's far plane), and how conversations and cuts drive it: `dev/FRAME_EFFECTS.md`, "da_dof: depth of field".
 
