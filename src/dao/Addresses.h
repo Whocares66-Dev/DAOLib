@@ -1686,8 +1686,8 @@ DAO_ADDRESS(kThreadManager_SetThreadName, 4373)
 // Pool's slot 4 (0x004BA880) allocates: under the pool's lock (the critical
 // section at its +0x40: 0x004C4D00 and 0x004C4D50 take it, 0x004C4D30 lets
 // it go) it rounds the size up to 4, finds a free block (0x004B9940),
-// unlinks it (slot 11), splits off what is left over when that is at least
-// the pool's smallest block (+0xEC) and links the remainder (slot 10), and
+// unlinks it (slot 10), splits off what is left over when that is at least
+// the pool's smallest block (+0xEC) and links the remainder (slot 9), and
 // writes the block's header. Slot 5 (0x004BA9D0) reallocates, growing in
 // place over the free blocks that follow. Both read the header straight
 // from the pointer: the block's size at -0x10, its alignment's shift at
