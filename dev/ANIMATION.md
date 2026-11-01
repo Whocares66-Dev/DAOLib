@@ -541,6 +541,35 @@ Read in the disassembly (daoexe.py, capstone) and the game's files (ghilana). No
 - **Mode 3 (a .tbi curve, 0x008151F0 at 0x00815230 and 0x0081528D-0x0081540F):** `elapsed += dt`; while `elapsed <= 0` nothing; when `elapsed >= curve.x3` (the float at curve+0x18) the value is **y3 (+0x1C)** (flag 0, the outgoing clip) or **1 - y3** (flag 1, the incoming clip). In between the time elapsed is mapped to a curve parameter s by a numerical search on the **cubic Bezier x(s)** with control x values at curve +0, +8, +0x10, +0x18 and the weight is the **Bezier y(s)** with the y values at +4, +0xC, +0x14, +0x1C (Bernstein terms with the constant 3.0 at 0xAF0C38 are visible; the search's stopping tolerance and step were not decoded: the constant 1/30 at 0xC12420 is used there). The incoming clip's weight is **1 - y** (flag 1: `fsubp`, 0x00815404).
   - Data as stored (field 4033): `[x0,y0, x1,y1, x2,y2, x3,y3]` = the four Bezier control points (time in seconds, weight).
 
+#### The animation manager and the frame's phases (read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2 with subagents)
+
+[C unless marked]
+- **The manager:** one `Animation::AnimationManager`, a function static at 0x00C395E0 (`Instance` 0x008107F0, vtable 0x00B26584, 26 slots).
+  - **Slots:** 2 Update 0x0080E280, 4 GetFrameDelta 0x00810340, 5 SetPaused, 6 SetTimeScale, 7 GetTree 0x0080F980, 9 FindAnimation, 13 PopEvent, 14 AddEvent, 15 TakeEventsFor, 16 ClearEvents, 17 GetAnimationLength, 18 IsAdditive, 19 IsOverride, 20 GetEventTime, 21 FlushCache (`UnloadModule` calls it), 25 LoadAnimation.
+  - **Fields:** clips +0x04 and trees +0x34, keyed by the lower-cased name; last time +0x68; real clock +0x70, game clock +0x78; their frame deltas +0x80 and +0x88; paused +0x94; time scale +0x98 (1.0); event lists +0xA0 and +0xB0.
+- **Its clock** (`Update(now)`): dt = min(now − last, 0.1) × the scale. The real delta and clock take it; the game delta is 0 while paused, else dt. So the real clock runs while paused, scaled. `CClientExoApp::FrameUpdate` sets the scale (0x005D77E0). Who calls Update was not found [I].
+- **An object's delta** (`GetFrameDelta`): the game clock unless the object's flag 0x2000 (+0x260 bit 13) is set, then the real one. It is multiplied by the object's double +0x2E8 (0x005502D3, 0x008154E0 and others).
+- **Events:**
+  - The sweep 0x00815990 makes 0x20-byte events: id +0, time +8, the owner's key +0x14/+0x18, a string +0x1C. The `.evt` events go at 0x00815D4C, BlendStart (0xB) at 0x00815DF0 and Done (0xD) at 0x00815EA8.
+  - `AddEvent` appends to list A for targets bit 0 and to B for bit 1. `TakeEventsFor(owner, out, 1)` moves an owner's events from A (callers 0x0069A600, 0x0079EB00). Nothing reading list B was found [I].
+  - `GetEventTime(clip, id)` reads `<clip>.evt` uncached and answers the first event of that id, else −1.0.
+- **The frame's phases:**
+  - **The task:** `Animation::AnimationTask` (vtable 0x00B26784, Execute 0x008154D0) runs one object's animation a frame, with the object's delta.
+  - **The phases** go through the object's slot 25 (0x00546B90) in this order:
+    1. 0x100: slot 50, every tree's `UpdateWeights`.
+    2. 1: slot 48, every tree's time step (0x00814260), then its controllers.
+    3. Only if slot 37 or 38 answers true: 0x10000 slot 49 (the pose) and 0x10 slot 51, both when the object has bound entries (+0x1D4), and 0x1000 slot 52.
+    4. 0.
+  - So weights move before times, and the pose is built only for a flagged model.
+  - **The time step:** previous = time, advance, then the events, only for an active entry with events on.
+  - **The clock:** wraps modulo 65536 unless the entry's flag bit 0 is set (then it clamps). An entry retires with bit 0 set, time 0xFFFF and weight ≤ 0.
+- **The bind:** `UpdateWeights` (0x00814340) steps each entry's weight tween (0x008151F0). The first frame an entry's weight is above 0 with no tracks bound (+0x2C = 0xFFFF), it calls `Object::BindClipTracks` (0x0054D380).
+  - That stores the entry's slice number in the track vector (Object +0x18C) at +0x2C.
+  - `ModelAnimation::BindTracks` (0x008164C0) then pairs the clip's channels (+0x48, 0x20 bytes, name at +4) with the object's entries (+0x1D4, 0x30 bytes, name at +0x20) by a merge join on a case-sensitive compare of the names. Both lists are taken to be in name order. A channel with no entry is skipped; an entry with no channel gets null.
+  - Whether the entries' names are the bones' names is not read [I].
+- **Playing a clip** (`ModelAnimationTree` slot 12, 0x00813D70): the rate is speed × 65535 / length, and the event cursor is the index of the last event before the start time.
+- **Restarting a clip** (0x00549580) zeroes its tracks' key cursors.
+
 #### 4. The .tbi files (checked, ghilana)
 
 `humanoid.tbi` (832 bytes, in global.rim / anims.erf) lists 7 (from, to) pairs, all with y: 1 -> 0 (the outgoing clip's weight, the incoming one is 1 - y):
@@ -586,7 +615,7 @@ Read in the disassembly (daoexe.py, capstone) and the game's files (ghilana). No
 
 #### Not read
 
-- The caller of the tween update (0x008151F0) per frame and what drives the clip's own time/loop; what removes a node whose weight has reached 0.
+- Read 2026-10-31: `UpdateWeights` in phase 0x100, "The animation manager and the frame's phases". What drives the clip's own time/loop is also answered there (the time step, the clock) and what removes an entry is its retire rule (bit 0, time 0xFFFF, weight ≤ 0).
 - How a finished one-shot hands over to the TransitionTo clip with no play call (the "animation player follows the transition itself" in playanim.md); AnimationEvents 11-13 (BlendStart, BlendEnd, Done) and 23-26 handlers.
 - The set's normalisation of clip names for the tbi map (0x00A5E730, 0x00A69300), and which tbi is loaded for which creature (0x00A5D5A0's caller; likely the apr_base tree name + ".tbi"; not read).
 - Mode 2 of the tween (0x00815190's callers), the exact numeric search of the Bezier (0x0081528D-0x0081536C), the movement controller's event numbers and its named nodes (strings are runtime globals at 0xC4C5A0 etc.), and what sets bBlendIn int 7 = 1 (blend 3.0).
@@ -705,7 +734,7 @@ Effective rate `180/T` deg/s: 450 at ~0 degrees, 580 at 45 degrees, 692 at 90, 9
 
 ##### The turn (settled (corrected 2026-10-18 by lib-agent-2))
 
-The turn is the fast logical turn. The drawn model follows the object's orientation (+0x130), and the turn clip's root yaw does nothing: these clips lack GFF 4008 `AnimationHasGobAnim`, so the root-motion object holds no clip (see the turn clips in "Movement, casting, hits and gestures" below). The turn clip is cut after about 0.15-0.25 s, when state 4 ends, with a 0.25 s fade (corrected 2026-10-18 by lib-agent-2). This replaces the earlier "not settled" point on whether the model shows the logical facing or the clip's root rotation.
+The turn is the fast logical turn. The drawn model follows the object's orientation (+0x130), and the turn clip's root yaw is not shown to do anything (corrected 2026-10-31, lib-agent-2: the `.ani` lacks GFF 4008 `AnimationHasGobAnim`, but the turn clip's `.gad` has it; `mh_m.mov_p_r90trn_p.gad` has a gob rotation of −90° about z over 0.37 s, with no translation, so the root-motion object does hold the clip [C, file]. Whether the controller's fast turn (0x00A63B20) and the clip's rotation both act on the drawn orientation is open [I]) (see the turn clips in "Movement, casting, hits and gestures" below). The turn clip is cut after about 0.15-0.25 s, when state 4 ends, with a 0.25 s fade (corrected 2026-10-18 by lib-agent-2). This replaces the earlier "not settled" point on whether the model shows the logical facing or the clip's root rotation.
 
 #### Not read
 
@@ -760,7 +789,10 @@ Other overlay trees (apr_base column values): `bowoverlay`, `cbowoverlay`, `staf
   - additive clips last: v · w added to a translation, slerp(identity, q, w) multiplied onto a rotation (the multiplication's order inferred). Weights are used raw, not divided by a sum.
 - **The flinch** (row 103) starts through `PlayAdditiveAnimation` (0x00659300 → 0x00696B50) with a blend rate of 5.0 (0xAE7308) toward weight 1, so 0.20 s to full. No fade-out was found [open].
 - **The overlay draw (108) and sheathe (109)** are gated by 0x00694E20, which requires rows 100 and 109 (or 101 and 108) at weight 0.
-- **Row 99, bodyoverlay:** no code that starts it was found.
+- **Row 99, bodyoverlay** (corrected 2026-10-31 [C unless marked]): started by an `AnimWeightRequests` at AnimBase +0x208 (constructor 0x007F4CE0, id 0x63, built at 0x00A60CE5).
+  - **Its setter** 0x007F4D10(slot, mode, value, blend) keeps a {value, mode} per slot. The weight is the largest mode-1 value times the product of the mode-2 values, clamped to [0, 1] (0x007F4A50).
+  - **The first time,** it plays the animation through AnimBase +0x58; afterwards it only sets the weight (0x00A5C840) [I for the play call's argument order].
+  - **Its setters:** 0x006A6D90 (slot 0) and 0x007E04E0 (slot 1), both mode 1 [I for what they stand for].
 - Override priority (4013) is 0 in every overlay clip read, so ordering among overrides was not needed.
 
 #### 2. Blinking
@@ -852,7 +884,7 @@ anim_base/anim_combat column `DisableLookAt` (hash 0x07EF3CC0, read by the table
 
 #### 4. Additive and partial clips
 
-- Marker: in the clip (.ani, GFF4 "ANI V0.1", root struct): `AnimationIsAdditive` 4011 (byte), `AnimationIsOverride` 4012 (byte), `AnimationOverridePriority` 4013 (uint32), `AnimationIgnoreScale` 4040 (byte), `AnimationAnimLength` 4009 (float seconds). Loader 0x00815FB0 stores them in the ModelAnimation (+0x2D, +0x2C, +0x28, +0x2F, +8). Getters: `Animation::AnimationManager` vtable slots 18 (IsAdditive(id), 0x0080FEC0) and 19 (IsOverride(id), 0x0080FFA0) and the same two slots of `ModelAnimationTree` (0x00813EE0, 0x00813F70).
+- Marker: in the clip (.ani, GFF4 "ANI V0.1", root struct): `AnimationIsAdditive` 4011 (byte), `AnimationIsOverride` 4012 (byte), `AnimationOverridePriority` 4013 (uint32), `AnimationIgnoreScale` 4040 (byte), `AnimationAnimLength` 4009 (float seconds). Loader 0x00815FB0 stores them in the ModelAnimation (+0x2D, +0x2C, +0x28, +0x2F, +8). Getters: `Animation::AnimationManager` vtable slots 18 (IsAdditive(name), 0x0080FEC0) and 19 (IsOverride(name), 0x0080FFA0; corrected 2026-10-31 [C]: the argument is the clip's name, a wstring, found with `FindAnimation` and loaded if absent, 0x0080FEE8–0x0080FF14) and the same two slots of `ModelAnimationTree` (0x00813EE0, 0x00813F70).
 - No bone mask field exists in the .anb or the clip: the bones a clip keys are the mask (an override clip replaces only the channels it contains; an additive clip adds only to those).
 - Additive clips found (all in `mh_o.*` and `mh_c.*`): the head/eye/body look poses (6.0, 6.03, 3.03 s), `eyejitter`, `eyelids`. Others not enumerated (could be done by scanning all 4,518 .ani for AnimationIsAdditive = 1).
 - No breathing layer was found: a scan of the overlay trees shows none, and no table row says breathing (inferred: breathing is baked into the idle clips).
@@ -1099,8 +1131,8 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools
 #### Short answers
 
 1. **Walk start: no clip is played, the controller goes straight to mode 2 in the same frame.** `pausewalkf` (85) has no node in movement.anb, so `0xA6A300` fails its "is the clip in the Transition tree" test and calls `0xA6BF70` (mode 4 -> mode 2). Mode 2's enter then fades `Motion` to 1.0 and `Transition` to 0.0 at blend 4.0 = 0.25 s linear, and the walk/run leaves restart at clip time 0. Run start (`pauserunf` 84, `mov_p_rf.ani` 0.2 s) does have a node and plays.
-2. **Stop clips: the logical position is already at the path's end, and nothing moves the object during them.** State 3 is entered on arrival (speed set to 0 at once, no deceleration), the controller does not move the creature in state 3, and the stop clips drive nothing in the object: the engine's root-motion channels are not in these clips. The 0.05 m of travel in `root_translation` is bone animation inside the model (checked).
-3. **Turn clips: the model's drawn orientation is the creature's logical orientation, rotated by the code's fast turn (about 0.15 to 0.25 s for 90 degrees); the clip animates the body only.** The clip's root yaw is not applied to the object (the root-motion object has no clip for these files), and the clip has no 90 degrees of yaw in any bone (checked). So the "root-yaw scaling" in animmove is a no-op for the human locomotion clips.
+2. **Stop clips: the stop and turn clips do drive the root-motion object by their `.gad`** (corrected 2026-10-31, lib-agent-2 [C]; the earlier reading looked in the `.ani`, "Root motion's data" under "Sync abilities"). State 3 is entered a little before arrival (speed set to 0 at once, no deceleration), the controller does not move the creature in state 3, and the 0.05 m in `root_translation` is a bone channel apart from the root motion (checked).
+3. **Turn clips: the model's drawn orientation is the creature's logical orientation, rotated by the code's fast turn (about 0.15 to 0.25 s for 90 degrees).** The turn clip's `.gad` has a gob rotation, so the root-motion object does hold the clip (corrected 2026-10-31, lib-agent-2 [C]); whether it also acts on the drawn orientation is open [I]. The clip has no 90 degrees of yaw in any bone (checked).
 8. **Mode 8 (stop) has no exit on MvmtUnlock or on a time test. Its exits: the engine's Done (event 13) at the clip's end (2.267 s at rate 1.0), or new movement input (mode 4 at once).** The stop clips have no Done in their .evt; Done is raised by the clip event sweep when the playhead crosses the clip's length (inferred from 0x815E81, not seen). Mode 0x10 (turn) exits on Done too, but earlier in practice: as soon as the controller leaves state 4, which is when the facing is within 0.999999 degrees of the desired one, so the 0.8 s turn clip is cut to a 0.25 s fade after about 0.15 to 0.25 s.
 
 #### 1. Walk start from idle (checked unless marked)
@@ -1118,8 +1150,12 @@ Chain, per frame `0xA6BF00(dt ms)`:
 #### 2. Stop clips and where the creature is (checked unless marked)
 
 - Path following `0xA64350`: remaining path length [+0xE8] = `0xA63E80`. With an anim controller, `0xA6ACF0` returns `0.25 * |node+0x20|` (double 0xAE7FE8 = 0.25) for the stop clip chosen by `0xA69BA0(0)` (the clip node's +0x20 vec3 is its end root translation, filled by the clip wrapper's constructor at 0xA39440..: `0xA390F0(0, node+0x10)` and `0xA390F0(length, node+0x20)`, both zero-initialised first). If that is `< remaining`, `0xA636B0` gives the travel the clip still has; the state-3 test is `remaining < travelLeft + 1e-6`. Then the step is taken (`0xA63450`, `0xA63F40`), and **arrival (`0xA63F40` true) sets state 3 as well**, with the struct's position at the path end.
-- **For the human stop clips `|node+0x20|` is 0**: `0xA390F0` looks for a channel named **"gob_gobtranslation"** (UTF-16 at 0xB58CBC; rotation "gob_gobrotation" at 0xB58C9C) in the clip's channel list (field 4005, names 4000), and these clips (mh_m.mov_rf_p_lfoot/rfoot, mov_p_rf, mov_p_r90trn_p, mov_rf, mov_wf, checked by dump) have `god_translation`, `god_rotation`, `root_translation`, `root_rotation` and no such channel. So travelLeft = 0 and **state 3 begins only at arrival (remaining < 1e-6), at the end of the path**. The travel ratio `AnimBase[+0xB4] = max(0.25, remaining/T)` written by `0xA6AD50` is then a division by zero and is never used (see section 3: the root-motion object has no clip for these files).
-- In state 3 (`0xA644E0`): `0xA63B20` (turn the facing toward [+0x90]) is called, **[+0xE0] speed = 0 at once (no deceleration; the creature arrives at full speed and stops dead)**, `0xA64350` (movement) is not called. The creature update (`0x6BB9CA` region) applies the controller's position to the object as in any frame (`0x6B6880`, then SetOrientation `0x694CE0`) because AnimBase+0xC0 is 0 (section 3). The position does not change, as the struct position is unchanged.
+- **For the human stop clips `|node+0x20|` is not 0** (corrected 2026-10-31, lib-agent-2 [C]): `0xA390F0` looks for a channel named **"gob_gobtranslation"** (UTF-16 at 0xB58CBC; rotation "gob_gobrotation" at 0xB58C9C) in the clip's channel list (field 4005, names 4000).
+  - **Where the reader looks:** `0xA390F0` reads `gob_gobtranslation` from the clip wrapper built from the `.gad` (`CacheClipGad` 0x00A60010 → 0x00A39430 → 0x00A394B1/0x00A394C1). The earlier dump listed the `.ani`'s channels (`god_*`, `root_*`), which are bone channels.
+  - **The run stops:** `mh_m.mov_rf_p_lfoot.gad` travels 0.095 m, so `|node+0x20|` is not 0. State 3 begins when the remaining path is within the clip's travel (×0.25, 0xA6ACF0), a little before arrival, not only at arrival [C for the data and the reader; the controller's comparison as this section has it].
+  - **The walk stop:** `mh_m.mov_wf_p_lfoot.gad` travels 0.81 m over 1.03 s (end (−0.022, 0.813, 0), peak y 0.8136 at 1.0 s). But per the bullet "The clip itself" a walk sets no transition, so a walk stop has no clip.
+  - **No gob track:** the loops `mh_m.mov_wf` and `mov_rf`.
+  - **The run start:** `mh_m.mov_p_rf.gad` travels 0.372 m forward over 0.2 s.- In state 3 (`0xA644E0`): `0xA63B20` (turn the facing toward [+0x90]) is called, **[+0xE0] speed = 0 at once (no deceleration; the creature arrives at full speed and stops dead)**, `0xA64350` (movement) is not called. The creature update (`0x6BB9CA` region) applies the controller's position to the object as in any frame (`0x6B6880`, then SetOrientation `0x694CE0`) because AnimBase+0xC0 is 0 (section 3). The position does not change, as the struct position is unchanged.
 - The clip itself: `0xA6AD50` (mode 8 enter): id `0xA69BA0(1)` = [+0x60] (set by the run clip's MvmtSetTransition events to `runpausefl` 74 or `runpausefr` 75; walking sets none, so **a walk stop has no clip: [+0x60] = 0 -> `0xA6BF70` -> mode 1, a crossfade to idle**); `0xA6A300(id, 1.0)`: rate 1.0, blend [+0x50] = 4.0 (0.25 s), Motion -> 0, Transition -> 1. So the stop clip plays in place, 2.267 s, 1.0x.
 - The foot is chosen when the run loop's events fire (section 4 of animmove); the stop clips' own events: `mov_rf_p_lfoot.evt`: 0.00 MvmtLock(23), 0.03 MvmtSetTransition(25) "pause", 0.17 FootDown(14) "|Left", 0.30 FootDown "|Scuff", 0.30 MvmtUnlock(24). `mov_rf_p_rfoot.evt`: 0.00 Lock, 0.03 SetTransition "pause", 0.07 FootDown, 0.17 MovementSound(17) "Unknown", 0.27 FootDown "|Left|Scuff", 0.27 Unlock. (The add-in dao_prc_cp_2 has copies of the same sizes, 278/322 bytes; not readable, assumed equal.)
 
@@ -1159,7 +1195,7 @@ Events (`0xA6BFA0`, ids 11-26; the jump table: 11 and 13 -> one handler, 23 -> l
 - AnimBase virtual 0x6C's time unit (`0xA69AD0`), 0x70 (`0xA69AA0`), the settle `0xA69DF0`/`0xA69CF0` beyond the weights.
 - Whether a new move order can set state 1 or 2 while state 3 holds (the setter `0xA639C0`/`0xA63800` callers, and the command layer's gate for a move while the stop runs).
 - `0xA63F40` (the path advance: that it puts the position exactly at the path end on arrival), `0xA63E80`, `0xA63450`, `0x6B6880`.
-- How many .ani files in the game have field 4008 (the gob clips) and what plays them; the use of the warp flags +0x68..+0x6A in the root-motion object (`0xA66xxx`).
+- Field 4008 is in the `.gad` files, never the `.ani`; every play through slot 44 starts the root motion (2026-10-31). The use of the warp flags +0x68..+0x6A in the root-motion object (`0xA66xxx`).
 - Quadrupeds (their stop/turn trees and whether they have gob channels), the dao_prc_cp_2 add-in's clip/evt copies (assumed equal), the combat tree (no Transition node).
 - Nothing here was seen in play; the numbers 0.15-0.25 s for a turn and the dead stop at the path end are readings of the code and should be checked against the vanilla game.
 
@@ -1645,16 +1681,25 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - 0x00695750 stores the yaw (+0xE0, flag +0xE9) and then calls `MovementController::SetDesiredFacing` (0x00A638B0);
     - 0x00695780 stores the end time in ms (+0xE4): `ftol(record +0x24 × the step's ms)`, at least 101.
   - **The root-motion update** 0x00A65ED0 is called by `CCCreature` slot 0x118 (0x006A3150) and by CCObject's 0x00695980. It returns at once unless:
-    - the root-motion object holds a gob clip (+0x40, set only for a clip with GFF field 4008 `AnimationHasGobAnim`, 0x00A38F20), or
+    - the root-motion object holds a gob clip (+0x40, set only for a clip with GFF field 4008 `AnimationHasGobAnim`, 0x00A38F20 (the clip's `.gad`, see "Root motion's data")), or
     - its byte +0x6A is set (0x00A65F28–0x00A65F35).
     - The position's flag alone does not move anyone.
   - **+0x6A is set in two places** [C by a byte search]:
     - `CCCreature::DisableControllerCollision` 0x006A0DF0, at death [I];
     - 0x006A3C50, a melee swing's lunge: from `CSSubActionHandler::Swing` 0x007A87C0 (at 0x007A8BA7), with +0x68 = 1 and the end at 500 ms, unless 0x00A64740's bit 0.
     - It is cleared at a held clip's end (0x00A65CF0) and by 0x007C1690(0).
-  - **So the victim of a knockdown or a deathblow is turned, not moved.** Their clips have no field 4008 (`mh_c.rct_kdwn_lp_v1`, `rct_kdwn_up_v1`, every `*dblow*` clip of core [C, paragon-agent-2's parse of 46 files]), and nothing sets +0x6A. So the stored spot is never used. Only the yaw takes effect, through SetDesiredFacing.
-    - Whether any other sync ability's clips (table 0x65's rows) carry field 4008 is not read [I].
-    - The deathblow's attacker goes through the same 0x007A3370 [I]. So "the attacker slides over 0.15 s" (the deathblow bullet below) needs a gob clip or a sync record (0x007C1600: the partner's appearance kind 3 and table 0x65's column 0xE639A8C5 > 0) [I]. Seeing it in play would settle it.
+  - **The victim of a knockdown's get-up or a deathblow's death is moved by the clip's root motion** (corrected 2026-10-31 by lib-agent-2 with subagents, from paragon-agent's anim-4 reading) [C unless marked].
+    - The field 4008 and the gob tracks are in the clip's `.gad`, not its `.ani` ("Root motion's data" below). paragon-agent-2's parse of 46 files read the `.ani`.
+    - Every play through `CCCreature` slot 44 starts `RootMotion::Start` ("Root motion's data").
+    - The `.gad` of `mh_c.rct_kdwn_up_v1` (the get-up, 2.13 s, travel up to 0.42 m) has a gob track. So do the sword-and-shield, two-hander and dual-wield victims' `*_dblow_die_v1/2/3` (`combat_humanoid.anb` maps `db_h_{ws,2h,dw}_die_v*` to `{sw,tw,dw}_dblow_die_v*`).
+    - The loops (`rct_kdwn_lp_v1`, every `*_die_lp_*`) have none.
+    - So `+0x40` is set and `RootMotion::Update` (0x00A65ED0) moves the victim by the clip's translation from where it stood at `Start`. The yaw still comes through `SetDesiredFacing`.
+    - Whether the placement's stored target (+0x50, set by 0x007A3370 before the play) is still eased toward, since `Start` does not clear it, was not followed [I]. Not seen in play.
+  - **Sync abilities other than the deathblow:** whether their clips (table 0x65's rows) carry gob tracks is not read [I].
+  - **The deathblow's attacker:** its clips differ by weapon.
+    - The sword-and-shield attacker's `sw_dblow_atk_v1/2/3` and `sw_dblow_v3_1` have gob tracks (`sw_dblow_atk_v1`'s runs past 1.19 m).
+    - The two-hander's and dual-wielder's `*_dblow_atk_v*` have none.
+    - So "the attacker slides over 0.15 s" (the deathblow bullet below) has a gob clip only with sword and shield [C, files]. Which tree row plays the attacker's clip was not found [I].
   - **When the root motion runs** (`CCCreature` slot 0x118, 0x006A3150, each update):
     - **The step:** 0x00A65ED0(dt in ms) adds the time (+0x3C). While it is before the end (+0x64): pos += (target − pos) × min(1, ms / (end − time)), all four components, and the yaw likewise toward +0x60.
       - With a gob clip, the output is the position plus the clip's translation at that time (× +0x34), turned (0x00A39260).
@@ -1673,6 +1718,25 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - **Slot 0x178 is called** at ExecuteEffect's end (0x00747250: 0x0074728E, 0x00747318), at sub-action 51's end with flag 5, and at the deathblow's end (0x007473EE).
   - **Not read:** 0x007A6EA0, 0x00A63F40 (slot 0x11C's path clamp), 0x007C1B70's maths, and which scripts set `EFFECT_INTEGER_DISABLE_PHYSICS`.
 
+##### Root motion's data (read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagent)
+
+[C unless marked]
+- **The file:** a clip's root motion is in its sibling `.gad` (GFF4, the clip's name + `.gad`, beside the `.ani`).
+  - **Its fields:** `AnimationNodeList` (4005), `AnimationGeneralAnimName`, `AnimationHasGobAnim` (4008), `AnimationAnimLength`, `AnimationCombatRange`.
+  - **Its nodes:** `gob_gobtranslation` (3 floats a key after the time) and `gob_gobrotation` (4), 30 keys a second.
+  - A clip with no root motion has an empty list and 4008 = 0, about 220–240 bytes. The `.ani` has none of these.
+- **The cache:** `AnimBase::AddTree` (0x00A61B10, slot 35) caches each clip's `.gad` through `CacheClipGad` (0x00A60010), and its `.evt` through 0x00A60150, keyed by the Animations row of the node's `AnimName` (0x005CB780; key 0 ignored).
+  - `CCCreature` adds its trees with flags 0xF (0x006B5CA1), so every clip of a creature has its `.gad` cached.
+  - `GetNodeById` (0x00A5E390) finds a played row's node through the trees in their order. The tree names' vector is at AnimBase +0x68..+0x6C.
+- **The start:** every play through `CCCreature` slot 44 (0x006AA7E0) passes the root-motion flag 1:
+  - `PlayInner` 0x0069B3D0 → 0x006958F0 (which also runs `RootMotion::Init` 0x00A65C80) → 0x00A5FCC0 → 0x00A5F9C0;
+  - that then calls `RootMotion::Start` 0x00A65BD0 after the play (0x00A5FAB7; by id through slot 22, 0x00A5E717);
+  - `Start` keeps the clip (+0x40) only if `HasGobAnim` (0x00A38F20, field 0xFA8) is true. Asking again for the clip already playing returns early.
+- **The stop:** `StopAnimation` calls `RootMotion::Reset`.
+- **The deathblows' `.gad` files** (44 of 48 read; the 4 `c_lghtdrag` ones are in an enciphered add-in):
+  - with gob tracks: `sw_dblow_atk_v1/2/3`, `sw_dblow_die_v1/2/3`, `sw_dblow_v3_1`, `tw_dblow_die_v1/2/3`, `dw_dblow_die_v1/2/3`, `dblow_hdrg_*`, and `c_dragona` and `c_spidera`'s `dblow_blunt`;
+  - none: `tw_dblow_atk_*`, `dw_dblow_atk_*`, every `*_die_lp_*`, `*_v3_2`, `shared.dblowdieloop`, `c_highdrag.dblow_*`.
+
 #### The deathblow
 
 - **The start handler is 0x00745E10** (ID 17720, `ret 8`), slot 38 of the first handler table 0x00747480 fills; its end is 0x00747360 (cited from DAOTurnBased: it takes the striker out of the slow-motion set).
@@ -1684,7 +1748,7 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
   - **What follows** [I, from the code and the data, not played]: a humanoid killed with a blunt weapon gets V1 or V2 at random; with a blade, always V3, or with gore and a neck always the decapitation row; a blunt weapon with gore and a neck matches no row and falls back. A beast's kill is fixed by weapon style and blade or blunt. Ogres have `ValidDeathBlows` 1 (the beast rows); the positional ones (2) are the brood mother, Wild Sylvan, high dragon, pride demon, archdemon and Grand Oak.
 - **No row, or no valid victim:** the attacker plays anim 107, and the target gets table 103's row 1 (SIMPLE_DEATH_V2, React 250) as a plain death.
 - **The two sides:** the target is given a death EFFECT of type 7, not a command (corrected 2026-10-23 by lib-agent-2), whose handler (0x007A12E0) queues command 32, ExecuteEffect, which plays the row's `React` through 0x005CA740; the start handler gives the target no command of its own and never command 38, which is made once, by the script, on the attacker (combat_h.nss:957) [C]. The target plays the row's `React`, or table 103's for the fallback. The attacker plays the row's `CastAnim` through sub-action 37 (0x007A5FC0 → `AddCommand(0x25)`) with a placement record, and is added to the slow-motion set (0x00745DF0).
-- **The placement** (0x007A5A30): **the target is not moved or turned.** The attacker slides over **0.15 s** (0x0074639D) [I since 2026-10-27: the slide needs a gob clip or a sync record, "Who carries out the placement" above; not seen in play] to the point on the line between them at PersonalSpaces(target, attacker) + 1.2 m from the target (0x00695320; 1.2 at 0x00AFEBC0), or, for a large creature with a row in tables 118–122, to that row's spot in the target's frame (Percentage, Distance, AngleATK, AngleTarg). No walk-grid or collision test was seen. The vector's maths is [I].
+- **The placement** (0x007A5A30): **the target is not moved or turned.** The attacker slides over **0.15 s** (0x0074639D) [a gob clip only for the sword-and-shield attacker's clips, "Sync abilities" above (2026-10-31); not seen in play] to the point on the line between them at PersonalSpaces(target, attacker) + 1.2 m from the target (0x00695320; 1.2 at 0x00AFEBC0), or, for a large creature with a row in tables 118–122, to that row's spot in the target's frame (Percentage, Distance, AngleATK, AngleTarg). No walk-grid or collision test was seen. The vector's maths is [I].
 - Closed 2026-10-23 by lib-agent-2 [C]: the guard 0x0073C5F0 sends a target already in command 32 to the plain death row (0x00745F54–0x00745F68), and the second `AddCommand(…, 5, …)` at 0x007462C7 is `AddSubAction(5)` (0x0073D4D0) on the attacker, which only drops temporary trees.
 - Not read: 0x0079F4A0, 0x006956B0 → 0x005CA710, 0x006A51C0 and 0x007EED00 (when `Position` is set); 0x006A3780's numbers; whether sub-action 37's move is cut by the grid; no row choice was played.
 
@@ -1752,14 +1816,25 @@ GOG exe 1.05 (base 0x400000), no Ghidra, no game. "checked" = read in disassembl
   - **Its names:** PlayVO is handed the same wstring twice (ShowLine 0x0068E8A4–0x0068E916), so FaceFX's group and animation are both `<strref>_m`, or `<strref>_f`. `36658_m.fxe` (magic `BIOE`) holds an `FxAnimGroup` named `36658_m`, authored for `humanmale`, with curves on face-graph nodes (`jawOpen`, `pucker`, ..., `Orientation Head Pitch`), not on bones. The suffix is `_f` exactly when the voice event's is: the main character is female and the `_f` event exists (0x007F2B70). Each language has its own timing.
   - **The actor** is the head model's own field, `MMHFacialAnimationBlueprintName` (6248) on its `.mmh`, not a race and gender table: `hm_uhm_basa_0.mmh` names `humanmale.fxa`, `ef_uhm_*` `elffemale.fxa`, `kn_uhm_*` `child.fxa`, 392 `cn_hed_*` `Human.fxa`, besides `succubus`, `werewolf` and `sylvan`. Many heads have it empty (`hm_hed_dcpa_0.mmh`), and they get no face animation. `FacialAnimationBlueprint` (0x0084D4F0) strips the bones' `default_` prefix.
   - **The clock:** with a voice, the FMOD channel's position. The player's update (0x00850FB0) hands the sound's position (0x005B65C0, ms × 0.001) to FaceFX's tick (0x00A0BAF0) as an external time, so the mouth pauses and stops with the sound. Without one the position is −1 and FaceFX keeps its own clock. That a position ≥ 0 replaces FaceFX's clock is inferred.
-  - **Start and end:** while FaceFX has not started (the tick returns 0) and there is a sound, the player starts the sound (0x0085117B), so the face drives the voice's start under faceSync. The face ends at state 2. It loops only with Play's fifth argument (+0x7C), which PlayVO passes as 0. Stop (slot 7, 0x0084EC40) puts the bones back to the reference.
+  - **Start and end:** while FaceFX has not started (the tick returns 0) and there is a sound, the player starts the sound (0x0085117B), so the face drives the voice's start under faceSync. The face ends at state 2. It loops only with Play's fifth argument (+0x7C), which PlayVO passes as 0.
+  - **After a stop the face eases to rest over 2.0 s, linearly** (corrected 2026-10-31 by lib-agent-2 with a subagent, from paragon-agent's face reading; replaces "Stop (slot 7, 0x0084EC40) puts the bones back to the reference") [C unless marked]. `StopAnimation` (0x0084EC40) keeps its first argument at +0x7D. For a playing instance it stops FaceFX, sets the fade's start +0x68 to the last frame time (+0x70), and copies each bound bone's last output into its fade slot.
+  - **Each later `Update`** (0x00850FB0), while +0x68 ≥ 0 and 0 < now − stop < 2.0, gives w = 1 − 0.5·(now − stop) (2.0f at 0x00B2B56C, the double 0.5 at 0x00AE70F8). With the instance stopped and w > 0, it applies the last pose scaled by w (0x008510A1–0x008510D9).
+  - **Cancelling the fade:** `StopVO`'s second argument (0x00A5D360 takes two) calls the player's slot 8 (0x0084E790), which sets +0x68 to −1.0.
+  - **A new `PlayAnimation`** (0x0084EEF0) first stops the player (`StopAnimation(0, 1)`). It takes (group, anim, sound or 0, level, loop).
+    - PlayVO passes the line's face name as both group and anim.
+    - The cut's `AnimateFace` (0x007CE9A0) passes the action's +0x28 and +0x44, and its byte +0x64 as the level.
+  - **Who starts the voice:** `Update` gives FaceFX's tick the sound's position × 0.001, or −1.0 with no sound or with the manager's +0xC8 set. When the tick returns 0 on a frame the instance had not stopped before, and a sound is attached, the player plays it (0x00851177–0x00851188). The manager's +0xC8 blanks only the clock, not the start.
+  - **The face's level:** a bone is skipped when its level (+0x54) is below the player's (+0x80). `BindBone` (0x0084EA30) binds the whole tree at level 0, and one subtree (under the node named by the object's +0xEC string) at level 1.
+    - PlayVO plays at level 0; a cut's face at its `FaHeadMove` byte.
+    - Which node the second pass finds is [I].
+  - **A line's length while a face plays:** `GetAnimDuration` (0x0084E8B0) = max(end, end − start).
   - **No fallback:** with no face (an empty field, a dog), or no `.fxe` of that name (manager slot 8 false), the voice plays alone and the mouth stays at rest. There is no default talking clip and no flap by loudness (inferred from their absence). The line's timer is then the sound's length.
   - **Barks and ambient lines play faces too, through PlayVO:** the sound set's voice (`CCCreature` 0x0069FE50 from PlaySoundSet, event `<ss_name>/VO/<strref>_m`, face `<strref>_m`, at the creature's +0x870, stopping a voice already playing when asked) and the ambient manager (0x006FE71B). Barks' faces are in `corefacialanimations.erf` (`179932_m.fxe`, Alistair's). A cut's spoken line (ASLN) plays its own with the same names.
   - **Its output is bones, a third term** (the evaluator 0x0084F550): each bone of the actor's `FxMasterBoneList` is its reference plus, per linked face-graph node of value v, v × the node's position and scale deltas; its turn from the reference is the product, in the poses' order with each new factor on the right, of `slerp(I, pose × conj(reference), v)`, starting from identity and normalised once (settled 2026-10-20 by lib-agent-2 against the engine's own instructions in an x87 emulator; `dao/core/FaceFx.h`, #206). Each bone is handed that turn as {x, z, y, −w} and (position − reference) / 100 with y and z swapped through `ObjectNode`'s face setter (slot 1 of the vtable 0x00AF972C, 0x0055E000, scale dropped). The node composes rotation = FaceFX (+0xF0) × animated (+0xE0) and translation = rest + animation + FaceFX (+0x130) (0x0055E9D0). So it comes after the whole body pose (normal, override and additive clips, the look-at among them) and enters no clip list. A cut's `cs_f.*` clip and FaceFX on the same bone compose, and neither wins. No consumer of `FxMorphTargetNode` was found, so no morph targets (inferred).
   - **And the face material's emotion weights:** an `FxEmotionsWeightNode` ("Material parameter index" 0..7, name `mml_fEmotionsMapWeight`, mesh `FaceM1`; 0xB57AD8–0xB57B44) writes its value into component i of the 2 × vec4 `mml_fEmotionsMapWeight` on the face mesh (the evaluator's first part, 0x0084F561–0x0084F6F7). These are the 8 weights over `mml_tEmotionsMask` (the shader's use inferred from the name, dev/CHARACTERS.md). So emotions come from the `.fxe`, as bone motion and as these weights.
   - **No blink layer in the engine:** a blink shows only when the line's curves drive the eyeBlink or lowLid bones.
   - **Cut action 44 is `ActionAnimateFace`** (vtable 0xB232E0, update 0x007CE9A0): it plays a named FaceFX animation on the actor's face through the manager, from the action's start, and stops it at its end. Its arguments are inferred.
-  - **Order in a frame:** the scene's tick (0x0052A090, from the scene loop 0x0052A565, after the scene's preparation) calls the manager's slot 13 (0x0084CB60) with the scene time (`[edi+0x48]`), then 0x0084CAF0, which runs each player's update (0x00850FB0), which runs the evaluator (0x0084F550). The player fades the face out near its end (0x00851007–0x00851036; inferred from the code's shape).
+  - **Order in a frame:** the scene's tick (0x0052A090, from the scene loop 0x0052A565, after the scene's preparation) calls the manager's slot 13 (0x0084CB60) with the scene time (`[edi+0x48]`), then 0x0084CAF0, which runs each player's update (0x00850FB0), which runs the evaluator (0x0084F550). The player fades the face after a stop, not near its end (corrected 2026-10-31, "After a stop the face eases to rest" above) [C].
   - **The face graph's evaluation** (read 2026-10-19 by lib-agent-2's readers, for #206; the starred items checked, the rest read in the listings):
     - **Order:** `FxFaceGraph::Update` (0x00A19B60) makes one forward pass in the file's node order, with no recursion and no sort. In all 13 readable `.fxa` every link's input index is below its node's; the four enciphered add-ins' actors were not read.
     - **A curve sets its node:** the tick (0x00A0BAF0) sets the node's pending value to the curve's value at t, finding the node by the curve's name (0x00A1AB50).
@@ -1787,7 +1862,7 @@ GOG exe 1.05 (base 0x400000), no Ghidra, no game. "checked" = read in disassembl
     - **Node types** 0, 4 and 8 alone occur, and the update treats them alike. Inferred: 0 a combiner or generic target, 4 a bone pose's target (every bone pose names a type 4), 8 `FxEmotionsWeightNode`. The Delta, CurrentTime and MorphTarget classes exist and are not used; the nodes' track records (state 3, none) do nothing.
     - Not read: how the tick works out its elapsed time, the blend in and out, the per-bone weight (1.0 in every shipped file), and ids above 10.
   - A core reader needs the face graph as well as the curves: the `.fxe` holds curves on graph nodes, and the `.fxa` holds the graph, its link functions (linear, quadratic, cubic, sqrt, negate, inverse, oneclamp, constant, corrective, clampedlinear, perlin noise, custom; strings 0xB573E0–0xB57810) and the bones' poses.
-- Not read: the `.fxe` and `.fxa` layouts (the reader, #206); how FaceFX's tick uses the external time; what writes the scene time `[edi+0x48]`, so whether a pause freezes a face with no voice; the `.fxe` loader (0x0084DBA0) and how the head's field reaches the player; whether record type 8 is exactly `FxEmotionsWeightNode`; the fade's constants (0xB2B56C, 0xAE70F8); where the node's compose (0x005B5D40) runs against the face's update in a frame, so whether the face lags a frame; `ActionAnimateFace`'s arguments and whether a shipped cut uses it; whether every `_f` event has an `_f.fxe`; `g_eclipseGame+0x254`, which decides faceSync.
+- Not read: the `.fxe` and `.fxa` layouts (the reader, #206); how FaceFX's tick uses the external time; what writes the scene time `[edi+0x48]`, so whether a pause freezes a face with no voice; the `.fxe` loader (0x0084DBA0) and how the head's field reaches the player; whether record type 8 is exactly `FxEmotionsWeightNode`; where the node's compose (0x005B5D40) runs against the face's update in a frame, so whether the face lags a frame; `ActionAnimateFace`'s arguments and whether a shipped cut uses it; whether every `_f` event has an `_f.fxe`. faceSync is on in normal play: the only write of `g_eclipseGame+0x254` is the `capturemovie` launch option (0x00404B10), which stores 30.0f and sets the manager's +0xC8 (2026-10-31) [C].
 
 #### (c) Idle, listener and the look-at
 
@@ -1841,12 +1916,19 @@ GOG exe `game\DAOrigins.exe` (base 0x400000), no Ghidra, no game. "checked" = re
 3. `0x00544620`: for each additive entry (weight > 0, track present, in list order): sample q with `0x008118D0`, then `0x008111E0(Q, q, w)`: `delta = slerp(identity, q, w)` (`0x004CBC10` puts identity in the output and calls `0x004CBAA0`), then `Q = 0x004CB640(delta, Q)` = **delta * Q**.
 4. Store Q at the entry's +0x10 pointer. 0x004CBAA0 is a true slerp: dot of the two, sign flip if negative (shortest path), `acos`/`sin` weights (0x004CB930, 0x004CB3E0), a linear fallback near dot 1 (threshold double at 0x00AE09B0); `rsqrtss` inside. The outputs are unit (slerp of unit quaternions; products of unit quaternions), and no renormalise is found in the path, none is needed.
 - `0x004CB640(out, a, b)` is the Hamilton product a*b (x = ax*bw + bx*aw + ay*bz - az*by ...). The node (0x0055E9D0) calls it as `local = +0xF0 (FaceFX) * +0xE0 (animation)` and builds the matrix with `0x004D3D00`. So FaceFX and each additive delta act on the same side (outermost) of the animated rotation; the order among several additive entries is list order (they do not commute).
-- A key is sampled by `0x00818490` (finds the two keys around the 16-bit time, factor f) and `0x008118D0` / `0x00811B20` lerp the two 4-vectors componentwise with (1-f, f). Quaternions are lerped, not slerped, between keys, and not renormalised in the sampler; the keys are 1/30 s apart so the error is tiny. The caller's time is the clip's playback time (for look clips the controller sets it with SetTime).
+- A key is sampled by `0x00818490` (finds the two keys around the 16-bit time, factor f) (corrected 2026-10-31 by lib-agent-2 with a subagent, from paragon-agent's anim-2 reading) [C]:
+  - **Rotations:** `0x008118D0` decodes the two keys and **slerps** them with f through `0x004CBC10(out, a, b, t)` (cdecl, out first set to identity) → `0x004CBAA0` (call at 0x00811A25).
+    - **0x004CBAA0:** linear weights when 1 − |dot| ≤ 1e-6 (0x00AE09B0); else θ from atan2 (0x004CB930) with sin θ by a Newton-refined rsqrt, and the polynomial sine 0x004CB3E0. The second weight is negated for a negative dot, giving the shortest arc. No renormalise.
+  - **Every other track:** `0x00811B20` lerps, A·s + B·(1 − s) on four floats, with no normalise.
+  - **The decoders** take the dropped quaternion component as `left × rsqrtss(left)` with no Newton step (0x008114A4–0x008114B4, about 12 bits). Core's `Clip.cpp` uses an exact `sqrt` and does not interpolate.
+  - This agrees with the slerp stated above through 0x004CBAA0.
+  - The caller's time is the clip's playback time (for look clips the controller sets it with SetTime).
 
 ##### Translation and others
 
 - vec3 (`0x00544E20`): override accumulation `0x00543FC0` (weighted mean, returns Wo), normal tree `0x00544140`, mix with `0x00811030` (`result = normal*(1-Wo)/... + override*Wo`, a weighted mean), then additive `0x00544090`: **`v += w * key`** (`0x008110F0`). Starting default zero. The key is an offset added to the node's rest (dev/CHARACTERS.md).
 - scalar (`0x00544F30`): the same shape with floats (`0x00544370` additive).
+- **The float channel** (0x00544F30, read 2026-10-31, checked) follows the same order as the others: the override alone at a weight ≥ 1; else the tree's weighted mean (0x00810E30: acc = (acc·W + v·w)/(W + w)), mixed with the override (1 − Wo, Wo) when Wo > 0; then the additive pass (0x00544370). A leaf with no keys takes the channel's rest value [C].
 - vec4 (`0x00545170`): per-component linear weighted mean for override/normal, and additive `Q += w * q` (`0x00810FE0`); that is the colour channel type, not rotation. (I first took this one for the rotation; the default (0,0,0,0) at 0x008112A0 and the Hamilton product in 0x008111E0 settled it.)
 - Scale: `AnimationIgnoreScale` (+0x2F) only sets the entry's scale vec3 to (1,1,1) in `0x008149D0`; the scale arrives in the list entries' first three floats (a4 = object+0x290). How the scale multiplies a key was not read.
 
@@ -1890,7 +1972,7 @@ For a port: `Q = base`; for each additive clip (weight > 0) in order, `Q = slerp
 #### Not read
 
 - The normal-tree blend `0x00544700` / `0x00544140` internals beyond "the same running slerp / weighted mean" (read by the call shape, not instruction by instruction), and the initial value when no normal clip is active for a bone (`0x00544AB0` starts from the entry's own first 16 bytes, which I did not trace to the rest rotation).
-- The binding that sets each entry's +0x10 pointer (vfunc +0x68 called from 0x0054D380): the node field it points at is taken from dev/CHARACTERS.md (+0xE0 rotation, +0x120 translation), not read at the bind.
+- The binding: "The bind" in "The animation manager and the frame's phases" (2026-10-31); whether the entries' names are bones' is [I].
 - Scale's combination, and `AnimationIgnoreScale` beyond setting (1,1,1).
 - The order of the entries inside the additive list (the tree's walk order, 0x008149D0 per clip tree); only that it is list order and the products do not commute.
 - Other additive clips in the game (mh_c.b_look*, bw_look*, etc.) were not re-dumped here; the engine path is the same for every clip with 4011 = 1.

@@ -1077,7 +1077,7 @@ ShowLine is 0x0068E250 (`GameModeDialog`; dialog object fields below). The updat
    - PlayVO stops the old VO and any sound of the same name first.
    - It loads the content and places the emitter.
    - When FaceFX has the face animation, it plays through the face (with the content when faceSync); otherwise it plays the content directly (Play(0, 0)).
-   - faceSync = (`g_eclipseGame` +0x254 == 0.0). The meaning of that float was not read.
+   - faceSync = (`g_eclipseGame` +0x254 == 0.0). Only `capturemovie` (0x00404B10) writes it, 30.0f, so faceSync is on in normal play (ANIMATION.md, the face) (2026-10-31, lib-agent-2) [C].
 4. **What the movie is given.** hasVO = AnimBase +0x1AC ≠ 0 (0x00A5C9D0), i.e. a VO event was found and loaded. The text and hasVO go to the conversation GUI object (dialog +0x84, 0x0068CBD0: two data slots).
 5. **The line timer, dialog +0x2C4:**
    - **NoVOIngame:** T = 1.0 (`[0x00C01814]`).
@@ -1155,7 +1155,7 @@ The user properties are read at Load (0x005BAB72), each property value in turn (
 - The FEV1 event header's field layout (the offsets above are fitted to the data) and the `(distance)` parameter's rolloff envelopes for VO (30 m custom curve): for the project reader.
 - FMOD 4.24's enums, as noted at the top.
 - Who sets AnimBase +0x1A8 (the voice at the listener). The emitter → content copy each frame (emitter +0x1D dirty).
-- `g_eclipseGame`+0x254 (PlayVO's faceSync condition).
+- `g_eclipseGame`+0x254 (PlayVO's faceSync condition): read, only `capturemovie` (0x00404B10) writes it, 30.0f, so faceSync is on in normal play (ANIMATION.md, the face) (2026-10-31, lib-agent-2) [C].
 - `conversation.gfx`'s handling of HasVO, the subtitles option and `OnNPCLineFinished`.
 - Whether dialog +0x1A4 (kept replies) is cleared before a new line's replies are offered. A stale list would let the lone-continue test see the old one; not seen in play.
 - The `+0x20D` short path of ShowLine (slideshow?). The wait loop at 0x0068E705 (0x00619060 on 0x00C33B20).
