@@ -720,7 +720,7 @@ The sound manager (singleton getter 0x005B9020) keeps the renderer at +0x90 and 
 - **When the sync runs** (its five callers, checked as calls; the occasions are inferred from what precedes each):
   - `0x00404260` (ID 160): the application's start, right after the sound manager's init `0x005BD660`.
   - `0x005FCE80`: the campaign's package sources set up (FILES.md's 0x005FCE80), after `0x004E0BF0` (inferred: the data tables merged again).
-  - `0x005FC140` (ID 11001, a `CCModule` method): the same pair.
+  - `0x005FC140` (ID 11001, `ModuleResourceManager::UnloadModuleResources`; corrected 2026-11-01 from "a `CCModule` method": its ecx is the module resource manager at the app's +0xC0, caller 0x005F5F89, read by lib-agent-3's naming readers): the same pair.
   - `0x006C76F0`: the loading states for a new game or a save, after `0x005FCE80`.
   - `0x006C8800` (ID 15092): after `CCModule::DropAreaList` and `CClientExoApp::GetModule`, the module left.
 
