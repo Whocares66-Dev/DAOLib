@@ -220,6 +220,8 @@ The journal's conversation history page (the journal movie's `ConversationHistor
 - **Nothing trims the lines inside a record**: the two append functions only push_back.
 
 The names `BeginConversationRecord` (ID 15738), `AddConversationLine` (15699) and `AddConversationReply` (15700) are the readers' proposals for the address library.
+
+**A quest's group** (gui-18/19, read 2026-11-01; DAOParagonEngine #351; two readings reconciled; read in 0x006EBC70, the walk checked). `Journal::GetPlotGroup` (0x006EBC70) looks the plot up in the active plots (`this+0x58`), else the completed ones (`this+0x74`), and returns its group string (+0x148); when that is empty it repeats with the plot's parent (+0xE8), so a quest takes the nearest parent plot's group, and "" when none has one. Nothing guards a parent chain that loops. The journal screen uses it on every show (GUI.md).
 ## A line's cut, as the engine plays it (read 2026-10-18 by lib-agent-2)
 
 `ConversationLineCut` (12211) is a generic (type 0xFFFF, flags 0x2000) at the line's +0x4C, null as `FFFFFFFF FFFFFFFF`. Otherwise it holds a struct told apart by its template's fourcc: a `CUTR` (12210 `ConversationLineCutResRef`, a `.cut` by name) or a `CUT ` (a whole cutscene held in the line). Core's `Conversation` already reads both (`ConversationLine::cutscene`, `cutsceneInLine`, `ConversationFile::LineCutscene`). It doesn't read two fields the engine passes to the cut: 12100 `ConversationStageName` (string, +0x5C) and 12104 `ConversationStageAtCurrentLocation` (U8, +0x64).

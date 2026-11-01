@@ -447,6 +447,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 ## An item's own properties (read 2026-10-21 by lib-agent-2 with two subagents, for DAOParagonEngine)
 
 - **Where they are** [C]: the item's +0x680 holds the property ids (`itemprps.gda` rows) and +0x69C their powers. They come from the .uti's PropertiesList and from `AddItemProperty` (`dev/script_commands/item_prop.md`). A rune's properties are under the item's +0x4BC.
+- **An item property's condition: `CCCreature::MeetsItemPropertyCondition`** (0x006ACF60, `ret 8`) (gui-18/19, read 2026-11-01; DAOParagonEngine #351; two readings reconciled; [C] the event type 0x46 at 0x006AD05B). It is what `GetItemRequirements` (GUI.md) asks for each property whose `itemprps.IPType` is 3: it runs the row's `ConditionScript` as script event 70 on the creature, with the item as object 0, the creature as object 1 and the property's id as integer 0, and answers true only when the script left `SetCanUseItem` at exactly 1. `CanUseItem` fails only on 0, so a script that sets 2 lets the item be used while the tooltip shows the requirement unmet.
 - **On equip, each IPType-1 property becomes an effect on the wearer** [C]:
   - Who: the item-equipped handler 0x006C16E0 calls the item's 0x00759A40 at 0x006C17ED, after the base stats (0x0071B3C0), and only while creature +0xC58 is 0. 0x00759A40 also does the runes'.
   - The effect, made by 0x00759190 per entry:

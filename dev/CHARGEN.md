@@ -83,7 +83,7 @@ Read 2026-10-18 by lib-agent-2 in the GOG exe (GUICharGen's message handlers) an
 | AUTOLEVEL | 56 | `GUICharGenBase` AutoLevelUpMessage `0x007FCF60` | object 0 only. The scripts' own constant, `events_h` line 98; not in `script.ldf`. `sys_chargen` runs `AL_DoAutoLevelUp` |
 | CHARGEN_END | 59 | CharGenEndMessage `0x007FCA90` | int 0 = message +8, the mode (0 create, 1 level up); int 1 = message +0xC, the start: 0 quick start, 1 normal, 2 advanced, 3 the "level of the week". In create mode (int 0 = 0) the handler first switches the game to loading (`GameModeLoadingData(7, …)`, `0x005D5E90(9, 1, …)`), sends the event, and then runs the event queue (`AIMaster::Update(0)`) |
 
-- Not raised by the engine: SCREEN_ENTERED (45) and IMPORT_HERO (53); no constructor site stores either type, and no shipped script handles them. CharGenUpdateBeard, SaveInfo, ResetCreature, ImportHero, UpdateHeroAppearance and `GUICharGenBase` ResetMessage build no script event (read: no `CScriptEvent` in their first 0x600 bytes).
+- Not raised by the engine: SCREEN_ENTERED (45); no constructor site stores its type, and no shipped script handles it. IMPORT_HERO (53) is raised by the whole hero import, not by the appearance-only update: `SaveLoadProxy::ImportHeroFromSave` (0x006D1850) goes through 0x0069DF10, which queues event 0x35 to the module through `AIMaster::AddEventDeltaTime` (0x0069E0C4 stores 0x35 at +0x20; the call at 0x0069E0F3) (corrected 2026-11-01, gui-18/19, two readings reconciled; checked in the GOG exe, 0x0069E0C4-0x0069E0F3; the earlier "not raised" was wrong). The shipped scripts still do not handle it. CharGenUpdateBeard, SaveInfo, ResetCreature, ImportHero, UpdateHeroAppearance and `GUICharGenBase` ResetMessage build no script event (read: no `CScriptEvent` in their first 0x600 bytes).
 
 ### The order in a run
 
@@ -133,7 +133,8 @@ Read 2026-10-18 in the GOG exe by lib-agent-2. GUI::GUICharGen's handlers mostly
 ### Saved heroes
 
 - `CharGenSaveInfoMessage` (`0x007371c0`) writes the hero as a `.chr` file under `PLAYERS`, named from the hero's name (or `Hero`). Read.
-- `UpdateHeroAppearanceMessage` (`0x00738550`) applies an entry of a list of saved heroes (the screen's +0x150, each with a name at +0x7C and a morph at +0x98) to the hero through `0x006d1850`, refreshes the hero (`0x007b8470(hero, 0, 1)`) and republishes `CharGenCreature`. That the list is the `.chr` files is inferred.
+- `UpdateHeroAppearanceMessage` (`0x00738550`) applies an entry of a list of saved heroes (`SaveLoadProxy`'s list, `[[app+0x150]+0x150]`, not the screen's +0x150 (corrected 2026-11-01, gui-18/19, two readings reconciled; checked 0x007385C4-0x007385CA: `mov ecx,[0xC327EC]; mov ecx,[ecx+0x150]`), whose entries are `HeroInfo`, each with a name at +0x7C and a folder at +0x98, and the saves at +0x134 to the hero through `0x006d1850`, refreshes the hero (`0x007b8470(hero, 0, 1)`) and republishes `CharGenCreature`. That the list is the `.chr` files is inferred.
+- **`SaveLoadProxy::ImportHeroFromSave`** (0x006D1850, `bool __thiscall (this, heroIndex, saveIndex, appearanceOnly, refreshSaves)`, `ret 0x10`) is the body of `ImportHeroMessage` and `UpdateHeroAppearanceMessage` (gui-18/19, read 2026-11-01; DAOParagonEngine #351; two readings reconciled; `this` and the call checked in the exe). It selects a saved hero and one of its saves, opens the save (`SaveGame::LoadFromSlot`) and copies the hero into the current game by 0x0069DF10, whole or appearance only; only the whole import queues IMPORT_HERO (53) to the module.
 
 ### CharCreatorRunning and the end of creation (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #172 and #171; also seen in the running game through Eluvian (a human male noble warrior))
 
