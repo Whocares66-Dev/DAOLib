@@ -83,7 +83,7 @@ oC1 = (0.34464, 0.99609375, 0.996084, 1);                                  // fa
 - **`sky.sta.xml` blends nothing:** depth test on, depth write off, no culling. So the opacity changes nothing on screen.
 - **`atmosphereAlpha`** goes to fog[1].y, which `sky.psh` doesn't read.
 - **The frame is cleared to black** (0, 0, 0, 1), with its depth (0x00529E6C; the colour from the render target's +0x50, set in 0x0045A845; other colours only under debug flags).
-- **The draw order** is terrain, then the sky dome, then the rest (`dadefaultsub.sub.xml`). The dome covers whatever its far-plane depth passes.
+- **The draw order** is terrain, then the sky dome, then the rest (`dadefaultsub.sub.xml`). The file is a program the renderer runs: EFFECTS.md, "The draw-order program". The dome covers whatever its far-plane depth passes.
 
 ## Water: its fog and its reflection cube (lib-agent-2, read 2026-10-19, for DAOParagonEngine #25)
 
