@@ -101,7 +101,7 @@ The first `debug` build compiles spdlog, Detours and Catch2 through vcpkg for x8
 .\tools\build.ps1 -Preset core-x64 -Test
 ```
 
-**And in the game** (`dev/TESTING.md`), for a merge that changes what is built: GOG's and Steam's exes started side by side with no compatibility setting and with "Disable fullscreen optimizations", `.\tools\play_matrix.ps1` (no deploy: it stages each row from the build), and EA's with `-EaApp` after a deploy into it. A release is seen under the whole matrix, `-Preset release -All`, every kept exe.
+**And in the game** (`dev/TESTING.md`): a release is seen under the whole matrix, `.\tools\play_matrix.ps1 -Preset release -All`, every kept exe, and EA's with `-EaApp` after a deploy into it. A merge does not run the matrix (the user, 2026-10-31: "run the matrix on release only, not on merge"); what a change needs seen in play is seen in play on its branch.
 
 **Not before every commit** (the user, 2026-10-11: "no need to run the fucking build gates every commit. only when merging to master"). On a feature branch, build and test what the change needs and commit. The three runs are for the merge to master.
 

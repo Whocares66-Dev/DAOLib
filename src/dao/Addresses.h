@@ -730,8 +730,9 @@ DAO_ADDRESS(kMessages_FromCallbackText, 6984)
 //   no key (0x10000000 the keyboard; 0x20000 for the screenshot's and the
 //   console's actions, 0x40000 and 0x50000 for others); the text names a
 //   message ("TakeScreenshotMessage").
-// - SetKey, __thiscall (const std::wstring &name, const uint32 *input,
-//   int which of its two keys, bool), `ret 0x10`: the input is a code, the
+// - SetKey, __thiscall bool (const std::wstring &name, const uint32 *input,
+//   int which of its two keys, bool), `ret 0x10`, true if the key was set
+//   (`mov al, 1` / `xor al, al` at 0x00894E9A; lib-agent-2, 2026-10-31): the input is a code, the
 //   modifiers and the device in one word (dao/core/InputCode.h). The game's
 //   defaults pass 0 last; with 1 it goes on to look at the actions that
 //   have the key already.
@@ -800,7 +801,7 @@ DAO_DATA(kPlatformWin32_Vftable, 60745)
 // allow the input now, else whether any key bound to it is down in the
 // devices' state. AllowsInput, __thiscall on the modes (InputModes::Get's;
 // const int *input), `ret 4`, a bool: true if a group that is on allows the
-// input and none bars it, as Allowed answers for a text. Every one of
+// input and none bars it, as AllowsText answers for a text. Every one of
 // IsDown's 84 calls asks AllowsInput first through it (the address
 // library's session, reading GOG and EA the same day). The names are ours.
 DAO_ADDRESS(kInput_IsDown, 24337)
@@ -808,7 +809,7 @@ DAO_ADDRESS(kInputModes_AllowsInput, 24258)
 DAO_DATA(kInputModes, 102761)
 DAO_ADDRESS(kInputModes_Group, 24295)
 DAO_ADDRESS(kInputModeGroup_Allow, 24272)
-DAO_ADDRESS(kInputModes_Allowed, 24264)
+DAO_ADDRESS(kInputModes_AllowsText, 24264)
 // One key to one action, and what an action answers to, read 2026-10-15 for
 // DAOLib #130 (dao/Input.cpp, keys shared by actions whose modes do not
 // overlap). SetKey (above) and LoadKeyBindings (0x0089573A, 0x00895863)
@@ -1747,7 +1748,7 @@ DAO_DATA(kEngineMemoryManager, 100163)
 // selection (a vector of ids at +0x184; 0x006368F0) and signals it
 // EVENT_TYPE_ON_SELECT (89); for anything else, nothing. The game mode
 // controller's +0x60 is the explore camera's controller
-// (CameraControllerExplore, vftable 0x00B1D954, 25 slots, built by
+// (CameraControllerExplore, vftable 0x00B1D954, 20 slots, built by
 // 0x0076F890): the id of what it follows at +0x08 and its focus point at
 // +0x70. Its slot 8, SnapToTarget, copies the target's position (the
 // graphics object's +0x120) into the focus and hands the camera the new

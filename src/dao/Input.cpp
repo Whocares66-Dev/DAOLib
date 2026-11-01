@@ -773,7 +773,7 @@ bool Attach()
     std::call_once(once, [] {
         attached = g_registerActions.Attach(addr::kInput_RegisterActions, &RegisterActions) &&
                    g_resetKeys.Attach(addr::kInput_ResetKeys, &ResetKeys) &&
-                   g_allowed.Attach(addr::kInputModes_Allowed, &Allowed) &&
+                   g_allowed.Attach(addr::kInputModes_AllowsText, &Allowed) &&
                    g_takeKey.Attach(addr::kGroupedInputMappings_TakeKey, &TakeKey) &&
                    g_setRecordKey.Attach(addr::kGroupedInputs_SetKey, &SetRecordKey);
         if (attached)
@@ -1191,7 +1191,7 @@ bool __fastcall AllowsInput(void *modes, int edx, const std::int32_t *id)
 // Read 2026-10-15 (above, and dao/Addresses.h, kInput_IsDown): every IsDown the game asks of an
 // input, and its axes (kInput_AxisPair), ask InputModes::AllowsInput first and answer nothing
 // where it says no, so a withheld input is one it says no to. The game's actions, the keys bound
-// to messages and a plugin's own, go by their texts (kInputModes_Allowed) and are not withheld.
+// to messages and a plugin's own, go by their texts (kInputModes_AllowsText) and are not withheld.
 bool Down(Key key)
 {
     AttachReadings();
