@@ -155,6 +155,7 @@ add_library(
     src/dao/core/Conversation.cpp
     src/dao/core/Cutscene.cpp
     src/dao/core/FaceFx.cpp
+    src/dao/core/Gad.cpp
     src/dao/core/Stage.cpp
     src/dao/core/Wind.cpp
     src/dao/core/Ctab.cpp

@@ -111,6 +111,7 @@ CHARACTER = "src/dao/core/Character.cpp"
 HEADPRESET = "src/dao/core/HeadPreset.cpp"
 MORPHCONFIG = "src/dao/core/MorphConfig.cpp"
 CLIP = "src/dao/core/Clip.cpp"
+GAD = "src/dao/core/Gad.cpp"
 EFFECT = "src/dao/core/Effect.cpp"
 FEV = "src/dao/core/Fev.cpp"
 MODEL = "src/dao/core/Model.cpp"
@@ -871,6 +872,36 @@ MUTANTS: list[Mutant] = [
         CUTSCENE,
         "constexpr std::uint32_t kHeadtrackSpeed = 5621;",
         "constexpr std::uint32_t kHeadtrackSpeed = 5402;",
+    ),
+    Mutant(
+        "gad-slerp-shorter-way: two keys more than half a turn apart are blended the shorter way",
+        GAD,
+        "    if (dot < 0.0F)",
+        "    if (dot < -2.0F)",
+    ),
+    Mutant(
+        "gad-slerp-not-straight: keys not all but one are slerped, not blended straight",
+        GAD,
+        "    if (1.0F - dot > kNearlyOne)",
+        "    if (1.0F - dot > 2.0F)",
+    ),
+    Mutant(
+        "gad-key-width: a translation key is a time and three values",
+        GAD,
+        "    return KeysOf<3, PositionKey>(in, label,",
+        "    return KeysOf<4, PositionKey>(in, label,",
+    ),
+    Mutant(
+        "gad-yaw-sign: yaw turns towards -x positive, as the engine's",
+        GAD,
+        "std::atan2(-2.0F * ((x * y) - (w * z))",
+        "std::atan2(2.0F * ((x * y) - (w * z))",
+    ),
+    Mutant(
+        "gad-summary-from-first: the summary's turn is from the first key, not from none",
+        GAD,
+        "YawDegrees(TurnFrom(gad.rotation.front().orientation, gad.rotation.back().orientation))",
+        "YawDegrees(gad.rotation.back().orientation)",
     ),
     Mutant(
         "cutscene-linear-fraction: a linear transition's fraction is of the segment's own length",

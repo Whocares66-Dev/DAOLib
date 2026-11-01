@@ -33,6 +33,7 @@
 // and head tracking's speed and realignment are left unread.
 #pragma once
 
+#include "dao/core/Gad.h"
 #include "dao/core/Gff4.h"
 
 #include <array>
@@ -82,18 +83,9 @@ struct Curve
 };
 
 // A key of an animation's travel: where the clip's root has gone, cumulative from the clip's
-// start, at a time into the clip.
-struct PositionKey
-{
-    float time = 0.0F;
-    Vector3 position{};
-};
-
-struct OrientationKey
-{
-    float time = 0.0F;
-    Quaternion orientation{0.0F, 0.0F, 0.0F, 1.0F};
-};
+// start, at a time into the clip; read and sampled as a clip's .gad is (dao/core/Gad.h).
+using PositionKey = gad::PositionKey;
+using OrientationKey = gad::OrientationKey;
 
 // A frame-buffer effect's parameter, and the curve of its action that moves it.
 struct EffectParameter

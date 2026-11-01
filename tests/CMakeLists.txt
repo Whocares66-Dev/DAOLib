@@ -18,6 +18,7 @@ add_executable(
     test_sweep.cpp
     test_crashlog.cpp
     test_cutscene.cpp
+    test_gad.cpp
     test_facefx.cpp
     test_stage.cpp
     test_wind.cpp

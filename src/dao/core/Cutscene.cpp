@@ -119,25 +119,6 @@ std::optional<std::int32_t> Id(const gff4::Struct &in, std::uint32_t label)
     return std::nullopt;
 }
 
-// A list of floats, GadKeysPos's or GadKeysOri's, cut into keys of a time and Width values.
-template <std::size_t Width, class Key, class Make>
-std::vector<Key> KeysOf(const gff4::Struct &in, std::uint32_t label, Make make)
-{
-    const std::span<const std::byte> bytes = in.ListBytes(label, gff4::Type::F32);
-    std::vector<float> floats(bytes.size() / sizeof(float));
-    if (!floats.empty())
-    {
-        std::memcpy(floats.data(), bytes.data(), floats.size() * sizeof(float));
-    }
-    std::vector<Key> keys;
-    keys.reserve(floats.size() / (Width + 1));
-    for (std::size_t at = 0; at + Width + 1 <= floats.size(); at += Width + 1)
-    {
-        keys.push_back(make(floats[at], &floats[at + 1]));
-    }
-    return keys;
-}
-
 Vertex VertexOf(const gff4::Struct &in)
 {
     return {.time = in.Get<float>(kVertexTime).value_or(0.0F), .value = in.Get<float>(kVertexValue).value_or(0.0F)};
@@ -223,12 +204,8 @@ Action ActionOf(const gff4::Struct &in)
     action.blendGad = in.Get<std::uint8_t>(kAnimationBlendGad).value_or(0) != 0;
     action.extendGad = in.Get<std::uint8_t>(kAnimationExtendGad).value_or(0) != 0;
     action.applyFutureGads = in.Get<std::uint8_t>(kAnimationApplyFutureGads).value_or(0) != 0;
-    action.gadPositions = KeysOf<3, PositionKey>(in, kAnimationGadKeysPos, [](float time, const float *v) {
-        return PositionKey{.time = time, .position = {v[0], v[1], v[2]}};
-    });
-    action.gadOrientations = KeysOf<4, OrientationKey>(in, kAnimationGadKeysOri, [](float time, const float *v) {
-        return OrientationKey{.time = time, .orientation = {v[0], v[1], v[2], v[3]}};
-    });
+    action.gadPositions = gad::PositionKeysOf(in, kAnimationGadKeysPos);
+    action.gadOrientations = gad::OrientationKeysOf(in, kAnimationGadKeysOri);
     action.text = in.Tlk(kText).value_or(gff4::TlkString{});
     action.voBank = in.String(kLineVoBank).value_or(L"");
     action.lipsync = in.String(kLineLipsync).value_or(L"");
@@ -382,58 +359,6 @@ Quaternion About(std::size_t axis, float degrees)
     return q;
 }
 
-// A GAD key list is read as the engine's readers do, 0x00A38DE0 for positions and 0x00A38D20
-// for orientations: the first key at or before the first key's time, the last at or after the
-// last's, and between two the interpolator 0x00A38C60, the keys' values weighted by the times.
-// An orientation is read the same way and normalised after; the engine's blend of two
-// orientations was not read, and the keys come thirty to a second.
-template <class Key> struct Between
-{
-    const Key *from = nullptr;
-    const Key *to = nullptr;
-    float fraction = 0.0F;
-};
-
-template <class Key> Between<Key> KeysAround(const std::vector<Key> &keys, float time)
-{
-    if (keys.empty())
-    {
-        return {};
-    }
-    if (time <= keys.front().time)
-    {
-        return {.from = &keys.front(), .to = &keys.front(), .fraction = 0.0F};
-    }
-    for (std::size_t next = 1; next < keys.size(); ++next)
-    {
-        if (keys[next].time > time)
-        {
-            const Key &from = keys[next - 1];
-            return {.from = &from, .to = &keys[next], .fraction = (time - from.time) / (keys[next].time - from.time)};
-        }
-    }
-    return {.from = &keys.back(), .to = &keys.back(), .fraction = 0.0F};
-}
-
-Quaternion Blend(const Quaternion &a, const Quaternion &b, float fraction)
-{
-    const float dot = (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]) + (a[3] * b[3]);
-    const float sign = dot < 0.0F ? -1.0F : 1.0F; // the shorter way round
-    Quaternion q{};
-    float length = 0.0F;
-    for (std::size_t i = 0; i < 4; ++i)
-    {
-        q.at(i) = a.at(i) + (((sign * b.at(i)) - a.at(i)) * fraction);
-        length += q.at(i) * q.at(i);
-    }
-    length = std::sqrt(length);
-    for (float &component : q)
-    {
-        component /= length;
-    }
-    return q;
-}
-
 // The track's own place before any stage, 0x007D0660: the actor's origin, then the three curves.
 Vector3 LocalPosition(const Actor &actor, const Action &track, float time)
 {
@@ -526,17 +451,13 @@ Travel TravelAt(const Action &animation, float time)
 {
     const float local = time - animation.start;
     Travel travel;
-    if (const auto keys = KeysAround(animation.gadPositions, local); keys.from != nullptr)
+    if (const auto position = gad::PositionAt(animation.gadPositions, local))
     {
-        for (std::size_t i = 0; i < 3; ++i)
-        {
-            const float from = keys.from->position.at(i);
-            travel.position.at(i) = from + ((keys.to->position.at(i) - from) * keys.fraction);
-        }
+        travel.position = *position;
     }
-    if (const auto keys = KeysAround(animation.gadOrientations, local); keys.from != nullptr)
+    if (const auto orientation = gad::OrientationAt(animation.gadOrientations, local))
     {
-        travel.orientation = Blend(keys.from->orientation, keys.to->orientation, keys.fraction);
+        travel.orientation = *orientation;
     }
     return travel;
 }
