@@ -453,7 +453,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
   - +0x2C5 (active) must be set.
   - A failed gate returns without lifting.
 - **Place always lifts first** (0x00A629F0 → 0x00A627D0), so the stamp follows the creature.
-- **Every position change**: `CCCreature::SetPosition` 0x006B5EF0's tail lifts (0x006B609C) and places (0x006B60A3) while the creature is in an area. The walk moves through it, so a walker re-stamps each frame it moves (a soft stamp).
+- **Every position change**: `CCCreature::OnPositionChanged` 0x006B5EF0's tail (slot 31, which `CCObject::SetPosition` calls after storing the position; named SetPosition here before 2026-11-01) lifts (0x006B609C) and places (0x006B60A3) while the creature is in an area. The walk moves through it, so a walker re-stamps each frame it moves (a soft stamp).
 - **The end of a walk**: the stop 0x006A9430 (from the move update 0x007A9130) sets state 3 or 0 and places a hard stamp.
 - **AddToArea** (0x006B3070) places when state 0 and active, and lifts when inactive.
 - **SetActive** (0x006B5D90) places when on and lifts when off, except an active-party follower's deactivation, which returns early.
@@ -1218,9 +1218,9 @@ CCObject::SetPositionBase(pos, force):                      // 0x00695540
   if !force and pos == this.pos (0x004D4EF0): return
   old = this.pos; this.pos(+0x120) = pos         // the SCRIPT'S z is stored here, raw
   this.groundCacheValid(+0x1C4) = 0               // the cached ground height/normal is stale
-  this.vtable[+0x7C](&old, 0)                     // CCCreature::SetPosition 0x006B5EF0
+  this.vtable[+0x7C](&old, 0)                     // CCCreature::OnPositionChanged 0x006B5EF0
 
-CCCreature::SetPosition(old, force):                         // 0x006B5EF0 (cited PATHFINDING.md:153, :241)
+CCCreature::OnPositionChanged(old, force):                         // 0x006B5EF0 (cited PATHFINDING.md:153, :241)
   if has capsule (+0x770) and !disabled (+0x420) and !inSnap (+0x774):
       capsulePos = capsule.GetPosition(); capsulePos.z -= +0x784 (centre offset)
       if distance(this.pos, capsulePos) > 0.05 [0xAF70B0]  or force:        // 0x006B5F51

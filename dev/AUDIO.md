@@ -1322,7 +1322,7 @@ The pieces:
 
   So it is a 0..1 parameter that takes a second to change. glo_fly_fs.fev names `walk/run` 54 times and glo_fly_mv.fev 8 times.
 - **The surface byte** creature+0xB6C [C]:
-  - It is written in **CCCreature vtable slot 0x7C** (0x006B5EF0, inferred SetPosition), at 0x006B608F, from the world's grid query 0x00A46870 (`[app]+0x118`, the position and the area id).
+  - It is written in **CCCreature vtable slot 0x7C** (0x006B5EF0, `CCCreature::OnPositionChanged`, the hook `CCObject::SetPosition` 0x00695540 calls after storing the position), at 0x006B608F, from the world's grid query 0x00A46870 (`[app]+0x118`, the position and the area id).
   - In game modes 4 and 5 it is also refreshed every tick from the model's animated position (0x006AA5EB).
   - The query returns `AreaGridSoundData` (3114; `dev/COLLISION.md`).
   - Low nibble → `sound_movement_footsteps`/`scuffing`/`bodyfall*` row (0 Unknown, 1 Wood, 2 Sand, 3 Leaves, 4 Grass, 5 Stone, 6 Dirt, 7 Puddle, 8 Water, 9 Mud, 10 Ice, 11 Snow, 12 Hollow_wood, 14 Gravel, 15 Carpet; there is no 13).
