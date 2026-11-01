@@ -2308,7 +2308,11 @@ DAO_ADDRESS(kWorldTimer_SinceUpdate, 32690)
 DAO_ADDRESS(kWorldTimer_WorldTime, 32695)
 DAO_ADDRESS(kObjectTimer_Update, 15799)
 DAO_ADDRESS(kCCCreature_Update, 14951)
-DAO_DATA(kClock_Timer, 100176)
+// The services object 0x00401F40 builds (0xE8 bytes: the clock, the file
+// aliases, a process wrapper, the log writer, the input gate); this row was
+// kClock_Timer, from Ghidra's label (renamed 2026-11-01 by addr-lib-agent from
+// paragon-agent's gui-02 and lib-agent-2's readings).
+DAO_DATA(kServices, 100176)
 DAO_DATA(kGTimer_Clock, 99837)
 
 // Input, read 2026-09-30 (dev/TODO.md, item 3). The key bindings' actions
