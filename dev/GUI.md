@@ -932,7 +932,7 @@ Function `0x00610D50` (`DragonAgeGUISystem::UpdateSharedMapCreatures`; its `this
 
 - **The secondary map is saved and restored by the engine** (read 2026-10-27 by lib-agent-2 with a subagent, for DAOParagonEngine #295) [C unless marked].
   - **The struct:** the save's `SavegameWorldmap` (16780, WRLD) holds `SavegameWorldmapPrimaryMap` 16781, **`SavegameWorldmapSecondaryMap` 16782** (the map's tag, empty when none is set), `SavegameWorldmapMapList` 16783, `GUIStatus` 16790 and the last pin clicked 16791.
-  - **The writer** is 0x00701C10 (ID 15972, unnamed). 0x00700FE0 (ID 15953) also touches 16782 and 16783; it was not read.
+  - **The writer** is `WorldMap::WriteToSave` (0x00700FE0, ID 15953). 0x00701C10 (ID 15972, `Gff4::DefineWorldMapStruct`) only defines the WRLD struct's fields (0x418D-0x418F, 0x4196, 0x4197) through the schema builder 0x004860F0 and writes no values (read 2026-11-01 by lib-agent-3, correcting "the writer" for it).
   - **The loader** (0x00701250) reads 16781 into `WorldMap` +0x68 and 16782 into +0x78, each tag looked up among the module's world maps and stored through the attribute's Set, which notifies the interface. It also reads 16790 into +0x98 and 16791 into +0xB8.
     - It does not run the refresh 0x00700A90 that the script commands run after their Set [C for the calls; I for what the refresh adds].
     - A tag that matches no map of the module gives no map [I from the lookup].
