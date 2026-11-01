@@ -261,22 +261,33 @@ Not read: whether an event queued to an inactive creature (the cleared move's CO
 - **Edge cases:** **an invalid target faults at start**: `fld [ecx+0x3CC]` at 0x006953D0 runs on the null result of `GetObjectById` (0x00745355), with no check. A non-creature speaker completes with success. (checked)
 
 ### InteractWithObject (587)
-- **Handler:** 0x0065C110 (not shared). It calls `CClientExoApp::GetCreatureById` and `CCCreature::ForScript_InteractWithObject` (0x006A9390).
-- **Does:** pops oCreature, oTarget, nInteractionId, nPose, nLoops, bPlayExit, then bSkipReposition. Both sides are called (checked):
+- **Handler:** 0x0065C110 (not shared). It calls `CClientExoApp::GetCreatureById` and `CCCreature::ForScript_InteractWithObject` (0x006A9390). Arguments `(oCreature, oTarget, nInteractionId, nPose = 1, nLoops = 0, bPlayExit = 1, bSkipReposition = 0)`.
+- **It is a sync animation, not a use.** The creature (and a creature partner) plays Enter, Pose<n> x loops and Exit clips from a data table, placed against the partner; no event of any kind goes to the partner or its script. (interact, read 2026-11-01 by paragon-agent-2's readers; DAOParagonEngine), two readings reconciled.
+- **Does:** pops the seven arguments. Both sides are called (checked):
   - If oCreature is a creature: `ForScript_InteractWithObject(target, initiator=1, id, pose, loops, playExit≠0, skip≠0)`.
-  - Then, if oTarget is a creature, the same on the target, with the creature and initiator=0.
+  - Then, if oTarget is a creature, the same on the target, with the creature and initiator=0. A placeable target gets no command.
 - **ForScript_InteractWithObject** (checked):
   - It stores id, pose, loops and playExit at +0xC74, +0xC78, +0xC7C and +0xC80.
-  - If its current command is already type **37** (Interact), it stops there: the running interaction takes the new values with no new command (as script.ldf says).
-  - Otherwise 0x006A3920 builds type 37 and **queues it at the front** (`QueueCommand(cmd, 1, -1)`): object 0 the other party, ints 0/1/2 id/pose/loops, flag 2 initiator, flag 4 playExit, flag 1 skipReposition.
-- **Start** (0x00743690) (checked):
-  - Unless flag 1 is set, it repositions first. For a placeable it uses table 123's row for the interaction (inferred: SyncPlaceableAnims), with sub-action 14 to the spot and 42 to its facing. Otherwise it uses sub-action 15 to the target and 39 to face it.
-  - Then sub-action **53** (0x007A6EA0, not read).
-  - End 0x007472E0: for a creature, 0x0069EBB0(1) and vtable slot 94 (inferred: back to idle), then the shared end.
+  - 0x006A3920 (`QueueInteractCommand`) builds type 37 and **queues it at the front** (`QueueCommand(cmd, 1, -1)`) unless the current command is already type **37**. Command data: object 0 the partner; ints 0/1/2 the interaction row, pose, loops; flag 1 skip reposition, flag 2 initiator, flag 4 play exit. commands.gda row 37 has AddBehavior 2 and AddBehaviorSelf 2 [C by the reading].
+  - **Unsettled:** whether the values are stored while a type-37 command is already current. One reading has them stored whatever the current command is, so a running interact takes them up (as script.ldf says); the other has them stored only when it is not type 37. Paragon follows the first [I]. Open.
+- **Start** (`Commands::InteractStart`, 0x00743690, ID 17689) (checked; (interact, read 2026-11-01 by paragon-agent-2's readers; DAOParagonEngine)):
+  - With flag 1 (skip reposition) only sub-action 53 is queued. Otherwise:
+  - **A placeable partner with a usable row** of table 123 (`syncplaceableanimations`, 4 rows: Invalid, Sitting, Table Lean, Bed sleeping; usable means Percentage > 0, via ComputeSyncPlacement): the spot is the placeable's position plus Distance times its +0x130 direction turned by -AngleTarg, the facing that direction turned by 180 - AngleATK (the direction-vector reading and the yaw sign are [I]). If the creature is within its PerSpace (slot 0x9C) of the spot in 2-D, nothing is queued before 53. Otherwise sub-action 14 (MoveToLocation to the spot, within 0.1), then 42 (turn to the facing).
+  - **A creature partner, or a row that fails:** sub-action 15 (approach within 0.1, no line of sight needed), then 39 (turn to the object).
+  - **Last, always:** sub-action 53 on a copy of the data. [C] The pushes of 14 (0x007437f7), 42 (0x00743844), 39 (0x00743910) and 53 (0x00743942) before the queueing call 0x0073D4D0 are in the disassembly; sub-action 15 is by the reading.
+- **Sub-action 53** (0x007A6EA0, ID 19862; read, (interact, read 2026-11-01 by paragon-agent-2's readers; DAOParagonEngine), two readings reconciled):
+  - At its start it switches the controller off: interaction count 0, +0x778 = 0, +0x420 = 1.
+  - **Table:** 123 for a placeable partner, 124 (`synccreatureanimations`, 4 rows: Kissing, Hand Shaking, Punching, one empty) for a creature. [C] 0x7B and 0x7C are loaded in the function (0x007A6F00, 0x007A6F0E). The initiator, or the only side for a placeable target, uses Enter, Pose1..Pose3 and Exit; a creature partner uses EnterSync, PoseSync1..3 and ExitSync. A cell is an animation id.
+  - **Phases:** Enter; the Pose<pose> clip `loops` times (skipped when loops is 0 or pose < 1; loops < 0 holds the pose and returns 2, COMMAND_LOOPING); Exit if play exit is set; then it returns 1. A changed row restarts at Enter; a changed pose during the pose phase replays it.
+  - **Duration:** AnimationStepLength, or AnimationLength x loops for a looping clip.
+  - **Placement:** the initiator's Enter clip is placed against the partner (ComputeClipPlacement, PlayClipTimed [C by the reading]). The other clips play plainly through slot 0xB0 at speed 1.0 with blend -2.0. A creature partner's clips play in the same step.
+  - **No events:** no USE or other event goes to the partner or its script.
+- **End** (0x007472E0, ID 17739) (corrected 2026-11-01: it was recorded as 'vtable slot 94, inferred: back to idle'): [C] it calls 0x0069EBB0(1) on the creature (the controller's interaction count set to 1), then slot 0x178 (= slot 94), which is `CCCreature::EndManualPlacement` (0x006BA870, ID 14922; [C] its body clears +0x420 when set and calls 0x006B1790(0), the snap to the ground by the reading). Then `EndShared` (0x00746900) sends COMMAND_COMPLETE. Not an idle order.
+- **Results** [C by the reading]: success is 1, looping 2. Sub-action 53 gives -3 for no creature, no data, no clip or a phase >= 3, and -7 when the partner is gone. Sub-action 14 gives -3 or -4; 15 gives -3, -7, -4 or -10; 39 and 42 give -1. When another command clears it the result is -2 and the end handler still runs. A start that finds no creature or data queues nothing and completes 1.
 - **Edge cases:** void, always returns 0. If oCreature is not a creature, **nothing happens on either side**, even if the target is one. A placeable target gets only the creature's side. (checked)
 
 ## Not read
-- Sub-action handlers 52 (multi-location move, 0x007A9BD0), 53 (interaction, 0x007A6EA0), 47 (fly) beyond its done test, 5 (finishing a weapon draw), and the walk inside 4/15/14. So how MoveToMultiLocations advances its waypoints (ints 5 and 6) and loops, and exactly how float 4 makes MoveAwayFromObject move away, are not established.
+- Sub-action handlers 52 (multi-location move, 0x007A9BD0), 47 (fly) beyond its done test, 5 (finishing a weapon draw), and the walk inside 4/15/14 (sub-action 53 is read: see InteractWithObject above). So how MoveToMultiLocations advances its waypoints (ints 5 and 6) and loops, and exactly how float 4 makes MoveAwayFromObject move away, are not established.
 - 0x00745250 (the movement mode put in int 2), 0x006A2A20 (the stop at MoveToObject's end), 0x006A0E10 (Fly's end) and 0x0069EBB0 with slot 94 (Interact's end).
 - Which engine code sets a Sheathing command's int 1 (the delay before sub-action 48).
 - Table 123's identity, and the placeable branch of Interact's spot in detail.
