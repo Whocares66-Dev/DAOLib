@@ -31,15 +31,15 @@
     Claude Code session uses the MCP server instead. The two cannot run at once:
     a project is locked while open.
 
-    Without either, opens the analysed project headless without analysing again,
-    names its functions and globals from tools\names.py (Addresses.h, the message
-    handler and script command tables, every RTTI vftable; through
-    tools\ghidra\ImportNames.java, and a name set by hand in Ghidra is kept), and
-    runs GhidrAssistMCP's server on the program until -Stop.
+    Without either, opens the analysed project headless without analysing again
+    and runs GhidrAssistMCP's server on the program until -Stop. The project's
+    names are the address library's, written by its own session alone
+    (DAOAddressLibrary tools/ghidra_sync.py over this server); a launch writes
+    none, so it cannot put back a name the library has since changed.
 
     -Stop asks the server to close through its completion file, so Ghidra saves what
     was renamed or retyped over MCP and exits. Ctrl+C or closing the window loses
-    that; the imported names come back on the next launch either way.
+    what was not saved.
 
     Port 8090, so it can run beside the Skyrim projects' servers on 8080-8082.
 
@@ -159,8 +159,10 @@ Show-Head "Ghidra MCP: DAOrigins.exe on http://127.0.0.1:$Port/mcp"
 Show-Info 'stop it with: .\tools\ghidra-mcp.ps1 -Stop'
 # Only our folder is named: an installed extension's scripts are on Ghidra's own
 # path, and cmd, which runs the .bat launcher, would split a `;` list apart.
+# No name pass here (2026-10-31): the address library's session is the one writer of
+# the project's names; a launch that applied tools\names.py's names put back 109
+# that its sync had changed since.
 & $headless -H $projects $name -process 'DAOrigins.exe' -noanalysis `
     -scriptPath $ourScripts `
-    -preScript ImportNames.java $names `
     -postScript GAMCPStartServerScript.java 'host=127.0.0.1' "port=$Port" 'wait=true' "completion_file=$complete" `
     'agentic=false'

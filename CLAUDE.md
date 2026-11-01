@@ -137,7 +137,7 @@ It also produced a structure per class. For 616 functions Ghidra could not retyp
 
 Two traps made this take three tries. First, both scripts check that the compiler is exactly PeLoader's label `visualstudio:unknown`, and the bare `visualstudio` fails silently. Second, the RTTI pass saves an "RTTI Found" flag on its first run and skips every later run, so a run with the wrong compiler blocks all the rest. `set_compiler.py` sets the label and clears a stale flag.
 
-The class names also come from `tools\daoexe.py`'s own walk, which needs no Ghidra. On every launch `tools\ghidra\ImportNames.java` applies the names `tools\names.py` reads from the address library's table, about 4,400 of them:
+The class names also come from `tools\daoexe.py`'s own walk, which needs no Ghidra. The project's names are the address library's, and its session alone writes them into the project, over the MCP server (DAOAddressLibrary `tools/ghidra_sync.py`; the user, 2026-10-31); a launch of the server writes none. A `-Query` applies `tools\names.py`'s names in memory through `tools\ghidra\ImportNames.java`, read-only, about 4,400 of them:
 
 - everything a `DAO_ADDRESS`/`DAO_DATA` row of `Addresses.h` was read as
 - every message handler, as `Owner::HandleMessage_Message`
@@ -146,7 +146,7 @@ The class names also come from `tools\daoexe.py`'s own walk, which needs no Ghid
 
 The handlers' and commands' names are made from the tables under `dev/`; `python tools\names.py --give` names in the address library's table what those tables have come to name since.
 
-It creates a function where analysis found none. A name set by hand in Ghidra wins over all of them.
+It creates a function where analysis found none.
 
 **MSVC templates** have names like `MemberFunctionMessageHandler<GameModeController,UserTogglePauseMessage,&GameModeController::HandleMessage>`. `tools\msvc_names.py` undecorates them, and `names.py` writes their inner `::` as `.` and their spaces as `_` so Ghidra accepts them. The C++ `dao::TypeName` leaves a template's name decorated rather than guess.
 
