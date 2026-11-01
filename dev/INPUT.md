@@ -60,6 +60,14 @@ The registrations are tabulated in `dev/input_names.csv` (`id`, `name`: the 76 n
   - `GuiFSCommand::PushContext` (0x005205A0) pushes the movie's name on a stack (0x00C315BC) and activates it in slot 1.
   - `PopContext` (0x0051FA40) erases that name and everything above it. If the stack is not empty, the new top goes into slot 1; if it is, the popped name is deactivated.
   - `GUIPopup`, `MapInputs`, `ResGraph`, `TutorialActive`, `DisableAll` and `GUIContextCutscene` are named in the exe only by `RegisterInputMessages`, so a movie turns them on by name [I which way, slot 1 or the map].
+  - Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 [C unless marked]:
+  - **Only the movies change it.** The stack (a `std::vector<std::wstring>` at 0x00C315BC, made at 0x00ACF4B0) is touched by `PushContext` and `PopContext` alone. Slot 1 is written only by them, since every other Activate and Deactivate passes slot 0 or 2. No hide, unload or mode change of the engine's pops a context.
+  - **The stack holds names only,** one stack for the whole GUI. It does not record which movie or scene pushed a name.
+  - **Popping:** `PopContext` finds the first copy of the name and erases it and everything above it. So a name pushed twice is removed by one pop, and popping a lower name also removes the contexts pushed after it. An example is the inventory's `PaperDoll` above "Inventory".
+  - **How a movie pops:** the engine invokes `_root.FinishSceneFromGame` when a screen closes (GUI.md "1. Scene start protocol"). The movie's `SceneManager.EndMovie` runs `FinishScene_<label>` and the class's `FinishScene`, which pop what the matching `StartScene` pushed. An example is `Inventory.as`:158–167.
+    - The next show invokes `_root.StartSceneFromGame`, which pushes them again.
+    - The pairing is the movie's own; all 19 movies that push contexts were not each checked [I].
+  - **A hidden HUD keeps its context.** The hide-keep (`HideScreen` 0x00523CB0, the HUD's `ToggleMainInterfaceMessage`; GUI.md) invokes nothing in the movie. So the quickbar's `InGameGUI`, pushed in `QuickbarScene.StartScene` and popped only in its `FinishScene`, stays on the stack while the HUD is hidden [C for the AS and the hide's calls; I that nothing else pops it then].
 - **Slot 2, the cursor**, set each frame by the mode's slot 29 (`GameMode::Update` 0x00694640 calls it; GUI, CharGen and PartyPicker call it themselves):
   - **Explore and Combat** (`GameModeExplore::UpdateInputContext` 0x00710120) take the first that holds:
     1. `CursorLookMode`, while the explore camera's drag is on (camera +0x10 == 1, set by `ReadInput` at 0x007EDF43; CAMERA.md "The mouse orbit").
