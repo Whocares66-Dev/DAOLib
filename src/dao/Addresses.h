@@ -2295,7 +2295,8 @@ DAO_ADDRESS(kCClientExoApp_SetTimeScale, 10573)
 DAO_ADDRESS(kCClientExoApp_FrameUpdate, 10566)
 // The frame's clock (dao/Clock.h): the Eclipse game object, a global the
 // update task reads (0x00401F30 returns it), keeps two EC::ITimer at +0xB4
-// and +0xB8 (its constructor, 0x00404260). ITimer::Update, __thiscall
+// and +0xB8 (made by its start-up step 0x00404350, InitializeGame; 0x00404260
+// is the sound step, corrected 2026-11-01, #290). ITimer::Update, __thiscall
 // (float fixed frames per second), `ret 4`: the microsecond clock's
 // seconds since +0x08 (or one over the fixed rate) into +0x10, added to
 // the double at +0x18. EclipseGame's frame step (0x004025C0) updates the
