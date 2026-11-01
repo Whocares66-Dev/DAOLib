@@ -181,6 +181,16 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
 - Every other placeable keeps its `.phy` mask in every state, so a crate or statue always blocks sight.
 - Side note: the walk-patch stamp `0x0074DBA0` skips placeables whose +0x6D8 has bit 0x1, unless +0x638 == 1. +0x6D8 is −1 until model-ready, and stays −1 without a physics object, so such a placeable is skipped too (PLACEABLES.md, the stamp's tests) [C, 2026-10-25, lib-agent-2].
 
+### A placeable's trigger shapes report to the area (placeable triggers, read 2026-11-01 by paragon-agent-2's readers; DAOParagonEngine)
+
+The physics route to a placeable's collision event (77) and trap triggered (16); what each event is and who gets it is in `dev/PLACEABLES.md` ("A placeable's collision (77) and trap triggered (16)").
+
+- **The report:** each `CCArea` holds a `CPhysicsTriggerReport` at area+0x630 [C by the reading]. PhysX's `Physics::PhysicsTriggerReport::onTrigger` (0x00838EB0, ID 22730) calls `CPhysicsTriggerReport::OnTrigger` (0x007E96B0, ID 21133) with the two shapes' group masks and a status. Only the enter status (bit 1) raises an event [C, 0x007E96D0 and 0x007E97D5].
+- **The owners:** a creature's shape through `Physics::GetControllerUser` (0x0081C490, ID 22180), for character-controller shapes only; a placeable's through `GetActorObjectId` (0x0081C970) and the client's object lookup (0x005D5B40) [C for the calls].
+- **The masks** [C for the tests; I for the meaning]: 0x10 is a creature controller's shape, 0x04 a placeable's. A trigger shape of the placeable (0x04) meeting a creature (0x10) on enter raises event 77 (`RaisePlaceableCollisionEvent`, 0x0074DAA0); the creature's shape (0x10) as the trigger and the placeable (0x04) the other, on enter, raises event 16 (`RaiseTrapTriggeredEvent`, 0x0074F900) [C: 0x007E96B4 and 0x007E96C3 for the trap, 0x007E97CC to 0x007E97D3 for the collision]. On leave the trap's masks do the door call, and raise nothing.
+- **The argument order** into OnTrigger is [I]: the decompiler lost the frame; both readings read the same order.
+- **Not read:** which placeable shapes carry mask 0x04 (one reading: `CreateTriggerShapes`, 0x00820120, with shape flag 7).
+
 ## 3. Rooms: the walk grid's byte is not the room (checked)
 
 - **Creature +0x41C is the room object and +0x150 is its id**, both written by `0x00695D10` (`[+0x41C] = room`, `[+0x150] = room ? room+0x14 : −1`). It is called from `0x00695D70` and `0x0068C0FD`.
