@@ -69,7 +69,7 @@ Shared facts (checked):
 
 ### PrintToLogWindow (82)
 - **Handler:** 0x0064E370 (not shared).
-- **Does:** pops sString. It pops sLogType only when paramCount ≥ 2. Nothing else; the GUI's `PrintToLogWindowMessage` class exists but is not used here. (checked)
+- **Does:** pops sString. It pops sLogType only when paramCount ≥ 2. Nothing else; the GUI's `PrintToLogWindowMessage` class is not used here. (checked) The client VM's twin, command 0x006D4230, does send it: it builds the message (constructor 0x00518360, called at 0x006D42F3) and `Messages::Send`s it to the client application's GUI target (`[app+0x158]`, 0x006D42FE) (corrected 2026-10-31, the message was said not to be used); no handler for it was found (read 2026-10-31 by paragon-agent's readers, two readings reconciled; DAOParagonEngine #351)
 
 ### SendToRunDatabase (174)
 - **Handler:** 0x0064E450 (shared with Warning 674, no switch).
