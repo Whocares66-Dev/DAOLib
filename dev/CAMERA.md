@@ -199,7 +199,7 @@ Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagen
   - **Its use:** `CClientExoApp::FrameUpdate` reads it (0x005D7607, 0x005D7718) as a view jitter; it is never added to the position [I for its full effect].
 - **Not the camera's:** `CCameraFixedPolicy` (vtable 0x00AFFE7C) is a layout policy (thresholds by distance) that the retail game never builds. The factory's one call (0x005C8FF7) passes kind 4, `EC::IndoorStreamPolicy`.
 - **The controllers' vtables:**
-  - **Explore:** 0x00B1D954, 20 slots. 0 OnTargetChanged, 1 OnZoomChanged, 3 0x0076EF10, 4 the deleting destructor, 5 0x0076FD70, 7 Update, 9 the reset, 11 the mode name L"Exploration Mode", 12 the focus (0x0076EC30, no caller), 13 the pivot offset, 14 0x0076F6E0, 19 the telemetry. `Addresses.h`:1750's "25 slots" is 20 by `daoexe.py --vtables`.
+  - **Explore:** 0x00B1D954, 20 slots. 0 OnTargetChanged, 1 OnZoomChanged, 3 0x0076EF10, 4 the deleting destructor, 5 0x0076FD70, 7 Update, 9 the reset, 11 the mode name L"Exploration Mode", 12 the focus (0x0076EC30, its +0x70..+0x78; no direct caller, but 0x007C4A10 calls it through the vtable for the pathfinder's far-goal test, PATHFINDING.md section 11), 13 the pivot offset, 14 0x0076F6E0, 19 the telemetry. `Addresses.h`:1750's "25 slots" is 20 by `daoexe.py --vtables`.
   - **Base:** 0x00B2456C. 1 ClampZoom, 5 0x007EE980, 7 the update, 9 the turn behind the target (0x007EE9A0 → 0x007EE880 with the target id `ctl+8`), 13 the pivot offset (0x007EDC40, which returns its out pointer). The base constructor 0x007EE9B0 sets `ctl+0x4C` 0.4, `+0x50` −9999, `+0x64` −1, `+0x68` 1, `+0x5C` 1 and `+0x1C` 1.0.
 
 ## On a load, and after a scene
