@@ -560,6 +560,8 @@ Read 2026-10-21 by lib-agent-2, for DAOParagonEngine. Vanilla filters by `bitm_b
 | 6 | `ItemFilterPlot` (0xB24930) | the byte at item+0x2C4 (the plot flag) (0x0080E100) |
 | 7 | `ItemFilterBuybackSellback` (0xB2493C) | the value at item+0x5C0 is non-zero (0x0080E120) |
 
+What the item views do with these filters besides accepting: items of one non-zero `StackingGroupID` (+0x600) are folded into one entry with a count, known recipes (`BaseItemID` 108 with a learned `RecipeID`) are left out, and the list is sorted by the party's backpack sort; that is `FilteredGroupedItemView::Refresh` 0x007FB570, in GUI.md (gui-35, read 2026-11-01; DAOParagonEngine #351).
+
 - **What that gives with vanilla's `bitm_base`** [C for the table's values, read with ghilana]:
   - Weapons: every weapon (main-hand mask 1 or 3), arrows, bolts and staff projectiles (4), and Shale's right arm (65536). Shale's left arm (131072) is not a weapon.
   - Armour: body armour and clothing (16), helmets (32), boots of every weight (64), gloves (128), shields (2), Shale's chest (32768), and the dog's collar and warpaint. Shale's body (16384) is not armour.
