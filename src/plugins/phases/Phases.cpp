@@ -47,6 +47,7 @@ struct Stats
     std::atomic<std::uint64_t> calls{0};
     std::atomic<std::uint64_t> inclusive{0}; // QPC ticks
     std::atomic<std::uint64_t> exclusive{0};
+    std::atomic<std::uint64_t> inside{0}; // calls made within the "!inside" function
 };
 
 struct Phase
@@ -313,6 +314,9 @@ struct Entry
 // call counted, so each function's inclusive share of the phase can be read despite the frame
 // pointers the exe omits. Written each 5 s to phases-samples.tsv beside the log.
 std::atomic<int> g_sampleIndex{-1};
+// "!inside INDEX": each function's calls are counted apart when they are made within the list's
+// function INDEX (0-based), such as the device's draws within Umbra's occluder pass.
+std::atomic<int> g_insideIndex{-1};
 std::atomic<int> g_inTarget{0};
 
 thread_local std::array<Entry, kDepth> t_stack;
@@ -346,6 +350,17 @@ extern "C" void __cdecl OnEnter(std::uintptr_t *slot)
         return; // the caller's return address stays: this call is not timed
     }
     t_stack[t_depth++] = {slot[1], index, Now(), 0};
+    if (const int inside = g_insideIndex.load(std::memory_order_relaxed); inside >= 0)
+    {
+        for (std::uint32_t i = 0; i + 1 < t_depth; ++i)
+        {
+            if (static_cast<int>(t_stack[i].phase) == inside)
+            {
+                phase.root.inside.fetch_add(1, std::memory_order_relaxed);
+                break;
+            }
+        }
+    }
     slot[1] = reinterpret_cast<std::uintptr_t>(&ExitStub);
     if (static_cast<int>(index) == g_sampleIndex.load(std::memory_order_relaxed) &&
         GetCurrentThreadId() == g_rootThread.load(std::memory_order_relaxed))
@@ -487,6 +502,11 @@ void ReadList()
             g_frameLog = true;
             continue;
         }
+        if (address == "!inside")
+        {
+            g_insideIndex = std::stoi(name);
+            continue;
+        }
         if (address == "!sample")
         {
             g_sampleIndex = std::stoi(name);
@@ -559,7 +579,7 @@ void Report()
     LARGE_INTEGER frequency;
     QueryPerformanceFrequency(&frequency);
     const double msPerTick = 1000.0 / static_cast<double>(frequency.QuadPart);
-    std::vector<std::array<std::uint64_t, 6>> last(g_count);
+    std::vector<std::array<std::uint64_t, 7>> last(g_count);
     std::uint64_t lastFrames = 0;
     std::int64_t lastTime = Now();
     for (;;)
@@ -576,10 +596,11 @@ void Report()
         for (std::size_t i = 0; i < g_count; ++i)
         {
             const Phase &p = g_phases[i];
-            const std::array<std::uint64_t, 6> now{p.root.calls,  p.root.inclusive,  p.root.exclusive,
-                                                   p.other.calls, p.other.inclusive, p.other.exclusive};
-            std::array<double, 6> d{};
-            for (std::size_t k = 0; k < 6; ++k)
+            const std::array<std::uint64_t, 7> now{p.root.calls,  p.root.inclusive,  p.root.exclusive,
+                                                   p.other.calls, p.other.inclusive, p.other.exclusive,
+                                                   p.root.inside};
+            std::array<double, 7> d{};
+            for (std::size_t k = 0; k < 7; ++k)
             {
                 d[k] = static_cast<double>(now[k] - last[i][k]);
             }
@@ -589,9 +610,9 @@ void Report()
                 continue;
             }
             lines.emplace_back(d[1] * msPerTick / n,
-                               fmt::format("{:8.3f} ms incl {:8.3f} excl {:7.2f} calls | others {:8.3f} ms {:7.2f} calls  {} {:#x}",
-                                           d[1] * msPerTick / n, d[2] * msPerTick / n, d[0] / n, d[4] * msPerTick / n,
-                                           d[3] / n, p.name, p.address));
+                               fmt::format("{:8.3f} ms incl {:8.3f} excl {:7.2f} calls ({:7.2f} inside) | others {:8.3f} ms {:7.2f} calls  {} {:#x}",
+                                           d[1] * msPerTick / n, d[2] * msPerTick / n, d[0] / n, d[6] / n,
+                                           d[4] * msPerTick / n, d[3] / n, p.name, p.address));
         }
         std::sort(lines.begin(), lines.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
         for (const auto &line : lines)
