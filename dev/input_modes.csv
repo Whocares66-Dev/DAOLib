@@ -1,0 +1,320 @@
+seq,helper,what,modes
+1,0x00890AE0,(none; arg is the mode name),DisableAll
+2,byte store [group+0x0],0x1,DisableAll
+3,byte store [group+0x1],0x1,DisableAll
+4,0x00890AE0,(none; arg is the mode name),GameModeCombat
+5,0x00890AE0,(none; arg is the mode name),GameModeCutscene
+6,0x0088F810,SkipCutsceneMessage,GameModeCutscene
+7,0x00890AE0,(none; arg is the mode name),GameModeDead
+8,0x0088F810,PopGUIScreenMessage,GameModeDead
+9,0x00890AE0,(none; arg is the mode name),GameModeDialog
+10,0x0088F810,SkipDialogMessage,GameModeDialog
+11,0x00890AE0,(none; arg is the mode name),GameModeExplore
+12,0x0088F810,ToggleTacticalCameraMessage,GameModeExplore
+13,0x0088F810,SaveGameMessage -1 2,GameModeExplore
+14,0x00890AE0,(none; arg is the mode name),GameModeFixed
+15,0x00890AE0,(none; arg is the mode name),GameModeFlyCam
+16,0x0088F750,26,GameModeFlyCam
+17,0x0088F750,27,GameModeFlyCam
+18,0x0088F750,28,GameModeFlyCam
+19,0x0088F750,29,GameModeFlyCam
+20,0x0088F750,30,GameModeFlyCam
+21,0x0088F750,31,GameModeFlyCam
+22,0x0088F750,32,GameModeFlyCam
+23,0x0088F750,33,GameModeFlyCam
+24,0x0088F750,32,GameModeFlyCam
+25,0x0088F750,31,GameModeFlyCam
+26,0x0088F750,32,GameModeFlyCam
+27,0x0088F750,33,GameModeFlyCam
+28,0x0088F750,34,GameModeFlyCam
+29,0x0088F750,34,GameModeFlyCam
+30,0x0088F750,35,GameModeFlyCam
+31,0x0088F750,35,GameModeFlyCam
+32,0x0088F750,37,GameModeFlyCam
+33,0x0088F750,38,GameModeFlyCam
+34,0x0088F750,39,GameModeFlyCam
+35,0x0088F750,40,GameModeFlyCam
+36,0x0088F750,41,GameModeFlyCam
+37,0x0088F750,42,GameModeFlyCam
+38,0x00890AE0,(none; arg is the mode name),GameModeGUI
+39,0x0088F810,HideFullScreenGUIMessage,GameModeGUI
+40,0x0088F810,ToggleFullScreenGUIMessage CharacterRecord,GameModeGUI
+41,0x0088F810,ToggleFullScreenGUIMessage Journal,GameModeGUI
+42,0x0088F810,ToggleFullScreenGUIMessage Inventory,GameModeGUI
+43,0x0088F810,ToggleFullScreenGUIMessage Skills,GameModeGUI
+44,0x0088F810,ToggleFullScreenGUIMessage SpellsTalents,GameModeGUI
+45,0x0088F810,ToggleFullScreenGUIMessage Options,GameModeGUI
+46,0x0088F810,ToggleFullScreenGUIMessage Map,GameModeGUI
+47,0x0088F810,ToggleFullScreenGUIMessage WorldMap,GameModeGUI
+48,0x0088F810,ToggleFullScreenGUIMessage Tactics,GameModeGUI
+49,0x0088F810,PopGUIScreenMessage,GameModeGUI
+50,0x0088F810,CycleFullScreenGUIRightMessage,GameModeGUI
+51,0x0088F810,CycleFullScreenGUILeftMessage,GameModeGUI
+52,0x0088F810,ShowAllGuiLabelsMessage 0,GameModeGUI
+53,0x0088F810,ShowAllGuiLabelsMessage 1,GameModeGUI
+54,0x00890AE0,(none; arg is the mode name),GameModeMovie
+55,0x0088F810,SkipMovieMessage,GameModeMovie
+56,0x00890AE0,(none; arg is the mode name),GameModePregame
+57,0x0088F810,PopGUIScreenMessage,GameModePregame
+58,0x00890AE0,(none; arg is the mode name),GameModeCharGen
+59,0x0088F810,CharGenGoBackMessage,GameModeCharGen
+60,0x00890AE0,(none; arg is the mode name),GameModeCharGen_LevelUp
+61,0x0088F810,CharGenGoBackMessage,GameModeCharGen_LevelUp
+62,0x0088F810,PopGUIScreenMessage,GameModeCharGen_LevelUp
+63,0x00890AE0,(none; arg is the mode name),GameModePartyPicker
+64,0x0088F750,75,GameModePartyPicker
+65,0x0088F810,SelectPartyMemberUnderCursorMessage 0,GameModePartyPicker
+66,0x0088F810,SelectPartyMemberUnderCursorMessage 1,GameModePartyPicker
+67,0x006DC880,CursorMovedMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+68,0x006DC8C0,43,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+69,0x006DC880,TakeScreenshotMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+70,0x006DC880,OpenConsoleMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+71,0x006DC880,GUICursorLeftButtonDownMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+72,0x006DC880,GUICursorLeftButtonUpMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+73,0x006DC880,GUICursorLeftButtonDblClickMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+74,0x006DC880,GUICursorMiddleButtonDownMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+75,0x006DC880,GUICursorMiddleButtonUpMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+76,0x006DC880,GUICursorMiddleButtonDblClickMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+77,0x006DC880,GUICursorRightButtonDownMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+78,0x006DC880,GUICursorRightButtonUpMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+79,0x006DC880,GUICursorRightButtonDblClickMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+80,0x006DC880,GUICursorScrollDownMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+81,0x006DC880,GUICursorScrollUpMessage,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+82,0x006DC8C0,54,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+83,0x006DC8C0,55,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+84,0x006DC8C0,56,"GameModeCombat,GameModeCutscene,GameModeDead,GameModeDialog,GameModeExplore,GameModeFixed,GameModeFlyCam,GameModeGUI,GameModeMovie,GameModePregame,GameModeCharGen,GameModeCharGen_LevelUp,GameModePartyPicker,GUITextInput,GUIPopup"
+85,0x00890AE0,(none; arg is the mode name),MapInputs
+86,0x0088E690,1,MapInputs
+87,0x00890AE0,(none; arg is the mode name),CursorLookMode
+88,0x00890AE0,(none; arg is the mode name),CursorOverFriendlyNPC
+89,0x0088F750,48,CursorOverFriendlyNPC
+90,0x0088F750,49,CursorOverFriendlyNPC
+91,0x0088F750,75,CursorOverFriendlyNPC
+92,0x0088F810,PerformPrimaryActionOnTargetUnderCursorMessage,CursorOverFriendlyNPC
+93,0x0088F810,PerformSecondaryActionOnTargetUnderCursorMessage,CursorOverFriendlyNPC
+94,0x0088F750,73,CursorOverFriendlyNPC
+95,0x0088F750,50,CursorOverFriendlyNPC
+96,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverFriendlyNPC
+97,0x00890AE0,(none; arg is the mode name),CursorOverGUI
+98,0x00890AE0,(none; arg is the mode name),CursorOverPortrait
+99,0x0088F750,75,CursorOverPortrait
+100,0x0088F810,SelectPartyMemberUnderCursorMessage 0,CursorOverPortrait
+101,0x0088F810,SelectPartyMemberUnderCursorMessage 1,CursorOverPortrait
+102,0x0088F810,CenterOnObjectUnderCursorMessage,CursorOverPortrait
+103,0x0088F810,PerformPrimaryActionOnTargetUnderCursorMessage,CursorOverPortrait
+104,0x0088F810,PerformSecondaryActionOnTargetUnderCursorMessage,CursorOverPortrait
+105,0x0088F750,73,CursorOverPortrait
+106,0x0088F750,50,CursorOverPortrait
+107,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverPortrait
+108,0x00890AE0,(none; arg is the mode name),CursorOverHostileNPC
+109,0x0088F750,48,CursorOverHostileNPC
+110,0x0088F750,49,CursorOverHostileNPC
+111,0x0088F750,75,CursorOverHostileNPC
+112,0x0088F810,SelectHostileUnderCursorMessage,CursorOverHostileNPC
+113,0x0088F810,PerformPrimaryActionOnTargetUnderCursorMessage,CursorOverHostileNPC
+114,0x0088F810,PerformSecondaryActionOnTargetUnderCursorMessage,CursorOverHostileNPC
+115,0x0088F750,73,CursorOverHostileNPC
+116,0x0088F750,50,CursorOverHostileNPC
+117,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverHostileNPC
+118,0x00890AE0,(none; arg is the mode name),CursorOverPartyMember
+119,0x0088F750,48,CursorOverPartyMember
+120,0x0088F750,49,CursorOverPartyMember
+121,0x0088F750,75,CursorOverPartyMember
+122,0x0088F810,SelectPartyMemberUnderCursorMessage 0,CursorOverPartyMember
+123,0x0088F810,SelectPartyMemberUnderCursorMessage 1,CursorOverPartyMember
+124,0x0088F810,CenterOnObjectUnderCursorMessage,CursorOverPartyMember
+125,0x0088F810,PerformPrimaryActionOnTargetUnderCursorMessage,CursorOverPartyMember
+126,0x0088F810,PerformSecondaryActionOnTargetUnderCursorMessage,CursorOverPartyMember
+127,0x0088F750,73,CursorOverPartyMember
+128,0x0088F750,50,CursorOverPartyMember
+129,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverPartyMember
+130,0x00890AE0,(none; arg is the mode name),CursorOverStaticGeometry
+131,0x0088F750,48,CursorOverStaticGeometry
+132,0x0088F750,49,CursorOverStaticGeometry
+133,0x0088F750,75,CursorOverStaticGeometry
+134,0x0088F810,PreMoveCharacterToLocationMessage,CursorOverStaticGeometry
+135,0x0088F810,MoveCharacterToLocationMessage,CursorOverStaticGeometry
+136,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverStaticGeometry
+137,0x00890AE0,(none; arg is the mode name),CursorOverNull
+138,0x0088F750,48,CursorOverNull
+139,0x0088F750,49,CursorOverNull
+140,0x0088F750,75,CursorOverNull
+141,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverNull
+142,0x0088F810,PreMoveCharacterToLocationMessage,CursorOverNull
+143,0x0088F810,MoveCharacterToLocationMessage,CursorOverNull
+144,0x00890AE0,(none; arg is the mode name),CursorOverUsableObject
+145,0x0088F750,48,CursorOverUsableObject
+146,0x0088F750,49,CursorOverUsableObject
+147,0x0088F750,75,CursorOverUsableObject
+148,0x0088F810,PerformPrimaryActionOnTargetUnderCursorMessage,CursorOverUsableObject
+149,0x0088F810,PerformSecondaryActionOnTargetUnderCursorMessage,CursorOverUsableObject
+150,0x0088F750,73,CursorOverUsableObject
+151,0x0088F750,50,CursorOverUsableObject
+152,0x0088F810,CenterOnMainPartyMemberMessage,CursorOverUsableObject
+153,0x00890AE0,(none; arg is the mode name),DragSelectMode
+154,0x0088F750,48,DragSelectMode
+155,0x0088F750,49,DragSelectMode
+156,0x0088F750,75,DragSelectMode
+157,0x00890AE0,(none; arg is the mode name),TargetingModeOverValidTarget
+158,0x0088F750,74,TargetingModeOverValidTarget
+159,0x0088F810,PerformAbilityOnTargetUnderCursorMessage,TargetingModeOverValidTarget
+160,0x0088F810,PerformAbilityOnSelectedTargetMessage,TargetingModeOverValidTarget
+161,0x0088F810,CancelAbilityTargetingMessage,TargetingModeOverValidTarget
+162,0x0088F860,ToggleFullScreenGUIMessage MainMenu,TargetingModeOverValidTarget
+163,0x00890AE0,(none; arg is the mode name),TargetingModeOverInvalidTarget
+164,0x0088F810,CancelAbilityTargetingMessage,TargetingModeOverInvalidTarget
+165,0x0088F860,ToggleFullScreenGUIMessage MainMenu,TargetingModeOverInvalidTarget
+166,0x00890AE0,(none; arg is the mode name),TargetingModeOverGUI
+167,0x0088F810,CancelAbilityTargetingMessage,TargetingModeOverGUI
+168,0x0088F860,ToggleFullScreenGUIMessage MainMenu,TargetingModeOverGUI
+169,0x00890AE0,(none; arg is the mode name),Effect_DisableInput
+170,0x0088F860,DropItemMessage,Effect_DisableInput
+171,0x0088F860,EquipItemMessage,Effect_DisableInput
+172,0x0088F860,PerformAbilityMessage,Effect_DisableInput
+173,0x0088F860,PerformAbilityOnPlayerMessage,Effect_DisableInput
+174,0x0088F860,PerformAbilityOnSelectedTargetMessage,Effect_DisableInput
+175,0x0088F860,PerformAbilityOnSelectedTargetMessage,Effect_DisableInput
+176,0x0088F7B0,74,Effect_DisableInput
+177,0x0088F860,PerformAbilityOnTargetUnderCursorMessage,Effect_DisableInput
+178,0x0088F860,PerformDefaultActionOnTargetMessage,Effect_DisableInput
+179,0x0088F860,PerformSecondaryActionOnTargetMessage,Effect_DisableInput
+180,0x0088F860,RequestTargetMessage,Effect_DisableInput
+181,0x0088F860,SelectNextCreatureTargetMessage,Effect_DisableInput
+182,0x0088F860,SelectNextHostileTargetMessage,Effect_DisableInput
+183,0x0088F860,SelectNextUsableObjectMessage,Effect_DisableInput
+184,0x0088F860,SelectPreviousCreatureTargetMessage,Effect_DisableInput
+185,0x0088F860,SelectPreviousHostileTargetMessage,Effect_DisableInput
+186,0x0088F860,SelectPreviousUsableObjectMessage,Effect_DisableInput
+187,0x0088F860,SwitchWeaponSetMessage,Effect_DisableInput
+188,0x0088F860,SwitchWeaponSetNowMessage,Effect_DisableInput
+189,0x0088F860,UnequipItemMessage,Effect_DisableInput
+190,0x0088F7B0,50,Effect_DisableInput
+191,0x0088F7B0,0,Effect_DisableInput
+192,0x0088F7B0,1,Effect_DisableInput
+193,0x0088F7B0,6,Effect_DisableInput
+194,0x0088F7B0,2,Effect_DisableInput
+195,0x0088F7B0,3,Effect_DisableInput
+196,0x0088F7B0,4,Effect_DisableInput
+197,0x0088F7B0,5,Effect_DisableInput
+198,0x00890AE0,(none; arg is the mode name),Effect_DisableMovement
+199,0x0088F7B0,0,Effect_DisableMovement
+200,0x0088F7B0,1,Effect_DisableMovement
+201,0x0088F7B0,6,Effect_DisableMovement
+202,0x0088F7B0,2,Effect_DisableMovement
+203,0x0088F7B0,3,Effect_DisableMovement
+204,0x0088F7B0,4,Effect_DisableMovement
+205,0x0088F7B0,5,Effect_DisableMovement
+206,0x00890AE0,(none; arg is the mode name),PostCutsceneInputFilter
+207,0x0088F860,ToggleFullScreenGUIMessage MainMenu,PostCutsceneInputFilter
+208,0x00890AE0,(none; arg is the mode name),ResGraph
+209,0x0088F810,NextPageMessage,ResGraph
+210,0x0088F810,PrevPageMessage,ResGraph
+211,0x00890AE0,(none; arg is the mode name),Console
+212,byte store [group+0x0],0x1,Console
+213,byte store [group+0x1],0x1,Console
+214,0x0088F750,43,Console
+215,0x00890AE0,(none; arg is the mode name),TutorialActive
+216,0x00890AE0,(none; arg is the mode name),TrainingTutorialMode
+217,0x0088F860,SaveGameMessage -1 2,TrainingTutorialMode
+218,0x00890AE0,(none; arg is the mode name),GUIContextCutscene
+219,0x00890AE0,(none; arg is the mode name),GUITextInput
+220,0x0088F810,CursorMovedMessage,GUITextInput
+221,0x0088F750,43,GUITextInput
+222,byte store [group+0x0],0x1,GUITextInput
+223,0x00890AE0,(none; arg is the mode name),GUIPopup
+224,0x0088F810,CursorMovedMessage,GUIPopup
+225,0x0088F750,43,GUIPopup
+226,byte store [group+0x0],0x1,GUIPopup
+227,0x006DC880,UnpauseMessage,"GameModeExplore,GameModeCombat"
+228,0x006DC880,ActivateLinearTargetModeMessage,"GameModeExplore,GameModeCombat"
+229,0x006DC880,ActivateAnalogTargetModeMessage,"GameModeExplore,GameModeCombat"
+230,0x006DC8C0,57,"GameModeExplore,GameModeCombat"
+231,0x006DC8C0,62,"GameModeExplore,GameModeCombat"
+232,0x006DC8C0,63,"GameModeExplore,GameModeCombat"
+233,0x006DC8C0,61,"GameModeExplore,GameModeCombat"
+234,0x006DC8C0,66,"GameModeExplore,GameModeCombat"
+235,0x006DC8C0,65,"GameModeExplore,GameModeCombat"
+236,0x006DC8C0,67,"GameModeExplore,GameModeCombat"
+237,0x006DC8C0,64,"GameModeExplore,GameModeCombat"
+238,0x006DC8C0,68,"GameModeExplore,GameModeCombat"
+239,0x006DC8C0,71,"GameModeExplore,GameModeCombat"
+240,0x006DC8C0,72,"GameModeExplore,GameModeCombat"
+241,0x006DC8C0,70,"GameModeExplore,GameModeCombat"
+242,0x006DC880,DisplayLastFullScreenGUIMessage,"GameModeExplore,GameModeCombat"
+243,0x006DC880,DisplayLastFullScreenGUIMessage,"GameModeExplore,GameModeCombat"
+244,0x006DC880,SelectNextCharacterMessage,"GameModeExplore,GameModeCombat"
+245,0x006DC880,SelectPreviousCharacterMessage,"GameModeExplore,GameModeCombat"
+246,0x006DC880,PerformDefaultActionOnTargetMessage,"GameModeExplore,GameModeCombat"
+247,0x006DC880,PerformSecondaryActionOnTargetMessage,"GameModeExplore,GameModeCombat"
+248,0x006DC880,TeleportPlayerMessage,"GameModeExplore,GameModeCombat"
+249,0x006DC880,SelectPartyMemberIndexMessage 0 0,"GameModeExplore,GameModeCombat"
+250,0x006DC880,SelectPartyMemberIndexMessage 1 0,"GameModeExplore,GameModeCombat"
+251,0x006DC880,SelectPartyMemberIndexMessage 2 0,"GameModeExplore,GameModeCombat"
+252,0x006DC880,SelectPartyMemberIndexMessage 3 0,"GameModeExplore,GameModeCombat"
+253,0x006DC880,SelectPartyMemberIndexMessage 0 1,"GameModeExplore,GameModeCombat"
+254,0x006DC880,SelectPartyMemberIndexMessage 1 1,"GameModeExplore,GameModeCombat"
+255,0x006DC880,SelectPartyMemberIndexMessage 2 1,"GameModeExplore,GameModeCombat"
+256,0x006DC880,SelectPartyMemberIndexMessage 3 1,"GameModeExplore,GameModeCombat"
+257,0x006DC880,ToggleFullPartySelectMessage,"GameModeExplore,GameModeCombat"
+258,0x006DC880,ToggleHoldPartyMessage,"GameModeExplore,GameModeCombat"
+259,0x006DC880,CameraZoomInMessage,"GameModeExplore,GameModeCombat"
+260,0x006DC880,CameraZoomOutMessage,"GameModeExplore,GameModeCombat"
+261,0x006DC8C0,23,"GameModeExplore,GameModeCombat"
+262,0x006DC8C0,24,"GameModeExplore,GameModeCombat"
+263,0x006DC880,UserTogglePauseMessage,"GameModeExplore,GameModeCombat"
+264,0x006DC880,ToggleFullScreenGUIMessage CharacterRecord,"GameModeExplore,GameModeCombat"
+265,0x006DC880,ToggleFullScreenGUIMessage Journal,"GameModeExplore,GameModeCombat"
+266,0x006DC880,ToggleFullScreenGUIMessage Inventory,"GameModeExplore,GameModeCombat"
+267,0x006DC880,ToggleFullScreenGUIMessage Skills,"GameModeExplore,GameModeCombat"
+268,0x006DC880,ToggleFullScreenGUIMessage SpellsTalents,"GameModeExplore,GameModeCombat"
+269,0x006DC880,ToggleFullScreenGUIMessage Options,"GameModeExplore,GameModeCombat"
+270,0x006DC880,ToggleFullScreenGUIMessage Map,"GameModeExplore,GameModeCombat"
+271,0x006DC880,ToggleFullScreenGUIMessage WorldMap,"GameModeExplore,GameModeCombat"
+272,0x006DC880,ToggleFullScreenGUIMessage MainMenu,"GameModeExplore,GameModeCombat"
+273,0x006DC880,ToggleFullScreenGUIMessage Tactics,"GameModeExplore,GameModeCombat"
+274,0x006DC880,ToggleMainInterfaceMessage,"GameModeExplore,GameModeCombat"
+275,0x006DC8C0,7,"GameModeExplore,GameModeCombat"
+276,0x006DC8C0,8,"GameModeExplore,GameModeCombat"
+277,0x006DC8C0,11,"GameModeExplore,GameModeCombat"
+278,0x006DC8C0,12,"GameModeExplore,GameModeCombat"
+279,0x006DC8C0,13,"GameModeExplore,GameModeCombat"
+280,0x006DC8C0,9,"GameModeExplore,GameModeCombat"
+281,0x006DC8C0,10,"GameModeExplore,GameModeCombat"
+282,0x006DC8C0,14,"GameModeExplore,GameModeCombat"
+283,0x006DC8C0,15,"GameModeExplore,GameModeCombat"
+284,0x006DC8C0,16,"GameModeExplore,GameModeCombat"
+285,0x006DC8C0,17,"GameModeExplore,GameModeCombat"
+286,0x006DC8C0,18,"GameModeExplore,GameModeCombat"
+287,0x006DC8C0,26,"GameModeExplore,GameModeCombat"
+288,0x006DC8C0,27,"GameModeExplore,GameModeCombat"
+289,0x006DC8C0,0,"GameModeExplore,GameModeCombat"
+290,0x006DC8C0,1,"GameModeExplore,GameModeCombat"
+291,0x006DC8C0,6,"GameModeExplore,GameModeCombat"
+292,0x006DC8C0,2,"GameModeExplore,GameModeCombat"
+293,0x006DC8C0,3,"GameModeExplore,GameModeCombat"
+294,0x006DC8C0,4,"GameModeExplore,GameModeCombat"
+295,0x006DC8C0,5,"GameModeExplore,GameModeCombat"
+296,0x006DC880,ToggleRunWalkMessage,"GameModeExplore,GameModeCombat"
+297,0x006DC8C0,19,"GameModeExplore,GameModeCombat"
+298,0x006DC8C0,20,"GameModeExplore,GameModeCombat"
+299,0x006DC8C0,21,"GameModeExplore,GameModeCombat"
+300,0x006DC8C0,22,"GameModeExplore,GameModeCombat"
+301,0x006DC880,EnableObjectGlowMessage,"GameModeExplore,GameModeCombat"
+302,0x006DC880,DisableObjectGlowMessage,"GameModeExplore,GameModeCombat"
+303,0x006DC8C0,44,"GameModeExplore,GameModeCombat"
+304,0x006DC8C0,45,"GameModeExplore,GameModeCombat"
+305,0x006DC8C0,46,"GameModeExplore,GameModeCombat"
+306,0x006DC8C0,47,"GameModeExplore,GameModeCombat"
+307,0x006DC880,LoadGameMessage -1 2,"GameModeExplore,GameModeCombat"
+308,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 0,"GameModeExplore,GameModeCombat"
+309,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 1,"GameModeExplore,GameModeCombat"
+310,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 2,"GameModeExplore,GameModeCombat"
+311,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 3,"GameModeExplore,GameModeCombat"
+312,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 4,"GameModeExplore,GameModeCombat"
+313,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 5,"GameModeExplore,GameModeCombat"
+314,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 6,"GameModeExplore,GameModeCombat"
+315,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 7,"GameModeExplore,GameModeCombat"
+316,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 8,"GameModeExplore,GameModeCombat"
+317,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 9,"GameModeExplore,GameModeCombat"
+318,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.ActivateQuickslot 10,"GameModeExplore,GameModeCombat"
+319,0x006DC880,InvokeCallbackMessage Quickbar Quickbar.SwitchWeaponSet,"GameModeExplore,GameModeCombat"

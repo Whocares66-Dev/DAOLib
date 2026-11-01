@@ -2,6 +2,8 @@
 
 How the engine reads the keyboard and mouse and turns them into actions: the DirectInput backend and its events, the modifier mask, the modes' groups that let an input or a message text through, the bindings of numbered inputs, the actions with their two keys and `KeyBindings.ini`. Read 2026-10-31 in the GOG exe by paragon-agent's helpers (128 Input and Camera functions no note cited, DAOParagonEngine #351), every claim checked in the disassembly by lib-agent-2 with subagents; what did not hold was dropped or corrected. Static reading; nothing played. It builds on `src/dao/Addresses.h`'s input rows (the actions, `SetKey`, `TakeKey`, the mapper, `IsDown`, `AxisPair`, the modes' groups), `src/dao/core/InputCode.h` (the input word), `dev/GUI.md` ("Default bindings", "How a binding becomes the string", and the movies' `EnableGameMessage`) and `dev/CAMERA.md` ("The controls"). [C] read in the disassembly, [I] inferred.
 
+The registrations are tabulated in `dev/input_names.csv` (`id`, `name`: the 76 numbered inputs), `dev/input_modes.csv` (`seq`, `helper`, `what`, `modes`: 319 group operations of `RegisterInputMessages`) and `dev/input_actions.csv` (`seq`, `call`, `action`, `args`: 297 rows, R1–R239 of `RegisterActions` and D1–D58 of the defaults function), from two independent transcriptions of `RegisterInputNames` 0x00895F10, `RegisterInputMessages` 0x006DC900 and `RegisterActions` 0x006E30D0 that agree row for row (paragon-agent, DAOParagonEngine #351, 2026-10-31); the call counts were checked by lib-agent-2.
+
 ## The input word
 
 - **One 32-bit word names an input** [C]: the device in the top nibble, the modifiers in bits 20–22, the code in the low 16 bits (`InputCode.h`).
@@ -37,12 +39,23 @@ How the engine reads the keyboard and mouse and turns them into actions: the Dir
 
 - **A group** (`InputModes::Group` 0x00890C60, `ret 4`, returns the group, which lives in the name map's node at +0x28) [C]:
   - **Inputs:** a set of allowed numbered inputs at +4 (`AllowsInput` 0x0088EC00), a set barred at +0x18, and a flag at +1 that bars every input not allowed (`BarsInput` 0x0088EC40, which calls `AllowsInput` itself).
-  - **Message texts:** a set allowed at +0x30 (`AllowsText` 0x0088F1D0; `Allow` 0x0088F810 adds), a set barred at +0x5C (`BarsText` 0x0088F220; 0x0088F860 adds), a flag at +0 that bars every text not allowed, and **a flag at +0x2C that allows every text** (set by 0x0088E690; its one caller sets it on `CursorLookMode`, 0x006DE6DA).
+  - **Message texts:** a set allowed at +0x30 (`AllowsText` 0x0088F1D0; `Allow` 0x0088F810 adds), a set barred at +0x5C (`BarsText` 0x0088F220; 0x0088F860 adds), a flag at +0 that bars every text not allowed, and **a flag at +0x2C that allows every text** (set by 0x0088E690; its one caller sets it on `MapInputs`, 0x006DE6A9–0x006DE6DA) [C: the string pushed at 0x006DE6A9 is 0xB12B84, L"MapInputs"; L"CursorLookMode" at 0xB12B64 is the next group's] (2026-10-31, lib-agent-2).
   - The texts are message texts such as "SelectResponseMessage 3", not typed text (Addresses.h; GUI.md's `EnableGameMessage`).
 - **The groups that are on** [C]: three fixed slots at +0xB0, +0xB4 and +0xB8, filled by the activation 0x00890CA0, and a map at +0xBC. `AllowsInput` (0x0088EDE0) and `Allowed` (0x0088F430) walk them all: a bar anywhere answers false at once, else true when some group allowed. [I: what each slot stands for; why the map's walk dereferences once more than `Group` returns.]
 - **Filling them at the start** (`RegisterInputMessages` 0x006DC900) [C], each over an array of mode names and a count, `__cdecl`:
-  - 0x006DC880 (ID 15450): allow a message text in each listed mode's group (68 calls).
-  - **0x006DC8C0 (ID 15451): allow a numbered input in each listed mode's group** (48 calls), through 0x0088F750 into the +4 set. It is not a "disallow": its first call allows input 43, `CastCursorRay`'s axis pair, in fifteen modes.
+  - 0x006DC880 (ID 15450): allow a message text in each listed mode's group (64 calls).
+  - **0x006DC8C0 (ID 15451): allow a numbered input in each listed mode's group** (47 calls), through 0x0088F750 into the +4 set. It is not a "disallow": its first call allows input 43, `CastCursorRay`'s axis pair, in fifteen modes.
+  - **It also works on groups one by one** (read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2) [C]: `Group` by name, then:
+    - define a group 0x00890AE0 ×38;
+    - allow a text 0x0088F810 ×64;
+    - bar a text 0x0088F860 ×24;
+    - allow an input 0x0088F750 ×59;
+    - bar an input 0x0088F7B0 ×16;
+    - allow every text 0x0088E690 ×1.
+  - **The flags set:**
+    - "bars every text not allowed" (+0) on `DisableAll` (0x006DC9AA), `Console` (0x006E17D2), `GUITextInput` (0x006E1B17) and `GUIPopup` (0x006E1C76);
+    - "bars every input not allowed" (+1) on `DisableAll` (0x006DC9E7) and `Console` (0x006E1818).
+  - One barred text is built from a narrow string (0xB12264, `"ToggleFullScreenGUIMessage MainMenu"` for `PostCutsceneInputFilter`) [paragon-agent's transcription].
 
 ## Bindings: `Input`
 
@@ -51,7 +64,7 @@ How the engine reads the keyboard and mouse and turns them into actions: the Dir
 - **A binding** [C]: the first key at +0, the second at +4, a byte at +8 (1), and +9 whether both keys must be down (a chord; 0x008910A0 makes one key, 0x008910C0 two).
 - **`IsDown`** (0x00892340) [C]: false when the modes do not allow the input; else true if any of its bindings is down, a chord needing both keys. A single binding with key 0 is never down. It does not stop at the first.
 - **`AxisPair`** (0x00892670) [C]: the first binding only, (0, 0) when the modes bar it or either key is 0; else out[0] = the first key's value and out[1] the second's, as ints. The chord flag is not read.
-- **Making them** [C]: `AddBinding` (0x008937D0 → 0x00892210) and `AddBindingPair` (0x008937F0 → 0x008922A0) append a binding and its index to the input's list. 0x00892850 (`ret 0xC`; key, input, flag) and 0x00892DC0 (two keys) bind a keyboard or mouse key **eight times, once per combination of Shift, Alt and Ctrl**, the key's own modifiers dropped; with the flag clear, or for an axis or kind 4, once. 44 and 2 callers in `RegisterActions`. So such an input is down whatever modifiers are held, which the state query alone would not allow [I from the two readings].
+- **Making them** [C]: `AddBinding` (0x008937D0 → 0x00892210) and `AddBindingPair` (0x008937F0 → 0x008922A0) append a binding and its index to the input's list. 0x00892850 (`ret 0xC`; key, input, flag) and 0x00892DC0 (two keys) bind a keyboard or mouse key **eight times, once per combination of Shift, Alt and Ctrl**, the key's own modifiers dropped; with the flag clear, or for an axis or kind 4, once. 44 and 2 callers in `RegisterActions`. Of these, 8 of the 44 and both of the 2 pass the flag 1 [paragon-agent's transcriptions, two copies agreeing]. So such an input is down whatever modifiers are held, which the state query alone would not allow [I from the two readings].
 - **`Bind`** (0x00891170) rebinds an index; its one caller is the action's `SetKey` (0x00893A40).
 - **The input mapper** (`InputMapper::Get` 0x0087D320, `__cdecl ()`, 0x60 bytes at 0x00C3B214) [C]: its 0x28-byte entries (Addresses.h) and two maps from a key word to entries, at +0x14 and +0x38. 0x0087D5A0 (ID 24122; entry, key) gives an entry a new key and moves it from the old key's place in the map to the new; an entry whose byte +0x24 is set is keyed without modifiers, in the map at +0x38. Its one caller is the action's `SetKey`. Its constructor ends by building the key-name tables from GDA 267 (`inputmap`, column `strref`; 0x00882680; GUI.md "How a binding becomes the string"). +0x5C is the remapping flag (below).
 
@@ -61,6 +74,14 @@ The one object (`Get` 0x00895DC0, 0xE8 bytes at 0x00C3B9D8; data-tree name `Inpu
 
 - **An action, `GroupedInputs`** (0x13C bytes, constructor 0x00894140) [C]: `RemappingPrimary` +0x58 and `RemappingSecondary` +0x68 (bools); `Description` +0x78, `PrimaryMappedKey` +0xA0, `SecondaryMappedKey` +0xC8 (strings); the two keys' mappings at +0xF0 and +0x100 (8 bytes each: a flag, then a numbered input's binding index for 0 or a mapper entry for 1); the key words at +0x110 and +0x114; +0x118 how the mappings combine (0 all, else any); +0x119 hidden from the ini; the name at +0x11C; +0x138 the keys missing from the ini (bit 0 the first, bit 1 the second).
 - **`AddMapping`** (0x00894BB0) makes two mapper entries for the same trigger and text, one per key (0x00894490). **`AddInputMapping`** (0x00894C40, 15 callers) makes two empty bindings of a numbered input, one per key (0x008944E0).
+  - **`RegisterActions` (0x006E30D0) makes, all inline** (read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2; [C] for the counts):
+    - 53 `AddAction`;
+    - 45 `AddMapping`, whose flag byte is 0 in all 45 [transcription];
+    - 15 `AddInputMapping`;
+    - 60 calls of 0x00892820, which make an input-mapper entry through 0x0087D480 with (word, word, text, flag). 15 pass flag 1, the mouse wheel's and the GUI cursor's [transcription];
+    - 44 of 0x00892850 and 2 of 0x00892DC0;
+    - 19 `AddBinding` and 1 `AddBindingPair`.
+  - **The defaults function 0x006E9510:** the clear (0x00893D70), 56 `SetKey`, each with report 0, then 0x006E2FD0.
 - **Whether a key may be set** (0x00893840) [C]: each of the action's mappings is asked whether the key word is a valid key of its device (0x00880C40), or 0; the answers are ANDed (combine 0) or ORed.
 - **`SetKey`** (0x00894CC0) **returns a bool** [C]: false, with nothing changed, when the key is refused; else `TakeKey`, the action's own `SetKey`, and, when asked to report, `RemappingError` set to talk string 387764, or to 387765 + " " + the `Description` of the action that lost the key. Then true.
 - **Remapping from the controls screen** [C]:
@@ -75,7 +96,7 @@ The one object (`Get` 0x00895DC0, 0xE8 bytes at 0x00C3B9D8; data-tree name `Inpu
 - **`ResetKeys`** (0x006EA9F0, `__cdecl ()`) [C]: clears the keys (0x00893D70), runs the defaults function 0x006E9510 (56 `SetKey` calls), then reads `keymap` (GDA 292): per row, the `Label` and the language's column (`EN-US` when the language has none); the label less its last two characters is the action and its suffix `_0` or `_1` the key; `TeleportPlayer--DEBUG` is skipped; the text is parsed (0x008823C0) and set with `SetKey(name, key, which, 0)`. It ends with 0x006E2FD0 (`PerformPrimaryAction` and `PerformSecondaryAction` in code, GUI.md).
 - **Load** (0x00895580) [C]: for each action not hidden, each key present in the ini is parsed, taken from any other action (`TakeKey`) and set; a key missing sets its bit in +0x138.
 - **Save** (0x00895980) [C]: writes only the keys whose bit is set in +0x138, then clears the mask. Load sets the bits for keys the ini lacks [C]; that a change made on the controls screen sets them too is [I] (GUI.md has bit 0 as "primary changed or missing").
-- **Order at the start** (the game mode controller, 0x00641870, Addresses.h): `RegisterInputMessages`, `RegisterActions`, `ResetKeys` (0x006418B2), `LoadKeyBindings` (0x006418B7). `RegisterInputNames` (0x00895F10, from 0x006418A3) names the 76 numbered inputs 0–0x4B (`AccelerateCharacterLateral` to `Pre_Selection`), from narrow strings.
+- **Order at the start** (the game mode controller, 0x00641870, Addresses.h): `RegisterInputMessages`, `RegisterActions`, `ResetKeys` (0x006418B2), `LoadKeyBindings` (0x006418B7). `RegisterInputNames` (0x00895F10, from 0x006418A3) names the 76 numbered inputs 0–0x4B (`AccelerateCharacterLateral` to `Pre_Selection`), from narrow strings. Four are made out of order: the blocks for 0xB313DC, 0xB313C8, 0xB313B0 and 0xB31398 take ids 0x39, 0x36, 0x37 and 0x38. So 54–56 are `GUILeftCursorButton`, `GUIMiddleCursorButton` and `GUIRightCursorButton`, and 57 is `DisableMovement`, though `DisableMovement` is made first [C, read by my subagent and by both transcriptions].
 
 ## Not read
 
