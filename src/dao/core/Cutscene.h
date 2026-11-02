@@ -162,8 +162,8 @@ struct Actor
     std::array<float, 4> originOrientation{}; // a quaternion
     std::array<float, 3> finalPosition{};
     std::array<float, 4> finalOrientation{};
-    std::uint8_t master = 0; // 255 for the master actor
-    std::uint8_t inventory = 0;
+    std::uint8_t master = 0;       // 255 for the master actor
+    std::uint8_t inventory = 0xFF; // the slots the actor keeps; a file with none keeps them all
     float scale = 1.0F;
     std::vector<Action> actions; // in the file's order
 };
@@ -179,7 +179,10 @@ struct Cutscene
     std::uint8_t playUntilVoCompletes = 0; // 255 or 0, as written; only a line's cut waits on its voices
     std::uint8_t areaRequired = 0;         // 255 or 0, as written
     std::wstring henchmanTag;
-    std::vector<std::wstring> resources; // "bhmcs_intro.cub", "da_dof.ffx.xml"
+    std::vector<Curve> lodCurves;                // the player's LOD position by time, x, y and z in the origin's frame
+    std::array<float, 3> lodOriginPosition{};    // that frame's place
+    std::array<float, 4> lodOriginOrientation{}; // and its turn, a quaternion
+    std::vector<std::wstring> resources;         // "bhmcs_intro.cub", "da_dof.ffx.xml"
     std::vector<Actor> actors;
 };
 

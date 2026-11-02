@@ -50,7 +50,7 @@ std::vector<std::byte> CutsceneFile()
     Builder b = Start(
         "CUT ",
         {{"CUT",
-          40,
+          72,
           {{3010, 14, 0, 0},
            {5000, 8, 0, 4},
            {5001, 14, 0, 8},
@@ -61,7 +61,10 @@ std::vector<std::byte> CutsceneFile()
            {5019, 0, 0, 25},
            {5050, 14, 0, 28},
            {5100, 14, gff4::kList, 32},
-           {5200, 6, kStructList, 36}}},
+           {5200, 6, kStructList, 36},
+           {5011, 3, kStructList, 40},
+           {5014, 10, 0, 44},
+           {5015, 13, 0, 56}}},
          {"VERT", 8, {{5370, 8, 0, 0}, {5371, 8, 0, 4}}},
          {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
          {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
@@ -113,7 +116,7 @@ std::vector<std::byte> CutsceneFile()
            {5621, 8, 0, 12},
            {5628, 0, 0, 18},
            {5629, 0, 0, 19}}}});
-    const std::size_t root = Struct(b, 40);
+    const std::size_t root = Struct(b, 72);
     b.U32(root, b.String(u"bhm500ar_tower_harrowing"));
     Float(b, root + 4, 61.0F);
     b.U32(root + 8, b.String(u"gen00cs_cutscene_end"));
@@ -126,6 +129,15 @@ std::vector<std::byte> CutsceneFile()
     const std::uint32_t cub = b.String(u"bhmcs_intro.cub");
     const std::uint32_t dof = b.String(u"da_dof.ffx.xml");
     b.U32(root + 32, b.Numbers({cub, dof}));
+    Floats(b, root + 44, {-10.5F, 39.0F, 2.0F});
+    Floats(b, root + 56, {0.0F, 0.0F, 0.5F, 0.75F});
+    const std::size_t lodCurves = b.bytes.size();
+    b.U32(lodCurves, 2);
+    const std::size_t lodX = Struct(b, 12);
+    const std::size_t lodY = Struct(b, 12);
+    b.U32(root + 40, static_cast<std::uint32_t>(lodCurves - b.data));
+    Float(b, lodX, 1.5F);
+    Float(b, lodY, -2.5F);
 
     const std::size_t actors = b.bytes.size();
     b.U32(actors, 1);
@@ -223,6 +235,11 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templ
     CHECK(read->areaRequired == 255);
     CHECK(read->henchmanTag == L"gen00fl_alistair");
     CHECK(read->resources == std::vector<std::wstring>{L"bhmcs_intro.cub", L"da_dof.ffx.xml"});
+    REQUIRE(read->lodCurves.size() == 2);
+    CHECK(read->lodCurves[0].base == 1.5F);
+    CHECK(read->lodCurves[1].base == -2.5F);
+    CHECK(read->lodOriginPosition == std::array<float, 3>{-10.5F, 39.0F, 2.0F});
+    CHECK(read->lodOriginOrientation == std::array<float, 4>{0.0F, 0.0F, 0.5F, 0.75F});
     REQUIRE(read->actors.size() == 1);
     const auto &actor = read->actors[0];
     CHECK(actor.name == L"Jowan");
@@ -231,6 +248,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templ
     CHECK(actor.mappingTag == L"bhm_jowan");
     CHECK(actor.scale == 1.5F);
     CHECK(actor.originPosition == std::array<float, 3>{1.0F, 2.0F, 3.0F});
+    CHECK(actor.inventory == 0xFF); // this file has no field 5217
     REQUIRE(actor.actions.size() == 4);
 
     const auto &animation = actor.actions[0];

@@ -23,6 +23,9 @@ constexpr std::uint32_t kEndScript = 5001;
 constexpr std::uint32_t kBlendTree = 5007;
 constexpr std::uint32_t kFps = 5016;
 constexpr std::uint32_t kStage = 5017;
+constexpr std::uint32_t kLodCurves = 5011;
+constexpr std::uint32_t kLodOriginPosition = 5014;
+constexpr std::uint32_t kLodOriginOrientation = 5015;
 constexpr std::uint32_t kPlayUntilVoCompletes = 5018;
 constexpr std::uint32_t kAreaRequired = 5019;
 constexpr std::uint32_t kHenchmanTag = 5050;
@@ -253,7 +256,7 @@ Actor ActorOf(const gff4::Struct &in)
         .finalPosition = Several<3>(in, kActorFinalPosition),
         .finalOrientation = Several<4>(in, kActorFinalOrientation),
         .master = in.Get<std::uint8_t>(kActorMaster).value_or(0),
-        .inventory = in.Get<std::uint8_t>(kActorInventory).value_or(0),
+        .inventory = in.Get<std::uint8_t>(kActorInventory).value_or(0xFF), // the exe's default, 0x007E020F
         .scale = in.Get<float>(kActorScale).value_or(1.0F),
         .actions = {},
     };
@@ -529,9 +532,16 @@ Cutscene CutsceneOf(const gff4::Struct &root)
         .playUntilVoCompletes = root.Get<std::uint8_t>(kPlayUntilVoCompletes).value_or(0),
         .areaRequired = root.Get<std::uint8_t>(kAreaRequired).value_or(0),
         .henchmanTag = root.String(kHenchmanTag).value_or(L""),
+        .lodCurves = {},
+        .lodOriginPosition = Several<3>(root, kLodOriginPosition),
+        .lodOriginOrientation = Several<4>(root, kLodOriginOrientation),
         .resources = root.Strings(kResources),
         .actors = {},
     };
+    for (const gff4::Struct &curve : root.Structs(kLodCurves))
+    {
+        cutscene.lodCurves.push_back(CurveOf(curve));
+    }
     const std::vector<gff4::Struct> actors = root.Structs(kActors);
     cutscene.actors.reserve(actors.size());
     for (const gff4::Struct &actor : actors)
