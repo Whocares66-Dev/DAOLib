@@ -163,3 +163,5 @@ Read in GOG's exe, not run in the game. [C] checked, [I] inferred.
 ## DragonAge.ini (read 2026-11-01, two readings)
 
 `CClientOptions::LoadGroupFromIni` (0x005DE2B0) and `SaveGroupToIni` (0x005DE5B0) take a group: 0 GameOptions, 1 OnlineOptions, 2 ControlOptions, 3 AudioOptions, 4 VideoOptions, 5 Movies, the file's sections. On a load a key in the file sets its option from the string, and a key missing from the file is written back with the option's own value, so the file fills itself in. Group 2 also loads or saves the key bindings.
+- **The texture folders by quality** (`ModuleResourceManager::BuildTextureFolders`, 0x005FB800): quality 2 gives `textures\high\` and `textures\patch_high\`, any other `textures\medium\` and `textures\patch_medium\`. There is no low folder.
+- **A table's running numbers** (0x004EDBA0, from `M2DA::AddPart` 0x004ECB60 when its flag is set): each row of the part gets a running number in its first cell, field 10005, from the table's row count + 1. Which call passes the flag isn't read.
