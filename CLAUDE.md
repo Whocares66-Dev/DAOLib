@@ -18,7 +18,7 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 | Ghidra | 12.1.4 at `C:\Modding\ghidra_12.1.4_PUBLIC`; project `game\ghidra\dao.gpr` (ignored) |
 | MCP | GhidrAssistMCP (our `agentic-switch` branch, `C:\Modding\GhidrAssistMCP`), port 8090; the Skyrim projects hold 8080-8082 |
 | Toolchain | VS 2022 `cl.exe` targeting x86 (`vcvarsall amd64_x86`), vcpkg at `C:\vcpkg`, triplet `x86-windows-static-md`, LLVM 22 for clang-format/tidy, capstone for `tools\daoexe.py --disasm` |
-| Logs | `Documents\BioWare\Dragon Age\daolib\`, which on this machine is under OneDrive: `C:\Users\tianx\OneDrive\Documents\BioWare\Dragon Age\daolib\` |
+| Logs | `Documents\BioWare\Dragon Age\daolib\`, under OneDrive on this machine |
 | Toolset | installer in `toolset\` (ignored); `dev/TOOLSET.md` |
 
 **Everything that goes into the game is 32-bit.** The game is, so the loader and every plugin must be. `CMakeLists.txt` refuses a 64-bit configure of them, and `tools\build.ps1` sets the environment up right. Inline asm and `__declspec(naked)` in the proxy are x86 features, and that is fine. The one exception is `src/dao/core`, the target `daolib_core`, which builds 64-bit as well (`-Preset core-x64`, the core and its tests alone) for tools that read the game's files with no game, Eluvian's ghilana first (DAOLib #106). Core's overlays of the engine's memory (`Msvc8.h`'s, `ScriptArray.h`'s) are declared only in a 32-bit build.
