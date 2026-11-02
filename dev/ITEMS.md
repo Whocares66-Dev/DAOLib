@@ -754,3 +754,7 @@ So, in the peer's 1-based terms, column = L ÷ 3 + 1 with integer division, vali
 
 - Item slot +0x64 at the end of SetItemMaterialType; 0x00753D90 in full.
 - Whether the enciphered add-in `ts_material_kcc` adds rows (the running game reads it; Eluvian can).
+
+## A store's load (0x007EB7F0, read 2026-11-01, two readings and by hand)
+
+From a save's struct, with 2 set in the global flags 0x00C371B4 for the call: the template's resref from field 3, the template loaded (slot at +0x1C8), then the saved struct (slot at +0x88). With no saved struct, the GFF3 field `TemplateResRef` gives the template. `CCArea::ReadStoreList` calls it for list field 16017, on a 0x4A0-byte `Store`, and the tag is registered with `CCModule::SetNamedSlot`.

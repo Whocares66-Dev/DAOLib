@@ -304,3 +304,9 @@ Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address
   - with the module's `AREA_LOAD_HINT` set: that row of `loadhints` (206), and the local is reset;
   - otherwise a random row by the hero's level: up to 3, table 284 (`vlowlevelloadhints`); 4 to 7, 277 (`lowlevelloadhints`); 8 to 12, 275 (named `HighLeveLoadHints`); 13 on, 276 (named `MidLeveLoadHints`). The script's comments have the last two the other way round.
 - **Not read:** the hint on a new game's or a save's load (whether a stale one shows); how markup such as `<LeftClickDefaultCapped/>` in a hint becomes text; `SendEventTransitionToWorldMap` has no engine side: it is a script event to the module (script_commands/arrays.md, "Leaving a random encounter") [I for no engine reader] (corrected 2026-10-23 by lib-agent-2); whether the world map scene's +0xBC is set on a normal world-map trip; the kind-3 early-out in slot 5 (0x006C6DC2–0x006C6DFE).
+
+## A module event's delivery, and the campaign files' variables (read 2026-11-01, two readings)
+
+- **Delivery** (`CCModule` 0x005FEB00): the event runs through the module's own script (+0x1F8), then through each entry of the 0x1C-byte vector at +0x26C whose +0x14 is set; the event is freed last, so a caller hands it over. What those entries are is inferred.
+- **Listeners** (+0x188): a vector of 0x14-byte entries, each an event id and its listeners, kept in ascending id order and searched in a line (0x005FE8A0).
+- **Variables from the campaign files** (0x005FF010): the further `.cif` resources at +0x474 are walked last to first, only GFF4 files counting, and each one's list field 17000 goes into the module's variables at +0x394. So the last file's are read first.
