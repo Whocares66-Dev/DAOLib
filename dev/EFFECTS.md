@@ -87,7 +87,7 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
   - The stop (0x0079E3E0) stops the impact and duration sounds, plays the cessation sound, and goes to cessation; with no cessation clip it destroys the effect at once (0x0079DF10). Its order (read 2026-11-01): destroyed at once at phase 5, phase 0 or with `immediate`; left alone with an impact clip and no duration clip (a zero-length clip counts as absent, 0x007E9AD0), or at phase 4, so an impact-only effect plays out; otherwise clips 500 and 502 stop outright, 501 fades to weight 0 at blend rate 3.0, and it enters phase 4.
   - Which effect's remote material shows (0x0079F7A0, read 2026-11-01): the highest `vfx_base.Priority` among the creature's effects, the first of equals, from a baseline of 0, so a row at 0 or below doesn't win.
   - The sounds are the row's `SoundImpact`, `SoundDuration`, `SoundCessation`.
-- **The manager** is the singleton at [0x00C389C8] (0x0079E820): create 0x0079EDC0 → 0x0079E8A0. A "held" create (+0x448 = 1) loads without starting; 0x0079D810 starts it.
+- **The manager** is the singleton at [0x00C389C8] (0x0079E820): create 0x0079EDC0 → 0x0079E8A0. A "held" create (+0x448 = 1) loads without starting; 0x0079D810 starts it: a placed effect (state 3) at once, any other set to state 2, which the placement (0x0079D9F0) doesn't skip (read 2026-11-01). The placement ends every effect at state 3, held or not, so a held one is live and unstarted.
 - **While the game is paused** the manager's update (0x0079EE20) animates only effects whose `PauseAnimate` is set [C].
 
 ### A creature's crust effect: the scripts apply it
@@ -470,7 +470,7 @@ Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area o
   - **The load:** the model load 0x007EA550 applies the `CrustEffect` test to a location effect too. With CrustEffect 1 and no target it returns false (0x007EA853–0x007EA87E). There is no separate location branch.
   - **The removal:** 0x0079D9F0 then removes the handle (0x004E9640) and calls 0x0079D880.
     - The script has already been given the handle id (0x0079EDF4–0x0079EE00), so it holds an id for an effect that is gone.
-    - That nothing else keeps it is [I]: 0x0079D880 was not read to its end.
+    - Nothing else keeps it: 0x0079D880 is the pool's release, the effect destroyed in place and its slot recycled (read 2026-11-01). The script's handle goes stale.
 - **A non-crust row at a location** loads normally [C]:
   - 0x0079D9F0 finds GetAreaById(owner) non-null, so it skips the creature attachments 0x0079D690 and 0x0079D580 and sets effect +0x448 = 3.
   - 0x0079D410 parents the graphics object to the area's scene (area +0x62C, `src/dao/Objects.h`'s ISceneInstance) through effect slot 0x104.
@@ -486,7 +486,6 @@ Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area o
   - `fxa_fire_cone_c.mmh` has one `crst` node, CrustHook2 (hook id 2, "Right Cast" in `crusts.gda`), holding all five emitters and both lights.
   - So the cone is drawn at the caster's right-hand cast hook, not at a location anchor [C, read 2026-10-23 by lib-agent-2: `EffectConeCasting` is a script function (`effect_conecasting_h.nss`), `Effect(EFFECT_TYPE_CONECASTING)` (1030) then `SetEffectEngineInteger(e, EFFECT_INTEGER_VFX, nVfx)`. Type 1030 has no apply handler, so it goes 0x0079FE90 → 0x0079FC10, which makes the row's visual on the holder: the caster. So the cone's crust row is bound to the caster's hooks, CrustHook2, "Right Cast", for the fire cone].
 - **Not read:**
-  - 0x0079D880 to its end;
   - the projectile maker's sixth argument (0x007E709E);
   - the aiming effect's row (UpdateAim, 0x00711322);
   - scripts that build the vfx id in a variable.
@@ -497,7 +496,7 @@ Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area o
 
 - **0x0079D690** [C]: crust path when `CrustEffect` && the effect object's +0x278 (slot 0x80, 0x0054F810); both hold for a crust row made as above. It calls the owner's slot 0xDC, **0x00543BD0**(effect), and sets the effect's +0x440 = 1.
 - **0x00543BD0** [C], `this` the owner:
-  1. Only if the owner's crust map **and** the effect's crust map exist: sets the effect object's byte +0xEE = 1 (0x00542960; meaning not read), and calls 0x00562FE0 on the effect's map with the owner.
+  1. Only if the owner's crust map **and** the effect's crust map exist: sets the effect object's byte +0xEE = 1 (0x00542960; the emitter target blueprint's instantiate 0x005B0B80 sets it too, and a byte scan of the code finds no reader, read 2026-11-01), and calls 0x00562FE0 on the effect's map with the owner.
   2. **Always**, whatever step 1 did: `effect.vtbl[0xF0]` (0x0054D860)(owner, owner's node `GOB` (string 0x00AF83B8), "GOB", 0, 0): an `ObjectAttachDependency`-style attachment (0x50 bytes, 0x00542DD0, then 0x00568BB0) of the whole effect object to the owner's GOB node. Returns 1.
 - **0x00562FE0** [C], the hook binding: `M` the effect's map, `N` the owner's (`owner+8` slot 0x6C). First 0x00562E50: for each id in `M` that both maps have, the two vectors must be the same length, else the binding is skipped entirely (return 0, not acted on by the caller). Then for each id of `M`, for each index i: if `N` has the id, a `NodeAttachDependency` (0x30 bytes, vtable 0x00AF837C, +0x2C the effect's node) is made from the owner's node `N[id][i]` and added to the effect's node `M[id][i]` (0x0057B940). An id the owner lacks is skipped, its subtree staying under the effect's GOB.
 
@@ -515,7 +514,7 @@ Slot 0x10C is the owner object's crust-target slot (0x0079E957), which an area o
 
 ###### Not read
 
-- What the crust-target argument does inside the node instancing of 0x00567F80 (blueprint +0x44 slot 8), and the effect object's +0xEE flag.
+- What the crust-target argument does inside the node instancing of 0x00567F80 (blueprint +0x44 slot 8).
 - Whether a humanoid's part models' hooks are merged into the creature's one object (the map's owner) or kept per part; which hooks a Clothing chest's model (drawn with no gloves model) carries. A caster without the hook holds the projectile, by the code, at +0x4D0 unattached.
 - 0x0054D860's dependency update per frame (that the attached effect follows each frame is inferred, as for the crust nodes).
 
