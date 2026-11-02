@@ -119,6 +119,7 @@ MORPH = "src/dao/core/Morph.cpp"
 CONVERSATION = "src/dao/core/Conversation.cpp"
 TALKTABLE = "src/dao/core/TalkTable.cpp"
 SAVEMETA = "src/dao/core/SaveMeta.cpp"
+PROFILE = "src/dao/core/Profile.cpp"
 GFX = "src/dao/core/GfxMovie.cpp"
 OPTIONS = "src/dao/core/OptionsMovie.cpp"
 LOGNAMES = "src/dao/core/LogNames.cpp"
@@ -1049,6 +1050,36 @@ MUTANTS: list[Mutant] = [
         TALKTABLE,
         "if (id && text && *id != kEmptySlot)",
         "if (id && text)",
+    ),
+    Mutant(
+        "profile-records-at: the records start at 0x80, past the header",
+        PROFILE,
+        "constexpr std::size_t kRecordsAt = 0x80;",
+        "constexpr std::size_t kRecordsAt = 0x7F;",
+    ),
+    Mutant(
+        "profile-stop-at-bad-byte: a byte that is no text ends a record, so a lone NUL ends the reading",
+        PROFILE,
+        "    while (at < blob.size() && IsTextByte(blob[at]))",
+        "    while (at < blob.size() && blob[at] != std::byte{';'} && blob[at] != std::byte{'@'})",
+    ),
+    Mutant(
+        "profile-stop-at-short-record: a record cut before its stop is not kept",
+        PROFILE,
+        "if (out.empty() || at >= blob.size() || static_cast<char>(blob[at]) != stop)",
+        "if (at >= blob.size() || static_cast<char>(blob[at]) != stop)",
+    ),
+    Mutant(
+        "profile-count-over-zero: a record is unlocked when its count is over 0, not when it is 0 or more",
+        PROFILE,
+        "return std::ranges::any_of(text, [](char c) { return c != '0'; });",
+        "return !text.empty();",
+    ),
+    Mutant(
+        "profile-count-not-a-number: a count that is no number ends the reading",
+        PROFILE,
+        "    if (!std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; }))",
+        "    if (false)",
     ),
     Mutant(
         "savemeta-level-field: the level is read from its own field",

@@ -71,6 +71,7 @@ add_executable(
     test_path.cpp
     test_picture.cpp
     test_plot.cpp
+    test_profile.cpp
     test_range.cpp
     test_readat.cpp
     test_readat.cpp

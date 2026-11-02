@@ -199,6 +199,7 @@ add_library(
     src/dao/core/Pe.cpp
     src/dao/core/Picture.cpp
     src/dao/core/Plot.cpp
+    src/dao/core/Profile.cpp
     src/dao/core/RayCast.cpp
     src/dao/core/ReadAt.cpp
     src/dao/core/ReadAt.cpp
