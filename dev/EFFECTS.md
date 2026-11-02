@@ -271,12 +271,12 @@ Nothing here was seen in play. [C] read in the exe, [I] inferred.
   - KillParticleWhenTargetHit (+0x132 bit 0) off: nothing happens, and the pull goes on.
   - On: age = −1.0 (0x0057C318). The ageing loop removes it at the next pass, at the position just reached.
   - The radius plays no part in the hit.
-- **Not read:** whether the physics sprite (0x005534C0), which does not call this updater, has a pull of its own [I: likely none]; whether a clip key replaces the live attraction or mixes with it.
+- **The physics sprite has no pull** (read 2026-11-01): its update (0x005523E0) has no motion code at all, see "Physics sprites". **Not read:** whether a clip key replaces the live attraction or mixes with it.
 
 **The update** (slot 34: `Sprite<SpriteParticle>` 0x00552CF0), once a frame, one step:
 - It is skipped where UpdateOnlyWhenVisible and the model is unseen; the particles don't age then.
 - The emitter's previous and current world position and rotation are kept (0x00542440).
-- `UpdateParticles(dt)` (0x005528E0), then, while the model's emit bit is set, `SpawnCount` particles are spawned (0x00552AF0, at most 256).
+- `UpdateParticles(dt)` (0x005528E0), then, while the model's emit bit is set, `SpawnCount` particles are spawned (0x00552AF0, at most 256). With the bit clear the update returns there (0x00553C5B-0x00553C69, read 2026-11-01), skipping the fill too, so what's alive isn't drawn that frame either.
 
 **The spawn count** (0x0053EC80, checked; randS in [−1, 1], rand01 in [0, 1]):
 ```
@@ -1454,10 +1454,18 @@ Offsets are from the object's start (render-08, read 2026-11-01; DAOParagonEngin
 
 ## Splats (read 2026-11-01, two readings)
 
-A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. The decals' batch is made only for a physics emitter whose splat width (+0x210) is above 0. Which vanilla emitters do this wasn't searched.
+A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. The decals' batch is made only for a physics emitter whose splat width (+0x210) is above 0. Of the core game's 3,078 emitters (the enciphered add-ins not read), 10 can: the blood pools `fxa_bl_pool_s_p`, `_m_p`, `_l_p`, `fxa_crt_gr_aoe_p`, `fxa_crt_gr_aoesm_p` and `fxc_bm_tnt_app_c`.
 
 - **The grid:** C by R samples (+0x218, +0x21C) over W by H (+0x210, +0x214), turned about z by `randS * range` (+0x220, as radians, from the birth stream).
 - **Its heights:** each sample probes around the particle's height, a segment between z+2.0 and z-1.75 (mask 0x20), else a ray down from z+3.0, and sits 0.05 above the hit.
 - **Which samples show:** one that hit, with its largest height difference to its 8 neighbours at most 0.75 * max(stepX, stepY) (0x00540CEE-0x00540D15). So slopes and holes drop out.
 - **How many:** five live per emitter (the batch's capacity, 0x00561129); a sixth is dropped (0x00562B40).
 - **Each frame** (`UpdateSplats`, 0x005411B0): age += dt, dead at age * 1/life >= 1 (+0x224). The flipbook goes by fps * dt / (rows * cols), and hold-last stops at cells / (cells + 1). The colour comes from the splat's own age map (`FillSplats`, 0x00540090).
+
+## Physics sprites (read 2026-11-01, two readings)
+
+With `PhysicsEmitter` (blueprint +0x130 bit 0), 67 of the core game's 3,078 emitters: props breaking (`fxp_barrel_c`, `fxp_crates_c`), caltrops, the 10 above. Their `Update` (0x005534C0) is the sprite's, instruction for instruction, but their particles have no motion of their own (no `SpriteParticle::Update`):
+
+- **Each particle is a PhysX sphere** (0x00554080), radius 0.1 at first and max(scaleA, scaleB) * S from the fills, with the particle's birth position and velocity. Group 6 with `CanParticlesSplat`, else 1, and only group 6 reports contact.
+- **Each frame** (0x00554220): the emitter's acceleration (+0x3D0) goes in as force mode 5, PhysX's acceleration [I], and the position comes back from the pose. Velocity and axes don't.
+- **On contact** (0x00554280, from `EmitterManager::BeginUpdate`): the quad turns onto the surface, the position sits 0.01 off it, the actor is released and +0x75 is set. `UpdateParticles` (0x00552491) then spawns the splat and removes the particle. A non-splatter just bounces until it ages out.
