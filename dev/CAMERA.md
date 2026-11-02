@@ -9,7 +9,7 @@ How the engine runs the explore camera: its two zooms and the switch between the
 - **The views:** the close view is zc ≥ 0.5, i.e. s ≥ 0.75; the tactical view is s = 0, with a band between that the camera only passes through. The view flag `ctl+0x90` is zc < 0.5 (0x0076FC92–0x0076FCAD).
   - `Camera.h`'s `SceneCamera::Zoom` says "Below 0.5 the camera is in the tactical view": on that 0..1 scale it is below 0.75.
 - **The switch** (0x0076FBF0, checked):
-  - Zooming out: on the first frame zc < 0.5 with the setting below zc and the flag not yet set, the pitch is kept in degrees at `ctl+0x98` (65505 = none, 0x00B1D9C8). The setting snaps to -1, so the camera always goes on to the tactical view.
+  - Zooming out: on the first frame zc < 0.5 with the setting below 0.5 (`ctl+0x48` against 0.5, 0x0076FC15-0x0076FC1F, read 2026-11-01) and the flag not yet set, the pitch is kept in degrees at `ctl+0x98` (65505 = none, 0x00B1D9C8). The setting snaps to -1, so the camera always goes on to the tactical view.
   - Zooming in from the tactical view: the setting becomes max(setting, 0.5), so the camera always comes back to s ≥ 0.75.
   - Unless 0x0076F380 says the tactical view is blocked (`ctl+0x9D`, then a ray test 0x00648DA0): then zooming out stops at zc = 0.5.
 - **The easing** (in the orbit, 0x006C2DB5–0x006C2E9A), per substep h:
@@ -19,7 +19,7 @@ How the engine runs the explore camera: its two zooms and the switch between the
   else { spd = min(spd + 20*d*h, 2.0); s += sign(T - s) * min(spd*h, d); }   // 20 at 0x00C038D4, 2.0 at 0x00C038D0; spd = orbit+0x8C
   ```
   It accelerates toward the target, capped at 2 a second, and doesn't slow before arriving.
-- **The script's `SetZoomLevel`** (0x00666790) sets `ctl+0x50` = clamp(z, 0, 1) × 2 − 1, toward which the base update eases the setting (-9999 = none pending). Only `genev_tutorial` calls it.
+- **The script's `SetZoomLevel`** (0x00666790) sets `ctl+0x50` = clamp(z, 0, 1) × 2 − 1, and the base update then moves the setting that way at dt a second (-9999 = none pending). It stops only at an end of the range, `ctl+0x64` or `ctl+0x68`, where the pending value clears, and never tests the value itself (0x007EEC45-0x007EEC99, read 2026-11-01), so the camera runs past the level asked for. Only `genev_tutorial` calls it.
 
 ## Distance, pivot, pitch and field of view
 
@@ -133,7 +133,7 @@ heading = wrap(deg(atan2(-d.x, d.y)) + camYaw, 0, 360);                   // fac
 - **The screen's edge:** within `ScreenEdgePanningPixels`, the same speed, only with no arrow key down and the middle button up.
 - **A middle-button drag:** it grabs the ground plane through the focus.
 
-These pan only when the setting is all the way out (`TacticalStep` 0x00771060). A step is kept only while the target or a party member stays on screen (0x00770230, the creature's position plus radius + 0.5 m toward the focus, 0x00C0E024), and the moved camera clears the level by a 0.25 m sphere (0x006C28B0; skipped where `ctl+0x9D`). There is no distance limit. With the right mouse held, or no pan input, it keeps the party in view (`KeepInView`).
+These pan only when the setting is all the way out (`TacticalStep` 0x00771060). A step is kept only while the target or a party member stays on screen (0x00770230, the creature's position plus radius + 0.5 m toward the focus, 0x00C0E024), and the moved camera clears the level by a 0.25 m sphere (0x006C28B0; skipped where `ctl+0x9D`). There is no distance limit. With the right mouse held, or no pan input, it keeps the party in view (`KeepInView`). `KeepInView` does nothing unless 0x00770A10 says so (0x00770C4C): some listed party member's attack target is a creature hostile to the given one and on screen inside margins of 33% of the width and height (0.33, 0x00C0E030; two readings, 2026-11-01).
 
 **Back to the close view** (0x0076F470): both offsets are zeroed. The focus eases from where it was to the leader over max(0.3, 0.6 × (1 − d/60)) s for d ≤ 60 m (60 at 0x00B03BF8), and snaps beyond that.
 
