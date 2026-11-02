@@ -172,7 +172,7 @@ Read in the exe: nothing in the head's assembly consults the morph's parts list 
 ### Not read
 - `0x006A1180`, the loader of the list: I did not confirm it loads every non-empty slot, slot 4 included. I assumed it does. It does not appear to filter by slot.
 - Whether `MMHMeshDefaultHidden` is honoured differently on a morphed head's model (this was the 0x5950FA check; not re-traced).
-- The AnimBase `+0x18` method (0xA5D070) beyond its first lines: it seems to be a per-node parameter setter by dotted name.
+- The AnimBase `+0x18` method (0xA5D070): it adds a model by name, not a per-node setter as this said (two readings reconciled, 2026-11-01, the name [I]): with the model holder present it looks the name up through the holder's vtable +0x70 and attaches the model with slot 41 (+0xA4); a name with the numbered-variant suffix tries the base name and then each numbered variant, the results AND-ed.
 - The MorphParts list of a player `.mor`. The reader returns it as unread. I did not decode it by hand, so slot 4's emptiness is taken from CHARGEN.md, not re-read.
 - Not seen in play.
 
