@@ -267,6 +267,7 @@ struct Node
     // A crst node's MMHNodeCrustHookID (6235): the place on a creature it is the effect's hook for,
     // which a creature's hook of the same id carries it to (dev/EFFECTS.md).
     std::optional<std::uint8_t> crustHook;
+    std::optional<std::uint8_t> soundMaterial; // MMHNodeSoundMaterial (6330), where the node has it
     std::optional<MeshRef> mesh;
     // A wtrl node's weapon trail: the streak a swung weapon or a flying arrow draws behind this node.
     std::optional<WeaponTrail> trail;
@@ -284,6 +285,9 @@ struct Hierarchy
     std::uint32_t totalBones = 0;
     std::vector<Node> nodes; // in the file's order, each before its children; the tops have parent -1
     std::vector<int> bones;  // a bone index's node, -1 for one no node carries
+
+    // Returns the model's sound material: its first top node's, 0 where that node has none or there is no node.
+    [[nodiscard]] std::uint8_t SoundMaterial() const;
 };
 
 // Returns a model's node tree (.mmh), or nothing for a file that is no

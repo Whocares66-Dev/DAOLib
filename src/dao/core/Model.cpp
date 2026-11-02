@@ -356,6 +356,10 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
     node.kind = from.Label();
     node.parent = parent;
     TransformOf(from, node);
+    if (const auto sound = Number(from, kSoundMaterial))
+    {
+        node.soundMaterial = static_cast<std::uint8_t>(*sound);
+    }
     if (node.kind == "crst")
     {
         if (const auto hook = Number(from, kCrustHookId))
@@ -548,6 +552,15 @@ std::vector<std::uint32_t> Indices(const Chunk &chunk)
         out.push_back(index + chunk.baseVertex);
     }
     return out;
+}
+
+// The loaders keep this field as a byte in the node's blueprint, +0x108 (0x00595747). An Object's +0x2F0 takes it
+// from the top of its first node's parents (0x00543E70-0x00543EA3), a byte widened, 0 with no blueprint; that the
+// Object's first node is the file's first top is inferred. Read 2026-11-02 for DAOParagonEngine #371.
+std::uint8_t Hierarchy::SoundMaterial() const
+{
+    const auto top = std::ranges::find(nodes, -1, &Node::parent);
+    return top != nodes.end() ? top->soundMaterial.value_or(0) : std::uint8_t{0};
 }
 
 std::optional<Hierarchy> HierarchyOf(const gff4::File &hierarchy)

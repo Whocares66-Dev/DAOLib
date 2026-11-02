@@ -212,6 +212,36 @@ TEST_CASE("a weapon trail's node has its material, its segment's length and its 
     CHECK(node.trail->useVariationTint);
 }
 
+TEST_CASE("a model's sound material is its first top node's, and 0 where it has none", "[model]")
+{
+    const std::uint16_t children = gff4::kList | gff4::kReference;
+    dao::test::Builder b = dao::test::Start(
+        "MMH ",
+        {{"mdlh", 16, {{6000, 14, 0, 0}, {6005, 14, 0, 4}, {6256, 4, 0, 8}, {6999, dao::test::kGeneric, children, 12}}},
+         {"node", 12, {{6000, 14, 0, 0}, {6330, 0, 0, 8}, {6999, dao::test::kGeneric, children, 4}}},
+         {"mshh", 8, {{6000, 14, 0, 0}, {6999, dao::test::kGeneric, children, 4}}}});
+    const std::size_t root = dao::test::Struct(b, 16);
+    const std::size_t gob = dao::test::Struct(b, 12);
+    const std::size_t plain = dao::test::Struct(b, 8);
+    b.U32(root, b.String(u"m.mmh"));
+    b.U32(root + 4, b.String(u"m.msh"));
+    b.U32(root + 12, dao::test::Children(b, {{1, gob}}));
+    b.U32(gob, b.String(u"GOB"));
+    b.U8(gob + 8, 7);
+    b.U32(gob + 4, dao::test::Children(b, {{2, plain}}));
+    b.U32(plain, b.String(u"mesh"));
+
+    const std::optional<gff4::File> file = gff4::File::Parse(b.bytes);
+    REQUIRE(file);
+    const std::optional<model::Hierarchy> tree = model::HierarchyOf(*file);
+    REQUIRE(tree);
+    REQUIRE(tree->nodes.size() == 2);
+    CHECK(tree->nodes[0].soundMaterial == std::uint8_t{7});
+    CHECK_FALSE(tree->nodes[1].soundMaterial);
+    CHECK(tree->SoundMaterial() == 7);
+    CHECK(model::Hierarchy{}.SoundMaterial() == 0);
+}
+
 TEST_CASE("a cloth node has its cloth's parameters, attachments and mesh at rest", "[model]")
 {
     // As prp_bannerred_04_0.mmh has it (DAOLib #261): under GOB, the nclt Plane28, material
