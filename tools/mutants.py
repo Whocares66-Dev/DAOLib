@@ -852,6 +852,18 @@ MUTANTS: list[Mutant] = [
         ".control2 = VertexOf(transition.Child(kTransitionControl1))",
     ),
     Mutant(
+        "cutscene-link-target-default: a link with no target field is the actor of id 0, as the exe's constructor has it",
+        CUTSCENE,
+        "action.actor = Id(in, kOtherActor[2]).value_or(0);",
+        "action.actor = Id(in, kOtherActor[2]).value_or(-1);",
+    ),
+    Mutant(
+        "cutscene-link-node-default: a link with no node field is node 0, as the exe's constructor has it",
+        CUTSCENE,
+        "action.node = in.Get<std::int32_t>(kLinkNode).value_or(0);",
+        "action.node = in.Get<std::int32_t>(kLinkNode).value_or(-1);",
+    ),
+    Mutant(
         "cutscene-step-holds: a step transition holds the first vertex's value, not the next's",
         CUTSCENE,
         "    case TransitionType::Step:\n        return from.value;",

@@ -115,7 +115,36 @@ std::vector<std::byte> CutsceneFile()
            {5620, 4, 0, 8},
            {5621, 8, 0, 12},
            {5628, 0, 0, 18},
-           {5629, 0, 0, 19}}}});
+           {5629, 0, 0, 19}}},
+         // Laid out as the real ones are not (they carry the same fields at other offsets):
+         // a shake, a link, a link with nothing but the base fields, gore and the cloth switch.
+         {"ASHK",
+          36,
+          {{5300, 0, 0, 0},
+           {5301, 8, 0, 4},
+           {5302, 8, 0, 8},
+           {5304, 0, 0, 12},
+           {5600, 0, 0, 13},
+           {5605, 0, 0, 14},
+           {5606, 0, 0, 15},
+           {5603, 4, 0, 16},
+           {5604, 8, 0, 20},
+           {5607, 8, 0, 24},
+           {5608, 8, 0, 28},
+           {5609, 8, 0, 32}}},
+         {"ALNK",
+          24,
+          {{5300, 0, 0, 0},
+           {5301, 8, 0, 4},
+           {5302, 8, 0, 8},
+           {5304, 0, 0, 12},
+           {5636, 0, 0, 13},
+           {5637, 0, 0, 14},
+           {5630, 5, 0, 16},
+           {5631, 5, 0, 20}}},
+         {"ALNK", 16, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}}},
+         {"AGOR", 20, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}, {5750, 8, 0, 16}}},
+         {"ACTP", 16, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}, {5700, 0, 0, 13}}}});
     const std::size_t root = Struct(b, 72);
     b.U32(root, b.String(u"bhm500ar_tower_harrowing"));
     Float(b, root + 4, 61.0F);
@@ -203,7 +232,41 @@ std::vector<std::byte> CutsceneFile()
     b.U8(headtrack + 16, 28);
     b.U8(headtrack + 18, 255);
     b.U8(headtrack + 19, 0);
-    b.U32(actor + 12, Children(b, {{4, animation}, {5, line}, {7, camera}, {8, headtrack}}));
+    const std::size_t shake = Struct(b, 36);
+    b.U8(shake + 12, 255);
+    b.U8(shake, 20);
+    Float(b, shake + 8, 1e10F);
+    b.U8(shake + 13, 1);
+    b.U8(shake + 14, 2);
+    b.U8(shake + 15, 255);
+    b.U32(shake + 16, 0xFFFFFFFE);
+    Floats(b, shake + 20, {0.6F, 0.25F, 0.5F, 0.75F});
+    const std::size_t link = Struct(b, 24);
+    b.U8(link, 27);
+    b.U8(link + 13, 255);
+    b.U8(link + 14, 255);
+    b.U32(link + 16, 4);
+    b.U32(link + 20, 14);
+    const std::size_t bareLink = Struct(b, 16);
+    b.U8(bareLink, 27);
+    const std::size_t gore = Struct(b, 20);
+    b.U8(gore, 45);
+    Float(b, gore + 16, 0.3F);
+    const std::size_t cloth = Struct(b, 16);
+    b.U8(cloth, 36);
+    b.U8(cloth + 13, 255);
+    const std::size_t bareGore = Struct(b, 20);
+    b.U8(bareGore, 45);
+    b.U32(actor + 12, Children(b, {{4, animation},
+                                   {5, line},
+                                   {7, camera},
+                                   {8, headtrack},
+                                   {9, shake},
+                                   {10, link},
+                                   {11, bareLink},
+                                   {12, gore},
+                                   {13, cloth},
+                                   {12, bareGore}}));
     return b.bytes;
 }
 
@@ -218,7 +281,7 @@ std::vector<std::byte> FromDisk(const std::filesystem::path &path)
 
 } // namespace
 
-TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templates", "[cutscene]")
+TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templates", "[cutscene]")
 {
     const auto bytes = CutsceneFile();
     const auto file = gff4::File::Parse(bytes);
@@ -249,7 +312,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templ
     CHECK(actor.scale == 1.5F);
     CHECK(actor.originPosition == std::array<float, 3>{1.0F, 2.0F, 3.0F});
     CHECK(actor.inventory == 0xFF); // this file has no field 5217
-    REQUIRE(actor.actions.size() == 4);
+    REQUIRE(actor.actions.size() == 10);
 
     const auto &animation = actor.actions[0];
     CHECK(animation.kind == "AANI");
@@ -313,6 +376,42 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of four templ
     CHECK(headtrack.lookSpeed == 0.6348F);
     CHECK(headtrack.realignStart);
     CHECK_FALSE(headtrack.realignContinue);
+
+    // DAOLib #301.
+    const auto &shake = actor.actions[4];
+    CHECK(shake.kind == "ASHK");
+    CHECK(shake.type == 20);
+    CHECK(shake.shakeType == 1);
+    CHECK(shake.shakeSeed == 0xFFFFFFFE);
+    CHECK(shake.shakeFrequency == 0.6F);
+    CHECK(shake.shakeNoiseType == 2);
+    CHECK(shake.shakeCorrelated);
+    CHECK(shake.shakeRoughness == 0.25F);
+    CHECK(shake.shakeRampIn == 0.5F);
+    CHECK(shake.shakeRampOut == 0.75F);
+    CHECK_FALSE(animation.shakeCorrelated);
+    CHECK(animation.shakeSeed == 0);
+
+    const auto &link = actor.actions[5];
+    CHECK(link.kind == "ALNK");
+    CHECK(link.actor == 4);
+    CHECK(link.node == 14);
+    CHECK(link.linkIsTargetCrust);
+    CHECK(link.linkUseOffset);
+    CHECK_FALSE(headtrack.linkUseOffset);
+
+    // The exe's constructor (0x007DB900) defaults a link's target and node to 0, not -1.
+    const auto &bareLink = actor.actions[6];
+    CHECK(bareLink.kind == "ALNK");
+    CHECK(bareLink.actor == 0);
+    CHECK(bareLink.node == 0);
+    CHECK_FALSE(bareLink.linkIsTargetCrust);
+    CHECK_FALSE(bareLink.linkUseOffset);
+
+    CHECK(actor.actions[7].gore == 0.3F);
+    CHECK(actor.actions[8].clothPhysics);
+    CHECK(actor.actions[9].gore == 0.0F);
+    CHECK_FALSE(actor.actions[9].clothPhysics);
 }
 
 TEST_CASE("a file of another type is no cutscene", "[cutscene]")
@@ -342,6 +441,39 @@ struct Counts
     std::size_t fullSpeed = 0;
     std::size_t realignStarts = 0;
     std::size_t realignContinues = 0;
+    std::size_t shakes = 0;
+    std::size_t turnShakes = 0;
+    std::size_t moveShakes = 0;
+    std::size_t correlatedShakes = 0;
+    std::size_t links = 0;
+    std::size_t crustLinks = 0;
+    std::size_t offsetLinks = 0;
+    std::size_t gores = 0;
+    std::size_t goreSet = 0; // a gore action whose level is not 0
+    std::size_t clothSwitches = 0;
+    std::size_t fogs = 0;
+
+    // The actions of DAOLib #301: a shake, a link, gore, the cloth switch and fog.
+    void AddSmallActions(const cutscene::Action &action)
+    {
+        if (action.kind == "ASHK")
+        {
+            ++shakes;
+            turnShakes += action.shakeType == 1 ? 1 : 0;
+            moveShakes += action.shakeType == 2 ? 1 : 0;
+            correlatedShakes += action.shakeCorrelated ? 1 : 0;
+        }
+        if (action.kind == "ALNK")
+        {
+            ++links;
+            crustLinks += action.linkIsTargetCrust ? 1 : 0;
+            offsetLinks += action.linkUseOffset ? 1 : 0;
+        }
+        gores += action.kind == "AGOR" ? 1 : 0;
+        goreSet += action.gore != 0.0F ? 1 : 0;
+        clothSwitches += action.kind == "ACTP" ? 1 : 0;
+        fogs += action.fog ? 1 : 0;
+    }
 
     void Add(const cutscene::Action &action)
     {
@@ -354,6 +486,7 @@ struct Counts
             realignStarts += action.realignStart ? 1 : 0;
             realignContinues += action.realignContinue ? 1 : 0;
         }
+        AddSmallActions(action);
         curves += action.curves.size();
         for (const auto &curve : action.curves)
         {
@@ -418,6 +551,18 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
     CHECK(counts.fullSpeed == 928); // exactly 1, the most common speed
     CHECK(counts.realignStarts == 825);
     CHECK(counts.realignContinues == 594);
+    // 2026-11-02 (DAOLib #301): the templates' counts in the header of Cutscene.h; the rest as this reads them.
+    CHECK(counts.shakes == 4647);
+    CHECK(counts.links == 818);
+    CHECK(counts.gores == 781);
+    CHECK(counts.fogs == 7);
+    CHECK(counts.clothSwitches == 0); // ACTP is a template no action uses
+    CHECK(counts.turnShakes == 4566);
+    CHECK(counts.moveShakes == 81);
+    CHECK(counts.correlatedShakes == 201);
+    CHECK(counts.crustLinks == 436);
+    CHECK(counts.offsetLinks == 458);
+    CHECK(counts.goreSet == 777); // of 781; the others are the engine's default, 0
 }
 
 namespace

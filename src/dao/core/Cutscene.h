@@ -29,8 +29,9 @@
 // end". 279 files have an end script (275 gen00cs_cutscene_end), 2,866 a
 // stage, none a henchman tag or henchman actions (a conversation line's cut
 // can have both: alistair_main's line 1351); 2,396 run at 100 frames a
-// second, 762 at 30. The run times are 1 to 213 seconds. Shakes', gore's
-// and head tracking's speed and realignment are left unread.
+// second, 762 at 30. The run times are 1 to 213 seconds. A shake's, a link's, the
+// cloth switch's and gore's fields are read (DAOLib #301); the lights (types 33 to 35)
+// are tracks, their values curves, and the snap to the walk mesh (38) has no fields.
 #pragma once
 
 #include "dao/core/Gad.h"
@@ -131,7 +132,7 @@ struct Action
     std::wstring lipsync;                        // ASLN
     std::wstring sound;                          // ACSP
     std::int32_t actor = -1;          // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
-    std::int32_t node = -1;           // ALNK: the target's node linked to
+    std::int32_t node = -1;           // ALNK: the target's weaponparts.gda row linked to; 0 for a link with none
     float lookSpeed = 0.0F;           // ACHT: the look-at multiplier set on the action's first frame
     bool realignStart = false;        // ACHT: the creature's facing refreshed on the action's first frame
     bool realignContinue = false;     // ACHT: and on each step of the cut while the action runs
@@ -146,6 +147,18 @@ struct Action
     std::vector<EffectParameter> parameters; // AFBE
     std::wstring movie;                      // APBM
     std::optional<Fog> fog;                  // AFOG
+    std::uint8_t shakeType = 0;              // ASHK: 1 turns the actor, 2 moves it, any other does nothing
+    std::uint32_t shakeSeed = 0;             // ASHK: the noise's seed
+    float shakeFrequency = 0.0F;             // ASHK
+    std::uint8_t shakeNoiseType = 0;         // ASHK: 0 white, 1 smooth, 2 fractal
+    bool shakeCorrelated = false;            // ASHK
+    float shakeRoughness = 0.0F;             // ASHK
+    float shakeRampIn = 0.0F;                // ASHK: seconds
+    float shakeRampOut = 0.0F;               // ASHK: seconds
+    bool linkIsTargetCrust = false;          // ALNK: the target is a crust hook of its model
+    bool linkUseOffset = false;              // ALNK: the actor's pose in its own origin's frame is applied
+    bool clothPhysics = false;               // ACTP: type 36's switch
+    float gore = 0.0F;                       // AGOR
 };
 
 struct Actor

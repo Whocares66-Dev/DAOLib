@@ -80,6 +80,14 @@ constexpr std::uint32_t kLineVoBank = 5563;
 constexpr std::uint32_t kStageCameraDefault = 5570;
 constexpr std::uint32_t kStageCameraHenchman = 5571;
 constexpr std::uint32_t kStageLookAt = 5580;
+constexpr std::uint32_t kShakeType = 5600;
+constexpr std::uint32_t kShakeSeed = 5603;
+constexpr std::uint32_t kShakeFrequency = 5604;
+constexpr std::uint32_t kShakeNoiseType = 5605;
+constexpr std::uint32_t kShakeCorrelated = 5606;
+constexpr std::uint32_t kShakeRoughness = 5607;
+constexpr std::uint32_t kShakeRampIn = 5608;
+constexpr std::uint32_t kShakeRampOut = 5609;
 // The four actions that name another actor, each in a field of its own:
 // AACC's camera and ALNK's and ACRU's targets an S32, ACHT's a U32.
 constexpr std::array<std::uint32_t, 4> kOtherActor = {5610, 5620, 5630, 5640};
@@ -87,8 +95,12 @@ constexpr std::uint32_t kHeadtrackSpeed = 5621;
 constexpr std::uint32_t kHeadtrackRealignStart = 5628;
 constexpr std::uint32_t kHeadtrackRealignCont = 5629;
 constexpr std::uint32_t kLinkNode = 5631;
+constexpr std::uint32_t kLinkIsTargetCrust = 5636;
+constexpr std::uint32_t kLinkUseOffset = 5637;
 constexpr std::uint32_t kSound = 5670;
 constexpr std::uint32_t kVisible = 5680;
+constexpr std::uint32_t kTogglePhysics = 5700;
+constexpr std::uint32_t kGore = 5750;
 constexpr std::uint32_t kDrawMain = 5730;
 constexpr std::uint32_t kDrawOff = 5731;
 constexpr std::uint32_t kMovie = 5740;
@@ -181,6 +193,38 @@ std::optional<Fog> FogOf(const gff4::Struct &in)
                .zenith = in.Get<float>(kFogZenith).value_or(0.0F)};
 }
 
+// Notes on the shake's and the link's fields, read 2026-11-02 in the GOG exe (dev/CUTSCENES.md,
+// DAOLib #301). The shake's constructor 0x007DA990 reads 5600 (U8, at +0x28), 5603 (U32), 5604
+// (F32), 5605 and 5606 (U8, the second made a bool), 5607 to 5609 (F32) with a default of 0 for
+// each (the stack slot of each read is zeroed: 0x007DA9F4, 0x007DAA21, 0x007DAA3E, 0x007DAA7B,
+// 0x007DAAA8, 0x007DAAC6, 0x007DAAFC, 0x007DAB2A). The link's constructor 0x007DB900 (the
+// vftable 0x00B23268 is stored at 0x007DB944) reads 5630 and 5631 (S32) with a default of 0
+// (0x007DB960, 0x007DB98C), not -1, and 5636 and 5637 (U8, made bools) with a default of 0
+// (0x007DB9B8, 0x007DB9E9); a link with no target field is the actor of id 0, node 0. The toggle
+// of physics 0x007DC9D0 reads 5700 as a U8 and the gore 0x007DCA60 5750 as an F32, each
+// defaulting to 0 (0x007DCA18, 0x007DCA9A). The lights (types 33 to 35) and the snap to the
+// walk mesh (38) have no template of their own: the lights are tracks, their values the curves
+// (0x007D3520, 0x007D3550, 0x007D3580), and the snap is a plain ACTN.
+void ReadShake(const gff4::Struct &in, Action &action)
+{
+    action.shakeType = in.Get<std::uint8_t>(kShakeType).value_or(0);
+    action.shakeSeed = in.Get<std::uint32_t>(kShakeSeed).value_or(0);
+    action.shakeFrequency = in.Get<float>(kShakeFrequency).value_or(0.0F);
+    action.shakeNoiseType = in.Get<std::uint8_t>(kShakeNoiseType).value_or(0);
+    action.shakeCorrelated = in.Get<std::uint8_t>(kShakeCorrelated).value_or(0) != 0;
+    action.shakeRoughness = in.Get<float>(kShakeRoughness).value_or(0.0F);
+    action.shakeRampIn = in.Get<float>(kShakeRampIn).value_or(0.0F);
+    action.shakeRampOut = in.Get<float>(kShakeRampOut).value_or(0.0F);
+}
+
+void ReadLink(const gff4::Struct &in, Action &action)
+{
+    action.actor = Id(in, kOtherActor[2]).value_or(0);
+    action.node = in.Get<std::int32_t>(kLinkNode).value_or(0);
+    action.linkIsTargetCrust = in.Get<std::uint8_t>(kLinkIsTargetCrust).value_or(0) != 0;
+    action.linkUseOffset = in.Get<std::uint8_t>(kLinkUseOffset).value_or(0) != 0;
+}
+
 // Every template's own fields are read from every action: a field its
 // template does not have reads as nothing, so the member keeps its default.
 // The templates were the same in all 3,158 files (2026-10-18), so no field
@@ -237,6 +281,13 @@ Action ActionOf(const gff4::Struct &in)
     action.parameters = ParametersOf(in);
     action.movie = in.String(kMovie).value_or(L"");
     action.fog = FogOf(in);
+    ReadShake(in, action);
+    action.clothPhysics = in.Get<std::uint8_t>(kTogglePhysics).value_or(0) != 0;
+    action.gore = in.Get<float>(kGore).value_or(0.0F);
+    if (action.kind == "ALNK")
+    {
+        ReadLink(in, action);
+    }
     return action;
 }
 
