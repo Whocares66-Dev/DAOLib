@@ -114,7 +114,7 @@ Read 2026-10-22 in the GOG exe (ghidra-dao, read-only) and in a save with tools/
 - [C] Guarded by a byte at +0x7D4 of the object from 0x005D58C0 being 1, a check through 0x0074A7C0(1), and two equal shorts at +0x58 and +0x5A. It then calls 0x00643420 and, at 0x006C0EBC, pushes 0x4236 and calls 0x00A5A8E0.
 - [C] When the list is not empty (count from 0x004DB2A0), it allocates that many bytes (0x00413660) and copies the list into them (0x0047C940 per element).
 - [C] It hands the buffer to 0x005895D0 on a stack object made by 0x00587BD0 (its type from the object of 0x00867E30, vtable +0x1C).
-- [I] 0x005895D0 parses the morph file. That it is a morph parser is inferred from the call order and the bytes being a .mor.
+- 0x005895D0 (ID 9208) is the morph's GFF4 reader (two readings reconciled, 2026-11-01): it checks the buffer's 'GFF ' and 'V4.0' (0x00589622, 0x0058962A), builds the 0x180-byte Morph (0x0056EB00) and reads its nodes through 0x00588A60; MorphBuilderXML::Load (0x00589B20, ID 9211) wraps it for the morph loader.
 - [C] On success it takes 0x00587C20's result into 0x00534A70, and stores that through 0x004F4710 at this+0x1E4 (`LEA ECX,[ESI+0x1E4]`). It then frees the buffer (0x004136C0).
 - [I] +0x1E4 is the appearance's head-morph slot (CHARGEN.md's `UpdatePortraitMessage` writes the figure's head-morph name to `hero.appearance+0x1E4`).
 - Names: none of 0x00643420, 0x00A5A8E0, 0x005895D0, 0x00534A70, 0x004F4710, 0x007FEED0 or 0x00803000 is named in the address library (tools/addrlib.py lookup); 0x006C0DE0 is `BuildAppearanceModel` (ID 14965).
