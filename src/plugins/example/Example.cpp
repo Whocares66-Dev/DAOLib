@@ -323,7 +323,7 @@ void WatchCamera()
         {
             return;
         }
-        const auto *scene = camera->Scene();
+        const auto *scene = camera->Rig();
         if (scene == nullptr)
         {
             return;

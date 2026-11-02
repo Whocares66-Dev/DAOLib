@@ -175,7 +175,7 @@ std::uint32_t __fastcall ReadFromFile(std::byte *file, int edx, void *buffer, st
 
 void InstallArchiveReadFix()
 {
-    g_run.Attach(dao::addr::kReadRequestTask_Run, &RunReadRequest);
+    g_run.Attach(dao::addr::kReadRequestTask_Execute, &RunReadRequest);
     g_seek.Attach(dao::addr::kFileAccess_Seek, &SeekFile);
     g_readFile.Attach(dao::addr::kFileAccess_Read, &ReadFromFile);
     spdlog::info("fixes: a resource is read at its own offset, not at its archive's shared position (issue #3)");

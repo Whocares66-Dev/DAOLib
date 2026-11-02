@@ -170,7 +170,7 @@ float Share(float dt, float tau)
 
 void StepYaw(CameraController &camera, float dt)
 {
-    SceneCamera *scene = camera.Scene();
+    CameraRig *scene = camera.Rig();
     if (scene == nullptr)
     {
         End(Move::Yaw, MoveEnd::NoCamera);
@@ -552,14 +552,18 @@ float CloseDistance()
 //
 // Read 2026-10-15 in GOG's exe: Renderer::PerspectiveCamera (its vtable
 // kPerspectiveCamera_Vftable) keeps its vertical field of view in radians at
-// +0x140, an aspect's multiplier at +0x144, near and far at +0x130 and
-// +0x134. Its slot 41 (0x00A25A70), __thiscall (fov, aspect multiplier,
+// +0x140, its aspect (the viewport's width over height) at +0x144, near and
+// far at +0x130 and +0x134. Its slot 41 (0x00A25A70), __thiscall (fov, aspect,
 // near, far), `ret 0x10`, writes all four and sets +0x30, and slot 34
 // (0x00465AA0) remakes the projection (+0x40) from them through slot 40
-// (0x00A25AD0) when +0x30 is set: 0x004D3A60 (out, fov, the view's aspect
-// times +0x144, near, far), D3DXMatrixPerspectiveFovLH's arguments but not
-// its matrix (below, DAOLib #204). Slot 33
-// (0x00A259F0) answers +0x140. The constructor's default is pi/2. Slot 3
+// (0x00A25AD0) when +0x30 is set: 0x004D3A60 (out, fov, the pixel-aspect
+// factor of 0x00A25AA0 times +0x144, near, far), D3DXMatrixPerspectiveFovLH's
+// arguments but not its matrix (below, DAOLib #204). Slot 33
+// (0x00A259F0) answers +0x140, and slot 7 (0x00A25A00) answers +0x144. Slot 2
+// (0x00A25A10), SetViewport (x, y, width, height), `ret 0x10`, does nothing
+// when the width or the height is 0; otherwise it sets the base's viewport
+// (0x004655B0), stores width over height in +0x144 and sets +0x30 (read
+// 2026-11-02). The constructor's default is pi/2. Slot 3
 // (0x00A25A50), __thiscall (fov), `ret 4`, writes +0x140 alone and sets
 // +0x30; no other code writes +0x140 but the constructor (0x00A25B30). A
 // hold through slot 41 alone was not seen in play (2026-10-15, DAOTurnBased's
@@ -584,7 +588,7 @@ constexpr std::size_t kRemake = 0x30;       // the projection is to be made agai
 constexpr std::size_t kMatrix = 0x40;       // the projection, 16 floats
 constexpr std::size_t kNearPlane = 0x130;
 constexpr std::size_t kFarPlane = 0x134;
-constexpr std::size_t kAspectMultiplier = 0x144;
+constexpr std::size_t kViewAspect = 0x144;
 constexpr std::size_t kSetFieldOfViewSlot = 3;
 constexpr std::size_t kSetPerspectiveSlot = 41;
 
@@ -680,8 +684,9 @@ std::optional<float> FieldOfView()
 // The projection (DAOLib #204, for Eluvian #156 and DAOPhotoCam #1): the
 // fields #126 read, and the matrix slot 40 makes from them (0x00A25AD0 calls
 // 0x004D3A60, read 2026-10-19: 1 / tan(fov / 2) at [5], that over the aspect
-// at [0]). The aspect is the view's times +0x144, the view's from 0x00A25AA0
-// (1 unless +0x148 is set), so it is taken from the matrix as [5] / [0]
+// at [0]). The aspect is the pixel-aspect factor of 0x00A25AA0 (the renderer's,
+// by its slot 0x184, when +0x148 is set, else 1) times +0x144, the viewport's
+// width over height, so it is taken from the matrix as [5] / [0]
 // rather than worked out again.
 //
 // Seen in play 2026-10-19 by Eluvian's session (instance eluvian-test, 1600 x
@@ -761,7 +766,7 @@ namespace
 
 // The scene camera every mode drives, at a GameMode's +0x58 (dao/Addresses.h, the fly camera):
 // its place at +0x70, its orientation at +0x90 (x, y, z, w).
-constexpr std::size_t kModeSceneCamera = 0x58;
+constexpr std::size_t kModeCameraRig = 0x58;
 constexpr std::size_t kEye = 0x70;
 constexpr std::size_t kOrientation = 0x90;
 constexpr float kDegrees = 180.0F / std::numbers::pi_v<float>;
@@ -805,7 +810,7 @@ void GivePlanesBack(const Planes &planes)
     }
     const auto at = reinterpret_cast<std::uintptr_t>(camera);
     const auto fov = TryRead<float>(at + kFieldOfView);
-    const auto multiplier = TryRead<float>(at + kAspectMultiplier);
+    const auto multiplier = TryRead<float>(at + kViewAspect);
     if (fov && multiplier)
     {
         reinterpret_cast<SetPerspectiveFn>(table[kSetPerspectiveSlot])(camera, 0, *fov, *multiplier, planes.nearPlane,
@@ -867,11 +872,11 @@ void EndFree()
     g_flying = false;
 }
 
-std::uintptr_t SceneCameraOf(const GameModeController *modes)
+std::uintptr_t CameraRigOf(const GameModeController *modes)
 {
     const auto mode =
         reinterpret_cast<std::uintptr_t>(modes != nullptr ? modes->ModeObject(GameMode::FlyCam) : nullptr);
-    return mode != 0 ? TryRead<std::uintptr_t>(mode + kModeSceneCamera).value_or(0) : 0;
+    return mode != 0 ? TryRead<std::uintptr_t>(mode + kModeCameraRig).value_or(0) : 0;
 }
 
 void Place(std::uintptr_t camera, const View &view)
@@ -883,8 +888,8 @@ void Place(std::uintptr_t camera, const View &view)
                                                                                   view.pitch * kDegrees, 0.0F);
     using SetFn = void(__fastcall *)(void *, int, const float *, float, std::int32_t);
     auto *self = reinterpret_cast<void *>(camera);
-    reinterpret_cast<SetFn>(Module::Address(addr::kSceneCamera_SetPosition))(self, 0, eye.data(), 0.0F, 0);
-    reinterpret_cast<SetFn>(Module::Address(addr::kSceneCamera_SetOrientation))(self, 0, turn.data(), 0.0F, 0);
+    reinterpret_cast<SetFn>(Module::Address(addr::kCameraRig_SetPosition))(self, 0, eye.data(), 0.0F, 0);
+    reinterpret_cast<SetFn>(Module::Address(addr::kCameraRig_SetOrientation))(self, 0, turn.data(), 0.0F, 0);
 }
 
 } // namespace
@@ -917,7 +922,7 @@ void Place(std::uintptr_t camera, const View &view)
 // 2026-10-19).
 std::optional<View> CurrentView()
 {
-    const std::uintptr_t camera = SceneCameraOf(Modes());
+    const std::uintptr_t camera = CameraRigOf(Modes());
     const auto eye = camera != 0 ? TryRead<Vector>(camera + kEye) : std::nullopt;
     if (!eye)
     {
@@ -933,7 +938,7 @@ std::optional<View> CurrentView()
 bool SetFreeView(std::optional<View> view)
 {
     GameModeController *modes = Modes();
-    const std::uintptr_t camera = SceneCameraOf(modes);
+    const std::uintptr_t camera = CameraRigOf(modes);
     if (!view)
     {
         if (g_free && modes != nullptr && StillFree(modes))

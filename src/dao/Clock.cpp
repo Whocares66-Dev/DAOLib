@@ -150,7 +150,7 @@ bool SetSpeed(float scale, float seconds)
         return false;
     }
     // CClientExoApp::SetTimeScale: __thiscall (scale, seconds to ease over,
-    // an owner's id or -1 for none), `ret 0xC`.
+    // a key registered on the application's vector at +0x2DC or -1 for none), `ret 0xC`.
     using Fn = void(__fastcall *)(CClientExoApp *, int, float, float, std::int32_t);
     reinterpret_cast<Fn>(Module::Address(addr::kCClientExoApp_SetTimeScale))(app, 0, scale, seconds, -1);
     return true;

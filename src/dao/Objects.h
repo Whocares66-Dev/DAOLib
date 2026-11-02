@@ -284,8 +284,8 @@ class CGameObject : Opaque
     {
         return As<SEffectsHolder>(generated::CastSlot::SEffectsHolder);
     }
-    // Notes on AsItemPossessor: the inventory is at +0x440 of a creature, placeable or store,
-    // +0x70 of the party.
+    // Notes on AsItemPossessor: the ItemPossessor is at +0x440 of a creature, placeable or store,
+    // +0x70 of the party. A creature's Inventory is another object, the attribute at its +0xBF0.
 
     // Returns the object's inventory, or null if it has none. Its layout is not yet known.
     ItemPossessor *AsItemPossessor()
@@ -450,8 +450,8 @@ class CCCreature : public CCObject
     }
 
     // Notes on CombatState: it is the first int of the creature's combat block, which the pointer
-    // at +0xC60 points to; the block's +0x60 is the attack timing SetAttackDuration writes, not
-    // wrapped yet.
+    // at +0xC60 points to; the block's +0x60 is the aim loop's time SetAimLoopDuration writes and
+    // +0x64 the attack's SetAttackDuration writes (0x00659DA0), not wrapped yet.
 
     // Returns the creature's combat state, the same as GetCombatState.
     std::int32_t CombatState() const
@@ -749,7 +749,7 @@ class CCModule : public CGameObject
 class SEffectsHolder : Opaque
 {
 };
-// An object's inventory (CGameObject::AsItemPossessor). Its layout is not yet known.
+// The interface through which an object holds items (CGameObject::AsItemPossessor).
 class ItemPossessor : Opaque
 {
 };

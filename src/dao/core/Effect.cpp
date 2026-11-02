@@ -165,9 +165,12 @@ std::wstring Text(const gff4::Struct &from, std::uint32_t label)
     return from.String(label).value_or(L"");
 }
 
-template <std::size_t N> std::array<float, N> Floats(const gff4::Struct &from, std::uint32_t label)
+// The field's floats; a field that is missing gives `otherwise`, and a short one keeps its
+// rest.
+template <std::size_t N>
+std::array<float, N> Floats(const gff4::Struct &from, std::uint32_t label, const std::array<float, N> &otherwise = {})
 {
-    std::array<float, N> out{};
+    std::array<float, N> out = otherwise;
     const std::vector<float> read = from.Floats(label);
     std::copy_n(read.begin(), std::min(N, read.size()), out.begin());
     return out;
@@ -666,13 +669,17 @@ std::optional<Effect> EffectOf(const gff4::File &model)
                   .remoteMaterial = std::nullopt,
                   .items = {},
                   .totalExports = U32(*root, model::kTotalExports)};
-    if (root->Shape().Find(kRemoteDecal) != nullptr)
+    // The exe reads a remote material only when the tint is there (0x005960E8, read 2026-11-02),
+    // each of the others with its default: the decal empty, the falloff 1, the invert off, the
+    // alpha 0 and the tint white (#304).
+    if (root->Shape().Find(kRemoteTint) != nullptr)
     {
+        const RemoteMaterial none;
         effect.remoteMaterial = RemoteMaterial{.decal = Text(*root, kRemoteDecal),
-                                               .fresnelFalloff = F(*root, kRemoteFresnelFalloff),
+                                               .fresnelFalloff = F(*root, kRemoteFresnelFalloff, none.fresnelFalloff),
                                                .invertFresnel = Flag(*root, kRemoteInvertFresnel),
-                                               .alpha = F(*root, kRemoteAlpha),
-                                               .tint = Floats<4>(*root, kRemoteTint)};
+                                               .alpha = F(*root, kRemoteAlpha, none.alpha),
+                                               .tint = Floats<4>(*root, kRemoteTint, none.tint)};
     }
     const std::vector<gff4::Struct> structs = model::detail::NodeStructs(model);
     for (std::size_t i = 0; i < hierarchy->nodes.size() && i < structs.size(); ++i)

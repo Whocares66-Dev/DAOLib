@@ -885,7 +885,6 @@ DAO_ADDRESS(kEclipseGFxFSCommandHandler_Callback, 6584)
 DAO_ADDRESS(kEclipseGFxExternalInterface_Callback, 6585)
 DAO_ADDRESS(kGuiCommands_DispatchFSCommand, 6866)
 DAO_ADDRESS(kGuiCommands_DispatchExternalInterface, 6867)
-DAO_ADDRESS(kGuiCommands_Find, 6864)
 DAO_ADDRESS(kGuiCommands_RegisterFSCommand, 6878)
 DAO_ADDRESS(kGuiCommands_RegisterExternalInterface, 6879)
 DAO_ADDRESS(kCrc32, 4715)
@@ -1061,8 +1060,10 @@ DAO_ADDRESS(kResMan_AddSource, 4671)
 // the manager's lock it finds the source of that name that is not already
 // going (its +0x68 clear) and takes one count from it (0x004C7A10, its one
 // caller): at none left the source is closed (its slot 7) and, with none
-// of its resources held (+0x2C), taken out of the manager's list and its
-// index (0x004C6330) and deleted by a task of the manager's own
+// of its resources held (+0x2C), taken out of the manager's list and out of
+// its indexes by type (ECResMan::ResMan::UnindexSourceByType, 0x004C6330: one
+// lookup and erase for each of the source's 0x1C-byte entries, read
+// 2026-11-02) and deleted by a task of the manager's own
 // (ECResMan::DeleteSourceTask). True if there was such a source. AddSource
 // and this are a pair the game uses while it runs, some fifty callers
 // each, so neither belongs to start alone. The name is ours.
@@ -1303,7 +1304,7 @@ DAO_ADDRESS(kErfSource_Add, 4864)
 // SetFilePointer, the new position's low half or -1; Read, __thiscall (void
 // *buffer, uint32 size, uint32 count), `ret 0xC`, ReadFile at the file's
 // position with no OVERLAPPED, the bytes read, counted at 0x00C2BE50.
-DAO_ADDRESS(kReadRequestTask_Run, 5555)
+DAO_ADDRESS(kReadRequestTask_Execute, 5555)
 DAO_ADDRESS(kFileAccess_Seek, 4678)
 DAO_ADDRESS(kFileAccess_Read, 4681)
 
@@ -1785,7 +1786,7 @@ DAO_ADDRESS(kCameraControllerBase_ReadInput, 21234)
 DAO_ADDRESS(kCameraControllerBase_SetTarget, 21241)
 DAO_ADDRESS(kCameraControllerBase_Zoom, 21239)
 DAO_ADDRESS(kCameraControllerBase_TurnBehind, 21242)
-DAO_ADDRESS(kSceneCameraManager_Update, 15038)
+DAO_ADDRESS(kCameraRig_Update, 15038)
 // The game's fly camera, read 2026-10-15 for DAOLib #125 (dao/Camera.h,
 // SetFreeView). GameModeFlyCam (GM_FLYCAM, 6) is a mode the scripts'
 // SetGameMode enters. Its entry (slot 6, 0x0076D4A0) turns on the input
@@ -1804,16 +1805,16 @@ DAO_ADDRESS(kSceneCameraManager_Update, 15038)
 // quaternion *, yaw, pitch, roll), degrees) and gives it to SetOrientation,
 // __thiscall (const quaternion *, float seconds, ?), `ret 0xC`. The names
 // are ours.
-DAO_ADDRESS(kSceneCamera_SetPosition, 15033)
-DAO_ADDRESS(kSceneCamera_SetOrientation, 15039)
+DAO_ADDRESS(kCameraRig_SetPosition, 15033)
+DAO_ADDRESS(kCameraRig_SetOrientation, 15039)
 DAO_ADDRESS(kQuaternion_FromYawPitchRoll, 5699)
 DAO_ADDRESS(kQuaternion_Yaw, 5700)
 DAO_ADDRESS(kQuaternion_Pitch, 5701)
-DAO_ADDRESS(kSceneCamera_SetPitch, 15001)
-DAO_ADDRESS(kSceneCamera_Update, 15003)
-DAO_ADDRESS(kSceneCamera_SetYaw, 15000)
+DAO_ADDRESS(kCameraRig_SetPitch, 15001)
+DAO_ADDRESS(kCameraRig_UpdateOrbit, 15003)
+DAO_ADDRESS(kCameraRig_SetYaw, 15000)
 // The camera's distances, read 2026-10-04 (dao/Camera.h,
-// SetCloseDistance; DAOLib #17). The orbit (SceneCamera's update) takes its
+// SetCloseDistance; DAOLib #17). The orbit (CameraRig::UpdateOrbit) takes its
 // radius each frame as zoom x close + (1 - zoom) x far (0x006C2360; mode
 // 1 blends the pitch the same way, the behaviour's +0x48 with the camera's
 // +0x50). Close and far are the orbit behaviour's +0x40 and +0x30, set
@@ -2289,9 +2290,12 @@ DAO_ADDRESS(kClock_Microseconds, 4466)
 DAO_ADDRESS(kWorldTimer_Constructor, 32707)
 // The game's time scale (dao/Clock.h, SetSpeed), read 2026-09-30. The
 // application keeps it at +0x2C8; SetTimeScale, __thiscall (scale, seconds,
-// owner id or -1), `ret 0xC`, sets it at once for 0 seconds, else records
+// key or -1), `ret 0xC`. The key is one 0x00745DF0 pushed on the vector at
+// +0x2DC; a key not in it makes the call do nothing, -1 skips the test
+// (corrected 2026-11-02). It sets the scale at once for 0 seconds, else records
 // the scale it had (+0x2BC), the one asked (+0x2C0), the time (+0x2C4) and
-// how far it is (+0x2D0) for its update to ease (+0x2D8 set). The frame
+// how far it is (+0x2D0) for its update to ease (+0x2D8 set). 0x005D8240
+// removes a key and, when none is left, calls SetTimeScale(1, 0, -1). The frame
 // update (0x005D7560) advances the world timer (0x00A35A10), then, when the
 // scale is 0 or more, writes it to the world timer's +0x54 and gives it to
 // the scene (0x008107F0, slot 6, as a double). The names are ours.
@@ -2330,9 +2334,9 @@ DAO_ADDRESS(kGroupedInputMappings_HandleRawInput, 24378)
 
 // Using an ability from the quickbar, read 2026-09-30 from
 // PerformAbilityMessage's handler (dao/Messages.h says how it chooses a
-// target). UseAbility (ability, caster, the message's target, the target chosen,
+// target). UseAbility (ability, caster, the message's item, the target chosen,
 // a position), `ret 0x14`, queues the ability's command;
-// BeginTargeting, __thiscall on the mode (ability, caster, target), `ret
+// BeginTargeting, __thiscall on the mode (ability, caster, item), `ret
 // 0xC`, asks the player for a target: unless an input check fails (then a
 // "Target Required" floaty), it keeps the ability, its TargetType, the
 // caster and the target in globals from 0x00C35FA0, turns on the targeting
@@ -2350,7 +2354,7 @@ DAO_ADDRESS(kGameModeExplore_ValidTarget, 16234)
 // What BeginTargeting keeps, read 2026-10-02: one object, the "globals from
 // 0x00C35FA0" above being its fields. BeginTargeting resets it (0x0070AB60)
 // and then sets +0x40 the ability, +0x44 its AbilityType and +0x4C its
-// TargetType (abi_base), +0x48 the target passed and +0x50 the caster; the
+// TargetType (abi_base), +0x48 the item passed and +0x50 the caster; the
 // reset puts 0 in +0x10, +0x14, +0x40 and +0x44 and -1 in +0x50. An aim is
 // +0x40 not 0. Corrected 2026-10-31 (DAOLib #282, paragon-agent's reading for
 // its #340, through the address library, e919377): +0x14 is the aim's shape,

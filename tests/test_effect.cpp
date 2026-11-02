@@ -49,22 +49,34 @@ constexpr std::uint32_t kUnknown = 9999;
 // An effect as fxc_wisp_c.mmh is: GOB, with a bounding box, an attribute nothing reads and the
 // crust hook 1, which holds the emitter "glow" and the light "Light_c". The emitter exports
 // glow_birthrate (tag 8) and has two age keys and a mesh spawn volume of three points, kept as the
-// game keeps a Vector3 list, 16 bytes each; the light exports light_c_radius (tag 25).
-std::vector<std::byte> EffectFile()
+// game keeps a Vector3 list, 16 bytes each; the light exports light_c_radius (tag 25). The model
+// has a remote material as the exe reads one (0x005960E8): with the tint, whose absence leaves it
+// out whatever else is there, or the tint alone.
+enum class Remote : std::uint8_t
+{
+    Whole,
+    NoTint,
+    TintOnly,
+};
+
+std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
 {
     const std::uint16_t children = gff4::kList | gff4::kReference;
+    std::vector<dao::test::FieldSpec> modelFields = {{6000, 14, 0, 0}, {6005, 14, 0, 4},
+                                                     {6256, 4, 0, 8},  {6999, kGeneric, children, 12},
+                                                     {6275, 4, 0, 16}, {6333, 8, 0, 20}};
+    if (remote != Remote::TintOnly)
+    {
+        modelFields.push_back({6327, 14, 0, 24});
+        modelFields.push_back({6331, 8, 0, 28});
+    }
+    if (remote != Remote::NoTint)
+    {
+        modelFields.push_back({6332, 15, 0, 32});
+    }
     Builder b = Start(
         "MMH ",
-        {{"mdlh",
-          32,
-          {{6000, 14, 0, 0},
-           {6005, 14, 0, 4},
-           {6256, 4, 0, 8},
-           {6999, kGeneric, children, 12},
-           {6275, 4, 0, 16},
-           {6333, 8, 0, 20},
-           {6327, 14, 0, 24},
-           {6331, 8, 0, 28}}},
+        {{"mdlh", 48, modelFields},
          {"node", 12, {{6000, 14, 0, 0}, {6254, 5, 0, 4}, {6999, kGeneric, children, 8}}},
          {"crst", 12, {{6000, 14, 0, 0}, {6235, 0, 0, 4}, {6999, kGeneric, children, 8}}},
          {"nemt",
@@ -91,7 +103,7 @@ std::vector<std::byte> EffectFile()
          {"data", 12, {{6168, 0, 0, 0}, {16, 10, gff4::kList, 4}, {8, 2, gff4::kList, 8}}},
          {"bbox", 32, {{6054, 12, 0, 0}, {6055, 12, 0, 16}}},
          {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}}});
-    const std::size_t root = Struct(b, 32);
+    const std::size_t root = Struct(b, 48);
     const std::size_t gob = Struct(b, 12);
     const std::size_t box = Struct(b, 32);
     const std::size_t gobAt = Struct(b, 16);
@@ -116,6 +128,7 @@ std::vector<std::byte> EffectFile()
     Float(b, root + 20, 0.5F);
     b.U32(root + 24, b.String(u"White.dds"));
     Float(b, root + 28, 0.25F);
+    Floats(b, root + 32, {0.5F, 0.25F, 0.75F, 1});
 
     b.U32(gob, b.String(u"GOB"));
     b.U32(gob + 4, 0xFFFFFFFF);
@@ -278,6 +291,32 @@ TEST_CASE("an effect's row names its model and tree, the row the game takes of i
     CHECK_FALSE(effect::Row{}.ModelFor(1.0F));
 }
 
+TEST_CASE("a remote material is read only when the model has its tint, the rest by the exe's defaults", "[effect]")
+{
+    // The decal and the alpha are there, the tint is not: the exe reads none of it (#304).
+    const auto without = EffectFile(Remote::NoTint);
+    const auto withoutFile = gff4::File::Parse(without);
+    REQUIRE(withoutFile);
+    const auto none = effect::EffectOf(*withoutFile);
+    REQUIRE(none);
+    CHECK_FALSE(none->remoteMaterial);
+
+    // The tint alone: the decal empty, the falloff 1, the invert off, the alpha 0.
+    const auto alone = EffectFile(Remote::TintOnly);
+    const auto aloneFile = gff4::File::Parse(alone);
+    REQUIRE(aloneFile);
+    const auto tinted = effect::EffectOf(*aloneFile);
+    REQUIRE(tinted);
+    REQUIRE(tinted->remoteMaterial);
+    CHECK(tinted->remoteMaterial->decal.empty());
+    CHECK(tinted->remoteMaterial->fresnelFalloff == Approx(1.0F));
+    CHECK_FALSE(tinted->remoteMaterial->invertFresnel);
+    CHECK(tinted->remoteMaterial->alpha == Approx(0.0F));
+    CHECK(tinted->remoteMaterial->tint == effect::Colour{0.5F, 0.25F, 0.75F, 1});
+    // A struct made here has the defaults of a tint that is missing.
+    CHECK(effect::RemoteMaterial{}.tint == effect::Colour{1, 1, 1, 1});
+}
+
 TEST_CASE("an effect's model is its nodes, each read by its kind", "[effect]")
 {
     const auto bytes = EffectFile();
@@ -291,6 +330,9 @@ TEST_CASE("an effect's model is its nodes, each read by its kind", "[effect]")
     REQUIRE(read->remoteMaterial);
     CHECK(read->remoteMaterial->decal == L"White.dds");
     CHECK(read->remoteMaterial->alpha == Approx(0.25F));
+    CHECK(read->remoteMaterial->tint == effect::Colour{0.5F, 0.25F, 0.75F, 1});
+    CHECK(read->remoteMaterial->fresnelFalloff == Approx(1.0F)); // missing: the exe's default
+    CHECK_FALSE(read->remoteMaterial->invertFresnel);
     REQUIRE(read->items.size() == 4);
 
     const effect::Item &gob = read->items[0];

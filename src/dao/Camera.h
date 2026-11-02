@@ -110,16 +110,17 @@
 namespace dao
 {
 
-// The game's scene camera, which the CameraController drives: its position, its angles
-// around the point it looks at (the focus), and its zoom. Get it from
-// CameraController::Scene.
-class SceneCamera
+// The game's camera rig, which the CameraController drives: its position, its angles
+// around the point it looks at (the focus), and its zoom. Its engine class is CameraRig;
+// the renderer's GraphicsStructures::SceneCamera is another object. Get it from
+// CameraController::Rig.
+class CameraRig
 {
   public:
-    SceneCamera() = delete;
-    SceneCamera(const SceneCamera &) = delete;
-    SceneCamera &operator=(const SceneCamera &) = delete;
-    ~SceneCamera() = delete;
+    CameraRig() = delete;
+    CameraRig(const CameraRig &) = delete;
+    CameraRig &operator=(const CameraRig &) = delete;
+    ~CameraRig() = delete;
 
     // Returns the direction from the focus to the camera, in radians, measured from +x
     // toward +y. The value is not wrapped, so it can grow past 2 pi as the player turns.
@@ -138,8 +139,8 @@ class SceneCamera
     // Call on the game thread.
     void SetYaw(float radians)
     {
-        using Fn = void(__fastcall *)(SceneCamera *, int, float);
-        reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetYaw))(this, 0, radians);
+        using Fn = void(__fastcall *)(CameraRig *, int, float);
+        reinterpret_cast<Fn>(Module::Address(addr::kCameraRig_SetYaw))(this, 0, radians);
     }
     // Returns the camera's tilt in radians, measured from straight above.
     float Pitch() const
@@ -160,8 +161,8 @@ class SceneCamera
     // on the game thread. Not yet tested in the game.
     void SetPitch(float radians)
     {
-        using Fn = void(__fastcall *)(SceneCamera *, int, float);
-        reinterpret_cast<Fn>(Module::Address(addr::kSceneCamera_SetPitch))(this, 0, radians);
+        using Fn = void(__fastcall *)(CameraRig *, int, float);
+        reinterpret_cast<Fn>(Module::Address(addr::kCameraRig_SetPitch))(this, 0, radians);
     }
     // Notes on Zoom: the controller's view flag, +0x90, is set while its Zoom() = 2s - 1
     // is below 0.5 (0x0076FBF4, 0x0076FC92-0x0076FCAD), so on this 0..1 scale the
@@ -267,7 +268,7 @@ class CameraController
     // tactical view) to its most (+0x68, 1, close in), which the mouse wheel moves
     // (each notch times +0x4C, 0.4, added through 0x007EDBD0). The controller's update
     // (0x007EEB70) maps it to the scene camera's 0..1 (0x007EE770) and hands it to
-    // SceneCamera::SetZoom (0x006C2BF0), toward which the scene camera eases its own
+    // CameraRig::SetZoom (0x006C2BF0), toward which the scene camera eases its own
     // zoom (at most 2 a second, quicker as it goes), and below 0.75 there it is the
     // tactical view (0.5 on the controller's -1..1; corrected 2026-10-18, lib-agent-2).
 
@@ -330,12 +331,12 @@ class CameraController
     }
 
     // Returns the scene camera that the controller drives.
-    SceneCamera *Scene() const
+    CameraRig *Rig() const
     {
-        return Read<SceneCamera *>(kSceneCamera);
+        return Read<CameraRig *>(kRig);
     }
 
-    static constexpr std::size_t kSceneCamera = 0x04; // offset of the scene camera
+    static constexpr std::size_t kRig = 0x04;         // offset of the camera rig
     static constexpr std::size_t kTarget = 0x08;      // offset of the followed object's id
     static constexpr std::size_t kZoomSetting = 0x48; // offset of the zoom setting
     static constexpr std::size_t kZoomLeast = 0x64;   // offset of the least zoom setting
@@ -379,13 +380,13 @@ CameraController *Current();
 void OnTargetChanged(std::function<void(ObjectId now, ObjectId before)> callback);
 
 // Turns the camera to a yaw, in the close view.
-// @param radians the yaw to turn to, measured as SceneCamera::Yaw is
+// @param radians the yaw to turn to, measured as CameraRig::Yaw is
 // @param seconds how long the turn takes to all but arrive; it starts quickly and slows into
 // place
 void EaseYaw(float radians, float seconds);
 
 // Zooms the camera, as the mouse wheel does.
-// @param zoom the zoom to reach, on SceneCamera::Zoom's scale from 1 (close behind the
+// @param zoom the zoom to reach, on CameraRig::Zoom's scale from 1 (close behind the
 // creature) to 0 (the tactical view high above); clamped to 0..1
 // @param seconds how long the zoom takes to all but arrive
 //

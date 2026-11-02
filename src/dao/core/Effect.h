@@ -343,14 +343,15 @@ struct Driven
     Parameter parameter = Parameter::Rotation;
 };
 
-// The remote material an effect puts on what it is a crust of: the model's own fields.
+// The remote material an effect puts on what it is a crust of: the model's own fields. The
+// exe reads it only when the model has the tint, each other field with the default given here.
 struct RemoteMaterial
 {
     std::wstring decal; // MMHRemoteMaterialDecalName: "White.dds"
-    float fresnelFalloff = 0;
+    float fresnelFalloff = 1;
     bool invertFresnel = false;
     float alpha = 0;
-    Colour tint{};
+    Colour tint{1, 1, 1, 1};
 };
 
 struct Effect
