@@ -1454,7 +1454,7 @@ Offsets are from the object's start (render-08, read 2026-11-01; DAOParagonEngin
 
 ## Splats (read 2026-11-01, two readings)
 
-A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. The decals' batch is made only for a physics emitter whose splat width (+0x210) is above 0. Of the core game's 3,078 emitters (the enciphered add-ins not read), 10 can: the blood pools `fxa_bl_pool_s_p`, `_m_p`, `_l_p`, `fxa_crt_gr_aoe_p`, `fxa_crt_gr_aoesm_p` and `fxc_bm_tnt_app_c`.
+A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. The decals' batch is made only for a physics emitter whose splat width (+0x210) is above 0. Of the core game's 3,078 emitters (the enciphered add-ins not read), 10 can: the blood pools `fxa_bl_pool_s_p`, `_m_p`, `_l_p`, `fxa_crt_gr_aoe_p`, `fxa_crt_gr_aoesm_p`, `fxc_bm_tnt_app_c` (two emitters) and three test models (`vfx_testcrust07`, `09`, `16`).
 
 - **The grid:** C by R samples (+0x218, +0x21C) over W by H (+0x210, +0x214), turned about z by `randS * range` (+0x220, as radians, from the birth stream).
 - **Its heights:** each sample probes around the particle's height, a segment between z+2.0 and z-1.75 (mask 0x20), else a ray down from z+3.0, and sits 0.05 above the hit.
