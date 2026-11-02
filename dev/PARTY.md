@@ -480,7 +480,7 @@ Read in the GOG exe and the files (ghilana); the camera's constants (0x00C0D704 
   5. set the poses (0x00766AB0);
   6. set the camera (0x007672C0).
 - **Enter** [C]: input context `GameModePartyPicker`; the `ambient` and `vfxamb_combat` sound busses set; the scene camera's position, orientation and FOV saved (mode +0xB0/+0xC0/+0xD0); scene 0x22 faded in; the stage's marks gathered (0x0076CC90).
-- **The stage** [C]: the module's SharedCharacterStage (+0x388, `char_stage`, layout `oth999d`; CHARGEN.md). It is **switched to**, not drawn apart. 0x00707040 sets area +0x45C = 1, saves the current area at +0x6E8, and makes the stage's scene (+0x62C) the renderer's active one (0x0067C3B0(1)). The camp stays loaded.
+- **The stage** [C]: the module's SharedCharacterStage (+0x388, `char_stage`, layout `oth999d`; CHARGEN.md). It is **switched to**, not drawn apart. 0x00707040 (a method of the stage, a CCArea subclass) sets its +0x45C = 1 (0x0070707C), saves the area from 0x005D6B30 at its own +0x6E8 (0x0070705C), the first field past CCArea's 0x6E8 bytes, and makes the stage's scene (+0x62C) the renderer's active one (0x0067C3B0(1)). The camp stays loaded.
 - **A clone** (0x007662A0, entry +4) [C]:
   - It is a fresh `CCCreature(-1)`, not in the area's object list. It copies the follower's appearance record (+0x7B0, through 0x0074A610), its sound set and its equipment (0x007B8950, not read).
   - It goes into the stage's scene only (its slot 66 with mode +0x84). The row's `BlendTree` (`pp_<name>.anb`) is loaded through 0x006B5B30.
