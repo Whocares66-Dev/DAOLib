@@ -84,8 +84,23 @@ float Dot(const Quaternion &a, const Quaternion &b)
     return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]) + (a[3] * b[3]);
 }
 
+// a's turn undone, then b's: the turn from a to b.
+Quaternion TurnFrom(const Quaternion &a, const Quaternion &b)
+{
+    const auto [ax, ay, az, aw] = a;
+    const auto [bx, by, bz, bw] = b;
+    // a's conjugate times b.
+    return {(aw * bx) - (ax * bw) - (ay * bz) + (az * by), (aw * by) + (ax * bz) - (ay * bw) - (az * bx),
+            (aw * bz) - (ax * by) + (ay * bx) - (az * bw), (aw * bw) + (ax * bx) + (ay * by) + (az * bz)};
+}
+
+} // namespace
+
 // Two rotations' blend (0x00A38BF0): the second turned round where they are more than half a turn
-// apart, then slerped (0x004CBC10 -> 0x004CBAA0), straight where they are all but one.
+// apart, then slerped (0x004CBC10 -> 0x004CBAA0), straight where they are all but one. 0x004CBAA0 takes
+// the dot product's absolute value for the angle and flips the second's weight where it is negative, which
+// is the same as turning the second round first (read 2026-11-02, DAOLib #306), so the cutscene's blend list
+// (0x007D8240), which calls 0x004CBC10 directly, slerps by this too.
 Quaternion Slerp(const Quaternion &a, Quaternion b, float fraction)
 {
     float dot = Dot(a, b);
@@ -113,18 +128,6 @@ Quaternion Slerp(const Quaternion &a, Quaternion b, float fraction)
     }
     return q;
 }
-
-// a's turn undone, then b's: the turn from a to b.
-Quaternion TurnFrom(const Quaternion &a, const Quaternion &b)
-{
-    const auto [ax, ay, az, aw] = a;
-    const auto [bx, by, bz, bw] = b;
-    // a's conjugate times b.
-    return {(aw * bx) - (ax * bw) - (ay * bz) + (az * by), (aw * by) + (ax * bz) - (ay * bw) - (az * bx),
-            (aw * bz) - (ax * by) + (ay * bx) - (az * bw), (aw * bw) + (ax * bx) + (ay * by) + (az * bz)};
-}
-
-} // namespace
 
 std::vector<PositionKey> PositionKeysOf(const gff4::Struct &in, std::uint32_t label)
 {

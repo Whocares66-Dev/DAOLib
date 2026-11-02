@@ -813,7 +813,7 @@ TEST_CASE("an actor is its tracks' place with its live clips' travel added", "[c
     CheckNear(cutscene::PlacementAt(actor, 3.0F).position, {1.0F, 10.0F, 0.0F}); // over: its last key stays
 
     actor.actions[1].blendGad = true;
-    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {1.0F, 0.0F, 0.0F}); // blended: left out
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {1.0F, 0.0F, 0.0F}); // blended, with no weight: nothing
 }
 
 TEST_CASE("a live clip's travel is turned by the clips that ended before it, and the stage turns all", "[cutscene]")
@@ -822,6 +822,7 @@ TEST_CASE("a live clip's travel is turned by the clips that ended before it, and
     actor.originOrientation = {0.0F, 0.0F, 0.0F, 1.0F};
     auto first = Clip(0.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {2.0F, {0.0F, 10.0F, 0.0F}}});
     first.extendGad = true;
+    first.applyFutureGads = true;
     first.gadOrientations = {{0.0F, {0.0F, 0.0F, 0.0F, 1.0F}}, {2.0F, QuarterTurn()}};
     actor.actions.push_back(first);
     actor.actions.push_back(Clip(2.0F, 4.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {1.0F, {0.0F, 2.0F, 0.0F}}}));
@@ -832,6 +833,164 @@ TEST_CASE("a live clip's travel is turned by the clips that ended before it, and
     const cutscene::Stage stage{.position = {5.0F, 0.0F, 0.0F}, .orientation = QuarterTurn()};
     const auto staged = cutscene::PlacementAt(actor, 3.0F, stage);
     CheckNear(staged.position, {-5.0F, -2.0F, 0.0F}); // (-2, 10) turned to (-10, -2), then moved by (5, 0)
+}
+
+namespace
+{
+
+// A clip of the travel (0, 0, 0) to `end` over 0 to 2 s that is blended with a weight, as a percentage.
+cutscene::Action Blended(float weight, cutscene::Vector3 end)
+{
+    auto clip = Clip(0.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {0.1F, end}});
+    clip.blendGad = true;
+    cutscene::Curve curve;
+    curve.base = weight;
+    clip.curves.push_back(curve);
+    return clip;
+}
+
+cutscene::Actor Still()
+{
+    cutscene::Actor actor;
+    actor.originOrientation = {0.0F, 0.0F, 0.0F, 1.0F};
+    return actor;
+}
+
+} // namespace
+
+TEST_CASE("blended clips share the actor by their weights, whatever the sum", "[cutscene]")
+{
+    auto actor = Still();
+    actor.actions.push_back(Blended(30.0F, {10.0F, 0.0F, 0.0F}));
+    actor.actions.push_back(Blended(70.0F, {0.0F, 20.0F, 0.0F}));
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {3.0F, 14.0F, 0.0F}); // 0.3 p1 + 0.7 p2
+
+    // Weights of 3 and 7 are the same shares, and a weight over 100 is held at 100.
+    actor.actions[0].curves[0].base = 3.0F;
+    actor.actions[1].curves[0].base = 7.0F;
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {3.0F, 14.0F, 0.0F});
+    actor.actions[0].curves[0].base = 200.0F;
+    actor.actions[1].curves[0].base = 100.0F;
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {5.0F, 10.0F, 0.0F});
+}
+
+TEST_CASE("a lone blended clip is applied whole at any weight above 1e-6, and one of weight 0 is not", "[cutscene]")
+{
+    auto actor = Still();
+    actor.actions.push_back(Blended(0.001F, {10.0F, 0.0F, 0.0F}));
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {10.0F, 0.0F, 0.0F});
+    actor.actions[0].curves[0].base = 0.0F;
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {0.0F, 0.0F, 0.0F});
+    actor.actions[0].curves[0].base = -5.0F; // below 0 is held at 0
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {0.0F, 0.0F, 0.0F});
+    actor.actions[0].curves[0].base = 0.00001F; // a sum of 1e-7 is under the engine's 1e-6
+    CheckNear(cutscene::PlacementAt(actor, 1.0F).position, {0.0F, 0.0F, 0.0F});
+}
+
+TEST_CASE("blended clips turn the actor by a slerp from nothing to their turn by their share", "[cutscene]")
+{
+    auto actor = Still();
+    auto first = Blended(50.0F, {0.0F, 0.0F, 0.0F});
+    first.gadOrientations = {{0.0F, QuarterTurn()}};
+    actor.actions.push_back(first);
+    actor.actions.push_back(Blended(50.0F, {0.0F, 0.0F, 0.0F})); // a share with no turn of its own
+    // Half a quarter turn.
+    CheckNear(Turned(cutscene::PlacementAt(actor, 1.0F).orientation, {0.0F, 1.0F, 0.0F}),
+              {-std::sqrt(0.5F), std::sqrt(0.5F), 0.0F});
+
+    // The blend's turn goes on the left of a direct clip's: the quarter turn about x first, and the blend after.
+    auto direct = Clip(0.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}});
+    const float half = std::sqrt(0.5F);
+    direct.gadOrientations = {{0.0F, {half, 0.0F, 0.0F, half}}};
+    actor.actions.push_back(direct);
+    CheckNear(Turned(cutscene::PlacementAt(actor, 1.0F).orientation, {0.0F, 1.0F, 0.0F}), {0.0F, 0.0F, 1.0F});
+}
+
+TEST_CASE(
+    "a clip's keys are read at the time since its start, whatever its StartOffset, and an ended one leaves its last",
+    "[cutscene]")
+{
+    auto actor = Still();
+    auto clip =
+        Clip(1.0F, 2.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}, {1.0F, {0.0F, 10.0F, 0.0F}}, {3.0F, {0.0F, 30.0F, 0.0F}}});
+    clip.startOffset = 25.25F;
+    clip.extendGad = true;
+    actor.actions.push_back(clip);
+    // Live at 1.5 s: half a second in, whatever the offset.
+    CheckNear(cutscene::PlacementAt(actor, 1.5F).position, {0.0F, 5.0F, 0.0F});
+    // Ended at 5 s: the last key (3 s), not the key at the clip's length (1 s).
+    CheckNear(cutscene::PlacementAt(actor, 5.0F).position, {0.0F, 30.0F, 0.0F});
+    CheckNear(cutscene::TravelAt(clip, 1.5F).position, {0.0F, 5.0F, 0.0F});
+}
+
+TEST_CASE("an ended blended clip stays in the blend with its weight at its stop, after the live ones", "[cutscene]")
+{
+    auto actor = Still();
+    auto ended = Blended(30.0F, {10.0F, 0.0F, 0.0F});
+    ended.extendGad = true;
+    ended.stop = 1.0F;
+    actor.actions.push_back(ended);
+    auto live = Blended(70.0F, {0.0F, 20.0F, 0.0F});
+    live.start = 1.5F;
+    live.stop = 3.0F;
+    actor.actions.push_back(live);
+    // The clip began at 1.5 s, so the keys run from there: the key at 0.1 s is 1.6 s.
+    CheckNear(cutscene::PlacementAt(actor, 2.0F).position, {3.0F, 14.0F, 0.0F});
+    // Alone once the live one is over, the ended one is applied whole.
+    actor.actions[1].stop = 1.8F;
+    CheckNear(cutscene::PlacementAt(actor, 5.0F).position, {10.0F, 0.0F, 0.0F});
+}
+
+TEST_CASE("an ended clip's turn goes on the left, and turns later travel only if it applies future gads", "[cutscene]")
+{
+    auto actor = Still();
+    auto turner = Clip(0.0F, 1.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}});
+    turner.extendGad = true;
+    turner.gadOrientations = {{0.0F, QuarterTurn()}};
+    actor.actions.push_back(turner);
+    // A live clip, which turns the actor about x and moves it up y.
+    auto live = Clip(1.0F, 3.0F, {{0.0F, {0.0F, 2.0F, 0.0F}}});
+    const float half = std::sqrt(0.5F);
+    live.gadOrientations = {{0.0F, {half, 0.0F, 0.0F, half}}};
+    actor.actions.push_back(live);
+    // ext * (track * live): the forward axis (0, 1, 0) goes about x to (0, 0, 1), then about z, which leaves it.
+    CheckNear(Turned(cutscene::PlacementAt(actor, 2.0F).orientation, {0.0F, 1.0F, 0.0F}), {0.0F, 0.0F, 1.0F});
+    // (track * live) * ext would take (0, 1, 0) round z to (-1, 0, 0), then about x: not that.
+    // Without ApplyFutureGads the live travel is not turned by the ended clip's quarter turn.
+    CheckNear(cutscene::PlacementAt(actor, 2.0F).position, {0.0F, 2.0F, 0.0F});
+    actor.actions[0].applyFutureGads = true;
+    CheckNear(cutscene::PlacementAt(actor, 2.0F).position, {-2.0F, 0.0F, 0.0F});
+}
+
+TEST_CASE("a blend-extended clip does not turn the clips after it, and the product puts the later on the left",
+          "[cutscene]")
+{
+    auto actor = Still();
+    auto blended = Blended(100.0F, {0.0F, 0.0F, 0.0F});
+    blended.extendGad = true;
+    blended.applyFutureGads = true;
+    blended.stop = 1.0F;
+    blended.gadOrientations = {{0.0F, QuarterTurn()}};
+    actor.actions.push_back(blended);
+    auto live = Clip(1.0F, 3.0F, {{0.0F, {0.0F, 2.0F, 0.0F}}});
+    actor.actions.push_back(live);
+    CheckNear(cutscene::PlacementAt(actor, 2.0F).position, {0.0F, 2.0F, 0.0F});
+
+    // Two ended clips that apply future gads: a quarter turn about z, then one about x, turn the
+    // third's (0, 0, 1) by `x * z` (the later on the left): z leaves it, x sends it to (0, -1, 0),
+    // where `z * x` would send it to (1, 0, 0).
+    auto z = Clip(0.0F, 1.0F, {{0.0F, {0.0F, 0.0F, 0.0F}}});
+    z.extendGad = z.applyFutureGads = true;
+    z.gadOrientations = {{0.0F, QuarterTurn()}};
+    auto x = z;
+    const float half = std::sqrt(0.5F);
+    x.stop = 1.5F;
+    x.start = 1.0F;
+    x.gadOrientations = {{0.0F, {half, 0.0F, 0.0F, half}}};
+    auto third = Clip(2.0F, 4.0F, {{0.0F, {0.0F, 0.0F, 1.0F}}});
+    auto both = Still();
+    both.actions = {x, z, third}; // the file's order is not the order they ended
+    CheckNear(cutscene::PlacementAt(both, 3.0F).position, {0.0F, -1.0F, 0.0F});
 }
 
 TEST_CASE("jowan_attacks' clips carry their actors metres from FinalPos, which is the tracks' alone",
@@ -866,5 +1025,9 @@ TEST_CASE("jowan_attacks' clips carry their actors metres from FinalPos, which i
         carried += away > 0.3 ? 1 : 0;
     }
     // 2026-10-18: five actors of jowan_attacks end 0.45 to 3 m from FinalPos (lib-agent-2: FinalPos excludes the GADs).
+    // 2026-11-02 (#306): one of them, actor 7, ends some 80 m away: its BlendGad clip (cs_duncan.hn_frwll01__1, a
+    // constant weight of 100, StartOffset 25.25) has keys that jump from (4.4, 2.7) to (78.7, -30.0) between 2.0 and
+    // 2.4 s into the clip, and the cut stops at 3.1 s into it. A lone blend clip is applied whole, so the actor
+    // follows the keys, as the engine's arithmetic does; it has not been seen in play.
     CHECK(carried == 5);
 }

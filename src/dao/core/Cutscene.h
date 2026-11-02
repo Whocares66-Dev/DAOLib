@@ -236,7 +236,9 @@ struct Placement
 // Returns where an actor is at a time: its position and orientation tracks (the last of each
 // begun by then) with the travel of its animations added, as the engine's step does. An
 // animation with PlayGad is added while it is live, and its last key stays when it has ended
-// with ExtendGad. One with BlendGad is left out, which the engine blends by weight.
+// with ExtendGad. Those with BlendGad are blended by the weight of their first curve. The
+// engine builds its lists of ended clips as a run goes, so this reconstructs them, and the weight
+// of an ended blend clip is the one at its stop. The henchman's own turn of its clips is left out.
 // @param stage the stage the cutscene plays in; the default for a script's cutscene.
 Placement PlacementAt(const Actor &actor, float time, const Stage &stage = {});
 

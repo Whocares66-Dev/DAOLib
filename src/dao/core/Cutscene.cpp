@@ -1,5 +1,6 @@
 #include "dao/core/Cutscene.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -443,6 +444,64 @@ const Action &LastBegun(const Actor &actor, std::uint8_t type, float time)
     return *found;
 }
 
+// One entry of the engine's blend list (0x007D8180's 0x24-byte record): a weight, the clip's travel
+// already turned by RotateGadDelta, and its turn.
+struct BlendEntry
+{
+    float weight = 0.0F;
+    Vector3 position{};
+    Quaternion orientation{0.0F, 0.0F, 0.0F, 1.0F};
+};
+
+// The travel an ended clip leaves: its last keys as they are, not the keys at the clip's length. 0x007D9450
+// reads the last position (three floats) and the last orientation (four) from the ends of the arrays; the
+// two coincide for the game's clips, whose keys stop at their length.
+Travel LastKeys(const Action &action)
+{
+    Travel travel;
+    if (!action.gadPositions.empty())
+    {
+        travel.position = action.gadPositions.back().position;
+    }
+    if (!action.gadOrientations.empty())
+    {
+        travel.orientation = action.gadOrientations.back().orientation;
+    }
+    return travel;
+}
+
+// A BlendGad clip's weight, clamp(curve 0 / 100, 0, 1) (0x007DB44B-0x007DB486). The engine samples
+// the curve at the clip's local time and adds the clip's start, which is a query at the cutscene's
+// time here. An action with no curve reads 0, as every curve a track lacks does.
+float BlendWeight(const Action &action, float time)
+{
+    const auto weight = static_cast<float>(static_cast<double>(Sample(action, 0, time)) / 100.0);
+    return std::clamp(weight, 0.0F, 1.0F);
+}
+
+// ApplyBlendGads (0x007D8240): with the weights' sum above 1e-6 (a smaller one, or none, applies
+// nothing), each entry takes its share of the sum, adds its position by that share, and puts a
+// slerp from the identity to its turn by the share on the left of the actor's turn.
+void ApplyBlends(const std::vector<BlendEntry> &entries, Vector3 &local, Quaternion &turn)
+{
+    constexpr double kTooSmall = 1e-6;
+    float total = 0.0F;
+    for (const BlendEntry &entry : entries)
+    {
+        total += entry.weight;
+    }
+    if (std::isnan(total) || total <= kTooSmall)
+    {
+        return;
+    }
+    for (const BlendEntry &entry : entries)
+    {
+        const float share = entry.weight / total;
+        local = Add(local, {entry.position[0] * share, entry.position[1] * share, entry.position[2] * share});
+        turn = Multiply(gad::Slerp({0.0F, 0.0F, 0.0F, 1.0F}, entry.orientation, share), turn);
+    }
+}
+
 } // namespace
 
 float FrameTime(float seconds, std::uint32_t fps)
@@ -516,47 +575,106 @@ Travel TravelAt(const Action &animation, float time)
     return travel;
 }
 
-// Notes on PlacementAt, read 2026-10-18 by lib-agent-2 (dev/CUTSCENES.md, "Root motion"): a
-// clip's travel is the cut's own GadKeysPos and GadKeysOri, not the clip's channels, which are
-// in place. Category 0, the tracks, sets the place absolutely (0x007D0660, 0x007CF6B0); then
-// each live AANI with PlayGad adds its travel at its local time (0x007DB400 -> 0x007D92E0),
-// the position turned by the turns of the clips that ended before it with ExtendGad, and the
-// orientation multiplied on; then each of those ended clips adds its last key in turn
-// (0x007D8610 -> 0x007D84A0, 0x007D9450). A clip with BlendGad is put on a list and resolved by
-// weight (0x007D8240), which was not read, and is left out here. The turn of the actor's own
-// orientation that the engine adds for the henchman's actor alone (player +0x210) is left out
-// too. The order of the ended clips' own positions among themselves is the file's (inferred).
+// Notes on PlacementAt, read 2026-10-18 by lib-agent-2 (dev/CUTSCENES.md, "Root motion") and
+// 2026-11-02 for DAOLib #306 (in the exe by lib-agent-306). A clip's travel is the cut's own
+// GadKeysPos and GadKeysOri, not the clip's channels, which are in place. They are sampled at the clip's
+// local time, the cutscene's time less its start, as it stands: 0x007D92E0 hands its first argument, which
+// 0x007DB400 got as (time - start) from 0x007DA46B, straight to the key readers, so StartOffset, which
+// says where in the animation it begins, does not move the keys. They are the clip's cumulative travel
+// from its start, an absolute offset from the track's place each step, not a delta from the step before. Category 0,
+// the tracks, sets the place absolutely (0x007D0660, 0x007CF6B0); then each live AANI with PlayGad adds its travel at
+// its local time (0x007DB400 -> 0x007D92E0): the position turned by RotateGadDelta (0x007D3C80), the orientation
+// multiplied on the right, `cur * gad` (0x007D93DC), unless it has BlendGad, when the pair goes on the blend list
+// (+0x538, 0x007D8180) with its weight and nothing is added yet. At the category-20 crossing (0x007D8610) the engine
+// then runs ApplyExtendedGads (0x007D84A0) and ApplyBlendGads (0x007D8240), in that order.
+//
+// The extended list (+0x548) is what ended clips left. A clip with ExtendGad, once its local time
+// first passes (stop - start) - 1e-5, stores its last key, whatever the clip's length (0x007D9450): the position
+// through RotateGadDelta (0x007D956D), the quaternion as it is, a word that is -1 for a clip without BlendGad and its
+// weight on that first frame for one with, and the ApplyFutureGads byte. Each step then adds a direct entry's position
+// and puts its quaternion on the LEFT, `ext * cur` (0x007D85B9), in the order the entries were made; an entry with a
+// weight of 0 or more is appended to the blend list after the live clips' (0x007D85F4).
+//
+// RotateGadDelta (0x007D3C80) turns a position by the product 0x007D3A90 makes of the list, which
+// is `entry * product` (the new on the left, 0x007D3B80), over only the entries whose
+// ApplyFutureGads byte is set (0x007D3B65) and whose word is negative (0x007D3B6B-0x007D3B74), so
+// not a blend-extended clip. A clip that does not apply future gads does not turn the ones after it
+// by its turn, though its own quaternion still goes onto the actor's. When the actor is the
+// player's +0x22C (the henchman) it first turns the position by its own orientation as it
+// stands at that moment; that needs the run's state and the cutscene's henchman, which an actor
+// alone lacks, and is left out.
+//
+// The engine builds both lists as the run goes, so a query reconstructs them: the clips that
+// have ended by `time`, in the order they ended. That is by stop, ties in the file's order (the
+// engine's order within one step is the action list's, and clips stopping in one frame could
+// differ from this; unread). The engine makes an entry only if a step's time lands in
+// (stop - 1e-5, stop + 1e-4] (0x007DA3C2, 0x007DB77B), which the frame-aligned clock is assumed
+// to do. The weight of an ended blend clip is the one on the first frame seen ended; a query at one
+// time cannot know that frame, so it is the weight at `stop`, which is within the curve's change over
+// that window of it. The position of an ended clip is turned here by the product of the entries
+// before it, as the engine does when it ends, because they are the same entries.
 Placement PlacementAt(const Actor &actor, float time, const Stage &stage)
 {
     Vector3 local = LocalPosition(actor, LastBegun(actor, kTypeMoveSpline, time), time);
     Quaternion turn = LocalTurn(actor, LastBegun(actor, kTypeRotate, time), time);
-    Quaternion extended{0.0F, 0.0F, 0.0F, 1.0F};
     std::vector<const Action *> live;
+    std::vector<const Action *> ended;
     for (const Action &action : actor.actions)
     {
-        if (action.type != kTypeAnimation || !action.playGad || action.blendGad || time < action.start - kAtVertex)
+        if (action.type != kTypeAnimation || !action.playGad || time < action.start - kAtVertex)
         {
             continue;
         }
-        const bool ended = (time - action.start) > ((action.stop - action.start) - kEndedBy);
-        if (ended && action.extendGad)
+        const bool over = (time - action.start) > ((action.stop - action.start) - kEndedBy);
+        if (over && action.extendGad)
         {
-            const Travel last = TravelAt(action, action.stop);
-            local = Add(local, Rotate(extended, last.position));
-            extended = Multiply(extended, last.orientation);
+            ended.push_back(&action);
         }
         else if (time <= action.stop + kAtVertex)
         {
             live.push_back(&action);
         }
     }
+    std::ranges::stable_sort(ended, [](const Action *a, const Action *b) { return a->stop < b->stop; });
+
+    Quaternion rotation{0.0F, 0.0F, 0.0F, 1.0F}; // 0x007D3A90's product
+    std::vector<Quaternion> extended;
+    std::vector<BlendEntry> extendedBlends;
+    for (const Action *action : ended)
+    {
+        const Travel last = LastKeys(*action);
+        const Vector3 position = Rotate(rotation, last.position);
+        if (action->blendGad)
+        {
+            extendedBlends.push_back({BlendWeight(*action, action->stop), position, last.orientation});
+            continue;
+        }
+        local = Add(local, position);
+        extended.push_back(last.orientation);
+        if (action->applyFutureGads)
+        {
+            rotation = Multiply(last.orientation, rotation);
+        }
+    }
+    std::vector<BlendEntry> blends;
     for (const Action *action : live)
     {
         const Travel travel = TravelAt(*action, time);
-        local = Add(local, Rotate(extended, travel.position));
+        const Vector3 position = Rotate(rotation, travel.position);
+        if (action->blendGad)
+        {
+            blends.push_back({BlendWeight(*action, time), position, travel.orientation});
+            continue;
+        }
+        local = Add(local, position);
         turn = Multiply(turn, travel.orientation);
     }
-    turn = Multiply(turn, extended);
+    for (const Quaternion &entry : extended)
+    {
+        turn = Multiply(entry, turn);
+    }
+    blends.insert(blends.end(), extendedBlends.begin(), extendedBlends.end());
+    ApplyBlends(blends, local, turn);
     return {.position = Add(stage.position, Rotate(stage.orientation, local)),
             .orientation = Multiply(stage.orientation, turn)};
 }

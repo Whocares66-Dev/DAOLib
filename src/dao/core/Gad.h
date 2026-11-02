@@ -58,6 +58,9 @@ std::optional<Vector3> PositionAt(const std::vector<PositionKey> &keys, float ti
 // @return nothing for no keys
 std::optional<Quaternion> OrientationAt(const std::vector<OrientationKey> &keys, float time);
 
+// Returns the rotation a fraction of the way from one to another, the shorter way round.
+Quaternion Slerp(const Quaternion &a, Quaternion b, float fraction);
+
 // Returns a rotation's yaw as the engine reckons it: the heading of the forward axis (+y) turned
 // by it, in degrees, turning towards -x positive.
 float YawDegrees(const Quaternion &rotation);
