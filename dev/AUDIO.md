@@ -312,7 +312,7 @@ What plays, by the code and the data together (inferred as a sequence; each step
 
 ### The listener, the interface's sounds, the ducking events and sound_settings (PARAGON_AUDIO questions 1, 11, 12) (read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2 (subagent au2) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py`, a linear disassembly, `fmod_event.dll`'s exports, ghilana's tables, `audio_categories.fev`'s strings, `gui.fsb`'s sample headers and FFDec's decompile of `inventory.gfx` (patch003's). Not seen in play. "(checked)" = read in the disassembly or the data; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (subagent au2) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py`, a linear disassembly, `fmod_event.dll`'s exports, ghilana's tables, `audio_categories.fev`'s strings, `gui.fsb`'s sample headers and FFDec's decompile of `inventory.gfx` (patch003's). Not seen in play. "(checked)" = read in the disassembly or the data; "(inferred)" = not.
 
 Names used below:
 - **The sound manager**: the singleton from getter 0x005B9020 (global 0x00C323B4), as in `lib-agent-2-scg-sounds.md`.
@@ -555,7 +555,7 @@ Read 2026-10-18 by lib-agent-2 (subagent au4, with two forks: au4q6 for Q6, au4q
 
 #### Q5. An area's sound objects
 
-Read 2026-10-18 by lib-agent-2 (subagent au4) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py` and capstone, the tables through ghilana, FMOD's version from `fmod_event.dll`'s resource (FMOD Ex EventSystem 4.24.24). Not seen in play. "(checked)" is read in the disassembly or the data; "(inferred)" is not. Builds on `%TEMP%\lib-agent-2-scg-sounds.md` (the sound commands and the sound object's fields), which this corrects in one place (below, "The instance list").
+Read 2026-10-18 by lib-agent-2 (subagent au4) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py` and capstone, the tables through ghilana, FMOD's version from `fmod_event.dll`'s resource (FMOD Ex EventSystem 4.24.24). Not seen in play. "(checked)" is read in the disassembly or the data; "(inferred)" is not. Builds on `%TEMP%\lib-agent-2-scg-sounds.md` (the sound commands and the sound object's fields), which this corrects in one place (below, "The instance list").
 
 ##### The classes and where they come from
 
@@ -638,7 +638,7 @@ FMOD geometry is not used: `System::createGeometry` is not imported, only `Event
 
 #### Q6. Which FMOD projects load, and when
 
-Read 2026-10-18 by lib-agent-2's subagent (au4q6) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py`, in `fmod_event.dll` 4.24.24 (its exports), and in the data through ghilana and the files on disk. Not seen in play. "(checked)" means read in the disassembly or the data. "(inferred)" means not read.
+Read 2026-10-18 by lib-agent-2's subagent (au4q6) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py`, in `fmod_event.dll` 4.24.24 (its exports), and in the data through ghilana and the files on disk. Not seen in play. "(checked)" means read in the disassembly or the data. "(inferred)" means not read.
 
 ##### Summary
 
@@ -828,7 +828,7 @@ The table's projects stay loaded for the session, re-synced at the source change
 
 #### Q7. The audio triggers
 
-Read 2026-10-18 by lib-agent-2 (subagent au4q7) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py` and capstone; data through ghilana (`bhm100ar_tower_level_1.are`) and `master_reverb.fev` from disk. Not seen in play. "(checked)" is read in the disassembly or the data; "(inferred)" is not.
+Read 2026-10-18 by lib-agent-2 (subagent au4q7) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py` and capstone; data through ghilana (`bhm100ar_tower_level_1.are`) and `master_reverb.fev` from disk. Not seen in play. "(checked)" is read in the disassembly or the data; "(inferred)" is not.
 
 ##### The classes and which Type makes which
 
@@ -1181,7 +1181,7 @@ The user properties are read at Load (0x005BAB72), each property value in turn (
 
 ### Sounds from animation events, effects and sound sets (PARAGON_AUDIO questions 8, 9, 10) (read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by a lib-agent-2 subagent (prefix au5) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, a full-text disassembly (`%TEMP%\lib-agent-2-b2b-b-text.txt`), scratch scripts `%TEMP%\lib-agent-2-au5-*.py`; the tables through ghilana (the copies the game takes); 3,161 readable `.evt` files extracted to `%TEMP%\lib-agent-2-au5-evt` (1,004 more are in enciphered add-ins or other campaigns); the `.fev` projects' strings from disk; the scripts in `toolset\extract\scripts\`. No Ghidra, no game. **[C]** = read in the disassembly or the data; **[I]** = inferred. Addresses are GOG's. Column names are GDA column hashes (CRC32 of the lowercased UTF-16LE name), matched with `tools\gda.py`'s `column_hash` (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`). Not seen in play.
+Read 2026-10-18 by a lib-agent-2 subagent (prefix au5) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a full-text disassembly (`%TEMP%\lib-agent-2-b2b-b-text.txt`), scratch scripts `%TEMP%\lib-agent-2-au5-*.py`; the tables through ghilana (the copies the game takes); 3,161 readable `.evt` files extracted to `%TEMP%\lib-agent-2-au5-evt` (1,004 more are in enciphered add-ins or other campaigns); the `.fev` projects' strings from disk; the scripts in `toolset\extract\scripts\`. No Ghidra, no game. **[C]** = read in the disassembly or the data; **[I]** = inferred. Addresses are GOG's. Column names are GDA column hashes (CRC32 of the lowercased UTF-16LE name), matched with `tools\gda.py`'s `column_hash` (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`). Not seen in play.
 
 #### Summary
 

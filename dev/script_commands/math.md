@@ -1,6 +1,6 @@
 # Script commands, group "math": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and capstone scans, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and capstone scans, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 Shared facts (checked):
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`; −639 (0xFFFFFD81) on a failed pop, −638 on a failed push, else 0 (master's `dev/script_commands/commands.md`). Arguments pop in the declared order.

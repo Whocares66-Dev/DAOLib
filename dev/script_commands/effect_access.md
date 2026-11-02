@@ -1,6 +1,6 @@
 # Script commands: effect_access (GOG 1.05, read 2026-10-18 by lib-agent-2's subagent)
 
-For DAOParagonEngine #27. Read in `game\DAOrigins.exe` with `tools\daoexe.py`; no Ghidra, no play. "Checked" means read in the disassembly; "inferred" means not followed to the end. Every handler pops its arguments with the VM's `StackPop*` and fails the script with 0xFFFFFD81 when a pop fails (missing or wrong-typed argument), and with 0xFFFFFD82 when its push of a result fails (checked in each one).
+For DAOParagonEngine #27. Read in `game\DAOrigins.exe` with `extern\DAOAddressLibrary\tools\daoexe.py`; no Ghidra, no play. "Checked" means read in the disassembly; "inferred" means not followed to the end. Every handler pops its arguments with the VM's `StackPop*` and fails the script with 0xFFFFFD81 when a pop fails (missing or wrong-typed argument), and with 0xFFFFFD82 when its push of a result fails (checked in each one).
 
 Shared facts used below (checked unless marked):
 - An `effect` on the VM stack is a copy. `StackPopEngineStructure` (0x00A2F650) and `StackPushEngineStructure` (0x00A2D920) both copy through the VM's structure implementer, slot 0x20, and each handler deletes the copy it popped (vtable slot 0, `push 1`) before returning. So a `Set*` command never changes an effect already applied, or the one in the current event: it returns a changed copy, which matters only if the script then applies it (inferred from the copy calls and `dao/Structures.h`'s 0x7C-byte copy note; consistent with `SetIsCurrentEffectValid` existing).
@@ -139,7 +139,7 @@ Shared facts used below (checked unless marked):
 
 ## Second half's shared facts
 
-Read 2026-10-18 by a subagent of lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, the address library's names, `script.ldf` and the toolset's scripts. No Ghidra, no play. [C] = read in the disassembly; [I] = inferred. Builds on `dev/COMBAT.md` (effects), `dev/PROPERTIES.md`, `dev/ITEMS.md`, and `dev/EFFECTS.md` (on branch gh-181-vfx, commit 78fe841).
+Read 2026-10-18 by a subagent of lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, the address library's names, `script.ldf` and the toolset's scripts. No Ghidra, no play. [C] = read in the disassembly; [I] = inferred. Builds on `dev/COMBAT.md` (effects), `dev/PROPERTIES.md`, `dev/ITEMS.md`, and `dev/EFFECTS.md` (on branch gh-181-vfx, commit 78fe841).
 
 Common facts used below [C]:
 - `CGameEffect` (0x7C bytes, ctor 0x00A652A0(type)): +0 the script's `CDataArrays` (ints, floats, objects, strings, vectors; `GetEffectInteger` and kin), +0x20 id, +0x24 type, +0x28 duration type, +0x2C duration (ms), +0x30 elapsed, +0x34 animation, +0x38 priority, +0x3C flags, +0x40 creator, +0x44 ability, +0x48 invalid word, +0x4C −1, +0x50 started byte, **+0x54 a second `CDataArrays`, the "engine" parameters**, +0x74 the visual-effect handle (−1 none), +0x78 −1. The ctor zeroes the rest, and for a type ≠ 0 takes the id from a global counter at 0x00C1CF10 (starts at 1, skips −1, post-incremented); a type-0 effect keeps id 0.
@@ -292,7 +292,7 @@ Common facts used below [C]:
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/effect_access.md` apply (an effect on the stack is a copy; `CGameEffect` is 0x7C bytes; failed pop -639, failed push -638). One more, checked: **"OBJECT_SELF resolves to a game object" is `CClientExoApp::GetGameObjectById` 0x005D5840** (a lookup in the table at `app+0xCC`; it answers null for an unknown id); the constructors below set the creator only then, and otherwise leave the constructor's -1.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/effect_access.md` apply (an effect on the stack is a copy; `CGameEffect` is 0x7C bytes; failed pop -639, failed push -638). One more, checked: **"OBJECT_SELF resolves to a game object" is `CClientExoApp::GetGameObjectById` 0x005D5840** (a lookup in the table at `app+0xCC`; it answers null for an unknown id); the constructors below set the creator only then, and otherwise leave the constructor's -1.
 
 ### Engine_ApplyEffectOnObject (597)
 - **Handler:** 0x0065CA20 (not shared). Pops nDurationType, the effect (structure 3), oTarget, fDuration, oCreator and, only when paramCount >= 6, nAbilityId (else 0).

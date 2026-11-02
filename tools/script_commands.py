@@ -35,6 +35,7 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import library_tools  # noqa: E402, F401
 import archive  # noqa: E402
 import daoexe  # noqa: E402
 

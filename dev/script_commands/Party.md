@@ -1,6 +1,6 @@
 # Script commands: the party group (DAOParagonEngine #27 baseline)
 
-Read 2026-10-18 by lib-agent-2 in GOG's `DAOrigins.exe` 1.05 (`tools\daoexe.py` disassembly, the address library's names). Not seen in play. "Checked" = read in the disassembly; "inferred" = from names, shapes or scripts, not traced to the end.
+Read 2026-10-18 by lib-agent-2 in GOG's `DAOrigins.exe` 1.05 (`extern\DAOAddressLibrary\tools\daoexe.py` disassembly, the address library's names). Not seen in play. "Checked" = read in the disassembly; "inferred" = from names, shapes or scripts, not traced to the end.
 
 Common to every handler (checked): arguments are popped with `CVirtualMachine::StackPopObject` 0x00A2F6D0 / `StackPopInteger` 0x00A2F3C0 / `StackPopFloat` 0x00A2F410, and a failed pop returns -639 (0xFFFFFD81, fails the script). Results are pushed with `StackPushInteger` 0x00A2D650 / `StackPushObject` 0x00A2D980 / `StackPushString` 0x00A2D730, and a failed push returns -638. The party is `[[g_clientExoApp 0xC327EC]+0xD0]+0x58` (getter 0x005D57C0, null before a game exists). No handler here checks an object's type unless stated: the follower map and the approval list are keyed by the raw id.
 

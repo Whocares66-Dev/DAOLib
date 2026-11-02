@@ -1,6 +1,6 @@
 # Script commands, group "aoe": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 Shared facts:
 - Handlers are `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`; a failed pop returns -639, a failed push -638 (master's `dev/script_commands/commands.md`). Its +8 is OBJECT_SELF (`effect_access.md`). (checked)

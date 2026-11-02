@@ -14,7 +14,7 @@
 // the message's mode and two zeros, and so does SetMode.
 //
 // Explore mode, read 2026-09-30. Combat mode derives from it (dao::TypeName and
-// tools\daoexe.py --bases GameModeCombat). The mode's update (vtable slot 8, 0x00712F90) re-picks
+// daoexe.py --bases GameModeCombat). The mode's update (vtable slot 8, 0x00712F90) re-picks
 // 15 times a second (a timer at +0x6E4 reset to 1/15 s), or at once when the engine asks: it
 // casts a ray from the camera through the cursor (0x0070B590, up to 32 hits at +0xE0, their count
 // at +0x6E0, sorted nearest first), then chooses (0x0070F270): the object at +0xCC, or the ground

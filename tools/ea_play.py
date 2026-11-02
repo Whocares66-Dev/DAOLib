@@ -52,7 +52,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 # The address library's tools know the EA build's wrapper: how to find the
 # run the EA app starts, and whether its code is still encrypted.
-sys.path.insert(1, os.path.join(HERE, "..", "extern", "DAOAddressLibrary", "tools"))
+import library_tools  # noqa: E402, F401
 import daoexe  # noqa: E402
 import ea_dump  # noqa: E402
 

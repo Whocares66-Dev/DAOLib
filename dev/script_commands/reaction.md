@@ -1,6 +1,6 @@
 # Script command handlers: reaction (DAOParagonEngine #27)
 
-Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agent-2's subagent, with `tools\daoexe.py --disasm` and scratch call/xref scans; no Ghidra, no game. "Checked" = read in the disassembly; "inferred" = a reading of purpose. Shared idioms (checked): `CVirtualMachine::StackPopObject` 0x00A2F6D0, `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410, `StackPushInteger` 0x00A2D650, `StackPushFloat` 0x00A2D690; a failed pop returns -639, a failed push -638. `CClientExoApp::GetCreatureById` 0x005D58C0 (null for anything not a creature), `GetObjectById` 0x005D5BE0. "The party" is `[[app+0xD0]+0x58]` (`CCCreature::GetParty` 0x006A2CC0, also `0x005D57C0`); `[[app+0xD0]+0x5C]` is the controlled creature's id (`0x005D5CA0`; `0x005D5CC0` returns that creature).
+Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agent-2's subagent, with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and scratch call/xref scans; no Ghidra, no game. "Checked" = read in the disassembly; "inferred" = a reading of purpose. Shared idioms (checked): `CVirtualMachine::StackPopObject` 0x00A2F6D0, `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410, `StackPushInteger` 0x00A2D650, `StackPushFloat` 0x00A2D690; a failed pop returns -639, a failed push -638. `CClientExoApp::GetCreatureById` 0x005D58C0 (null for anything not a creature), `GetObjectById` 0x005D5BE0. "The party" is `[[app+0xD0]+0x58]` (`CCCreature::GetParty` 0x006A2CC0, also `0x005D57C0`); `[[app+0xD0]+0x5C]` is the controlled creature's id (`0x005D5CA0`; `0x005D5CC0` returns that creature).
 
 ## Group hostility: summary
 
@@ -37,7 +37,7 @@ Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) by lib-agen
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetCreatureById` 0x005D58C0, `GetObjectById` 0x005D5BE0; a `CCObject`'s group id is +0x3C0, its team id +0x3C4, its reaction override flag +0x3B8 and value +0x3BC; the reputation manager is `app+0x1B0`. "Checked" = read in the disassembly, "inferred" = not.
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetCreatureById` 0x005D58C0, `GetObjectById` 0x005D5BE0; a `CCObject`'s group id is +0x3C0, its team id +0x3C4, its reaction override flag +0x3B8 and value +0x3BC; the reputation manager is `app+0x1B0`. "Checked" = read in the disassembly, "inferred" = not.
 
 ### IsObjectHostile (468)
 - **Handler:** 0x0065BA20 (not shared; the script_commands.csv names it COMMAND_ISHOSTILE). It calls 0x0064BB40 on `app+0x1B0`. (checked)

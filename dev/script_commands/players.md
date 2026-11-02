@@ -1,6 +1,6 @@
 # Script commands, group "players" (500, 513): the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops and pushes as `dev/script_commands/Party.md` says (-639 a failed pop, -638 a failed push).
+Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops and pushes as `dev/script_commands/Party.md` says (-639 a failed pop, -638 a failed push).
 
 ### IsHero (500)
 - **Handler:** 0x00660A20 (`ScriptCommand::ISHERO`, not shared). Calls `GetObjectById` (0x005D5BE0) and the object's vtable +0x10 (as-creature). (checked)

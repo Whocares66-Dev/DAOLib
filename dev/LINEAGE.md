@@ -6,7 +6,7 @@ Dragon Age: Origins' engine, Eclipse, descends from BioWare's Aurora engine (Nev
 
 The exe keeps Aurora's names and shapes in its core:
 
-- **Class names in NWN's style**, from the RTTI (`tools\daoexe.py --rtti`):
+- **Class names in NWN's style**, from the RTTI (`extern\DAOAddressLibrary\tools\daoexe.py --rtti`):
   - `CClientExoApp`, `CExoGFF`, `CResGFF`, `CResARE`, `CResIFO`, `CTlkTable`, `CNetLayer`, `CRules`, `CGameObject`, `CGameEffect`, `CScriptEvent`, `CAIEvent`
   - the script machine's `CVirtualMachineCommands`, `CClientVirtualMachineCommands` and `CVirtualMachineCmdImplementer`
   - client-side objects with NWN's `CNWC*` pattern shortened to `CC*`: `CCCreature`, `CCArea`, `CCItem`, `CCPlaceable`, `CCModule`, `CCParty`

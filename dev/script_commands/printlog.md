@@ -1,6 +1,6 @@
 # Script commands, group "printlog": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and scratch scans, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and scratch scans, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts (checked):
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`, and returns 0, -639 on a failed pop or -638 on a failed push (`dev/script_commands/commands.md`). Pops: `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410, `StackPopVector` 0x00A2F460, `StackPopString` 0x00A2F4C0, `StackPopResource` 0x00A2F5F0, `StackPopObject` 0x00A2F6D0. Strings are `std::wstring` (UTF-16).

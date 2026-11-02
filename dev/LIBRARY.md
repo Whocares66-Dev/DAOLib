@@ -111,7 +111,7 @@ A creature property's id is a row of the game's properties table (`properties.gd
 
 ## The game object
 
-Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/daoexe.py --bases CCCreature`, from the RTTI's class hierarchy descriptors):
+Every game object is a `CGameObject` at its start, then DAO's own bases (`extern/DAOAddressLibrary/tools/daoexe.py --bases CCCreature`, from the RTTI's class hierarchy descriptors):
 
 | Offset | Base | What it is |
 |---|---|---|

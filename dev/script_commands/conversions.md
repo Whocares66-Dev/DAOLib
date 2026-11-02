@@ -1,6 +1,6 @@
 # Script commands, group "conversions": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not; CRT behaviour is MSVC 8's, inferred from which CRT entry is called.
+Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not; CRT behaviour is MSVC 8's, inferred from which CRT entry is called.
 
 Shared facts (checked):
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`. It returns -639 on a failed pop, -638 on a failed push, and 0 otherwise. Strings are `std::wstring` (UTF-16). Pops: `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410, `StackPopVector` 0x00A2F460, `StackPopString` 0x00A2F4C0, `StackPopObject` 0x00A2F6D0, and the untyped 0x00A2F720 (an `any`, as {VM type tag, value}, freed by 0x00A2F7C0). Pushes: `StackPushInteger` 0x00A2D650, `StackPushFloat` 0x00A2D690, `StackPushVector` 0x00A2D6D0, `StackPushString` 0x00A2D730.

@@ -26,6 +26,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import library_tools  # noqa: E402, F401
 import daoexe  # noqa: E402
 import msvc_names  # noqa: E402
 
@@ -55,7 +56,7 @@ def message_classes(img):
 
 def read_clone(img, clone):
     """(size, [(offset, width)], other calls) of a clone function."""
-    ins = img.disasm(clone, None, limit=0x400)
+    ins = img.disasm(clone)
     size = None
     pushed = None
     fields = {}

@@ -1,6 +1,6 @@
 # Script commands, group "sounds": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, ghilana for the tables, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, ghilana for the tables, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
 
 Shared facts:
 - Handlers are `__thiscall (commandId, argCount)`, `ret 8`; pops through the VM at `[0x00C1D080]` (`StackPopObject` 0x00A2F6D0, `StackPopString` 0x00A2F4C0, `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410). A failed pop returns -639 (0xFFFFFD81) and fails the script; otherwise 0. None of these pushes anything. (checked)

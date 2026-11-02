@@ -54,6 +54,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import library_tools  # noqa: E402
 import daoexe  # noqa: E402
 import msvc_names  # noqa: E402
 import address_ids  # noqa: E402
@@ -173,7 +174,7 @@ def instructions_of(img, entry, end):
     short, and this tool and script_fields.py saw a fraction of them."""
     return [
         (i.mnemonic, i.op_str)
-        for i in img.disasm(entry, count=1 << 20, limit=end - entry + 1)
+        for i in library_tools.disasm_range(img, entry, end + 1)
         if i.address <= end
     ]
 

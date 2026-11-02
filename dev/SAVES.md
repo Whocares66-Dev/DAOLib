@@ -310,7 +310,7 @@ Read 2026-09-30 from the save proxy's handlers, for `dao::saves::Load` and `Save
 
 ## Resume and LastPlayedGame (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
 
-Read 2026-10-21 by lib-agent-2 in the GOG exe (base 0x400000) with `tools/daoexe.py --disasm`, read-only; no Ghidra, no game. C = read in the disassembly (or a file on this machine), I = inferred.
+Read 2026-10-21 by lib-agent-2 in the GOG exe (base 0x400000) with `extern/DAOAddressLibrary/tools/daoexe.py --disasm`, read-only; no Ghidra, no game. C = read in the disassembly (or a file on this machine), I = inferred.
 
 ### Short answers
 

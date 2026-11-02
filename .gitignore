@@ -1,5 +1,5 @@
 # The game's executable and its Ghidra analysis: copied in by hand, never
-# committed. tools\ghidra-mcp.ps1 and tools\daoexe.py read from here.
+# committed. tools\ghidra-mcp.ps1 and extern\DAOAddressLibrary\tools\daoexe.py read from here.
 /game/
 
 # The Dragon Age toolset's installer (half a gigabyte) and what is extracted

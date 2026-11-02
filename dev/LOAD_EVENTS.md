@@ -255,7 +255,7 @@ Read in the GOG exe for paragon-agent's saves work (DAOParagonEngine #20). Check
 
 ## The loading mode's screen (read 2026-10-19 by lib-agent-2)
 
-Read in the GOG exe and the movies (`tools\daoexe.py`). Checked where an address is given, else inferred. The screen ids were never logged in play, so which screen a player sees is from the code.
+Read in the GOG exe and the movies (`extern\DAOAddressLibrary\tools\daoexe.py`). Checked where an address is given, else inferred. The screen ids were never logged in play, so which screen a player sees is from the code.
 
 ### A request's kind, and the screen
 

@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     The executable is game\DAOrigins.exe, a copy of the GOG Ultimate Edition's
-    bin_ship\DAOrigins.exe (1.05.13263.0; tools\daoexe.py --check says whether the
+    bin_ship\DAOrigins.exe (1.05.13263.0; extern\DAOAddressLibrary\tools\daoexe.py --check says whether the
     copy is the one every address in src\dao\Addresses.h was read from). The Ghidra
     project is game\ghidra\dao.gpr, beside it and ignored by git like it.
 
@@ -22,7 +22,7 @@
     and a structure per class. In Ghidra 12 these are scripts, not analyzers, and
     both refuse a program not marked as Visual Studio's in PeLoader's exact words,
     so set_compiler.py runs first here too. The log is game\ghidra\dao.recover.log.
-    Class names are also applied on every launch from tools\daoexe.py's own walk
+    Class names are also applied on every launch from extern\DAOAddressLibrary\tools\daoexe.py's own walk
     of the RTTI, which needs none of this.
 
     -Query runs tools\ghidra\query.py over the project and prints its answers:

@@ -13,7 +13,7 @@ std::string UndecorateClassName(std::string_view decorated)
     {
         return std::string(decorated);
     }
-    // A template's name needs a real parser (tools/msvc_names.py is one);
+    // A template's name needs a real parser (msvc_names.py is one);
     // split on '@' like the rest it would come out as nonsense, so it comes
     // back decorated, which is at least exact.
     if (decorated.substr(kPrefix.size() + 1).starts_with("?$"))

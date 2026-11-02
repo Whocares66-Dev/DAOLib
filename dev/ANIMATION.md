@@ -4,7 +4,7 @@ How the engine plays a creature's animations for two cases read in the exe: a we
 
 ## Drawing and sheathing weapons (DAOParagonEngine #33)
 
-Read 2026-10-18 by lib-agent-2 (and two of its forks) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, scratch call and xref scans and capstone; the tables and clips through ghilana (core copies, `2da.erf`, `global.rim`); the scripts in `toolset\extract\scripts\`. No Ghidra, no game. "Checked" = read in the disassembly, the files or the scripts; "inferred" = a reading of purpose not followed to the end. Every address is GOG's and has an ID in the address library (`python tools\address_ids.py 0x...`).
+Read 2026-10-18 by lib-agent-2 (and two of its forks) in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, scratch call and xref scans and capstone; the tables and clips through ghilana (core copies, `2da.erf`, `global.rim`); the scripts in `toolset\extract\scripts\`. No Ghidra, no game. "Checked" = read in the disassembly, the files or the scripts; "inferred" = a reading of purpose not followed to the end. Every address is GOG's and has an ID in the address library (`python tools\address_ids.py 0x...`).
 
 ### Summary
 
@@ -332,7 +332,7 @@ This is checked in 0x006A56B0's calls. What each swapped tree's `pause`/ready no
 
 ## CommandPlayAnimation (569): looping, queued commands behind it, and a missing animation
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, the toolset's scripts and the tables through ghilana, for DAOParagonEngine. Not seen in play. "(checked)" means read in the disassembly or the data; "(inferred)" means not. The shared command run path (StepCommands, start/end tables, the shared end 0x00746900, COMMAND_COMPLETE) is `dev/script_commands/commands.md`; the clear rules (static, the sub-action's byte +4) are `dev/TURN_BASED.md`, "A soft ClearAllCommands mid-swing".
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, the toolset's scripts and the tables through ghilana, for DAOParagonEngine. Not seen in play. "(checked)" means read in the disassembly or the data; "(inferred)" means not. The shared command run path (StepCommands, start/end tables, the shared end 0x00746900, COMMAND_COMPLETE) is `dev/script_commands/commands.md`; the clear rules (static, the sub-action's byte +4) are `dev/TURN_BASED.md`, "A soft ClearAllCommands mid-swing".
 
 ### Short answers
 
@@ -623,7 +623,7 @@ Read in the disassembly (daoexe.py, capstone) and the game's files (ghilana). No
 
 ### Movement animation: the blend, the play rate, start/stop, turning (animmove)
 
-Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, a rel32 call scanner, `apr_base`/`anim_base`/`events` through ghilana, and the movement trees and clips extracted with ghilana. No Ghidra, no game. "(checked)" = read in the disassembly or the data; "(inferred)" = reading of purpose, not followed to the end. Addresses are GOG's.
+Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a rel32 call scanner, `apr_base`/`anim_base`/`events` through ghilana, and the movement trees and clips extracted with ghilana. No Ghidra, no game. "(checked)" = read in the disassembly or the data; "(inferred)" = reading of purpose, not followed to the end. Addresses are GOG's.
 
 #### Short answers
 
@@ -925,7 +925,7 @@ Playing it while moving (checked, 0x006ABA40 / 0x006ABBF0 from dev/ANIMATION.md)
 
 ### Idle and ambient variation: how it is picked and blended (prefix animidle)
 
-Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, a text disassembly (`%TEMP%\lib-agent-2-b2b-b-text.txt`), the tables and clips through ghilana, the scripts in `toolset\extract\scripts\`. No Ghidra, no game, not seen in play. "(checked)" = read in the disassembly, the data or the scripts. "(inferred)" = a reading not followed to the end. Addresses are GOG's. Builds on master's `dev/ANIMATION.md` (the PlayAnimation command, sub-action 37) and `dev/AI.md` (the AMBIENT_CONTINUE heartbeat).
+Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a text disassembly (`%TEMP%\lib-agent-2-b2b-b-text.txt`), the tables and clips through ghilana, the scripts in `toolset\extract\scripts\`. No Ghidra, no game, not seen in play. "(checked)" = read in the disassembly, the data or the scripts. "(inferred)" = a reading not followed to the end. Addresses are GOG's. Builds on master's `dev/ANIMATION.md` (the PlayAnimation command, sub-action 37) and `dev/AI.md` (the AMBIENT_CONTINUE heartbeat).
 
 #### Short answers
 
@@ -1126,7 +1126,7 @@ Durations, using `dev/ANIMATION.md`'s PlayAnimation timings (length of the clip,
 
 ### Movement follow-ups: walk start, stop clips, turn clips, mode exits (anim2mv)
 
-Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `tools\daoexe.py --disasm`, a rel32 call scanner, the .ani/.evt files through ghilana and `tools\gff4.py`. No Ghidra, no game. "(checked)" = read in the disassembly or the data; "(inferred)" = reasoning from what was read. Not seen in play. Addresses are GOG's. Scratch: `%TEMP%\lib-agent-2-anim2-*`.
+Read 2026-10-18 in the GOG exe (`game\DAOrigins.exe`, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a rel32 call scanner, the .ani/.evt files through ghilana and `tools\gff4.py`. No Ghidra, no game. "(checked)" = read in the disassembly or the data; "(inferred)" = reasoning from what was read. Not seen in play. Addresses are GOG's. Scratch: `%TEMP%\lib-agent-2-anim2-*`.
 
 #### Short answers
 
@@ -1362,7 +1362,7 @@ abi_base (table 1) columns that name animation: **`ConjureAnim`, `CastAnim`, `Bl
 
 ### Which animation rows play for an attack and its reactions, and who picks them (prefix anim2hit, lib-agent-2, 2026-10-18)
 
-Read in the GOG exe (base 0x400000) with `tools\daoexe.py --disasm`, a call scanner, the tables through ghilana and the toolset's scripts. "checked" = read in disassembly or data; "inferred" = a reading of purpose. Scratch is `%TEMP%\lib-agent-2-anim2hit-*`. No game run.
+Read in the GOG exe (base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a call scanner, the tables through ghilana and the toolset's scripts. "checked" = read in disassembly or data; "inferred" = a reading of purpose. Scratch is `%TEMP%\lib-agent-2-anim2hit-*`. No game run.
 
 #### Short answers
 

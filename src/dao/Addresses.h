@@ -83,7 +83,7 @@ DAO_ADDRESS(kCVirtualMachineCommands_Register, 12839)
 // object in ecx, its result returned.
 DAO_ADDRESS(kCVirtualMachineCommands_ExecuteCommand, 12840)
 
-// Pause (dev/TURN_BASED.md). Read 2026-09-29 with tools/daoexe.py; not yet
+// Pause (dev/TURN_BASED.md). Read 2026-09-29 with daoexe.py; not yet
 // verified in play.
 //
 // The pause key's handler. Its address is the member function pointer the

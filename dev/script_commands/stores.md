@@ -1,6 +1,6 @@
 # Script commands, group "stores": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
 
 Shared facts, all checked:
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`. It returns 0, -639 (0xFFFFFD81) on a failed pop, -638 on a failed push; either fails the script. Pops are `CVirtualMachine::StackPopObject` 0x00A2F6D0 and `StackPopInteger` 0x00A2F3C0, the push `StackPushInteger` 0x00A2D650.

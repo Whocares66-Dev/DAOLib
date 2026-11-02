@@ -1,6 +1,6 @@
 # Script commands, group "item_prop": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (subagent b3c and a fork of it) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py`, a capstone scan of `.text` for field offsets, the game's tables (`tools\gda.py` (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`), ghilana) and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "Checked" is read in the disassembly; "inferred" is not. `script.ldf`'s "item_prop" group holds many functions that have nothing to do with items; its name is kept.
+Read 2026-10-18 by lib-agent-2 (subagent b3c and a fork of it) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py`, a capstone scan of `.text` for field offsets, the game's tables (`tools\gda.py` (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`), ghilana) and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "Checked" is read in the disassembly; "inferred" is not. `script.ldf`'s "item_prop" group holds many functions that have nothing to do with items; its name is kept.
 
 Shared facts (checked unless marked):
 - Handlers are `__thiscall (command, argCount)`, `ret 8`, on `CVirtualMachineCommands`. Pops: object 0x00A2F6D0, int 0x00A2F3C0, string 0x00A2F4C0, float 0x00A2F410; push int 0x00A2D650, string 0x00A2D730. A failed pop returns -639 (the script fails), a failed push -638. Lookups as in master's `dev/script_commands/items.md`: `0x005D5870` item by id, `GetCreatureById` 0x005D58C0, `GetObjectById` 0x005D5BE0. A lookup of the wrong kind fails, and the handler then does nothing or pushes its default.
@@ -202,7 +202,7 @@ Shared facts (checked unless marked):
 
 ## The second part's shared facts
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and capstone scans, `script.ldf` and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "Checked" is read in the disassembly; "inferred" is marked. `script.ldf`'s `item_prop` group holds many unrelated functions; the name is kept.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and capstone scans, `script.ldf` and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "Checked" is read in the disassembly; "inferred" is marked. `script.ldf`'s `item_prop` group holds many unrelated functions; the name is kept.
 
 Shared facts (checked unless marked):
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, and returns 0, −639 (0xFFFFFD81) when a pop fails, or −638 when a push fails; both fail the script (master's `dev/script_commands/commands.md`). No handler here fails because an object is wrong or missing: a getter pushes its default.

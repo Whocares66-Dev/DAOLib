@@ -1,6 +1,6 @@
 # Script commands, group "commands": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts, all checked:
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands` (vftable 0x00B0030C). It returns 0, or -639 (0xFFFFFD81) when a pop fails, or -638 (0xFFFFFD82) when a push fails. Either failure aborts the script.
@@ -124,7 +124,7 @@ Shared facts, all checked:
 
 ### CommandMoveToLocation (559): bDeactivateAtEnd
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 #### The constructor (0x0066F080)
 - Pops the location, then bRunToLocation, then **bDeactivateAtEnd only if paramCount > 2** (`cmp [ebp+0xC], 2`, 0x0066F104); otherwise it stays 0. (checked)
@@ -295,7 +295,7 @@ Not read: whether an event queued to an inactive creature (the cleared move's CO
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/commands.md` apply: every handler is `__thiscall (commandId, paramCount)`, returns 0, -639 on a failed pop and -638 on a failed push; a command on the stack is a copy (`CDataArrays` at command+4: `SetInteger` 0xA5B710, `SetObject` 0xA5B950, `SetVector` 0xA5A9B0, `SetFloat` 0xA5B7D0, `SetString` 0xA5BA10, `SetFlag` 0xA5B890); a start handler that adds no sub-action makes its command complete with success. Start and end handlers are at table offset 4 x type (filled at 0x00747480). The constructors below all leave the command null (type 0, no parameters) when the commands system (`app+0x1AC -> +0x6C`) is absent or the pool gives none, and still push it (checked).
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/commands.md` apply: every handler is `__thiscall (commandId, paramCount)`, returns 0, -639 on a failed pop and -638 on a failed push; a command on the stack is a copy (`CDataArrays` at command+4: `SetInteger` 0xA5B710, `SetObject` 0xA5B950, `SetVector` 0xA5A9B0, `SetFloat` 0xA5B7D0, `SetString` 0xA5BA10, `SetFlag` 0xA5B890); a start handler that adds no sub-action makes its command complete with success. Start and end handlers are at table offset 4 x type (filled at 0x00747480). The constructors below all leave the command null (type 0, no parameters) when the commands system (`app+0x1AC -> +0x6C`) is absent or the pool gives none, and still push it (checked).
 
 ### AddCommand (533)
 - **Handler:** 0x0066E0E0 (not shared). Pops the object, the command (structure 2), bAddToFront, bStatic and, only when paramCount > 4, nOverrideAddBehavior (default -1 in the handler); calls `GetObjectById` 0x005D5BE0 and `CCObject::QueueCommand` 0x0073CD10.

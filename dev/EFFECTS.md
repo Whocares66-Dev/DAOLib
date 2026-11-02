@@ -442,11 +442,11 @@ Read in the GOG exe and the game's files by lib-agent-2 (with subagents), for DA
 
 #### Effects, open questions 1, 5, 7, 9 (vq1), read 2026-10-18
 
-Read in the GOG exe (`tools\daoexe.py`, capstone sweeps; no Ghidra, no game) and the game files (ghilana, `tools\gff4.py`) by lib-agent-2's vq1 and its forks, following `lib-agent-2-vfx.md`. [C] read in the disassembly or data, [I] inferred. Each section ends with its own "Not read".
+Read in the GOG exe (`extern\DAOAddressLibrary\tools\daoexe.py`, capstone sweeps; no Ghidra, no game) and the game files (ghilana, `tools\gff4.py`) by lib-agent-2's vq1 and its forks, following `lib-agent-2-vfx.md`. [C] read in the disassembly or data, [I] inferred. Each section ends with its own "Not read".
 
 ##### 1. A crust row whose model has no crust hooks, and abi_base `Crust_ID`
 
-Read 2026-10-18 in the GOG exe (`tools\daoexe.py`, capstone sweeps) and the game's files (ghilana, `tools\gff4.py`) by lib-agent-2 (vq1). [C] read in the disassembly or data, [I] inferred.
+Read 2026-10-18 in the GOG exe (`extern\DAOAddressLibrary\tools\daoexe.py`, capstone sweeps) and the game's files (ghilana, `tools\gff4.py`) by lib-agent-2 (vq1). [C] read in the disassembly or data, [I] inferred.
 
 ###### A crust row is made only on an owner that has crust hooks
 

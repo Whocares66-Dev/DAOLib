@@ -1,6 +1,6 @@
 # Script commands, group "game_modes": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" is read in the disassembly; "(inferred)" is not.
 
 Shared facts: handlers are `__thiscall (commandId, paramCount)`, `ret 8`. A failed pop returns -639 and a failed push -638; either fails the script. The mode controller is `GameModeController` at `app+0x114` (`app` = `g_clientExoApp` 0x00C327EC). `SetGameMode` (0x006414A0) and the switch's order and event 60 are in `dev/TURN_BASED.md` ("The game mode's change"). The numbers are script.ldf's `GM_*`: -1 INVALID, 0 EXPLORE, 1 COMBAT, 2 DEAD, 3 GUI, 4 DIALOG, 5 CUTSCENE, 6 FLYCAM, 7 FIXED, 8 PREGAME, 9 LOADING, 10 MOVIE, 11 CHARGEN, 12 PARTYPICKER. The client options singleton is `[0x00C32938]`.
 

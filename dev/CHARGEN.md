@@ -239,7 +239,7 @@ For a port that wants the picture: hero at P facing 30 degrees left of +Y, camer
 
 ### Chargen stage: the figure and the portrait circle (lib-agent-2, 2026-10-19)
 
-Marks: [C] checked in the GOG exe (disassembly, `tools/daoexe.py`, capstone scans), the scripts, the AS or ghilana; [I] inferred. Addresses are GOG VAs. Scratch: `%TEMP%\lib-agent-2-cgfigure-*`. No game, no Ghidra.
+Marks: [C] checked in the GOG exe (disassembly, `extern/DAOAddressLibrary/tools/daoexe.py`, capstone scans), the scripts, the AS or ghilana; [I] inferred. Addresses are GOG VAs. Scratch: `%TEMP%\lib-agent-2-cgfigure-*`. No game, no Ghidra.
 
 #### Short answers
 
@@ -393,7 +393,7 @@ Paths below are under `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chargen\scripts\__P
 
 ## Level-up
 
-Read 2026-10-19 by lib-agent-2 for paragon-agent's screens, in GOG's exe with `tools\daoexe.py --disasm`, the scripts' source and `as_levelup`'s ActionScript; the tables through ghilana. [C] read, [I] inferred.
+Read 2026-10-19 by lib-agent-2 for paragon-agent's screens, in GOG's exe with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, the scripts' source and `as_levelup`'s ActionScript; the tables through ghilana. [C] read, [I] inferred.
 
 ### The ability chains (FindAbilityChains)
 

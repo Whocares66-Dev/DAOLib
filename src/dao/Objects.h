@@ -211,7 +211,7 @@ class SEffectsHolder;
 class ItemPossessor;
 
 // Notes on CGameObject: it is what the object array holds. The RTTI's base class descriptors put
-// CGameObject at +0 of every class here (tools/daoexe.py --bases CCCreature), so a pointer to one
+// CGameObject at +0 of every class here (daoexe.py --bases CCCreature), so a pointer to one
 // is a pointer to the other, as the lookups by id assume.
 
 // Any game object; the base of every object class in this file. The As* functions cast it to a

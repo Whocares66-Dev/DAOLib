@@ -1,6 +1,6 @@
 # Script commands, group "bio_appearanc": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts (checked unless marked):
 - Pops, pushes and the -639/-638 failures: `dev/script_commands/commands.md`. Lookups: `GetCreatureById` 0x005D58C0; 0x005D5840 any game object by id (then the object's slot +0x10 casts it to a creature); 0x005D5870 an item (type byte +0x14 = 7); `GetObjectById` 0x005D5BE0.

@@ -26,6 +26,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import library_tools  # noqa: E402, F401
 import address_ids  # noqa: E402
 import daoexe  # noqa: E402
 
@@ -35,7 +36,7 @@ OUT = os.path.join(ROOT, "src", "dao", "generated", "MessageHandlers.h")
 
 
 def confirmed(img, va):
-    ins = img.disasm(va, None, limit=0x4000)
+    ins = img.disasm(va)
     return bool(ins) and ins[-1].mnemonic == "ret" and ins[-1].op_str in ("4", "0x4")
 
 

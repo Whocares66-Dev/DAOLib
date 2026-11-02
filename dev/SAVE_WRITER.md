@@ -221,7 +221,7 @@ Templates: APC1 (32; creature in an area) holds only 16324, 16325, 16326; APP1 (
 
 ## The save writers of placeables, items, effects and stores, and their loaders (GOG exe)
 
-Read 2026-10-21 by lib-agent-2 in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`; types checked on `Characters\Lyna\Saves\AutoSave_1\savegame.das` with `%TEMP%\lib-agent-2-wr-tpl.py` (the templates' field types). C = read in the disassembly, I = inferred. Prior work used and not redone: master dev/SAVES.md, dev/PARAGON_SAVES.md (templates), dev/LOAD_EVENTS.md:46-56 (the area's save, `0x00683C80`), dev/COMBAT.md:167-186 (the effect's invalid word +0x48, AgeEffect), dev/script_commands/vars.md:34 (the variable writer), %TEMP%\lib-agent-2-sav-area.md (the loaders of PLC1, STO1, GME1), -sav-inv.md (ITL1 loader, item-list loader, GME1/DTA1 loader), -rst-cmd.md (commands: not repeated). New here: every writer, its order, its conditions, its sources.
+Read 2026-10-21 by lib-agent-2 in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`; types checked on `Characters\Lyna\Saves\AutoSave_1\savegame.das` with `%TEMP%\lib-agent-2-wr-tpl.py` (the templates' field types). C = read in the disassembly, I = inferred. Prior work used and not redone: master dev/SAVES.md, dev/PARAGON_SAVES.md (templates), dev/LOAD_EVENTS.md:46-56 (the area's save, `0x00683C80`), dev/COMBAT.md:167-186 (the effect's invalid word +0x48, AgeEffect), dev/script_commands/vars.md:34 (the variable writer), %TEMP%\lib-agent-2-sav-area.md (the loaders of PLC1, STO1, GME1), -sav-inv.md (ITL1 loader, item-list loader, GME1/DTA1 loader), -rst-cmd.md (commands: not repeated). New here: every writer, its order, its conditions, its sources.
 
 ### Short answers
 
@@ -413,7 +413,7 @@ For the one list field 17000 (generic list, label 0x4268): for each of 13 type b
 
 ## The area writer and the small kinds' writers (GOG exe), for the save writer (DAOLib #221)
 
-Read 2026-10-21 by lib-agent-2 in `game\DAOrigins.exe` (GOG 1.05, base 0x400000), `tools\daoexe.py --disasm` and a labelled disassembly. C = checked in disassembly, I = inferred. Types are the GFF4 types of the save's own templates (read from `Characters\Lyna\Saves\AutoSave_1\savegame.das`, templates 34-45 and 26) and are the ones the writer helpers check (below), so they agree.
+Read 2026-10-21 by lib-agent-2 in `game\DAOrigins.exe` (GOG 1.05, base 0x400000), `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and a labelled disassembly. C = checked in disassembly, I = inferred. Types are the GFF4 types of the save's own templates (read from `Characters\Lyna\Saves\AutoSave_1\savegame.das`, templates 34-45 and 26) and are the ones the writer helpers check (below), so they agree.
 
 Prior work used, not redone: master dev/SAVES.md (the load), dev/PARAGON_SAVES.md (the templates), dev/LOAD_EVENTS.md "Area lists" (:36-62: leaving a list writes the areas into the save tree at app+0x14C; the area writer `0x00683C80` is called there), `%TEMP%\lib-agent-2-sav-area.md` (the LOADERS of everything here: ARE1, PLC1, triggers, SND1, WPT1, AOE1, STO1, the container, variables; section numbers below refer to it), `%TEMP%\lib-agent-2-rst-cmd.md` (the command part of the base writer), dev/AUDIO.md:537-555 (a sounds region's `CCSoundObjectPannable`). New here: every writer.
 

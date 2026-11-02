@@ -1,6 +1,6 @@
 # Script commands, group "Arrays" (the world map, and GetItemValue): the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py` and capstone, the game's tables through ghilana, `script.ldf` and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not. `script.ldf` files these under its "Arrays" group, but they are the world map's commands plus GetItemValue.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py` and capstone, the game's tables through ghilana, `script.ldf` and the toolset's scripts, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not. `script.ldf` files these under its "Arrays" group, but they are the world map's commands plus GetItemValue.
 
 Shared facts, all checked unless marked:
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`. It returns 0, or -639 (0xFFFFFD81) when a pop fails (the script fails), or -638 when a push fails. No handler here fails because an object is wrong or missing: it does nothing instead.

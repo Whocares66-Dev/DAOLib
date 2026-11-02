@@ -12,12 +12,12 @@ Markdown here is not hard-wrapped: one line per paragraph or list item.
 |---|---|
 | Game | Dragon Age: Origins Ultimate Edition, GOG, `C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins` |
 | Executable | `bin_ship\DAOrigins.exe` 1.05.13263.0, 32-bit x86, no ASLR, no DRM, RTTI intact, link stamp 0x4eb19d53 |
-| Our copy | `game\DAOrigins.exe` (ignored by git); `python tools\daoexe.py --check` says it is the expected build |
+| Our copy | `game\DAOrigins.exe` (ignored by git); `python extern\DAOAddressLibrary\tools\daoexe.py --check` says it is the expected build |
 | EA's build | `C:\Program Files\EA Games\Dragon Age\bin_ship\daorigins.exe`, also 1.05.13263.0, link stamp 0x52164c37, wrapped. Read in `C:\project\DAOAddressLibrary`, whose `game\ea\` has the copies. `dev/BUILDS.md` |
 | Steam's build | `E:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe`, 1.05.13263.0: GOG's code, and GOG's link stamp 0x4eb19d53, wrapped by SteamStub 2.1. Read in `C:\project\DAOAddressLibrary` (`dev/STEAM.md`). `dev/BUILDS.md` |
 | Ghidra | 12.1.4 at `C:\Modding\ghidra_12.1.4_PUBLIC`; project `game\ghidra\dao.gpr` (ignored) |
 | MCP | GhidrAssistMCP (our `agentic-switch` branch, `C:\Modding\GhidrAssistMCP`), port 8090; the Skyrim projects hold 8080-8082 |
-| Toolchain | VS 2022 `cl.exe` targeting x86 (`vcvarsall amd64_x86`), vcpkg at `C:\vcpkg`, triplet `x86-windows-static-md`, LLVM 22 for clang-format/tidy, capstone for `tools\daoexe.py --disasm` |
+| Toolchain | VS 2022 `cl.exe` targeting x86 (`vcvarsall amd64_x86`), vcpkg at `C:\vcpkg`, triplet `x86-windows-static-md`, LLVM 22 for clang-format/tidy, capstone for `extern\DAOAddressLibrary\tools\daoexe.py --disasm` |
 | Logs | `Documents\BioWare\Dragon Age\daolib\`, under OneDrive on this machine |
 | Toolset | installer in `toolset\` (ignored); `dev/TOOLSET.md` |
 
@@ -63,7 +63,7 @@ src/plugins/    one folder per plugin: probe/ watches and checks, example/ check
 examples/       small plugins, one per part of daolib, to read and copy from and to check it in play (examples/README.md)
 tests/          Catch2: dao_core_tests over src/dao/core (x86 and x64), dao_tests over what of daolib needs no game;
                 ctest also runs tools/test_*.py and gen_script_fields.py --check
-tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, daoexe.py, msvc_names.py, script_commands.py,
+tools/          build.ps1, deploy.ps1, ghidra-mcp.ps1, library_tools.py (the address library's daoexe.py and msvc_names.py on the path), script_commands.py,
                 message_handlers.py, script_backends.py, script_fields.py, gen_script_fields.py, object_casts.py,
                 names.py, probe_targets.py, probe_report.py, sqlbak.py, toolset_scripts.py, gen_script_constants.py, gen_script_api.py, gen_message_handlers.py, messages.py, gff4.py (and second_reader.py, gff4.py checked against core's GFF4 reader with second_reader's dao_gff4_leaves), files/ (dao_files: an archive's entries written out or listed, and GFF4 files as JSON, many in one call) and archive.py (the Python tools' archive reads, through it), tlk.py (a plugin's own talk table written), gen_gda_schema.py and gen_gff3_schema.py (the tables' and templates' schemas, from gda_schema's and gff3_schema's scans), address_ids.py (the IDs in the source are the address library's), package.ps1 and release.ps1 (the zip a player installs, and a release of it), ea_play.py (the EA game with the build's loader, nothing deployed), play_matrix.ps1 (a build's game started under each compatibility setting, and the loader's start checked), version_matrix.py (each store's exe, and the repacks of Steam's, staged in its install and played into a fight, the stock exe put back), mutants.py (the core broken on purpose), ghidra/
 dev/            plan, reading, tables
@@ -119,7 +119,7 @@ Tests first, then the formatters (clang-format, ruff format, gersemi for CMake) 
 
 The exe is the authority. The wiki, the toolset's `dascript.chm` and memory are leads. There are three ways in, cheapest first:
 
-1. **`tools\daoexe.py`**: `--rtti`/`--vtables <text>` for the classes and their vtables (its own walk of the RTTI, 2,990 vtables), `--class-of 0xVA`, `--bases Class` for a class's bases at their offsets in the object, `--refs 0xVA` for code holding an address, `--disasm 0xVA [n]`, `--commands`, `--strings`, `--imports`. It needs no Ghidra and answers in seconds, the cheapest way to follow a call chain.
+1. **`extern\DAOAddressLibrary\tools\daoexe.py`**: `--rtti`/`--vtables <text>` for the classes and their vtables (its own walk of the RTTI, 2,990 vtables), `--class-of 0xVA`, `--bases Class` for a class's bases at their offsets in the object, `--refs 0xVA` for code holding an address as an immediate, `--callers 0xVA` for direct calls and jumps to it, `--disasm 0xVA [n]`, `--commands`, `--strings`, `--imports`. It needs no Ghidra and answers in seconds, the cheapest way to follow a call chain.
 2. **`.\tools\ghidra-mcp.ps1 -Query "..."`** from a shell: `vtable <class>`, `string <text>`, `refs <0xaddr>`, `decompile <0xaddr>`, `symbols <text>`, `analyzers`, `info`. It opens the project read-only for the question, with a minute of Ghidra start-up each time.
 3. **The MCP server**: run `.\tools\ghidra-mcp.ps1` in its own window, then use the `ghidra-dao` tools in Claude Code (`.mcp.json`). Stop it with `-Stop` so Ghidra saves what was renamed over MCP. The project is locked while any of these has it open, so run one at a time. Start the server before Claude Code, which connects at session start. If the server came up later, `/mcp` reconnects without a restart. It takes about a minute to report "Headless MCP server ready".
 
@@ -137,7 +137,7 @@ It also produced a structure per class. For 616 functions Ghidra could not retyp
 
 Two traps made this take three tries. First, both scripts check that the compiler is exactly PeLoader's label `visualstudio:unknown`, and the bare `visualstudio` fails silently. Second, the RTTI pass saves an "RTTI Found" flag on its first run and skips every later run, so a run with the wrong compiler blocks all the rest. `set_compiler.py` sets the label and clears a stale flag.
 
-The class names also come from `tools\daoexe.py`'s own walk, which needs no Ghidra. The project's names are the address library's, and its session alone writes them into the project, over the MCP server (DAOAddressLibrary `tools/ghidra_sync.py`; the user, 2026-10-31); a launch of the server writes none. A `-Query` applies `tools\names.py`'s names in memory through `tools\ghidra\ImportNames.java`, read-only, about 4,400 of them:
+The class names also come from `extern\DAOAddressLibrary\tools\daoexe.py`'s own walk, which needs no Ghidra. The project's names are the address library's, and its session alone writes them into the project, over the MCP server (DAOAddressLibrary `tools/ghidra_sync.py`; the user, 2026-10-31); a launch of the server writes none. A `-Query` applies `tools\names.py`'s names in memory through `tools\ghidra\ImportNames.java`, read-only, about 4,400 of them:
 
 - everything a `DAO_ADDRESS`/`DAO_DATA` row of `Addresses.h` was read as
 - every message handler, as `Owner::HandleMessage_Message`
@@ -148,7 +148,7 @@ The handlers' and commands' names are made from the tables under `dev/`; `python
 
 It creates a function where analysis found none.
 
-**MSVC templates** have names like `MemberFunctionMessageHandler<GameModeController,UserTogglePauseMessage,&GameModeController::HandleMessage>`. `tools\msvc_names.py` undecorates them, and `names.py` writes their inner `::` as `.` and their spaces as `_` so Ghidra accepts them. The C++ `dao::TypeName` leaves a template's name decorated rather than guess.
+**MSVC templates** have names like `MemberFunctionMessageHandler<GameModeController,UserTogglePauseMessage,&GameModeController::HandleMessage>`. `extern\DAOAddressLibrary\tools\msvc_names.py` undecorates them, and `names.py` writes their inner `::` as `.` and their spaces as `_` so Ghidra accepts them. The C++ `dao::TypeName` leaves a template's name decorated rather than guess.
 
 **Recording a finding.** An address goes into `src/dao/Addresses.h` with the engine's name for it, what it is, how it was found, and the date; `tools\address_ids.py` then turns the row into its ID and moves the name to the address library (above). A layout goes into a class header under `src/dao/`, like `ClientExoApp.h`, with the evidence per field. A field a getter command returns goes through `dev/script_fields.csv` and `tools/gen_script_fields.py` instead, and gets its name in `Objects.h`. A hypothesis is tried in the probe plugin before anything relies on it: detour, log what arrives (`dao::TypeName` says what an object is), change nothing.
 
@@ -158,7 +158,7 @@ Member functions are `__thiscall`: `this` in ecx, arguments on the stack, and th
 
 The loader detours the exe's entry point from `DllMain`, which Detours permits (its own samples do it). Plugins are loaded from the detour, on the process's first thread, with the loader lock released. A plugin's `DAOLib_Load` runs before any game code, so a detour placed there is in place for the first call. No game object exists yet, so load does hooks, not reads (`CClientExoApp::Get()` is null there, verified). The game's own work then runs on other threads, so a hook must not assume which thread calls it.
 
-A hook that wants its caller logs `_ReturnAddress()` rebased to the preferred base, as `src/plugins/probe/Probe.cpp` does. That gives an address to look up with `tools\daoexe.py --disasm` or in Ghidra.
+A hook that wants its caller logs `_ReturnAddress()` rebased to the preferred base, as `src/plugins/probe/Probe.cpp` does. That gives an address to look up with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` or in Ghidra.
 
 ## Style
 

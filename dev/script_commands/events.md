@@ -1,6 +1,6 @@
 # Script commands, group "events": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and scratch call/displacement scans, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and scratch call/displacement scans, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts, checked unless marked:
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`; none is shared. It returns 0, -639 (0xFFFFFD81) on a failed pop, -638 (0xFFFFFD82) on a failed push (`dev/script_commands/commands.md`). Pops: `StackPopEngineStructure` 0x00A2F650 (structure 0 = event, 1 = location), `StackPopInteger` 0x00A2F3C0, `StackPopFloat` 0x00A2F410, `StackPopString` 0x00A2F4C0, `StackPopResource` 0x00A2F5F0, `StackPopObject` 0x00A2F6D0. Pushes: `StackPushEngineStructure` 0x00A2D920, `StackPushInteger` 0x00A2D650, `StackPushFloat` 0x00A2D690, `StackPushString` 0x00A2D730, `StackPushResource` 0x00A2D890.
@@ -126,7 +126,7 @@ Shared facts, checked unless marked:
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/events.md` apply (an event on the stack is a copy; `CScriptEvent` is 0x50 bytes with type +0x20, creator +0x24, target +0x28 and own script +0x2C; the copy constructor drops the own script; null events reach handlers; failed pop -639, failed push -638). "Current event" below is the event the calling object is running: a game object with a CCObject view (slot 0x18) -> `+0x2A8`; type byte 4 (area, through slot 8) -> `+0x3C4`; type 3 (module, through slot 0x1C) -> `+0x390`.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not followed to the end. The shared facts of `dev/script_commands/events.md` apply (an event on the stack is a copy; `CScriptEvent` is 0x50 bytes with type +0x20, creator +0x24, target +0x28 and own script +0x2C; the copy constructor drops the own script; null events reach handlers; failed pop -639, failed push -638). "Current event" below is the event the calling object is running: a game object with a CCObject view (slot 0x18) -> `+0x2A8`; type byte 4 (area, through slot 8) -> `+0x3C4`; type 3 (module, through slot 0x1C) -> `+0x390`.
 
 ### SignalEvent (105)
 - **Handler:** 0x00657E40 (not shared). Pops oObject, the event (structure 0) and, only when paramCount > 2, bProcessImmediate (else 0). Looks the target up with `GetGameObjectById` 0x005D5840 and needs the commands/events system (`app+0x1AC`).

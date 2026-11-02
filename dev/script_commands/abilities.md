@@ -1,6 +1,6 @@
 # Script commands, group "abilities": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not. Shared idioms (pops, pushes, -639/-638, `GetCreatureById` 0x005D58C0): `dev/script_commands/commands.md`. `IsAbilityAvailable`, `GetAbilityCount` and `RemoveAbility` are in script.ldf's `stats` group (see `lib-agent-2-scg-stats.md`).
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not. Shared idioms (pops, pushes, -639/-638, `GetCreatureById` 0x005D58C0): `dev/script_commands/commands.md`. `IsAbilityAvailable`, `GetAbilityCount` and `RemoveAbility` are in script.ldf's `stats` group (see `lib-agent-2-scg-stats.md`).
 
 ### CanUseConditionedAbility (819)
 - **Handler:** 0x0066C1F0 (not shared). Pops creature, ability, conditions (all three, no count check); `GetCreatureById`, stats (`[creature+0x7C4]+0xC`), then `CCCreatureStats` 0x0071C310(ability, conditions, 0); pushes 1 if that returns 1, else 0 (checked).

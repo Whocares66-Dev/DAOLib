@@ -1,6 +1,6 @@
 # Script commands, group "placeables": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts (checked unless marked):
 - Handlers are `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`. A failed pop returns -639 (0xFFFFFD81) and a failed push -638 (0xFFFFFD82); either aborts the script (`dev/script_commands/commands.md`). The class-rank pair swaps these codes (below).

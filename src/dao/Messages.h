@@ -90,9 +90,9 @@ inline bool Send(void *receiver, const Message &message)
 // Notes on a game object as a receiver: read 2026-10-24 (DAOLib #253) after the Eluvian server's
 // EquipItemMessage sent to a creature at +0 crashed in Messages::Send (0x004D834A, a call through
 // the receiver's vtable). The engine hands a handler its receiver as a Messages::MessageReceiver,
-// and a game object's is at +0x18, after its CGameObject (tools/daoexe.py --bases: CCCreature,
+// and a game object's is at +0x18, after its CGameObject (daoexe.py --bases: CCCreature,
 // CCPlaceable, CCItem, CCObject, CCParty and Store alike), where a game mode's and Journal's is at
-// +0. A CCArea is a CGameObject here but its receiver is at +0xD4 (tools/daoexe.py --bases CCArea),
+// +0. A CCArea is a CGameObject here but its receiver is at +0xD4 (daoexe.py --bases CCArea),
 // and OnlineFeatures' at +8: the handlers' invokers subtract 0x18 for the creature, placeable, item,
 // party and store, 0xD4 for the area and 8 for OnlineFeatures (0x006A4CF0, 0x0067BC60, 0x004785A0;
 // read 2026-11-01). The observers' receiver is the same pointer, which dao::TypeName names by the object's class.

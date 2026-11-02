@@ -1,7 +1,7 @@
 // The sound events: a hook on fmod_event.dll's FMOD::Event::start.
 //
 // Read 2026-10-21 in the GOG build's fmod_event.dll (FMOD Ex EventSystem 4.24.24, the exports
-// with capstone) and in the exe's imports (tools\daoexe.py --imports, dev/AUDIO.md). The exe
+// with capstone) and in the exe's imports (daoexe.py --imports, dev/AUDIO.md). The exe
 // imports the dll statically, so it is mapped before any plugin loads. The game imports
 // `?start@Event@FMOD@@QAG?AW4FMOD_RESULT@@XZ` (RVA 0x11040): a __stdcall method, which MSVC
 // takes with `this` on the stack and `ret 4`, not in ecx. The export checks the handle and

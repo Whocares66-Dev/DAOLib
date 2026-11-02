@@ -70,7 +70,7 @@ Logs are written to `Documents\BioWare\Dragon Age\daolib\`. A plugin in a reposi
 
 ## Working on DAOLib
 
-[CLAUDE.md](CLAUDE.md) has the project's rules: building, the checks every commit passes, how the executable is read (with `tools\daoexe.py`, Ghidra, and the address library's IDs), and where the notes in `dev/` are.
+[CLAUDE.md](CLAUDE.md) has the project's rules: building, the checks every commit passes, how the executable is read (with `extern\DAOAddressLibrary\tools\daoexe.py`, Ghidra, and the address library's IDs), and where the notes in `dev/` are.
 
 ## License
 

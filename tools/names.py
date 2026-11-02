@@ -54,6 +54,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import library_tools  # noqa: E402, F401
 import address_ids  # noqa: E402
 import msvc_names  # noqa: E402
 

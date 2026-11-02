@@ -1,6 +1,6 @@
 # Script commands, group "objects": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (subagents, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and a linear sweep of `.text`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops and pushes as `dev/script_commands/Party.md` says (-639 a failed pop, -638 a failed push).
+Read 2026-10-18 by lib-agent-2 (subagents, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and a linear sweep of `.text`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. Pops and pushes as `dev/script_commands/Party.md` says (-639 a failed pop, -638 a failed push).
 
 Shared facts:
 
@@ -70,7 +70,7 @@ Projectiles:
 
 #### Scope and nNth order, read further
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. This settles the scope the bullets above infer, and the order of nNth.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. This settles the scope the bullets above infer, and the order of nNth.
 
 #### Scope: the module's index holds exactly the current area list's areas (all of them), plus what outlives a swap
 - One index on the module (+0x198), filled by 18 insert sites and emptied by 14 remove sites (above; listed again with a call scan, checked).
@@ -210,7 +210,7 @@ Not read: the other eleven tag-index removers' classes, one by one; the order of
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetGameObjectById` 0x005D5840 returns any game object, `GetObjectById` 0x005D5BE0 only a `CCObject` (cast slot +0x18); the type byte is object +0x14. "Checked" = read in the disassembly, "inferred" = not.
+Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`. Shared facts as in the group's file: a failed pop returns -639, a failed push -638; `GetGameObjectById` 0x005D5840 returns any game object, `GetObjectById` 0x005D5BE0 only a `CCObject` (cast slot +0x18); the type byte is object +0x14. "Checked" = read in the disassembly, "inferred" = not.
 
 ### GetObjectType (207)
 - **Handler:** 0x00659470 (not shared). It calls `GetGameObjectById`. (checked)

@@ -542,7 +542,7 @@ Prior work used: `dev/script_commands/inventory.md`:217-232, `dev/script_command
 
 ## Control and selection, as the engine runs it
 
-Read 2026-10-18 by lib-agent-2 (with a forked subagent for part 2) in GOG's `DAOrigins.exe` 1.05 (capstone disassembly through `tools\daoexe.py` and a scratch caller scan) and the toolset's scripts. Not seen in play. **Checked** = read in the disassembly; **inferred** = from names, shapes or scripts, not traced to the end. Builds on the sections above, `dev/script_commands/Party.md`, `dev/script_commands/spells_combat.md`, `src/dao/Party.cpp` and `Addresses.h`'s `Party::Select` row.
+Read 2026-10-18 by lib-agent-2 (with a forked subagent for part 2) in GOG's `DAOrigins.exe` 1.05 (capstone disassembly through `extern\DAOAddressLibrary\tools\daoexe.py` and a scratch caller scan) and the toolset's scripts. Not seen in play. **Checked** = read in the disassembly; **inferred** = from names, shapes or scripts, not traced to the end. Builds on the sections above, `dev/script_commands/Party.md`, `dev/script_commands/spells_combat.md`, `src/dao/Party.cpp` and `Addresses.h`'s `Party::Select` row.
 
 ### Three words: selected, controlled, leader
 
@@ -740,7 +740,7 @@ Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194
 
 ### The selection: where it starts, when it is empty, what to use in place of "empty = hero" (lib-agent-2, 2026-10-19)
 
-Read in GOG's DAOrigins.exe (capstone via tools\daoexe.py and a byte scan for call sites) and the toolset scripts. Not seen in play, except one corroboration from DAOTurnBased (below). **Checked** = read in disassembly or scripts; **inferred** = from shape or names. Prior notes: master's `dev/PARTY.md` "Control and selection, as the engine runs it" (lines 393-478, the caller table 462-476, "Selection: growing, shrinking, all" from 480), `dev/COMBAT.md` 243, 272-277, `dev/LOAD_EVENTS.md` 98, 111, `dev/gff4_fields.csv` 1829, 1837. Short names: SetSelection = CCParty 0x006368F0 (ID 12442); Deselect = 0x00639DB0; Observer = 0x00637220; Bar = CCParty+0xC8.
+Read in GOG's DAOrigins.exe (capstone via extern\DAOAddressLibrary\tools\daoexe.py and a byte scan for call sites) and the toolset scripts. Not seen in play, except one corroboration from DAOTurnBased (below). **Checked** = read in disassembly or scripts; **inferred** = from shape or names. Prior notes: master's `dev/PARTY.md` "Control and selection, as the engine runs it" (lines 393-478, the caller table 462-476, "Selection: growing, shrinking, all" from 480), `dev/COMBAT.md` 243, 272-277, `dev/LOAD_EVENTS.md` 98, 111, `dev/gff4_fields.csv` 1829, 1837. Short names: SetSelection = CCParty 0x006368F0 (ID 12442); Deselect = 0x00639DB0; Observer = 0x00637220; Bar = CCParty+0xC8.
 
 #### Short answers
 

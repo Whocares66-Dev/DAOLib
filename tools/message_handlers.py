@@ -27,7 +27,7 @@ calls on the owner (DAOLib #188):
     mov   dword ptr [eax], 0x00AF5480       ; the handler's vftable
     mov   dword ptr [eax + 4], 0x00512980   ; the method
 
-This finds each handler vftable (tools/daoexe.py's RTTI walk), the code
+This finds each handler vftable (extern/DAOAddressLibrary/tools/daoexe.py's RTTI walk), the code
 that stores it, and the values stored at +8 and +0xC there (or +4), tracking
 constants loaded into registers since the function began. It writes
 dev/message_handlers.csv, one row per handler:
@@ -51,6 +51,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import library_tools  # noqa: E402
 import daoexe  # noqa: E402
 import msvc_names  # noqa: E402
 
@@ -79,7 +80,7 @@ def built_with(img, vftable, ref):
     # there, so start may be a function before the one holding ref (0x0063A240 for
     # CCParty's SelectCharacterMessage, built at 0x0063A2C8; DAOLib #188). Nothing
     # tracked before a ret holds after it.
-    for ins in img.disasm(start, count=1 << 20, limit=ref - start + 0x40):
+    for ins in library_tools.disasm_range(img, start, ref + 0x40):
         ops = [o.strip() for o in ins.op_str.split(",")]
         if ins.address > ref + 0x30:
             break

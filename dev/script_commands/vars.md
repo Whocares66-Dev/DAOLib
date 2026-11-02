@@ -1,6 +1,6 @@
 # Script commands, group "vars": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and a raw call scan, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and a raw call scan, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 Shared facts (checked unless marked), which hold for `GetLocalInt`/`SetLocalInt` (63/64, 0x00655FA0/0x00656120) too:
 - **Every handler has one shape.** Pop oObject (`StackPopObject` 0x00A2F6D0), then sVarName (`StackPopString` 0x00A2F4C0), then for a setter the value. A failed pop returns −639, a failed push −638. Look the object up with `CClientExoApp::GetGameObjectById` (0x005D5840), any type. Pick its variable table by the type byte (+0x14):

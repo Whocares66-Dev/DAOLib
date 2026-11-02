@@ -1,6 +1,6 @@
 # Script commands, group "posorient": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 Shared facts (checked):
 - **Conventions** are master's `dev/script_commands/locations.md` "Facing ↔ orientation": `Vector::FromAngle` 0x004EAE30 = (sin(−a·k), cos(−a·k), 0), `Vector::ToAngle` 0x004EE570 = atan2(−x, y)·57.2958, normalize 0x00451A30 (|v|² ≤ 1e-6 → (1,0,0)). Position is object +0x120, orientation +0x130 (a raw direction vector), `CCObject::SetOrientation` 0x00694CE0 writes it.

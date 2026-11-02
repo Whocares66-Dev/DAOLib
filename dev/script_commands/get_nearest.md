@@ -1,6 +1,6 @@
 # Script commands, group "get_nearest" (164, 165): the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. The other get_nearest commands (127, 433–436) are `dev/PARTY.md` "A search by tag finds inactive objects".
+Read 2026-10-18 by lib-agent-2 (a subagent, b2b) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not. The other get_nearest commands (127, 433–436) are `dev/PARTY.md` "A search by tag finds inactive objects".
 
 Shared facts (checked): both are cases of the shared getter 0x00668A20, which also answers `GetObjectActive` (141) and others. It pops the object (`StackPopObject` 0x00A2F6D0; failure -639), then **one or two more ints only when paramCount > 1 / > 2** (for other commands; 164 and 165 take none), looks the object up with `CClientExoApp::GetObjectById` (0x005D5BE0) and switches on the command number. The creature cases go through the object's vtable +0x10 (as-creature), then a jump table indexed by `command − 160` (byte table 0x00668CFC, targets 0x00668CE8): 164 → 0x00668B5C, 165 → 0x00668B69. The result is pushed with `StackPushInteger` 0x00A2D650 (failure -638). An invalid id, or an object that is not a creature, falls through every case and pushes 0.
 

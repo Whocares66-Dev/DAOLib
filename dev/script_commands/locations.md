@@ -1,6 +1,6 @@
 # Script commands, group "locations": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 Shared facts (checked):
 - **The structure.** `CScriptLocation`, 0x30 bytes (`dao/Structures.h`, master's `dev/LIBRARY.md`): +0x00 position (3 floats, +0x0C pad), +0x10 orientation (3 floats, +0x1C pad), +0x20 area id, +0x24..+0x2F pad. The constructor 0x007ABD00 zeroes both vectors and sets the area to 0xFFFFFFFF. The orientation is a **direction vector, not a quaternion**: nothing here reads or writes a fourth component (the pads get whatever 16-byte copy carries them, unread).

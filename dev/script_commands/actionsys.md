@@ -1,6 +1,6 @@
 # Script commands, group "actionsys": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. Not seen in play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts, all checked:
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, on `CVirtualMachineCommands`; none of these is shared with another command. It returns 0, -639 (0xFFFFFD81) on a failed pop, -638 (0xFFFFFD82) on a failed push (`dev/script_commands/commands.md`). The VM is `g_pVirtualMachine` (0x00C1D080); pops are `StackPopInteger` 0x00A2F3C0, `StackPopString` 0x00A2F4C0 (a `resource` is popped as a string), `StackPopObject` 0x00A2F6D0; pushes `StackPushInteger` 0x00A2D650, `StackPushString` 0x00A2D730, `StackPushResource` 0x00A2D890.
@@ -82,7 +82,7 @@ Shared facts, all checked:
 
 ## Described elsewhere first (batch 4, read 2026-10-18 by lib-agent-2)
 
-Read 2026-10-18 in the GOG exe (`tools\daoexe.py --disasm`). Not seen in play. Shared facts (table lookup, row IDs, the by-name fallback, -639/-638): the top of `actionsys.md`. Master's `dev/LIBRARY.md` (the "trap" line) and `dev/FILES.md` (seen in play) also use these.
+Read 2026-10-18 in the GOG exe (`extern\DAOAddressLibrary\tools\daoexe.py --disasm`). Not seen in play. Shared facts (table lookup, row IDs, the by-name fallback, -639/-638): the top of `actionsys.md`. Master's `dev/LIBRARY.md` (the "trap" line) and `dev/FILES.md` (seen in play) also use these.
 
 ### GetM2DAString (9)
 - **Handler:** 0x00653EF0 (not shared). Same body as `GetM2DAResource` (13, 0x00654150) with `StackPushString` 0xA2D730 for the push.

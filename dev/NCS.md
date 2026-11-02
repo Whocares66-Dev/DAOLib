@@ -132,7 +132,7 @@ Read 2026-10-18 by lib-agent-2 for DAOParagonEngine, not seen in play.
 
 ## A script named with ".nss": the name stripped, `<stem>.ncs` loaded
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm` and byte scans of `.text`, for DAOParagonEngine. Not seen in play. "(checked)" = read in the disassembly; "(inferred)" = not.
 
 - **The compiled script keeps the extension.** `sp_module_item_acq.ncs` (extracted with ghilana) holds the resource constants as the text `preev_item_acquired.nss`, `arlev_item_acquired.nss`, …; `arl101cr_undead.ncs` holds `cli000cr_army_ds.ncs`. A resource is a string cell in the VM (above). (checked)
 - **`HandleEvent` (121, handler 0x006586D0) cuts the name at its first '.':** it pops the event, then the resource (`StackPopResource` 0x00A2F5F0, which does no parsing), copies it, takes `std::wstring::find(L'.', 0)` (0x004C1000, at 0x0065878A) and keeps the part before it (0x004C30F0, left(n), with npos keeping the whole). An empty name then takes the object's default script (CCObject +0x26C, area +0x38C, module +0x1F8); else the stem is passed on: CCObject 0x006985F0, area 0x0067BFB0, module 0x005FE840. (checked) Multi-dot names keep only the part before the first dot (checked from the code).

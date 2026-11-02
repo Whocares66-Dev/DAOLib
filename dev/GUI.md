@@ -637,7 +637,7 @@ Both screens are the start menu's online side; the EA servers are gone, so the l
 
 ## The Chanter's board (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
 
-Read-only. C = read in code or data this session; I = inferred. Exe disassembly with `tools/daoexe.py`; tables with ghilana; the movie's ActionScript at `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chanters\scripts\__Packages\Chanters.as`. Prior notes: `dev/script_commands/inventory.md:195-199` (ShowChantersGUI, already had tables 115/116 and the accept handler), `dev/GUI.md:142` (movie record), `dev/gui_data_paths.csv:167-175`, `dev/message_handlers.csv:276-277`, `dev/PLOTS.md:5-16` (Get/SetPlotFlag). New here: the per-entry rules, what fills each field, what Accept does, and the Clear handler (the csv has function_va 0 for it; it exists).
+Read-only. C = read in code or data this session; I = inferred. Exe disassembly with `extern/DAOAddressLibrary/tools/daoexe.py`; tables with ghilana; the movie's ActionScript at `%TEMP%\lib-agent-2-guicmd-x\allgfx\as_chanters\scripts\__Packages\Chanters.as`. Prior notes: `dev/script_commands/inventory.md:195-199` (ShowChantersGUI, already had tables 115/116 and the accept handler), `dev/GUI.md:142` (movie record), `dev/gui_data_paths.csv:167-175`, `dev/message_handlers.csv:276-277`, `dev/PLOTS.md:5-16` (Get/SetPlotFlag). New here: the per-entry rules, what fills each field, what Accept does, and the Clear handler (the csv has function_va 0 for it; it exists).
 
 ### Short answers
 
@@ -976,7 +976,7 @@ Examples (checked with ghilana): `bhm600ar_fade_harrowing.are` Name strref 21857
 
 ##### Evidence
 
-###### The `Area` node and its `Name` (checked, exe GOG 1.05, `tools\daoexe.py --disasm`, no Ghidra)
+###### The `Area` node and its `Name` (checked, exe GOG 1.05, `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, no Ghidra)
 
 - `CCArea`'s constructor (vftable `0x00B0DE04`, the function around `0x00688CC1`-`0x00689D2B`, `ret 0x4c`) builds the area's attributes by name into the container at `this+0xD4` (the vtable `0x00B0DDE0` stored at `[esi+0xD4]`). The wide-string pushes there: `ResRef` (0x00B0DD4C) -> `this+0x480`; **`Name` (0x00AEDA08, push at 0x006893FA) -> `this+0x4A8`**; `Minimap` (0x00B03828) -> `this+0x4D0`; `North` (0x00B0DD40); `MinimapBottom/Left/Top/Right/Width/Height` (0x00B0DD24 .. 0x00B0DCA0), which are the `Area.Minimap*` paths of `dev/gui_data_paths.csv:1873-1879`. So `Area.Name` = `CCArea+0x4A8`, `Area.Minimap` = `+0x4D0`.
 - The attribute at `+0x4A8` is a string attribute; its destructor and copy are at `0x0068AD2F`, `0x0068C6D9`.
@@ -1480,7 +1480,7 @@ The ActionScript of the 56 non-font movies was scanned for the data-tree paths i
 
 ## A creature's `Attributes.<id>.<field>` tokens: Base, Current, Total, Modifier (read 2026-10-22 by lib-agent with a subagent, for DAOParagonEngine #174)
 
-Read in the GOG exe (`tools\daoexe.py --disasm`; names from the address library). [C] = read in the disassembly, [I] = inferred. Builds on `dev/PROPERTIES.md` (the store, the four getters) and `dev/GUI.md` (the data tree).
+Read in the GOG exe (`extern\DAOAddressLibrary\tools\daoexe.py --disasm`; names from the address library). [C] = read in the disassembly, [I] = inferred. Builds on `dev/PROPERTIES.md` (the store, the four getters) and `dev/GUI.md` (the data tree).
 
 **Summary.** `.Modifier` is the property's own modifier field (the store's +0x54), not total minus base: it excludes the EngineLink formula. `.Base` is +0x4C, `.Total` is base + modifier + formula, clamped, `.Current` is a depletable's +0x5C. Each is a float copied into a mirror object per property id, and which of the four are filled depends on the property's kind. [C]
 
@@ -2029,7 +2029,7 @@ Numbers: the Default row (table 7, ID 1): pitch -7.5, rotation 23.5, distance 0.
 
 #### Evidence index
 
-- Render 0x007F46E0 (disassembly /tmp/lib-agent-2-portclone-render.txt, regenerate with `python tools\daoexe.py --disasm 0x007F46E0 400`): the tag test 0x007F494F (`push 0xC3907C`; `call 0x4C0DE0` equality; `jne 0x7F499E`) and 0x007F4969 (`push 0xC39060`), the branches 0x007F4977 (all unset) and 0x007F499E (the block).
+- Render 0x007F46E0 (disassembly /tmp/lib-agent-2-portclone-render.txt, regenerate with `python extern\DAOAddressLibrary\tools\daoexe.py --disasm 0x007F46E0 400`): the tag test 0x007F494F (`push 0xC3907C`; `call 0x4C0DE0` equality; `jne 0x7F499E`) and 0x007F4969 (`push 0xC39060`), the branches 0x007F4977 (all unset) and 0x007F499E (the block).
 - Tag strings: static initialisers 0x00AD3550 (`push 0xAECC9C` = "paperdoll", `mov ecx,0xC3907C`) and 0x00AD3570 (`push 0xAECCB0` = "player", `mov ecx,0xC39060`), wide strings read at the VAs.
 - Hero tag `player`: dev scripts (toolset\extract\scripts\Landsmeet (Denerim)\_Includes\den_functions_h.nss: `if (sTag == "player")`, "If oFollower is the player "player" is substituted for (tag of party member)") [C text; the creature's actual tag in a save not read].
 - Saves read: `Documents\BioWare\Dragon Age\Characters\{Lyna\Saves\AutoSave_1, Lyna\Saves\PostCampaign_1, Leliana\Saves\Slot_1, HurlockVanguard\Saves\Slot_1}` with `python tools\gff4.py --dump FILE --depth 3 --items 3 | grep PlayerPortrait`.

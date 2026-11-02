@@ -1,6 +1,6 @@
 # Script commands, group "strings": the GOG exe's handlers
 
-Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not.
+Read 2026-10-18 by lib-agent-2's subagent in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, for DAOParagonEngine #27. No Ghidra, no play. "(checked)" means read in the disassembly; "(inferred)" means not.
 
 Shared facts (checked):
 - Every handler is `__thiscall (commandId, paramCount)`, `ret 8`, and none is shared. Each pops every argument unconditionally, with `StackPopString` 0x00A2F4C0 and `StackPopInteger` 0x00A2F3C0. It returns -639 on a failed pop and -638 on a failed push (`StackPushString` 0x00A2D730, `StackPushInteger` 0x00A2D650), and 0 otherwise.

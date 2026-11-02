@@ -229,7 +229,7 @@ A single-item take (`AcquireItemMessage` 0x006A70E0) into a creature is the same
 
 ### The party's shared Inventory: who gets INVENTORY_ADDED / REMOVED, leaving the pool, the join's move (pinva, 2026-10-19)
 
-GOG exe, read in disassembly (`tools/daoexe.py`), plus ghilana and the toolset scripts. "checked" = read in disassembly/data; "inferred" = marked. Prior notes used: dev/ITEMS.md:145 and :200-207 (the wrappers, "the call from 0x00762990 down to the owner callbacks was not traced"), dev/script_commands/inventory.md:11 ("leaving the pool: not found"), :78, :98, dev/PARTY.md:402 (0x005D5CA0 = the controlled creature, `[[app+0xD0]+0x5C]`).
+GOG exe, read in disassembly (`extern/DAOAddressLibrary/tools/daoexe.py`), plus ghilana and the toolset scripts. "checked" = read in disassembly/data; "inferred" = marked. Prior notes used: dev/ITEMS.md:145 and :200-207 (the wrappers, "the call from 0x00762990 down to the owner callbacks was not traced"), dev/script_commands/inventory.md:11 ("leaving the pool: not found"), :78, :98, dev/PARTY.md:402 (0x005D5CA0 = the controlled creature, `[[app+0xD0]+0x5C]`).
 
 #### Short answers
 
@@ -272,7 +272,7 @@ partyMoney += oldMoney; creature.+0xBF0 = partyInventory; delete old; G.flags = 
 
 #### Evidence
 
-- Possessor vtables (RTTI scan, `tools/daoexe.py` vtables): ItemPossessor 0x00B1C258 (slot 5 = purecall 0x008E17D6, slots 7/8 = 0x00763390/0x007633C0); `CCParty` at +0x70: 0x00B05DBC (slots 5 = 0x00639DA0 `add ecx,-0x6C; jmp 0x53CC40` = party id at +4, 7 = 0x006313A0, 8 = 0x00631470); `CCCreature` at +0x440: 0x00B10334 (5 = 0x007EBCF0 `add ecx,-0x43C` = creature id, 6 = 0x006BA800, 7 = 0x006A2EE0, 8 = 0x006A2FA0); `CCPlaceable` at +0x440: 0x00B1BF30 (7 = 0x0074BE00, 8 = 0x0074FC60). Party object's primary vslot 13 (0x34) = 0x00639D40 `lea eax,[ecx+0x70]`; creature's = 0x00750EC0 `lea eax,[ecx+0x440]`. 0x005D5C20 = id -> object -> vslot 0x34 (the possessor).
+- Possessor vtables (RTTI scan, `extern/DAOAddressLibrary/tools/daoexe.py` vtables): ItemPossessor 0x00B1C258 (slot 5 = purecall 0x008E17D6, slots 7/8 = 0x00763390/0x007633C0); `CCParty` at +0x70: 0x00B05DBC (slots 5 = 0x00639DA0 `add ecx,-0x6C; jmp 0x53CC40` = party id at +4, 7 = 0x006313A0, 8 = 0x00631470); `CCCreature` at +0x440: 0x00B10334 (5 = 0x007EBCF0 `add ecx,-0x43C` = creature id, 6 = 0x006BA800, 7 = 0x006A2EE0, 8 = 0x006A2FA0); `CCPlaceable` at +0x440: 0x00B1BF30 (7 = 0x0074BE00, 8 = 0x0074FC60). Party object's primary vslot 13 (0x34) = 0x00639D40 `lea eax,[ecx+0x70]`; creature's = 0x00750EC0 `lea eax,[ecx+0x440]`. 0x005D5C20 = id -> object -> vslot 0x34 (the possessor).
 - Correction to dev/ITEMS.md:122: ItemPossessor slot 6 for a creature (0x006BA800) is `add ecx,0x7B0` on the possessor (= creature+0x440) so it returns the Inventory attribute at **creature+0xBF0**, not +0xBFC.
 - Party ctor 0x0063A3C0: `[esi+0x20C] = 0x007405E0(new 0x50 bytes, ownerId = [esi+4] via 0x53CC40, 9, 0xC)` (0x0063A98D-0x0063A9AC). 0x007405E0 sets vtable 0xB1B974 and builds sub-locations; the Backpack is `0x0080D220(owner, 9, 0xC)` -> `0x007CAAE0(owner)` -> `0x00761170`, which stores `[loc+4] = owner` (0x0076117C). Backpack max (+0x28) = 0x60 (0x007CAB47).
 - 0x00762240 tail 0x00762558-0x00762598: `[item+0x4E8] = this`, vslot 0x54, `GetObjectById([this+4])`, vslot 0x1C(item). Stack merge branch 0x0076232B-0x00762365 (0x00755CB0/0x00755D10 can-merge, then destroys the moved item with vslot 0x198(0)); skipped if global flag 1 is set (0x007622E4 `and al,1`, 0x00762316).
@@ -488,7 +488,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 
 ## An item's value (read 2026-10-21 by lib-agent-2 with a subagent, for DAOParagonEngine)
 
-Read 2026-10-21 by lib-agent-2 (subagent), GOG `game\DAOrigins.exe` (base 0x400000), `tools\daoexe.py --disasm`, ghilana (uti 3000-cost glove), and store.gfx decompiled with FFDec 26.3 (`java -jar ffdec.jar -cli -export script`; scratch `%TEMP%\lib-agent-2-ui-store\out\scripts\__Packages`, made from the CFX->CWS-renamed `lib-agent-2-guigfx-x\store.gfx`; inventory/popuplayer from `lib-agent-2-guiext-as`). C = read in code/data, I = inferred. Not seen in play.
+Read 2026-10-21 by lib-agent-2 (subagent), GOG `game\DAOrigins.exe` (base 0x400000), `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, ghilana (uti 3000-cost glove), and store.gfx decompiled with FFDec 26.3 (`java -jar ffdec.jar -cli -export script`; scratch `%TEMP%\lib-agent-2-ui-store\out\scripts\__Packages`, made from the CFX->CWS-renamed `lib-agent-2-guigfx-x\store.gfx`; inventory/popuplayer from `lib-agent-2-guiext-as`). C = read in code/data, I = inferred. Not seen in play.
 
 ### Short answers
 
@@ -580,7 +580,7 @@ What the item views do with these filters besides accepting: items of one non-ze
 
 ## The weapon style, and GetWeaponStrengthModifier
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG, base 0x400000) with `tools\daoexe.py --disasm/--refs`, a scratch rel32 call scan, and `bitm_base` from `packages\core\data\2da.erf` (`tools\gda.py (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`) --dump bitm_base`; base table, add-ins' M2DA rows not merged). No Ghidra, no game. **Checked** = read in the disassembly or the table; **inferred** = a reading of purpose.
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm/--refs`, a scratch rel32 call scan, and `bitm_base` from `packages\core\data\2da.erf` (`tools\gda.py (retired 2026-10-24, DAOLib #106: the tables are read by `dao/core/GdaFile.h`, their columns listed in `dev/gda_schema.csv`) --dump bitm_base`; base table, add-ins' M2DA rows not merged). No Ghidra, no game. **Checked** = read in the disassembly or the table; **inferred** = a reading of purpose.
 
 ### 1. Weapon style (GetWeaponStyle, 354)
 
@@ -698,7 +698,7 @@ This corrects "The four weapon commands" above, which said 701 reads `StrengthMo
 
 ## ScaleEquippedItems (386): a creature's equipment set to a level's material
 
-Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `tools\daoexe.py --disasm`, a call scanner over `.text`, `tools\gda.py`, and ghilana's merged tables, for DAOParagonEngine. Not seen in play. "(checked)" means read in the disassembly or the table; "(inferred)" means not. Builds on `dev/ITEMS.md` (item stats, `SetItemMaterialType`), `dev/PROPERTIES.md` (property slots), `dev/COMBAT.md` (0x0071EAC0, ability add), and `dev/script_commands/stats.md` (254, 333).
+Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05, base 0x400000) with `extern\DAOAddressLibrary\tools\daoexe.py --disasm`, a call scanner over `.text`, `tools\gda.py`, and ghilana's merged tables, for DAOParagonEngine. Not seen in play. "(checked)" means read in the disassembly or the table; "(inferred)" means not. Builds on `dev/ITEMS.md` (item stats, `SetItemMaterialType`), `dev/PROPERTIES.md` (property slots), `dev/COMBAT.md` (0x0071EAC0, ability add), and `dev/script_commands/stats.md` (254, 333).
 
 ### The chain
 - **Handler** `ScriptCommand::SCALEEQUIPPEDITEMS` 0x006664D0 (not shared): pops the object, then the int `nTargetLevel`; `GetObjectById` 0x005D5BE0, slot +0x10 (as a creature); a non-creature or invalid id does nothing; then `ScriptBackend::ForScript_ScaleEquippedItems` 0x006A88F0 (ID 14612), `__thiscall(creature, level)`, `ret 4`. Returns 0 (checked).
