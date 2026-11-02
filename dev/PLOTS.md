@@ -101,8 +101,8 @@ A line's check is `0x007f0d30`, its action `0x007f0560`.
 
 How long a line without a cut shows is `dev/AUDIO.md`'s ("A conversation line without a cut", lib-agent-2): a voiced line's timer is its voice's length less 0.3 s, and a line without voice waits for a click.
 
-- `PlotCheck.test` is a bool byte: 255 or 1 for set, 0 for clear. For an action it is the value written.
-- A script condition or action (`0x007f0420`, `0x007eedc0`) runs on the conversation's owner, its parameter kept at the client app's +0x210, where `GetConversationEntryParameter` (command 443) reads it. A condition passes on an int result that is not 0.
+- `PlotCheck.test` is a bool byte: 255 or 1 for set, 0 for clear. For an action it is the value written. For a condition it is the value the flag must have: the caller makes the byte 0 or 1 (`setne` at 0x007F0DAC, so 255 counts as 1), and `0x007EF090` answers `(flag != 0) == test` (0x007EF0D2–0x007EF0E0; read 2026-11-01).
+- A script condition or action (`0x007f0420`, `0x007eedc0`) runs on the conversation's owner, its parameter kept at the client app's +0x210, where `GetConversationEntryParameter` (command 443) reads it. A condition passes on an int result that is not 0. Before running, the condition stores at the client app's +0x214 the line's own `ConversationLineAmbient` byte (12207: `push 0x2FAF` at 0x007F049A, the store at 0x007F04CA), and the action stores the conversation's +0x35 there (0x007EEDF7, 0x007EEE00; read 2026-11-01).
 
 ### Ambient conversations (barks), read 2026-10-18
 
