@@ -46,8 +46,9 @@
     mutant checked again after its test was mended, in seconds.
 
 .PARAMETER Jobs
-    How many compilations to run at once. The default leaves two of the
-    machine's cores to everything else. Also exported as
+    How many compilations to run at once. The default is 6, whatever the
+    machine's cores: 18 at a time from overlapping gates locked the machine up
+    (the user, 2026-11-01). Also exported as
     CMAKE_BUILD_PARALLEL_LEVEL, so a `cmake --build` run afterwards in the same
     shell -- the `tidy` and `format` targets -- takes the same limit.
 
@@ -169,7 +170,7 @@ if ($Fresh -and (Test-Path $buildDir)) {
 }
 
 $cores = [Environment]::ProcessorCount
-$parallel = if ($Jobs -gt 0) { $Jobs } else { [Math]::Max(1, $cores - 2) }
+$parallel = if ($Jobs -gt 0) { $Jobs } else { 6 }
 $env:CMAKE_BUILD_PARALLEL_LEVEL = $parallel
 (Get-Process -Id $PID).PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 Show-Line "  jobs   $parallel of $cores cores, below normal priority"
