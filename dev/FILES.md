@@ -159,3 +159,7 @@ Read in GOG's exe, not run in the game. [C] checked, [I] inferred.
 - **An add-in's folders this install has none of** (−1, −4, −5 of the base): read in the code, not seen.
 - **`ADDINS:`'s** add-ins, installed from a `.dazip` into Documents: none were installed here.
 - **Other builds**: read in GOG's; the code is the same in Steam's (GOG's code) and the address library's session found the resource manager the same in EA's.
+
+## DragonAge.ini (read 2026-11-01, two readings)
+
+`CClientOptions::LoadGroupFromIni` (0x005DE2B0) and `SaveGroupToIni` (0x005DE5B0) take a group: 0 GameOptions, 1 OnlineOptions, 2 ControlOptions, 3 AudioOptions, 4 VideoOptions, 5 Movies, the file's sections. On a load a key in the file sets its option from the string, and a key missing from the file is written back with the option's own value, so the file fills itself in. Group 2 also loads or saves the key bindings.

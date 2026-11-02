@@ -35,6 +35,8 @@ GFF4, type `SAVE`, version 1.1, 78 struct templates. Its top struct:
 - **Saved** as `SavegameCampaign` > `SavegameJournal` (`JRNL`) > `SavegameJournalResRef` (16510), a string: the active plot's ResRef, or empty for none. The writer is 0x006ED770 (its tail 0x006EE255–0x006EE2CF). The loader (0x006F7290) reads the quest lists first, then calls `SetActivePlot` with the saved ResRef (0x006F81F5). Real saves agree: `gwb000pt_sideplot`, `lel000pt_main`, `shl000pt_main`, and empty in a save with no quests.
 - **After a load** the saved quest is active if its ResRef is among the loaded `PlotList`'s, else none: the engine picks nothing else.
 
+**Before a save** (read 2026-11-01, two readings): `BeginSave` calls `CClientExoApp::RaiseModulePresave` (0x005D6C40), which delivers EVENT_TYPE_MODULE_PRESAVE (62) straight to the module through `AIMaster::DeliverNow`, with object 0 the controlled creature. Nothing is sent with no controlled creature, AI master or module.
+
 ## How the game loads a save (read 2026-10-20 by lib-agent-2, DAOLib #202)
 
 Read in the GOG exe's disassembly, every loader's field list checked against real saves (Lyna AutoSave_1 with 123 areas, Lyna2 Slot_33); checked unless marked [I]. What follows is each struct's loader and the fields that matter; the full field tables (label, file type, reader type, default) were kept with the reading, not here.
