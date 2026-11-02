@@ -1226,7 +1226,7 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
   - +0x1BC is the flicker multiplier, 1 at start.
   - +0x154 is the owning `GraphicsStructures::Object` (the effect's model).
   - +0x60 is the node's world matrix. The position is (m[+0xC], m[+0x1C], m[+0x2C]) / m[+0x3C] (`ILight` slot 2, 0x0053CA70).
-- **Flicker** [C]: where IntensityVariation ≠ 0, the instance maker makes an `Animation::RandomWaveController<float>` (0x30 bytes; constructor 0x008155F0, Update 0x008156E0 = ID 22011).
+- **Flicker** [C]: where IntensityVariation > 0 (0x0055FC08-0x0055FC15, read 2026-11-02), the instance maker makes an `Animation::RandomWaveController<float>` (0x30 bytes; constructor 0x008155F0, Update 0x008156E0 = ID 22011).
   - It targets +0x1BC and is put on the owning Object's controller list (+0x1AC).
   - Each cycle lasts `period + randS·periodDelta` and moves between two targets, each `base + randS·variation`. The exact scaling is [I]; elgara's data reading says "base × (1 + variation·randS)".
   - It uses the engine's LCG at 0x00C39778.

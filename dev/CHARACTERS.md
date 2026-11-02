@@ -316,7 +316,7 @@ GOG 1.05 addresses. [C] read in the code or the files, [I] inferred.
     - The morph load 0x005895D0 (ID 9208) reads each node through 0x00588A60 (ID 9203).
     - For each node it reads the vertex stream and count, then the lists of texture, vector and float parameters.
   - **Applying it:** ObjectNodeMesh's vtable 0x00AF8F4C, entry +0x4C (slot 19 from 0), is 0x0055B540 (ID 8283) [C]. In order:
-    - **Bones:** it calls 0x0055EC80 unconditionally, for the bone rest plus the morph's Position. So a morph's bone offsets apply at every level.
+    - **Bones:** it calls 0x0055EC80 unconditionally, for the bone rest plus the morph's Position, which it adds only for mode 0 or 1 (0x0055ECDE, 0x0055ECE3, read 2026-11-02; its callers pass 0 at 0x0054EBB3 and 2 at 0x0054ED46). Whether that mode is the level meant here isn't read.
     - **The node:** it finds the morph's node by the mesh node's name.
     - **Material parameters:** 0x005696E0 (ID 8631) sets the node's textures, vectors and floats. It is called in every mode, before any count test, and has no level condition. It returns early only on a null material or argument.
     - **Vertices:** 0x0057D430 (ID 8999) replaces the vertices only when the morph node has a vertex stream (+0x10) and its count (+0x18) equals the mesh chunk's (`[+0x14C]+0x4C`) (0x0057D4F1..0x0057D509). Otherwise it jumps to 0x0057D6DC and silently skips the replacement. The buffer is then rebuilt from the mesh's own vertices.
