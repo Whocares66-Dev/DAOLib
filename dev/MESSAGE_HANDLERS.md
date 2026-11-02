@@ -31,3 +31,13 @@ Why it matters:
 - **It is the engine's event API.** Hooking a handler is how a plugin sees or intercepts a player action (`GameModeExplore::HandleMessage_PerformAbilityMessage`), a mode change (`GameModeController::HandleMessage_SetGameModeMessage`), or input.
 - **It maps the game modes.** `GameModeExplore`, `GameModeDialog`, `GameModeCutscene`, `GameModeDead`, `GameModeCharGen`, ... each with the messages it takes.
 - **Sending a message is how a plugin acts as the engine does.** Read 2026-09-30: the handlers are kept by a registry (a singleton, `0x004740B0`), in a table by the receiver's class id and the message's type id, each the object's own vtable slot 0. `Messages::Send(message, receiver)` (`0x004D20C0`, 74 callers) looks the handler up and runs it at once, if the receiver's +4 byte says it takes messages, and returns its answer. `dao::messages::Send` calls it (`dao/Messages.h`); not yet seen in play.
+
+## A message class's type info
+
+Read 2026-11-02 over all 295 classes with an `InitType`, by a script decoding each class's `GetType` and `InitType`; the id's assignment read by lib-agent.
+
+- Each class has a static `s_classInfo` of 8 bytes, {type id, parent}. The id starts as 0xFFFFFFFF in the exe. `GetType` returns its address (`mov eax, S`), and `InitType` writes the parent's address to S+4, behind a one-time guard. All 295 store the same parent in both.
+- The roots are `Messages::Message::s_classInfo` 0x00BF0C2C and `Messages::GameMessage::s_classInfo` 0x00BF0C34, whose parent is Message's. 178 classes derive from GameMessage and share one guard for its parent, 0x00C1D264, so the first of them to run sets it.
+- `MessageRegistry::AssignClassId` 0x004D7F20 gives a class its id when it is still -1: the registry's counter at +0x10, then incremented. So ids are handed out in the order classes first reach it, and aren't fixed numbers [C].
+- `Register` 0x004D9190 indexes an outer vector with a 16-byte row per receiver class, whose inner vector holds a 4-byte handler id per message type. An index out of range gets a shared cell: 0x00C2C0A4 for a row, 0x00C2C0A0 for a slot.
+- `Messages::Message::s_instanceCount` 0x00C2BF4C counts live messages (the constructors and destructor, 0x004D2078, 0x004D2088, 0x004D20A6). Nothing reads it.
