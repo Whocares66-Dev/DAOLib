@@ -84,7 +84,8 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
 - **Every effect is a phase machine** (`CCVisualEffect` +0x444; the phase's animation by the table at 0x00B23D94) [C]:
   - 1 `vfxcast` (anim 500), 2 `vfximpact` (502), 3 `vfxduration` (501, loops), 4 `vfxcessation` (503), 5 done.
   - It advances (0x007EAC30) past any phase the tree lacks.
-  - The stop (0x0079E3E0) stops the impact and duration sounds, plays the cessation sound, and goes to cessation; with no cessation clip it destroys the effect at once (0x0079DF10).
+  - The stop (0x0079E3E0) stops the impact and duration sounds, plays the cessation sound, and goes to cessation; with no cessation clip it destroys the effect at once (0x0079DF10). Its order (read 2026-11-01): destroyed at once at phase 5, phase 0 or with `immediate`; left alone with an impact clip and no duration clip (a zero-length clip counts as absent, 0x007E9AD0), or at phase 4, so an impact-only effect plays out; otherwise clips 500 and 502 stop outright, 501 fades to weight 0 at blend rate 3.0, and it enters phase 4.
+  - Which effect's remote material shows (0x0079F7A0, read 2026-11-01): the highest `vfx_base.Priority` among the creature's effects, the first of equals, from a baseline of 0, so a row at 0 or below doesn't win.
   - The sounds are the row's `SoundImpact`, `SoundDuration`, `SoundCessation`.
 - **The manager** is the singleton at [0x00C389C8] (0x0079E820): create 0x0079EDC0 → 0x0079E8A0. A "held" create (+0x448 = 1) loads without starting; 0x0079D810 starts it.
 - **While the game is paused** the manager's update (0x0079EE20) animates only effects whose `PauseAnimate` is set [C].
@@ -725,7 +726,7 @@ Read in the GOG exe (capstone, `daoexe.py`, direct-call and vtable scans), and t
   - The scene's add has no guard against an object already added. Each add presimulates again [C].
   - Its `this` is the scene. `Graphics::ISceneInstance` slot 2 (0x0053A3D0) dispatches event 2 to this add and event 1 to the remove 0x005395B0 [C].
 - **A visual effect reaches it at creation, in the attach** [C]:
-  - The manager's create (0x0079E8A0) leads to the attach 0x0079D9F0, either directly (0x0079DB90 → 0x0079DD2D) or through the task posted when the effect must wait (0x0079D360; its run 0x0079ED50 → 0x0079EDA1).
+  - The manager's create (0x0079E8A0) leads to the attach 0x0079D9F0, either directly (0x0079DB90 → 0x0079DD2D) or through two tasks (read 2026-11-01): `LoadVFXTask` (0x0079D360, run 0x0079ED10 → 0x0079DB90) on the streaming thread, then `FinalizeVFXTask`, made in 0x0079DB90 (run 0x0079ED50 → 0x0079EDA1), on the update thread.
   - The attach first calls 0x0079D410, which picks the scene:
     - by default the current one (`[0xC31650]` slot 0x24);
     - otherwise the owner's scene: the owner's model, its `AnimBase` (0x00A5CBA0) or +0x62C.
