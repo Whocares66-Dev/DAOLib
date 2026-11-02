@@ -413,8 +413,8 @@ std::optional<Hit> FirstHit(const Vector &from, const Vector &to, std::uint32_t 
 
 namespace
 {
-constexpr std::size_t kMovement = 0xA40; // in the creature: its MovementController
-constexpr std::size_t kSearch = 0x14;    // in the controller
+constexpr std::size_t kMovement = 0xA40; // in the creature: its MovementPath, the MovementController's +0x10
+constexpr std::size_t kSearch = 0x14;    // in that: the Pathfinding::Path
 constexpr std::size_t kWaypoints = 0x70; // in the search: a std::vector of 12-byte points
 constexpr std::size_t kNext = 0x88;      // in the search
 
@@ -641,15 +641,13 @@ void PlaceObstacle(CCCreature *creature)
 
 } // namespace
 
-// Read 2026-09-30: a creature's MovementController (its +0xA40, 0x006A2570; vftable
-// 0x00B596C0) keeps its search at +0x14, whose waypoints are a std::vector of 12-byte
-// points at +0x70 (0x00A47620 reads one, bounds-checked by (last - first) / 12) and
-// whose next waypoint's index is at +0x88 (0x00A625E0). The move commands' update
-// (0x007A9130) asks for the path a slice of time a frame (0x0073EA80, the search
-// advanced by 0x00A62640), so a path appears a frame or more after the order, not
-// while the game is paused. The search outlives the walk: a creature that has arrived,
-// or stood since a load, still answers its last path (seen in play, 2026-09-30), so
-// whether it is walking it is its current command's to say (a move:
+// Read 2026-09-30: a creature's MovementPath (its +0xA40, 0x006A2570, the
+// MovementController's +0x10; the name corrected 2026-11-02) keeps its Pathfinding::Path at +0x14, whose waypoints are
+// a std::vector of 12-byte points at +0x70 (0x00A47620 reads one, bounds-checked by (last - first) / 12) and whose next
+// waypoint's index is at +0x88 (0x00A625E0). The move commands' update (0x007A9130) asks for the path a slice of time a
+// frame (0x0073EA80, the search advanced by 0x00A62640), so a path appears a frame or more after the order, not while
+// the game is paused. The search outlives the walk: a creature that has arrived, or stood since a load, still answers
+// its last path (seen in play, 2026-09-30), so whether it is walking it is its current command's to say (a move:
 // CCObject::CurrentCommand). Seen in play.
 std::optional<WalkPath> CurrentPath(ObjectId creature)
 {
@@ -1216,7 +1214,7 @@ constexpr std::size_t kLayout = 0x658;      // in the area
 constexpr std::size_t kRooms = 0x424;       // in the layout: an array of room pointers
 constexpr std::size_t kRoomCount = 0x428;   // in the layout
 constexpr std::size_t kRoomNumber = 0x14;   // in a room
-constexpr std::size_t kRoomBounds = 0x120;  // in a room
+constexpr std::size_t kRoomBounds = 0x120;  // in a room: a Math::AABB
 constexpr std::size_t kRoomLoad = 0x264;    // in a room
 constexpr std::size_t kRoomSeen = 0x100;    // in a room
 constexpr std::size_t kRoomState = 0x268;   // in a room
@@ -1346,7 +1344,7 @@ std::optional<Room> RoomAt(const Vector &point)
     // A point in no room: the nearest, by the measure the streaming goes
     // by, the squared distance from a point to a room's bounds.
     using Fn = float(__fastcall *)(std::uintptr_t bounds, int, const Vector4 *);
-    const auto distanceSquared = reinterpret_cast<Fn>(Module::Address(addr::kBounds_DistanceSquared));
+    const auto distanceSquared = reinterpret_cast<Fn>(Module::Address(addr::kMathAABB_DistanceSquared));
     std::optional<Room> nearest;
     for (const std::uintptr_t pointer : RoomPointers())
     {

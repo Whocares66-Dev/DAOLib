@@ -223,7 +223,8 @@ DAO_ADDRESS(kCCPlaceable_BlocksSight, 13576)
 DAO_ADDRESS(kCCObject_Area, 14059)
 DAO_ADDRESS(kCCModule_CurrentArea, 11018)
 // Paths, read 2026-09-30 (dao/World.h, CurrentPath; dev/TODO.md, item 5). A
-// creature's MovementController is its +0xA40 (Movement); the move
+// creature's MovementPath is its +0xA40, the MovementController's +0x10 (the
+// controller is the creature's +0xA30); the move
 // commands' update (0x007A9130) asks for a path through RequestPath
 // (__thiscall on the creature's area (creature, const Vector4 *to, const
 // Vector4 *from or null), `ret 0xC`; 1 found, 5 failed, 8 no controller,
@@ -251,7 +252,7 @@ DAO_ADDRESS(kCCModule_CurrentArea, 11018)
 // __thiscall (layout, ?, room, int *state), `ret 0x10`) answers 4 for a
 // room the scene's +0x68 object names (its slot 21, by the room's number;
 // what that object is, is not read), else goes by the squared distance from
-// the point to the room's bounds (BoundsDistanceSquared, __thiscall on the
+// the point to the room's bounds (Math::AABB::DistanceSquared, __thiscall on the
 // bounds (const Vector4 *), `ret 4`): under its +8, 5; under its +0xC, 4;
 // up to its +0x10, 1, which changes nothing; farther, 3. A room keeps its
 // number at +0x14, its bounds at +0x120, its load at +0x264 (2 not loaded,
@@ -292,7 +293,7 @@ DAO_ADDRESS(kCCArea_RoomAt, 13596)
 DAO_ADDRESS(kAreaLayout_Update, 10254)
 DAO_ADDRESS(kIndoorStreamPolicy_Decide, 10447)
 DAO_ADDRESS(kCRoom_SetState, 10429)
-DAO_ADDRESS(kBounds_DistanceSquared, 4918)
+DAO_ADDRESS(kMathAABB_DistanceSquared, 4918)
 
 // Cooldowns (dao/Abilities.h), read 2026-09-30 from the scripts'
 // SetCooldown and GetRemainingCooldown. A creature's stats keep a cooldown
@@ -900,8 +901,8 @@ DAO_ADDRESS(kCrc32, 4715)
 // for its slots 80 and 81 (IsMovieOnStage and CallFunctionOnMovie, run by
 // the ActionScript of MovieUtils). InvokeOnRecord is a record's own
 // Invoke: a jump to its movie's slot 18. The names are ours.
-DAO_ADDRESS(kGuiMovieSet_Begin, 14716)
-DAO_ADDRESS(kGuiMovieSet_Next, 14717)
+DAO_ADDRESS(kDefaultSet_Begin, 14716)
+DAO_ADDRESS(kDefaultSet_Next, 14717)
 DAO_ADDRESS(kScaleformManager_FindMovie, 6603)
 DAO_ADDRESS(kGuiMovie_Invoke, 6741)
 DAO_ADDRESS(kDragonAgeGUISystem_IsMovieOnStage, 11443)

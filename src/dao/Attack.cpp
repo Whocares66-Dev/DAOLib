@@ -353,6 +353,8 @@ constexpr std::uintptr_t kController = 0xA30;
 constexpr std::uintptr_t kControllerFacing = 0xA0;
 constexpr std::uintptr_t kControllerState = 0xF0;
 constexpr std::uintptr_t kControllerMotion = 0x70;
+// Every store to this byte that was found writes 0 (0x00A630D9, 0x00A6331F, 0x006AA8E2), so the busy case
+// is read as the engine tests it (0x00A63974) but is not known to occur.
 constexpr std::uintptr_t kControllerHasMotion = 0x74;
 constexpr float kTurnStarts = 0.99999899F;
 constexpr float kNoLength = 1e-6F;

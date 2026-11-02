@@ -203,8 +203,8 @@ std::vector<void *> Owners()
     }
     void *set = static_cast<std::byte *>(manager) + 0x70;
     using StepFn = void *(__fastcall *)(void *, int, SetIterator *);
-    const auto begin = reinterpret_cast<StepFn>(Module::Address(addr::kGuiMovieSet_Begin));
-    const auto next = reinterpret_cast<StepFn>(Module::Address(addr::kGuiMovieSet_Next));
+    const auto begin = reinterpret_cast<StepFn>(Module::Address(addr::kDefaultSet_Begin));
+    const auto next = reinterpret_cast<StepFn>(Module::Address(addr::kDefaultSet_Next));
     SetIterator it;
     begin(set, 0, &it);
     // Past this many, something is wrong: the game has a few dozen.
