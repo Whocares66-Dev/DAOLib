@@ -39,7 +39,7 @@ Marks: [C] read in the disassembly at the address given, [I] inferred. The manag
 
 | Offset | What | Evidence |
 |---|---|---|
-| +0x00 | vftable 0x00AF566C, 5 slots: 0 `StaticClassInfo` 0x00517BF0, 1 `Clone` 0x005182D0, 2 `RegisterClass` 0x00517C20, 3 `RegisterMessageHandlers` 0x005166C0, 4 the scalar deleting destructor 0x00518340 | [C] |
+| +0x00 | vftable 0x00AF566C, 5 slots: 0 `GetClassInfo` 0x00517BF0, 1 `Clone` 0x005182D0, 2 `RegisterClass` 0x00517C20, 3 `RegisterMessageHandlers` 0x005166C0, 4 the scalar deleting destructor 0x00518340 | [C] |
 | +0x04 | `Messages::MessageReceiver` base | 0x005177C3, destructor 0x0051803B [C] |
 | +0x08 | the `GFxLoader`, built from a file opener, a GFx state of type 0x1D and `GFxJpegSupport` | 0x005178BC [C]; 0x1D is zlib support [I from GFx 3's loader] |
 | +0x14 | byte, 0 at construction, 1 at the start of destruction | 0x00517912, 0x00517F09 [C]; "shutting down" [I] |
