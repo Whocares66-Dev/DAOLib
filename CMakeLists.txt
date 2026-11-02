@@ -190,6 +190,7 @@ add_library(
     src/dao/core/FrameEffect.cpp
     src/dao/core/MaterialDefinition.cpp
     src/dao/core/MaterialObject.cpp
+    src/dao/core/MaterialState.cpp
     src/dao/core/Morph.cpp
     src/dao/core/MorphConfig.cpp
     src/dao/core/Ncs.cpp
