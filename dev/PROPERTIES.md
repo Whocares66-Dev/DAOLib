@@ -102,7 +102,7 @@ Pops object, property, value type (default 1); the four getters each call a slot
 
 ## The party-wide set (ids 2000 and up)
 
-Read 2026-11-02 for DAOParagonEngine #373 [C by the reading]; the routing's bound and the save's fields were also seen in three saves.
+Read 2026-11-02 for DAOParagonEngine #373 [C by the reading]; the save's fields were also seen in three saves.
 
 - Ids 2000 and up are `CreatureProperties::s_partyProperties` (0x00C3896C, begin and end at +4 and +8), a static array of property objects with a null owner, built from data table 270 (0x10E) by `LoadHeroicDefinitions` 0x007966D0 only for a stats object whose creature's byte +0x7D4 (`IsPlayerCharacter`, the template's `CharType`) is 1. `GetTotal`, `GetBase`, `GetCurrent`, `GetModifier`, `SetBase`, `SetCurrent`, `SetModifier`, `AddCurrent` and `AddModifier` route an id below 1000 to the creature's own vector, 1000-1999 to its heroic vector, and 2000 up to `s_partyProperties[id - 2000]`, with a bounds check, so every creature sees the same objects. An id past the end gets 0, and a set does nothing to it.
 - The set is built when the hero joins the party pool: `CCCreatureStats::EnsurePartyData` 0x0071CCD0, from `CCParty::AddToPool` 0x0063A020, from `SetFollowerState` 0x0063B9A0 for follower states 1 and 7. `~CreatureProperties` 0x00796A50 frees it when the live count (0x00C38954) reaches 0.
