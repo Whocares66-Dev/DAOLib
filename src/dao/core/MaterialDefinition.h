@@ -103,7 +103,8 @@ struct Definition
     std::vector<ParameterSet> sets;
     std::vector<Semantic> semantics;
 
-    // Returns the semantic of a name, or nullptr.
+    // Returns the semantic of a name, matched ignoring case, or nullptr, as the engine finds it: of two
+    // with exactly the same name the first counts, and of two differing in case the later.
     [[nodiscard]] const Semantic *SemanticNamed(std::string_view wanted) const;
     // Returns the parameter set of a name, or nullptr.
     [[nodiscard]] const ParameterSet *SetNamed(std::string_view wanted) const;

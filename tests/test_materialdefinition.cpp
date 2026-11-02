@@ -115,6 +115,27 @@ TEST_CASE("a material definition's semantics, blocks, passes and parameters, in 
     REQUIRE(plain->blocks[0].techniques[0].passes.size() == 1);
     CHECK(plain->blocks[0].techniques[0].passes[0].parameters.empty());
     CHECK(read->SemanticNamed("None") == nullptr);
+    CHECK(read->SemanticNamed("default") == plain); // the engine compares names ignoring case
+}
+
+TEST_CASE("of two semantics differing in case the later is found, and of two the same the first", "[mat]")
+{
+    mat::Definition differing;
+    differing.semantics.resize(3);
+    differing.semantics[0].name = "Shadow";
+    differing.semantics[1].name = "Other";
+    differing.semantics[2].name = "SHADOW";
+    CHECK(differing.SemanticNamed("shadow") == &differing.semantics[2]);
+    CHECK(differing.SemanticNamed("Other") == &differing.semantics[1]);
+    CHECK(differing.SemanticNamed("Missing") == nullptr);
+
+    mat::Definition same;
+    same.semantics.resize(3);
+    same.semantics[0].name = "Shadow";
+    same.semantics[1].name = "Other";
+    same.semantics[2].name = "Shadow"; // the engine's AddSemantic drops this one
+    CHECK(same.SemanticNamed("Shadow") == same.semantics.data());
+    CHECK(same.SemanticNamed("SHADOW") == same.semantics.data());
 }
 
 TEST_CASE("a pass's parameter is its own, or its sets', and each block keeps its own default", "[mat]")

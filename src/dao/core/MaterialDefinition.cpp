@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstddef>
 #include <utility>
 
 namespace dao::core::mat
@@ -224,11 +225,32 @@ template <class Item> const Item *NamedIn(const std::vector<Item> &items, std::s
     return found != items.end() ? &*found : nullptr;
 }
 
+bool EqualsIgnoringCase(std::string_view left, std::string_view right)
+{
+    const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+    return std::ranges::equal(left, right, {}, lower, lower);
+}
+
 } // namespace
 
+// As the engine has it (read 2026-11-01 in GOG's exe for DAOLib #296, from DAOParagonEngine #351's render-16
+// and render-21). Material::AddSemantic (0x00503520) drops a semantic whose name is exactly one it has, compared
+// with case (0x004C0DE0, a wstring compare equal to 0), so the first of those is the one kept. Then
+// Material::FindSemantic (0x00503140) walks what is kept from the last to the first, comparing names ignoring
+// case (0x004C0A50). This keeps the file's list as written, so it skips what AddSemantic would have dropped.
 const Semantic *Definition::SemanticNamed(std::string_view wanted) const
 {
-    return NamedIn(semantics, wanted);
+    for (std::size_t at = semantics.size(); at-- > 0;)
+    {
+        const std::string &own = semantics[at].name;
+        const bool dropped = std::any_of(semantics.begin(), semantics.begin() + static_cast<std::ptrdiff_t>(at),
+                                         [&own](const Semantic &earlier) { return earlier.name == own; });
+        if (!dropped && EqualsIgnoringCase(own, wanted))
+        {
+            return &semantics[at];
+        }
+    }
+    return nullptr;
 }
 
 const ParameterSet *Definition::SetNamed(std::string_view wanted) const
