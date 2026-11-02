@@ -598,7 +598,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG, base 0
 
 - `0x006B8D40` (CCCreature, no args) is the only caller of both the chooser and the setter:
   1. Gate `0x006A25A0` → `0x0069F030`: the appearance (`[+0x7B0]+0x58`, `apr_base` = table 2) column **`CombatModelTree`** (hash `0xDE80B418`) must contain `"combat_humanoid"` (`0x00B0F318`). Otherwise nothing is chosen and the style stays what it was (0 from construction, inferred).
-  2. The chooser `0x007C3500` (on the combat data; args: out record, the creature's equipment `+0xBE0`) picks a record (below).
+  2. The chooser `0x007C3500` (a static: ecx is never read, ret 8; args: out record, the creature's equipment `+0xBE0`) picks a record (below).
   3. If the new id differs from the current (`0x00616C20` reads it), `0x007C3600` stores it, then `0x006B5B30` is called four times: (2, old base tree), (2, old overlay), (0, new base), (0, new overlay) (checked; inferred: the old trees taken out of the animation player and the new put in).
 
 #### The decision table (the chooser `0x007C3500`, checked)
