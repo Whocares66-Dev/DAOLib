@@ -8,7 +8,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset's scr
 
 ### The sub-actions and their handlers
 
-`CSSubActionHandler`'s table (filled by `0x007AB8D0`, a handler per type at +0x48 + 4 × type) gives: 4 `0x007AA560` (approach the melee ring), 6 `0x007A1ED0`? (aim, see below), 7 `0x007A66A0` (conjure), 8 `0x007A7440` (use), 14 `0x007A99B0` (approach a point), 15 `0x007AA200` (approach to a range), 37 `0x007A4390` (play an animation), 39 `0x007A69E0` (turn to an object), 40 `0x007A6AF0` (turn to a point), 50 `0x007A1E40` (the command's own step, dispatched again by the command type through a second table at +0x4C; type 25's is `0x007A83F0`), 51 `0x007AAC10` (death). Read (the table's stores); the aim handler's address is not confirmed.
+`CSSubActionHandler`'s table (filled by `0x007AB8D0`, a handler per type at +0x48 + 4 × type) gives: 4 `0x007AA560` (approach the melee ring), 6 `0x007A2410` (aim, see below; the store at +0x18, 0x007AB97F), 7 `0x007A66A0` (conjure), 8 `0x007A7440` (use), 14 `0x007A99B0` (approach a point), 15 `0x007AA200` (approach to a range), 22 `0x007A1ED0` (switch weapon set; the store at +0x58, 0x007ABA4C), 37 `0x007A4390` (play an animation), 39 `0x007A69E0` (turn to an object), 40 `0x007A6AF0` (turn to a point), 50 `0x007A1E40` (the command's own step, dispatched again by the command type through a second table at +0x4C; type 25's is `0x007A83F0`), 51 `0x007AAC10` (death). Read (the table's stores; corrected 2026-11-01, where this gave the aim as `0x007A1ED0` with a question mark).
 
 ### Queuing them: the UseAbility step (`0x00743F50`)
 
