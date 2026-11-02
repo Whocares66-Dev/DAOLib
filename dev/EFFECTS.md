@@ -1020,7 +1020,7 @@ else: axis = k % 3; normal = (max - p <= p - min) ? +axis : -axis   // the neare
   - DataIsIndexStream 6168 = 1: DataCount 6173 u16 indices (field 8), kept as count/3 six-byte triangles at +0x1C (a vector: begin +0x20, end +0x24).
   - DataType 6169 (2 for the positions, 0 for the indices) isn't read.
   - Examples: `fxa_lit_cone_c`'s `CO_Mesh*` (384 vertices, 384 indices), `fxe_cha_sel_p` (20 vertices, 66 indices).
-- A second array at +0x10, read as per-vertex normals, is **never filled**: the loader writes only +4 and +0x1C. Nothing else filling it was found: the other callers of the array's resize (0x0053F400) weren't traced to it [I].
+- A second array at +0x10 holds per-vertex normals, filled after the load (0x00561E30, 0x00561F3B-0x0056220A; read 2026-11-01): the normalised sum of the unit face normals of the triangles sharing the vertex, a degenerate sum giving (1,0,0). No vanilla volume asks for them.
 - **Within**, with at least one vertex:
   ```
   i = rand % (n-1); j = rand % (n-1)           // the last vertex is never picked; n = 1 divides by zero
@@ -1033,7 +1033,7 @@ else: axis = k % 3; normal = (max - p <= p - min) ? +axis : -axis   // the neare
   tri = rand % T                               // uniform per triangle, not by area
   r1, r2, r3 = u, u, u; S = r1 + r2 + r3
   pos = V[a]*(r1/S) + V[b]*(r2/S) + V[c]*(r3/S) // crowds the centroid; not uniform over the triangle
-  normal = normalsAsDir ? ±(N[a]*w1 + N[b]*w2 + N[c]*w3), not normalized, from the unfilled +0x10 : (0,0,1)
+  normal = normalsAsDir ? ±(N[a]*w1 + N[b]*w2 + N[c]*w3), not normalized, from +0x10 : (0,0,1)
   ```
   T = 0 gives pos 0 and normal (0, 0, 1).
 - All 21 vanilla mesh volumes have NormalsAsDirection 0, so their normal is always (0, 0, 1). Their within flags are 0 (17) and 1 (4), and invert 1 on 4 of them [C, scanned]. A port need not model the empty normals array.
@@ -1139,7 +1139,7 @@ loop:
 - **Width at a joint** is the averaged, renormalised axis B times the *older* particle's sY. The first edge and the last edge use the raw axis B (not renormalised). The owner object's scale isn't applied. Unlike the sprite fill, this fill doesn't update the emitter's bounds (+0x2C0/+0x2D0, +0x4EC) [C].
 - **Colour per vertex**: each joint's pair takes its particle's age-map colour × the tint (+0x39C). **Only the oldest particle's alpha is multiplied by the emitter's opacity (+0x4F4·+0x4E0) and clamped.** Every later colour is neither faded by the emitter nor saturated, and a component above 1.0 wraps in its byte [C; as read, a vanilla fault]. So an emitter faded through +0x4E0 fades only the tail end of its ribbon, then vanishes when +0x4E0 reaches 0 [I].
 - **u, v**: TEXCOORD0.x runs across the ribbon (1 on the +W edge, 0 on −W). TEXCOORD0.y runs along it: with N = 0, 0 → 1 over the whole ribbon from the oldest particle to the emitter, so the texture stretches as the ribbon grows. With N > 0, each segment spans [k/N, (k+1)/N], repeating every N segments, with k fixed to the particle's birth number so the texture travels with the particles. A spawn dropped on a full ring still advances the counter, so the texture then slips by one segment [C arithmetic; I effect]. TEXCOORD0.w is 1, against 0 for sprites, so an `AlternateDecal` material draws its alternate texture on a ribbon [I from the shader's lerp].
-- **Pool limit** [C, 0x00562570]: the lock fails (no ribbon this frame) when the quads don't fit. It scales the count it returns by the pool's percentage (+0x38, ÷100, at least 1), and the batch draws that many. The ribbon loop still writes every particle's quad [I: only matters if that percentage is below 100].
+- **Pool limit** [C, 0x00562570]: the lock fails (no ribbon this frame) when the quads don't fit. It scales the count it returns by the pool's percentage (+0x38, ÷100, at least 1; `Unlock` 0x00562500 sets it to capacity * 100 / requested when more was asked than fits, else 100, so an overloaded scene thins every emitter a frame late), and the batch draws that many. The ribbon loop still writes every particle's quad [I: only matters if that percentage is below 100].
 
 ###### Corrections to the earlier reading
 
@@ -1417,7 +1417,6 @@ GOG 1.05 addresses, from two independent readings reconciled by paragon-agent (t
 ##### Not read (spawn volumes)
 
 - What +0x60 and +0x490 of the emitter instance are, precisely: taken as the node's world matrix and world rotation from their use [I].
-- Whether anything fills SpawnVolumeMesh's +0x10 normals array (only the loader's writes were read).
 - The signs of 0x004CB6D0's rotation, checked only by its form (the standard matrix from a quaternion).
 
 
@@ -1454,7 +1453,7 @@ Offsets are from the object's start (render-08, read 2026-11-01; DAOParagonEngin
 
 ## Splats (read 2026-11-01, two readings)
 
-A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. Which vanilla emitters do this wasn't searched.
+A physics-sprite particle that touches the world, on an emitter with `CanParticlesSplat` (blueprint +0x20C, 6321), is removed and leaves a decal in its place: `SpawnSplat` (0x005405E0), from the contact byte +0x75 the response 0x00554280 sets. The decals' batch is made only for a physics emitter whose splat width (+0x210) is above 0. Which vanilla emitters do this wasn't searched.
 
 - **The grid:** C by R samples (+0x218, +0x21C) over W by H (+0x210, +0x214), turned about z by `randS * range` (+0x220, as radians, from the birth stream).
 - **Its heights:** each sample probes around the particle's height, a segment between z+2.0 and z-1.75 (mask 0x20), else a ray down from z+3.0, and sits 0.05 above the hit.
