@@ -478,7 +478,7 @@ void SetFieldOfView(std::optional<float> degrees);
 struct Projection
 {
     float fieldOfView = 0.0F; // the vertical angle, top to bottom, in degrees
-    float aspect = 0.0F;      // width over height, as the projection uses it
+    float aspect = 0.0F;      // as the projection uses it: width over height, times the fullscreen correction
     float nearPlane = 0.0F;   // metres
     float farPlane = 0.0F;    // metres
     std::int32_t width = 0;   // the view, in pixels

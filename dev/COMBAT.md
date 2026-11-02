@@ -354,7 +354,7 @@ So the order for one melee swing:
 
 ## Effects
 
-Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" means seen in the code; "inferred" means not followed to the end. DAOLib already has an effect's ageing (`Addresses.h`, `kEffectsHolder_AgeEffect` and kin; `dao/Effects.h`, `dao/Clock.h`) and the CDataArrays parameters an effect and an event share.
+Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2. "Read" means seen in the code; "inferred" means not followed to the end. DAOLib already has an effect's ageing (`Addresses.h`, `kEffectsManager_AgeEffect` and kin; `dao/Effects.h`, `dao/Clock.h`) and the CDataArrays parameters an effect and an event share.
 
 What an effect makes a creature play (the knockdown's fall, loop and get-up, stun, sleep, paralysis's pause) is in `dev/ANIMATION.md`, "Effects' animations".
 
@@ -415,7 +415,7 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 
 - `0x007a0840` builds a type-34 event with the effect as effect 0 and runs it at once through the same slot 0x28, on the target's own script, while the holder is enabled. Then `0x007a0150` takes the effect out. Read. The scripts' `rules_core` calls `Effects_HandleRemoveEffect`.
 - It's reached through `0x007a08e0` from:
-  - expiry: `SEffectsHolder::AgeEffect` (`0x007a0b10`) → `0x007a0a90`, which first sets the invalid word;
+  - expiry: `EffectsManager::AgeEffect` (`0x007a0b10`) → `0x007a0a90`, which first sets the invalid word;
   - removal by match: `0x007a0c50`, the holders' walk that `RemoveEffect` (598, `0x00674590` → `ForScript_RemoveEffect` `0x006741e0` → `0x00670a80`) and its kin drive;
     - **REMOVEEFFECT 0x00674590** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) [C]:
       - A null effect does nothing.
@@ -425,7 +425,7 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 
 ### Durations
 
-- What DAOLib already read (`Addresses.h`, `dao/Effects.h`): each object's update ages its effects (`kEffectsHolder_Update` → `AgeEffect`). For a temporary effect (+0x28 = 2) that has started (+0x50), `AgeEffect` asks the owner (slot 0x2C) for this update's milliseconds and calls `CGameEffect::AddElapsed`, which adds them to +0x30, capped at the duration in +0x2C. When nothing is left, `0x007a0a90` ends the effect, and REMOVE_EFFECT follows.
+- What DAOLib already read (`Addresses.h`, `dao/Effects.h`): each object's update ages its effects (`kEffectsManager_Update` → `AgeEffect`). For a temporary effect (+0x28 = 2) that has started (+0x50), `AgeEffect` asks the owner (slot 0x2C) for this update's milliseconds and calls `CGameEffect::AddElapsed`, which adds them to +0x30, capped at the duration in +0x2C. When nothing is left, `0x007a0a90` ends the effect, and REMOVE_EFFECT follows.
 - The granularity is the owner's update, in milliseconds. The time is the owner's own clock, the same one regeneration uses, which `dao/Clock.h` holds and advances.
 - Duration types are `EFFECT_DURATION_TYPE_INSTANT` 1, `TEMPORARY` 2, `PERMANENT` 3, 5 = innate (no constant in the ldf; EFFECTS.md) and `DEATH` 6. An effect whose +0x24 is 2 is removed by `AgeEffect` straight away, or by `0x007a00a0` in some game states (modes 4 and 5 via `0x005d5e70`). Inferred: that's how an instant effect goes once applied.
 

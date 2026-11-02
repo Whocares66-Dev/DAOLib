@@ -63,7 +63,7 @@ std::unordered_map<std::uint32_t, float> g_remaining;
 // only means an effect seen again waits for the next Advance.
 constexpr std::size_t kForgetAfter = 20000;
 
-// The object whose effects are being aged, on this thread: SEffectsHolder::
+// The object whose effects are being aged, on this thread: EffectsManager::
 // AgeEffect, the one caller of AddElapsed, is handed it, as a pointer to
 // its effects part inside it (dao/TypeName.h, CompleteObject): until
 // 2026-10-02 its +0x10 was read for the id there, which is not the id, so
@@ -71,17 +71,18 @@ constexpr std::size_t kForgetAfter = 20000;
 // spider's Overwhelm, advanced on the spider's clock, never ran down).
 thread_local ObjectId t_owner = kInvalidObject;
 
-// SEffectsHolder::AgeEffect: __thiscall (owner, effect), `ret 8`.
-using AgeEffectFn = std::int32_t(__fastcall *)(void *holder, int edx, void *owner, CGameEffect *effect);
+// EffectsManager::AgeEffect: __thiscall (owner, effect), `ret 8`; this is the manager (the walker
+// 0x0079F5D0's callback; it was named on the holder until 2026-11-01, and this hook only passes it on).
+using AgeEffectFn = std::int32_t(__fastcall *)(void *manager, int edx, void *owner, CGameEffect *effect);
 Detour<AgeEffectFn> g_ageEffect;
 
-std::int32_t __fastcall AgeEffect(void *holder, int edx, void *owner, CGameEffect *effect)
+std::int32_t __fastcall AgeEffect(void *manager, int edx, void *owner, CGameEffect *effect)
 {
     const void *object = CompleteObject(owner);
     const auto id = object != nullptr ? TryRead<ObjectId>(reinterpret_cast<std::uintptr_t>(object) + CGameObject::kId)
                                       : std::nullopt;
     const ObjectId outer = std::exchange(t_owner, id.value_or(kInvalidObject));
-    const std::int32_t result = g_ageEffect.Original()(holder, edx, owner, effect);
+    const std::int32_t result = g_ageEffect.Original()(manager, edx, owner, effect);
     t_owner = outer;
     return result;
 }
@@ -125,7 +126,7 @@ void Attach()
 {
     static std::once_flag once;
     std::call_once(once, [] {
-        g_ageEffect.Attach(addr::kEffectsHolder_AgeEffect, &AgeEffect);
+        g_ageEffect.Attach(addr::kEffectsManager_AgeEffect, &AgeEffect);
         g_addElapsed.Attach(addr::kCGameEffect_AddElapsed, &AddElapsed);
     });
 }
@@ -164,8 +165,8 @@ void OwnClock(ObjectId owner, bool own)
 
 // The owner is the object the effect is on, not its creator (a spider's
 // Overwhelm holds attacker and victim by an effect on each, each aged by
-// its own owner's clock). Read 2026-10-02: SEffectsHolder::AgeEffect,
-// AddElapsed's one caller, is __thiscall on the object's effects holder
+// its own owner's clock). Read 2026-10-02: EffectsManager::AgeEffect,
+// AddElapsed's one caller, is __thiscall on the effects manager
 // (the object, the effect), and this follows it.
 void AdvanceObject(ObjectId owner, float seconds)
 {

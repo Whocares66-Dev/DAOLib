@@ -578,7 +578,7 @@ DAO_ADDRESS(kCCArea_NearestFree, 17572)
 // +0x94 when the command has one, and the range, 0.05 m, at +0x90.
 DAO_ADDRESS(kMovementPath_Cancel, 33569)
 DAO_ADDRESS(kMovementPath_NextWaypoint, 33556)
-DAO_ADDRESS(kPathSearch_Waypoint, 33026)
+DAO_ADDRESS(kPath_GetWaypoint, 33026)
 
 // Visual effects in the world (dao/Vfx.h), read 2026-09-30 from explore
 // mode's aiming (0x00710F80), which keeps its ring's id in a global and
@@ -2369,8 +2369,9 @@ DAO_ADDRESS(kGameModeExplore_SelectTarget, 16228)
 
 // How a temporary effect runs out, read 2026-09-30 (dao/Effects.h). Each
 // object's update ages its effects through its effects holder (a virtual
-// on every object class, 0x007A1800, calling Update, 0x007A1500), which
-// walks them (0x0079F5D0) with AgeEffect (0x007A0B10) for each. For a
+// on every object class, 0x007A1800, calling the effects manager's Update,
+// 0x007A1500), which walks them (0x0079F5D0) with the manager's AgeEffect
+// (0x007A0B10) for each, called (ecx = manager, holder, effect). For a
 // temporary effect that has been applied, AgeEffect asks the owner (its
 // vtable slot 11) for this update's figures and passes their +0x08, the
 // milliseconds since the last, to AddElapsed (__thiscall (ms), `ret 4`),
@@ -2378,8 +2379,8 @@ DAO_ADDRESS(kGameModeExplore_SelectTarget, 16228)
 // Then, if the duration less the elapsed is nothing, it ends the effect.
 // AddElapsed has no other caller. The names are ours.
 DAO_ADDRESS(kCGameEffect_AddElapsed, 19723)
-DAO_ADDRESS(kEffectsHolder_Update, 19775)
-DAO_ADDRESS(kEffectsHolder_AgeEffect, 19766)
+DAO_ADDRESS(kEffectsManager_Update, 19775)
+DAO_ADDRESS(kEffectsManager_AgeEffect, 19766)
 DAO_ADDRESS(kCGameEffect_Prepare, 13143)
 // Regeneration, read 2026-09-30 (dao/Clock.h). UpdateRegeneration,
 // __thiscall on the creature's stats (ms, bool in combat), `ret 8`, adds
@@ -2602,11 +2603,11 @@ DAO_ADDRESS(kCCModule_EventHandler, 11051)
 // (0x0065404D-0x00654088: the column trimmed of " \t", lowercased and
 // hashed, the out a std::wstring), and slot 11 for a bool, whose cell
 // reader (M2DA's slot 15, 0x004EC4D0) writes one byte. Read 2026-09-30.
-DAO_DATA(kGdaTables, 99739)
-DAO_ADDRESS(kGdaTables_GetInt, 32473)
-DAO_ADDRESS(kGdaTables_GetFloat, 32472)
-DAO_ADDRESS(kGdaTables_GetString, 32471)
-DAO_ADDRESS(kGdaTables_GetBool, 32474)
+DAO_DATA(kRules, 99739)
+DAO_ADDRESS(kCRules_GetInt, 32473)
+DAO_ADDRESS(kCRules_GetFloat, 32472)
+DAO_ADDRESS(kCRules_GetString, 32471)
+DAO_ADDRESS(kCRules_GetBool, 32474)
 // The store's lookup of a table by number, __thiscall, `ret 4`, null if it
 // has none: what every getter above starts with. A table's row count is
 // its slot 5 and its column count its slot 4, no arguments, as

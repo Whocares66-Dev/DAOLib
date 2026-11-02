@@ -38,7 +38,7 @@ namespace
 // does on first use; the getters read through the store without a check.
 void *Keeper()
 {
-    void *tables = Global<void *>(addr::kGdaTables);
+    void *tables = Global<void *>(addr::kRules);
     if (tables == nullptr || *reinterpret_cast<void *const *>(static_cast<const std::byte *>(tables) + 4) == nullptr)
     {
         return nullptr;
@@ -89,19 +89,19 @@ std::optional<std::int32_t> Count(std::int32_t table, std::size_t slot)
 
 std::optional<std::int32_t> GetInt(std::int32_t table, std::int32_t row, std::uint32_t columnHash)
 {
-    return Get<std::int32_t>(addr::kGdaTables_GetInt, table, row, columnHash);
+    return Get<std::int32_t>(addr::kCRules_GetInt, table, row, columnHash);
 }
 
 std::optional<float> GetFloat(std::int32_t table, std::int32_t row, std::uint32_t columnHash)
 {
-    return Get<float>(addr::kGdaTables_GetFloat, table, row, columnHash);
+    return Get<float>(addr::kCRules_GetFloat, table, row, columnHash);
 }
 
 std::optional<std::wstring> GetString(std::int32_t table, std::int32_t row, std::uint32_t columnHash)
 {
     // The engine assigns into the string, so it is the engine's own.
     WString value;
-    if (!Call(addr::kGdaTables_GetString, table, row, columnHash, value.Engine()))
+    if (!Call(addr::kCRules_GetString, table, row, columnHash, value.Engine()))
     {
         return std::nullopt;
     }
@@ -110,7 +110,7 @@ std::optional<std::wstring> GetString(std::int32_t table, std::int32_t row, std:
 
 std::optional<bool> GetBool(std::int32_t table, std::int32_t row, std::uint32_t columnHash)
 {
-    return Get<bool>(addr::kGdaTables_GetBool, table, row, columnHash);
+    return Get<bool>(addr::kCRules_GetBool, table, row, columnHash);
 }
 
 std::optional<std::int32_t> Rows(std::int32_t table)

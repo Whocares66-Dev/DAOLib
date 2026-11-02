@@ -17,7 +17,7 @@
 //     tangents and binormals Float16_4, always both; blend weights
 //     Float16_4, four that sum to 1; blend indices Short4; colours Float3 or
 //     Float16_4. Indices are 16 bits but in 3 chunks, which say 32 in the
-//     chunk's index format; the file's own index format is junk in 91 files.
+//     chunk's index format; the file's own (8032), read by nothing in the exe, is 0x006F0074 in 91 files.
 //   <model>.mmh: a tree of nodes, each a struct with a name and children.
 //     A node's children are its own transform (a "trsl" translation, a
 //     "rota" rotation as x, y, z, w, a "scal" scale), local to its parent,
