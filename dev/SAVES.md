@@ -382,3 +382,7 @@ A load numbers its new objects from the save's counter, which is where the game 
 ## What it means for plugins
 
 A save is the engine's own objects written out. A plugin that keeps state of its own needs it saved and loaded with the game's: DAOLib's "save and load" item (`dev/LIBRARY.md`). The script variables are one place the game already saves by name. A plugin's own data could ride in a table of its own, as SKSE's co-saves do beside Skyrim's saves.
+
+## Where the party-wide properties are
+
+Field 16352 `SavegameHeroicPartyStatList` of the stats struct: PLYR > SavegamePlayerCharChar (CRP1) > SavegameCreatureStats (CPS1). `CreatureProperties::WriteToSave` 0x00797000 fills it only for a creature whose +0x7D4 is 1; every other creature's is an empty list (three saves, 2026-11-02: exactly one populated in each). An element is `SavegameStatPropertyBase` (float) and `SavegameStatPropertyIndex` (16353, u16), the id less 2000, written for a property whose "needs saving" slot +0x40 answers true. PROPERTIES.md has the run-time side. Core: `Stats::heroicPartyStats` of `Save::hero`.
