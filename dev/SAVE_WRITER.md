@@ -402,7 +402,7 @@ For the one list field 17000 (generic list, label 0x4268): for each of 13 type b
 
 ### Not read
 
-- What `[+0x600]` of an item is (the second Position coordinate in a placeable/store/backpack), (`+0x5D0` is the DefaultAmmo flag, read 2026-11-02).
+- `[+0x600]` of an item, the second Position coordinate in a container, is its `StackingGroupID` (SAVES.md); what assigns it in play was not found. `+0x5D0` is the DefaultAmmo flag (read 2026-11-02).
 - The loader setters 0x00752BF0, 0x00752C30, 0x00756540, 0x00753250 (that they set the attributes the writer reads, taken as true).
 - Who sets the placeable's `+0x658` state, `+0x600` bodybag dword and `+0x664` from play; the post-load `0x0074DBA0` was not reopened.
 - The writer's type filter for variables with no template (types 5-11), the effect's VFX start `0x0079FA70`, and `0x007CA4F0(container, -1)` after a store's items load.
