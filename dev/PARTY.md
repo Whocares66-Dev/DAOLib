@@ -509,7 +509,7 @@ Read in the GOG exe and the files (ghilana); the camera's constants (0x00C0D704 
   - With P and F the hero's clone's position and facing, it is placed at `P + d·F + (−0.5)·(F.y, −F.x, 0) + (0, 0, 2.5)`, where d = 7.75, or 7.0 when the aspect is 1.6 or more. It looks at `P + (0, 0, 0.75)`.
   - So it is in front of the hero, looking back at the line. For vanilla `char_player` that is about (−6.705, 3.476, 3.401) looking at (−2.628, −3.133, 1.651) [I that the waypoint's stored quaternion becomes this facing vector].
   - Near and far are unchanged.
-- **The pan** [C]: `PanCameraLeft` (0x00765990) and `PanCameraRight` (0x007659E0) slide the camera 1 m along its own right vector over 1 s (curve 3, `SceneCamera::SetPosition` 0x006C45F0). It has no limit, and the orientation is unchanged. Who sends them was not traced.
+- **The pan** [C]: `PanCameraLeft` (0x00765990) and `PanCameraRight` (0x007659E0) slide the camera 1 m along its own right vector over 1 s (curve 3, `CameraRig::SetPosition` 0x006C45F0). It has no limit, and the orientation is unchanged. Who sends them was not traced.
 - **The pick** [C]:
   - 0x007675B0 unprojects the mouse through the camera and casts a physics ray (`World::Raycast` 0x006497A0, up to 32 hits).
   - It skips hits of type 2 with flag 0x20000, and matches a hit's id to each clone's attribute at clone +4 [I: its physics body's id]. It does not use MouseOverInterface.
