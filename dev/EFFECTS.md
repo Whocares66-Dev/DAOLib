@@ -904,7 +904,7 @@ The constant's name is the wide string at 0x00AF7F00, and both writers set it on
 - **Its default is (1, 1, 1, 1)**: every one of the 60 `mml_vUserColorMultiplier` parameters in vanilla `vfx.mat.xml` (`packages/core/data/materials.erf`) has `Default = "1 1 1 1"` [C].
 
 **a) A visual effect's tint, by `UseVariationTint`** [C]: Object (+8) vtable slot 69 (+0x114) = 0x00546700, `SetTint(vec4)`.
-- It keeps the colour at Object +0x2CC.
+- It keeps the colour at Object +0x2D4 (read 2026-11-02; 0x2CC is the +8 view's offset).
 - For every node of types 1, 6, 7, 19, 20, 21 (byte table 0x00546834), whose blueprint's slot 10 is true and which has a material instance, it sets the user colour to it.
   - On an emitter blueprint slot 10 is 0x00561A60, which returns +0x2BC. That is 6340 `MMHUseVariationTint`, read at 0x00593B67–0x00593B80.
   - A mesh's is +0x1AA (0x0057CF00; [I] the same field).
