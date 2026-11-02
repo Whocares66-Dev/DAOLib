@@ -119,7 +119,7 @@ Every game object is a `CGameObject` at its start, then DAO's own bases (`tools/
 | +0x04 | `SmartData::Attribute<unsigned int>` | the id, as an observable attribute: its value at +0xC of it |
 | +0x18 | `SmartData::SmartObject` | DAO's attribute and message system: a message receiver and observer, a hash map of named attributes |
 | +0x70 | `SEffectsHolder` | the effects on the object (+0xCC in an area) |
-| +0x440 | `ItemPossessor` | the inventory, in creatures, placeables and stores (+0x70 in the party) |
+| +0x440 | `ItemPossessor` | the interface that holds items, in creatures, placeables and stores (+0x70 in the party); a creature's `Inventory` is another object, the attribute at its +0xBF0 |
 
 `dao::CGameObject` gives the id, the type (`dao::core::ObjectType`, one bit off the scripts' `OBJECT_TYPE_*`) and the engine's casts, `AsCreature()` and the rest, virtual calls as the engine's own lookups make them. The probe checks all three on every object a script check looks up.
 
