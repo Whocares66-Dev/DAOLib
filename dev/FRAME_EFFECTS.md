@@ -565,6 +565,7 @@ Singleton 0x00C308C0 (`GetInstance` 0x004F77C0, 26 callers; Ghidra has no functi
 - **`DefaultSemantic` is looked up by `Material::FindSemantic` (slot 6, 0x00503140), last to first and case-insensitive, and a miss keeps the material's own default.** [C] The loop walks the material's semantic list (+0xC/+0x10) from its last entry down (`sub esi,1` at 0x00503163, the entry at `[list+esi*4]`) and compares names with `EqualsNoCase` (0x00503187..0x0050318E), checked in the exe. The name is kept by the builder (+0x64) and resolved when `MaterialObject` closes (`SetSemantic` 0x004FE940, which stores only a non-null result into +0x74); `SetMaterial` (0x00501540) had already set +0x74 to the material's default semantic (`Material` +0x18) [C by the reading]. So a `.mat` with two semantics of one name gives the later one.
 - **The .mao reader's element names are case-insensitive** (`__wcsicmp` and `ECString::EqualsNoCase` in the builder's end-element handler 0x005077F0) [C by the reading]; `dev/PARAGON_MAO_CASE.md` agrees.
 - A `Texture` element with the builder's flag +0x28 set goes to the deferred record (0x00500DF0), where `lm.dds` becomes `Default_Black` (`dev/SKY.md`).
+- **Core's `MaterialObject` keeps all nine kinds the builder files** (Texture with RequiresID, Vector4f, Vector4fArray, Matrix4x4f, Float, SoundType, Material, Override, DefaultSemantic), each at its closing tag in its own type, and the first `<MaterialObject>` only; the .mat's defaults are the caller's to apply (DAOLib #297, render-19).
 
 ### Weak handles [C]
 
