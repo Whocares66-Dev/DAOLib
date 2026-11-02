@@ -311,7 +311,7 @@ Read 2026-10-21 by lib-agent-2 in the GOG exe (base 0x400000) with `tools/daoexe
 
 ### Short answers
 
-1. **The setting is not called "LastSave".** The exe has no such string. It is the client option `LastPlayedGame`, a wide string in `DragonAge.ini` section `[GameOptions]`, held in `CClientOptions` (the global at 0x00C32938) at `+0x1A0`, the string at `+0x1AC`. Its value is the full path of a `savegame.das` (C). On this machine: `LastPlayedGame=C:\Users\tianx\OneDrive\Documents\BioWare\Dragon Age\Characters\Lyna\Saves\AutoSave_4\savegame.das`. It is read through 0x006CB910, which is not a reader of the setting: it is "can this path be opened for reading" (C). The setting is read in 0x006CC8C0.
+1. **The setting is not called "LastSave".** The exe has no such string. It is the client option `LastPlayedGame`, a wide string in `DragonAge.ini` section `[GameOptions]`, held in `CClientOptions` (the global at 0x00C32938) at `+0x1A0`, the string at `+0x1AC`. Its value is the full path of a `savegame.das` (C). On this machine: `LastPlayedGame=Documents\BioWare\Dragon Age\Characters\Lyna\Saves\AutoSave_4\savegame.das`. It is read through 0x006CB910, which is not a reader of the setting: it is "can this path be opened for reading" (C). The setting is read in 0x006CC8C0.
 2. **Written** by one function, 0x006CB8D0 (takes the .das path), called from exactly two places (C):
    - `SaveGame::Write` (0x00646280) at 0x00646622, right after the save's jpg is copied: on every save that goes through `Write` (manual, autosave, quicksave, post-campaign).
    - the save reader 0x00645650 at 0x00645799, after the .das has been opened and its header read, on every load, including a load that resume itself asks for.
