@@ -2124,3 +2124,111 @@ TEST_CASE("the player's saves, read and written back unchanged, are their own by
     CHECK(saves > 0);
     WARN(saves << " saves written back as they were, " << strings << " string variables among them");
 }
+
+// -- Blank (DAOLib #302)
+
+TEST_CASE("a blank save is a GFF4 SAVE of the engine's 78 templates that Read takes as an empty save",
+          "[savegame][blank]")
+{
+    const auto bytes = sg::Blank();
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    CHECK(file->Type() == "SAVE");
+    CHECK(file->TypeVersion() == "V1.1");
+    REQUIRE(file->Templates().size() == 78);
+    CHECK(file->Templates()[0].size == 0x110);
+    CHECK(file->Templates()[0].fields.size() == 9);
+    CHECK(file->Templates()[1].label == "SVI1");
+    CHECK(file->Templates()[77].label == "SSF1");
+    CHECK(bytes.size() == file->DataOffset() + 0x110);
+    CHECK(file->Root());
+
+    const auto save = sg::Read(*file);
+    REQUIRE(save);
+    CHECK(save->areas.empty());
+    CHECK_FALSE(save->hero);
+    CHECK(save->party.pool.empty());
+    CHECK(save->campaign.variables.empty());
+    CHECK(save->campaign.resource.empty());
+}
+
+TEST_CASE("a blank save written over reads back what was set", "[savegame][blank][write]")
+{
+    const auto blank = sg::Blank();
+    auto save = ReadOf(blank);
+    save.campaign.id = 7;
+    save.campaign.resource = L"a_campaign";
+    save.campaign.entryArea = L"ar_start";
+    save.campaign.entryPosition = sg::Vec3{1, 2, 3};
+    save.campaign.variables.push_back({L"COUNT", std::int32_t{5}, sg::kNoSource});
+    save.campaign.variables.push_back({L"NAME", std::wstring(L"a name"), sg::kNoSource});
+    save.areas.push_back(AreaToAdd());
+    save.party.money = 42;
+    save.timePlayedSeconds = 99;
+    save.state.worldDay = 3;
+
+    const auto out = Rewrite(blank, save);
+    CHECK(out.unwritten.empty());
+    CHECK(out.save.campaign.id == 7);
+    CHECK(out.save.campaign.resource == L"a_campaign");
+    CHECK(out.save.campaign.entryArea == L"ar_start");
+    CHECK(out.save.campaign.entryPosition == sg::Vec3{1, 2, 3});
+    REQUIRE(out.save.campaign.variables.size() == 2);
+    CHECK(out.save.campaign.variables[0].name == L"COUNT");
+    CHECK(std::get<std::int32_t>(out.save.campaign.variables[0].value) == 5);
+    CHECK(std::get<std::wstring>(out.save.campaign.variables[1].value) == L"a name");
+    REQUIRE(out.save.areas.size() == 1);
+    CHECK(out.save.areas[0].tag == L"ar_new");
+    CHECK(out.save.areas[0].id == 9100);
+    CHECK(out.save.areas[0].placeables.size() == 1);
+    CHECK(out.save.party.money == 42);
+    CHECK(out.save.timePlayedSeconds == 99);
+    CHECK(out.save.state.worldDay == 3);
+    // The file it made is itself again when written unchanged.
+    const auto again = sg::Write(out.bytes, out.save);
+    REQUIRE(again);
+    CHECK(again->bytes == out.bytes);
+}
+
+// A player's save, read only: the blank's header and template tables are its own bytes. Hidden, as the saves are
+// the player's: run it by its tag, dao_core_tests "[install-real]".
+TEST_CASE("a blank save's templates are a real save's, byte for byte", "[.][install-real]")
+{
+    PWSTR documents = nullptr;
+    std::filesystem::path characters;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &documents)))
+    {
+        characters = std::filesystem::path(documents) / L"BioWare/Dragon Age/Characters";
+    }
+    CoTaskMemFree(documents);
+    if (!std::filesystem::is_directory(characters))
+    {
+        SKIP("no Documents/BioWare/Dragon Age/Characters here");
+    }
+    const auto blank = sg::Blank();
+    const auto blankFile = gff4::File::Parse(blank);
+    REQUIRE(blankFile);
+    std::size_t saves = 0;
+    for (const auto &item : std::filesystem::recursive_directory_iterator(characters))
+    {
+        if (!item.is_regular_file() || item.path().extension() != L".das")
+        {
+            continue;
+        }
+        INFO(item.path().string());
+        const auto bytes = FileBytes(item.path());
+        const auto file = gff4::File::Parse(bytes);
+        REQUIRE(file);
+        REQUIRE(file->DataOffset() == blankFile->DataOffset());
+        CHECK(std::equal(blank.begin(), blank.begin() + static_cast<std::ptrdiff_t>(blankFile->DataOffset()),
+                         bytes.begin()));
+        if (++saves == 20)
+        {
+            break;
+        }
+    }
+    if (saves == 0)
+    {
+        SKIP("no .das under Documents/BioWare/Dragon Age/Characters");
+    }
+}

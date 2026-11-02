@@ -1036,4 +1036,8 @@ struct Written
 // id in the party, an area's id and the like are not made to agree. Nothing for a file that is not a SAVE.
 std::optional<Written> Write(std::span<const std::byte> original, const Save &save);
 
+// Returns the bytes of a saved game with nothing in it, to give Read and then Write as `original`.
+// A caller sets all it needs. Whether the game loads the result has not been seen in play.
+std::vector<std::byte> Blank();
+
 } // namespace dao::core::savegame

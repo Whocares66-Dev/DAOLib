@@ -160,6 +160,7 @@ FSB = "src/dao/core/Fsb.cpp"
 SAVEGAME = "src/dao/core/Savegame.cpp"
 SAVEGAME_H = "src/dao/core/Savegame.h"
 SAVEGAME_WRITE = "src/dao/core/SavegameWrite.cpp"
+SAVEGAME_BLANK = "src/dao/core/SavegameBlank.cpp"
 CTAB = "src/dao/core/Ctab.cpp"
 FACEFX = "src/dao/core/FaceFx.cpp"
 MATDEF = "src/dao/core/MaterialDefinition.cpp"
@@ -1030,6 +1031,37 @@ MUTANTS: list[Mutant] = [
         SAVEGAME_WRITE,
         'return index || label != "EBAS" ? index : IndexOf("ESCR");',
         "return index;",
+    ),
+    # A blank save (DAOLib #302): the table of templates the game's saves share, and the file around it.
+    Mutant(
+        "savegame-blank-data-offset: the header gives the data's offset after the field tables and the word the engine leaves",
+        SAVEGAME_BLANK,
+        "(kSaveFields.size() * kFieldBytes) + 4;",
+        "(kSaveFields.size() * kFieldBytes);",
+    ),
+    Mutant(
+        "savegame-blank-field-offset: a template's fields are found by their index in the one table of fields",
+        SAVEGAME_BLANK,
+        "fieldsAt + (shape.first * kFieldBytes)",
+        "fieldsAt",
+    ),
+    Mutant(
+        "savegame-blank-flags: a field's flags are the upper half of its type word",
+        SAVEGAME_BLANK,
+        "(static_cast<std::uint32_t>(field.flags) << 16)",
+        "(static_cast<std::uint32_t>(field.flags) << 8)",
+    ),
+    Mutant(
+        "savegame-blank-type: the file's type is SAVE, version V1.1",
+        SAVEGAME_BLANK,
+        'PutText(out, "GFF V4.0PC  SAVEV1.1");',
+        'PutText(out, "GFF V4.0PC  SAVEV1.0");',
+    ),
+    Mutant(
+        "savegame-blank-root: the top struct is made, nulled as a blank struct is, at the start of the data",
+        SAVEGAME_BLANK,
+        "if (!editor.New(0))",
+        "if (!editor.New(1))",
     ),
     # A movie patched in memory: every size around inserted code grows, every
     # branch across it is fixed, placements land in the right sprite and frame;
