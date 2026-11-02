@@ -183,7 +183,7 @@ struct Effect
     std::vector<Stage> stages;
 
     // Returns the resource of an id (the engine's lookup is exact), or nullptr.
-    [[nodiscard]] const Resource *ResourceNamed(std::string_view id) const;
+    [[nodiscard]] const Resource *ResourceNamed(std::string_view wanted) const;
 };
 
 struct Options

@@ -16,7 +16,7 @@ namespace
 {
 
 // An effect with two targets, a float and a back buffer, and one stage with the given filter body.
-std::string Effect(std::string_view body, std::string_view header = "id=\"fx\" layer=\"10\" availability=\"1\"")
+std::string Effect(std::string_view body, std::string_view header = R"(id="fx" layer="10" availability="1")")
 {
     return "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n<Effect " + std::string(header) +
            ">\n<resources>\n<target id=\"Mask\" width=\"BACKBUFFER_WIDTH/2\" format=\"A8R8G8B8\" shared=\"true\"/>\n"
@@ -61,8 +61,8 @@ TEST_CASE("an effect's header, resources, stage and filter are read in file orde
 TEST_CASE("element and keyword names match without case", "[ffx]")
 {
     // 0x008E687B is __wcsicmp.
-    const auto effects = ffx::Read("<EFFECT ID=\"a\"><RESOURCES><TARGET id=\"T\"/></RESOURCES><IMPLEMENTATION>"
-                                   "<STAGE id=\"s\" EVENT=\"endframe\"><FILTER id=\"f\">COPY BACKBUFFER TO T</FILTER>"
+    const auto effects = ffx::Read(R"(<EFFECT ID="a"><RESOURCES><TARGET id="T"/></RESOURCES><IMPLEMENTATION>)"
+                                   R"(<STAGE id="s" EVENT="endframe"><FILTER id="f">COPY BACKBUFFER TO T</FILTER>)"
                                    "</STAGE></IMPLEMENTATION></EFFECT>");
     REQUIRE(effects.size() == 1);
     CHECK(effects[0].stages[0].event == ffx::Event::EndFrame);
@@ -72,10 +72,10 @@ TEST_CASE("element and keyword names match without case", "[ffx]")
 TEST_CASE("availability is a number above 0, and an effect without it is not available", "[ffx]")
 {
     // 0x0046A16F is setg; the constructor clears the byte.
-    CHECK(ffx::Read(Effect("", "id=\"a\" availability=\"2\"")).front().available);
-    CHECK(!ffx::Read(Effect("", "id=\"a\" availability=\"0\"")).front().available);
-    CHECK(!ffx::Read(Effect("", "id=\"a\" availability=\"-1\"")).front().available);
-    const auto bare = ffx::Read(Effect("", "id=\"a\" layer=\"3\" minlod=\"1\""));
+    CHECK(ffx::Read(Effect("", R"(id="a" availability="2")")).front().available);
+    CHECK(!ffx::Read(Effect("", R"(id="a" availability="0")")).front().available);
+    CHECK(!ffx::Read(Effect("", R"(id="a" availability="-1")")).front().available);
+    const auto bare = ffx::Read(Effect("", R"(id="a" layer="3" minlod="1")"));
     CHECK(!bare.front().available);
     CHECK(bare.front().layer == 3);
     CHECK(bare.front().minLod == 1);
@@ -83,26 +83,26 @@ TEST_CASE("availability is a number above 0, and an effect without it is not ava
 
 TEST_CASE("the id must be the first attribute of an effect, or the file yields nothing", "[ffx]")
 {
-    CHECK(ffx::Read(Effect("", "layer=\"1\" id=\"a\"")).empty());
+    CHECK(ffx::Read(Effect("", R"(layer="1" id="a")")).empty());
 }
 
 TEST_CASE("an unknown element in Resources drops the effect and stops the file", "[ffx]")
 {
     const std::string text =
-        "<Effect id=\"a\"><Resources><texture id=\"t\"/></Resources></Effect>" + Effect("", "id=\"b\"");
+        R"(<Effect id="a"><Resources><texture id="t"/></Resources></Effect>)" + Effect("", R"(id="b")");
     CHECK(ffx::Read(text).empty());
 }
 
 TEST_CASE("a stage with no filter drops the effect", "[ffx]")
 {
-    CHECK(ffx::Read("<Effect id=\"a\"><implementation><stage id=\"s\" event=\"start\"></stage></implementation>"
+    CHECK(ffx::Read(R"(<Effect id="a"><implementation><stage id="s" event="start"></stage></implementation>)"
                     "</Effect>")
               .empty());
 }
 
 TEST_CASE("an effect read before an error stands, the broken one and the rest are lost", "[ffx]")
 {
-    const std::string text = Effect("", "id=\"one\"") + Effect("bind", "id=\"two\"") + Effect("", "id=\"three\"");
+    const std::string text = Effect("", R"(id="one")") + Effect("bind", R"(id="two")") + Effect("", R"(id="three")");
     const auto effects = ffx::Read(text);
     REQUIRE(effects.size() == 1);
     CHECK(effects[0].id == "one");
@@ -111,8 +111,8 @@ TEST_CASE("an effect read before an error stands, the broken one and the rest ar
 TEST_CASE("a duplicate resource id is dropped, the first stays", "[ffx]")
 {
     // FrameBufferEffect::AddResource, 0x00460280, inserts only when the name is absent.
-    const auto effects = ffx::Read("<Effect id=\"a\"><resources><float id=\"X\" value=\"1\"/>"
-                                   "<float id=\"X\" value=\"2\"/></resources></Effect>");
+    const auto effects = ffx::Read(R"(<Effect id="a"><resources><float id="X" value="1"/>)"
+                                   R"(<float id="X" value="2"/></resources></Effect>)");
     REQUIRE(effects.size() == 1);
     REQUIRE(effects[0].resources.size() == 1);
     CHECK(effects[0].resources[0].attributes[0].value == "1");
@@ -120,25 +120,25 @@ TEST_CASE("a duplicate resource id is dropped, the first stays", "[ffx]")
 
 TEST_CASE("requires needs effectid as its second attribute", "[ffx]")
 {
-    const auto effects = ffx::Read("<Effect id=\"a\"><resources><requires id=\"da_copybackbuffer\" "
-                                   "effectid=\"da_copybackbuffer\"/></resources></Effect>");
+    const auto effects = ffx::Read(R"(<Effect id="a"><resources><requires id="da_copybackbuffer" )"
+                                   R"(effectid="da_copybackbuffer"/></resources></Effect>)");
     REQUIRE(effects.size() == 1);
     REQUIRE(effects[0].requirements.size() == 1);
     CHECK(effects[0].requirements[0].effectId == "da_copybackbuffer");
-    CHECK(ffx::Read("<Effect id=\"a\"><resources><requires id=\"x\" other=\"y\" effectid=\"z\"/></resources>"
+    CHECK(ffx::Read(R"(<Effect id="a"><resources><requires id="x" other="y" effectid="z"/></resources>)"
                     "</Effect>")
               .empty());
 }
 
 TEST_CASE("a stage needs event as its second attribute; an event the engine does not know never runs", "[ffx]")
 {
-    CHECK(ffx::Read("<Effect id=\"a\"><implementation><stage event=\"start\" id=\"s\"><filter id=\"f\"/></stage>"
+    CHECK(ffx::Read(R"(<Effect id="a"><implementation><stage event="start" id="s"><filter id="f"/></stage>)"
                     "</implementation></Effect>")
               .empty());
-    const auto effects = ffx::Read("<Effect id=\"a\"><implementation>"
-                                   "<stage id=\"s\" event=\"user\"><filter id=\"f\"/></stage>"
-                                   "<stage id=\"t\" event=\"StaticGeom_Start\"><filter id=\"f\"/></stage>"
-                                   "<stage id=\"u\" event=\"stop\"><filter id=\"f\"/></stage>"
+    const auto effects = ffx::Read(R"(<Effect id="a"><implementation>)"
+                                   R"(<stage id="s" event="user"><filter id="f"/></stage>)"
+                                   R"(<stage id="t" event="StaticGeom_Start"><filter id="f"/></stage>)"
+                                   R"(<stage id="u" event="stop"><filter id="f"/></stage>)"
                                    "</implementation></Effect>");
     REQUIRE(effects.size() == 1);
     CHECK(effects[0].stages[0].event == ffx::Event::Other);
@@ -148,10 +148,9 @@ TEST_CASE("a stage needs event as its second attribute; an event the engine does
 
 TEST_CASE("a filter's material is found as its second or third attribute only", "[ffx]")
 {
-    const auto effects =
-        ffx::Read("<Effect id=\"a\"><implementation><stage id=\"s\" event=\"start\">"
-                  "<filter id=\"f\" library=\"L\" material=\"M\"/>"
-                  "<filter id=\"g\" a=\"1\" b=\"2\" material=\"N\"/></stage></implementation></Effect>");
+    const auto effects = ffx::Read(R"(<Effect id="a"><implementation><stage id="s" event="start">)"
+                                   R"(<filter id="f" library="L" material="M"/>)"
+                                   R"(<filter id="g" a="1" b="2" material="N"/></stage></implementation></Effect>)");
     REQUIRE(effects.size() == 1);
     CHECK(effects[0].stages[0].filters[0].material == "M");
     CHECK(effects[0].stages[0].filters[1].material.empty());
@@ -162,7 +161,7 @@ TEST_CASE("a cinematics effect is empty, and the file's later effects are lost",
     // 0x0046A0E9 pushes state 11; its end pops to the Effect's state 1, so the next Effect is out
     // of place (0x00469D36, 0x0046A1EF).
     const std::string text =
-        Effect("Decal0 = Mask", "id=\"cine\" domain=\"cinematics\" layer=\"7\"") + Effect("", "id=\"after\"");
+        Effect("Decal0 = Mask", R"(id="cine" domain="cinematics" layer="7")") + Effect("", R"(id="after")");
     const auto effects = ffx::Read(text);
     REQUIRE(effects.size() == 1);
     CHECK(effects[0].id == "cine");
@@ -174,7 +173,7 @@ TEST_CASE("a cinematics effect is empty, and the file's later effects are lost",
 
 TEST_CASE("with cinematics allowed the same file reads whole", "[ffx]")
 {
-    const std::string text = Effect("Decal0 = Mask", "id=\"cine\" domain=\"cinematics\"") + Effect("", "id=\"after\"");
+    const std::string text = Effect("Decal0 = Mask", R"(id="cine" domain="cinematics")") + Effect("", R"(id="after")");
     const auto effects = ffx::Read(text, {.cinematicsAllowed = true});
     REQUIRE(effects.size() == 2);
     CHECK(!effects[0].cinematics);
@@ -183,7 +182,7 @@ TEST_CASE("with cinematics allowed the same file reads whole", "[ffx]")
 
 TEST_CASE("a domain other than cinematics, and a second effect after a whole one, read", "[ffx]")
 {
-    const auto effects = ffx::Read(Effect("", "id=\"a\" domain=\"game\"") + Effect("", "id=\"b\""));
+    const auto effects = ffx::Read(Effect("", R"(id="a" domain="game")") + Effect("", R"(id="b")"));
     REQUIRE(effects.size() == 2);
     CHECK(effects[1].id == "b");
 }
@@ -282,8 +281,8 @@ TEST_CASE("copy: to is optional, filter picks point or linear, targets only", "[
 
 TEST_CASE("run: the semantic needs the filter's material", "[ffx]")
 {
-    const auto effects = ffx::Read("<Effect id=\"a\"><implementation><stage id=\"s\" event=\"start\">"
-                                   "<filter id=\"f\">run semantic X</filter></stage></implementation></Effect>");
+    const auto effects = ffx::Read(R"(<Effect id="a"><implementation><stage id="s" event="start">)"
+                                   R"(<filter id="f">run semantic X</filter></stage></implementation></Effect>)");
     CHECK(effects.empty());
     const auto instructions = Lines("run\nrun preferred\nrun semantic Pass1");
     REQUIRE(instructions.size() == 3);
@@ -310,7 +309,7 @@ TEST_CASE("a refused line drops the effect: clear is no word of the parser", "[f
 
 TEST_CASE("text outside a filter, and unknown elements outside Resources, are ignored", "[ffx]")
 {
-    const auto effects = ffx::Read("<Effect id=\"a\"><header><description>copy nothing at all</description></header>"
+    const auto effects = ffx::Read(R"(<Effect id="a"><header><description>copy nothing at all</description></header>)"
                                    "stray text <!-- note --><implementation/></Effect>");
     REQUIRE(effects.size() == 1);
 }

@@ -32,7 +32,7 @@ bool Same(std::string_view a, std::string_view b)
 int Atoi(std::string_view text)
 {
     std::size_t at = 0;
-    while (at < text.size() && std::isspace(static_cast<unsigned char>(text[at])))
+    while (at < text.size() && std::isspace(static_cast<unsigned char>(text[at])) != 0)
     {
         ++at;
     }
@@ -43,16 +43,16 @@ int Atoi(std::string_view text)
         ++at;
     }
     std::uint32_t value = 0;
-    for (; at < text.size() && std::isdigit(static_cast<unsigned char>(text[at])); ++at)
+    for (; at < text.size() && std::isdigit(static_cast<unsigned char>(text[at])) != 0; ++at)
     {
-        value = value * 10 + static_cast<std::uint32_t>(text[at] - '0');
+        value = (value * 10) + static_cast<std::uint32_t>(text[at] - '0');
     }
     return negative ? -static_cast<int>(value) : static_cast<int>(value);
 }
 
 bool StartsWithDigit(std::string_view text)
 {
-    return !text.empty() && std::isdigit(static_cast<unsigned char>(text.front()));
+    return !text.empty() && std::isdigit(static_cast<unsigned char>(text.front())) != 0;
 }
 
 // _wtof of a text that starts with a digit.
@@ -180,7 +180,7 @@ class LineParser
             // Only a number sets it; anything else is ignored, and the line is accepted (0x00460653).
             if (StartsWithDigit(*rhs))
             {
-                filter_.instructions.push_back(SetResource{std::string(lhs), Number(*rhs)});
+                filter_.instructions.emplace_back(SetResource{std::string(lhs), Number(*rhs)});
             }
             return true;
         }
@@ -188,18 +188,18 @@ class LineParser
         {
             if (IsSurface(source))
             {
-                filter_.instructions.push_back(TextureFromResource{std::string(lhs), source->id});
+                filter_.instructions.emplace_back(TextureFromResource{std::string(lhs), source->id});
             }
             else
             {
-                filter_.instructions.push_back(ParameterFromResource{std::string(lhs), source->id, source->kind});
+                filter_.instructions.emplace_back(ParameterFromResource{std::string(lhs), source->id, source->kind});
             }
             return true;
         }
         // A number must start with a digit: "-3.5", ".5" and "+1" are not numbers (0x004607ED).
         if (StartsWithDigit(*rhs))
         {
-            filter_.instructions.push_back(ParameterValue{std::string(lhs), Number(*rhs)});
+            filter_.instructions.emplace_back(ParameterValue{std::string(lhs), Number(*rhs)});
             return true;
         }
         // name.width or name.height of a target; a word with no "." fails at its lookup (0x0046085D).
@@ -214,8 +214,18 @@ class LineParser
         {
             return false;
         }
-        filter_.instructions.push_back(ParameterSize{std::string(lhs), target->id, Same(member, "height")});
+        filter_.instructions.emplace_back(ParameterSize{std::string(lhs), target->id, Same(member, "height")});
         return true;
+    }
+
+    // A copy's filter word: point, linear, or the default.
+    static int CopyFilter(std::string_view word)
+    {
+        if (Same(word, "point"))
+        {
+            return 6;
+        }
+        return Same(word, "linear") ? 7 : 5;
     }
 
     // FBParseCopy, 0x00460A40: copy Source [to] Destination [filter point|linear].
@@ -239,7 +249,7 @@ class LineParser
             {
                 break;
             }
-            mode = Same(*kind, "point") ? 6 : Same(*kind, "linear") ? 7 : 5;
+            mode = CopyFilter(*kind);
         }
         const Resource *to = effect_.ResourceNamed(*destination);
         const bool fromBackBuffer = Same(*source, "backbuffer");
@@ -248,12 +258,86 @@ class LineParser
         {
             return false;
         }
-        filter_.instructions.push_back(
+        filter_.instructions.emplace_back(
             Copy{fromBackBuffer ? "backbuffer" : std::string(*source), to->id, mode, fromBackBuffer});
         return true;
     }
 
-    // FBParseBind, 0x00460CE0: a state machine over the words (the engine's table is 0x0046107C).
+    static ViewportMode ViewportNamed(std::string_view word)
+    {
+        if (Same(word, "recalculate"))
+        {
+            return ViewportMode::Recalculate;
+        }
+        return Same(word, "stored") ? ViewportMode::Stored : ViewportMode::Original;
+    }
+
+    // The machine's state 0: a resource, the back buffer or null is the subject. False refuses the line.
+    bool BindFirstWord(Bind &bind, std::string_view word, bool &subject, int &state)
+    {
+        if (const Resource *resource = effect_.ResourceNamed(word))
+        {
+            if (!IsSurface(resource))
+            {
+                return false;
+            }
+            bind.resource = resource->id;
+            subject = true;
+            state = 1;
+            if (!IsTarget(resource))
+            {
+                bind.index = resource->index;
+                state = 3;
+            }
+        }
+        else if (Same(word, "at"))
+        {
+            state = 2;
+        }
+        else if (Same(word, "viewport"))
+        {
+            state = 6;
+        }
+        else if (Same(word, "backbuffer") || Same(word, "null"))
+        {
+            bind.subject = Same(word, "null") ? Bind::Subject::Unbind : Bind::Subject::BackBuffer;
+            subject = true;
+        }
+        return true;
+    }
+
+    // The machine's later states (the engine's table is 0x0046107C).
+    static void BindLaterWord(Bind &bind, std::string_view word, int &state)
+    {
+        switch (state)
+        {
+        case 1:
+            if (Same(word, "at"))
+            {
+                state = 2;
+            }
+            else if (Same(word, "viewport"))
+            {
+                state = 6;
+            }
+            break;
+        case 2:
+            bind.index = Atoi(word);
+            state = 3;
+            break;
+        case 3:
+        case 5:
+        case 6:
+            state = Same(word, "viewport") ? 7 : state;
+            break;
+        default: // 7: the mode
+            bind.viewport = ViewportNamed(word);
+            state = 8;
+            break;
+        }
+    }
+
+    // FBParseBind, 0x00460CE0: a state machine over the words.
     // `clear ...` is not a word of it, and `viewport` counts only after `at N` or a back buffer
     // resource: after the subject alone it waits for a second one, so the mode stays original.
     // The words after the mode are not read.
@@ -264,56 +348,13 @@ class LineParser
         int state = 0;
         for (auto word = tokens.Next(); word && state != 8; word = tokens.Next())
         {
-            switch (state)
+            if (state != 0)
             {
-            case 0:
-                if (const Resource *resource = effect_.ResourceNamed(*word))
-                {
-                    if (!IsSurface(resource))
-                    {
-                        return false;
-                    }
-                    bind.resource = resource->id;
-                    subject = true;
-                    state = 1;
-                    if (!IsTarget(resource))
-                    {
-                        bind.index = resource->index;
-                        state = 3;
-                    }
-                }
-                else if (Same(*word, "at"))
-                {
-                    state = 2;
-                }
-                else if (Same(*word, "viewport"))
-                {
-                    state = 6;
-                }
-                else if (Same(*word, "backbuffer") || Same(*word, "null"))
-                {
-                    bind.subject = Same(*word, "null") ? Bind::Subject::Unbind : Bind::Subject::BackBuffer;
-                    subject = true;
-                }
-                break;
-            case 1:
-                state = Same(*word, "at") ? 2 : Same(*word, "viewport") ? 6 : state;
-                break;
-            case 2:
-                bind.index = Atoi(*word);
-                state = 3;
-                break;
-            case 3:
-            case 5:
-            case 6:
-                state = Same(*word, "viewport") ? 7 : state;
-                break;
-            default: // 7: the mode
-                bind.viewport = Same(*word, "recalculate") ? ViewportMode::Recalculate
-                                : Same(*word, "stored")    ? ViewportMode::Stored
-                                                           : ViewportMode::Original;
-                state = 8;
-                break;
+                BindLaterWord(bind, *word, state);
+            }
+            else if (!BindFirstWord(bind, *word, subject, state))
+            {
+                return false;
             }
         }
         if (!subject)
@@ -324,7 +365,7 @@ class LineParser
         {
             bind.viewport = ViewportMode::Original; // FBIBindTarget(null, index, 0)
         }
-        filter_.instructions.push_back(std::move(bind));
+        filter_.instructions.emplace_back(std::move(bind));
         return true;
     }
 
@@ -347,7 +388,7 @@ class LineParser
         {
             return false;
         }
-        filter_.instructions.push_back(std::move(run));
+        filter_.instructions.emplace_back(std::move(run));
         return true;
     }
 
@@ -361,7 +402,7 @@ class LineParser
             return false;
         }
         const auto path = tokens.Next();
-        filter_.instructions.push_back(Dump{resource->id, path ? std::string(*path) : resource->id + ".dds"});
+        filter_.instructions.emplace_back(Dump{resource->id, path ? std::string(*path) : resource->id + ".dds"});
         return true;
     }
 
@@ -483,7 +524,7 @@ class Builder
         else if (State() == 4)
         {
             Pop();
-            if (resource_)
+            if (resource_ && effect_)
             {
                 // A duplicate id is dropped (FrameBufferEffect::AddResource, 0x00460280).
                 if (effect_->ResourceNamed(resource_->id) == nullptr)
@@ -578,30 +619,30 @@ class Builder
             Fail(); // error 4
             return;
         }
-        effect_ = Effect{};
-        effect_->id = attributes[0].value;
+        Effect &effect = effect_.emplace();
+        effect.id = attributes[0].value;
         for (std::size_t i = 1; i < attributes.size(); ++i)
         {
             const Attribute &attribute = attributes[i];
             if (Same(attribute.name, "layer"))
             {
-                effect_->layer = Atoi(attribute.value);
+                effect.layer = Atoi(attribute.value);
             }
             else if (Same(attribute.name, "domain"))
             {
                 if (Same(attribute.value, "cinematics") && !options_.cinematicsAllowed)
                 {
-                    effect_->cinematics = true;
+                    effect.cinematics = true;
                     Push(11); // 0x0046A0E9..0x0046A11E
                 }
             }
             else if (Same(attribute.name, "minlod"))
             {
-                effect_->minLod = Atoi(attribute.value);
+                effect.minLod = Atoi(attribute.value);
             }
             else if (Same(attribute.name, "availability"))
             {
-                effect_->available = Atoi(attribute.value) > 0; // setg, 0x0046A16F
+                effect.available = Atoi(attribute.value) > 0; // setg, 0x0046A16F
             }
         }
     }
@@ -643,7 +684,7 @@ class Builder
     // resource is valid (the engine's byte at +0x28, which ends in error 6) is not checked [I].
     void ReadResource(std::string_view name, const std::vector<Attribute> &attributes)
     {
-        if (attributes.empty() || !Same(attributes[0].name, "id"))
+        if (!effect_ || attributes.empty() || !Same(attributes[0].name, "id"))
         {
             Fail();
             return;
@@ -663,7 +704,8 @@ class Builder
                                                                                {"float", ResourceKind::Float},
                                                                                {"vector4f", ResourceKind::Vector4f},
                                                                                {"runtime", ResourceKind::Runtime}};
-        const auto kind = std::ranges::find_if(kKinds, [&](const auto &entry) { return Same(name, entry.first); });
+        const auto *const kind =
+            std::ranges::find_if(kKinds, [&](const auto &entry) { return Same(name, entry.first); });
         if (kind == std::end(kKinds))
         {
             Fail();
@@ -792,6 +834,81 @@ const Resource *Effect::ResourceNamed(std::string_view wanted) const
     return found != resources.end() ? &*found : nullptr;
 }
 
+namespace
+{
+
+// A comment, a processing instruction, CDATA or a declaration at the start of rest: gives CDATA's
+// text and returns where the file goes on, past rest's end when it has no closer. Nullopt for a tag.
+std::optional<std::size_t> SkipMarkup(Builder &builder, std::string_view rest)
+{
+    const auto past = [rest](std::string_view opener, std::string_view closer) {
+        const std::size_t end = rest.find(closer, opener.size());
+        return end == std::string_view::npos ? rest.size() : end + closer.size();
+    };
+    if (rest.starts_with("<!--"))
+    {
+        return past("<!--", "-->");
+    }
+    if (rest.starts_with("<?"))
+    {
+        return past("<?", "?>");
+    }
+    if (rest.starts_with("<![CDATA["))
+    {
+        const std::size_t end = rest.find("]]>");
+        if (end == std::string_view::npos)
+        {
+            return rest.size();
+        }
+        GiveText(builder, rest.substr(9, end - 9));
+        return end + 3;
+    }
+    if (rest.starts_with("<!"))
+    {
+        return past("<!", ">");
+    }
+    return std::nullopt;
+}
+
+// A start or end tag, the text between < and >. False where expat stops: the file is not well formed.
+bool GiveTag(Builder &builder, std::vector<std::string> &open, std::string_view tag)
+{
+    if (tag.starts_with('/'))
+    {
+        const std::string_view name = Trimmed(tag.substr(1));
+        if (open.empty() || open.back() != name)
+        {
+            return false;
+        }
+        open.pop_back();
+        builder.End(name);
+        return true;
+    }
+    const bool selfClosing = tag.ends_with('/');
+    if (selfClosing)
+    {
+        tag.remove_suffix(1);
+    }
+    std::string_view name;
+    std::vector<Attribute> attributes;
+    if (!ParseStart(tag, name, attributes))
+    {
+        return false;
+    }
+    builder.Start(name, attributes);
+    if (selfClosing)
+    {
+        builder.End(name);
+    }
+    else
+    {
+        open.emplace_back(name);
+    }
+    return true;
+}
+
+} // namespace
+
 std::vector<Effect> Read(std::string_view text, const Options &options)
 {
     Builder builder(options);
@@ -806,74 +923,17 @@ std::vector<Effect> Read(std::string_view text, const Options &options)
             break;
         }
         const std::string_view rest = text.substr(lt);
-        // Each skipped kind ends at its closer; one with none ends the file.
-        const auto skip = [&](std::string_view opener, std::string_view closer) {
-            const std::size_t end = rest.find(closer, opener.size());
-            return end == std::string_view::npos ? text.size() : lt + end + closer.size();
-        };
-        if (rest.starts_with("<!--"))
+        if (const auto next = SkipMarkup(builder, rest))
         {
-            at = skip("<!--", "-->");
+            at = lt + *next;
+            continue;
         }
-        else if (rest.starts_with("<?"))
+        const std::size_t close = rest.find('>');
+        if (close == std::string_view::npos || !GiveTag(builder, open, rest.substr(1, close - 1)))
         {
-            at = skip("<?", "?>");
+            break;
         }
-        else if (rest.starts_with("<![CDATA["))
-        {
-            const std::size_t end = rest.find("]]>");
-            if (end == std::string_view::npos)
-            {
-                break;
-            }
-            GiveText(builder, rest.substr(9, end - 9));
-            at = lt + end + 3;
-        }
-        else if (rest.starts_with("<!"))
-        {
-            at = skip("<!", ">");
-        }
-        else
-        {
-            const std::size_t close = rest.find('>');
-            if (close == std::string_view::npos)
-            {
-                break;
-            }
-            std::string_view tag = rest.substr(1, close - 1);
-            at = lt + close + 1;
-            if (tag.starts_with('/'))
-            {
-                const std::string_view name = Trimmed(tag.substr(1));
-                if (open.empty() || open.back() != name)
-                {
-                    break; // not well formed: expat stops here
-                }
-                open.pop_back();
-                builder.End(name);
-                continue;
-            }
-            const bool selfClosing = tag.ends_with('/');
-            if (selfClosing)
-            {
-                tag.remove_suffix(1);
-            }
-            std::string_view name;
-            std::vector<Attribute> attributes;
-            if (!ParseStart(tag, name, attributes))
-            {
-                break;
-            }
-            builder.Start(name, attributes);
-            if (selfClosing)
-            {
-                builder.End(name);
-            }
-            else
-            {
-                open.emplace_back(name);
-            }
-        }
+        at = lt + close + 1;
     }
     return builder.Done();
 }
