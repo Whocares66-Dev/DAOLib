@@ -173,6 +173,7 @@ Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagen
 
 ## The scene camera's behaviours (read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2 with subagents)
 
+- **Who holds it:** the GameModeController (`[app+0x114]`) holds the rig at +0x5C (0x006418ED) and the explore controller at +0x60 (0x00641929), read 2026-11-02.
 - **One object:** the controller's `cam` (`ctl+4`) is one plain object, `CameraRig` in the table (no vftable; the renderer's `GraphicsStructures::SceneCamera`, vftable 0x00AF77AC, is another thing). `CameraRig::Update` 0x006C4C60 runs every behaviour with its own `this`.
 - **The behaviours** are records in a vector at `cam+0x104`, found by (kind, key) (0x006C2A90; 0x006C29F0 answers whether one exists). Each updater is `__thiscall(cam, dt, record)` and its true return removes the record. The dispatch is at 0x006C4EA4:
   - 0, the position blend (0x006C2580), key 0: `cam+0x80` lerps from record +0x20 to +0x10.

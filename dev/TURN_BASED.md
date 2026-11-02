@@ -35,7 +35,7 @@ What pause freezes is the next question. It is some per-frame update that checks
 
 The wider probe (`dev/PROBE.md`) ran through startup, the main menu, loading a save, a conversation, exploring, and opening menu screens three times.
 
-**The game modes, by number.** The mode at `(app+0x114)->+0x78`, logged once a second, lines up with the `SetPaused` callers and with what was on screen:
+**The game modes, by number.** The engine's own `GetGameMode` (0x00640060) answers `[[ctl+0x74]+0x5C]`, the current mode object's number, and `+0x78` is the number `SwitchMode` stored beside it (0x00641E2C); read 2026-11-02. The mode at `(app+0x114)->+0x78`, logged once a second, lines up with the `SetPaused` callers and with what was on screen:
 
 | Mode | What | Evidence |
 |---|---|---|
