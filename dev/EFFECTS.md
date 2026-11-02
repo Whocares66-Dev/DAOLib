@@ -1359,7 +1359,8 @@ A light passes when [C]:
 - they share a room, or
 - the object's room is in the light's room's list.
 The list is the room's EnvRoomLightVisList (3164), read by `CRoom::vfunction4` into CRoom +0xC0 at 0x005D3C73; the test reads its first and last at +0xC4/+0xC8 through the light's +0x188 [C]. A single -1 entry passes everything; an empty list passes nothing more [C]. Core: level::Room::lightVis (DAOLib #243).
-- A lamp's or probe's room (+0x188) is the room whose .rml placed its layout [I]: the code that sets +0x188 was not found.
+- A lamp's or probe's room is set by `ObjectNodeLight::SetRoom` (slot 15 of all four light vtables, 0x0053D150; read 2026-11-02): `room+0x14`, or -1, at +0x168, the `CRoom*` at +0x188, then every child's slot 15. That it's the room whose .rml placed the layout is [I]: its caller goes through a register and wasn't found.
+- **An ambient light's score** ignores position, size and rooms: (|r|+|g|+|b|) / 3.0 of the shown colour, no alpha (0x0053D040, read 2026-11-02). A black one scores 0.
 
 **Held slots and fades (`LightList::ChooseFor` 0x00463E40, 0x0046A430, 0x0046A470)**
 Three static slots [C]:
