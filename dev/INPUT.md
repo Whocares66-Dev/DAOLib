@@ -169,7 +169,7 @@ The one object (`Get` 0x00895DC0, 0xE8 bytes at 0x00C3B9D8; data-tree name `Inpu
   - **The writer** (0x004E1CD0, `(value, path, section, key)`) writes `(UNASSIGNED)` for "".
   - **A word as text** (0x0088E560): "" for 0, else `Shift + `, `Alt + `, `Control + ` in that order, then the key's name, or `---<ERROR - Unregistered value >---` for an unknown word.
   - The display text (0x00881090, GUI.md) puts Ctrl outermost and reads the talk table instead.
-- **`ResetKeys`** (0x006EA9F0, `__cdecl ()`) [C]: clears the keys (0x00893D70), runs the defaults function 0x006E9510 (56 `SetKey` calls), then reads `keymap` (GDA 292): per row, the `Label` and the language's column (`EN-US` when the language has none); the label less its last two characters is the action and its suffix `_0` or `_1` the key; `TeleportPlayer--DEBUG` is skipped; the text is parsed (0x008823C0) and set with `SetKey(name, key, which, 0)`. It ends with 0x006E2FD0 (`PerformPrimaryAction` and `PerformSecondaryAction` in code, GUI.md).
+- **`ResetKeys`** (0x006EA9F0, `__cdecl ()`) [C]: clears the keys (0x00893D70), runs the defaults function 0x006E9510 (56 `SetKey` calls), then reads `keymap` (GDA 292): per row, the `Label` and the language's column (`EN-US` when the language has none); the label less its last two characters is the action and its suffix `_0` or `_1` the key; `TeleportPlayer--DEBUG` is skipped; the text is parsed (0x008823C0) and set with `SetKey(name, key, which, 0)`. It ends with 0x006E2FD0 (`PerformPrimaryAction` and `PerformSecondaryAction` in code, GUI.md: `SetKey` 0x00894CC0 twice with key 0 and no report, the primary mouse 0x0D with no modifier, stored at 0x006E3011 and 0x006E3019, and the secondary mouse 0x0D with Shift 0x100000, stored at 0x006E306C and 0x006E3074; read to its end 2026-11-01).
 - **Load** (0x00895580) [C]: for each action not hidden, each key present in the ini is parsed, taken from any other action (`TakeKey`) and set; a key missing sets its bit in +0x138.
 - **Save** (0x00895980) [C]: writes only the keys whose bit is set in +0x138, then clears the mask. Load sets the bits for keys the ini lacks [C]; that a change made on the controls screen sets them too is [I] (GUI.md has bit 0 as "primary changed or missing").
 - **Order at the start** (the game mode controller, 0x00641870, Addresses.h): `RegisterInputMessages`, `RegisterActions`, `ResetKeys` (0x006418B2), `LoadKeyBindings` (0x006418B7). `RegisterInputNames` (0x00895F10, from 0x006418A3) names the 76 numbered inputs 0–0x4B (`AccelerateCharacterLateral` to `Pre_Selection`), from narrow strings. Four are made out of order: the blocks for 0xB313DC, 0xB313C8, 0xB313B0 and 0xB31398 take ids 0x39, 0x36, 0x37 and 0x38. So 54–56 are `GUILeftCursorButton`, `GUIMiddleCursorButton` and `GUIRightCursorButton`, and 57 is `DisableMovement`, though `DisableMovement` is made first [C, read by my subagent and by both transcriptions].
@@ -177,7 +177,7 @@ The one object (`Get` 0x00895DC0, 0xE8 bytes at 0x00C3B9D8; data-tree name `Inpu
 ## Not read
 
 - 0x0087F210, 0x0087F2A0 and 0x0087EE80 past their calls; what writes +0x04/+0x08 besides 0x0087DF00; the 2-byte vector's use.
-- 0x006E2FD0 past its first literal; the secondary branch of the enable message (0x00894845).
+- The secondary branch of the enable message (0x00894845).
 - Which movie pushes which context name (the .gfx), which decides slot 1 or the map for the six groups above.
 - The effects behind the creature's flag bits 7 and 0, and the refresh flag +0xC3D.
 - 0x00890AE0 past its callers.
