@@ -336,7 +336,7 @@ p'.z += -9.8*Gravity*0.5*(T^2 - (T - h)^2)    // gravity never enters v
   - Two point lights, radius 2.
   - The particles are sprites drawn by their materials' family (the table above).
 - **At death:** `vfxcessation` (`cess.ani`, 3.33 s, once) ramps `rays` 10→0 and `glow` 7→0 between 0.30 and 0.31 s of its length (keys 19660 and 20315 of 65535: 1.0 and 1.03 s of its 3.33, just after the event below; the file section's reading), and fades the colour multipliers and lights.
-  - Its `.evt` fires event 16 at 0.97 s naming `expiration` and `expirationsmoke`. That arms those burst emitters (`Object` slot 64, 0x00549800; event 16's route there is inferred), which spawn 1 and 3 particles with Inheritance 0, left where they were born.
+  - Its `.evt` fires event 16 at 0.97 s naming `expiration` and `expirationsmoke`. That arms those burst emitters (`Object` slot 64, 0x00549800: an empty name arms every EmitType-1 emitter, a name only those whose node matches without case, read 2026-11-02; event 16's route there is inferred), which spawn 1 and 3 particles with Inheritance 0, left where they were born.
   - Then the effect is destroyed.
 - **While paused:** the wisp's `PauseAnimate` is 0, so its effect freezes.
 
