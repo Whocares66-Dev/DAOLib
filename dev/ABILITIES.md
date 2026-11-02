@@ -10,6 +10,14 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset's scr
 
 `CSSubActionHandler`'s table (filled by `0x007AB8D0`, a handler per type at +0x48 + 4 × type) gives: 4 `0x007AA560` (approach the melee ring), 6 `0x007A2410` (aim, see below; the store at +0x18, 0x007AB97F), 7 `0x007A66A0` (conjure), 8 `0x007A7440` (use), 14 `0x007A99B0` (approach a point), 15 `0x007AA200` (approach to a range), 22 `0x007A1ED0` (switch weapon set; the store at +0x58, 0x007ABA4C), 37 `0x007A4390` (play an animation), 39 `0x007A69E0` (turn to an object), 40 `0x007A6AF0` (turn to a point), 50 `0x007A1E40` (the command's own step, dispatched again by the command type through a second table at +0x4C; type 25's is `0x007A83F0`), 51 `0x007AAC10` (death). Read (the table's stores; corrected 2026-11-01, where this gave the aim as `0x007A1ED0` with a question mark).
 
+**The aim, sub-action 6 (`0x007A2410`)** [C], read 2026-11-01, thiscall (sub-action, owner), `ret 8`; each run, in this order:
+
+1. The owner's creature (the owner's slot +0x10); none answers −3.
+2. On the first run (flag 0 clear), the duration (+0x14) becomes the combat record's +0x60 (`[creature+0xC60]+0x60`), and flag 0 is set.
+3. The time left (`SubAction::RemainingMs` 0x007A1AE0: the duration less the elapsed time at +0xC, and 0 when the duration is 0 or less). At 0 or less it answers 1, done, with no sight test on that run; so a record with +0x60 at 0 finishes at once.
+4. The target is the data's object 0. With an object: a dead one answers −7 (`ForScript_IsDead`, 0x007A24AD), no `Combat::LineOfSight` (0x0067C750, creature, target, its id, 0) answers −1, and the direction is the target's +0x120 less the creature's. With no object: the data's vector 0 is the target point, no sight of it (0x0067C700, creature, the point, −1) answers −1, and the direction is the point less the creature's +0x120. So an object that has gone falls to the point; it does not fail.
+5. The direction is normalized (0x00451A30), and its angle to the creature's +0x130..+0x138 (the facing) is taken in degrees (0x004D4BF0: 0x004D4B80's result times 57.2958; that 0x004D4B80 is the angle between two vectors is [I]). Above 67.5 (0x00B2117C) answers −1; otherwise 0, still running.
+
 ### Queuing them: the UseAbility step (`0x00743F50`)
 
 - Read: it stops at once (queuing nothing, so the command ends) if the user is dead, if `abi`'s `AbilityType`, `TargetType` or `Range` cannot be read, if an item ability (`AbilityType` 4) has no item (object 1, or found by the string 0's tag through `0x006A6400`), if `CCCreatureStats::CanUseAbility` refuses, or if the target is not valid for the ability's `TargetType` (`0x00742E00`).
@@ -75,7 +83,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and the toolset's scr
 
 ### Not read
 
-- The conjure handler's own body, how the cast animation's event becomes CAST_IMPACT, the aim sub-action, `0x00742F20`'s value (int 6), and `0x007A4F90` (called by the conjure and the use with int 6).
+- The conjure handler's own body, how the cast animation's event becomes CAST_IMPACT, `0x00742F20`'s value (int 6), and `0x007A4F90` (called by the conjure and the use with int 6).
 
 ## Ability timing, cost, cooldown and projectiles
 
