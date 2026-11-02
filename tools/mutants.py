@@ -855,8 +855,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "cutscene-blend-too-small: weights summing to 1e-6 or under apply nothing (0x007D8312)",
         CUTSCENE,
-        "total <= kTooSmall",
-        "total <= 0.0",
+        "constexpr double kTooSmall = 1e-6;",
+        "constexpr double kTooSmall = 0.0;",
     ),
     Mutant(
         "cutscene-blend-left: a blend's slerp goes on the left of the actor's turn (0x007D8469)",
@@ -921,14 +921,14 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "cutscene-gad-extended: a clip that has ended with ExtendGad leaves its last key",
         CUTSCENE,
-        "if (ended && action.extendGad)",
-        "if (ended && !action.extendGad)",
+        "if (over && action.extendGad)",
+        "if (over && !action.extendGad)",
     ),
     Mutant(
         "cutscene-gad-live-turned: a live clip's travel is turned by the clips ended before it",
         CUTSCENE,
-        "local = Add(local, Rotate(extended, travel.position));",
-        "local = Add(local, travel.position);",
+        "const Vector3 position = Rotate(rotation, travel.position);",
+        "const Vector3 position = travel.position;",
     ),
     Mutant(
         "cutscene-headtrack-speed: a head-tracking action's speed is its own field, not the clip's speed",
@@ -2471,7 +2471,7 @@ MUTANTS: list[Mutant] = [
         "mat-pass-stage: two textures on a stage make a pass invalid",
         MATDEF,
         "if (plain[i]->name == plain[j]->name || sameStage)",
-        "if (plain[i]->name == plain[j]->name)",
+        "if (plain[i]->name == plain[j]->name || (sameStage && plain[i]->name == plain[j]->name))",
     ),
     Mutant(
         "mat-float-range: a Float is invalid over its Max",
@@ -2513,7 +2513,7 @@ MUTANTS: list[Mutant] = [
         "mat-unknown-type: a parameter of a Type the engine makes nothing of is not added",
         MATDEF,
         "if (!known)",
-        "if (false)",
+        "if (!known && parameter.name.empty())",
     ),
     Mutant(
         "mat-ref-case: a reference finds its set ignoring case",
