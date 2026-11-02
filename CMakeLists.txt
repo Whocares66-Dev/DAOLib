@@ -157,6 +157,7 @@ add_library(
     src/dao/core/FaceFx.cpp
     src/dao/core/Gad.cpp
     src/dao/core/Stage.cpp
+    src/dao/core/SubmissionProgram.cpp
     src/dao/core/Wind.cpp
     src/dao/core/Ctab.cpp
     src/dao/core/DaZip.cpp

@@ -181,7 +181,7 @@ Read in the GOG exe, the game's files, the scripts and elgara-agent's shader lis
   - u: with N (+0x2B0) 0, 0→1 over the ribbon; else k/N wrapping, phased by the birth count so the texture stays on the particles.
   - One frame value for the whole ribbon; the fade is the age curve's alpha.
 - **Sorting:** per emitter or group, farthest first, not per particle. Inside an emitter, array order; a dead particle is replaced by the last (0x005529A0).
-- **The draw order** (`dadefaultsub.sub.xml`): opaque, characters, `SplatParticles` (sorted), vista, water, fading trees, distortion, distortion water, then `TransparentGeometry` (sorted farthest first: the transparent class, emitter groups, emitters not `sorted_emitter`), then fading geometry. The file is a program the renderer runs, read in full in "The draw-order program" at the end of this file.
+- **The draw order** (`dadefaultsub.sub.xml`): opaque, characters, `SplatParticles` (sorted), vista, water, fading trees, distortion, distortion water, then `TransparentGeometry` (sorted farthest first: the transparent class, emitter groups, emitters not `sorted_emitter`), then fading geometry. The file is a program the renderer runs, read in full in "The draw-order program" at the end of this file. Core reads it: `dao/core/SubmissionProgram.h` (#293), whose `Program::Classify` is the engine's rule for which group takes a renderable: a group refuses on any exclusion, the first class whose includes match takes it, and a `keep copy` class lets it go on.
 - **Blend and depth by `VFX.mat` family** (depth test LESSEQUAL and no depth write unless said; linear, wrapping samplers):
 
 | Semantic | Blend | Alpha test | Note |
