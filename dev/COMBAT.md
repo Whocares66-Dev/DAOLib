@@ -328,7 +328,7 @@ So the order for one melee swing:
   3. The main hand's own `bitm_base` `Projectile` is never read.
   4. No ammo item, or a row of 0, makes no projectile (0x006B70A4 → 0x006B731A).
 - **The engine's made ammunition** (`0x006A0750(ammo base item, launcher, set)`) [C]: a new `CCItem` of the launcher's `bitm_base` `Ammo` base item, with its bool attribute at item +0x5D0 set (slot 21 of the attribute, called with 1 at 0x006A07EE). It is then equipped into RANGEDAMMO of that weapon set (`0x006BC7F0(item, 2, set)`). Nothing is made while bit 0x200 of the global flags 0xC371B4 is set; only the equipment's clear-all 0x007977D0 sets that bit (with 0x2).
-- **+0x5D0 marks it transient** [C]. It is the flag the item notes call "being destroyed" (ITEMS.md:144, SAVE_WRITER.md:294):
+- **+0x5D0 marks it transient** [C]. It is the bool attribute DefaultAmmo (name pushed 0x00754D7D, lea 0x00754DB4), which the item notes called "being destroyed" (ITEMS.md:144, SAVE_WRITER.md:294):
   - the item raises no ADDED or REMOVED event;
   - the save writer skips it, so a save never holds made ammo;
   - a shot never uses it up.
