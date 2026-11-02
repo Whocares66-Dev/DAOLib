@@ -292,7 +292,7 @@ The exe's instance LOD (0x52CD60, checked; the LOD value comes from 0x52E260, `d
   - +0x18/+0x1C = `WndGustMinDuration` 2 / `WndGustMaxDuration` 3 (0xA55D40);
   - +0x20 = `LvlWindSptGustFrequency` / 60 (0xA55D60; 9.96/60 if absent). **`oth000d` has 0: no gusts**;
   - strength +0x34 (0.25) and direction +0x40 ((0, 1, 0)), read by 0xA566F0;
-  - `WndTreeNumWindMatrices` (8) and `WndTreeNumLeafAngles` are clamped to 1..7 by 0xA571F0, and the response, exponents, oscillations, rocking and rustling into +0x50… (0xA55D70–0xA55DD0).
+  - `WndTreeNumWindMatrices` (8) is clamped to 1..7 and `WndTreeNumLeafAngles` to at least 1 by 0xA571F0, which stores them at +0x2C/+0x30 and then has each wind instance in [wind+0xD0] (0xA56B10) clamp them the same way and size its matrix arrays and vectors, and the response, exponents, oscillations, rocking and rustling into +0x50… (0xA55D70–0xA55DD0).
 - **But the trees' CSpeedWinds don't take most of it (checked).** 0x5369C0 (called at 0x5C8ADC) builds **one fixed SpeedWind text** from constants and `Load`s it (0x536B40) into each of **5 CSpeedWinds** (a 4-byte pimpl each, at manager+0x04…+0x14). The text:
 
       NumWindMatricesAndLeafAngles 6 8
