@@ -2152,6 +2152,21 @@ TEST_CASE("a blank save is a GFF4 SAVE of the engine's 78 templates that Read ta
     CHECK(save->campaign.resource.empty());
 }
 
+TEST_CASE("a blank save carries the build number and save version the game's load tests", "[savegame][blank]")
+{
+    // IsSupportedVersion 0x00645510 refuses a build number under 8183 (a blank's 0 was refused in play).
+    const auto save = sg::Read(sg::Blank());
+    REQUIRE(save);
+    CHECK(save->version.buildNumber == 13263);
+    CHECK(save->version.saveVersion == 1);
+    CHECK(save->version.cheatUsed == 0);
+    // Only the data block changed: the header and tables are as before, and the top struct is the same size.
+    const auto bytes = sg::Blank();
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    CHECK(bytes.size() == file->DataOffset() + 0x110);
+}
+
 TEST_CASE("a blank save written over reads back what was set", "[savegame][blank][write]")
 {
     const auto blank = sg::Blank();

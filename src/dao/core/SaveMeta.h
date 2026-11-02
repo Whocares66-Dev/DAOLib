@@ -59,6 +59,12 @@ struct SaveMeta
     // not a save's metadata. The screenshot is not in this file but beside the save.
     static std::optional<Written> Write(std::span<const std::byte> original, const SaveMeta &meta);
 
+    // The bytes of a metadata file with the two fields the save list lists a save by (16809 and 16810) set and
+    // the rest empty or 0, to give Parse and then Write as `original`.
+    // A caller sets every field the list shows: Write it with the area, the character, the time played, the level
+    // and the rest. Whether the game's list shows such a file has not been seen in play.
+    static std::vector<std::byte> Blank();
+
     static constexpr std::uint32_t kStory = 16511;
     static constexpr std::uint32_t kArea = 16800;
     static constexpr std::uint32_t kTimePlayed = 16801;
@@ -69,6 +75,8 @@ struct SaveMeta
     static constexpr std::uint32_t kBackground = 16806;
     static constexpr std::uint32_t kCharacter = 16807;
     static constexpr std::uint32_t kName = 16808;
+    static constexpr std::uint32_t kListed = 16809;      // "single player;", which the save list tests for
+    static constexpr std::uint32_t kListedShort = 16810; // "SP;"
 };
 
 // A slot's kind as the engine numbers it (0 a manual save, 1 an autosave,

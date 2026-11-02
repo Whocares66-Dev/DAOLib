@@ -2,11 +2,16 @@
 #include "dao/core/SaveMeta.h"
 #include "gff4_builder.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
-
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <shlobj.h>
 #include <string_view>
 #include <vector>
+#include <windows.h>
 
 using dao::core::SaveMeta;
 using dao::core::SlotFolderName;
@@ -208,6 +213,116 @@ TEST_CASE("the metadata's unnamed fields and its story ride along", "[savemeta][
     CHECK(root->String(16809).value_or(L"") == L"single player;");
     CHECK(root->String(16810).value_or(L"") == L"SP;");
     CHECK(root->String(SaveMeta::kStory).value_or(L"") == meta.story);
+}
+
+TEST_CASE("a blank metadata file parses as empty but for the two strings the save list tests", "[savemeta][blank]")
+{
+    const auto bytes = SaveMeta::Blank();
+    const auto file = dao::core::gff4::File::Parse(bytes);
+    REQUIRE(file);
+    CHECK(file->Type() == "SVMT");
+    CHECK(file->TypeVersion() == "V1.1");
+    REQUIRE(file->Templates().size() == 1);
+    CHECK(file->Templates()[0].size == 0x30);
+    CHECK(file->Templates()[0].fields.size() == 12);
+    CHECK(file->DataOffset() == 0xBC); // as all the real files checked: no word of 0xFFFFFFFF after the fields
+    const auto meta = SaveMeta::Parse(bytes);
+    REQUIRE(meta);
+    CHECK(meta->area.empty());
+    CHECK(meta->character.empty());
+    CHECK(meta->name.empty());
+    CHECK(meta->story.empty());
+    CHECK(meta->secondsPlayed == 0);
+    CHECK(meta->level == 0);
+    const auto root = file->Root();
+    REQUIRE(root);
+    CHECK(root->String(SaveMeta::kListed).value_or(L"") == L"single player;");
+    CHECK(root->String(SaveMeta::kListedShort).value_or(L"") == L"SP;");
+}
+
+TEST_CASE("a blank metadata file written over reads back what was set", "[savemeta][blank][write]")
+{
+    const auto blank = SaveMeta::Blank();
+    SaveMeta meta;
+    meta.area = L"Somewhere";
+    meta.character = L"A Hero";
+    meta.name = L"a save";
+    meta.story = L"A story so far.";
+    meta.secondsPlayed = 321;
+    meta.level = 4;
+    meta.characterClass = 2;
+    meta.gender = 1;
+    meta.race = 3;
+    meta.background = 5;
+    const auto out = SaveMeta::Write(blank, meta);
+    REQUIRE(out);
+    CHECK(out->unwritten.empty());
+    const auto back = SaveMeta::Parse(out->bytes);
+    REQUIRE(back);
+    CHECK(back->area == meta.area);
+    CHECK(back->character == meta.character);
+    CHECK(back->name == meta.name);
+    CHECK(back->story == meta.story);
+    CHECK(back->secondsPlayed == 321);
+    CHECK(back->level == 4);
+    CHECK(back->characterClass == 2);
+    CHECK(back->gender == 1);
+    CHECK(back->race == 3);
+    CHECK(back->background == 5);
+    // The two strings the list tests ride along, and the file written again unchanged is itself.
+    const auto file = dao::core::gff4::File::Parse(out->bytes);
+    REQUIRE(file);
+    const auto root = file->Root();
+    REQUIRE(root);
+    CHECK(root->String(SaveMeta::kListed).value_or(L"") == L"single player;");
+    const auto again = SaveMeta::Write(out->bytes, *back);
+    REQUIRE(again);
+    CHECK(again->bytes == out->bytes);
+}
+
+// A player's metadata, read only: the blank's header and template are its own bytes. Hidden, as the files are the
+// player's; run it by its exact name.
+TEST_CASE("a blank metadata file's header and template are a real one's, byte for byte", "[.][install-real-meta]")
+{
+    PWSTR documents = nullptr;
+    std::filesystem::path characters;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &documents)))
+    {
+        characters = std::filesystem::path(documents) / L"BioWare/Dragon Age/Characters";
+    }
+    CoTaskMemFree(documents);
+    if (!std::filesystem::is_directory(characters))
+    {
+        SKIP("no Documents/BioWare/Dragon Age/Characters here");
+    }
+    const auto blank = SaveMeta::Blank();
+    const auto blankFile = dao::core::gff4::File::Parse(blank);
+    REQUIRE(blankFile);
+    std::size_t files = 0;
+    for (const auto &item : std::filesystem::recursive_directory_iterator(characters))
+    {
+        if (!item.is_regular_file() || item.path().extension() != L".met")
+        {
+            continue;
+        }
+        std::ifstream in(item.path(), std::ios::binary);
+        std::vector<char> raw((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        const auto *first = reinterpret_cast<const std::byte *>(raw.data());
+        const std::vector<std::byte> bytes(first, first + raw.size());
+        const auto file = dao::core::gff4::File::Parse(bytes);
+        REQUIRE(file);
+        REQUIRE(file->DataOffset() == blankFile->DataOffset());
+        CHECK(std::equal(blank.begin(), blank.begin() + static_cast<std::ptrdiff_t>(blankFile->DataOffset()),
+                         bytes.begin()));
+        if (++files == 20)
+        {
+            break;
+        }
+    }
+    if (files == 0)
+    {
+        SKIP("no .das.met under Documents/BioWare/Dragon Age/Characters");
+    }
 }
 
 TEST_CASE("only a save's metadata is written", "[savemeta][write]")

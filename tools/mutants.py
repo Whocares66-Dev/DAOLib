@@ -1084,8 +1084,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "savegame-blank-data-offset: the header gives the data's offset after the field tables and the word the engine leaves",
         SAVEGAME_BLANK,
-        "(kSaveFields.size() * kFieldBytes) + 4;",
-        "(kSaveFields.size() * kFieldBytes);",
+        "(fields.size() * kFieldBytes) + (endWord ? 4 : 0);",
+        "(fields.size() * kFieldBytes);",
     ),
     Mutant(
         "savegame-blank-field-offset: a template's fields are found by their index in the one table of fields",
@@ -1102,14 +1102,58 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "savegame-blank-type: the file's type is SAVE, version V1.1",
         SAVEGAME_BLANK,
-        'PutText(out, "GFF V4.0PC  SAVEV1.1");',
-        'PutText(out, "GFF V4.0PC  SAVEV1.0");',
+        'PutText(out, "V1.1");',
+        'PutText(out, "V1.0");',
     ),
     Mutant(
         "savegame-blank-root: the top struct is made, nulled as a blank struct is, at the start of the data",
         SAVEGAME_BLANK,
         "if (!editor.New(0))",
         "if (!editor.New(1))",
+    ),
+    # The version a blank save carries, which the game's load tests (DAOLib #307, IsSupportedVersion 0x00645510).
+    Mutant(
+        "savegame-blank-build-number: a blank's build number is the game's 13263, not 0, which the load refuses",
+        SAVEGAME_BLANK,
+        "save->version.buildNumber = kBuildNumber;",
+        "save->version.buildNumber = 0;",
+    ),
+    Mutant(
+        "savegame-blank-build-number-value: the build number is 13263",
+        SAVEGAME_BLANK,
+        "kBuildNumber = 13263;",
+        "kBuildNumber = 8182;",
+    ),
+    Mutant(
+        "savegame-blank-save-version: a blank's save version is 1, so the engine converts the tree by label",
+        SAVEGAME_BLANK,
+        "save->version.saveVersion = kSaveVersionInternal;",
+        "save->version.saveVersion = 0;",
+    ),
+    Mutant(
+        "savegame-blank-save-version-value: the save version is 1",
+        SAVEGAME_BLANK,
+        "kSaveVersionInternal = 1;",
+        "kSaveVersionInternal = 2;",
+    ),
+    # A blank metadata file (DAOLib #307).
+    Mutant(
+        "savemeta-blank-listed: the blank sets 16809, which the save list tests for",
+        SAVEMETA,
+        '!ed.SetString(*root, kListed, L"single player;")',
+        '!ed.SetString(*root, kListedShort, L"single player;")',
+    ),
+    Mutant(
+        "savemeta-blank-no-end-word: a metadata file's fields are not closed by a word of 0xFFFFFFFF",
+        SAVEMETA,
+        "detail::kMetaFields, false);",
+        "detail::kMetaFields, true);",
+    ),
+    Mutant(
+        "savemeta-blank-type: the metadata's type is SVMT",
+        SAVEMETA,
+        'Directory("SVMT"',
+        'Directory("SAVE"',
     ),
     # A movie patched in memory: every size around inserted code grows, every
     # branch across it is fixed, placements land in the right sprite and frame;

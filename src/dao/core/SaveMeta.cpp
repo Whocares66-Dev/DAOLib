@@ -1,6 +1,8 @@
 #include "dao/core/SaveMeta.h"
 
 #include "dao/core/Gff4.h"
+#include "dao/core/SaveDirectory.h"
+#include "dao/core/generated/SaveMetaTemplates.h"
 
 #include <array>
 
@@ -99,6 +101,28 @@ std::optional<SaveMeta::Written> SaveMeta::Write(std::span<const std::byte> orig
     text(kName, meta.name);
     out.bytes = ed.Bytes();
     return out;
+}
+
+// Read 2026-11-02 for #307 in 538 .das.met of one player: all are the one template of 48 bytes (SVMT, V1.1,
+// the file's data at 0xBC, no word of 0xFFFFFFFF after the fields, which a .das has), and all have 16809 and
+// 16810 set. The save list reads those two (dev/SAVES.md), so the blank sets them as the engine writes them;
+// every other string is null and every number 0.
+std::vector<std::byte> SaveMeta::Blank()
+{
+    const std::vector<std::byte> directory =
+        savegame::detail::Directory("SVMT", detail::kMetaTemplates, detail::kMetaFields, false);
+    const auto bare = gff4::File::Parse(directory);
+    if (!bare)
+    {
+        return {};
+    }
+    gff4::Editor ed(*bare);
+    const auto root = ed.New(0);
+    if (!root || !ed.SetString(*root, kListed, L"single player;") || !ed.SetString(*root, kListedShort, L"SP;"))
+    {
+        return {};
+    }
+    return ed.Bytes();
 }
 
 std::optional<SlotFolderName> SlotFolderName::Parse(std::wstring_view folder)

@@ -934,8 +934,8 @@ struct GameState
     std::int32_t worldTimeMs = 0;
 };
 
-// A VERS. The engine's load path reads none of it (the build number is written, never checked), so a
-// save of another build loads.
+// A VERS. The load refuses a save whose build number is under 8183 or whose save version is under 0
+// (IsSupportedVersion); nothing else of it is read, so a save of another build loads. Blank sets 13263 and 1.
 struct Version
 {
     std::uint8_t cheatUsed = 0;
@@ -1037,7 +1037,8 @@ struct Written
 std::optional<Written> Write(std::span<const std::byte> original, const Save &save);
 
 // Returns the bytes of a saved game with nothing in it, to give Read and then Write as `original`.
-// A caller sets all it needs. Whether the game loads the result has not been seen in play.
+// Its version is the build number 13263 and the save version 1, which the game's load tests; a caller sets all
+// else it needs. Whether the game loads a save with nothing else in it has not been seen in play.
 std::vector<std::byte> Blank();
 
 } // namespace dao::core::savegame
