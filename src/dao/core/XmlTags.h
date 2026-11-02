@@ -86,6 +86,51 @@ inline std::optional<std::string> Attribute(std::string_view tag, std::string_vi
     return std::nullopt;
 }
 
+// Calls visit(name, value) with each `name="value"` of a tag, in the order written, the value with
+// its entities replaced, spaces allowed about the `=` and either quote. A tag's element is skipped,
+// and what is not a quoted pair ends the walk, as an Attribute that finds nothing does.
+template <class Visit> void ForEachAttribute(std::string_view tag, Visit &&visit)
+{
+    std::size_t p = tag.find_first_of(" \t\r\n/");
+    while (p != std::string_view::npos && p < tag.size())
+    {
+        while (p < tag.size() && (Space(tag[p]) || tag[p] == '/'))
+        {
+            ++p;
+        }
+        const std::size_t nameAt = p;
+        while (p < tag.size() && !Space(tag[p]) && tag[p] != '=')
+        {
+            ++p;
+        }
+        const std::string_view name = tag.substr(nameAt, p - nameAt);
+        while (p < tag.size() && Space(tag[p]))
+        {
+            ++p;
+        }
+        if (name.empty() || p >= tag.size() || tag[p] != '=')
+        {
+            return;
+        }
+        ++p;
+        while (p < tag.size() && Space(tag[p]))
+        {
+            ++p;
+        }
+        if (p >= tag.size() || (tag[p] != '"' && tag[p] != '\''))
+        {
+            return;
+        }
+        const std::size_t end = tag.find(tag[p], p + 1);
+        if (end == std::string_view::npos)
+        {
+            return;
+        }
+        visit(name, Unescape(tag.substr(p + 1, end - p - 1)));
+        p = end + 1;
+    }
+}
+
 // Returns a tag's element: its text up to the first space or slash.
 inline std::string_view ElementOf(std::string_view tag)
 {

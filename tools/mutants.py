@@ -162,6 +162,8 @@ SAVEGAME_H = "src/dao/core/Savegame.h"
 SAVEGAME_WRITE = "src/dao/core/SavegameWrite.cpp"
 CTAB = "src/dao/core/Ctab.cpp"
 FACEFX = "src/dao/core/FaceFx.cpp"
+MATDEF = "src/dao/core/MaterialDefinition.cpp"
+MATDEF_H = "src/dao/core/MaterialDefinition.h"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -2276,6 +2278,234 @@ MUTANTS: list[Mutant] = [
         STAGE,
         "if (camera.tag == tag)",
         "if (camera.tag != tag)",
+    ),
+    Mutant(
+        "mat-sm3-level0: shader model 3 is refused at level 0, whatever the device has",
+        MATDEF,
+        "            if (level == 0)\n            {\n                return false;\n            }\n",
+        "",
+    ),
+    Mutant(
+        "mat-sm3-device: a shader model 3 test needs a device with it",
+        MATDEF,
+        "pass = pass && shaderModel3;",
+        "pass = pass;",
+    ),
+    Mutant(
+        "mat-sm2-device: a shader model 2 test is met by a device without 3 and not by one with it",
+        MATDEF,
+        "pass = !shaderModel3;",
+        "pass = true;",
+    ),
+    Mutant(
+        "mat-sm2-level0: a shader model 2 test at level 0 asks nothing of the device",
+        MATDEF,
+        "if ((flags & 2) != 0 && level != 0)",
+        "if ((flags & 2) != 0)",
+    ),
+    Mutant(
+        "mat-detail-high: HIGH admits level 3 only",
+        MATDEF,
+        "admits |= flags & 4;",
+        "admits |= flags & 0;",
+    ),
+    Mutant(
+        "mat-detail-medium: MEDIUM admits levels 2 and 3",
+        MATDEF,
+        "admits |= flags & 8;",
+        "admits |= flags & 0;",
+    ),
+    Mutant(
+        "mat-detail-level0: level 0 admits no detail",
+        MATDEF,
+        "        default:\n            break;\n        }\n        pass = admits != 0;",
+        "        default:\n            admits = 0x1C;\n            break;\n        }\n        pass = admits != 0;",
+    ),
+    Mutant(
+        "mat-sm2-clears-detail: shader model 2 clears the detail written before it",
+        MATDEF,
+        "test.flags &= ~0x1CU;",
+        "test.flags &= ~0U;",
+    ),
+    Mutant(
+        "mat-sm2-refuses-detail: a detail after shader model 2 is dropped",
+        MATDEF,
+        "if ((test.flags & 2) == 0)",
+        "if (true)",
+    ),
+    Mutant(
+        "mat-first-technique: a block keeps its first technique",
+        MATDEF,
+        "return block.technique ? &discardedTechniques_.emplace_back() : &block.technique.emplace();",
+        "return &block.technique.emplace();",
+    ),
+    Mutant(
+        "mat-first-logic: a semantic keeps its first Logic as its tree",
+        MATDEF,
+        "if (!parent.semantic->logic)",
+        "if (true)",
+    ),
+    Mutant(
+        "mat-technique-with-blocks: a block with a technique and blocks inside is invalid",
+        MATDEF,
+        "(!block.children.empty() || !TechniqueValid(*block.technique))",
+        "(!TechniqueValid(*block.technique))",
+    ),
+    Mutant(
+        "mat-leaf-above: a block with an invalid block inside is invalid",
+        MATDEF,
+        "return std::ranges::all_of(block.children, BlockValid);",
+        "return true;",
+    ),
+    Mutant(
+        "mat-technique-passes: a technique with no pass is invalid",
+        MATDEF,
+        "return !technique.passes.empty() && std::ranges::all_of",
+        "return std::ranges::all_of",
+    ),
+    Mutant(
+        "mat-pass-shaders: a pass needs a vertex and a pixel shader",
+        MATDEF,
+        "if (pass.vertexShader.empty() || pass.pixelShader.empty())",
+        "if (pass.vertexShader.empty())",
+    ),
+    Mutant(
+        "mat-pass-names: two parameters of a name make a pass invalid",
+        MATDEF,
+        "if (plain[i]->name == plain[j]->name || sameStage)",
+        "if (sameStage)",
+    ),
+    Mutant(
+        "mat-pass-stage: two textures on a stage make a pass invalid",
+        MATDEF,
+        "if (plain[i]->name == plain[j]->name || sameStage)",
+        "if (plain[i]->name == plain[j]->name)",
+    ),
+    Mutant(
+        "mat-float-range: a Float is invalid over its Max",
+        MATDEF,
+        "return LeadingFloat(min) <= value && value <= LeadingFloat(max);",
+        "return LeadingFloat(min) <= value;",
+    ),
+    Mutant(
+        "mat-float-limits: a Float's Min and Max are -10000 and 10000 where not written",
+        MATDEF_H,
+        'std::string min = "-10000";',
+        'std::string min = "0";',
+    ),
+    Mutant(
+        "mat-effect-pass-valid: a pass with an effect is valid",
+        MATDEF,
+        "return true; // valid when its effect is found",
+        "return false; // valid when its effect is found",
+    ),
+    Mutant(
+        "mat-effect-pass-bare: a pass with an effect keeps no shaders or parameters",
+        MATDEF,
+        "if (!pass.effect.empty())\n        {\n            pass.vertexShader.clear();",
+        "if (false)\n        {\n            pass.vertexShader.clear();",
+    ),
+    Mutant(
+        "mat-own-after-ref: an own parameter written after a reference replaces its copy",
+        MATDEF,
+        ".mapped = holder == list.end()",
+        ".mapped = false",
+    ),
+    Mutant(
+        "mat-ref-order: the parameter that takes the removed one's place is the last",
+        MATDEF,
+        "*holder = std::move(list.back());",
+        "*holder = std::move(list.front());",
+    ),
+    Mutant(
+        "mat-unknown-type: a parameter of a Type the engine makes nothing of is not added",
+        MATDEF,
+        "if (!known)",
+        "if (false)",
+    ),
+    Mutant(
+        "mat-ref-case: a reference finds its set ignoring case",
+        MATDEF,
+        "EqualsIgnoringCase(set.name, name)",
+        "set.name == name",
+    ),
+    Mutant(
+        "mat-set-case: a set is found by name ignoring case",
+        MATDEF,
+        "EqualsIgnoringCase(set.name, wanted)",
+        "set.name == wanted",
+    ),
+    Mutant(
+        "mat-misplaced: a set is read only under the Material",
+        MATDEF,
+        "return parent == Element::Material;\n    case Element::Logic:",
+        "return parent == Element::Material || parent == Element::Semantic;\n    case Element::Logic:",
+    ),
+    Mutant(
+        "mat-id-name: an ID names an element as a Name does",
+        MATDEF,
+        '|| EqualsIgnoringCase(name, "ID")',
+        "|| false",
+    ),
+    Mutant(
+        "mat-semantic-name: a semantic with no name draws nothing",
+        MATDEF,
+        "chosen->name.empty() || ",
+        "",
+    ),
+    Mutant(
+        "mat-default-semantic: the default semantic is named exactly Default",
+        MATDEF,
+        'if (semantics[at].name == "Default")',
+        'if (EqualsIgnoringCase(semantics[at].name, "Default"))',
+    ),
+    Mutant(
+        "mat-stage-word: a stage is a word, and 0xFFFF is none",
+        MATDEF,
+        "LeadingInteger(stage) & 0xFFFF",
+        "LeadingInteger(stage) & 0x7FFFFFFF",
+    ),
+    Mutant(
+        "mat-size-default: a parameter's Size is 1 where not written",
+        MATDEF,
+        "return size.empty() ? 1 :",
+        "return size.empty() ? 0 :",
+    ),
+    Mutant(
+        "mat-array-by-size: a Vector4f is an array by its Size",
+        MATDEF,
+        "return Count() > 1 ? Kind::Vector4Array : Kind::Vector4;",
+        "return Count() > 0 ? Kind::Vector4Array : Kind::Vector4;",
+    ),
+    Mutant(
+        "mat-groups-end: a number read to the text's end is the last of the groups",
+        MATDEF,
+        "if (!ReadFloat(text, at, component) || at >= text.size())",
+        "if (!ReadFloat(text, at, component))",
+    ),
+    Mutant(
+        "mat-vector-one-group: a Vector4 takes the Default's one group and else zeros",
+        MATDEF,
+        "return groups.size() == 1 ? groups.front() : kZero;",
+        "return groups.empty() ? kZero : groups.front();",
+    ),
+    Mutant(
+        "mat-array-lost: a Default shorter than the Size is lost",
+        MATDEF,
+        "if (groups.size() < wanted)",
+        "if (groups.empty())",
+    ),
+    Mutant(
+        "mat-matrix-identity: a matrix with no Default is the identity",
+        MATDEF,
+        "return MatrixDefault().value_or(kIdentity);",
+        "return MatrixDefault().value_or(Matrix{});",
+    ),
+    Mutant(
+        "mat-attributes-end: the next attribute starts after a value's closing quote",
+        XMLTAGS,
+        "p = end + 1;",
+        "p = end;",
     ),
 ]
 
