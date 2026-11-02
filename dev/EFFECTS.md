@@ -389,7 +389,7 @@ Read in the files (ghilana, `tools/gff4.py`) and the GOG exe, for DAOParagonEngi
   - c23 = (alpha, falloff, invert, 1);
   - with none, (1,1,1,1) and (0,1,0,1), a weight of 0.
   - What +0x2D4 is, inferred to be the effect's creation tint, is not read.
-- **b4** (`g_bShaderControlBooleans[4]`, usage 0x15, provider 0x004F8BF0 through the switch 0x004F8A10) is the drawn object's +0x2FC; b5 is the global byte 0x00BF2300.
+- **b4** (`g_bShaderControlBooleans[4]`, usage 0x15, provider 0x004F8BF0 through the switch 0x004F8A10) is the drawn object's +0x2FC; b5 is the global byte 0x00BF2300, stored by Renderer::SetDepthPassColorWrite (0x0045C190, at 0x0045C1D1), the depth pass's colour-write flag; it is 1 at the file's start and not constant.
 - **Clip channels 33 to 35 are bound live** (the name table 0x0055D9A0, the lookup 0x00542A50): RemoteMaterialTintColor, FresnelFalloff and Alpha write the remote material's own fields. Many effects have a static alpha of 0 and raise it from a clip. The ghost's clip keys nothing (its `dura` is 0.5 s with no channels, and no events), so its values are the model's: White.dds, falloff 1.2, invert 0, alpha 1, tint (0.95, 1, 0.6).
 - **The White.dds the game takes** for it is an add-in's copy (the dao_prc_str and dao_prc_gib texture pack, higher in the order), not core's `gui.erf` copy, a 16 × 16 all-white texture.
 
