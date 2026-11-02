@@ -31,7 +31,7 @@ Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2 (a subag
 | 6 | Health (7) | max(0, CON − 10) × 5 | `0x0079CEA0` |
 | 7 | Mana_Stamina (8) | max(0, WIL − 10) × 5 | `0x0079CF50` |
 | 8 | Resistance_Mind (32) | ((MAG − 10) + (WIL − 10) + (CUN − 10)) × 0.5, no floor | `0x0079D000` |
-| 9 | Resistance_Physical (33) | the same over STR, CON and DEX (the operand order read; that each term is −10 inferred) | `0x0079D0F0` |
+| 9 | Resistance_Physical (33) | the same over STR, CON and DEX (read 2026-11-01: each less the double 10.0 at 0x00AE7D48, 0x0079D1A1–0x0079D1BA, the sum times the double 0.5 at 0x00AE70F8, 0x0079D1C2) | `0x0079D0F0` |
 
 - So attack, defense, spellpower, the resistances, and health's and mana's maximum follow the attributes live: there is no stored derived value to recompute. Everything else (armor, crit, damage, regeneration rates, level, class) is a plain base + modifier set by the scripts and effects.
 
@@ -77,8 +77,8 @@ Pops object, property, value type (default 1); the four getters each call a slot
   - 5, SpellPower (13): max0(MAG) (`0x0079CDF0`).
   - 6, Health (7): max0(CON)×5 (`0x0079CEA0`).
   - 7, Mana_Stamina (8): max0(WIL)×5 (`0x0079CF50`).
-  - 8, Resistance_Mind (32): from MAG, WIL and CUN, each less 10, summed and ×0.5 (`0x0079D000`; the exact signs not checked).
-  - 9, Resistance_Physical (33): from STR, CON and DEX the same way (`0x0079D0F0`; the signs not checked).
+  - 8, Resistance_Mind (32): from MAG, WIL and CUN, each less 10, summed and ×0.5 (`0x0079D000`; read 2026-11-01: each term less 10, no floor, the sum times 0.5, 0x0079D0B1–0x0079D0D4).
+  - 9, Resistance_Physical (33): from STR, CON and DEX the same way (`0x0079D0F0`; read 2026-11-01: each term less 10, no floor, the sum times 0.5, 0x0079D1A1–0x0079D1C2).
   - The attribute ids are 1 STR, 2 DEX, 3 WIL, 4 MAG, 5 CUN, 6 CON.
 
 ### SetCreatureProperty (740, `0x00669890`) and UpdateCreatureProperty (741, `0x006699C0`)

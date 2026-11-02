@@ -370,7 +370,7 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
     - 0x007A0E30 sends a type 1..11 with an apply-table entry to that handler, after the target's slot 0x6C allows it. Any other type goes to `EffectsHolder::RaiseApplyEffect` 0x0079FE90, then 0x0079FC10.
     - Of the handled types, type 4 (visual effect) writes int 2 itself and calls 0x0079F7A0 directly (0x007A00A0). The type-5 handler (0x007A0348, 0x007A0396) and type 8, PARALYZE (0x007A05D7), call 0x0079FC10 themselves.
     - Types 2, 6, 9, 10 and 11 reach neither 0x0079FC10 nor 0x0079F7A0; type 7 (death) reaches 0x0079FC10 through RaiseApplyEffect 0x0079FE90 (corrected 2026-10-23 by lib-agent-2: it was listed with those that never do; see the next bullet).
-    - The apply table has entries for types 2 and 4..11; type 1's was not read.
+    - The apply table has entries for types 1, 2 and 4..11: type 1's is `0x00A21F90`, which answers 0 and does nothing else (`xor eax, eax; ret 8`, read 2026-11-01), and its remove `0x007421D0` answers 1.
     - So an effect's engine int 2 is drawn for every type without a handler (the scripted types 1000 and up), and for types 4, 5, 7 and 8 (type 7 added: corrected 2026-10-23 by lib-agent-2).
   - **The type-7 handler calls RaiseApplyEffect itself** (corrected 2026-10-23 by lib-agent-2; read 2026-10-23) [C]:
     - `EffectsHolder::RaiseApplyEffect` 0x0079FE90 has two callers in .text: 0x007A110F, in 0x007A0E30's path for types without a handler, and **0x007A1371, in the type-7 (death) handler 0x007A12E0**.
@@ -442,7 +442,7 @@ What an effect makes a creature play (the knockdown's fall, loop and get-up, stu
 
 Read 2026-10-18 in the GOG exe and the toolset's scripts by lib-agent-2 (a subagent), for paragon-agent-2. "Read" means seen in the code; "inferred" is marked.
 
-**The native handler tables.** `0x007a1840` (the effects manager's setup; the manager is `*(client app+0x1AC)+0x68`) fills two tables of 12 entries: `[manager+0]` for applying and `[manager+4]` for removing, indexed by effect type. Read:
+**The native handler tables.** `0x007a1820` (the effects manager's setup, corrected 2026-11-01 from `0x007a1840`, a loop inside it; the manager is `*(client app+0x1AC)+0x68`) fills two tables of 12 entries: `[manager+0]` for applying and `[manager+4]` for removing, indexed by effect type. Read:
 
 | Type | Name (script.ldf) | Apply | Remove |
 |---|---|---|---|
