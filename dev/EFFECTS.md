@@ -550,7 +550,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
 
 ###### The states (`+0x448`, the update 0x007E9630's jump table at 0x007E969C) [C]
 
-- **0 → 1, loaded and held:** at load (0x007E8700 → 0x007E6F70). `+0x444` = 1. Under `HideLaunch` the model's alpha is 0. Then 0x007E7FC0(1) turns the model's weapon trails on, and the attached effect is made if there is one.
+- **0 → 1, loaded and held:** at load (0x007E8700 → 0x007E6F70). `+0x444` = 1. Under `HideLaunch` the model's alpha is 0. Then 0x007E7FC0(0) turns the model's weapon trails off (the call at 0x007E879F pushes 0; corrected 2026-11-01, read), and the attached effect is made if there is one. The trails come on at the launch, 0x007E80E0: 0x007E7FC0(1), with ebx set to 1 at 0x007E8252 and pushed at 0x007E8264.
 - **2, flying** (0x007E9170). The first update after release (`+0x440` = 0) is the launch, 0x007E80E0:
   - The model is detached from the hand and its alpha set to 1.
   - The model's own tree plays anim 501 `vfxduration` (CProjectile slot 44 0x0069B3D0, args 501, 1.0, −1.0, 1).
