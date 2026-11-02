@@ -1469,3 +1469,11 @@ With `PhysicsEmitter` (blueprint +0x130 bit 0), 67 of the core game's 3,078 emit
 - **Each particle is a PhysX sphere** (0x00554080), radius 0.1 at first and max(scaleA, scaleB) * S from the fills, with the particle's birth position and velocity. Group 6 with `CanParticlesSplat`, else 1, and only group 6 reports contact.
 - **Each frame** (0x00554220): the emitter's acceleration (+0x3D0) goes in as force mode 5, PhysX's acceleration [I], and the position comes back from the pose. Velocity and axes don't.
 - **On contact** (0x00554280, from `EmitterManager::BeginUpdate`): the quad turns onto the surface, the position sits 0.01 off it, the actor is released and +0x75 is set. `UpdateParticles` (0x00552491) then spawns the splat and removes the particle. A non-splatter just bounces until it ages out.
+
+- **Physics ribbons** exist in the code: a blueprint with both `PhysicsEmitter` and `LinkParticlesTogether` makes `ObjectNodeEmitterSpriteLinked<PhysicsSpriteParticle>`, with a sphere at each joint (0x00584F43-0x00584F69). No emitter of the core game has both: of 3,078, 67 are physics and 30 linked. The add-ins aren't read.
+
+## Cloth wind (read 2026-11-01, two readings)
+
+`ClothWind` (`Update` 0x00586850, `GetWindVector` 0x005865B0) gives a cloth node a force of direction * strength, as PhysX cloth parameters 0xC, 0xD, 0xE. Four channels, strength and the direction's x, y and z, each step `(target - current) * dt * response`, dt clamped to 0.05, capped by a limit a second. Gusts alternate with calms, each of a random length: a gust adds random strength and turns the direction by a random vector. Flags take the direction, strength or whole parameter block from the level's `.wnd`, sampled every +0x54 s (default 1).
+
+No template of any `.mmh` in the core game holds `MMHClothWindEnabled` (6257), so no core model's file reaches these fields (scanned 2026-11-01; the add-ins aren't read).
