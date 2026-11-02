@@ -234,6 +234,18 @@ using TextureUnits = std::function<std::optional<int>(std::string_view texture)>
 // the 16 stages.
 Values ValuesOf(const State &state, const TextureUnits &units = {});
 
+// The sampler states a state names for one texture parameter, by its SamplerName; unset where it names none.
+struct NamedSampler
+{
+    std::string texture;
+    std::array<std::optional<std::uint32_t>, kSamplerTypes> values;
+};
+
+// Returns a state's samplers named by a texture, in the order first named, a later entry of the same
+// name and type replacing an earlier. For a caller that finds the units itself, in place of TextureUnits.
+// The names are matched with case, as a shader's table is searched by `units`.
+std::vector<NamedSampler> NamedSamplers(const State &state);
+
 // Returns what is set when a pass draws under its state: the defaults, with the entries the pass
 // names over them. Nothing of the state drawn before is kept, so a value an earlier state named and
 // this one does not is back at the default. The defaults' own texture-named samplers are not part of

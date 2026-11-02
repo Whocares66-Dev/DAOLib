@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <utility>
 
 namespace dao::core::sta
@@ -395,6 +396,26 @@ Values ValuesOf(const State &state, const TextureUnits &units)
         }
     }
     return values;
+}
+
+std::vector<NamedSampler> NamedSamplers(const State &state)
+{
+    std::vector<NamedSampler> named;
+    for (const SamplerEntry &entry : state.samplers)
+    {
+        if (entry.texture.empty())
+        {
+            continue;
+        }
+        auto found = std::ranges::find(named, entry.texture, &NamedSampler::texture);
+        if (found == named.end())
+        {
+            named.push_back({.texture = entry.texture, .values = {}});
+            found = std::prev(named.end());
+        }
+        found->values[static_cast<std::size_t>(entry.type)] = entry.value;
+    }
+    return named;
 }
 
 Values Effective(const State &defaults, const State &pass, const TextureUnits &units)

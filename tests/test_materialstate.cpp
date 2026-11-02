@@ -173,6 +173,27 @@ TEST_CASE("a sampler named by a texture is placed by the shader's unit, or skipp
     CHECK_FALSE(sta::Effective(defaults, pass, far).sampler[0][I(SamplerType::AddressV)]);
 }
 
+TEST_CASE("a state's samplers named by a texture are grouped by name, the later entry winning", "[sta]")
+{
+    const auto state = sta::Read(R"(<MaterialState Name="s">
+  <SamplerState SamplerName="smpDecal" State="SAMP_ADDRESSU" Value="TEXADD_CLAMP" />
+  <SamplerState Stage="2" State="SAMP_ADDRESSU" Value="TEXADD_MIRROR" />
+  <SamplerState SamplerName="smpNormal" State="SAMP_MINFILTER" Value="TEXFILT_POINT" />
+  <SamplerState SamplerName="smpDecal" State="SAMP_ADDRESSU" Value="TEXADD_BORDER" />
+  <SamplerState SamplerName="smpDecal" State="SAMP_MAGFILTER" Value="TEXFILT_LINEAR" />
+</MaterialState>)");
+    REQUIRE(state);
+    const auto named = sta::NamedSamplers(*state);
+    REQUIRE(named.size() == 2);
+    CHECK(named[0].texture == "smpDecal");
+    const auto at = [](SamplerType type) { return static_cast<std::size_t>(type); };
+    CHECK(named[0].values[at(SamplerType::AddressU)] == static_cast<std::uint32_t>(SamplerValue::TexAddBorder));
+    CHECK(named[0].values[at(SamplerType::MagFilter)] == static_cast<std::uint32_t>(SamplerValue::TexFiltLinear));
+    CHECK_FALSE(named[0].values[at(SamplerType::AddressV)]);
+    CHECK(named[1].texture == "smpNormal");
+    CHECK(named[1].values[at(SamplerType::MinFilter)] == static_cast<std::uint32_t>(SamplerValue::TexFiltPoint));
+}
+
 TEST_CASE("a state's name loads <name>.xml, or DefaultState for a name the engine refuses", "[sta]")
 {
     CHECK(sta::FileNameFor("Face.sta") == "Face.sta.xml");
