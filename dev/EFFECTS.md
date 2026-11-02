@@ -1171,7 +1171,7 @@ Nothing here was seen in play. [C] read in the exe and the vanilla files, [I] in
   - **Orientation** (0x005ACA20): the model's UpAxis (6302, live +0x400) is turned onto the particle's velocity, or onto (0, 0, 1) when the velocity is zero. Then it is rolled about the RollAxis (6303, live +0x3F0, turned into the world by the emitter's rotation) by the particle's roll angle. OrientationBehavior is not used.
   - **Scale:** one uniform factor, the age map's ScaleX × AgemapScalexMultiplier × the particle's size, on all three axes. ScaleY and its multiplier are computed but never read. The owner's scale is not applied, unlike a sprite's. Whether the 0.5 key halving applies is [I].
 - **Colour** [C for the values, I for the binding]:
-  - Each particle's rgba is the age map's colour × the emitter's colour multiplier. Its alpha is also × the emitter's opacity (+0x4E0), and × the owner's user colour when the blueprint names a user parameter. There is no saturate.
+  - Each particle's rgba is the age map's colour × the emitter's colour multiplier. Its alpha is also × the emitter's opacity (+0x4E0), and the whole colour × the owner's vec4 at +0x2D4 when the blueprint has `UseVariationTint` (+0x2BC through 0x00561A60; 0x00583829, read 2026-11-01). There is no saturate.
   - It is written to the submit context's +0xD0. That this reaches the shader's `aur_vExternalColor` is [I]: every Chunky pass declares that constant, and this is the only per-particle colour written.
 - **The shader and states** (vanilla, from shaders.erf and the core archives) [C]:
   - `vfxchunky0.psh`: rgb = diffuse × ExternalColor, blended toward the fog colour by `mml_vUserColorMultiplier`; alpha = diffuse.a × ExternalColor.a × `mml_fOpacityMultiplier` × a Fresnel term saturate(|a|·a / (Start − End)²), with a = |Invert − N·V| − End. No lighting.
@@ -1179,10 +1179,10 @@ Nothing here was seen in play. [C] read in the exe and the vanilla files, [I] in
   - ChunkyAddv is SRCALPHA/ONE, no depth write, LESSEQUAL, cull CW, no alpha test (`daemtaddv1s.sta`).
   - ChunkyBlend uses `DAEmtNorm1S` (not opened).
 - **Against the sprite update** (`Mesh<MeshParticle>` 0x00583F80) [C]:
-  - **Shared:** the spawn count, birth, life and kill, the frame advance, the motion, the target pull (above), the presimulation and the cap of 256.
+  - **Shared:** the spawn count, birth, life and kill, the motion, the target pull (above) and the cap of 256. The presimulation is `trunc(T / 0.0666)` steps with **no minimum of one** (0x00584028-0x00584039, read 2026-11-01), and the frame advance goes by the graphics step `[[0x00C31650]+0x3C]`, not dt (0x005842D6-0x00584317).
   - **The particle** is 0x60 bytes (roll axis +0x40, roll angle +0x50), not 0x80.
   - **No vertex fill.**
-  - **No UpdateOnlyWhenVisible early out**, so mesh particles age and spawn while unseen [C from the missing test].
+  - **No UpdateOnlyWhenVisible early out**, and no emit-bit or opacity gate, so mesh particles age and spawn while unseen or faded [C from the missing tests].
   - **A Life of 0 or less** (fxa_stone_swrd_c's −1) gives an inverse life of −1: the particle never dies and is drawn at t = 0.
 - **Worked examples** [C, data]:
   - fxa_fire_aoe_p's `Twister_FireMesh_Funnel`: fx_m_tube01 drawn with fx_c_twister (ChunkyAddv), Life 1.5, speed 15, key scale 2.5–3, multiplier 0.9.
