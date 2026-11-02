@@ -331,7 +331,11 @@ StandPoint (0x7CBA90): dir = 7CB6B0(place c) (unit vector from the centre to the
 
 Claim marking (end of 0x7CC2B0, when claim and success): h = half>>1 (half = N-1, so h = m): for k = -h..h: place[Wrap(c+k)].+0x18 = id. Then 7CB870(c-h-1, c+h+1, id): from c-h-1 walking down and from c+h+1 walking up, `[0xC111CC]+1` = 2 places each (the dword at 0xC111CC is 1, loops run while counter <= 1), sets +0x1C = id where it is -1 (a guard margin of two places each side; the "+0x1C" slot). Then id is appended to ring+0x30 claimants (0x698C30). Note that claim only marks the ring that won.
 
-Release (0x7CC060 over all rings; 0x7CC000 per ring): every place with +0x18 == id gets -1; then 7CB1C0 (clears +0x1C == id marks, inferred from the name pattern, not read) and the id is removed from the claimants (0x745230). Choose with claim=1 releases first, so an attacker's own prior claim never blocks it and it re-picks fresh (placing it again nearest to its current angle, i.e. usually the same place).
+Building a ring (0x7CB400, read 2026-11-01): the old points and places are deleted and rebuilt; the radius is clamped to at least 1e-6, then 0.1 is added; each place starts {i, i+1, 0, 0, body -1, body distance 65505.0, +0x14 -1, +0x18 -1, +0x1C -1}, and the last place's next is 0.
+
+GetCreaturesInMeleeRing (command 205, handler 0x006712F0, read 2026-11-01): the script's angles are relative to the facing: the handler adds the facing's signed angle from (0,1,0) (creature +0x130) to both, then 0x7CC6E0 (nothing for a missing ring index) and 0x7CC4F0 walk ceil(span/9) places from floor(wrap(start)/9) and return each body id at +0x0C once. So it reports the bodies marked by perception, not live positions. `combat_h.nss:471` asks ring 0 for 0.0 to 359.99.
+
+Release (0x7CC060 over all rings; 0x7CC000 per ring): every place with +0x18 == id gets -1; then 7CB1C0 (clears +0x1C == id marks, the claim margin `0x007CB870` wrote, read 2026-11-01) and the id is removed from the claimants (0x745230). Choose with claim=1 releases first, so an attacker's own prior claim never blocks it and it re-picks fresh (placing it again nearest to its current angle, i.e. usually the same place).
 
 Disabled arc (0x7CB240, run by RefreshMeleeRing before): clears +8 on all places, then arc start = ring.+0x1C + creature facing angle (signed angle from +Y, same convention), places floor(wrap(start)/9) .. + ceil(span/9) get +8 = 1. Near-only +9 flags from walls and slopes are set in RefreshMeleeRing (not re-read here). Perceived bodies mark +0x0C/+0x10 (7CC870; not re-read here).
 
@@ -351,7 +355,7 @@ out: centre + unitdir(middle of place c) * stand radius, z from the ground, inwa
 
 #### Not read
 
-- 0x7CB1C0's exact effect, 0x7CC0B0's sort in full (insertion-sort part read at 0x7CBEB0; ties' stability inferred), the exact inward-retry loop condition in 0x7CBA90 (read roughly), whether a ring whose pointer is missing is skipped (the dummy at 0xC38E00 is used), the sign convention of 4EE200's Euler rotation (derived from consistency, not from running it), what the unread a3 and a5 of MeleeRingSpot are.
+- 0x7CC0B0's sort in full (insertion-sort part read at 0x7CBEB0; ties' stability inferred), the exact inward-retry loop condition in 0x7CBA90 (read roughly), whether a ring whose pointer is missing is skipped (the dummy at 0xC38E00 is used), the sign convention of 4EE200's Euler rotation (derived from consistency, not from running it), what the unread a3 and a5 of MeleeRingSpot are.
 
 ### Melee ring: the centre, the disabled arc, and what moves when the target moves (lib-agent-2, 2026-10-18)
 
