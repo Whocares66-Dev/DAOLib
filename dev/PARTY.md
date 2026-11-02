@@ -724,12 +724,12 @@ Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194
       - 0x00712450 polls inputs 48 and 49 each frame (is-down, not an event). The frame of the press records the cursor (input 43) at 0x00C36010/14.
       - A drag begins once `|cursor.x − start.x| × 2 > 7`, i.e. 4 pixels or more across. Only x is tested, and there is no time.
       - Nothing in it reads the camera's mode, so it works in the close view as in the tactical [C for the absence; I for "works"].
-      - A gate asks slot 0x40 of `[[app+0x114]+0x60]` or `explore+0x5C == 1`; that object was not identified [I].
+      - A gate asks slot 0x40 of `[[app+0x114]+0x60]` or `explore+0x5C == 1`; that object was not identified [I]. When both fail, the update clears the box's visible byte and returns (0x00712490..0x00712497, `mov [ebx+0x78],al` with al = 0) [C by the reading].
     - **The box's look** [C]:
       - It is `GraphicsStructures::SelectionBox` (vtable 0x00AF8C44, constructor 0x005551B0), not a Flash movie.
-      - The GUI system's constructor makes it (0x005243CD–0x005243DF) with the colour (0xFF, 0xCC, 0x00, 0xFF), kept at GUISystem +0xDC: opaque gold [I for the channel order].
-      - It has five vertices of 0x14 bytes, a closed outline [I], with the material "ScreenSpace" (0x00AF8C50). The corners are turned from pixels to clip space by 0x00554E80, and it is drawn by 0x00554DA0.
-      - It shows from the frame the drag begins.
+      - The GUI system's constructor makes it (0x005243CD–0x005243DF) with the colour (0xFF, 0xCC, 0x00, 0xFF), kept at GUISystem +0xDC: opaque gold, by the vertex bytes and the element's type, the `ScreenSpace` shader not read [C by the reading for the channel order: the constructor takes red, green, blue, alpha and stores them B, G, R, A for a D3DCOLOR vertex element, GUI.md line 122].
+      - It has five vertices of 0x14 bytes, a closed outline [C: a line strip, D3D's LINESTRIP: CreateGraphics 0x00555000 passes the primitive index 4 at 0x0055515A, which the submit driver maps through the table at 0x00B2DC00 to 3; SetCorners 0x00554E80 writes the rectangle's four corners, top-left, top-right, bottom-right, bottom-left, and repeats the first as the fifth vertex, 0x00554F8E..0x00554FD6], with the material "ScreenSpace" (0x00AF8C50). The corners are turned from pixels to clip space by 0x00554E80, and it is drawn by 0x00554DA0.
+      - It shows from the frame the drag begins. It does so through the byte at SelectionBox+0x78, which the drag update 0x00712450 writes every frame: 1 in the branch where the dragging flag 0x00C35E75 is set (0x00712668), 0 where it is not (0x00712625), and 0 when the gate below fails (0x00712497). The corners passed to SetCorners (0x007126F2) are the minimum and maximum of the press point (0x00C36010/14) and the pointer, so the outline is the same whichever way the drag goes. A second flag, 0x00C35E76, is set once the box is more than 2 pixels across in either axis (0x007126C5..0x007126DF); its reader is not read. [C by the reading]
     - **Which point is tested** [C]:
       - It is the creature's origin (+0x120..+0x128, w = 1), projected by the scene camera's slot 0x48 (0x00465700 → 0x00465BB0): x = W(0.5·ndc.x + 0.5), y = H(0.5 − 0.5·ndc.y). A point behind the camera (clip z < 0) is not in.
       - The rectangle test 0x0070A9B0 is half-open.

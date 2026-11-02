@@ -68,7 +68,7 @@ A clip's events (`<clip>.evt`, `clip::EventsOf`) are a list (AnimationEventList,
 
 ## What is not read
 
-- What the files hold that the runtime section does not explain: the target groups (`emtg`) and `nemg`'s own material. The attachments and the remote material are read below (2026-10-20); types 2 and 3 (by Name, which no file uses) are not.
+- What the files hold that the runtime section does not explain: the target groups (`emtg`) and `nemg`'s own material. The attachments and the remote material are read below (2026-10-20); types 2 and 3 (by Name, which no file uses) are not. The toolset XML's names for the four types are AllShapes 1, Node 2, Shape 3 and ParentCrust 4, and an absent or unknown Type text becomes 1 (ParseEmitterAttachmentType, 0x00597000, `neg/sbb/and 3/add 1` at 0x00597149..0x00597150) [C by the reading].
 - What Type `T` and `C`, Tint, LoadGlobal and Priority do.
 - No tree of the game's has a `vfxcast` node, the runtime's first phase; one has `vfx` (`.cust.ani` in two), which the phases do not name.
 - Where the two readings differ: the runtime section reads WorldAxisAcceleration as a vec4, where the files' field is a Vector3 (type 10) in every emitter.
@@ -320,7 +320,7 @@ p'.z += -9.8*Gravity*0.5*(T^2 - (T - h)^2)    // gravity never enters v
   - The keys are found from the last one used (0x00818490) and blended linearly (floats 0x00811330, colours 0x00811B20, vectors 0x00811A60, rotations 0x004CBC10).
   - A channel naming no node is ignored.
 
-**Space** (0x00542440, 0x0053EBC0): particles are kept in world space. With `ParticleInheritance` ≠ 0 (and not InheritVelocity), each step carries them with a frame: `p = R_now·R_prev⁻¹·(p − framePrev) + frameNow`, the velocity turned too. The frame is 1 the emitter node, 2 its parent, 3 the model's root; 4 and 5 weren't read.
+**Space** (0x00542440, 0x0053EBC0): particles are kept in world space. With `ParticleInheritance` ≠ 0 (and not InheritVelocity), each step carries them with a frame: `p = R_now·R_prev⁻¹·(p − framePrev) + frameNow`, the velocity turned too. The frame is 1 the emitter node, 2 its parent, 3 the model's root; 4 and 5 are the toolset XML's InheritFromParentToolsetHack and InheritFromObjectBaseToolsetHack (ParseParticleInheritance, 0x00596B80): the frame switch takes 1 to 5 (0x005424F4..0x005424FD, jump table 0x005425F4), 4 calls 0x005422D0 with 0 (0x00542588) and 5 calls 0x00540300 (0x00542593). Case 5 walks the owner's node list (owner+0x1F8) for the first node a virtual test accepts that has an owner, and takes its position and rotation as the frame (+0x470, +0x4A0); with none, the zero point and identity (0x005403E8..0x00540442). The test and case 4 are unread. [C by the reading] for the dispatch and the fallback.
 
 **Random numbers:** MSVC's LCG (`s = s·0x343FD + 0x269EC3; r = (s >> 16) & 0x7FFF`), four global streams, never seeded and shared by every emitter: 0x00C31994 a particle's birth (0x0053F980), 0x00C31A6C the sprite's update and spawn (0x00552CF0, 0x00552AF0, 0x005525B0) and the physics sprite's, 0x00C31FC4 the movement spread (0x0057C340, 0x0057C4F0), 0x00C32234 a ribbon's spawn and start frame. So the distributions can be matched but not the sequence (checked at 0x0053DF30). `dao::vfx::ReplayEmitters` seeds all four for a replay (below, section 9).
 
