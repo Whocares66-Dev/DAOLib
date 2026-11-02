@@ -1333,7 +1333,7 @@ The pieces:
   - Low nibble → `sound_movement_footsteps`/`scuffing`/`bodyfall*` row (0 Unknown, 1 Wood, 2 Sand, 3 Leaves, 4 Grass, 5 Stone, 6 Dirt, 7 Puddle, 8 Water, 9 Mud, 10 Ice, 11 Snow, 12 Hollow_wood, 14 Gravel, 15 Carpet; there is no 13).
   - High nibble → `sound_vegetation_type` row (0x006A05A0).
   - A cell byte of −1 would read as 15 Carpet / vegetation 15. Inferred: creatures do not stand on such cells.
-- **`MMHNodeSoundMaterial` (6330)** is read only by the model loaders (push 0x18BA at 0x00595701, 0x0059EFA7, 0x005A9ECF, 0x005AB6CA), not by footsteps [C]. Its use is presumably occlusion with `sound_geometry_mat_types` (question 5) [I].
+- **`MMHNodeSoundMaterial` (6330)** is read by the model loaders (push 0x18BA at 0x00595701, 0x0059EFA7, 0x005A9ECF, 0x005AB6CA) into node-blueprint +0x108 [C], and at run time from Object +0x2F0 by `Physics::GetActorSoundMaterial` and `Pathfinding::Grid::TraceGround` (read 2026-11-02; COLLISION.md). Its use with `sound_geometry_mat_types` is presumably occlusion (question 5) [I].
 - **`TerrainSoundData` (7076)** is never pushed as a field id in the code [C]. Inferred: unused.
 - **Data fault [C, strings]**: glo_fly_fs.fev has no `water` event. Rows 7 Puddle and 8 Water (`…/water`) name events that don't exist, so stepping in water is silent (inferred). `carpet` exists only for humanoids and scuffs. The `Shale` column is empty everywhere.
 
