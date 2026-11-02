@@ -1669,7 +1669,7 @@ The quickbar has up to 50 slots in script (`MAX_QUICK_SLOTS = 50`, Quickbar.as:3
   - a key with no table entry: the string "Unknown Key" (TLK 369761, 0x5A461 via 0xC3B7AC).
   - then modifiers are put in front, Shift first, then Alt, then Ctrl on the outside: so the text is `Ctrl + Alt + Shift + <key>`. Prefix strings: Shift = TLK 369760 `Shift + `, Ctrl = TLK 373286 `Ctrl + `, Alt = TLK 373287 `Alt + ` (0xC3B734, 0xC3B75C, 0xC3B784).
 - It is a talk-table text, so it follows the game's language (here en-us); there is no DirectInput name, no ini name (`Keyboard::Button_1`) and no upper-casing in the string. Digits are `1`..`9`, `0` (TLK 369298..369306 and 369297); punctuation is the character itself.
-- `0x61727` = TLK 399143 "No key mapped" is used by the engine for the key-remapping dialog (0x00894710 and a fallback object), not for `PrimaryMappedKey`: the string for an unbound action is `""`. Mapping errors during remapping (TLK 387764 and 387765) go to `InputMappings.RemappingError`; not read.
+- `0x61727` = TLK 399143 "No key mapped" is the last fallback of 0x00894710, which answers an action's primary key text (+0xA0), else its secondary (+0xC8), else this string, kept in the static at 0xC3BAC4 (read 2026-11-01; `push 0x61727` at 0x00894784; all 29 direct calls of it are in `ExpandDesignerTag`, 0x0051D7D5–0x0051E900), and is not for `PrimaryMappedKey`: the string for an unbound action is `""`. Mapping errors during remapping (TLK 387764 and 387765) go to `InputMappings.RemappingError`; not read.
 
 ### The table the peer can copy (en-us; checked)
 
@@ -1718,7 +1718,7 @@ Other defaults (from `keymap.gda`, not shown by the HUD movies): TogglePause Spa
 
 - The authored initial text of `BoundKey_mc` in quickbar.gfx (what a slot with no token value shows); what `GuiExternal::GetValue` returns for an absent mapping path in play (it was read at the code level only, GUI.md line 760); in-game play check of any of this.
 - Which options-screen setting is the mouse-handedness byte at +0x350+0xC read by 0x00838210 and its default; so `Right-click` for the primary action is inferred (default flag false).
-- Where the engine loads `keymap.gda` into the mappings and how `KeyBindings.ini` overrides it: read 2026-10-31, INPUT.md, "`KeyBindings.ini` and the defaults". Still not read: the 0x00894710 / 0x00894E44 "No key mapped" paths and the remapping error strings.
+- Where the engine loads `keymap.gda` into the mappings and how `KeyBindings.ini` overrides it: read 2026-10-31, INPUT.md, "`KeyBindings.ini` and the defaults". Still not read: the 0x00894E44 "No key mapped" path and the remapping error strings.
 - The talk-table strings of the language other than en-us (the table is the same, only the TLK language differs); the full 188-row `inputmap.gda` beyond the rows listed.
 - Rows for DirectInput codes whose registration block my byte scan missed (Esc code 1, "0" code 11 and others): taken from the alphabetical order of the TLK strings, which agrees with every key checked.
 
