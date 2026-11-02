@@ -485,7 +485,7 @@ Format: category attack/hold/release ms, dB.
 | 3 | min time between footsteps (560) | not read; but **560 ms is hard-coded** in the creature's animation-event handler (0x006B65E5, `lea eax,[edi-0x230]`) |
 | 4 | min time between movement (260) | not read; **260 ms hard-coded** the same way (0x006B666E, `-0x104`) |
 | 5 | force minimum fadeout (34) | not read |
-| 6 | fade out for sounds stopped by animation (400) | not read; the renderer's `StopEvent` fades out over a constant 400 ms ("The content layer", below), possibly its use [I] (read 2026-10-31 by paragon-agent's readers, two readings reconciled; DAOParagonEngine #351) |
+| 6 | fade out for sounds stopped by animation (400) | not read; the renderer's `StopEvent` fades out over a constant 400 ms ("The content layer", below), its use is [I]: the one caller found releases a clip's attachments (read 2026-10-31 by paragon-agent's readers, two readings reconciled; DAOParagonEngine #351) |
 | 7 | max time between markers (15000) | not read ("NOT IMPLEMENTED YET", and true) |
 | 8 | fade out for max playback hack (100) | not read |
 | 9 | Use Fmod profiler (0) | manager+0x30 = 1 when > 0. Where it is used was not found. |
@@ -1555,7 +1555,7 @@ ApplyVolumeAndPitch (slot +0xA0, 0x005C3D10, above) reads the category entry fou
 
 #### Stopping
 
-- **The renderer's `StopEvent`** (slot +0x5C, 0x005BE650, `(FMOD::Event*)`): for a non-null event and only on the thread that ran Init (`GetCurrentThreadId` against 0x00C32514), it sets event property 0x25 (37, fade-out) to **400** ms on the instance (`setPropertyByIndex(e, 0x25, &400, true)`, the constant 0x190 at 0x005BE671), then calls `Event::stop(e, false)`; the event fades out over 400 ms whatever its designed fade-out. On any other thread it returns false and does nothing [C]. The value equals `sound_settings` row 6 "fade out for sounds stopped by animation (400)", which the exe does not read (above); that this is its use is [I], and who calls slot +0x5C is not read.
+- **The renderer's `StopEvent`** (slot +0x5C, 0x005BE650, `(FMOD::Event*)`): for a non-null event and only on the thread that ran Init (`GetCurrentThreadId` against 0x00C32514), it sets event property 0x25 (37, fade-out) to **400** ms on the instance (`setPropertyByIndex(e, 0x25, &400, true)`, the constant 0x190 at 0x005BE671), then calls `Event::stop(e, false)`; the event fades out over 400 ms whatever its designed fade-out. On any other thread it returns false and does nothing [C]. The value equals `sound_settings` row 6 "fade out for sounds stopped by animation (400)", which the exe does not read (above); that this is its use is [I]. Slot +0x5C is called by `SoundManager::StopEvent` (0x005B5F00, which forwards to the renderer at +0x90), and the caller found is `AnimBase::ReleaseClipAttachments` (0x00A603C0; the call at 0x00A60474, on the attachment's +0x28) [C, read 2026-11-01].
 - Every other stop in this layer is `Event::stop(e, false)` with the event's own fade-out: the destructor's `RemoveCallbackAndStop` (0x005BF110, which first removes the callback), `FreeEvent` (slot +0x1C, which then frees the event data through the group) and the content's own Stop (slot +0x40). `StopMusicEvent` (0x005BFEA0) un-pauses the event first, so a paused track fades out too. The destructor stops the event and does not free it.
 
 #### What "playing" means
