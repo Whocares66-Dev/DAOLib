@@ -165,3 +165,5 @@ Read in GOG's exe, not run in the game. [C] checked, [I] inferred.
 ## DragonAge.ini (read 2026-11-01, two readings)
 
 `CClientOptions::LoadGroupFromIni` (0x005DE2B0) and `SaveGroupToIni` (0x005DE5B0) take a group: 0 GameOptions, 1 OnlineOptions, 2 ControlOptions, 3 AudioOptions, 4 VideoOptions, 5 Movies, the file's sections. On a load a key in the file sets its option from the string, and a key missing from the file is written back with the option's own value, so the file fills itself in. Group 2 also loads or saves the key bindings.
+
+At start (`CClientOptions::CreateGlobals`, 0x005EC7A0, from `EclipseGame::Run`) three `CClientOptions` of 0x940 bytes are made, live, saved and defaults (0x00C32938, 0x00C3293C, 0x00C32940). Only the live one reads the file. A non-empty voice-language or locale override from the command line then goes over it, so the command line beats the file, and the live object is copied to saved.
