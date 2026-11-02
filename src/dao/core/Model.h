@@ -175,6 +175,10 @@ struct MeshRef
     // MMHMeshCutAway: a mesh the area's cutoff fades and hides when the camera is high above the
     // focus (dev/CAMERA.md, "The cutoff: what the roof fade fades").
     bool cutAway = false;
+    // MMHUseVariationTint: a visual effect's tint reaches this mesh's material (dev/EFFECTS.md).
+    bool useVariationTint = false;
+    // MMHMeshDefaultHidden: the node is made hidden. No shipped model sets it.
+    bool defaultHidden = false;
 };
 
 // A controller a node exports: the name an animation's channel goes by, and what it drives.

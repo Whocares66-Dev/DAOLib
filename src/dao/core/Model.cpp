@@ -388,7 +388,9 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
                      .material = from.String(kMaterialObject).value_or(L""),
                      .part = from.String(kNodeId).value_or(L""),
                      .bonesUsed = {},
-                     .cutAway = Number(from, kMeshCutAway).value_or(0) != 0};
+                     .cutAway = Number(from, kMeshCutAway).value_or(0) != 0,
+                     .useVariationTint = Number(from, kUseVariationTint).value_or(0) != 0,
+                     .defaultHidden = Number(from, kMeshDefaultHidden).value_or(0) != 0};
         for (const std::uint32_t used : from.Numbers(kBonesUsed))
         {
             mesh.bonesUsed.push_back(static_cast<std::int32_t>(used));
