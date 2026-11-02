@@ -691,8 +691,9 @@ std::optional<float> FieldOfView()
 // D3DXMatrixPerspectiveFovRH, not the LH one its arguments suggested. The
 // field of view 59.99995, aspect 1.6 (times 1000 is the width), far 4000 in
 // every state; near 0.15 exploring, 0.01 in DAOPhotoCam's free view and
-// 0.25 after it (the fly camera mode's entry passes 0.25 and 4000 to a
-// renderer setter, 0x0076D5D9 to 0x0076D5F6; what sets 0.01 is not read).
+// 0.25 after it (the fly camera mode's entry passes 0.01 and 4000 to a
+// renderer setter, 0x0076D530 to 0x0076D54D, and its exit 0.25 and 4000,
+// 0x0076D5D9 to 0x0076D5F6; corrected 2026-11-01, see the near plane below).
 // A field of view of 40 held in the free view read 40.
 std::optional<Projection> CurrentProjection()
 {

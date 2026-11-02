@@ -2790,7 +2790,9 @@ DAO_ADDRESS(kLightState_Fill, 2848)
 // 0x00C1E930 and 0x00C1EC00, made by 0x00466120, which zeroes it; no other
 // store to it was found), handed in by the shader parameters' provider
 // (0x004F8A10: 0x11 is g_vLightParams through 0x0046BAF0, 0x1B the probe's
-// cube through 0x0046BC40). A light's colour, __thiscall on the node (float4
+// three irradiance matrices through 0x0046BC40; the probe's cube is usage
+// 0x1A of the texture provider 0x004F8CE0, through 0x0046BB30, which hands
+// back the slot at +0x114; corrected 2026-11-01). A light's colour, __thiscall on the node (float4
 // *out), `ret 4`: the node's +0x1A0, times the float4 at *(+0x154) + 0x2D4
 // where the byte at +0x196 is set; Fill takes it for point and ambient lights
 // alike. Ambient lights (ObjectNodeAmbientLight, ILight kind 2, 0x004CCAE0)
