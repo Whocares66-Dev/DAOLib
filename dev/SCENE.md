@@ -103,6 +103,7 @@ Banners and flags are cloth: a node of kind `nclt` in the model's `.mmh`, not a 
   - `Physics::PhysicsManager::CookClothMesh` (0x008196F0) cooks it, and `PhysicsObject::CreateCloth` (0x00839F10) makes the NxCloth.
   - Not read: how the simulated vertices reach the draw, and whether the rest pose is drawn before the simulation runs.
 - **The wind** comes from the level's `.wnd`, not the model (EFFECTS.md, "Cloth wind").
+- **Its matrix and vertices** (read 2026-11-01): drawn with an identity world matrix (the interface's slots 2 and 3 are 0x00564980, a jump to the static identity 0x004D38E0), since PhysX writes positions and normals in world space. Only texcoords come from the rest mesh (0x00565641-0x005656DA); tangent and binormal stay zero. A failed creation leaves nothing drawn: there is no rest-mesh fallback.
 
 ## 9. A node's blueprint, its slots and what feeds Umbra (read 2026-11-01)
 
