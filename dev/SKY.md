@@ -129,7 +129,7 @@ So for the Fade the stand-in fog density is 5.9 times too low (4e-6 against 2.34
 - File values: `python tools/gff4.py --dump <install>\packages\core\env\oth000d.arl` and ost100d.arl, the Atmo* fields (table above). Checked. gff4_fields.csv:2408-2409 names 22533/22534; core Level.cpp:456-457 names them but the paragon crate reads only AtmoFogIntensity/Cap (level.rs:1354-1362 and 1011-1022).
 
 #### Not read
-- The usage constant 0x2F by name (no string table); nothing was run in the game, so no captured register value.
+- Nothing was run in the game, so no captured register value. (Usage 0x2F's name is `WaterFogParameters`, by `MaterialInternalParamTemp::SetUsage`, 0x00509870, which compares a `.mat.xml` `Usage` to its names without case; read 2026-11-02.)
 - Whether z, w of the vector (scene+0x2C, +0x30) are ever set: the shaders read only x and y.
 - The water fog in any area other than the two; areas whose layout lacks the water fields use the fallback above (read at 0x005D047D, 0x005D04D8).
 - Whether the area's sky block can also be changed by script (SetAtmosphere has no water-fog parameter in Sky.h's list, so a script cannot change +0x1C/+0x20: inferred from kSkyFields having no entry there).
