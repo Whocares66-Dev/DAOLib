@@ -391,7 +391,7 @@ Shared: every handler pops with the VM stack helpers 0xA2F6D0 (object) and 0xA2F
 ### SignalDamage (359)
 - **Handler:** 0x00662310 (own).
 - **Described in:** `dev/COMBAT.md` (Damage and death): `Effects_ApplyInstantEffectDamage` calls `SignalDamage(oDamager, oTarget)` after setting health.
-- **Does:** both ids resolved with `GetCreatureById` 0x005D58C0, then gated; if the gates pass it calls 0x00523880 on the source and 0x0063FB80 on the result. That call is inferred to be the damage notification to the target's AI (perception/threat), not read further.
+- **Does:** both ids resolved with `GetCreatureById` 0x005D58C0, then gated; if the gates pass it calls `FloatyLayer::Get` 0x00523880 and `GUIFloatyLayer::SignalDamage` 0x0063FB80 on the source: the hostile's off-screen arrow, not an AI notification. It finds the source's kind-5 floaty or adds one, and `OffscreenIndicatorFloaty::OnSignalDamage` 0x00764760 sets its lifetime to 2.0 s (0x00C0D620, stored at +0x1C) when the source's `IsHostile` (+0x4E8) is set [C at 0x00764763-0x0076477C] (corrected 2026-11-01, paragon-agent's floaty reading, two readings reconciled: this had it inferred as the damage notification to the target's AI).
 - **Edge cases:** either not a creature (invalid, or another object type) -> returns 0, nothing happens (checked). Gates, all checked as code, meaning inferred: the byte at +0xC of the fields at +0x4F8 (target) and +0x4E8 (source) must both be non-zero; `0x007C4D20(target,0,0,0)` must be true and the same call on the source must be false. Otherwise a silent no-op. Never fails the script apart from a failed pop (-639).
 
 ### StartCharGen (746)
