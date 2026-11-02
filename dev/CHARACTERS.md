@@ -137,7 +137,7 @@ At rest nothing moves the lips off the head model's rest, seen in play 2026-10-1
 Read 2026-10-18 in the GOG exe and vanilla's files (shaders through `fxc /dumpbin`) by lib-agent-2 (with subagents), for DAOParagonEngine's side-by-side of the Harrowing's Fade. Not seen in play. The key claims were checked again in the listings, the files or the disassembly.
 
 - **The material.** A robe with bare hands (`hm_rob_appa_0.mmh`, `RobeM1`, `pm_rob_appa.mao`) is `Character.mat`'s `ArmourSkinTint` (`Ch1ArmTnt.psh`) with `mml_tTintMask`. The mask's **R, G and B are the three armour tints, and A is the skin**: the hands are about 0.77 alpha with no colour. Robes without skin use `NoTint`.
-- **`mml_vTintMaskColours`**, 10 float4s in the shader's order: [0] diffuse opacity per channel, [1] specular opacity, [2]/[3] R's diffuse/specular, [4]/[5] G's, [6]/[7] B's, [8]/[9] A's (the skin). It is set by name on each node's material (slot 41, 0x00A604A0; the name at 0x00B107A4, pushed at 0x00A6057E).
+- **`mml_vTintMaskColours`**, 10 float4s in the shader's order: [0] diffuse opacity per channel, [1] specular opacity, [2]/[3] R's diffuse/specular, [4]/[5] G's, [6]/[7] B's, [8]/[9] A's (the skin). It is set by name on each node's material (slot 41, 0x00A604A0; the name at 0x00B107A4, pushed at 0x00A6057E). The ten Vector4 are copied from the tint block at offsets +0x1C, +0x2C, +0x4C, +0x8C, +0x5C, +0x9C, +0x6C, +0xAC, +0x3C, +0x7C as entries 0 to 9 (ten push_backs, 0x00A604F3-0x00A60579).
 - **The shader** (`Ch1ArmTnt`, c12..c20 = C[0..8]):
   ```
   o = mask * C[0]
@@ -217,7 +217,7 @@ Not "drawn but skin-like": hidden by state. The band is invisible because the wh
 - What `0x00A1C71A` does exactly (visible flag on the node's listener); `0x00A5D070`/`vt+0x18` internals.
 - Whether event 28's animation clips include every decapitating kill; which death or finishing move plays them in play (ANIMATION.md lists 327/330 and dw/tw deathblows).
 - Whether the gore setters `0x006B1BC0`/`0x006B19B0` reach NeckM1 (moot while hidden), and the meaning of GFF `0x3FC6`.
-- The entry-by-entry mapping of the tint block onto `mml_vTintMaskColours`; `SM2_Face0.psh` (the LOD2/LOD3 pixel shader `Face2.psh` is read: "A model's level of detail"); the shader of EA's/Steam's builds; nothing seen in play.
+- `SM2_Face0.psh` (the LOD2/LOD3 pixel shader `Face2.psh` is read: "A model's level of detail"); the shader of EA's/Steam's builds; nothing seen in play.
 - Block index of the neck's tint (inferred 0).
 
 ## NeckM1 (hm_hed_dcpa_0): geometry, skinning and the draw (neck2b, 2026-10-18) (lib-agent-2)
