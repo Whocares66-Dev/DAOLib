@@ -54,6 +54,7 @@ Read 2026-10-22 by lib-agent with subagents, for DAOLib #244 (the library's `dao
   | ObjectNodeEmitterMesh<MeshParticle> | 0x00AFAC34 | 0x13 |
   | ObjectNodeWeapontrail | 0x00AFE634 | 0x15 |
   | ObjectNodeEmitterGroup | 0x00AF7E14 | 0x16 |
+  | SpeedTreeForest | 0x00AF740C | 0xB (slot 7, 0x00533040; read 2026-11-02) |
   | ObjectNodeEmitter (abstract base) | 0x00AF800C | purecall |
   | ObjectNodeLight / PointLight / AmbientLight / LightProbe | 0x00AF79DC / 0x00AF7ACC / 0x00AF7CAC / 0x00AF7BBC | ILight (+0x180, 6 slots) slot 4: 0 / 1 / 2 / 3; they are in the +0x70 vector, not +0x64 |
   The kinds are the constants each class's slot-7 target returns (`mov eax,N; ret` at 0x00564940, 0x008CCE30, 0x005832F0, 0x008CC510, 0x00550030, 0x0079B310, 0x0046E740, 0x005B0EF0). Kind 0x14 of the #242 reading was not met; no class returns it [C].
