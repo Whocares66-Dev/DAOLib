@@ -387,3 +387,12 @@ A save is the engine's own objects written out. A plugin that keeps state of its
 ## Where the party-wide properties are
 
 Field 16352 `SavegameHeroicPartyStatList` of the stats struct: PLYR > SavegamePlayerCharChar (CRP1) > SavegameCreatureStats (CPS1). `CreatureProperties::WriteToSave` 0x00797000 fills it only for a creature whose +0x7D4 is 1; every other creature's is an empty list (three saves, 2026-11-02: exactly one populated in each). An element is `SavegameStatPropertyBase` (float) and `SavegameStatPropertyIndex` (16353, u16), the id less 2000, written for a property whose "needs saving" slot +0x40 answers true. PROPERTIES.md has the run-time side. Core: `Stats::heroicPartyStats` of `Save::hero`.
+
+## What a load refuses
+
+Read 2026-11-02 [C by the reading], the game not run, save the build test, read by lib-agent at 0x00645605-0x00645624.
+
+- `SaveGame::Read` 0x00645650 needs "GFF ", "V4.0" and platform "PC  " (0x006454D0; the type "SAVE" isn't tested), then `IsSupportedVersion` 0x00645510 (0x0064573B), reading the raw buffer: VERS (16004) must have SaveVersionInternal 16771 at 0 or more, and BuildNumber 16770 at 8183 (0x1FF7) or more. The byte at 0xC347A8 would waive the build test, and nothing sets it.
+- A failed `Read`, like an empty campaign resource (MODU 16014), shows "Unable to open file. Your file may have been corrupted." (strref 374423; `LoadGameFromSlot` 0x005DA500, `LoadGameFromFile` 0x005DA7B0). The save list reads only the `.met`, so a save refused here still lists.
+- After `Read`, the loading machine's step 5 (0x006C7912) parses the whole file (`SaveGame::ParseSave` 0x006488A0): every offset in bounds, every block exactly its template's size (`IsBlockSizeValid` 0x004DB100), and for SaveVersionInternal 1 or more the tree converted by label and type into the engine's own layout (0x004DCB70, 0x004DCF00), where a field the file lacks stays 0xFF. Failure is `FailLoad(0x21)` (0x006C5B01), with the same text.
+- The "template has no such field" drops in a write report (16321 on APC1, 16203 on CRE1, 16478 on CRP1) are the engine's own templates, which hold those fields on other kinds of creature only: APP1 and APL1 for the hero's and pool's appearance, CRP1 and CRL1 for party members. They aren't a fault.
