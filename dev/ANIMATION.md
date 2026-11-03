@@ -20,7 +20,7 @@ Read 2026-10-18 by lib-agent-2 (and two of its forks) in the GOG exe (`game\DAOr
 
 - for state 1 it calls **0x006ABA40**, entering combat;
 - for anything else it calls **0x006ABBF0**, leaving combat;
-- it calls vtable slot 0x154/4 and the +0x624 sub-object's slot 0x54 with (state == 1). Inferred: the UI and observers; not read.
+- it calls vtable slot 0x154/4 (CCCreature::UpdateAILevel 0x006A53E0) and the Set (slot 0x54) of the InCombat bool attribute at creature+0x624 with (state == 1) (0x006AE0C5-0x006AE0EC); the value is stored raw, EnterCombat runs only for 1 and LeaveCombat for any other value.
 
 The callers (all three E8 calls, checked):
 
