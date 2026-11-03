@@ -34,6 +34,7 @@ constexpr std::uint32_t kModelUserParams = 3506;
 // it) loads <EnvModelBlendTreeName>.anb and plays its node EnvModelDefaultAnimation.
 constexpr std::uint32_t kModelDefaultAnimation = 3504;
 constexpr std::uint32_t kModelBlendTreeName = 3505;
+constexpr std::uint32_t kModelInstanceId = 3320;
 constexpr std::uint32_t kModelCutAwayOverride = 3109; // a byte in the game's files
 constexpr std::uint32_t kUserParamName = 3507;
 constexpr std::uint32_t kUserParamValue = 3508;
@@ -710,6 +711,7 @@ std::optional<Room> RoomOf(const gff4::File &definition)
         placed.cutAwayOverride = model.Get<std::uint8_t>(kModelCutAwayOverride).value_or(0);
         placed.defaultAnimation = model.String(kModelDefaultAnimation).value_or(L"");
         placed.blendTree = model.String(kModelBlendTreeName).value_or(L"");
+        placed.instanceId = model.String(kModelInstanceId).value_or(L"");
         for (const gff4::Struct &part : model.Structs(kModelLightmaps))
         {
             LightmapPart lightmap;

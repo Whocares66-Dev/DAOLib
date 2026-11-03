@@ -278,6 +278,9 @@ struct Placed
     std::wstring defaultAnimation;
     // EnvModelBlendTreeName: that tree, <name>.anb, the room's own (dao/core/Anb.h's RoomTreeOf).
     std::wstring blendTree;
+    // EnvModelInstanceID: its own lightmap's name part, `lm` + this + a mesh node's MMHID + `.dds`
+    // (dev/MATERIALS.md, "The texture variant"); empty for none, as most are.
+    std::wstring instanceId;
 };
 
 // A SpeedTree tree or grass placed in a room, in the room's space.
