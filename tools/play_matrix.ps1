@@ -43,7 +43,8 @@
 
     EA's exe cannot be staged: it hands off to the EA app, which starts the game in the one
     folder HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age's Path names, as the game as ever. -EaApp
-    runs its rows after the others, one at a time, in EA's install, which needs the loader and
+    runs its rows after the others, one at a time, in EA's install, under the settings but the
+    compatibility modes, under which EA's game ends before the loader runs. It needs the loader and
     a plugin deployed there (.\tools\deploy.ps1 -Install ea); where Path names another install
     (Steam's installer writes it), -SwitchPath sets it to EA's for the runs and puts it back,
     from an elevated shell.
@@ -92,9 +93,13 @@ $stage = Join-Path $repo 'build\matrix'
 $loaderName = 'dinput8.dll'
 # The layers' names as the Compatibility tab writes them; '' is no setting at all.
 $merge = @('', 'DISABLEDXMAXIMIZEDWINDOWEDMODE')
-$whole = $merge + @('HIGHDPIAWARE', 'DPIUNAWARE', 'GDIDPISCALING DPIUNAWARE', 'WINXPSP2', 'WINXPSP3', 'VISTARTM',
-    'VISTASP1', 'VISTASP2', 'WIN7RTM', 'WIN8RTM')
+$modes = @('WINXPSP2', 'WINXPSP3', 'VISTARTM', 'VISTASP1', 'VISTASP2', 'WIN7RTM', 'WIN8RTM')
+$whole = $merge + @('HIGHDPIAWARE', 'DPIUNAWARE', 'GDIDPISCALING DPIUNAWARE') + $modes
 if (-not $PSBoundParameters.ContainsKey('Layers')) { $Layers = if ($All) { $whole } else { $merge } }
+# EA's game keeps up under no compatibility mode, and ends before the loader runs: vanilla EA
+# under WINXPSP2 too, and loaders 0.5.0 to 0.9.0 alike (dev/TESTING.md, 0.2.0 and 0.6.0). Its
+# rows under them test nothing of DAOLib's, so EA's rows leave them out.
+$eaLayers = @($Layers | Where-Object { $modes -notcontains $_ })
 $installs = @{
     gog   = 'C:\Program Files (x86)\GOG Galaxy\Games\Dragon Age Origins'
     steam = 'E:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition'
@@ -424,8 +429,8 @@ function Invoke-Ea {
             Set-ItemProperty $pathKey -Name Path -Value $root
             Show-Info "Path of $pathKey is $root for the runs, $names after"
         }
-        Show-Head "EA's $bin\DAOrigins.exe, $($plugins.Count) plugin(s), $($Layers.Count) settings, one at a time"
-        foreach ($layer in $Layers) {
+        Show-Head "EA's $bin\DAOrigins.exe, $($plugins.Count) plugin(s), $($eaLayers.Count) settings, one at a time"
+        foreach ($layer in $eaLayers) {
             $row = [pscustomobject]@{
                 Name = "ea, $(if ($layer) { $layer } else { 'no layer' })"; Exe = (Get-Item (Join-Path $bin 'DAOrigins.exe')).FullName
                 Folder = $bin; Layer = $layer; Instance = $null; Steam = $false; Plugins = $plugins; Run = $null; Began = $null; Answered = $null
@@ -507,7 +512,7 @@ finally {
     Clear-Stage -Lenient
 }
 if ($EaApp) {
-    $total += $Layers.Count
+    $total += $eaLayers.Count
     $failed += Invoke-Ea
 }
 if ($failed) { throw "$failed of $total rows failed" }

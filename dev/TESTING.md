@@ -8,7 +8,7 @@ Why it is here. 0.1.0 was seen in GOG's and Steam's games on one machine with no
 
 | When | Exes | Settings | Starts | Time |
 |---|---|---|---|---|
-| Before a release, on the release build that goes into the zip | every kept exe that runs (below), and EA's with `-EaApp` | the whole matrix below | 72, and EA's 12 | about 13 minutes, and EA's 10 minutes |
+| Before a release, on the release build that goes into the zip | every kept exe that runs (below), and EA's with `-EaApp` | the whole matrix below, EA's without the compatibility modes | 72, and EA's 5 | about 13 minutes, and EA's 3 minutes |
 
 A merge to `master` runs no matrix, whatever it changes (the user, 2026-10-31: "run the matrix on release only, not on merge"); the release's run sees everything merged since the last one.
 
@@ -27,7 +27,7 @@ A merge to `master` runs no matrix, whatever it changes (the user, 2026-10-31: "
 .\tools\deploy.ps1 -Install ea -Remove
 ```
 
-EA's exe cannot be staged: it hands off to the EA app, which starts the game in the one folder the registry's `Path` names, as the game as ever. So `-EaApp` runs its rows after the others, one at a time, in EA's install, and refuses while the game as ever is up.
+EA's exe cannot be staged: it hands off to the EA app, which starts the game in the one folder the registry's `Path` names, as the game as ever. So `-EaApp` runs its rows after the others, one at a time, in EA's install, and refuses while the game as ever is up. It leaves out the seven compatibility modes: under them EA's game ends before the loader runs, as vanilla EA does under `WINXPSP2` (0.2.0 and 0.6.0, below), so those rows test nothing of DAOLib's and took two minutes each to fail (the user, 2026-11-04: "if the vanilla game doesn't even work under these settings, then we shouldn't need to test them").
 
 A row passes when all of these hold, and the script fails on any that does not:
 
@@ -142,6 +142,6 @@ Then in play, the zip's `dinput8.dll` (SHA-256 `07A7C6D9...C30F1D8`), `dinput8.p
 | Build | Settings | Result |
 |---|---|---|
 | GOG, Steam, Steamless, Steamless with the 4GB flag, the Nexus exe, and it with the 4GB flag | all twelve | every one of the 72 passed, answering at 30 to 51 s, in each of two runs |
-| EA | all twelve | five passed: no setting, `DISABLEDXMAXIMIZEDWINDOWEDMODE`, `HIGHDPIAWARE`, `DPIUNAWARE` and `GDIDPISCALING DPIUNAWARE`. The seven compatibility modes, `WINXPSP2` to `WIN8RTM`, kept no game up, as at 0.6.0 to 0.8.0; vanilla EA keeps none up under them either (2026-10-23, above), so they are to leave EA's rows |
+| EA | all twelve | five passed: no setting, `DISABLEDXMAXIMIZEDWINDOWEDMODE`, `HIGHDPIAWARE`, `DPIUNAWARE` and `GDIDPISCALING DPIUNAWARE`. The seven compatibility modes, `WINXPSP2` to `WIN8RTM`, kept no game up, as at 0.6.0 to 0.8.0. The game ends there before the loader runs, as vanilla EA does under `WINXPSP2` (0.2.0 and 0.6.0, above), so since 0.9.0 EA's rows leave the compatibility modes out |
 
 Then in play, the zip's `dinput8.dll` (SHA-256 `C2A99D66...A2A5EA6`), `dinput8.pdb` and address files in GOG's private copy (`game\gogrun`, instance `lib-agent`), with the current `eluvian` and the release build's `example` and `probe`: `loader (daolib 0.9.0)`, "address library: 103052 IDs for this build" (the address library's 0.10.0 retired IDs), the three plugins loaded, and a save of Redcliffe Castle loaded into explore. `DAOLIB_PROBE_CRASH_TEST=1` and `=2` each wrote a crash log naming `SetPaused+0xe6 (Probe.cpp:159)`, the second with 4089 of 4096 MiB in use. In every run from a copy of an install, the matrix's and this one, the loader's window log could not hook the game's window (error 126, a warning each second), with the release loader and the debug one alike; from GOG's install it hooks (#316).
