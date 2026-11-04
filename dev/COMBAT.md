@@ -583,6 +583,12 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - A sync death (int 3 = 0, a deathblow) runs 0x007A7290 instead (read 2026-10-24 by lib-agent-2: ANIMATION.md, "Sync abilities").
 - Every tick while the duration type is 6, Dead (3) is played again as `(3, 1.0, -2.0, loop 1)` if the current animation is a loop whose State isn't 1, or isn't 3 while creature byte +0x1AC is 0. Inferred: Die plays out, the animation's own TransitionTo moves it to 3, and these calls hold it there.
 - DEATH (4) is run once, when the timer runs out: the end of the Die clip.
+  - **The timer's clock** (read 2026-11-03 for DAOParagonEngine #385, one reading) [C]:
+    - `+0xC` is the sub-action's elapsed time and `+0x14` its duration, both in world-clock milliseconds. `SubAction::RemainingMs` (0x007A1AE0) is `+0x14 − +0xC`, and 0 when `+0x14` ≤ 0.
+    - The step is `AnimationStepLength(250)`: `AnimClip::GetLengthMs` (0x00A38ED0) is the `.gad`'s `AnimationAnimLength` (4009) × 1000.0 (0x00AEBC00), with no speed or blend in it, summed along TransitionTo up to the first loop (Die only, since Dead loops).
+    - **The first tick sets both the health and the timer.** It sets health 0 at 0x007AB313–0x007AB33B, which is the frame `dao::creatures::OnDeath` hears, and `+0x14 = +0xC + length` with `+0xC` still 0. The command step (0x0073CB60) advances a sub-action only while its `+0x14` is above 0, so that first tick takes no time.
+    - **Each later Update advances it before the handler runs:** `+0xC += min(time left of the frame's dt, +0x14 − +0xC)` (0x0073CBFE–0x0073CC1A), dt being the world-clock milliseconds since the creature's last Update (TURN_BASED.md, "dt"). So DEATH comes in the first Update whose elapsed time reaches the length: the clip's length in world time, from the frame the health reached 0, to within a frame.
+    - Nothing between them subtracts or waits. Not read: whether the world clock and the wall clock part during a death.
 
 ### The body bag
 
