@@ -1627,7 +1627,7 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - **The one-shot step** (0x007A5E80, ID 19846):
       - With no data it answers −3.
       - With data flag 0 clear, it sets the flag and runs the placement 0x007A5A30, then 0x007A4D50.
-      - 0x007A4D50 (ID 19838): the length is AnimationStepLength(clip), then 0x007A3370 runs (read 2026-10-27 by lib-agent-2: "Who carries out the placement", under "Sync abilities"). The clip is played through slot 0xB0, speed 1.0, with blend 3.0 when the record's seconds (+0x24) are at least 0.01 (0x00B1B7D8) and −1.0 otherwise, looping by the record's +0x28. The step is +0x14 = +0xC + the length.
+      - 0x007A4D50 (ID 19838): the length is AnimationStepLength(clip), then 0x007A3370 runs (read 2026-10-27 by lib-agent-2: "Who carries out the placement", under "Sync abilities"). The clip is played through slot 0xB0, speed 1.0, with blend 3.0 when the record's Percentage (+0x24, a fraction of the clip) is at least 0.01 (0x00B1B7D8) and −1.0 otherwise, looping by the record's +0x28. The step is +0x14 = +0xC + the length.
       - It answers 1 once +0x14 ≤ +0xC.
     - **AnimationStepLength** (0x006957A0):
       - 0 with no animation set (+0x154).
@@ -1675,11 +1675,11 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
   - **0x007A6DA0** fills the record with the partner, an attacker byte, table 0x65 and the row (effect +0x44). It reads the effect's float 2, its int 1 (compared with 1 and 2), its float 0 and its vector 2. For the attacker only, it sets creature +0x750 +0x14 = 1.0 and calls 0x007C1600.
   - **0x007A5A30, the placement** (read 2026-10-24 by paragon-agent-2's helper, checked by lib-agent-2; the [I] about the angles' roles and units, Percentage and who moves is now read, 2026-10-24 by lib-agent-2) [C, 0x007A5A30–0x007A5BE9; the inputs from the effect's own +0x54 array through 0x007A6DA0]:
     ```
-    out.seconds = rec.seconds > 0 ? rec.seconds : 0.25           // 0x00AFF3E8
+    out.percentage = rec.percentage > 0 ? rec.percentage : 0.25  // 0x00AFF3E8; a fraction of the clip
     out.pos = creature.pos (+0x120);  out.facing = ToAngle(creature.orient +0x130)
     P = the partner
     if P and P != creature and rec.int1 != 2:
-        if !GetSyncRow(table 0x65, row, &out.seconds, &A, &T, &D):  // 0x005CA7B0: Percentage <= 0 means no row
+        if !GetSyncRow(table 0x65, row, &out.percentage, &A, &T, &D):  // 0x005CA7B0: Percentage <= 0 means no row
             out.facing = ToAngle(P.pos - out.pos)                  // no row: turn to the partner, no move
         else:
             if rec.attacker: q = Yaw(-AngleTarg); extra = AngleATK
@@ -1693,7 +1693,7 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
         else:           out.facing = ToAngle(out.pos - V2); out.pos = V2 + float2 * normalize(V2 - out.pos)
     if float2 > 0: out.pos -= float2 * Rotate(Yaw(out.facing), (0, 1, 0))   // knocked back along its own facing
     ```
-  - **Percentage** (0x414A699C) is the slide's time in seconds. It also says whether the row exists: 0x005CA7B0 returns false when it is ≤ 0 [C].
+  - **Percentage** (0x414A699C) is the slide's share of the clip, not seconds (corrected 2026-11-04 from paragon-agent-2's helper, checked by lib-agent [C]; DAOParagonEngine #402): 0x007A3370 sets the root motion's end to `max(101, ftol(Percentage × the clip's length in ms))` (`fld [+0x24]; fimul` the length at 0x007A33D0..0x007A33E5, the length from 0x007A4D50), 342 ms for `mh_c.rct_kbck_v1` at the default 0.25. It also says whether the row exists: 0x005CA7B0 returns false when it is ≤ 0 [C].
   - **The angles** are in degrees [C]: FromYawPitchRoll 0x004EE200 multiplies by 0.0174533, and ToAngle 0x004EE570 is atan2 in degrees, 0 along +Y. They are measured from the partner's facing (+0x130). The sign of the yaw was not derived [I].
   - **Who moves:** 0x007A5A30 only computes the result for the creature it is run for; it moves nobody itself [C]. Each of the pair holds its own effect, so both can be placed, each by its own role above.
     - A creature whose effect has int 3 set skips the placement (vfunction 29, below), so it stays where it is [C for the branch; I that the scripts set int 3 on the attacker's effect].
@@ -1720,10 +1720,11 @@ Nothing here was run in the game. The knockdown's times agree with what DAOTurnB
     - `CCCreature::DisableControllerCollision` 0x006A0DF0, at death [I];
     - 0x006A3C50, a melee swing's lunge: from `CSSubActionHandler::Swing` 0x007A87C0 (at 0x007A8BA7), with +0x68 = 1 and the end at 500 ms, unless 0x00A64740's bit 0.
     - It is cleared at a held clip's end (0x00A65CF0) and by 0x007C1690(0).
-  - **The victim of a knockdown's get-up or a deathblow's death is moved by the clip's root motion** (corrected 2026-10-31 by lib-agent-2 with subagents, from paragon-agent's anim-4 reading) [C unless marked].
+  - **The victim of a knockdown, in its entry clip and its get-up, or of a deathblow's death is moved by the clip's root motion** (corrected 2026-10-31 by lib-agent-2 with subagents, from paragon-agent's anim-4 reading) [C unless marked].
     - The field 4008 and the gob tracks are in the clip's `.gad`, not its `.ani` ("Root motion's data" below). paragon-agent-2's parse of 46 files read the `.ani`.
     - Every play through `CCCreature` slot 44 starts `RootMotion::Start` ("Root motion's data").
     - The `.gad` of `mh_c.rct_kdwn_up_v1` (the get-up, 2.13 s, travel up to 0.42 m) has a gob track. So do the sword-and-shield, two-hander and dual-wield victims' `*_dblow_die_v1/2/3` (`combat_humanoid.anb` maps `db_h_{ws,2h,dw}_die_v*` to `{sw,tw,dw}_dblow_die_v*`).
+    - The knockdown's entry clip `mh_c.rct_kbck_v1` (row 148) has one too, ending 2.65 m back (paragon-agent-2's helper, 2026-11-04; its gob track checked in the `.gad` by lib-agent), so `RootMotion::Update` 0x00A65ED0 carries the victim back as it falls.
     - The loops (`rct_kdwn_lp_v1`, every `*_die_lp_*`) have none.
     - So `+0x40` is set and `RootMotion::Update` (0x00A65ED0) moves the victim by the clip's translation from where it stood at `Start`. The yaw still comes through `SetDesiredFacing`.
     - Whether the placement's stored target (+0x50, set by 0x007A3370 before the play) is still eased toward, since `Start` does not clear it, was not followed [I]. Not seen in play.
