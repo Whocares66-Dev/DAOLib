@@ -61,6 +61,7 @@ const std::vector<FieldSpec> kLineFields = {
     {12216, 0, 0, 0x1E},                                         // no voice-over in the game
     {12217, 0, 0, 0x1F},                                         // revert the animation
     {12213, 4, 0, 0x20},                                         // animation
+    {12218, 14, 0, 0x10},                                        // slideshow picture
     {12211, 0xFFFF, gff4::kReference, 0x58},                     // cutscene, generic
     {12500, kSwitchTemplate, gff4::kList | gff4::kStruct, 0x64}, // objects switched
     {12100, 14, 0, 0x38},                                        // stage name
@@ -96,6 +97,7 @@ struct LineSpec
     std::vector<std::pair<std::u16string, std::int32_t>> switches;
     std::u16string stage;
     bool stageAtSpeaker = false;
+    std::u16string slide;
 };
 
 // A line's cutscene, appended to the data: a CUTR naming a .cut, or a CUT
@@ -149,6 +151,7 @@ void WriteLine(Builder &b, std::size_t at, const LineSpec &l)
     b.U8(at + 0x1E, l.noVo ? 0xFF : 0);
     b.U8(at + 0x1F, l.revert ? 0xFF : 0);
     b.U32(at + 0x20, l.animation);
+    b.U32(at + 0x10, b.String(l.slide));
     b.U32(at + 0x38, b.String(l.stage));
     b.U8(at + 0x3C, l.stageAtSpeaker ? 1 : 0);
     WriteCut(b, at, l.cut);
@@ -274,7 +277,8 @@ std::vector<std::byte> TwoLines()
              Cut::Named,
              {{u"bhm600cr_mouse_human", 1}, {u"PLAYER", 0}},
              u"jowan_attack",
-             false},
+             false,
+             u"ss_shield.dds"},
             {5678, u"PLAYER", u"OWNER", 2,     u"",  -1,         u"gen_cond", 3,  {},  true,
              1,    false,     true,     false, true, 0xFFFFFFFF, Cut::Held,   {}, u"", true},
         },
@@ -310,6 +314,7 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(npc->noVoInGame);
     CHECK_FALSE(npc->revertAnimation);
     CHECK(npc->animation == 820);
+    CHECK(npc->slideShowTexture == L"ss_shield.dds");
     CHECK(npc->cutscene == L"390762");
     CHECK_FALSE(npc->cutsceneInLine);
     CHECK_FALSE(conversation->LineCutscene(0));

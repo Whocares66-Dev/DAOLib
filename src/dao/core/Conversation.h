@@ -130,6 +130,7 @@ struct ConversationLine
     bool noVoInGame = false;      // played without its voice-over in the game (inferred from the name)
     bool revertAnimation = false; // the speaker's animation undone when the line ends (inferred from the name)
     std::uint32_t animation = 0xFFFFFFFF; // a row of the Animations table played with the line; 0xFFFFFFFF for none
+    std::wstring slideShowTexture;        // a picture shown with the line, "ss_shield.dds"; empty for none
     std::wstring cutscene;                // the cutscene (.cut) the line plays, by name; empty for none
     bool cutsceneInLine = false;          // the line holds its own cutscene: ConversationFile::LineCutscene
     std::wstring stageName;               // the stage the line's cut is set on (0x007D2AA0); may be empty
@@ -177,6 +178,7 @@ class ConversationFile
     static constexpr std::uint32_t kLineFastPath = 12215;
     static constexpr std::uint32_t kLineNoVoInGame = 12216;
     static constexpr std::uint32_t kLineRevertAnimation = 12217;
+    static constexpr std::uint32_t kLineSlideShowTexture = 12218;
     static constexpr std::uint32_t kPlotGuid = 12300;
     static constexpr std::uint32_t kPlotFlag = 12301;
     static constexpr std::uint32_t kPlotTest = 12302;

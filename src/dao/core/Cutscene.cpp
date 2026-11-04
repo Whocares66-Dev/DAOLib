@@ -38,6 +38,7 @@ constexpr std::uint32_t kActorActions = 5206;
 constexpr std::uint32_t kActorCreature = 5208;
 constexpr std::uint32_t kActorCameraTarget = 5209;
 constexpr std::uint32_t kActorPose = 5211;
+constexpr std::uint32_t kActorPoseHumanoid = 5213;
 constexpr std::uint32_t kActorOriginPosition = 5214;
 constexpr std::uint32_t kActorOriginOrientation = 5215;
 constexpr std::uint32_t kActorMappingTag = 5216;
@@ -303,6 +304,7 @@ Actor ActorOf(const gff4::Struct &in)
         .mappingRequired = in.Get<std::uint8_t>(kActorMappingRequired).value_or(0),
         .cameraTarget = in.Get<std::int32_t>(kActorCameraTarget).value_or(-1),
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
+        .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
         .originPosition = Several<3>(in, kActorOriginPosition),
         .originOrientation = Several<4>(in, kActorOriginOrientation),
         .finalPosition = Several<3>(in, kActorFinalPosition),

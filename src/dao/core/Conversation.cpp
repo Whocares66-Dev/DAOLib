@@ -98,6 +98,7 @@ std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) cons
     out.noVoInGame = line.Get<std::uint8_t>(kLineNoVoInGame).value_or(0) != 0;
     out.revertAnimation = line.Get<std::uint8_t>(kLineRevertAnimation).value_or(0) != 0;
     out.animation = line.Get<std::uint32_t>(kLineAnimation).value_or(0xFFFFFFFF);
+    out.slideShowTexture = line.String(kLineSlideShowTexture).value_or(L"");
     // The generic field holds a CUTR, a cutscene by name, or a CUT, one of its own.
     if (const auto cut = line.Child(kLineCut))
     {

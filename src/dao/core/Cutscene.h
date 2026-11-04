@@ -171,6 +171,7 @@ struct Actor
     std::uint8_t mappingRequired = 0; // 255 or 0, as written
     std::int32_t cameraTarget = -1;
     std::int32_t pose = -1;
+    std::uint8_t poseHumanoid = 0; // CutsceneActorPoseHumanoid: 255 or 0, as written; what it changes is unread
     std::array<float, 3> originPosition{};
     std::array<float, 4> originOrientation{}; // a quaternion
     std::array<float, 3> finalPosition{};
