@@ -2949,11 +2949,16 @@ DAO_DATA(kUmbra_Camera_SetParameters_Import, 60332)
 // frame's second target, which the distortion shaders (smpSceneDepth), depth
 // of field and skin scattering (da_dof, da_bssrdf) read. Umbra sends 0x90
 // only with occlusion culling, and then for every visible instance whose
-// Umbra object has property 8 and every visible group: counted at Redcliffe's
+// Umbra object has property 8, groups among them: counted at Redcliffe's
 // bridge over 120 main views, meshes (kind 1) and the tree forest (0xB) with
 // property 8 4,560 and 600 visible and as many sent, the rest (lights and
 // emitters, kind 6; kinds 0x15 and 0x16; meshes with property 7 and not 8)
-// none, and groups 1,440 and 1,440. 0xa0 opens the depth pass (0x00C1EBF4
+// none, and groups 1,440 and 1,440. A group is sent only while its Umbra
+// object (the first field of the object's proxy at +0x300) has property 8,
+// which GraphicsStructures::Object::SyncUmbraProxyVisibility (0x00543B40)
+// sets only while the object's flags (+0x260) lack 0x4000: in Redcliffe
+// 2026-11-04, with Morrigan faded (EFFECT_TYPE_ALPHA), 16 visible groups had
+// it and were sent, and her two had not and were not (#318). 0xa0 opens the depth pass (0x00C1EBF4
 // set, the driver's state for it) and 0xa1 closes it and clears. A view with
 // occlusion culling is 0x0 0xa0 0x20 0x90... 0x91 (queries 0x80-0x83, more
 // 0x91s) 0xa1 0xa2 0x20 0x30... 0xa3 0x1; with view-frustum culling alone,

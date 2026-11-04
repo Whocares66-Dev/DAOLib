@@ -65,8 +65,9 @@
 // occlusion culling it sends none, so at Redcliffe's bridge the stream's ripples
 // were drawn across the bridge and the bank (Denerim's market, where paused frames
 // were compared, has no water). While occlusion culling is out, a visible instance
-// is now sent to the depth pass as Umbra sends it with occlusion culling: a group,
-// or one whose Umbra object has property 8 (dao/Addresses.h, counted in play). A
+// is now sent to the depth pass as Umbra sends it with occlusion culling: one, a
+// node or a group, whose Umbra object has property 8 (dao/Addresses.h, counted in
+// play; groups since #318, below). A
 // first try that sent every visible instance, lights and emitters among them, had
 // the game abort in the depth pass's sort (0x0045B3DD) within a minute. Without
 // occlusion culling Umbra also sends the depth pass's bracket (0xa0, 0x91, 0xa1)
@@ -76,6 +77,16 @@
 // bridge: every frustum-only frame of 24 had a depth pass of the occlusion
 // frames' 71 draws and the 12 of the occluded meshes it also draws, the water
 // right, and no fault in minutes of play.
+//
+// That first sent every visible group, and a creature faded by an effect
+// (EFFECT_TYPE_ALPHA: Fade Shroud with Combat Magic, stealth) had its face, hair and
+// weapon drawn into the depth pass and nothing of it in colour, so the scene behind
+// them was hidden and they showed black, each second's probe flashing them (#318).
+// Umbra sends a group to the depth pass only while the group's Umbra object has
+// property 8, and SyncUmbraProxyVisibility (0x00543B40) takes it away while the
+// object's flags (+0x260) have 0x4000: seen 2026-11-04 in Redcliffe with Morrigan
+// faded, 16 visible groups with it sent and the two without it (Morrigan and her
+// staff) not. A group is now tested as a node is.
 //
 
 namespace perf
@@ -208,10 +219,26 @@ GetInstanceFn g_getInstance = nullptr;
 GetUserPointerFn g_getUserPointer = nullptr;
 TestFn g_test = nullptr;
 
+// The Umbra object of an instance's user pointer, the engine's {node, group}: a node's
+// is the first field of its record (the node's +0x20, EclipseUmbraScene::AddNode); a
+// group's, the first field of its proxy (the object's +0x300), the group being the
+// object's +8 (EclipseUmbraScene::AddObject).
+const void *UmbraObject(void *const *user)
+{
+    const auto *node = static_cast<const char *>(user[0]);
+    const auto *group = static_cast<const char *>(user[1]);
+    if (node == nullptr && group == nullptr)
+    {
+        return nullptr;
+    }
+    const char *holder = node != nullptr ? node + 0x20 : group - 8 + 0x300;
+    const auto *fields = *reinterpret_cast<const void *const *const *>(holder);
+    return fields != nullptr ? fields[0] : nullptr;
+}
+
 // Whether occlusion culling would have had the commander's current instance's depth
-// drawn: an instance of a group, or a node whose Umbra object has the property.
-// The instance's user pointer is the engine's {node, group} (EclipseUmbraScene::AddNode),
-// and the node's +0x20 its record, whose first field is the node's Umbra object.
+// drawn: one whose Umbra object has the property, a node or a group alike. A group's
+// loses it while its object is faded (EFFECT_TYPE_ALPHA; #318).
 bool DrawnInDepth(const void *commander)
 {
     void *const *user = g_getUserPointer(g_getInstance(commander, 0), 0);
@@ -219,13 +246,8 @@ bool DrawnInDepth(const void *commander)
     {
         return false;
     }
-    const void *node = user[0];
-    if (node == nullptr)
-    {
-        return true; // a group: its handler takes what of it belongs in the depth pass
-    }
-    const auto *record = *reinterpret_cast<const void *const *const *>(static_cast<const char *>(node) + 0x20);
-    return record != nullptr && record[0] != nullptr && g_test(record[0], 0, kPropertyInDepth);
+    const void *object = UmbraObject(user);
+    return object != nullptr && g_test(object, 0, kPropertyInDepth);
 }
 
 // Without occlusion culling Umbra asks for no depth pass, and the scene depth that

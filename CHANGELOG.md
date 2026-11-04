@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Dynamic occlusion culling and faded creatures:** a creature made see-through by an effect, such as Fade Shroud with Combat Magic or stealth, no longer flickers with black patches while dynamic occlusion is on (#318).
+
 ## 0.9.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). The loader and its contract with plugins are as in 0.3.0.
