@@ -204,6 +204,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Hook an engine message handler | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
 | Send an engine message | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h` |
 | Hook any engine function | `dao::Detour<Fn>` on an ID from `dao/Addresses.h` | `dao/Hook.h` |
+| Hook a Direct3D (COM) method | `dao::VtableHook<Fn>` on the object and its vtable slot; an overlay that hooks the method inline and later writes its bytes back cannot erase it, as it erases a detour (DAOLib #319) | `dao/Hook.h` |
 | Change a table or an operand in the exe, as an exe mod would | `dao::Patch::Apply({id, offset}, vanilla, replacement)`: written only where the bytes are vanilla's, put back by `Revert` | `dao/Patch.h` |
 | Know what an object is | `dao::TypeName(ptr)`, from its RTTI | `dao/TypeName.h` |
 | Read memory that might not be there | `dao::TryRead<T>(address)` | `dao/SafeRead.h` |

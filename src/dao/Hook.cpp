@@ -9,13 +9,14 @@ namespace dao::detail
 
 bool SwapSlot(void **slot, void *expected, void *desired) noexcept
 {
+    void *const page = static_cast<void *>(slot);
     DWORD was = 0;
-    if (slot == nullptr || VirtualProtect(slot, sizeof(void *), PAGE_READWRITE, &was) == FALSE)
+    if (slot == nullptr || VirtualProtect(page, sizeof(void *), PAGE_READWRITE, &was) == FALSE)
     {
         return false;
     }
     const bool swapped = InterlockedCompareExchangePointer(slot, desired, expected) == expected;
-    VirtualProtect(slot, sizeof(void *), was, &was);
+    VirtualProtect(page, sizeof(void *), was, &was);
     return swapped;
 }
 

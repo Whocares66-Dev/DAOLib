@@ -47,17 +47,24 @@ struct Fixture
     Fixture()
     {
         table = static_cast<void **>(VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+        if (table == nullptr)
+        {
+            return;
+        }
         table[0] = reinterpret_cast<void *>(&Thrice);
         table[1] = reinterpret_cast<void *>(&Twice);
         DWORD was = 0;
-        VirtualProtect(table, 4096, PAGE_READONLY, &was);
+        VirtualProtect(static_cast<void *>(table), 4096, PAGE_READONLY, &was);
         object = static_cast<void *>(&table);
     }
     Fixture(const Fixture &) = delete;
     Fixture &operator=(const Fixture &) = delete;
     ~Fixture()
     {
-        VirtualFree(table, 0, MEM_RELEASE);
+        if (table != nullptr)
+        {
+            VirtualFree(static_cast<void *>(table), 0, MEM_RELEASE);
+        }
     }
 
     int Call(std::size_t slot, int value) const
@@ -68,7 +75,7 @@ struct Fixture
     DWORD Protection() const
     {
         MEMORY_BASIC_INFORMATION info{};
-        VirtualQuery(table, &info, sizeof info);
+        VirtualQuery(static_cast<const void *>(table), &info, sizeof info);
         return info.Protect;
     }
 };
@@ -78,6 +85,7 @@ struct Fixture
 TEST_CASE("A vtable hook swaps the entry, calls through to the original and puts it back")
 {
     const Fixture fixture;
+    REQUIRE(fixture.table != nullptr);
     REQUIRE(g_hook.Attach(fixture.object, 1, &Hooked));
     CHECK(g_hook.IsAttached());
     CHECK(g_hook.Original() == &Twice);
@@ -95,9 +103,10 @@ TEST_CASE("A vtable hook swaps the entry, calls through to the original and puts
 TEST_CASE("A vtable hook leaves an entry another hook has since replaced")
 {
     const Fixture fixture;
+    REQUIRE(fixture.table != nullptr);
     REQUIRE(g_hook.Attach(fixture.object, 1, &Hooked));
-    REQUIRE(dao::detail::SwapSlot(&fixture.table[1], reinterpret_cast<void *>(&Hooked),
-                                  reinterpret_cast<void *>(&Other)));
+    REQUIRE(
+        dao::detail::SwapSlot(&fixture.table[1], reinterpret_cast<void *>(&Hooked), reinterpret_cast<void *>(&Other)));
     g_hook.Detach();
     CHECK(fixture.table[1] == reinterpret_cast<void *>(&Other));
 }
@@ -105,8 +114,9 @@ TEST_CASE("A vtable hook leaves an entry another hook has since replaced")
 TEST_CASE("A vtable hook refuses a null object, and a swap refuses an entry not as expected")
 {
     const Fixture fixture;
+    REQUIRE(fixture.table != nullptr);
     CHECK_FALSE(g_hook.Attach(nullptr, 1, &Hooked));
-    CHECK_FALSE(dao::detail::SwapSlot(&fixture.table[1], reinterpret_cast<void *>(&Thrice),
-                                      reinterpret_cast<void *>(&Other)));
+    CHECK_FALSE(
+        dao::detail::SwapSlot(&fixture.table[1], reinterpret_cast<void *>(&Thrice), reinterpret_cast<void *>(&Other)));
     CHECK(fixture.table[1] == reinterpret_cast<void *>(&Twice));
 }
