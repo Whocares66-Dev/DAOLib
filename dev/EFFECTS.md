@@ -564,7 +564,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
   - **Flight integration:**
     - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169; the update 0x007E9630 = CProjectile slot 113; state +0x448: 2 flying 0x007E9170, 3 the timer 0x007E6C60, 4 0x007E6CB0) Launch (0x007E80E0, the first update after release, +0x440 = 0): reads Mass (0x90FC93BB) into +0x460 and InitialSpeed (0x883650AA) into +0x464; sets the velocity (+0x450..+0x458) = InitialSpeed x the unit launch direction (0x007E6D80); no movement on that update.
     - [C] Each later update with dt (0x007E9170), for a projectile with Simulation (row +0x3A) 0: destination = 0x007E7120 (the stored point at +0x4E0; with a target id at +0x4C0, a position taken from the target's model hook if there is one, else the target object's position at +0x120); dir = normalise(destination - position); v = |velocity| + Acceleration x dt (row +0x28); v = max(v, MinSpeed) (row +0x2C); v = min(v, TopSpeed) (row +0x30); the velocity = dir x v. It is re-aimed at the destination every frame. The speed is integrated from the running velocity: the MinSpeed floor lifts it, and the acceleration is added on top of the floored speed frame by frame (Arcane Bolt: 15 on the first frame, then 15 + 10 t, not max(15, 5 + 10 t)).
-    - [C] New position = position + velocity x dt; when the distance remaining to the destination (before the step) is less than the step's length, the position is set to the destination. The swept collision (0x007E8C10) runs between the old and new positions and a hit moves the position to the hit point. Distance travelled (+0x468) accumulates the step lengths; over 1000.0 it goes to removal.
+    - [C] New position = position + velocity x dt; when the distance remaining to the destination (before the step) is less than the step's length, the position is set to the destination. The swept collision (0x007E8C10) runs between the old and new positions and a hit moves the position to the stuck position past the hit point (0x007E6A80, called at 0x007E9488 after the sweep at 0x007E946F; "Where a stuck projectile sits" in COMBAT.md). Distance travelled (+0x468) accumulates the step lengths; over 1000.0 it goes to removal.
     - [C] With Simulation 1 the speed rules are not used: the velocity gains Mass x (the three float constants at 0x00C11840, 0x00C11844, 0x00C11848) x dt (a ballistic path), and the 0.01 m arrival test is skipped. The constants are (0, 0, -9.81), gravity in m/s² (read in the file, 2026-11-04 by lib-agent-2).
     - [C] A `Simulation` 1 flight, read 2026-11-04 by lib-agent-2 for DAOParagonEngine #374:
       - **The launch is a solved arc.** Without a caster hold node (the launch's branch at 0x007E81E0), the model is turned by `CProjectile::GetLaunchRotation` (0x007E7F20): yaw from d = destination − position (`Vector3::ToAngle`), and for `Simulation` 1 the pitch from `CProjectile::ComputeLaunchAngle` (0x007E7CF0) in place of d's own elevation. The velocity is then `InitialSpeed` along the model's forward (Y) axis (0x007E82A6).
@@ -590,7 +590,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
      - With no duration clip but an impact clip (0x007E9AD0 returns 1), nothing is done: the effect plays its impact out by itself.
      - Already ceasing: nothing.
   4. **Only if the target object exists:**
-     - **Stuck in the target:** when `ImpactTimeout` > 0, the projectile's model is made a child of the target's model at the hit point (0x007E79D0, the owner's `Object` slot 0xF0, the same attach call the crust uses), and `+0x441` = 1.
+     - **Stuck in the target:** when `ImpactTimeout` > 0, the projectile's model is made a child of the target's model where it sits, past the hit point (0x007E79D0, the owner's `Object` slot 0xF0, the same attach call the crust uses), and `+0x441` = 1.
      - **The impact sound:** the target's slot 54 (`CCCreature` 0x006A0220) gets the `SoundMatType` value. It reads the target's material from table 89 `materialtypes` (column 0xBB8AD13B), labels from 153 `sound_item_materials` and 154, and plays the sound (0x005B9020 → 0x005BC7F0) [C; how the event name is composed is I].
   5. **The flying sound is stopped** (`+0x484`, 0x005B9330(0)).
   6. **State 3.**
@@ -620,7 +620,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
   - At 1 s the object is deleted, with any particles still alive [I: vanish].
   - Meanwhile the caster gets `ABILITY_CAST_IMPACT` at once, and the scripts lay the impact effects (`VFX_Impact0/1` or the damage-type effect) as separate effects.
 - **An arrow** (`prj_base` 1, ImpactTimeout 3, AlphaFade 1, no tree read):
-  - On a hit target it sticks into the target's model at the hit point and follows it.
+  - On a hit target it sticks into the target's model, past the hit point, and follows it.
   - It stays 3 s, fades over 0.75 s, and is deleted.
   - With no target object (a location), it stays where it stopped for the same 3 + 0.75 s.
   - Its weapon trail is let finish from arrival. A launcher's enchantment effect (`+0x4AC`) goes to its cessation at arrival and is cut off when the arrow is deleted.
