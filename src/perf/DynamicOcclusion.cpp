@@ -59,6 +59,24 @@
 // six rounds, 5.78 ms against vanilla's 5.80) or at 600 MHz (Orzammar, 91 fps
 // against 92), since the update thread seldom waited on the GPU.
 //
+// The picture was not the same (#315): the frame's scene depth, which distortion,
+// depth of field and skin scattering read, is drawn by a depth pass of the instances
+// Umbra sends the commander for its occlusion queries (command 0x90), and without
+// occlusion culling it sends none, so at Redcliffe's bridge the stream's ripples
+// were drawn across the bridge and the bank (Denerim's market, where paused frames
+// were compared, has no water). While occlusion culling is out, a visible instance
+// is now sent to the depth pass as Umbra sends it with occlusion culling: a group,
+// or one whose Umbra object has property 8 (dao/Addresses.h, counted in play). A
+// first try that sent every visible instance, lights and emitters among them, had
+// the game abort in the depth pass's sort (0x0045B3DD) within a minute. Without
+// occlusion culling Umbra also sends the depth pass's bracket (0xa0, 0x91, 0xa1)
+// before the visible instances, so what was sent waited for the next frame's
+// flush, its nodes sometimes gone by then (a pure virtual call); the bracket is
+// held and sent once they are all known, before 0xa3. Seen 2026-11-03 at the
+// bridge: every frustum-only frame of 24 had a depth pass of the occlusion
+// frames' 71 draws and the 12 of the occluded meshes it also draws, the water
+// right, and no fault in minutes of play.
+//
 
 namespace perf
 {
@@ -111,16 +129,132 @@ template <class Fn> Fn Imported(dao::AddressId slot)
     return at == 0 ? nullptr : *reinterpret_cast<const Fn *>(at);
 }
 
+// The camera occlusion culling was last taken out of, while it is out of it.
+std::atomic<const void *> g_cameraWithoutOcclusion{nullptr};
+
 // Umbra::Camera::setParameters, each frame for the main view (0x00466E9F) and
 // at the shadow views' set-up: occlusion culling taken out while it does not pay.
 void __fastcall SetParameters(void *camera, int edx, int width, int height, unsigned properties, float a, float b)
 {
-    if (properties == kFrustumAndOcclusion && g_on.load(std::memory_order_relaxed) &&
-        g_frustumOnly.load(std::memory_order_relaxed))
+    if (properties == kFrustumAndOcclusion)
     {
-        properties = kFrustumOnly;
+        if (g_on.load(std::memory_order_relaxed) && g_frustumOnly.load(std::memory_order_relaxed))
+        {
+            properties = kFrustumOnly;
+            g_cameraWithoutOcclusion.store(camera, std::memory_order_relaxed);
+        }
+        else
+        {
+            const void *expected = camera;
+            g_cameraWithoutOcclusion.compare_exchange_strong(expected, nullptr, std::memory_order_relaxed);
+        }
     }
     g_setParameters.Original()(camera, edx, width, height, properties, a, b);
+}
+
+// Whether the culling running on this thread is of a camera without occlusion
+// culling: its commands come to the commander within the camera's resolveVisibility.
+thread_local bool t_resolvingWithoutOcclusion = false;
+
+using CommandFn = void(__fastcall *)(void *commander, int edx, int command);
+dao::Detour<CommandFn> g_command;
+
+// The depth pass's bracket (0xa0, 0x91, 0xa1) of a view without occlusion culling,
+// held until its visible instances are known (Command, below).
+thread_local std::array<int, 3> t_held{};
+thread_local std::size_t t_heldCount = 0;
+
+// Sends the held bracket, and passes the rest of the view's commands through.
+void Release(void *commander, int edx)
+{
+    t_resolvingWithoutOcclusion = false;
+    for (std::size_t i = 0; i < t_heldCount; ++i)
+    {
+        g_command.Original()(commander, edx, t_held[i]);
+    }
+    t_heldCount = 0;
+}
+
+using ResolveVisibilityFn = void(__fastcall *)(const void *camera, int edx, void *commander, int a, float b);
+dao::Detour<ResolveVisibilityFn> g_resolveVisibility;
+
+void __fastcall ResolveVisibility(const void *camera, int edx, void *commander, int a, float b)
+{
+    t_resolvingWithoutOcclusion = camera == g_cameraWithoutOcclusion.load(std::memory_order_relaxed);
+    t_heldCount = 0;
+    g_resolveVisibility.Original()(camera, edx, commander, a, b);
+    if (t_heldCount != 0)
+    {
+        Release(commander, 0); // a view that ended with no 0xa3: the bracket is still closed
+    }
+    t_resolvingWithoutOcclusion = false;
+}
+
+// The main view's Umbra commander's commands (dao/Addresses.h).
+constexpr int kInstanceVisible = 0x30;
+constexpr int kInstanceInDepth = 0x90;
+constexpr int kDepthFlush = 0x91;
+constexpr int kDepthBegin = 0xa0;
+constexpr int kDepthEnd = 0xa1;
+constexpr int kVisibleEnd = 0xa3;
+
+// The Umbra object property an instance's depth is drawn for (dao/Addresses.h).
+constexpr int kPropertyInDepth = 8;
+
+using GetInstanceFn = const void *(__fastcall *)(const void *commander, int edx);
+using GetUserPointerFn = void **(__fastcall *)(const void *instance, int edx);
+using TestFn = bool(__fastcall *)(const void *object, int edx, int property);
+GetInstanceFn g_getInstance = nullptr;
+GetUserPointerFn g_getUserPointer = nullptr;
+TestFn g_test = nullptr;
+
+// Whether occlusion culling would have had the commander's current instance's depth
+// drawn: an instance of a group, or a node whose Umbra object has the property.
+// The instance's user pointer is the engine's {node, group} (EclipseUmbraScene::AddNode),
+// and the node's +0x20 its record, whose first field is the node's Umbra object.
+bool DrawnInDepth(const void *commander)
+{
+    void *const *user = g_getUserPointer(g_getInstance(commander, 0), 0);
+    if (user == nullptr)
+    {
+        return false;
+    }
+    const void *node = user[0];
+    if (node == nullptr)
+    {
+        return true; // a group: its handler takes what of it belongs in the depth pass
+    }
+    const auto *record = *reinterpret_cast<const void *const *const *>(static_cast<const char *>(node) + 0x20);
+    return record != nullptr && record[0] != nullptr && g_test(record[0], 0, kPropertyInDepth);
+}
+
+// Without occlusion culling Umbra asks for no depth pass, and the scene depth that
+// distortion and the frame's effects read was left empty (#315). With it, Umbra
+// sends the instances to draw in depth within the depth pass's bracket, and the
+// visible ones after it; without it, it sends the bracket before it knows what is
+// visible. So the bracket is held, each visible instance is given to the depth pass
+// as occlusion culling gives it, and the bracket is let go once they are all known:
+// the engine then draws the same depth pass, in the same view, as with occlusion
+// culling.
+void __fastcall Command(void *commander, int edx, int command)
+{
+    if (t_resolvingWithoutOcclusion)
+    {
+        if ((command == kDepthBegin || command == kDepthFlush || command == kDepthEnd) && t_heldCount < t_held.size())
+        {
+            t_held[t_heldCount++] = command;
+            return;
+        }
+        if (command == kInstanceVisible && DrawnInDepth(commander))
+        {
+            g_command.Original()(commander, edx, kInstanceInDepth);
+        }
+        else if (command == kVisibleEnd)
+        {
+            Release(commander, edx);
+        }
+    }
+    g_command.Original()(commander, edx, command);
 }
 
 // The way frames run, chosen from probes of the other way, on the game thread.
@@ -299,8 +433,27 @@ bool LeftOut()
 
 bool Attach()
 {
+    // The depth pass's two hooks before the switch's, so occlusion culling is never
+    // taken out without them.
     const auto setParameters = Imported<SetParametersFn>(dao::addr::kUmbra_Camera_SetParameters_Import);
-    return setParameters != nullptr && g_setParameters.AttachTo(setParameters, &SetParameters);
+    const auto resolveVisibility = Imported<ResolveVisibilityFn>(dao::addr::kUmbra_Camera_ResolveVisibility_Import);
+    g_getInstance = Imported<GetInstanceFn>(dao::addr::kUmbra_Commander_GetInstance_Import);
+    g_getUserPointer = Imported<GetUserPointerFn>(dao::addr::kUmbra_Commander_Instance_GetUserPointer_Import);
+    g_test = Imported<TestFn>(dao::addr::kUmbra_Object_Test_Import);
+    if (setParameters == nullptr || resolveVisibility == nullptr || g_getInstance == nullptr ||
+        g_getUserPointer == nullptr || g_test == nullptr ||
+        !g_command.Attach(dao::addr::kEclipseUmbraCommander_Command, &Command))
+    {
+        return false;
+    }
+    if (!g_resolveVisibility.AttachTo(resolveVisibility, &ResolveVisibility) ||
+        !g_setParameters.AttachTo(setParameters, &SetParameters))
+    {
+        g_resolveVisibility.Detach();
+        g_command.Detach();
+        return false;
+    }
+    return true;
 }
 
 } // namespace

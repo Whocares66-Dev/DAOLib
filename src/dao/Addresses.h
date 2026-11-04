@@ -2937,6 +2937,45 @@ DAO_DATA(kUmbra_OcclusionQuery_GetVertexCount_Import, 60308)
 // properties 3 (view frustum 1 | occlusion 2) while the global byte 0x00BF2853
 // is set; 1 gives view-frustum culling alone.
 DAO_DATA(kUmbra_Camera_SetParameters_Import, 60332)
+// The main view's Umbra commander, read 2026-11-03 for DAOLib #315 (the
+// decompiled command in Ghidra, and counted in play):
+// EclipseUmbraCommander slot 1, __thiscall (int command), `ret 4`, a jump
+// table over the command (0x0045CFC8, 0x0045CF90). 0x30, an instance
+// visible, adds its node to the list at +0x20, the frame's draws. 0x90 adds
+// its node to the list at +0x10 (a group's mesh members, kind 1, to +0x30,
+// while the byte 0x00BF2300 is set), and 0x91 is FlushQueries (0x0045C7C0):
+// both lists sorted front to back and drawn by the depth renderer
+// ([0x00C1EBF0]) with the g_fFocalPlane shaders into the scene depth, the
+// frame's second target, which the distortion shaders (smpSceneDepth), depth
+// of field and skin scattering (da_dof, da_bssrdf) read. Umbra sends 0x90
+// only with occlusion culling, and then for every visible instance whose
+// Umbra object has property 8 and every visible group: counted at Redcliffe's
+// bridge over 120 main views, meshes (kind 1) and the tree forest (0xB) with
+// property 8 4,560 and 600 visible and as many sent, the rest (lights and
+// emitters, kind 6; kinds 0x15 and 0x16; meshes with property 7 and not 8)
+// none, and groups 1,440 and 1,440. 0xa0 opens the depth pass (0x00C1EBF4
+// set, the driver's state for it) and 0xa1 closes it and clears. A view with
+// occlusion culling is 0x0 0xa0 0x20 0x90... 0x91 (queries 0x80-0x83, more
+// 0x91s) 0xa1 0xa2 0x20 0x30... 0xa3 0x1; with view-frustum culling alone,
+// 0x0 0xa0 0x91 0xa1 0xa2 0x20 0x30... 0xa3 0x1: no 0x90 and no queries, and
+// the bracket before the visible instances are known. 0xa2 and 0xa3 the
+// commander leaves alone. One 0x0 and one 0x1 a view: it serves the main view
+// alone.
+// EclipseUmbraScene::AddNode (0x004678F0) gives property 8 to opaque meshes,
+// forests and kinds 8 and 10, not to a node flagged 0x10 nor one whose owner
+// has flag 0x200 or 0x1000 (which get property 7), and sets each Umbra
+// object's user pointer to {node, group} and the node's +0x20 to its record,
+// {Umbra object, its shadow cells' object, model, bool}.
+DAO_ADDRESS(kEclipseUmbraCommander_Command, 2494)
+// Umbra::Camera::resolveVisibility (__thiscall const (Commander*, int, float)):
+// the culling of a camera, within which its commander is given its commands.
+DAO_DATA(kUmbra_Camera_ResolveVisibility_Import, 60338)
+// The commander's instance (__thiscall const, no arguments), during an
+// instance's command; and the instance's user pointer (__thiscall const).
+DAO_DATA(kUmbra_Commander_GetInstance_Import, 60325)
+DAO_DATA(kUmbra_Commander_Instance_GetUserPointer_Import, 60326)
+// Umbra::Object::test (__thiscall const bool (Property)).
+DAO_DATA(kUmbra_Object_Test_Import, 60301)
 // The update thread's wait for the render thread (read 2026-10-31, DAOLib #286):
 // __thiscall, no arguments, on the graphics object [0x00C31650]; it takes the
 // threaded driver at +0x118 and, if there is one, spins (SwitchToThread) in
