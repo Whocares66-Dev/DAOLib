@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
-- **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: the game keeps occlusion culling only while it is faster for what the camera sees, checking once a second and switching only on a clear difference (#281, #285, #286). With the party running through an area on an RTX 3090: the Brecilian Forest +22%, the Tower of Ishal +10%; areas where culling pays, such as Denerim's market and Ostagar's camp, run within a few percent of vanilla.
-- **Water and heat haze right with dynamic occlusion culling:** while the switch had occlusion culling out, the depth that water's refraction, heat haze, depth of field and skin read was left empty, and Redcliffe's stream was drawn across its bridge. That depth is now drawn as occlusion culling draws it (#315).
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: the game keeps occlusion culling only while it is faster for what the camera sees, checking once a second and switching only on a clear difference (#281, #285, #286). With the party running through an area on an RTX 3090: the Brecilian Forest +22%, the Tower of Ishal +10%; areas where culling pays, such as Denerim's market and Ostagar's camp, run within a few percent of vanilla. Water, heat haze, depth of field and skin look as they do with occlusion culling on (#315).
 - **Flickering lights livelier:** they now change about twice a second rather than once, so a weapon's or a spell's light flickers instead of looking still. Each change goes to a new random brightness, as in vanilla (#313).
+- **More of the game for plugins:** an aim as its ability sets it, with its shape: a creature, a circle or a cone (#282); an effect's time left set on the live effect (#278); another plugin's options read and set by name (#277); and the Fade's map read and travelled, and a city's two maps swapped (#276).
+- **More of the game's files read with no game running:** a frame effect's `.ffx.xml`, a material's state, submission program and the technique the engine draws (#292-#298, #309); a clip's root motion and a cutscene's actors, curves and placement as the engine samples them (#287, #299, #301, #306, #312); a conversation's end action and a line's slideshow picture (#288, #312); a model's sound materials, variation tint and a `.phy`'s mesh shape (#275, #303, #305); and the player's achievements (#310) (`daolib_core`).
+- **A blank save to write over:** a save made from nothing, with the version the game needs, for a tool to fill in (`dao::core` Savegame, #302, #307).
 
 ## 0.8.0
 
