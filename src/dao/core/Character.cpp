@@ -15,6 +15,7 @@ namespace
 // builder knows by ID (dev/CHARACTERS.md, 0x007480B0 and 0x007480C0).
 constexpr std::int64_t kAppearances = 2;
 constexpr std::int64_t kItems = 6;
+constexpr std::int64_t kEffects = 8;
 constexpr std::int64_t kNakedVariations = 80;
 constexpr std::int64_t kHeadTintMasks = 81;
 constexpr std::int64_t kBodyTintMasks = 82;
@@ -25,6 +26,10 @@ constexpr std::int64_t kTattooTints = 86;
 constexpr std::int64_t kBodyTints = 88;
 constexpr std::int64_t kWeaponParts = 91;
 constexpr std::int64_t kGenders = 92;
+constexpr std::int64_t kItemProperties = 107;
+// itemprps' IPType: an effect, its VFX put on with it; and a visual effect alone (0x00759190).
+constexpr std::int64_t kEffectProperty = 1;
+constexpr std::int64_t kVfxProperty = 2;
 constexpr std::int32_t kClothing = 38;
 constexpr std::int32_t kMassiveNoBoots = 22;
 // A female's own WeaponOffset counts a fifth, and no chest counts as one of
@@ -404,6 +409,21 @@ std::optional<Template> TemplateOf(const gff3::File &utc)
     return creature;
 }
 
+namespace
+{
+
+std::vector<Property> PropertiesOf(const gff3::Struct &root)
+{
+    std::vector<Property> properties;
+    for (const auto &entry : root.List("PropertiesList"))
+    {
+        properties.push_back({.id = Whole(entry, "PropertyID"), .power = Whole(entry, "PropertyPower")});
+    }
+    return properties;
+}
+
+} // namespace
+
 std::optional<Item> ItemOf(const gff3::File &uti)
 {
     const auto root = uti.Root();
@@ -419,6 +439,7 @@ std::optional<Item> ItemOf(const gff3::File &uti)
         .bodyTint = Whole(*root, "BodyTint"),
         .bodyTintMask = Whole(*root, "BodyTintMask"),
         .tintOverride = Whole(*root, "TintOverride"),
+        .properties = PropertiesOf(*root),
     };
 }
 
@@ -450,6 +471,73 @@ Tints TintsOf(const Template &creature, const TableOf &tableOf)
             .tattooMask = file(kHeadTintMasks, creature.tattoo, "MaskFile"),
             .body = file(kBodyTints, creature.bodyTint, "TintFile"),
             .bodyMask = file(kBodyTintMasks, creature.bodyTintMask, "MaskFile")};
+}
+
+} // namespace
+
+namespace
+{
+
+// Notes on an item's property effects, read 2026-11-04 in the GOG exe (DAOLib #317, dev/CHARACTERS.md).
+// 0x00759190 takes an item's properties one by one (its ids at item +0x680, powers at +0x69C)
+// and reads the row's IPType (column 0x4FE5E973). IPType 1 makes the row's Effect, if any, and then,
+// with VFX (0x9512145E) not 0, a visual effect of that row (0x007594BC..0x0075955B), put into
+// the item's effects (item +0x70, 0x007A1A20) with no other test. IPType 2 goes to 0x00758FD0,
+// which keeps one such effect an item (its property at +0x6D8, power at +0x6DC): none where
+// the base type's SuppressPropertyVFX (0x0075905D) is set, and a property replaces the one
+// held when its power is at least the held one's and its VFX not 0. That it starts from a
+// power of 0 is inferred; it also asks the item for an owner, not read further.
+std::vector<ItemEffect> ItemEffectsOf(const Context &context, const Template &creature, const ItemOfName &itemOf)
+{
+    std::vector<ItemEffect> found;
+    const m2da::Merged *properties = context.tableOf(kItemProperties);
+    const m2da::Merged *effects = context.tableOf(kEffects);
+    if (properties == nullptr || effects == nullptr)
+    {
+        return found;
+    }
+    const auto add = [&](std::int32_t slot, std::int32_t property, std::int64_t vfx) {
+        if (auto row = effect::RowOf(*effects, vfx))
+        {
+            found.push_back({.inventorySlot = slot, .property = property, .effect = std::move(*row)});
+        }
+    };
+    for (const auto &equipped : creature.equipment)
+    {
+        const auto item = itemOf(equipped.item);
+        if (!item)
+        {
+            continue;
+        }
+        const bool suppressed =
+            Number(context.items, RowOf(context.items, item->baseItem), "SuppressPropertyVFX") != 0;
+        std::optional<Property> held;
+        std::int64_t heldVfx = 0;
+        for (const Property &property : item->properties)
+        {
+            const m2da::Row *row = RowOf(properties, property.id);
+            const auto type = static_cast<std::int64_t>(Number(properties, row, "IPType"));
+            const auto vfx = static_cast<std::int64_t>(Number(properties, row, "VFX"));
+            if (vfx == 0)
+            {
+                continue;
+            }
+            if (type == kEffectProperty)
+            {
+                add(equipped.inventorySlot, property.id, vfx);
+            }
+            else if (type == kVfxProperty && !suppressed && property.power >= (held ? held->power : 0))
+            {
+                held = property;
+                heldVfx = vfx;
+            }
+        }
+        if (held)
+        {
+            add(equipped.inventorySlot, held->id, heldVfx);
+        }
+    }
+    return found;
 }
 
 } // namespace
@@ -490,6 +578,7 @@ std::optional<Character> Resolve(const Template &creature, const ItemOfName &ite
         character.body = BodyOf(context, creature, itemOf, character.prefix);
     }
     character.weapons = WeaponsOf(context, creature, itemOf);
+    character.itemEffects = ItemEffectsOf(context, creature, itemOf);
     return character;
 }
 

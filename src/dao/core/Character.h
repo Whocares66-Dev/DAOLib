@@ -14,6 +14,7 @@
 // detail's "_0".
 #pragma once
 
+#include "dao/core/Effect.h"
 #include "dao/core/Gff3.h"
 #include "dao/core/M2da.h"
 
@@ -87,6 +88,13 @@ struct Template
 // not one.
 std::optional<Template> TemplateOf(const gff3::File &utc);
 
+// One of an item's properties, as its template lists them.
+struct Property
+{
+    std::int32_t id = 0;    // its row of itemprps (table 107)
+    std::int32_t power = 0;
+};
+
 // What an item template (.uti) says of how the item looks.
 struct Item
 {
@@ -97,6 +105,7 @@ struct Item
     std::int32_t bodyTint = 0;
     std::int32_t bodyTintMask = 0;
     std::int32_t tintOverride = 0;
+    std::vector<Property> properties; // PropertiesList, in its order
 };
 
 // Returns what an item template says of the item's looks, or nothing for a file that is not one.
@@ -123,6 +132,14 @@ struct Weapon
     float offset = 0;
     bool sheathedOffset = false;
     bool drawnOffset = false;
+};
+
+// A visual effect an equipped item's property puts on it.
+struct ItemEffect
+{
+    std::int32_t inventorySlot = 0; // the item's, as the template's equipment list numbers it
+    std::int32_t property = 0;      // the property's row of itemprps (table 107)
+    effect::Row effect;             // its VFX's row of vfx_base (table 8): the model, and whether it is a crust
 };
 
 // What a helmet leaves of the head.
@@ -177,10 +194,14 @@ struct Character
     Head head;
     std::string headMorph; // the template's
     Tints tints;           // for a creature of one model too
+    // Every equipped item's property effects, in the equipment list's order, then the properties';
+    // in any slot, so a ring's or Shale's crystals' as well as a weapon's.
+    std::vector<ItemEffect> itemEffects;
 };
 
-// Returns a data table by its number in m2da_base (2 apr_base, 6 bitm_base, 80 naked_variation,
-// 81 to 88 the tint tables, 91 weaponparts, 92 gender and the variation worksheets), merged as
+// Returns a data table by its number in m2da_base (2 apr_base, 6 bitm_base, 8 vfx_base, 80
+// naked_variation, 81 to 88 the tint tables, 91 weaponparts, 92 gender, 107 itemprps and the
+// variation worksheets), merged as
 // the game merges it; null for none.
 using TableOf = std::function<const m2da::Merged *(std::int64_t table)>;
 

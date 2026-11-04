@@ -544,3 +544,73 @@ TEST_CASE("Alistair in game/characters, when there, is the parts paragon-agent d
         CHECK(hurlock->model == L"cn_bdy_hlkb");
     }
 }
+
+TEST_CASE("an equipped item's properties put their visual effects on it, a VFX property one an item", "[character]")
+{
+    // Made-up rows: a crust on a property of each kind, and base types with and without
+    // SuppressPropertyVFX.
+    const std::map<std::int64_t, m2da::Merged> byId{
+        {2, Table({"ID", "ModelType", "ModelName"}, {{40, {I(40), S(L"S"), S(L"c_golem")}}})},
+        {6, Table({"ID", "SuppressPropertyVFX"}, {{105, {I(105), I(0)}}, {106, {I(106), I(1)}}})},
+        {8, Table({"ID", "Label", "Type", "ModelName1", "Size1", "CrustEffect"},
+                  {{500, {I(500), S(L"Crust A"), S(L"D"), S(L"fxc_test_a_c"), F(0), I(1)}},
+                   {501, {I(501), S(L"Crust B"), S(L"D"), S(L"fxc_test_b_c"), F(0), I(1)}},
+                   {502, {I(502), S(L"Glow weak"), S(L"D"), S(L"fxc_glow1_c"), F(0), I(1)}},
+                   {503, {I(503), S(L"Glow strong"), S(L"D"), S(L"fxc_glow2_c"), F(0), I(1)}}})},
+        {107, Table({"ID", "IPType", "VFX"},
+                    {{1, {I(1), I(1), I(0)}},
+                     {10, {I(10), I(1), I(500)}},
+                     {11, {I(11), I(1), I(501)}},
+                     {12, {I(12), I(1), I(999)}},
+                     {20, {I(20), I(2), I(502)}},
+                     {21, {I(21), I(2), I(503)}},
+                     {22, {I(22), I(2), I(0)}}})},
+    };
+    const character::TableOf tableOf = [&byId](std::int64_t id) -> const m2da::Merged * {
+        const auto found = byId.find(id);
+        return found != byId.end() ? &found->second : nullptr;
+    };
+    const auto with = [](std::int32_t base, std::vector<character::Property> properties) {
+        character::Item item;
+        item.baseItem = base;
+        item.properties = std::move(properties);
+        return item;
+    };
+    const character::ItemOfName itemOf = [&](std::string_view name) -> std::optional<character::Item> {
+        if (name == "crystal")
+        {
+            // an effect property with no VFX, two with one, one whose VFX has no row
+            return with(105, {{1, 0}, {10, 0}, {12, 0}, {11, 0}});
+        }
+        if (name == "rune")
+        {
+            // VFX properties: the stronger held, then one of equal power replacing it, one of none passed over
+            return with(105, {{21, 3}, {20, 1}, {22, 5}, {20, 3}});
+        }
+        if (name == "muted")
+        {
+            return with(106, {{20, 2}, {10, 0}});
+        }
+        return std::nullopt;
+    };
+    character::Template golem;
+    golem.appearance = 40;
+    golem.equipment = {{.inventorySlot = 15, .item = "crystal"},
+                       {.inventorySlot = 0, .item = "rune"},
+                       {.inventorySlot = 9, .item = "muted"},
+                       {.inventorySlot = 16, .item = "nothing"}};
+    const auto resolved = character::Resolve(golem, itemOf, tableOf);
+    REQUIRE(resolved);
+    REQUIRE(resolved->itemEffects.size() == 4);
+    CHECK(resolved->itemEffects[0].inventorySlot == 15);
+    CHECK(resolved->itemEffects[0].property == 10);
+    CHECK(resolved->itemEffects[0].effect.crust);
+    CHECK(resolved->itemEffects[0].effect.ModelFor(0)->model.model == L"fxc_test_a_c");
+    CHECK(resolved->itemEffects[1].property == 11);
+    CHECK(resolved->itemEffects[1].effect.id == 501);
+    CHECK(resolved->itemEffects[2].inventorySlot == 0);
+    CHECK(resolved->itemEffects[2].property == 20); // the last of the highest power
+    CHECK(resolved->itemEffects[2].effect.id == 502);
+    CHECK(resolved->itemEffects[3].inventorySlot == 9); // a suppressed base type keeps its effect properties
+    CHECK(resolved->itemEffects[3].property == 10);
+}
