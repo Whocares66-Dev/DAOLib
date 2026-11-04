@@ -279,8 +279,8 @@ std::vector<std::byte> TwoLines()
              u"jowan_attack",
              false,
              u"ss_shield.dds"},
-            {5678, u"PLAYER", u"OWNER", 2,     u"",  -1,         u"gen_cond", 3,  {},  true,
-             1,    false,     true,     false, true, 0xFFFFFFFF, Cut::Held,   {}, u"", true},
+            {5678,  u"PLAYER", u"OWNER", 2,    u"",        -1,        u"gen_cond", 3,   {},   true, 1,
+             false, true,      false,    true, 0xFFFFFFFF, Cut::Held, {},          u"", true, u""},
         },
         {false, true});
 }
