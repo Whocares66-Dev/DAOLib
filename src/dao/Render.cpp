@@ -25,9 +25,11 @@
 // by IDirect3D9::CreateDevice (slot 16) on the Direct3D9 object Direct3DCreate9 returns; its frames
 // end at the device's Present (slot 17) or, during an area's arrival, at the implicit swap chain's
 // (slot 3; dao/Addresses.h at kD3DSwapChain_Present). The device is not made pure, so its Get*
-// methods answer: the shaders' functions and constants, the textures and the render states. These
-// are d3d9.dll's own functions, detoured where the vtables point (as the probe's colour-curve watch
-// and DAOElgaraShaders' capture did before), so a second plugin detouring them as well chains.
+// methods answer: the shaders' functions and constants, the textures and the render states. The
+// methods are hooked by their vtable entries, not detoured in d3d9.dll's code: an overlay that
+// hooks them inline and writes its bytes back when it lets the game go (RivaTuner Statistics
+// Server, seen 2026-11-04, DAOElgaraShaders #73) erased the detours placed after it, and then no
+// frame ended. Direct3DCreate9, an export, stays a detour (DAOLib #319).
 
 namespace dao::render
 {
@@ -57,18 +59,13 @@ constexpr std::size_t kChainPresentSlot = 3;   // IDirect3DSwapChain9::Present
 constexpr DWORD kVertexSamplers = D3DVERTEXTEXTURESAMPLER0;
 
 Detour<CreateFn> g_create;
-Detour<CreateDeviceFn> g_createDevice;
-Detour<PresentFn> g_present;
-Detour<ChainPresentFn> g_chainPresent;
-Detour<DrawFn> g_draw;
-Detour<DrawIndexedFn> g_drawIndexed;
-Detour<DrawUpFn> g_drawUp;
-Detour<DrawIndexedUpFn> g_drawIndexedUp;
-
-template <class Fn> Fn Method(void *object, std::size_t slot)
-{
-    return reinterpret_cast<Fn>((*static_cast<void ***>(object))[slot]);
-}
+VtableHook<CreateDeviceFn> g_createDevice;
+VtableHook<PresentFn> g_present;
+VtableHook<ChainPresentFn> g_chainPresent;
+VtableHook<DrawFn> g_draw;
+VtableHook<DrawIndexedFn> g_drawIndexed;
+VtableHook<DrawUpFn> g_drawUp;
+VtableHook<DrawIndexedUpFn> g_drawIndexedUp;
 
 // A watch as the library keeps it.
 struct Record
@@ -644,21 +641,19 @@ HRESULT __stdcall ChainPresent(IDirect3DSwapChain9 *chain, const RECT *source, c
 
 void AttachDevice(IDirect3DDevice9 *device)
 {
-    const bool drawn =
-        g_draw.AttachTo(Method<DrawFn>(device, kDrawSlot), &DrawPrimitive) &&
-        g_drawIndexed.AttachTo(Method<DrawIndexedFn>(device, kDrawIndexedSlot), &DrawIndexedPrimitive) &&
-        g_drawUp.AttachTo(Method<DrawUpFn>(device, kDrawUpSlot), &DrawPrimitiveUp) &&
-        g_drawIndexedUp.AttachTo(Method<DrawIndexedUpFn>(device, kDrawIndexedUpSlot), &DrawIndexedPrimitiveUp);
-    bool presented = g_present.AttachTo(Method<PresentFn>(device, kPresentSlot), &Present);
+    const bool drawn = g_draw.Attach(device, kDrawSlot, &DrawPrimitive) &&
+                       g_drawIndexed.Attach(device, kDrawIndexedSlot, &DrawIndexedPrimitive) &&
+                       g_drawUp.Attach(device, kDrawUpSlot, &DrawPrimitiveUp) &&
+                       g_drawIndexedUp.Attach(device, kDrawIndexedUpSlot, &DrawIndexedPrimitiveUp);
+    bool presented = g_present.Attach(device, kPresentSlot, &Present);
     IDirect3DSwapChain9 *chain = nullptr;
     if (SUCCEEDED(device->GetSwapChain(0, &chain)) && chain != nullptr)
     {
-        presented =
-            g_chainPresent.AttachTo(Method<ChainPresentFn>(chain, kChainPresentSlot), &ChainPresent) && presented;
+        presented = g_chainPresent.Attach(chain, kChainPresentSlot, &ChainPresent) && presented;
         chain->Release();
     }
-    spdlog::info("render: {} on the device's draws, {} on its presents", drawn ? "detours" : "no detours",
-                 presented ? "detours" : "not all detours");
+    spdlog::info("render: {} on the device's draws, {} on its presents", drawn ? "hooks" : "no hooks",
+                 presented ? "hooks" : "not all hooks");
 }
 
 HRESULT __stdcall CreateDevice(IDirect3D9 *direct3d, UINT adapter, D3DDEVTYPE type, HWND window, DWORD behaviour,
@@ -676,9 +671,9 @@ IDirect3D9 *__stdcall Create(UINT version)
 {
     IDirect3D9 *direct3d = g_create.Original()(version);
     if (direct3d != nullptr && !g_createDevice.IsAttached() &&
-        !g_createDevice.AttachTo(Method<CreateDeviceFn>(direct3d, kCreateDeviceSlot), &CreateDevice))
+        !g_createDevice.Attach(direct3d, kCreateDeviceSlot, &CreateDevice))
     {
-        spdlog::warn("render: no detour on CreateDevice");
+        spdlog::warn("render: no hook on CreateDevice");
     }
     return direct3d;
 }

@@ -344,6 +344,7 @@ add_library(
     src/dao/Options.cpp
     src/dao/OptionsScreen.cpp
     src/dao/Patch.cpp
+    src/dao/Hook.cpp
     src/dao/Log.cpp
     src/dao/Messages.cpp
     src/dao/Saves.cpp

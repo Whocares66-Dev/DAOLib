@@ -109,6 +109,7 @@ add_executable(
     test_fingerprint.cpp
     test_patch.cpp
     test_saferead.cpp
+    test_vtablehook.cpp
 )
 dao_apply_warnings(dao_tests)
 target_link_libraries(dao_tests PRIVATE daolib Catch2::Catch2WithMain)

@@ -1,5 +1,5 @@
 // Replace one of the game's functions with your own, and call the original from it, using
-// dao::Detour.
+// dao::Detour; or replace a COM object's method by its vtable slot, using dao::VtableHook.
 #pragma once
 
 #include "dao/Module.h"
@@ -8,6 +8,7 @@
 
 #include <detours/detours.h>
 
+#include <cstddef>
 #include <cstdint>
 
 // Notes on Detour: Detours replaces the function's first bytes with a jump to the hook
@@ -114,6 +115,98 @@ template <class Fn> class Detour
     }
 
   private:
+    Fn original_ = nullptr;
+    Fn hook_ = nullptr;
+    bool attached_ = false;
+};
+
+namespace detail
+{
+
+// Swaps the pointer at `slot` from `expected` to `desired`, under VirtualProtect, as one interlocked
+// exchange.
+// @return false if the slot did not hold `expected` or its page could not be made writable
+bool SwapSlot(void **slot, void *expected, void *desired) noexcept;
+
+} // namespace detail
+
+// A hook on one method of a COM object, Direct3D's first: the object's vtable entry for the slot
+// is pointed at the hook.
+//
+// The game calls Direct3D through the vtables, so the hook sees every call. Use it, not Detour,
+// for a method of a system object: an overlay (a frame counter, a capture tool) that hooked the
+// method's code inline and later writes its bytes back erases a Detour placed after it, but not a
+// vtable entry. The vtable is the class's, shared by every object of the class. `Fn` is the
+// method's pointer type with the object first, __stdcall for COM.
+//
+//     using PresentFn = HRESULT(__stdcall*)(IDirect3DDevice9*, const RECT*, const RECT*, HWND,
+//                                           const RGNDATA*);
+//     dao::VtableHook<PresentFn> g_present;
+//     g_present.Attach(device, 17, &Present);
+//     ... g_present.Original()(device, source, dest, window, dirty);
+//
+// The destructor removes the hook.
+template <class Fn> class VtableHook
+{
+  public:
+    VtableHook() = default;
+    VtableHook(const VtableHook &) = delete;
+    VtableHook &operator=(const VtableHook &) = delete;
+    ~VtableHook()
+    {
+        Detach();
+    }
+
+    // Points the object's vtable entry for `slot` at `hook`.
+    // @return false, with nothing changed, if the hook is already attached, `object` is null, or
+    // the entry could not be written
+    bool Attach(void *object, std::size_t slot, Fn hook)
+    {
+        if (attached_ || object == nullptr)
+        {
+            return false;
+        }
+        void **entry = *static_cast<void ***>(object) + slot;
+        void *was = *entry;
+        if (!detail::SwapSlot(entry, was, reinterpret_cast<void *>(hook)))
+        {
+            return false;
+        }
+        entry_ = entry;
+        original_ = reinterpret_cast<Fn>(was);
+        hook_ = hook;
+        attached_ = true;
+        return true;
+    }
+
+    // Puts the entry back as it was. Does nothing if the hook is not attached, and leaves an entry
+    // another hook has since replaced, whose own original is this hook.
+    void Detach()
+    {
+        if (!attached_)
+        {
+            return;
+        }
+        detail::SwapSlot(entry_, reinterpret_cast<void *>(hook_), reinterpret_cast<void *>(original_));
+        attached_ = false;
+        entry_ = nullptr;
+        original_ = nullptr;
+    }
+
+    // Returns the method the entry held, for the hook to call. Null until Attach succeeds.
+    Fn Original() const
+    {
+        return original_;
+    }
+
+    // Returns true while the hook is in place.
+    bool IsAttached() const
+    {
+        return attached_;
+    }
+
+  private:
+    void **entry_ = nullptr;
     Fn original_ = nullptr;
     Fn hook_ = nullptr;
     bool attached_ = false;
