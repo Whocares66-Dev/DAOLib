@@ -91,7 +91,7 @@ std::optional<Template> TemplateOf(const gff3::File &utc);
 // One of an item's properties, as its template lists them.
 struct Property
 {
-    std::int32_t id = 0;    // its row of itemprps (table 107)
+    std::int32_t id = 0; // its row of itemprps (table 107)
     std::int32_t power = 0;
 };
 

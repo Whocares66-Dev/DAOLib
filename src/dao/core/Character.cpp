@@ -509,8 +509,7 @@ std::vector<ItemEffect> ItemEffectsOf(const Context &context, const Template &cr
         {
             continue;
         }
-        const bool suppressed =
-            Number(context.items, RowOf(context.items, item->baseItem), "SuppressPropertyVFX") != 0;
+        const bool suppressed = Number(context.items, RowOf(context.items, item->baseItem), "SuppressPropertyVFX") != 0;
         std::optional<Property> held;
         std::int64_t heldVfx = 0;
         for (const Property &property : item->properties)

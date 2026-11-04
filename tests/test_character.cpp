@@ -557,14 +557,13 @@ TEST_CASE("an equipped item's properties put their visual effects on it, a VFX p
                    {501, {I(501), S(L"Crust B"), S(L"D"), S(L"fxc_test_b_c"), F(0), I(1)}},
                    {502, {I(502), S(L"Glow weak"), S(L"D"), S(L"fxc_glow1_c"), F(0), I(1)}},
                    {503, {I(503), S(L"Glow strong"), S(L"D"), S(L"fxc_glow2_c"), F(0), I(1)}}})},
-        {107, Table({"ID", "IPType", "VFX"},
-                    {{1, {I(1), I(1), I(0)}},
-                     {10, {I(10), I(1), I(500)}},
-                     {11, {I(11), I(1), I(501)}},
-                     {12, {I(12), I(1), I(999)}},
-                     {20, {I(20), I(2), I(502)}},
-                     {21, {I(21), I(2), I(503)}},
-                     {22, {I(22), I(2), I(0)}}})},
+        {107, Table({"ID", "IPType", "VFX"}, {{1, {I(1), I(1), I(0)}},
+                                              {10, {I(10), I(1), I(500)}},
+                                              {11, {I(11), I(1), I(501)}},
+                                              {12, {I(12), I(1), I(999)}},
+                                              {20, {I(20), I(2), I(502)}},
+                                              {21, {I(21), I(2), I(503)}},
+                                              {22, {I(22), I(2), I(0)}}})},
     };
     const character::TableOf tableOf = [&byId](std::int64_t id) -> const m2da::Merged * {
         const auto found = byId.find(id);
