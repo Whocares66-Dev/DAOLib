@@ -2151,7 +2151,7 @@ DAO_ADDRESS(kScriptBackend_ForScript_VectorToAngle, 5703)
 // (const Vector4 *), atan2 of z against the length in x and y, in degrees)
 // against 60. The names are ours.
 DAO_ADDRESS(kAngle_Wrap, 5693)
-DAO_ADDRESS(kVector_Elevation, 5704)
+DAO_ADDRESS(kVector3_Elevation, 5704)
 // The two facings an attack's turn reads, read 2026-10-05 (DAOLib #25, #32).
 // The creature's own (+0x130) is TurnToward's; ForScript_SetOrientation
 // (__thiscall (const Vector4 *) on the creature, `ret 4`) writes it and
@@ -2172,7 +2172,7 @@ DAO_ADDRESS(kVector_Elevation, 5704)
 // SetDesiredFacing and AngleBetween are ours.
 DAO_ADDRESS(kScriptBackend_ForScript_SetOrientation, 14042)
 DAO_ADDRESS(kMovementController_SetDesiredFacing, 33602)
-DAO_ADDRESS(kVector_AngleBetween, 4976)
+DAO_ADDRESS(kVector3_AngleBetween, 4976)
 DAO_ADDRESS(kCCObject_StartNextCommand, 17542)
 DAO_ADDRESS(kCCObject_ClearCurrentCommand, 17540)
 DAO_ADDRESS(kCommands_Start, 12731)

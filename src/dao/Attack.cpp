@@ -416,7 +416,7 @@ std::optional<FacingTurn> TurnFor(CCObject *from, CCObject *to)
             // set and the record's +0x10 holding a nonzero +0xC0 (the
             // address library's session, 2026-10-05).
             const bool within = own && (own->x * own->x) + (own->y * own->y) + (own->z * own->z) > kNoLength &&
-                                At<AngleBetweenFn>(addr::kVector_AngleBetween)(&toward, &*own) <= kTurnStarts;
+                                At<AngleBetweenFn>(addr::kVector3_AngleBetween)(&toward, &*own) <= kTurnStarts;
             const auto hasMotion = TryRead<std::uint8_t>(controller + kControllerHasMotion);
             const auto motion = TryRead<std::uintptr_t>(controller + kControllerMotion);
             const auto inner = motion && *motion != 0 ? TryRead<std::uintptr_t>(*motion + 0x10) : std::nullopt;
@@ -463,7 +463,7 @@ bool StrikesAtOnce(CCObject *from, CCObject *to, ObjectId target)
         rise.y /= span;
         rise.z /= span;
     }
-    if (std::fabs(At<ElevationFn>(addr::kVector_Elevation)(&rise)) > kMostElevation)
+    if (std::fabs(At<ElevationFn>(addr::kVector3_Elevation)(&rise)) > kMostElevation)
     {
         return false;
     }
