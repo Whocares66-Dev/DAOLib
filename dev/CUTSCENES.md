@@ -313,7 +313,7 @@ A line with no cut gets this camera; a line with one gets the cut's own (above).
   C   = E + v'                                       // camera position, at A's eye height
   T   = off - (0,0,0.06) + v' - Rz(+2°) v'          // look-at offset from A.pos (0.06 at 0x00B0E1F0;
                                                      //  1-cos2° 0x00B0E1D8 as a static, sin2° 0x00B0E1D0)
-  SceneCamera::SetPosition(C, 0.0, 0)                // 0x006C45F0, seconds 0 = stored at once (0x006C4782)
+  CameraRig::SetPosition(C, 0.0, 0)                  // 0x006C45F0, seconds 0 = stored at once (0x006C4782)
   SetLookAt(A.id, T, 0)                              // 0x006C4A00: look-at behaviour (type 3), target A.pos(+0x120) + T
   SetFov(40 / aspect, 0.0, 0)                        // 0x006C4B20; 40 at 0x00AF70C8, aspect from the renderer
   ```

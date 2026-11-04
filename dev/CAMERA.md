@@ -7,7 +7,7 @@ How the engine runs the explore camera: its two zooms and the switch between the
 - **The controller's zoom setting** `ctl+0x48` runs from -1 (tactical) to 1 (close), between `ctl+0x64` = -1 and `ctl+0x68` = 1. It starts at 1 when the controller is built (0x0076F890), once per process, in `GameModeController`'s constructor.
 - **The scene camera's zoom** `cam+0x24` runs 0..1 and eases toward (setting + 1) / 2 (0x007EE770, into `orbit+0x88`). The controller's `Zoom()` (0x007EE7E0) maps it back: zc = 2s − 1.
 - **The views:** the close view is zc ≥ 0.5, i.e. s ≥ 0.75; the tactical view is s = 0, with a band between that the camera only passes through. The view flag `ctl+0x90` is zc < 0.5 (0x0076FC92–0x0076FCAD).
-  - `Camera.h`'s `SceneCamera::Zoom` says "Below 0.5 the camera is in the tactical view": on that 0..1 scale it is below 0.75.
+  - `Camera.h`'s `CameraRig::Zoom` says "Below 0.5 the camera is in the tactical view": on that 0..1 scale it is below 0.75.
 - **The switch** (0x0076FBF0, checked):
   - Zooming out: on the first frame zc < 0.5 with the setting below 0.5 (`ctl+0x48` against 0.5, 0x0076FC15-0x0076FC1F, read 2026-11-01) and the flag not yet set, the pitch is kept in degrees at `ctl+0x98` (65505 = none, 0x00B1D9C8). The setting snaps to -1, so the camera always goes on to the tactical view.
   - Zooming in from the tactical view: the setting becomes max(setting, 0.5), so the camera always comes back to s ≥ 0.75.
