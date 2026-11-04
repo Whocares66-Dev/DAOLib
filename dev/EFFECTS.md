@@ -1230,7 +1230,7 @@ Read 2026-10-18 in the GOG exe (lib-agent-2's vq3 fork), against DAOLib's `Addre
   - It targets +0x1BC and is put on the owning Object's controller list (+0x1AC).
   - Each cycle lasts `period + randS·periodDelta` and moves between two targets, each `base + randS·variation`. The exact scaling is [I]; elgara's data reading says "base × (1 + variation·randS)".
   - It uses the engine's LCG at 0x00C39778.
-  - Vanilla's ease is broken: it jumps every cycle. DAOLib's `src/fix/LightFlicker.cpp` (#150) fixes this and stretches cycles to at least 1 s.
+  - Vanilla's ease is broken: it jumps every cycle. DAOLib's `src/fix/LightFlicker.cpp` (#150) fixes this and stretches cycles to at least 0.5 s (1 s until #313). Each cycle's target is drawn afresh, not from the last, so the light does not loop: a peak comes about every third cycle.
 - **The colour a shader gets**, `ObjectNodeLight::Color` (0x0053CD90, ID 7605) [C]: `c = +0x1A0`, times the owner's tint float4 at `*(+0x154) + 0x2D4` when +0x196 (UseVariationTint) is set. That tint is inferred to be the effect's tint from `ApplyEffectVisualEffect`/0x0079F540.
 
 ###### Animation drives it each frame

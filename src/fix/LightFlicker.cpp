@@ -34,7 +34,11 @@ static_assert(offsetof(RandomWave, cycle) == 0x20 && offsetof(RandomWave, t) == 
 // all 0.075 s give or take 0.025, read as a strobe even eased (the user,
 // 2026-10-17: "it's too fast. slow it down", then "try 1 / s"); a light the data
 // already has slower keeps its own pace, and the depth of the swing is the data's.
-constexpr double kShortestPeriod = 1.0;
+// At 1 s weapons' and spells' lights read as static (#313): each cycle's target is
+// drawn afresh, so a peak comes about every third cycle, and the light wandered for
+// seconds at a time. Halved for #313 (the user, 2026-11-03: "let's change it all to
+// 0.5s and see what happens").
+constexpr double kShortestPeriod = 0.5;
 
 using UpdateFn = void(__fastcall *)(RandomWave *wave, int edx, double dt);
 dao::Detour<UpdateFn> g_update;
@@ -78,8 +82,8 @@ void InstallLightFlickerFix()
                      "placed (issue #150)");
         return;
     }
-    spdlog::info(
-        "fixes: flickering lights ease from one brightness to the next, a cycle a second at the fastest (issue #150)");
+    spdlog::info("fixes: flickering lights ease from one brightness to the next, a cycle each half second at the "
+                 "fastest (issues #150, #313)");
 }
 
 } // namespace fix

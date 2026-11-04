@@ -3,6 +3,8 @@
 ## Unreleased
 
 - **Dynamic occlusion culling,** on by default in the options screen's Performance section above Fast loading: the game keeps occlusion culling only while it is faster for what the camera sees, checking once a second and switching only on a clear difference (#281, #285, #286). With the party running through an area on an RTX 3090: the Brecilian Forest +22%, the Tower of Ishal +10%; areas where culling pays, such as Denerim's market and Ostagar's camp, run within a few percent of vanilla.
+- **Water and heat haze right with dynamic occlusion culling:** while the switch had occlusion culling out, the depth that water's refraction, heat haze, depth of field and skin read was left empty, and Redcliffe's stream was drawn across its bridge. That depth is now drawn as occlusion culling draws it (#315).
+- **Flickering lights livelier:** they now change about twice a second rather than once, so a weapon's or a spell's light flickers instead of looking still. Each change goes to a new random brightness, as in vanilla (#313).
 
 ## 0.8.0
 
