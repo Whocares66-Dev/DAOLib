@@ -288,11 +288,7 @@ Result constants (`script.ldf`): `COMBAT_RESULT_INVALID` 0, `HIT` 1, `CRITICALHI
 - Creator: the attacker. The event's target field: the target.
 - Object 0: the attacker. Object 1: the target. Int 0: that hand's result. Int 1: the damage effect's id.
 - After queueing it, unless the result is 0 or 3 (miss), the engine raises the weapons' on-hit events (`0x00758180`, `EVENT_TYPE_ITEM_ONHIT`) for the attacker's and the target's equipped items.
-- A ranged attack's impact is made by the projectile (`0x007E87C0`), also 29, with the same int 0 and 1 and more fields:
-  - int 2 (the projectile's +0x4B0);
-  - vector 0: the projectile's position; vector 1: its heading (inferred);
-  - object 0: the shooter; object 1 and up: the targets hit.
-  It's queued to the object given, and its on-hit events are skipped for results 0, 3 and 5.
+- A ranged attack's impact is made by the projectile (`0x007E87C0`), also 29: its fields, its receiver and the held events it posts are in `dev/script_commands/objects.md`, "The default impact event".
 
 In `rules_core`'s ATTACK_IMPACT:
 - `GetAttackImpactDamageEffect(attacker, id)` (695, `0x0065E180`) fetches the kept effect.

@@ -34,7 +34,7 @@ Projectiles:
   - Type 29, `EVENT_TYPE_ATTACK_IMPACT`; creator (+0x24) the projectile.
   - Object 0 is the event target (+0x4C4). Objects 1..n are the objects hit (the hit list), or, with no list, the object at +4 of the record from `0x007E68A0` (+0x488, an attack result: inferred).
   - Int 0 is that record's +0 (the combat result, as `placeable_h`'s `Placeable_HandleImpact` reads it), int 1 its +8 (log_h: "DamageEffect"), int 2 the projectile's +0x4B0. **For a script projectile +0x4B0 is 0, not nType**, although `placeable_h` reads int 2 as the projectile type.
-  - Vector/location 0 is the projectile's position (+0x120). Location 1 comes from 0x007E6D80 (`placeable_h`: "orientation").
+  - Vector/location 0 is the projectile's position (+0x120). Location 1 is the Y axis (`GetYAxis` 0x004CBD30, at 0x007E8894) of the projectile model's rotation (0x007E6D80, at 0x007E888D): the model's +Y, which is its flight direction (`placeable_h` reads it as "orientation"; read 2026-11-05 by paragon-agent-2's helper, checked by lib-agent).
   - It is queued to the event target as above. Unless int 0 is 0, 3 or 5 (COMBAT_RESULT_INVALID, MISS, BLOCKED), it is then also queued to each id in the list at +0x4F8, which is then emptied (0x00634F20).
 
 ### IsObjectValid (206)

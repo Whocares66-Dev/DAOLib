@@ -120,7 +120,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 
 - **CanUseAbility 0x0071CE90** (read 2026-10-23 by paragon-agent-2's helper, checked by lib-agent-2) (ID 16539) is (ability, uint* reason, itemId = −1), `ret 0xC`. The reason is written only through a non-null pointer [C].
 - **The order of the checks** [C] (corrected 2026-10-23 by lib-agent-2: it replaces the earlier, shorter list):
-  - **The item checks:** for an item ability (AbilityType 4), 0x0071C0A0 false gives 244342. Then, with `stats+0x1B4` set, CanUseItem 0x0062AA80 false gives reason 0.
+  - **The item checks:** for an item ability (AbilityType 4), 0x0071C0A0 false gives 244342. 0x0071C0A0 (`HasAbilitySource`) asks, with `stats+0x1B4` set, 0x0062AA20: the creature's ability instance of kind 4 (item) for that ability and tag, true when it is found, its item id (+0xB8) is not -1, and the item id asked for is -1 or that one; with no `stats+0x1B4`, plain `HasAbility(ability, 0)` (0x0071BEC0). It never tests where the item is, worn or packed (read 2026-11-05 by paragon-agent-2's helper, checked by lib-agent at 0x0071C0A0..0x0071C0BD and 0x0062AA20..0x0062AA79). Then, with `stats+0x1B4` set, CanUseItem 0x0062AA80 false gives reason 0.
   - **The active modal:** an ability in the active-modal vector (stats +0xF8, ABILITIES.md:127) is usable at once (0x0071CF8A), before the disabled test.
   - **The disabled test:** `(4 << AbilityType | 0x80) & 0x00A64740()` gives 223888. 4 << type is DISABLE_COMBAT, TALENTS, SPELLS, SKILLS or ITEMS for types 0–4. 0x80 is EFFECT_FLAG_DISABLE_INPUT, which disables every type.
   - **The cost:** abi_base `Cost` (0xF03D763E) × (1 + property 41's modifier, vtable +0x18, × 0.01), against property 8's current value (vtable +0x24).

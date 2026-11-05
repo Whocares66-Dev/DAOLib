@@ -581,7 +581,7 @@ Read 2026-10-18 in the GOG exe (no Ghidra, no game) by vq1's fork. [C] read in t
   1. **The impact event** (0x007E89F0):
      - If a prepared event is held at `+0x4F4`, that is posted.
      - Otherwise, for an ability (`+0x4B8`), 0x007E71C0 builds a `CScriptEvent` of type **31 `EVENT_TYPE_ABILITY_CAST_IMPACT`**. It holds the receiver, the result's objects, the projectile's position `+0x120` as the impact location, and the objects hit.
-     - For an attack, 0x007E87C0 builds type **29 `EVENT_TYPE_ATTACK_IMPACT`**, then posts the held events at `+0x4F8` unless the result is 0, 3 or 5.
+     - For an attack, 0x007E87C0 builds type **29 `EVENT_TYPE_ATTACK_IMPACT`** (its fields and the held events it posts: `dev/script_commands/objects.md`, "The default impact event").
      - Each is posted to the caster with `AIMaster::AddEventDeltaTime(0, 0, id, id, 10, event)`, a delay of 0.
      - **The spell's impact visuals come from the scripts handling that event** (`VFX_Impact0/1`, the damage-type effects), as already read.
   2. **Weapon trails off** (0x007E7FC0(0)), only when there is no attached effect (`+0x480` = −1). It collects the model's nodes of type 0x15, which are `ObjectNodeWeapontrail` (the list holds their +0x180 interface; 0x00A676F0 does the same for a creature's weapons). For each it sets +0x1C0 = +0x1C1 = 0, +0x1C2 = 1 and +0x1C3 = 0, and zeroes +0x1D4. So the trail stops growing and is let finish [I: +0x1C2 reads as "fading", from 0x005B1127's use].
