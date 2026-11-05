@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). The loader and its contract with plugins are as in 0.3.0.
+
+- **Plugins keep working when an overlay lets the game go:** a frame counter or capture tool (RivaTuner Statistics Server among them) that hooked Direct3D and later wrote its bytes back used to erase every plugin's frame hook after it, so a plugin's per-frame work stopped and, in a graphics mod, memory could fill until the game crashed. DAOLib's own Direct3D hooks now go through the objects' tables instead, and plugins can do the same with `dao::VtableHook` (#319).
 - **Dynamic occlusion culling and faded creatures:** a creature made see-through by an effect, such as Fade Shroud with Combat Magic or stealth, no longer flickers with black patches while dynamic occlusion is on (#318).
+- **An item's own visual effects for a character built with no game running:** the effects an equipped item's properties put on it, such as Shale's crystals, with each effect's model and whether it hangs on the creature (`dao::core` Character, #317).
+- **Which appearances a creature may take:** a model type's kind and a creature's kinds, as the game tests a change of appearance, so a hero may become a bear and a bear not a hero (`dao::core` Character, #321).
+- **For plugin authors:** two address constants renamed as the address library names them, `kVector3_Elevation` and `kVector3_AngleBetween` (were `kVector_*`).
 
 ## 0.9.0
 
