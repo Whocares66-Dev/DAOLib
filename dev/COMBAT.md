@@ -592,7 +592,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
 - Without `bForce`, no bag is made:
   - for a creature not dead (slot 0x1D0);
   - for one with no loot and no bag yet (+0x790 = -1);
-  - for one from the area's pool of reused creatures (+0xB60 ≠ 0, 0x006A9261; +0xB60 is the pool `SavegameCreaturePoolName` saves, SAVE_WRITER.md).
+  - for one from the area's pool of reused creatures (+0xB60 ≠ 0, 0x006A9261; +0xB60 is the creature's pool reference, `dev/PARAGON_CREATURE_POOL.md`).
 - With `bForce`, all three are skipped. No bag at all for a creature with no area. There is no party-member test.
 - **"Loot"** (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; `CCCreature::HasLootableItems` 0x006A90D0): true if the money count is above 0 (the creature's +0xBF0 object → its +0x28 → +0x90, three `0x0053CC40` pointer derefs, `jle`), else if the count of items with a non-zero `0x006A4440` (item +0x4B0 byte, `IsItemDroppable`'s) in the equipment object (creature +0xBE0, counted by `0x0069FA00`) is above 0, else the same count in the +0xBF0 object (the inventory/backpack). So both lists are tested with the droppable byte and money is the purse of the +0xBF0 object.
 - An existing bag (+0x790 ≠ -1) is found and placed again, not made again.
