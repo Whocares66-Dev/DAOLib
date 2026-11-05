@@ -538,7 +538,7 @@ Read in the GOG exe and the files (ghilana); the camera's constants (0x00C0D704 
 - The Escape key's path to the Exit message; the `LockedPartyMembers` count's source for the movie.
 - The 104 timing caveat above in play. Nothing here was run.
 
-Prior work used: `dev/script_commands/inventory.md`:217-232, `dev/script_commands/plotman.md`:28-34, `dev/PARTY.md`:143-165 and :461, `dev/gda_schema.csv` (the Party Picker worksheet), `dev/AUDIO.md`:1445, `dev/CUTSCENES.md`:344 (party+0x1E8 = hero), `dev/LOAD_EVENTS.md`:150-156 (AddEventDeltaTime / AddEventNow). New here: Submit's per-entry order, the entry layout and what +0x10 is, the sort key, the toggle rules, activation by script, the 104 queue-order caveat.
+Prior work used: `dev/script_commands/inventory.md`:217-232, `dev/script_commands/plotman.md`:28-34, `dev/PARTY.md`:143-165 and :461, `dev/gda_schema.csv` (the Party Picker worksheet), `dev/AUDIO.md`:1445, `dev/CUTSCENES.md`:344 (party+0x1E8, the leader; the hero is +0x1F8), `dev/LOAD_EVENTS.md`:150-156 (AddEventDeltaTime / AddEventNow). New here: Submit's per-entry order, the entry layout and what +0x10 is, the sort key, the toggle rules, activation by script, the 104 queue-order caveat.
 
 ## Control and selection, as the engine runs it
 

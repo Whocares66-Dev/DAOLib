@@ -1089,7 +1089,7 @@ ShowLine is 0x0068E250 (`GameModeDialog`; dialog object fields below). The updat
 ##### ShowLine, non-cut branch (checked)
 
 1. **The previous voice is stopped.** If the dialog's `+0x20C` (the previous line had a cut) is clear, the previous line's speaker (+0x16C) has its VO stopped: AnimBase `StopVO` 0x00A5D360 (deleteEmitter = 1, resetFace = the skip flag +0x2C9). StopVO stops FaceFX, deletes the content (+0x1AC = 0) and the emitter. Then +0x16C = the new speaker, +0x174 = the line, +0x2C8 = 0.
-2. **Facing and the camera.** Speaker and listener are faced (0x0069EAA0) and their animation controllers resumed. The dialogue camera is set (0x0068D4B0).
+2. **Facing and the camera.** The camera partner and the speaker are set to look at each other (`SetLookAtTarget` 0x0069EAA0, then the look-ats enabled: a look-at, not a body turn, and not the line's Listener; `dev/ANIMATION.md`, "Look-at at line start"). The dialogue camera is set (0x0068D4B0).
 3. **The voice.** The name comes from 0x007F2B70 (`<vobank>/VO/<strref>_m|_f`). Unless the line's `NoVOIngame` (12216, read by 0x0068D8A0) is set, `PlayVO(face, …, event, faceSync, keepPrevious = 0, 0)` is called.
    - PlayVO stops the old VO and any sound of the same name first.
    - It loads the content and places the emitter.
