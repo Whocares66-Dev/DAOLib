@@ -613,3 +613,25 @@ TEST_CASE("an equipped item's properties put their visual effects on it, a VFX p
     CHECK(resolved->itemEffects[3].inventorySlot == 9); // a suppressed base type keeps its effect properties
     CHECK(resolved->itemEffects[3].property == 10);
 }
+
+TEST_CASE("a model type's kind, and a creature's kinds as its first model type makes them", "[character]")
+{
+    CHECK(character::ModelKind(L"S") == 1);
+    CHECK(character::ModelKind(L"w") == 2);
+    CHECK(character::ModelKind(L"H") == 4);
+    CHECK(character::ModelKind(L"P") == 8);
+    CHECK(character::ModelKind(L"x") == 0);
+    CHECK(character::ModelKind(L"") == 0);
+    CHECK(character::KindMask(L"S") == 1);
+    CHECK(character::KindMask(L"W") == 3);
+    CHECK(character::KindMask(L"H") == 7);
+    CHECK(character::KindMask(L"P") == 15);
+    CHECK(character::KindMask(L"") == 0);
+    const auto hero = character::KindMask(L"P");
+    CHECK(character::CanTakeAppearance(hero, L"S")); // a humanoid may become a bear
+    CHECK(character::CanTakeAppearance(hero, L"W"));
+    const auto bear = character::KindMask(L"S");
+    CHECK_FALSE(character::CanTakeAppearance(bear, L"P")); // a beast may not become a humanoid
+    CHECK_FALSE(character::CanTakeAppearance(bear, L"W"));
+    CHECK_FALSE(character::CanTakeAppearance(hero, L"")); // a row with no kind
+}

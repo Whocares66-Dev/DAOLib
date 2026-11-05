@@ -581,6 +581,45 @@ std::optional<Character> Resolve(const Template &creature, const ItemOfName &ite
     return character;
 }
 
+// Notes on the kinds, read 2026-11-05 (DAOLib #321, dev/CHARACTERS.md): 0x007490D0 maps ModelType's
+// first letter to s 1, w 2, h 4, p 8. A creature's animation base (creature +0x154) holds a kind
+// byte at +0x10 that only its constructors write, each class adding its bit to its base's:
+// AnimBase 0x00A60B50 stores 1, AnimBaseWield 0x00A66880 ors 2, AnimBaseHead 0x00A69960 ors 4,
+// AnimBaseParts 0x00A698C0 ors 8. The base is made for the creature's appearance when it is first
+// made and SetAppearanceType keeps it, and SETAPPEARANCETYPE (0x00674C80) refuses a row whose kind
+// has no bit in that byte (test bl,al at 0x00674DF6..0x00674E04).
+std::uint8_t ModelKind(std::wstring_view modelType)
+{
+    if (modelType.empty())
+    {
+        return 0;
+    }
+    switch (std::towlower(modelType.front()))
+    {
+    case L's':
+        return 1;
+    case L'w':
+        return 2;
+    case L'h':
+        return 4;
+    case L'p':
+        return 8;
+    default:
+        return 0;
+    }
+}
+
+std::uint8_t KindMask(std::wstring_view modelType)
+{
+    const std::uint8_t kind = ModelKind(modelType);
+    return kind == 0 ? 0 : static_cast<std::uint8_t>((kind << 1) - 1);
+}
+
+bool CanTakeAppearance(std::uint8_t mask, std::wstring_view modelType)
+{
+    return (mask & ModelKind(modelType)) != 0;
+}
+
 std::wstring FullFaceEyes(std::wstring_view eyes)
 {
     if (eyes.empty())

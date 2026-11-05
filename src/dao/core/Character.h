@@ -212,6 +212,18 @@ using ItemOfName = std::function<std::optional<Item>(std::string_view item)>;
 // @return nothing if the template's appearance has no row of apr_base
 std::optional<Character> Resolve(const Template &creature, const ItemOfName &itemOf, const TableOf &tableOf);
 
+// Returns the kind of a model type, apr_base's ModelType, by its first letter in any case: s 1,
+// w 2, h 4, p 8; 0 for any other.
+std::uint8_t ModelKind(std::wstring_view modelType);
+
+// Returns the kinds a creature can take: those of the model type it was first made with and
+// every lower one (S 1, W 3, H 7, P 15). A later appearance does not change it.
+std::uint8_t KindMask(std::wstring_view modelType);
+
+// Returns true if a creature with that mask may take an appearance of the model type, as
+// SetAppearanceType allows it: a humanoid (15) may become a bear (S or W); a beast may not become a humanoid.
+bool CanTakeAppearance(std::uint8_t mask, std::wstring_view modelType);
+
 // Returns the eyes' model a full-face helmet swaps in: a 2 before its last letter, cn_eye_glka
 // becoming cn_eye_glk2a.
 std::wstring FullFaceEyes(std::wstring_view eyes);
