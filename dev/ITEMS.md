@@ -254,9 +254,9 @@ if (count == max) party.+0x439 = 1                                    // the bac
 if (!(G.flags & 2)) { Raise(ADDED, target = GetMainControlled().id)   // 0x006313E1-0x00631415, the controlled creature's possessor
                       if (!(G.flags & 4)) party.NewItemNotice(item) }  // 0x00629620; flag 2 skips the alert too (corrected 2026-10-23 by lib-agent-2: the flag-4 test is inside the flag-2 branch, 0x006313E8 jumps past it)
 if (!(G.flags & 0x40)) item.+0x620 NewlyAcquired.set(1)             // the item's attribute, not the party's (corrected 2026-10-23 by lib-agent-2; ebp is the item)
-if (item.+0x660 != 200000) party.0x0062FA70(item)                    // 0x0063144A-0x00631460; what that does was not read
+if (item.+0x660 != 200000) party.0x0062FA70(item)                    // 0x0063144A-0x00631460; adds the item's ability to the members (ABILITIES.md, "The item checks")
 // OnItemAdded is slot 7 of the vtable at 0x00B05DBC, REMOVED 0x00631470 slot 8
-// REMOVED 0x00631470: SetItemOwner(item,-1); Raise(REMOVED, party); Raise(REMOVED, controlled) (0x763240 does its own flag-2 gate)
+// REMOVED 0x00631470: SetItemOwner(item,-1); Raise(REMOVED, party); Raise(REMOVED, controlled) (0x763240 does its own flag-2 gate); then, when +0x660 != 200000, party.0x0062FB40(item) (0x006314C4; ABILITIES.md)
 
 // creature's own possessor (not in pool / own Inventory) 0x006A2EE0
 if (party && party.members.contains(creature.id)) { SetItemOwner(item, creature.id); Raise(ADDED, creature) }
