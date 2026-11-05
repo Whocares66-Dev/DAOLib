@@ -17,8 +17,11 @@
 // node is its root (parent -1); a node's children follow one
 // another; flags are 0 or 1, 1 on the one-shot clips (an attack, an idle
 // twitch) and 0 on the loops (pause, a ready stance) and the nodes that only
-// hold others, so by the look of it a clip that plays once (not read in the
-// exe); weights 1 or 0. Which of a creature's trees the engine looks in first
+// hold others; weights 1 or 0. The engine's loop test reads bit 0: a clip loops
+// unless it is set (read 2026-11-05 by paragon-agent-2's reader for
+// DAOParagonEngine #374, the last step checked by lib-agent: AnimBase::IsAnimationLooping
+// 0x00A5E940 -> the model's tree, ModelAnimationTree::IsLooping 0x00813CA0, which
+// answers ~flags & 1 of the node found, 0x00813CD2..0x00813CDE). Which of a creature's trees the engine looks in first
 // is not read either. A clip's file is named whole, its creature's
 // prefix in it (mh., mh_m., mh_c., fh., c_ogre.); nothing is put before it.
 // The 95 level .anb files (amn120d_0_2_0.anb and kin) are another format, XML, read by
@@ -43,7 +46,7 @@ struct Node
     std::wstring name; // an animation's AnimName: "pause", "attk_v1"
     std::wstring file; // its clip: "mh_m.p.ani"; empty for a node holding others
     float weight = 1;
-    std::uint32_t flags = 0; // 1 on a clip that plays once
+    std::uint32_t flags = 0; // bit 0 set: the clip plays once; clear: it loops
     std::uint32_t firstChild = 0;
     std::uint32_t children = 0;
     std::int32_t parent = -1;
