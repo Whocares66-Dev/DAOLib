@@ -213,6 +213,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
   - **bAutoCancel:** a mode whose abi_base `AutoCancel` is set.
   - **nAbility:** a mode in the same `Condition_Group` as nAbility.
   - **bShapechange:** the ability held by a shapechange effect (effect +0x44). It is found through the effect search 0x00A64FA0 → 0x00A64D80: +0x44 != 0, duration type +0x28 not 1, 5 or 6, type +0x24 not 4, 6 or 10, and +0x48 == 0.
+- **The walk** [C, 0x0071E007..0x0071E0B2]: by index over the list as it stands, in the order the modes were switched on (0x0071DA90 appends). The size is read again each step, and the index goes on by one after a switch-off removed the current element, so the element after a removed one is passed over in that walk. The DEACTIVATE events come in that order. (read 2026-11-05 by paragon-agent-2's helper, the loop checked by lib-agent)
 - **Its six callers** (an E8 scan):
   - **SetAppearance** (0x006C1591) passes (0, 0, 1), on its "changed" branch, unless a skip flag ([esp+0x38]) is set. So an appearance change ends a shapechange's mode.
   - **QueueCommand** (0x0073CEF3) passes (0, the command's int 0, 0), only for a command of type 25 (UseAbility). So queuing an ability switches off the modes of its Condition_Group.
@@ -230,7 +231,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe, the toolset's script
 
 - `IsModalAbilityActive` (726, 0x0066DD80) searches the creature's stats' (+0x7C4 → `CCCreatureStats`) **+0xF8 vector of ability ids**.
 - `Engine_SetModalAbilityGUI` (725, 0x00669E80 → 0x0071DA90(ability, status, 0)) writes that same vector. Status 0 erases the id and anything else appends it; then it sets the quickbar button's toggle (0x00719A40).
-  - On a real change it may also send event 0x88 (on) or 0x89 (off) to the creature, when a table string is set and an equipment check passes (purpose not read).
+  - On a real change, for an ability whose abi_base `BlendTree` (column 0x70F463FA) is not empty, it plays that tree's animation: 0x88 switching on, 0x89 switching off. With no current command (`GetCurrentCommandType` 0) it queues a play-animation sub-action; otherwise it applies the tree directly. `SwitchModalAbilityOff` 0x006B9970 does the same after raising the DEACTIVATE event (0x006B9A55, the 0x89 at 0x006B9AA8). (corrected 2026-11-05 from paragon-agent-2's helper; the column and the 0x89 checked by lib-agent; "purpose not read" before)
 - **Its other writer** is a save's load: `SavegameCreatureModalAbilityList` (16468), through 0x0071DA90(id, 1, 1).
 - **The scripts call 725** from the upkeep effect: `effect_upkeep_h.nss`:107 on apply (TRUE), :212 on remove (FALSE).
 - So a modal ability is "active" exactly while its upkeep effect's handlers say so; the engine reads no effect for it.

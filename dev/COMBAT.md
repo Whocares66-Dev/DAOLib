@@ -596,7 +596,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
 - Without `bForce`, no bag is made:
   - for a creature not dead (slot 0x1D0);
   - for one with no loot and no bag yet (+0x790 = -1);
-  - for one from the area's pool of reused creatures (+0xB60 ≠ 0, inferred).
+  - for one from the area's pool of reused creatures (+0xB60 ≠ 0, 0x006A9261; +0xB60 is the pool `SavegameCreaturePoolName` saves, SAVE_WRITER.md).
 - With `bForce`, all three are skipped. No bag at all for a creature with no area. There is no party-member test.
 - **"Loot"** (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; `CCCreature::HasLootableItems` 0x006A90D0): true if the money count is above 0 (the creature's +0xBF0 object → its +0x28 → +0x90, three `0x0053CC40` pointer derefs, `jle`), else if the count of items with a non-zero `0x006A4440` (item +0x4B0 byte, `IsItemDroppable`'s) in the equipment object (creature +0xBE0, counted by `0x0069FA00`) is above 0, else the same count in the +0xBF0 object (the inventory/backpack). So both lists are tested with the droppable byte and money is the purse of the +0xBF0 object.
 - An existing bag (+0x790 ≠ -1) is found and placed again, not made again.
@@ -627,8 +627,8 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - **The decay step** 0x006B98E0(atEnd) runs once (+0x794) [C]. It does nothing with no bag (+0x790 = −1) before 15000 ms dead, when the corpse may not decay, or for a pooled creature (+0xB60). Otherwise it calls DestroyObject(atEnd ? 0 : 1500) through vtable slot 0x198 (0x00696A60), so the creature goes at the fade's end and the bag stays; it moves the loot into the bag (0x006B9620), places the bag at the creature (0x007526F0) and calls 0x0069B900 on the bag.
   - **The fade** [C]: 0x00695080 multiplies +0x190 by +0x198 and passes it to the model (AnimBase at +0x154, slot 8 → 0x00A61280). That sets `mml_fOpacityMultiplier` on each mesh (0x004F4900, mode 4), switches the material to its blended render class (0xB→1, 0xC→5, 0xD→6), and sets mesh flag 0x10 (0x80000 with the flag) and model flag 0x4000. No effect is started: no particles, no vfx row. apr_base has no decay or vfx column, vfx_base has no decay or dissolve row, and the scripts' death handler (`creature_core.nss`:223–317) starts only a blood-pool decal (ordinary creatures), vfx 93095 `fxa_stealth_imp_p` (ghost trait, destroyed at 1500 ms with no bag), or an on-death explosion (explosive traits). So the "dark smoke" players describe is most likely the blended model fading over a dark ground [I: no vanilla frame captured] (read 2026-10-21 by lib-agent-2 for DAOParagonEngine #126).
 - Whether a corpse may decay (0x006A3AD0) is decided in this order:
-  1. Yes if a delay was set.
-  2. No if a decay-blocking effect (type 4) is on it, or for a party member (inferred), or for the +0xBD4, +0xBD8 or +0xB60 cases.
+  1. Yes if a delay was set (+0xC8C, 0x006A3AD6).
+  2. No when +0xBD8 is set and +0xB60 is 0, or when +0xBD4 is set (0x006A3AE3..0x006A3B00); no for a member of the party pool (0x006316F0 on the party, 0x006A3B27); and no when the creature's local int `CREATURE_SPAWN_DEAD` (key {0, 4} on +0x2E0, "CREATURE_SPAWN_DEAD and PHYSICS_DISABLED in the engine" below) is above 0 (0x006A3B30..0x006A3B56). (corrected 2026-11-05 from paragon-agent-2's helper, checked by lib-agent: the earlier "decay-blocking effect (type 4)" was this key's 4, not an effect)
   3. Otherwise only behaviours 0 and 3 decay; 1 and 2 never do.
 - The death sub-action's `0x0069EDC0` unless DecayBehaviour is 2 (above, DEATH for a party member) is this.
 
