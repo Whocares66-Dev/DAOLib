@@ -325,7 +325,7 @@ Explore mode's pick (`dao/GameModes.h`) chooses nothing when the interface says 
   - **+0x6E4** is written by 0x0074BDE0 (ID 17847, which calls 0x006965E0 on a change). The constructor sets it to 1 (0x0074EFB2) and the copy constructor copies it (0x007525DC). Its only other writer is 0x0074D8C0 (below).
   - **+0x6CC** is 0 in the constructor (0x0074EEF0) and the death handler (0x0074D20A).
     - In `SetPlaceableState` (0x0074F9D0) it is set to 1 when 0x00695390, with the new state's animation (slot 0xB0), answers false (0x0074FA5D–0x0074FA66), and cleared when it answers true.
-    - 0x00695390 calls 0x00A5E940, an animation-tree query not read. So what +0x6CC marks is [I].
+    - 0x00695390 calls 0x00A5E940, `AnimBase::IsAnimationLooping` (`dev/ANIMATION.md`, "Is a clip looping"), so +0x6CC is set while the state's animation does not loop [C for the call, I for what the byte is for].
     - While it is 1, slot 0x194 is false, so a click on the placeable gives null, with the ground behind it discarded too.
 - **CCPlaceable slot 0x160, 0x0074D8C0** (ID 17887, unnamed), the placeable's rooms in view:
   - **Which room state:**

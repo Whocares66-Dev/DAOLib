@@ -834,7 +834,7 @@ See pseudo-code. Order rule on death: with a sole selected hero the next is the 
 #### Not read
 
 - The meaning of creature+0x610 (the bar's skip) and slot 0x190 in the bar build. The byte at creature+0x504 is read: `IsInParty`, in the active party list (the run/walk subsection below; corrected 2026-10-23 by lib-agent-2: it said ACTIVE).
-- Which path the save load takes to set creature+0x7D4 on a loaded hero (the save has no CharType). A new hero gets it from 0x0069D910 at 0x0069DA05, before 0x0069E008 (`script_commands/players.md`, IsHero; read 2026-10-29 by lib-agent-2). The insert-at-0 branch also fires through "id == leader"; with an empty list either branch gives the same result.
+- The insert-at-0 branch also fires through "id == leader"; with an empty list either branch gives the same result.
 - The 0x0069DF10 loop at 0x0069E01C-0x0069E023 (it re-tests a party state after the join; might create more than one member) and 0x0069DBB0's purpose (a load, inferred).
 - Whether the loader of kind-7 requests (new game, area transition) runs any step that calls SetSelection indirectly (I used the caller list: none).
 - Whether the leader attribute or the selection is re-set at the Fade's end and the Harrowing by other engine paths (e.g. CCCreature slot 86 0x006A8AC0 re-adding a PC as ACTIVE, PARTY.md:~432; its flow after the join was not followed).

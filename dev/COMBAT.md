@@ -153,7 +153,7 @@ Read 2026-10-18 in the GOG exe and the game's files (ghilana) by lib-agent-2 (a 
   - Where a tracked creature goes: "What the newcomer scan does with a tracked or in-range candidate" above.
 - **Range:** Survival also widens the leader's perception range to 42.6, 51.1, 60.4 and 71 m.
 - **Flag 0x10** (Survival 4) makes APPEAR fire on every update.
-- **Not read:** the identity of the creature's +0x4F8 flag (it looks like "party side"), and the property 0x77 setter's callers.
+- **Not read:** the property 0x77 setter's callers. The creature's +0x4F8 flag is `IsInParty` (`dev/PARTY.md`, "The creature byte +0x504 is `IsInParty`"); with +0x23C it makes `CCCreature::GetEffectsEmit` (`dev/PATHFINDING.md`, `IsSegmentClearOfCreatures`).
 
 ## The attack command
 
