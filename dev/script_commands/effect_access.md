@@ -212,7 +212,7 @@ Common facts used below [C]:
 - **State** (read 2026-10-29 by lib-agent-2 with a subagent) [C unless marked]: item +0x158 is the object's ordinary effect record, not a pending list: the holder (object +0x70)'s slot 2 is 0x0069A0D0, which returns holder +0xE8 = object +0x158, a pointer to {best effect, vector of effects}. Every effect walk (0x0079F5D0) and the apply (0x007A1920, which ends with 0x00A64900) go through it.
   - **On equip** the creature's equip step (0x006C16E0), for any slot but the weapons' 0, 1 and 2, calls the item holder's slot 5 (0x007A17D0, at 0x006C1859–0x006C1864). That replays every effect of the record through 0x007A1650, the apply 0x007A0E30 and the type-4 handler 0x007A00A0 (the VFX starts, the item as creator). It runs after the owner, the appearance and the wield are set, and before the stats' recompute (0x0071B970) and the EQUIP event.
   - **On unequip** slot 6 (0x007A1710, at 0x006C1A62–0x006C1A68), for every slot, stops the VFX and keeps the effect, so the next equip plays it again.
-  - **Weapon slots'** VFX presumably come back through 0x006A0F10(bool), which runs (1) or stops (0) all of a creature's effects and its 20 slots' items; its trigger (a caller near 0x007D4294) was not read [I].
+  - **Weapon slots'** VFX do not come back through 0x006A0F10(bool) (`SetEffectsActive`, a cutscene actor's show and hide: ITEMS.md, "What equipping does to the creature"); what brings them up on an equip was not read [I].
 - **Edge cases:** not an item (creature, placeable) or unknown id → the effect is deleted, nothing [C]. No check that the row exists [C]. A VFX's +0x38 is 0, so it never becomes the pending +0 entry [C].
 
 ### RemoveItemVisualEffect (782)

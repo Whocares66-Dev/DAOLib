@@ -1223,15 +1223,17 @@ Native (non-sound) handlers in 0x006C0BF0, for completeness [C]:
 | 7 | 0x006AF430 (ability impact) |
 | 8 | sets +0xCF4 from the string |
 | 21 | 0x006A5B70 |
-| 28 | 0x006AAC20 |
-| 29 | 0x006A5C10 |
-| 30 | 0x006A62F0 |
-| 31 | 0x006AABB0 |
-| 32 | 0x006BFC80 |
+| 28 | 0x006AAC20 (`OnDecapitateEvent`: appearance +0x5D = 1, the head hidden) |
+| 29 | 0x006A5C10 (`OnAnimEventDecapitateVFX`, the decapitation's effect) |
+| 30 | 0x006A62F0 (`OnAnimEventDeathblowDamage`, "Deathblow Damage Impact") |
+| 31 | 0x006AABB0 (`OnDeathblowAttackEvent`, "Deathblow Attack Merge") |
+| 32 | 0x006BFC80 (`OnAnimEventDeathblowDieMerge`, "Deathblow Death Merge") |
 | 34 and 37 | 0x0069E5B0 |
-| 35 | 0x006A0DF0 |
-| 36 | 0x006A0E10 |
-| 39 and 40 | 0x006A05C0 |
+| 35 | 0x006A0DF0 (`DisableControllerCollision`, called at 0x006C0CC6; events.gda's "Fly Start") |
+| 36 | 0x006A0E10 (`EnableControllerCollision`, called at 0x006C0CCF; "Fly End") |
+| 39 and 40 | 0x006A05C0 (`OnHideShowNodeEvent`: the node named by the event's string and its children, hidden by 39, shown by 40; "Hide/Show node and children") |
+
+The mapping of ids to cases is the byte table 0x006C0DB0 and the jump table 0x006C0D70 [C]; the handlers' names are the address library's, and 30, 31 and 32 were read only as far as their openers (read 2026-11-05 by paragon-agent-2's reader, checked by lib-agent).
 
 **events.gda's `IsAudio` and `EventName` columns are never read by the exe** (no immediate of either hash) [C]. The ids are hard-coded.
 

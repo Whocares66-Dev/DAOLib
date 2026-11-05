@@ -338,7 +338,7 @@ So the order for one melee swing:
 - **Where it goes** [C unless marked]:
   - **Taken off directly**: the unequip 0x006B7690 tests +0x5D0 first. Made ammo goes to `0x006A5CD0(set)`, which removes it from that set's RANGEDAMMO and destroys it (vtable +0x198 with 0). It never reaches the backpack.
   - **The launcher taken off**: `Equipment` slot 22 (0x00797E20, an item removed) destroys that set's made ammo through `0x006A5CD0` when the removed item's `Ammo` is non-zero. Equipping a melee weapon over the bow therefore destroys it.
-  - **Other ammo equipped**: the old item is taken off first, so made ammo is destroyed [I: the equip's own unequip not traced].
+  - **Other (real) ammo equipped**: `Equip` calls `DestroyMadeAmmo` for that set first [C] (ITEMS.md, "The equip").
   - **A weapon-set switch**: nothing is added or removed, so each set keeps its own made ammo [I: the switch not read].
 - **Also taken from the items** [C]:
   - +0x4AC, the effect attached to the projectile: the ammo item's local int `ITEM_CRUST` (variable id 10).
@@ -594,7 +594,7 @@ Read in the GOG exe by lib-agent-2, for DAOParagonEngine (the Harrowing's fights
   - for one with no loot and no bag yet (+0x790 = -1);
   - for one from the area's pool of reused creatures (+0xB60 ≠ 0, 0x006A9261; +0xB60 is the creature's pool reference, `dev/PARAGON_CREATURE_POOL.md`).
 - With `bForce`, all three are skipped. No bag at all for a creature with no area. There is no party-member test.
-- **"Loot"** (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; `CCCreature::HasLootableItems` 0x006A90D0): true if the money count is above 0 (the creature's +0xBF0 object → its +0x28 → +0x90, three `0x0053CC40` pointer derefs, `jle`), else if the count of items with a non-zero `0x006A4440` (item +0x4B0 byte, `IsItemDroppable`'s) in the equipment object (creature +0xBE0, counted by `0x0069FA00`) is above 0, else the same count in the +0xBF0 object (the inventory/backpack). So both lists are tested with the droppable byte and money is the purse of the +0xBF0 object.
+- **"Loot"** (read 2026-10-22 by paragon-agent-2's helper, checked by lib-agent-2, for DAOParagonEngine #169; `CCCreature::HasLootableItems` 0x006A90D0): true if the money count is above 0 (the creature's +0xBF0 object → its +0x28 → +0x90, three `0x0053CC40` pointer derefs, `jle`), else if the count of items with a non-zero `0x006A4440` (`CCItem::IsDroppableByte`: the item's +0x4B0 byte, ITEMS.md) in the equipment object (creature +0xBE0, counted by `0x0069FA00`) is above 0, else the same count in the +0xBF0 object (the inventory/backpack). So both lists are tested with the droppable byte and money is the purse of the +0xBF0 object.
 - An existing bag (+0x790 ≠ -1) is found and placed again, not made again.
 - A new bag is placeable template `gen_ip_bodybag`, with the appearance's `CorpseModel` or `PLC_BonePile_01_0`.
   - Links: creature +0x790 = the bag; the bag's +0x664 = the creature (`LootableObjectId`); the bag's +0x600 = 1 (`IsBodyBag`).

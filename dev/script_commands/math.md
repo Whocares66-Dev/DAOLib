@@ -54,7 +54,7 @@ Shared facts (checked):
 ### IsInTrigger (39)
 - **Handler:** 0x0066DA90 (not shared; `ScriptCommand::INTRIGGER`). It calls `CClientExoApp::GetCreatureById` 0x005D58C0 and `std::vector<unsigned int>::Contains` 0x008663A0. (checked)
 - **Does:** pops oObject, then oTrigger. Looks oObject up **as a creature** and answers whether oTrigger's id is in the creature's vector of trigger ids at **+0xBA8**. (checked)
-- **State:** creature+0xBA8 (`std::vector<u32>`, begin +4, end +8) is kept by trigger code: 0x006368F0 and the routine at 0x00636A90 edit it beside the trigger's own list at trigger+0x184 (checked that they touch both; that these are the enter/exit bookkeeping: inferred). No geometry is tested here: it is membership as the trigger last recorded it. (checked)
+- **State:** creature+0xBA8 (`std::vector<u32>`, begin +4, end +8) is the creature's inside-set of triggers and areas of effect, the list `IsInAOE` (336) reads too: `CCCreature::UpdateTriggerSet` (0x006AE100) keeps it, run by `RefreshTriggerMembership` (0x006B2F70) on each position change of an active, living creature and by the area-change path 0x006B3070 (aoe.md, "A creature walking in") [C, read 2026-11-05 by paragon-agent-2's reader, checked by lib-agent]; 0x006368F0 and the routine at 0x00636A90 edit it beside the trigger's own list at trigger+0x184 (checked that they touch both). A non-creature answers 0. No geometry is tested here: it is membership as the trigger last recorded it. (checked)
 - **Edge cases:** oObject not a creature (a placeable, an item) or invalid → FALSE. oTrigger invalid or not a trigger → FALSE (not in the list). A copy of this handler's body is at 0x006DA100, pushing to the VM at `[0x00C1D084]` instead (checked; whose table registers it: not read). (checked)
 
 ### IsVectorEmpty (40)
@@ -99,7 +99,7 @@ Shared facts (checked):
 - **Edge cases:** the positions are taken as ground points (eye height added), not eye points. OBJECT_SELF invalid or not in an area (a module script) → FALSE, as script.ldf's remark says. Positions outside the area are not checked. Same see-through-placeable and closest-hit rules as above. (checked apart from the closest-hit consequence) Since both forms add 1.8 to z, the Vector form given eye points casts 1.8 m higher than the Object form for the same creatures. That would explain a caller seeing the Object form stricter at the same eye points [I].
 
 ## Not read
-- The trigger routines 0x006368F0 and 0x00636A90 in full: when a creature's +0xBA8 is updated (on its move, each frame, on the trigger's own check) and whether it is cleared on an area change or a save load.
+- The trigger routines 0x006368F0 and 0x00636A90 in full: whether a creature's +0xBA8 is cleared on an area change or a save load (when it is updated is aoe.md's: `UpdateTriggerSet`).
 - The CRT's own domain-error paths (`_CIasin` beyond ±1, `_CItan` and `_CIsin` on inf), taken from the CRT's documented behaviour.
 - `CCArea::LineOfSight`'s hit record (flag +0x54 bit 4, id +0x5C) as filled by the physics scene's slot 4, and what base type 8 is (`placeable_types.gda`).
 - The other users of the shared RNG (0x00672006, 0x00A41380) and the holder object at `[0x00C2BDF8]` (built at 0x004C013D).

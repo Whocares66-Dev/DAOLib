@@ -27,8 +27,8 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). 
 ### Engine_SetModalAbilityGUI (725)
 - **Handler:** 0x00669E80 (not shared); pops creature, ability id, status (all unconditional) and calls `CCCreatureStats` 0x0071DA90(ability, status, 0) (checked).
 - **Described in:** `dev/ABILITIES.md`, "IsModalAbilityActive and Engine_SetModalAbilityGUI share one list".
-- **Does:** status 0 removes the ability id from the stats' +0xF8 vector, anything else appends it; sets the quickbar toggle (0x00719A40); may send event 0x88/0x89 on a real change. Called by the scripts' upkeep effect on apply and remove.
-- **Edge cases:** invalid or non-creature: nothing, returns 0 (checked). 0x0071DA90 returns at once if the stats have no owner (stats+0x5C null) (checked). Any non-zero status counts as ON (checked). The ability id is not validated here (the `ABI_base` row is looked up inside, hash 0x70F463FA, and its use inferred).
+- **Does:** status 0 removes the ability id from the stats' +0xF8 vector, anything else appends it; sets the quickbar toggle (0x00719A40); may queue a play-animation of the ability's `BlendTree` on a real change (ABILITIES.md, "IsModalAbilityActive and Engine_SetModalAbilityGUI share one list"; no script event). Called by the scripts' upkeep effect on apply and remove.
+- **Edge cases:** invalid or non-creature: nothing, returns 0 (checked). 0x0071DA90 returns at once if the stats have no owner (stats+0x5C null) (checked). Any non-zero status counts as ON (checked). The ability id is not validated here (the `ABI_base` row's `BlendTree`, hash 0x70F463FA, is read inside: ABILITIES.md).
 
 ### IsModalAbilityActive (726)
 - **Handler:** 0x0066DD80 (not shared) (checked).
@@ -50,4 +50,4 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). 
 
 ## Not read
 - The bodies of `CCCreatureStats::SetCooldown` 0x0071DCE0 and the record lookups 0x0071CA00/0x0071C250 (when a record is dropped, how the tag keys it).
-- 0x0071DA90's later branches (the event 0x88/0x89 conditions).
+- (0x0071DA90's later branches are read: ABILITIES.md.)

@@ -170,7 +170,7 @@ FollowerInfo, the map's value (checked): +0 state (`GetFollowerState`), +4 subst
 
 ### SetLookAtEnabled (805)
 - **Handler:** 0x0066BE50, the shared `ScriptCommand::SetObjectProperty`; jump-table case at 0x0066BFD8 → 0x0069EA50 (checked).
-- **Does:** stores (nEnabled != 0) at creature+0x76C. When turning it off from on, it first resets the look-at controller (0x0069E9D0 → 0x006CAB90) if one exists (checked; that it stops head-tracking is inferred).
+- **Does:** stores (nEnabled != 0) at creature+0x76C. When turning it off from on, it first resets the look-at controller (0x0069E9D0 → 0x006CAB90) if one exists (checked); `UpdateLookAt` (0x0069EAF0) runs the look-at only while the byte is set [C] (ANIMATION.md, the look-at's switches).
 - **State:** creature +0x76C (checked).
 - **Edge cases:** pops nEnabled only when there are more than 1 argument, else 0 (checked). Not a creature → it falls through to the placeable cases and does nothing (checked). Missing object → nothing (checked).
 
