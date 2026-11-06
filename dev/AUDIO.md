@@ -1088,7 +1088,7 @@ ShowLine is 0x0068E250 (`GameModeDialog`; dialog object fields below). The updat
 
 ##### ShowLine, non-cut branch (checked)
 
-1. **The previous voice is stopped.** If the dialog's `+0x20C` (the previous line had a cut) is clear, the previous line's speaker (+0x16C) has its VO stopped: AnimBase `StopVO` 0x00A5D360 (deleteEmitter = 1, resetFace = the skip flag +0x2C9). StopVO stops FaceFX, deletes the content (+0x1AC = 0) and the emitter. Then +0x16C = the new speaker, +0x174 = the line, +0x2C8 = 0.
+1. **The previous voice is stopped.** If the dialog's `+0x20C` (the previous line had a cut) is clear, the previous line's speaker (+0x16C) has its VO stopped: AnimBase `StopVO` 0x00A5D360 (deleteEmitter = 1, resetFace = the skip flag +0x2C9; `TakeReply` 0x0068D8F0 makes the same call at 0x0068D973 for the line it replaces). StopVO stops FaceFX, deletes the content (+0x1AC = 0) and the emitter. Then +0x16C = the new speaker, +0x174 = the line, +0x2C8 = 0.
 2. **Facing and the camera.** The camera partner and the speaker are set to look at each other (`SetLookAtTarget` 0x0069EAA0, then the look-ats enabled: a look-at, not a body turn, and not the line's Listener; `dev/ANIMATION.md`, "Look-at at line start"). The dialogue camera is set (0x0068D4B0).
 3. **The voice.** The name comes from 0x007F2B70 (`<vobank>/VO/<strref>_m|_f`). Unless the line's `NoVOIngame` (12216, read by 0x0068D8A0) is set, `PlayVO(face, …, event, faceSync, keepPrevious = 0, 0)` is called.
    - PlayVO stops the old VO and any sound of the same name first.
@@ -1109,7 +1109,7 @@ ShowLine is 0x0068E250 (`GameModeDialog`; dialog object fields below). The updat
 - **Every frame**, while +0x2BC is clear:
   - the input cooldown +0x258 −= dt;
   - a reply queued at +0x254 is taken (0x0068D8F0) and +0x254 reset.
-- **Lone continue.** The kept replies are dialog +0x1A4 (from ShowResponses). When there is exactly one, and its id is −1 or its text is empty, and the speaker's AnimBase holds a VO content and it has **finished** (0x00A5D440: the content no longer playing and the face animation not playing), the continue is queued (0x0068D020(0)). The cooldown +0x258 = 1.0 s is then set.
+- **Lone continue.** The kept replies are dialog +0x1A4 (from ShowResponses). When there is exactly one, and its id is −1 or its text is empty, and the speaker's AnimBase holds a VO content and it has **finished** (0x00A5D440: the content no longer playing and the face animation not playing; with no content it asks the face alone, and with no face player at all it is true), the continue is queued (0x0068D020(0)). The cooldown +0x258 = 1.0 s is then set.
 - **Real replies.** Otherwise, once the speaker's VO has finished, the movie's `Conversation.OnNPCLineFinished` is invoked (0x0068CC60). It is called on every such frame; the movie's handling was not read.
 - **The timer** (tail, 0x0068E1C7): while +0x2BC is clear and timer ≥ 0, timer −= dt. When it reaches ≤ 0, `OfferReplies` (0x007F1A40) is called and timer = −1.
 
@@ -1123,11 +1123,11 @@ ShowLine is 0x0068E250 (`GameModeDialog`; dialog object fields below). The updat
 - **The subtitles option** (`[0x00C32938]+0x78`) is not read anywhere on dialogue mode's non-cut path in the exe. Only cutscene mode's text (0x00692xxx) and the ambient manager read it. The movie gets the text with HasVO and decides (`conversation.gfx` not read).
 - **The fast path** only orders the replies (ShowResponses, as PLOTS.md has it). It plays no part in timing or the auto-continue.
 - **Skip** (`HandleMessage_SkipDialogMessage` 0x0068DC10) is ignored while +0x2BC is set or the cooldown runs. Otherwise:
-  - It sets +0x2C9 = 1. The next ShowLine's StopVO then resets the face.
+  - It sets +0x2C9 = 1 (0x0068DC67), once the lockout and +0x2BC checks have passed. The next StopVO, from `TakeReply` or from ShowLine, then resets the face at once (dev/ANIMATION.md, "Cancelling the fade").
   - The first skip of a line sets +0x309 and counts in +0x30C.
   - With a cut player playing (state 3) it seeks to the next skip marker (0x007CF2E0) and returns. Failing that, it sets the player's +0x1B4.
   - If the replies have not been offered (timer ≥ 0), it offers them now (timer −1).
-  - If the first kept reply is the empty continue, it takes it at once (0x0068D8F0(0)); otherwise +0x2C9 is cleared again.
+  - If the first kept reply is the empty continue, it takes it at once (0x0068D8F0(0)); otherwise +0x2C9 is cleared again (0x0068DDA3, the last path only). So a Skip that seeks a marker (it returns before the clear) or that takes the empty continue leaves the flag set, and every later StopVO resets the face at once until a Skip that takes no reply, or until the flag is zeroed at the start of a conversation (0x0068FE70, in the function at 0x0068FE40) and by the store at 0x0069102F (in the function at 0x00690E70) [I what those two functions are called; the stores are read] (read 2026-11-06 from paragon-agent's audit, checked by lib-agent).
   - **The skip does not stop the voice itself.** The voice stops when the next NPC line's ShowLine stops the previous speaker's VO. So skipping a voiced line with a lone continue cuts the voice at once (the next line starts). Skipping one with real replies shows them while the voice plays on until a reply leads to the next line (inferred from the two reads).
 
 #### 4. `#duck` on a VO line, and `#music` (0x005B9750, checked)
