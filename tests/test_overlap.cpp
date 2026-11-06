@@ -238,7 +238,7 @@ TEST_CASE("a sphere touches a triangle only within its radius, in the triangle's
     CHECK(dao::core::Overlaps(SphereAt({1, 1, 0.2F}, 0.25F), kFloor)); // over the face, within its radius
     CHECK_FALSE(dao::core::Overlaps(SphereAt({1, 1, 0.3F}, 0.25F), kFloor));
     CHECK_FALSE(dao::core::Overlaps(SphereAt({1, 1, 20}, 0.25F), kFloor)); // high above it
-    CHECK(dao::core::Overlaps(SphereAt({1, 1, 0}, 0.25F), kFloor));       // its centre on the face
+    CHECK(dao::core::Overlaps(SphereAt({1, 1, 0}, 0.25F), kFloor));        // its centre on the face
     // In the triangle's plane but outside it: beside the corner at the origin, 0.3 off.
     CHECK_FALSE(dao::core::Overlaps(SphereAt({-0.3F, 0, 0}, 0.25F), kFloor));
     CHECK(dao::core::Overlaps(SphereAt({-0.2F, 0, 0}, 0.25F), kFloor));
