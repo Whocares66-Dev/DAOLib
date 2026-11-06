@@ -116,3 +116,6 @@ dao_apply_warnings(example_objectids)
 
 add_daolib_plugin(example_patch SOURCES patch/Patch.cpp)
 dao_apply_warnings(example_patch)
+
+add_daolib_plugin(example_movement SOURCES movement/Movement.cpp)
+dao_apply_warnings(example_movement)

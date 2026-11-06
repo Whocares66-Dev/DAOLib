@@ -2112,6 +2112,20 @@ DAO_ADDRESS(kCSSubActionHandler_ApproachRanged, 19887)
 DAO_ADDRESS(kCSSubActionHandler_Swing, 19879)
 DAO_ADDRESS(kCCCreature_SignalAttackPending, 14503)
 DAO_ADDRESS(kCCCreature_InStrikingReach, 14500)
+// A move's update and its creature-in-the-way pass (dev/PATHFINDING.md, "A creature in the
+// walker's way"; conventions read 2026-11-06 for DAOLib #325 at the calls in 0x007A9130):
+// MoveUpdate 0x007A9130, __thiscall (creature, the sub-action's parameters (its +0x1C, a
+// CDataArrays), float stop, int flags), `ret 0x10`; HandleCreaturesInTheWay 0x007A3810, __cdecl
+// (the parameters, creature, &delta, &list), answering
+// 0, 1 or 2; its in-combat sibling 0x007A8FF0, __cdecl (creature, &delta), its own list;
+// ReactToCreatureInTheWay 0x007A3A20, __cdecl (creature, &list); CCArea::CreaturesInTheWay
+// 0x0073F230, __thiscall (mover, &probe, 0, &list), `ret 0x10`. The list is an MSVC 2005
+// std::vector of creature pointers (begin +4, end +8, as 0x0062F560 reads it).
+DAO_ADDRESS(kCSSubActionHandler_MoveUpdate, 19882)
+DAO_ADDRESS(kCSSubActionHandler_HandleCreaturesInTheWay, 19828)
+DAO_ADDRESS(kCSSubActionHandler_CreaturesInTheWayInCombat, 19881)
+DAO_ADDRESS(kCSSubActionHandler_ReactToCreatureInTheWay, 19829)
+DAO_ADDRESS(kCCArea_CreaturesInTheWay, 17576)
 // A creature's melee rings kept up to date, read 2026-10-04 (DAOLib #19;
 // corrected by the address library's session): CCCreature::Update calls
 // RefreshMeleeRing (__thiscall (ring index), `ret 4`) for each of its

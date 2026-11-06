@@ -313,6 +313,7 @@ add_library(
     src/dao/Conjure.cpp
     src/dao/Strings.cpp
     src/dao/SubActions.cpp
+    src/dao/Movement.cpp
     src/dao/Atmosphere.cpp
     src/dao/Lights.cpp
     src/dao/Framebuffer.cpp

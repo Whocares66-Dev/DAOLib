@@ -351,7 +351,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
 - **The penalties' switch,** the fine environment's +8 [C]: it gates every penalty term of the step cost (0x00A45AA0); the base distance (so h) and the push's turn cost are not affected. With it clear, and b not the goal and the distance not 0: +7 for a kind-5 cell when the mover's stamps stop it, else +7 for kind 6 and +3 for each creature ring on the cell; +8 for kind 7; +1 for each of the four diagonal neighbours of kind 8 or more, and +1 once if any is kind 7; +2 for a placeable's counter on the cell. The leg sets the switch (0x00A4D3F3) when path +0x48 > 0, so a retry after a failed leg runs without penalties and without the wide filter, until a leg succeeds and +0x48 goes back to 0.
 - **A creature in the walker's way** (read 2026-10-25 by paragon-agent-2's helper, checked by lib-agent-2 with three subagents, for DAOParagonEngine #213/#169) [C unless marked]:
   - **Where it runs:** in the move update (0x007A9130)'s walk part (parameter bit 2), after the frame's step along the path. `delta` is the next waypoint (0x00A62620) less the creature's position.
-    - **Out of combat** (0x006A2580, `[[+0xC60]] != 1`): `r = 0x007A3810(data, creature, &delta, &list)` (ID 19828, at 0x007A95DF).
+    - **Out of combat** (0x006A2580, `[[+0xC60]] != 1`): `r = 0x007A3810(data, creature, &delta, &list)` (ID 19828, at 0x007A95DF). `data` is the move update's second argument, the sub-action's parameters (the CDataArrays at the sub-action's +0x1C, not the sub-action; seen in play 2026-11-06, DAOLib #325).
       - r == 1 → the reaction 0x007A3A20 (0x007A95F6).
       - r == 2 → the update returns `0x007A3190(creature, 1)`, done.
       - r == 0 → nothing.

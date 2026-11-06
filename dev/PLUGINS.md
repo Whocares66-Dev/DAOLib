@@ -148,6 +148,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | Hear the game start a sound event: its path, place and time | `dao::audio::OnEventStart` | `dao/Audio.h` |
 | Give orders as the player's clicks do | `dao::orders::Attack`, `UseObject`, `UseAbility`, `MoveTo` | `dao/Orders.h` |
 | Know how long a command still holds a creature | `dao::commands::SubActions`, `HeldFor` | `dao/SubActions.h` |
+| Trace a creature's walk: its movement state, a wait for a creature in its way, each move update's answer and standing time | `dao::movement::WalkerOf`, `OnMoveUpdate` | `dao/Movement.h` |
 | Know whether an attacker, or an ability's user, is in reach, where its approach walks, and how it turns to face | `dao::attack::IsRanged`, `ApproachOf`, `Walk` (each with or without an ability), `TurnTo`, `FaceExactly`; `dao::commands::RunningSubAction` | `dao/Attack.h`, `dao/Conjure.h` |
 | Hold a spell in its conjure and feed it time | `dao::commands::HoldConjure(caster)`, `FeedConjure(caster, seconds)`, `Conjure(caster)` | `dao/Conjure.h` |
 | Know how long an animation, attack, shot or ability takes | `dao::animation::Length`, `StepLength`, `AttackDuration`, `AimDuration`, `OfShot`, `OfAbility` | `dao/Animation.h` |
