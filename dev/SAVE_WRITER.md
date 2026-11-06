@@ -408,7 +408,7 @@ For the one list field 17000 (generic list, label 0x4268): for each of 13 type b
 - The writer's type filter for variables with no template (types 5-11), the effect's VFX start `0x0079FA70`, and `0x007CA4F0(container, -1)` after a store's items load.
 - The party-pool test (`0x006316F0`) that keeps a creature out of the area's creature list.
 - Whether items on the ground (dropped, not in a bodybag) exist as area objects at all (the area's loop has no item cast; a dropped item is probably a bodybag placeable: I).
-- The Equipment/Backpack/PlotItems own writers (Inventory slot 27 `0x0073F7A0`, Equipment slot 26 `0x00797700`): the item-list writer they share is read here; their other fields are the creature note's.
+- The Equipment/Backpack/PlotItems own writers (Inventory slot 26 `0x0073FC70`, Equipment slot 26 `0x00797700`; Inventory's slot 27 `0x0073F7A0` writes an empty inventory instead, through the Backpack's and PlotItems' slot 27 and Money's slot 6; corrected 2026-11-06 from Paragon's reading, checked by lib-agent): the item-list writer they share is read here; their other fields are the creature note's.
 - The other serializer path of the effect writer (null struct; name tables) and of the command writer.
 
 ## The area writer and the small kinds' writers (GOG exe), for the save writer (DAOLib #221)
