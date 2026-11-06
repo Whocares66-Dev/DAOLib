@@ -1209,6 +1209,15 @@ bool MeshOverlaps(const Capsule &capsule, const TriangleMesh &mesh, const Pose &
 
 } // namespace
 
+// The camera's clearance test (DAOLib #323): CameraRig::IsSphereClear 0x006C28B0 asks
+// World::OverlapSphereNearest 0x006493E0, which asks the scene's slot +0x30,
+// PhysicsScene::OverlapSphere 0x0082E980, a 0.25 m sphere under mask 0x1024 tested against each
+// shape's bits0 as the capsule's query is (dev/COLLISION.md section 5; DAOParagonEngine #336).
+Capsule SphereAt(const Point &centre, float radius)
+{
+    return Capsule{centre, centre, radius};
+}
+
 bool Overlaps(const Capsule &capsule, Kind kind, const Point &dimensions, float radius, float height, const Pose &pose)
 {
     switch (kind)

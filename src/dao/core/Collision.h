@@ -230,6 +230,10 @@ Pose PoseOf(const std::array<float, 4> &rotation, const Point &position);
 // @param centreAbove how far above the feet the capsule's centre is (the creature's +0x784)
 Capsule CreatureCapsule(const Point &feet, float radius, float height, float centreAbove);
 
+// Returns a sphere as the overlap and sweep functions take it: a capsule of no length. The camera's
+// clearance test asks Overlaps with SphereAt(place, 0.25) and mask 0x1024, and is clear when nothing is met.
+Capsule SphereAt(const Point &centre, float radius);
+
 // Returns whether a capsule shares a point with a solid sphere, box or capsule placed by a pose.
 // @param dimensions a box's half extents
 // @param height a capsule's, between its caps' centres along its y
