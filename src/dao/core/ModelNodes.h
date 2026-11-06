@@ -29,6 +29,7 @@ inline constexpr std::uint32_t kTrailSegmentLength = 6292; // a wtrl node's MMHW
 inline constexpr std::uint32_t kTrailDuration = 6293;      // MMHWeapontrailDuration
 inline constexpr std::uint32_t kUseVariationTint = 6340;
 inline constexpr std::uint32_t kMeshCutAway = 6193; // an mshh node's MMHMeshCutAway
+inline constexpr std::uint32_t kMeshCastRuntimeShadow = 6176; // an mshh node's MMHMeshCastRuntimeShadow
 inline constexpr std::uint32_t kBonesUsed = 6255;
 inline constexpr std::uint32_t kTotalBones = 6256;
 inline constexpr std::uint32_t kChildren = 6999;

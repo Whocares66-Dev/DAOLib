@@ -398,6 +398,7 @@ TEST_CASE("a mesh node is cut away when its MMHMeshCutAway is set", "[model]")
            {6193, 0, 0, 52},
            {6340, 0, 0, 55},
            {6346, 0, 0, 56},
+           {6176, 0, 0, 53},
            {6999, dao::test::kGeneric, children, 20}}}});
     const std::size_t root = dao::test::Struct(b, 16);
     const std::size_t fade = dao::test::Struct(b, 64);
@@ -415,6 +416,7 @@ TEST_CASE("a mesh node is cut away when its MMHMeshCutAway is set", "[model]")
     b.U8(fade + 52, 1);
     b.U8(fade + 55, 1);
     b.U8(wall + 56, 1);
+    b.U8(wall + 53, 1);
     b.U32(wall, b.String(u"Wall"));
     b.U32(wall + 12, b.String(u"Wall"));
 
@@ -427,10 +429,12 @@ TEST_CASE("a mesh node is cut away when its MMHMeshCutAway is set", "[model]")
     CHECK(tree->nodes[0].mesh->cutAway);
     CHECK(tree->nodes[0].mesh->useVariationTint);
     CHECK_FALSE(tree->nodes[0].mesh->defaultHidden);
+    CHECK_FALSE(tree->nodes[0].mesh->castsRuntimeShadow);
     REQUIRE(tree->nodes[1].mesh);
     CHECK_FALSE(tree->nodes[1].mesh->cutAway);
     CHECK_FALSE(tree->nodes[1].mesh->useVariationTint);
     CHECK(tree->nodes[1].mesh->defaultHidden);
+    CHECK(tree->nodes[1].mesh->castsRuntimeShadow);
 }
 
 TEST_CASE("the ogre's body, when it is in game/models, reads whole", "[model]")

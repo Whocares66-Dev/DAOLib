@@ -382,6 +382,9 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
     {
         node.bone = static_cast<int>(*bone);
     }
+    // MMHMeshCastRuntimeShadow (6176): ReadMeshBlueprint reads it at 0x00594F5A into the blueprint's +0x1A4,
+    // 0 when absent, and ObjectNodeMesh's renderable slot +0x20 (0x0055B450) answers it when the
+    // shadow maps gather their casters (read 2026-11-05 for DAOParagonEngine #425; DAOLib #322).
     if (const auto chunk = from.String(kMeshGroupName); chunk && !chunk->empty())
     {
         MeshRef mesh{.chunk = *chunk,
@@ -390,7 +393,8 @@ void Walk(const gff4::Struct &from, int parent, std::size_t deep, Hierarchy &out
                      .bonesUsed = {},
                      .cutAway = Number(from, kMeshCutAway).value_or(0) != 0,
                      .useVariationTint = Number(from, kUseVariationTint).value_or(0) != 0,
-                     .defaultHidden = Number(from, kMeshDefaultHidden).value_or(0) != 0};
+                     .defaultHidden = Number(from, kMeshDefaultHidden).value_or(0) != 0,
+                     .castsRuntimeShadow = Number(from, kMeshCastRuntimeShadow).value_or(0) != 0};
         for (const std::uint32_t used : from.Numbers(kBonesUsed))
         {
             mesh.bonesUsed.push_back(static_cast<std::int32_t>(used));

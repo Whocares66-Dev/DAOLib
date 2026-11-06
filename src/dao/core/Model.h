@@ -179,6 +179,8 @@ struct MeshRef
     bool useVariationTint = false;
     // MMHMeshDefaultHidden: the node is made hidden. No shipped model sets it.
     bool defaultHidden = false;
+    // MMHMeshCastRuntimeShadow: the mesh is drawn into the shadow maps; not when absent.
+    bool castsRuntimeShadow = false;
 };
 
 // A controller a node exports: the name an animation's channel goes by, and what it drives.
