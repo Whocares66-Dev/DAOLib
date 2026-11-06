@@ -1289,9 +1289,8 @@ The pieces:
   - **+0x938/+0x93C (right/left weapon material)**: apr_base `Sound_Unarmed` when `Disabled_Weapon_Sounds` is set or the hand is empty, else the item's bitm_base `InvSoundType`. Longsword and greatsword give 1 Sword, dagger 4, mace and maul 3, axes 2, staff 7, bows 8, crossbow 9, shields 5/6, creature weapons 0.
   - **+0x930 (armour material)**, in this order:
     1. apr_base `Sound_Default_Armor`;
-    2. unless `Disabled_Armor_Sounds`: if the slot-0 material index (appearance+0x148[0]) is > 0, `materialtypes` (table 89) `Sound_MatType` for it;
-    3. then, if > 0, the slot-0 item's variation table (bitm_base `Variation_Worksheet`, row = the item's variation +0x138[0]) `SoundMatType` (0x007485D0).
-    4. Clamped: anything outside 10–13, 16–18 and 23–25 becomes **16 (Flesh)**.
+    2. only if not `Disabled_Armor_Sounds` and the slot-0 material index m (appearance+0x148[0]) is above 0 (signed; 0x006A0C4B..0x006A0C54): `materialtypes` (table 89) `Sound_MatType` of row m, then the slot-0 item's variation table's (bitm_base `Variation_Worksheet`, row = the item's variation +0x138[0]) `SoundMatType` (0x007485D0) in its place if above 0. With the flag set or no slot-0 material the variation is not read and `Sound_Default_Armor` stands (corrected 2026-11-06 from paragon-agent's port batch, checked by lib-agent).
+    3. Clamped: anything outside 10–13, 16–18 and 23–25 becomes **16 (Flesh)**.
   - Slot 0 is inferred to be the chest.
   - Example: apr 1/2/3/15 (humanoids) are `Humanoid_Large` (elves `Humanoid_Small`), `Medium`, `Sound_Unarmed` 19 BareHands, `Sound_Default_Armor` 16.
 

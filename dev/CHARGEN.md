@@ -490,7 +490,7 @@ Ids below are the slider ids of "The appearance sliders and chargenmorphcfg.xml"
 - Deletes the recipe at +0x1E4 (0x007BC080 then delete) and makes a new one (0x60 bytes, 0x007BFD80) [C].
 - Sizes two of its lists to 6 and 12 (0x00616F20(6), 0x00616F20(0xC)): the six parts and the twelve tint slots [I from the counts].
 - Zeroes the 50 slider values (+0x1F8, 200 bytes) [C], then sets +0x21C (id 9, eye shadow intensity), +0x2B4 (0x2F, blush intensity), +0x2BC (0x31, lip intensity) and +0x288 (0x24, tattoo intensity) to 1.0, and +0x28C (0x25, eyebrows) and +0x294 (0x27) to -1.0 (0xAE2E00) [C].
-- With +0xD8 = 1 (the "building" flag that stops 0x00802BF0 from queueing) calls 0x00804F60(0), the tattoo colour setter (0x23 at +0x284: the tattoo colour list's entry into three tint slots), then clears +0xD8 [C].
+- With +0xD8 = 1 (the "building" flag that stops 0x00802BF0 from queueing) calls 0x00804F60(0), the tattoo colour setter (0x23 at +0x284: the tattoo colour list's entry into four tint slots, 6 to 9), then clears +0xD8 [C].
 - Puts the three bases into the target list with weight 0 added (`0x00807D10(name, 0, add 1)`: present, weight unchanged): UH_UEM_BASa_0, UH_ULM_BASa_0, UH_UHM_BASa_0 [C for the names and the arguments; that the call is there to make the bases present is I].
 - Writes FaceM1 `mml_vTattooParameters` vectors 1, 2, 3, 4 = (1, 1, 1, 1) (0x00802AB0, a material vector override) [C], FaceM1 `g_vFacialHairColour` vector 0 = (0.08, 0.04, 0.05, 1.0) (constants 0xB26070, 0xB26074, 0xAF88AC) [C], and FaceM1 `g_vFacialHairWeights` component 4 = 0 (0x008029A0) [C].
 
@@ -499,7 +499,11 @@ Ids below are the slider ids of "The appearance sliders and chargenmorphcfg.xml"
 - MorphParts (23000) into the recipe's part names, MorphTintFileNames (0x59D9) into its tints, a tint taken only where the file's string is not empty [C].
 - Each MorphModelParams (0x59EA) entry: MorphModelName (0x59E8) and MorphModelValue (0x59E9) through 0x00807D10(name, value, 0) (set) [C].
 - MorphMatParams (0x59E6): node 0x59E1, parameter 0x59E2, index 0x59E3, value 0x59E4 through 0x00800820 [C]; MorphMatVecParams (0x59E7): node, parameter, index and the Vector4 0x59E5 through 0x008008B0 [C]; MorphTextures (0x59EE): node 0x59EB, parameter 0x59EC, texture 0x59ED through 0x00800950 [C].
-- 0x00804390(this + 0x2C0): builds the paperdoll's tattoo list (+0x2C4, 0x20-byte entries, a name and at +0x1C a component) [C for the call and the list's shape; that it is made from chargenmorphcfg's `tattoos` is I].
+- 0x00804390(this + 0x2C0): builds the paperdoll's tattoo list (+0x2C4, 0x20-byte entries, a name and at +0x1C a component) [C; read 2026-11-06 from paragon-agent's port batch, checked by lib-agent]. Its first entry is empty. The rest are string literals in the function, by the hero's racial type (`CCCreature::GetRacialType` 0x006A7D90) and background (stats property 37), each with components 0 to 3 unless said:
+  - human, and an elf of any background but 1: `UH_PCT_H01_0T`, then `UH_PCT_H02_0T`;
+  - an elf of background 1 (Dalish) or 6: `UH_TAT_ED1_0T` with components 2, 3, 0, 1, then `UH_TAT_ED2_0T`, `UH_TAT_ED3_0T` and `UH_TAT_ED4_0T` (background 6 after the human set);
+  - a dwarf of background 5 (noble) or 6: `UH_PCT_DN1_0T`; of background 2 (commoner) or 6: `UH_PMT_001_0T` component 3, then `UH_PCT_DC1_0T`.
+  - Only when none of these applies (no creature, another race, a dwarf of another background) does the end (0x00804B48) add the config's `tattoos` (+0x224), each with components 0 to 3. The origins are backgrounds 1 to 5; 6 is tested but is no origin constant.
 - With arg 3 set: if the hero's background (attribute at hero +0x7C4, read by 0x0071AFB0) is 1 and its racial type 2 (a Dalish elf), or 2 and racial type 1 (a dwarf commoner), then with +0xD8 = 1 calls 0x008039B0(1.0) [C]; that this gives those two origins their default tattoo is [I] (0x008039B0 works on +0x154 and was not followed).
 
 #### Target weights: 0x00807D10(this, name, weight, add)
@@ -752,8 +756,8 @@ So the movie's value is −1..1 for a signed slider (0..1 for 0xD and 0xF, whose
 | 7 | Eye Color | 0..eyes_colors−1 | tint slot 2 (+0x38) the `eyes_colors` entry. Read. |
 | 0x2C | Skin Complexion | 0..skins−1 | `FaceM1`'s `mml_tDiffuse` the `skins` entry (`uh_hed_fema_0d` …), and `mml_tNormalMap` the same name with its last letter made `n`. Read. |
 | 0x2D | Skin Tone | 0..skin_colors−1 | tint slot 0 the `skin_colors` entry (`t1_skn_001` …). Read. |
-| 0x22 | Tattoo | 0..tattoos−1 | `FaceM1`'s `mml_tTattooMask` the tattoo's mask; the old tattoo's component of `mml_vTattooParameters` set to 0 and the new one's to the tattoo intensity (slider 0x24). The paperdoll's tattoo list (+0x2C4, 0x20 each: name and component at +0x1C) is built from `tattoos` (inferred). Read. |
-| 0x23 | Tattoo Color | 0..tattoo_colors−1 | tint slots 6, 7 and 8 (+0xA8, +0xC4, +0xE0) from `tattoo_colors`. Read in outline. |
+| 0x22 | Tattoo | 0..tattoos−1 | `FaceM1`'s `mml_tTattooMask` the tattoo's mask; the old tattoo's component of `mml_vTattooParameters` set to 0 and the new one's to the tattoo intensity (slider 0x24). The paperdoll's tattoo list (+0x2C4, 0x20 each: name and component at +0x1C) is built by race and background, the config's `tattoos` only as a fallback (0x00804390, above). That the slider's range follows the list is [I]. Read. |
+| 0x23 | Tattoo Color | 0..tattoo_colors−1 | tint slots 6 to 9 (+0xA8, +0xC4, +0xE0, +0xFC) from `tattoo_colors`, the same entry in each. Read. |
 | 0x24 | Tattoo Intensity | 0.4..1.0 | the current tattoo's component of `mml_vTattooParameters` on `FaceM1`. Read. |
 | 8 | Eye Shadow Color | 0..eyes_makeup−1 | tint slot 4 (+0x70) the `eyes_makeup_colors` entry; `FaceM1`'s `mml_vTintMaskColours` component 1 set to the intensity (slider 9), or 0 when the entry is empty. Females. Read. |
 | 9 | Eye Shadow Intensity | 0..1 | `mml_vTintMaskColours` component 1 on `FaceM1`. Read. |
@@ -763,10 +767,10 @@ So the movie's value is −1..1 for a signed slider (0..1 for 0xD and 0xF, whose
 | 0x31 | Lip Intensity | 0..1 | `mml_vTintMaskColours` component 0. Read. |
 | 0x32 to 0x39 | Look Up / Down (−30..30), Turn Left / Right (−45..45), Camera Distance (0.5..0.72), Move Left / Right (±0.036), Move Up / Down (−0.02..0.1), Background (1..20), Expression | | the portrait's camera and backdrop (`0x0069ed50` and kin), not the head. Read in outline. |
 
-- The list setters called by 0x00809980 (each stores its value, sets its tint or part, and its intensity component, then 0x00802BF0) [C]: 0x00805AE0 blush (0x2E at +0x2B0; tint slot 5 = the list at config +0x1D4's entry; FaceM1 `mml_vTintMaskColours` component 2 = +0x2B4 or 0 where the entry is empty), 0x00804D40 eye make-up (8 at +0x218; slot 4 from +0x1C4; component 1 = +0x21C or 0), 0x00805D00 lips (0x30 at +0x2B8; slot 1 from +0x1E4; component 0 = +0x2BC or 0), 0x008055C0 beard (0x2A at +0x2A0; part 3 = the race and gender's beards entry, or "" with no list), 0x00803F60 stubble (0x26 at +0x290; `g_vFacialHairWeights` components 4..7 = 1.0 or 0 by bits 0..3), 0x00804F60 tattoo colour (0x23 at +0x284; the tattoo colours list's entry into three tint slots).
+- The list setters called by 0x00809980 (each stores its value, sets its tint or part, and its intensity component, then 0x00802BF0) [C]: 0x00805AE0 blush (0x2E at +0x2B0; tint slot 5 = the list at config +0x1D4's entry; FaceM1 `mml_vTintMaskColours` component 2 = +0x2B4 or 0 where the entry is empty), 0x00804D40 eye make-up (8 at +0x218; slot 4 from +0x1C4; component 1 = +0x21C or 0), 0x00805D00 lips (0x30 at +0x2B8; slot 1 from +0x1E4; component 0 = +0x2BC or 0), 0x008055C0 beard (0x2A at +0x2A0; part 3 = the race and gender's beards entry, or "" with no list), 0x00803F60 stubble (0x26 at +0x290; `g_vFacialHairWeights` components 4..7 = 1.0 or 0 by bits 0..3), 0x00804F60 tattoo colour (0x23 at +0x284; the tattoo colours list's entry into four tint slots, 6 to 9).
 - The beard's group rule (the Mouth and Jaw / Cheeks groups off with a beard) is seen in play, in "Making the head" above.
 - Which sliders appear (`0x0080ada0`): everyone gets 0 to 0x21 (morph), 7, 0x22 to 0x25, 0x28, 0x29, 0x2C, 0x2D and the portrait sliders. With `0x006a3650` true (inferred: male) the beard (0x2A, when the race has beards), Hair / Beard Color, Stubble (not elves, racial type 2) and Eyebrow / Stubble Color; otherwise the makeup sliders (8, 9, 0x2E to 0x31), Hair Color and Eyebrow Color. Read.
-- So the morph's tint slots, as these setters fill them: 0 skin, 1 lip makeup, 2 eyes, 3 hair, 4 eye makeup, 5 blush, 6 to 8 tattoo, 10 brows and stubble, 11 crew cut (9 not written here). That this list is the `.mor`'s `MorphTintFileNames`, in that order, is inferred.
+- So the morph's tint slots, as these setters fill them: 0 skin, 1 lip makeup, 2 eyes, 3 hair, 4 eye makeup, 5 blush, 6 to 9 tattoo, 10 brows and stubble, 11 crew cut. That this list is the `.mor`'s `MorphTintFileNames`, in that order, is inferred.
 
 ### chargenmorphcfg.xml as the engine reads it
 
