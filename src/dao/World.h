@@ -263,6 +263,19 @@ struct ModelBox
 // Call on the game thread.
 std::optional<ModelBox> ModelBoxOf(ObjectId creature);
 
+// The pathfinder's answers to a search, as PathSearch::result and dao::movement's
+// MoveUpdate::pathAnswer have them.
+namespace path
+{
+inline constexpr std::int32_t kFound = 1;     // found, or gave up part way with a partial path
+inline constexpr std::int32_t kSearching = 4; // the slice ran out of time, the search not done
+inline constexpr std::int32_t kNoPath = 5;
+// A door or something like it is in the way, and the walker must act on it to go on (the game
+// ends such a move with COMMAND_FAILED_PATH_ACTION_REQUIRED).
+inline constexpr std::int32_t kActionRequired = 6;
+inline constexpr std::int32_t kNoWalkmesh = 8;
+} // namespace path
+
 // The result of a path search by Pathfind.
 struct PathSearch
 {
@@ -276,14 +289,8 @@ struct PathSearch
     // (`result` 1), this is whatever lies across the path just ahead, which may not be what
     // stopped it.
     ObjectId blocker = kInvalidObject;
-    // The pathfinder's last result code:
-    // - 1: found, or gave up part way if `path` is empty
-    // - 5: no path
-    // - 6: a door or something like it is in the way, and the walker must act on it to go on
-    //   (the game ends such a move with COMMAND_FAILED_PATH_ACTION_REQUIRED)
-    // - 8: no walkmesh there
-    // - 0: never asked (no such creature, or called off the game thread)
-    // - any other value: the search ran out of time
+    // The pathfinder's last answer, one of path::; 0 if never asked (no such creature, or called
+    // off the game thread), and any value not named there the search running out of time.
     std::int32_t result = 0;
     // How many time slices the search took; 0 for a straight walk. The pathfinder works in
     // short slices of time.

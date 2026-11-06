@@ -500,9 +500,9 @@ constexpr float kAheadStep = 0.1F;
 // A closed door this near where a search stopped, whose footprint the
 // line there crosses, is taken for what stopped it (DAOLib #39).
 constexpr float kDoorNear = 3.0F;
-constexpr std::uint8_t kDoorBaseType = 1;      // placeable_basetypes: Door
-constexpr std::uint16_t kDoorClosedLocked = 1; // statecnt_door: 0 closed, 1 locked; 2 on open or dead
-constexpr std::size_t kBarredAt = 0x84;        // in the path: a pointer to the barred cell's point, once noted
+constexpr std::uint8_t kDoorBaseType = 1;       // placeable_basetypes: Door
+constexpr std::uint16_t kDoorClosedLocked = 1;  // statecnt_door: 0 closed, 1 locked; 2 on open or dead
+constexpr std::size_t kActionRequiredAt = 0x84; // in the path: a pointer to the barred cell's point, once noted
 constexpr auto kLongest = std::chrono::milliseconds(40); // of the game's frame, for one search
 constexpr int kMostLegs = 6;                             // searches in all, the first and those after
 constexpr float kLegProgress = 2.0F;                     // metres nearer a leg must get to search on
@@ -520,10 +520,11 @@ constexpr std::size_t kWorldStamps = 0xC4;  // in the pathfinding world: which s
 constexpr std::size_t kWorldSize = 0xC8;    // in the pathfinding world: the mover's size
 constexpr std::size_t kMoverStamps = 0xC90; // in the creature: not 0 for the other kind of stamp
 constexpr std::size_t kSizeSlot = 39;       // the creature's vtable: its size, a float
-constexpr std::int32_t kFound = 1;
-constexpr std::int32_t kNone = 5;
-constexpr std::int32_t kNoMesh = 8;
-constexpr std::int32_t kBarred = 6; // a door, or the like, on the way (0x00A4D1F0, a cell of kind 7)
+// The answers' names are world::path's; kActionRequired is a cell of kind 7 on the way (0x00A4D1F0).
+using path::kActionRequired;
+using path::kFound;
+using path::kNoPath;
+using path::kNoWalkmesh;
 
 class OwnSearch
 {
@@ -817,7 +818,7 @@ class Searcher
     // legs found already.
     ObjectId Stopper(const Leg &leg, const std::vector<Vector> &walked, const Vector &from) const
     {
-        if (answer_.result == kBarred)
+        if (answer_.result == kActionRequired)
         {
             Vector at = from;
             if (leg.barredAt)
@@ -906,8 +907,8 @@ class Searcher
             answer_.result = step_(controller, 0, kSlice);
             answer_.answers.push_back(answer_.result);
             leg.found = PathOf(reinterpret_cast<std::uintptr_t>(controller));
-            if (answer_.result == kFound || answer_.result == kNone || answer_.result == kNoMesh ||
-                answer_.result == kBarred)
+            if (answer_.result == kFound || answer_.result == kNoPath || answer_.result == kNoWalkmesh ||
+                answer_.result == kActionRequired)
             {
                 break;
             }
@@ -937,9 +938,9 @@ class Searcher
         }
         // With a 6 the engine notes the barred cell in the path, for the
         // creature's PathBlocker to look about (0x00A4D1F0).
-        if (answer_.result == kBarred)
+        if (answer_.result == kActionRequired)
         {
-            if (const auto noted = TryRead<std::uintptr_t>(path + kBarredAt); noted && *noted != 0)
+            if (const auto noted = TryRead<std::uintptr_t>(path + kActionRequiredAt); noted && *noted != 0)
             {
                 leg.barredAt = TryRead<Vector>(*noted);
             }

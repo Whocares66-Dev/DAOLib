@@ -9,6 +9,19 @@
 // argument's first word is CDataArrays' vtable, 0x00B5951C. The sub-action's type is the running
 // sub-action's (dao/SubActions.cpp's list), when its +0x1C is those parameters.
 //
+// The path the record keeps is at its +0x14 (dev/PATHFINDING.md, "The Path"): its waypoints a
+// vector of 12-byte points at +0x74/+0x78, the index of the one walked to at +0x88. The update
+// asks CCObject::RequestPath (0x0073EA80, its one caller 0x007A92F8, __thiscall (area; creature,
+// &goal, start or null), `ret 0xC`) at most once a run (DAOLib #327). Its answer is only read: a
+// search of the library's own would leave its path as the creature's.
+//
+// The standing counter (0x007A9785..0x007A9851) adds the update's ms to the parameters' int 1
+// only when the creature moved under 0.02 m (0x007A97BD), the parameters' flag 8 is 1
+// (CDataArrays::GetFlag at 0x007A9789, compared at 0x007A97D1), its AI level (+0x2B0) is above 1
+// (0x007A97DA) and the update's ms (`[[creature+0x2B8]+8]`, its ObjectTimer's) are under 300
+// (0x007A97EF). A creature that moves sets flag 8 and int 1 to 0 again (0x007A9853); otherwise
+// both stay (read 2026-11-06 for Eluvian #195).
+//
 // One update is followed by a hook on the update and one on each part of its in-the-way pass. A
 // thread's update open at the time is the one a part belongs to. Parts run outside an update (the
 // direct-control steering 0x007A8C20 calls HandleCreaturesInTheWay) are not recorded.
@@ -34,13 +47,21 @@ namespace dao::movement
 namespace
 {
 
-constexpr std::uintptr_t kMotion = 0xB20; // in a creature: its movement controller's state
-constexpr std::uintptr_t kRecord = 0xA40; // in a creature: its movement record
-constexpr std::uintptr_t kTimer = 4;      // in the record: the timer in ms
-constexpr std::uintptr_t kListBegin = 4;  // in the list, a std::vector of creature pointers
+constexpr std::uintptr_t kMotion = 0xB20;     // in a creature: its movement controller's state
+constexpr std::uintptr_t kRecord = 0xA40;     // in a creature: its movement record
+constexpr std::uintptr_t kTimer = 4;          // in the record: the timer in ms
+constexpr std::uintptr_t kPath = 0x14;        // in the record: the path
+constexpr std::uintptr_t kPointsBegin = 0x74; // in the path: its waypoints, 12 bytes each
+constexpr std::uintptr_t kPointsEnd = 0x78;
+constexpr std::uintptr_t kPointIndex = 0x88; // in the path: the index of the waypoint walked to
+constexpr std::uintptr_t kPointSize = 12;
+constexpr std::uintptr_t kListBegin = 4; // in the list, a std::vector of creature pointers
 constexpr std::uintptr_t kListEnd = 8;
-constexpr std::int32_t kStandingIndex = 1; // the sub-action's int that counts the standing time
-constexpr std::size_t kMostListed = 64;    // as many entries as are read before the list is taken to be broken
+constexpr std::int32_t kStandingIndex = 1;     // the sub-action's int that counts the standing time
+constexpr std::int32_t kCountingFlag = 8;      // the sub-action's flag that lets it count
+constexpr std::uintptr_t kTimerRecord = 0x2B8; // in a creature: its ObjectTimer's record
+constexpr std::uintptr_t kUpdateMs = 8;        // in that record: the update's ms
+constexpr std::size_t kMostListed = 64;        // as many entries as are read before the list is taken to be broken
 // The running sub-action, as dao/SubActions.cpp reads the list: the creature's command record, its
 // sub-actions' std::list at +0xC with its head node at +4, a node's value at +8; and the
 // sub-action's parameters at its +0x1C.
@@ -149,6 +170,9 @@ Detour<HandleFn> g_handle;
 Detour<InCombatFn> g_inCombat;
 Detour<ReactFn> g_react;
 Detour<ListFn> g_list;
+using RequestPathFn = std::int32_t(__fastcall *)(void *area, int edx, CCObject *creature, const void *goal,
+                                                 const void *start);
+Detour<RequestPathFn> g_requestPath;
 
 void Fire(const MoveUpdate &update)
 {
@@ -165,6 +189,30 @@ void Fire(const MoveUpdate &update)
     {
         detail::Guard("a move update callback", [&] { observer(update); });
     }
+}
+
+void ReadPath(std::uintptr_t creature, MoveUpdate &update)
+{
+    const auto record = TryRead<std::uintptr_t>(creature + kRecord).value_or(0);
+    const auto path = record != 0 ? TryRead<std::uintptr_t>(record + kPath).value_or(0) : 0;
+    if (path == 0)
+    {
+        return;
+    }
+    const auto begin = TryRead<std::uintptr_t>(path + kPointsBegin).value_or(0);
+    const auto end = TryRead<std::uintptr_t>(path + kPointsEnd).value_or(0);
+    update.waypoints = end > begin ? static_cast<std::int32_t>((end - begin) / kPointSize) : 0;
+    update.waypoint = TryRead<std::int32_t>(path + kPointIndex).value_or(0);
+}
+
+std::int32_t __fastcall OnRequestPath(void *area, int edx, CCObject *creature, const void *goal, const void *start)
+{
+    const std::int32_t answer = g_requestPath.Original()(area, edx, creature, goal, start);
+    if (t_open != nullptr && t_open->creature == reinterpret_cast<std::uintptr_t>(creature))
+    {
+        t_open->update.pathAnswer = answer;
+    }
+    return answer;
 }
 
 std::int32_t __fastcall OnUpdate(void *handler, int edx, CCObject *creature, std::uintptr_t parameters, float stop,
@@ -185,6 +233,12 @@ std::int32_t __fastcall OnUpdate(void *handler, int edx, CCObject *creature, std
     update.subAction = RunningType(open.creature, parameters);
     update.result = result;
     update.standingMs = reinterpret_cast<const CDataArrays *>(parameters)->Integer(kStandingIndex);
+    const auto *parametersOf = reinterpret_cast<const CDataArrays *>(parameters);
+    update.counting = parametersOf->Flag(kCountingFlag) == 1;
+    update.aiLevel = creature->AILevel();
+    const auto timer = TryRead<std::uintptr_t>(open.creature + kTimerRecord).value_or(0);
+    update.updateMs = timer != 0 ? TryRead<std::int32_t>(timer + kUpdateMs).value_or(0) : 0;
+    ReadPath(open.creature, update);
     update.walker = WalkerAt(open.creature);
     Fire(update);
     return result;
@@ -240,6 +294,7 @@ void Attach()
     static std::once_flag once;
     std::call_once(once, [] {
         g_list.Attach(addr::kCCArea_CreaturesInTheWay, &OnList);
+        g_requestPath.Attach(addr::kCCObject_RequestPath, &OnRequestPath);
         g_handle.Attach(addr::kCSSubActionHandler_HandleCreaturesInTheWay, &OnHandle);
         g_inCombat.Attach(addr::kCSSubActionHandler_CreaturesInTheWayInCombat, &OnInCombat);
         g_react.Attach(addr::kCSSubActionHandler_ReactToCreatureInTheWay, &OnReact);

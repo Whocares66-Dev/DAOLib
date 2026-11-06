@@ -83,6 +83,21 @@ struct MoveUpdate
     // How long the creature has stood while it should walk, in ms. Past 1000, or 2000 unless the
     // creature is in combat, the move fails with -4.
     std::int32_t standingMs = 0;
+    // What the standing time counts by. It adds an update's time only while the creature moved
+    // under 0.02 m, `counting` is set, its AI level is above 1 and the update took under 300 ms;
+    // otherwise it neither adds nor starts again, so a walker can stand with standingMs 0.
+    bool counting = false;     // the move's own switch, set again whenever the creature moves
+    std::int32_t aiLevel = 0;  // the creature's, as GetAILevel answers
+    std::int32_t updateMs = 0; // how long the creature's update took, in its own milliseconds
+    // The answer to the path request the update made itself, one of dao::world::path::; nullopt
+    // when it made none. world::path::kSearching holds the walker still: the update answers 0 and
+    // neither walks nor counts the standing time. 2, 3 and 7 walk as kFound does; kNoPath and
+    // kNoWalkmesh fail the move with -4, kActionRequired with -9.
+    std::optional<std::int32_t> pathAnswer;
+    // The points of the stretch of path the walker holds after the update, and the index of the one
+    // it goes to. A walker asks for its path a stretch at a time, so this is not the whole route.
+    std::int32_t waypoints = 0;
+    std::int32_t waypoint = 0;
     Walker walker;                    // after the update
     std::optional<InTheWay> inTheWay; // nullopt if the update ran no in-the-way pass
 };

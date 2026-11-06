@@ -44,9 +44,12 @@ void Updated(const dao::movement::MoveUpdate &u)
     {
         return;
     }
-    spdlog::info("0x{:x} sub-action {}: answer {}, standing {} ms, motion {}, record {} ({} ms)", u.creature,
-                 u.subAction, u.result, u.standingMs, u.walker.motion, state,
-                 u.walker.record ? u.walker.record->timerMs : 0);
+    spdlog::info(
+        "0x{:x} sub-action {}: answer {}, standing {} ms ({}, AI {}, {} ms), motion {}, record {} ({} ms), path {}, "
+        "point {} of {}",
+        u.creature, u.subAction, u.result, u.standingMs, u.counting ? "counting" : "not counting", u.aiLevel,
+        u.updateMs, u.walker.motion, state, u.walker.record ? u.walker.record->timerMs : 0,
+        u.pathAnswer ? std::to_string(*u.pathAnswer) : std::string("not asked"), u.waypoint, u.waypoints);
     if (u.inTheWay)
     {
         const dao::movement::InTheWay &w = *u.inTheWay;
