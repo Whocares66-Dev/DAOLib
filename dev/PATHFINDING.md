@@ -408,7 +408,7 @@ A blocked pocket edge: two cells (columns 319 and 320... col 319 is 1; 320..323 
     - **Flag 9** has no reader through 0x00A5A280 (all of about 85 call sites scanned); it is only written (0x0069EFD2). A direct read of the flag array was not excluded [I].
   - **The reaction** (0x007A3A20, ID 19829). The movement record P = `[creature+0xA40]` keeps a state at P+0 and a timer in ms at P+4: 0 clear, 2 re-path asked, 3 settling after a search, 4 waiting.
     - **When it acts:** only when the mover is not a ghost, P exists with state 0, and the list's first entry B (0x0062F560(0), pushed creatures still in the list) is neither null nor a ghost.
-    - **Unless both are active party members** (0x006A2CE0): roll = rand() % 100 (0x0053DF70, the CRT's LCG at 0x00C31994).
+    - **Unless both are active party members** (0x006A2CE0): roll = `RandomBelow(100)` (0x0053DF70: the engine's shared stream 0x00C31994, EFFECTS.md's "Random numbers", not the CRT's `rand`).
       - **Re-path, state 2:** when roll ≤ 50 − 20 × (n − 1) (0x00C0F6A0, 0x00C0F6A4).
       - **Wait, state 4:** otherwise, with the timer 200 + (its own LCG at 0x00C4C364) % 200 ms (0x00A62AE0: 0x00C1CEC4, 0x00C1CEC8).
       - So one creature in the way: re-path 51 %; two: 31 %; three: 11 %; four or more: always wait.
