@@ -1,5 +1,6 @@
 // dao/core/Savegame.h over a small save made here, laid out as the game's are (tools/gff4.py --templates
 // on one), and over the player's saves in game/saves when there (DAOLib #202), and its writer (DAOLib #221).
+#include "dao/core/Gff4Writer.h"
 #include "dao/core/Savegame.h"
 #include "gff4_builder.h"
 
@@ -2246,4 +2247,40 @@ TEST_CASE("a blank save's templates are a real save's, byte for byte", "[.][inst
     {
         SKIP("no .das under Documents/BioWare/Dragon Age/Characters");
     }
+}
+
+TEST_CASE("a save's add-ins are read, by language, with the uid for a name it lacks", "[savegame]")
+{
+    namespace gff4 = dao::core::gff4;
+    gff4::Writer out("SAVE", "V1.0");
+    std::vector<gff4::FieldSpec> fields{{16420, gff4::Type::String}};
+    for (std::uint32_t label = 16421; label <= 16430; ++label)
+    {
+        fields.emplace_back(label, gff4::Type::String);
+    }
+    const auto addIn = out.AddTemplate("ADIN", fields);
+    const gff4::StructAt root = out.Root("SAVE", {{16006, addIn, gff4::kList}});
+    const auto written = out.Structs(root, 16006, 1);
+    out.String(written[0], 16420, L"DAO_PRC_PROMO_WKD");
+    out.String(written[0], 16421, L"The Wicked Oath");
+    out.String(written[0], 16424, L"Eid der Niedertracht");
+    const auto save = sg::Read(out.Save());
+    REQUIRE(save);
+    REQUIRE(save->addIns.size() == 1);
+    CHECK(save->addIns[0].uid == L"DAO_PRC_PROMO_WKD");
+    CHECK(save->addIns[0].NameIn(sg::AddInLanguage::German) == L"Eid der Niedertracht");
+    CHECK(save->addIns[0].NameIn(sg::AddInLanguage::French) == L"DAO_PRC_PROMO_WKD");
+}
+
+TEST_CASE("an older save's add-ins, a list of strings, are each uid and name", "[savegame]")
+{
+    namespace gff4 = dao::core::gff4;
+    gff4::Writer out("SAVE", "V1.0");
+    const gff4::StructAt root = out.Root("SAVE", {{16006, gff4::Type::String, gff4::kList}});
+    out.Strings(root, 16006, {L"DAO_PRC_CP_1", L"DAO_PRC_CP_2"});
+    const auto save = sg::Read(out.Save());
+    REQUIRE(save);
+    REQUIRE(save->addIns.size() == 2);
+    CHECK(save->addIns[1].uid == L"DAO_PRC_CP_2");
+    CHECK(save->addIns[1].NameIn(sg::AddInLanguage::English) == L"DAO_PRC_CP_2");
 }

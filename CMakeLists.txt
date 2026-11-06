@@ -175,6 +175,8 @@ add_library(
     src/dao/core/Grid.cpp
     src/dao/core/WalkPatch.cpp
     src/dao/core/HeadPreset.cpp
+    src/dao/core/Hero.cpp
+    src/dao/core/Gff4Writer.cpp
     src/dao/core/Gff3.cpp
     src/dao/core/Gff3Write.cpp
     src/dao/core/Gff4.cpp

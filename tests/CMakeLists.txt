@@ -48,6 +48,7 @@ add_executable(
     test_walkpatch.cpp
     test_windowwatch.cpp
     test_headpreset.cpp
+    test_hero.cpp
     test_clip.cpp
     test_ldf.cpp
     test_level.cpp

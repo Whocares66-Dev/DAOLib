@@ -166,6 +166,7 @@ CTAB = "src/dao/core/Ctab.cpp"
 FACEFX = "src/dao/core/FaceFx.cpp"
 MATDEF = "src/dao/core/MaterialDefinition.cpp"
 MATDEF_H = "src/dao/core/MaterialDefinition.h"
+GFF4WRITER = "src/dao/core/Gff4Writer.cpp"
 
 # Left out, after the first run (2026-10-03), as changing nothing observable
 # or guarding nothing real: a branch inside a function counted again in the
@@ -2673,6 +2674,22 @@ MUTANTS: list[Mutant] = [
         XMLTAGS,
         "p = end + 1;",
         "p = end;",
+    ),
+    # A GFF4 file written as the game lays one out (#326). Kept: a list's elements at their
+    # alignment, the subtle rule of Write's "byte for byte" (the game-file test that also holds it
+    # is skipped without game/heroes), and a field never written read as none, not as offset 0.
+    # Left out: the data's start, which the hero's test asserts directly and nothing else moves.
+    Mutant(
+        "gff4w-list-count: a list's count sits so that its elements land at their alignment",
+        GFF4WRITER,
+        "while ((start + 4) % align != 0)",
+        "while (start % align != 0)",
+    ),
+    Mutant(
+        "gff4w-fill: bytes no value takes are 0xFF",
+        GFF4WRITER,
+        "data_.resize(end, std::byte{0xFF});",
+        "data_.resize(end, std::byte{0});",
     ),
 ]
 

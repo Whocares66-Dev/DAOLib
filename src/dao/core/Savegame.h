@@ -31,12 +31,12 @@
 // properties.gda. The hero's morph (16950) is read by the model builder from the PlayerChar struct, not
 // by the creature's restore. A trigger's or a store's ObjectID is written and not read.
 //
-// Not read: the add-ins list (16006) and the story so far (16008), which the load path has no reader for.
+// Not read: the story so far (16008), which the load path has no reader for.
 //
 // Write (DAOLib #221, below) takes the original file's bytes and a Save changed after Read, and gives the new
-// bytes through Gff4's Editor; SavegameWrite.cpp marks what each part of it rests on. Not written: the two
-// lists just named (they ride along untouched), a field a struct's template lacks, and the removal of a
-// field or a child struct.
+// bytes through Gff4's Editor; SavegameWrite.cpp marks what each part of it rests on. Not written: the
+// add-ins list and the story so far (they ride along untouched), a field a struct's template lacks, and the removal of
+// a field or a child struct.
 #pragma once
 
 #include "dao/core/Gff4.h"
@@ -952,6 +952,32 @@ struct IdPool
     std::uint32_t source = kNoSource; // where Read found it, for Write
 };
 
+// The languages an add-in's name is saved in, in the order of their fields (16421 to 16430).
+enum class AddInLanguage : std::uint8_t
+{
+    English,
+    French,
+    Italian,
+    German,
+    Spanish,
+    Polish,
+    Russian,
+    Pseudo,
+    Czech,
+    Hungarian,
+};
+
+// An add-in the save was made with (an ADIN of the add-ins list, 16006).
+struct AddIn
+{
+    std::wstring uid; // "DAO_PRC_PROMO_WKD"
+    // Its name by AddInLanguage. An older save keeps the uid alone, a list of strings, and each name is it.
+    std::array<std::wstring, 10> names;
+
+    // Returns the name the game shows in a language: that language's, or the uid where it has none.
+    const std::wstring &NameIn(AddInLanguage language) const;
+};
+
 struct Save
 {
     Campaign campaign;
@@ -964,6 +990,7 @@ struct Save
     Version version;
     GameState state;
     std::vector<IdPool> idPools; // SavegameWorldDatabase, 16500
+    std::vector<AddIn> addIns;   // in the order of the list
 
     // The area of that tag, or null.
     // The area of that tag, as the engine's area list finds it: the case of the tag does not matter.

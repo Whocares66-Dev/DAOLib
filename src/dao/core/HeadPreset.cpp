@@ -52,22 +52,27 @@ std::optional<Preset> PresetOf(const gff4::File &file)
     {
         return std::nullopt;
     }
+    return PresetIn(*root);
+}
+
+Preset PresetIn(const gff4::Struct &mop)
+{
     Preset out;
-    out.name = Text(*root, kName);
-    out.parts = root->Strings(kParts);
-    out.tints = root->Strings(kTints);
-    for (const gff4::Struct &model : root->Structs(kModels))
+    out.name = Text(mop, kName);
+    out.parts = mop.Strings(kParts);
+    out.tints = mop.Strings(kTints);
+    for (const gff4::Struct &model : mop.Structs(kModels))
     {
         out.models.push_back({.model = Text(model, kModelName), .weight = model.Get<float>(kModelValue).value_or(0)});
     }
-    for (const gff4::Struct &value : root->Structs(kValues))
+    for (const gff4::Struct &value : mop.Structs(kValues))
     {
         out.values.push_back({.node = Text(value, kNodeName),
                               .parameter = Text(value, kParamName),
                               .index = IndexOf(value),
                               .value = value.Get<float>(kParamValue).value_or(0)});
     }
-    for (const gff4::Struct &vector : root->Structs(kVectors))
+    for (const gff4::Struct &vector : mop.Structs(kVectors))
     {
         MaterialVector read{
             .node = Text(vector, kNodeName), .parameter = Text(vector, kParamName), .index = IndexOf(vector)};
@@ -78,7 +83,7 @@ std::optional<Preset> PresetOf(const gff4::File &file)
         }
         out.vectors.push_back(std::move(read));
     }
-    for (const gff4::Struct &texture : root->Structs(kTextures))
+    for (const gff4::Struct &texture : mop.Structs(kTextures))
     {
         out.textures.push_back({.node = Text(texture, kTexNodeName),
                                 .parameter = Text(texture, kTexParamName),

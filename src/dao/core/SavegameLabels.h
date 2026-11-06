@@ -131,6 +131,7 @@ constexpr std::uint32_t kEffectStartingId = 16626, kAiMaster = 16636, kWorldTime
                         kSeType = 16670, kSeCreator = 16671, kSeTarget = 16672, kSeData = 16673, kSeScriptName = 16674,
                         kSeResources = 16675;
 constexpr std::uint32_t kWorldDatabase = 16500, kWdGroup = 16501, kWdLastId = 16502;
+constexpr std::uint32_t kAddInsList = 16006, kAddInUid = 16420, kAddInFirstName = 16421; // ten names, 16421..16430
 constexpr std::uint32_t kCheatUsed = 16007, kBuildNumber = 16770, kSaveVersion = 16771;
 constexpr std::uint32_t kPlayerChar = 16208, kMapZoom = 16295, kMapLegend = 16296, kTimePlayed = 16298;
 } // namespace dao::core::savegame::L

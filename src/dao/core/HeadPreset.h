@@ -98,6 +98,9 @@ struct Preset
 // that is no preset.
 std::optional<Preset> PresetOf(const gff4::File &file);
 
+// Returns the preset a MOP struct holds: a .mop's root, or a saved hero's head (dao/core/Hero.h).
+Preset PresetIn(const gff4::Struct &mop);
+
 // A head mesh's vertices as a composition matches them: each one's position and texture
 // coordinate, in its chunk's order.
 struct MeshVertices

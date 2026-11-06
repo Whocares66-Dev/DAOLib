@@ -1317,6 +1317,47 @@ const Creature *Save::FindCreature(std::uint32_t id) const
     return nullptr;
 }
 
+namespace
+{
+
+// The add-ins list as LoadAddInNames (0x00647280) reads it (read 2026-11-06 by paragon-agent-2's
+// helper, checked by lib-agent): a list of ADIN structs, each the uid (16420) and the name in ten
+// languages (16421..16430, chosen by the language's index at 0x00647430); or, in an older save, a
+// list of strings (the field's struct flag clear, 0x006474A2), each both the uid and every name
+// (0x00647615). An empty name is the uid's.
+std::vector<AddIn> AddInsOf(const Struct &top)
+{
+    std::vector<AddIn> found;
+    for (const Struct &e : top.Structs(L::kAddInsList))
+    {
+        AddIn addIn;
+        addIn.uid = e.String(L::kAddInUid).value_or(L"");
+        for (std::size_t i = 0; i < addIn.names.size(); ++i)
+        {
+            addIn.names.at(i) = e.String(L::kAddInFirstName + static_cast<std::uint32_t>(i)).value_or(L"");
+        }
+        found.push_back(std::move(addIn));
+    }
+    if (found.empty())
+    {
+        for (const std::wstring &uid : top.Strings(L::kAddInsList))
+        {
+            AddIn addIn{.uid = uid, .names = {}};
+            addIn.names.fill(uid);
+            found.push_back(std::move(addIn));
+        }
+    }
+    return found;
+}
+
+} // namespace
+
+const std::wstring &AddIn::NameIn(AddInLanguage language) const
+{
+    const std::wstring &name = names.at(static_cast<std::size_t>(language));
+    return name.empty() ? uid : name;
+}
+
 std::optional<Save> Read(const gff4::File &das)
 {
     if (das.Type() != "SAVE")
@@ -1363,6 +1404,7 @@ std::optional<Save> Read(const gff4::File &das)
     {
         Fill(*g, save.state);
     }
+    save.addIns = AddInsOf(*top);
     return save;
 }
 
