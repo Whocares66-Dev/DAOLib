@@ -2366,7 +2366,7 @@ Who defines a right handler (grep over all 56 movies, `function onRight...`): `P
   - **Shift** (`PerformSecondaryAction`) does not queue or append [C]. It is the same path with secondary = 1: a placeable's Action1 in place of Action0, and the small creature differences in the table.
   - **The cursor** (0x0070CDA0) [C]:
     - It picks a name per object and appends "_pressed" while input 0x49 is held.
-    - **Creatures:** standard, attack, converse, examine, chest or invalid. Attack shows as standard while bit 4 of the party's flags word (0x0062FFC0) is set [I for the bit].
+    - **Creatures:** standard, attack, converse, examine, chest or invalid. Attack shows as standard while `EFFECT_FLAG_DISABLE_COMBAT` (4) is set in the party's common effect flags (`test bl, 4` at 0x0070CE4A) [C, 2026-11-06 by lib-agent-2]. `CCParty::GetCommonEffectFlags` (0x0062FFC0) ANDs `EffectsHolder::GetEffectsFlags` (0x00A64740, the creature's `+0x70`; its default flags, apr_base `DefaultEffectFlags`, OR its active effects' flags, COMBAT.md) over the selected creatures (`CCParty` +0x194, `selectedCreatures`), starting from 0xFFFFFFFF. So the attack cursor turns standard only when **every** selected creature has combat disabled, and also when nobody is selected.
     - **A placeable:** its `placeable_interactions` (table 100) row's cursor (19 rows: open, close, unlock, destroy, use, examine, disarm, dialog, chest, area_transition, trigger_trap and more). A disabled cursor is used where `0x006A8860(controlled, placeable)` is false [I for which column hash is which].
     - **The ground:** standard.
   - **Not read:** the conversation command's content; the message at 0x00712A77; +0x860; how the pick chooses among overlapping candidates.
