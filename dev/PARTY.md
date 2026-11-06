@@ -564,7 +564,7 @@ Checked, step by step:
 1. **Already so:** if the selection is exactly one id and it is `id`, return false (0x0063694A–0x00636982).
 2. **The old first selected** (if any): for each object in its +0xBA8 list of type 8 (`0x005D5AA0` casts by type byte 8; the 123-slot vtables of that size are the `CCTrigger` family, so inferred: the triggers it stands in), call slot 0x1E8(1) (inferred: "the controlled creature left"). If the old first is not `id`:
    - its steering object (+0x764) is reset (0x00763830: clears +0x3C and, if the creature is driving by keys, +0xB24 = 1, stops it through the movement controller's state 3, 0x00A63800);
-   - its look-at is reset, 0x0069EAC0(0.0, 0.0) → 0x0069E9D0's controller (inferred: the head-tracking).
+   - its look-at is reset, `CCCreature::SetLookAtOffset` 0x0069EAC0(yaw 0, pitch 0, in degrees): the look-at's resting offset quaternion at LookAt +0x134 (0x006C9FE0; ANIMATION.md, the controlled creature's look; read 2026-11-06 by lib-agent-2 with a subagent, for DAOParagonEngine #169).
    - **No command is cleared:** no `ClearAllCommands` or command call anywhere in 0x006368F0 or 0x00637220 (checked: their calls listed). The old creature keeps its queue.
 3. **The selection is emptied** (0x005198D0(0) on +0x184; inferred: a resize to 0).
 4. If `id` ≠ -1 and is a creature: push it (0x006F1340), tell its +0xBA8 triggers slot 0x1E4(1), set a flag, and refresh its input modes (0x0069F200: drops `Effect_DisableInput` and `Effect_DisableMovement` and adds them again from the creature's effect flags, through `InputModes::Get`; strings at 0x00B0F358 and 0x00B0F328, checked).
