@@ -86,12 +86,12 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 ### RestorePartyInventory (347)
 - **Handler:** 0x00665DF0 → `ScriptBackend::ForScript_RestorePartyInventory` (0x00639070).
 - **Does:** collects the placeable's items whose map entry (party+0x434) names the party, then moves each (`0x00762C40`, the item's own slot) into the party backpack; flag 0x100 meanwhile; both refreshed. Checked.
-- **Edge cases:** items the player added to the chest, or a member's stored equipment, stay. The map entries are not erased (checked: no erase in the function), so a later restore from another chest would also take those items if they were there. An item missing from the chest is simply not restored. Checked.
+- **Edge cases:** items the player added to the chest, or a member's stored equipment, stay. The restore function itself erases no entry, but the move out of the chest does: the removal reaches `CCPlaceable::OnItemRemoved` 0x0074FC60, which calls `CCParty::ForgetStoredItem` 0x00636250, so the entry of each item restored is gone (`dev/ITEMS.md`, "After the take") [C]. An item missing from the chest is simply not restored and keeps its entry. Corrected 2026-11-06 (read 2026-11-06 by paragon-agent-2's reader, checked by lib-agent).
 
 ### RestoreFollowerInventory (348)
 - **Handler:** 0x00665E50 → `ScriptBackend::ForScript_RestoreFollowerInventory` (0x00639290).
 - **Does:** for the placeable's items whose map entry names this follower, places each back at its recorded (slot, set) in the follower's `Equipment` (`0x00762990`). Checked.
-- **Edge cases:** the slot is not re-validated beyond `0x00762990`'s `0x007611A0` (can the location take it); if refused the item stays in the chest (checked in 0x00762990). The map entries are not erased. `Prelude`: `StoreFollowerInventory(oPC, footlocker)` and its restore use this for the hero. Checked.
+- **Edge cases:** the slot is not re-validated beyond `0x00762990`'s `0x007611A0` (can the location take it); if refused the item stays in the chest (checked in 0x00762990) and keeps its map entry [I]; the entries of the items moved are erased by the move (see RestorePartyInventory). `Prelude`: `StoreFollowerInventory(oPC, footlocker)` and its restore use this for the hero. Checked.
 
 ### MoveItem (349)
 - **Handler:** 0x00665EF0 → the target possessor's `ScriptBackend::ForScript_MoveItem` (0x007633F0). Pops oSource, oTarget, oItem.
@@ -178,7 +178,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Handler:** 0x0066B980 (own) → `CCCreatureStats::GetAutoLevelUp` 0x0071A1F0.
 - **Does:** returns party data +0x30 (an int attribute). Checked.
 - **State:** read only.
-- **Edge cases:** invalid, non-creature, or no party data → 0 (checked). Values: 0 off, 1 on, 2 forced (scripts set 2 on followers; joining the party keeps 2 and otherwise copies the party's own setting, party +0x84, 0x0063A09F, checked).
+- **Edge cases:** invalid, non-creature, or no party data → 0 (checked). Values: 0 off, 1 on, 2 forced (scripts set 2 on followers; joining the party keeps 2 and otherwise copies the party's own setting, party +0x84, 0x0063A09F, checked). A save holds the value as a signed byte, field 16329 (`dev/GUI.md`, the quickbars' load 0x0062C3D0).
 
 ### SetAutoLevelUp (385)
 - **Handler:** 0x0066B900 (own) → `ForScript_SetAutoLevelUp` 0x00719B10.
