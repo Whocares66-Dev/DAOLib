@@ -130,7 +130,10 @@ struct Action
     gff4::TlkString text;                        // ASLN's line, AANF's
     std::wstring voBank;                         // ASLN
     std::wstring lipsync;                        // ASLN
-    std::wstring sound;                          // ACSP
+    // ASLN, AANF: the face's level, CutsceneActionSpeakLineFaHeadMove: set, the face moves the
+    // head (from headBase) and not the neck; clear, the neck too.
+    bool faHeadMove = false;
+    std::wstring sound;               // ACSP
     std::int32_t actor = -1;          // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
     std::int32_t node = -1;           // ALNK: the target's weaponparts.gda row linked to; 0 for a link with none
     float lookSpeed = 0.0F;           // ACHT: the look-at multiplier set on the action's first frame

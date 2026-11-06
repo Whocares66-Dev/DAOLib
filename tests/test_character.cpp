@@ -206,6 +206,14 @@ TEST_CASE("a humanoid's body parts, each its item's or the bare body's", "[chara
     CHECK(bare->prefix == L"hf");
     CHECK(Models(*bare) == std::vector<std::wstring>{L"hf_arm_nuda", L"hf_glv_nuda", L"hf_boo_nuda"});
     CHECK_FALSE(bare->body[0].item); // a variation with no row is the bare body
+
+    // A gender outside 1 to 3 is male, as the appearance stores it.
+    for (const std::uint8_t gender : std::initializer_list<std::uint8_t>{0, 4, 255})
+    {
+        const auto other = character::Resolve(Human(gender, {}), Items(), tables.Of());
+        REQUIRE(other);
+        CHECK(other->prefix == L"hm");
+    }
 }
 
 TEST_CASE("clothing is drawn alone, massive armour with no boots without them", "[character]")

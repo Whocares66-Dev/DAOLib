@@ -126,9 +126,15 @@ Variation VariationOf(const Context &context, const Item &item)
 // The prefix of a part's name (0x00749200): the first letter of apr_base's
 // ModelRace, then the first of its ModelGenderOverride if it has one, else
 // the gender's letter in gender.gda (m, f, n; 0x00749020); "%hc%hc_", the
-// name after an underscore.
+// name after an underscore. The gender is the appearance's, which
+// CAppearance::SetGender (0x00747B50) stores as 1 when it is not 1 to 3
+// (read 2026-11-06 from paragon-agent's port batch, checked by lib-agent).
 std::wstring PrefixOf(const Context &context, std::uint8_t gender)
 {
+    if (gender < 1 || gender > 3)
+    {
+        gender = 1;
+    }
     const auto race = Text(context.appearances, context.appearance, "ModelRace");
     auto letter = Text(context.appearances, context.appearance, "ModelGenderOverride");
     if (letter.empty())

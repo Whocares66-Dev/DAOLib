@@ -79,6 +79,9 @@ constexpr std::uint32_t kParameterCurve = 5525;
 constexpr std::uint32_t kParameterVector = 5526;
 constexpr std::uint32_t kLineLipsync = 5562;
 constexpr std::uint32_t kLineVoBank = 5563;
+// The face player's level for the action (AnimateFace +0x64, read 2026-11-06 for
+// DAOParagonEngine; dev/CUTSCENES.md, "AnimateFace", and ANIMATION.md's face levels).
+constexpr std::uint32_t kLineFaHeadMove = 5564;
 constexpr std::uint32_t kStageCameraDefault = 5570;
 constexpr std::uint32_t kStageCameraHenchman = 5571;
 constexpr std::uint32_t kStageLookAt = 5580;
@@ -258,6 +261,7 @@ Action ActionOf(const gff4::Struct &in)
     action.text = in.Tlk(kText).value_or(gff4::TlkString{});
     action.voBank = in.String(kLineVoBank).value_or(L"");
     action.lipsync = in.String(kLineLipsync).value_or(L"");
+    action.faHeadMove = in.Get<std::uint8_t>(kLineFaHeadMove).value_or(0) != 0;
     action.sound = in.String(kSound).value_or(L"");
     for (const std::uint32_t label : kOtherActor)
     {
