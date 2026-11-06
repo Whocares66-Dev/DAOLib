@@ -414,13 +414,15 @@ DAO_ADDRESS(kCCCreature_Play, 14670)
 DAO_DATA(kModelAnimationTree_Vftable, 69616)
 // The particles' four random generators' states, each a word, read 2026-10-23 and 2026-10-30
 // for DAOLib #131 (dao/Vfx.h, ReplayEmitters). Each draw is MSVC's state = state * 0x343FD +
-// 0x269EC3, the high word's 15 bits, inline or through 0x0053DF30 and 0x0053DF70. The first
-// serves a particle's birth (0x0053F980) and the emitters' helpers about it; the second the
+// 0x269EC3, the high word's 15 bits, inline or through 0x0053DF30 and 0x0053DF70. The first is
+// the engine's own random state (the address library's g_randomState), which RandomUnitFloat,
+// RandomBelow and RandomSignedUnitFloat step: a particle's birth (0x0053F980) and the emitters'
+// helpers about it, and the look-at's decisions among others; the second the
 // sprite emitter's update and spawn (0x00552CF0, 0x00552AF0, 0x005525B0) and the physics
 // sprite's (0x005534C0); the third a particle's movement spread (0x0057C340, 0x0057C4F0); the
 // fourth a ribbon's (below).
 // The names are ours.
-DAO_DATA(kParticleRandomSeed, 100580)
+DAO_DATA(kRandomState, 100580)
 DAO_DATA(kParticleRandomSeedSpawn, 100598)
 DAO_DATA(kParticleRandomSeedSpread, 100707)
 // A ribbon's own: its spawn's spin and size (0x00584A90) and its start frame (0x00586134).

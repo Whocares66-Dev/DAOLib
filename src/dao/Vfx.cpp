@@ -633,7 +633,7 @@ std::vector<RunningEffect> RunningEffects()
 //
 // What a replay must hold still, each found by a pair of launches that still differed:
 // - The random draws. They come from four linear congruential generators of the engine's
-//   (dao/Addresses.h, kParticleRandomSeed), shared by every emitter: a particle's birth, the
+//   (dao/Addresses.h, kRandomState and the three after it), shared by every emitter: a particle's birth, the
 //   sprite's spawn, the movement spread, a ribbon's own. The tasks run on several threads at
 //   once, so each replay holds a lock and seeds all four from the emitter's own place first:
 //   what it draws does not hang on the order the threads take them in.
@@ -768,7 +768,7 @@ void __fastcall SpriteUpdate(std::uintptr_t emitter, int edx, std::int32_t presi
         {
             g_replayed[emitter] = g_replayAsked;
             const std::uint32_t seed = SeedOf(emitter);
-            for (const AddressId generator : {addr::kParticleRandomSeed, addr::kParticleRandomSeedSpawn,
+            for (const AddressId generator : {addr::kRandomState, addr::kParticleRandomSeedSpawn,
                                               addr::kParticleRandomSeedSpread, addr::kParticleRandomSeedRibbon})
             {
                 *reinterpret_cast<std::uint32_t *>(Module::Address(generator)) = seed;
