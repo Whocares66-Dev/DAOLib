@@ -212,6 +212,21 @@ Read 2026-10-31 by paragon-agent's helper, checked by lib-agent-2 with a subagen
 - **A long snap pauses the game:** the explore controller's viewer (`ctl+0xB0`, PARTY.md) follows the camera, and registering it (0x005C97F0) in game mode 0, more than 30 m from the old viewer, raises the chunk manager's wait flags (+0x581..+0x584) and pauses with `SetPaused(1, 0)`, noting whether the game was already paused. The wait ends once the pending chunks reach 0 (0x005CA490-0x005CA55A).
 - **The look-at** (`StartLookAt(id, offset, focus)` 0x006C4A00; the step 0x006C3010): the direction is the target (the object's +0x120, else the focus) + offset - `cam+0x80`, normalised, and its yaw and elevation make the orientation. An id of -1 with no focus removes it.
 
+## After a talk or a use, and on entering explore or combat (read 2026-11-06 by lib-agent-3, two readings reconciled; DAOParagonEngine #169)
+
+- **After a talk or a use, the camera does nothing** [C].
+  - `PerformActionOnTarget` 0x00712830 calls slot 0x28 of `CameraControllerExplore` (`[[app+0x114]+0x60]`, vtable 0x00B1D954) after `Orders::Talk` (0x00712B04..0x00712B42) and after `Orders::UseObject` (0x00712D09..0x00712D0F).
+  - Its arguments are the first selected creature's id and the target's position (+0x120).
+  - That slot is `Stub::NoOp_8` 0x00738C90, a bare `ret 8`, in this table and in `CameraControllerBase`'s.
+- **Entering explore or combat retargets the camera** [C]. `GameModeExplore::Enter` 0x0070E820 calls its own slot 24 (+0x60, at 0x0070E863), `RetargetCamera` 0x0070BDF0. `GameModeCombat` has the same slot, and its `Enter` 0x0076E5B0 calls `GameModeExplore::Enter`. `RetargetCamera`:
+  1. calls `CameraControllerBase::SetTarget` 0x007EE840 with the controlled creature's id ("A new target" above when it changes);
+  2. calls the controller's slot 5, `CameraControllerExplore::SyncZoomToScene` 0x0076FD70. That puts the normalised zoom back on the rig, reads the room level and the roof cutoff, sets the focus (+0x80) to the creature's position, and registers the explore viewer with the area's ChunkManager (PARTY.md, "The origin is ChunkManager +0x550");
+  3. tail-jumps to `GameModeExplore::FlagSteeringReset` 0x0070AB00, which sets the byte `GameModeExplore::s_steeringReset` 0x00C371B8 to 1.
+- **What the steering flag stops.** The only other reference to that byte in the image is `PlayerSteering::UpdateDirection` 0x00763CD0, at 0x00763E5B [C, a scan of every section].
+  - While the byte is set, that function clears its +0x3E and returns before the block from 0x00763E71: the tests of inputs 0xE, 0x19, 0x0B, 0x1A and 0x1B, and the controlled creature's turn to the camera's way (`CCCreature::TurnToAngle` at 0x00763FFA).
+  - That turn is the one "WASD in the close view" above describes, "the leader turns to the camera's way if it is more than 90° off".
+  - No instruction that clears the byte was found. If that's so, the turn would never run after the first entry into explore, which conflicts with that line. Neither was seen in play: a play check is needed before either is relied on [I].
+
 ## On a load, and after a scene
 
 - **Every load and transition ends with the camera reset behind the leader.** Three places set `ctl+0x25`: the loading state 6 (0x006C60F0, after the party is placed), the area's object load (0x00688625) and `GameModeLoading` slot 6 (0x006C5950). Each does `SetTarget(controlled creature)`; the next update calls the reset (explore slot 9, 0x00770FF0):

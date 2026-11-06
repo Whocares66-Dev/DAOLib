@@ -893,7 +893,14 @@ Tokens the HUD movies observe (read from the movies' ActionScript, FFDec of the 
 
 ### FloatyLayer (floaty text, health-over-head, icons), engine function `0x0063E5B0` (checked)
 
-Runs once per frame from the app update (above), only while the layer is on. It walks its map of floaty objects (each an object with a data-tree attribute holder; the floaty ids are what the movie sees), compares with the previous frame, and fills **parallel arrays** that it sets only if a given list is non-empty (a flag is kept, and `ProcessBatchUpdates` is invoked once at the end, `0x0063F978`, when anything was set). Sets are SetArray with the type in parentheses; the ActionScript (`FloatyLayer.as` `ProcessBatchUpdates`) consumes them in this order and clears each:
+Runs once per frame from the app update (above), only while the layer is on: the byte +0x14, which the constructor sets to 1 and nothing writes after (0x0063E44E; Update's test at 0x0063E5DB). **`ShowAllFloaties` and `HideAllFloaties` set another byte** (read 2026-11-06 by lib-agent-3, two readings reconciled; DAOParagonEngine #169) [C]:
+
+- ShowAllFloaties 0x0070AAD0 sets +0x15 to 0, and HideAllFloaties 0x0070AAE0 sets it to 1; the constructor sets it to 0 (0x0063E452). The layer is the 0x50-byte singleton of `FloatyLayer::Get` 0x00523880 (`s_instance` 0x00C343C0).
+- No reader of +0x15 was found. Update reads +0x14 and not +0x15.
+- **What was scanned:** both readings scanned every method of the layer and the floaty classes' updates for a `[reg+0x15]` operand, and the bodies of all callers of `FloatyLayer::Get` (24 call sites). A read through a pointer saved from `Get` elsewhere isn't ruled out.
+- So, as far as the code shows, the two messages change nothing in this build [I].
+
+The update walks its map of floaty objects (each an object with a data-tree attribute holder; the floaty ids are what the movie sees), compares with the previous frame, and fills **parallel arrays** that it sets only if a given list is non-empty (a flag is kept, and `ProcessBatchUpdates` is invoked once at the end, `0x0063F978`, when anything was set). Sets are SetArray with the type in parentheses; the ActionScript (`FloatyLayer.as` `ProcessBatchUpdates`) consumes them in this order and clears each:
 
 1. `BatchCreateIDs`(int) + `BatchCreateSymbolIDs`(int): create floaty id with its symbol. The symbol ids the engine sends are **0 stats, 1 message, 2 icon, 3 action bar, 4 off-screen** (the movie's FLOATY_SYMBOL_*; the movie also has 5 for the debug text); this said "symbol 1 stats" (corrected 2026-11-01, gui-32, two readings reconciled; checked in the GOG exe, DAOParagonEngine #351): each Init pushes its own constant, `push 0` via eax at 0x00764A68, `push 1` 0x00764AA3, `push 2` 0x00764ACA, `push 3` 0x00764B07, `push 4` 0x00764C52 [C]. The symbols' names, from the movie's `FloatySymbolNames`: FloatyStats, FloatyMessage, FloatyIcon, FloatyActionBar, FloatyOffscreenIndicator, DebugWorldSpaceTextFloaty).
 2. `BatchShowIDs`(int).

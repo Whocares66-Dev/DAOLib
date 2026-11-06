@@ -599,13 +599,29 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
   5. Otherwise **−1**.
   Then `AIMaster`'s set (0x0064B480 on `app+0x1AC`).
 - `AIMaster` 0x0064B480: ignored while a script's `SetAILevel` (+0x2B4) is set; -1 takes it out (0x0064B240); 0–4 moves it to one of five lists of 0x14 bytes (0x0064B400) and stores it at +0x2B0 through slot +0x150. What the lists change is read 2026-10-23 by lib-agent-2 (it was inferred, from Aurora: how often it is updated, not whether):
+  - **What the five lists change: only the time each gets** (read 2026-11-06 by lib-agent-3, two readings reconciled; DAOParagonEngine #169) [C]:
+    - **The walk:** `World_Update` 0x0064B010 walks the lists from level 4 down to 0, each list at `this + 0x14 × level`, and then calls `CCModule::UpdateAreaList` 0x005FE200. Its callers are the controller's update (0x00641FD1) and the loading mode (0x006C915E).
+    - **What is skipped:** nothing runs while the world's clocks are stopped (`app+0x100`).
+    - **The budgets:** level 0 has 128 µs a frame, 1 has 192, 2 has 480, 3 has 1,200 and 4 has 3,000 (0x00B06AFC..0x00B06B0C, timed by `Clock::Microseconds`).
+      - An overrun is carried to the lower levels: each list's budget is its own less the carry (0x0064B1A8..0x0064B1D0).
+      - The first creature of each list always runs.
+      - A round-robin cursor (+0x10 of the list) keeps its place across frames, so a creature that doesn't fit this frame waits for a later one.
+      - In the loading mode (9), each list is run once through with no limit.
+    - **What is run:** for each object whose byte +0x2C5 is set (the active byte of "The test" above), slot 0x15C, then slot 0x64.
+      - Slot 0x15C is `CCCreature::Update` 0x006BE4B0, or `CCPlaceable::Update` 0x0074DA40.
+      - Slot 0x64 is `Stub::NoOp` in the CCObject, CCCreature and CCPlaceable tables.
+      - `World_Update` doesn't test +0x421, so a creature whose deactivation is pending while its animation plays is still updated, unlike the `IsActive` test.
+    - **The other pass:** `ClientAIMaster::Update` 0x0064A2D0 calls every object's slot 0x160, gated per creature by ThrottleUpdate (TURN_BASED.md, "Its other reader, 0x006A5200"). So a creature is touched by two passes a frame.
+    - **`Clock::Microseconds`** 0x004BFFF0 jumps to `EngineServices::GetMicroseconds` 0x004BFF40, through `g_services` (0 when that is null).
+      - That reads `QueryPerformanceCounter` (import 0x00ADA08C) and returns the count × 1,000,000 ÷ the frequency kept at services +0x10, as an unsigned 64-bit number. It returns 0 if the call fails.
+      - The 64-bit product would wrap after about 21 days of counter time at a 10 MHz counter [I: the arithmetic, with the frequency assumed].
   - **The chooser for other creatures** [C]:
     - A creature that is neither controlled, in combat, nor in the active party, and is outside the controlled creature's area (`+0x254` differs), gets **−1** (corrected 2026-10-23; the order is above), which is in no list, so it is never updated. −1 is also where a creature starts (the constructor) and goes at destruction.
     - `0x007C49B0(self, base)` is called with base 2 in combat or 1 out of it; the band below is added to it (read 2026-10-23 by lib-agent-2; it replaces an inference):
     - **0x007C49B0** [C]: band 0 adds +2, band 2 adds +1, and any other band adds 0. A dead creature gets base − 1 with no band read. The result is clamped to 0..4. What it reads is the stored level (the next bullet): band 1 is stored as level 0, so +2 [C for the store] (corrected 2026-10-23 by lib-agent-2: it said band 1 is never stored).
     - **What writes it** [C]: the engine's `LodManager` (static at 0x00C33B20, vftable 0x00B03C04). Its pass 0x006184E0 hands each object a band. The model holder's slot 0x44 (`AnimBase` at creature `+0x154`, 0x00A5D5D0) stores the model level the band maps to, not the band (corrected 2026-10-23 by lib-agent-2), at holder `+0x150`, reached through object slot 0x144 (0x0069F180) → 0x00695E00.
       - 0x00A5D5D0 takes the first level of the band's row in 0x00B03B98 (0,1,2,3 / 1,0,2,3 / 2,1,0,3 / 3,2,1,0) whose bit is clear in `[holder+0x15C] | 2` (0x00A5CB10). So level 1 is never taken, and bands 0–3 give levels 0, 0, 2 and 3 [C].
-      - It stores the level and reloads the model (0x00A68DB0) only when the level changed. Creature slot 25 (0x00695DE0) reads `+0x150` back, or −1 with no holder [C].
+      - It stores the level and reloads the model (0x00A68DB0) only when the level changed. The +0x70 holder's slot 25 (`CCObject::GetModelLodLevel` 0x00695DE0; corrected 2026-11-06 by lib-agent-3: it said the creature's slot 25, which is `Stub::NoOp` in the main vtable) reads `+0x150` back, or −1 with no holder [C].
     - **The distance** [C]: 3-D, from the camera's point (`[controlled creature's area +0x658]+0x550`, copied by 0x006170B0) to the model (its node [I]), in 0x006170F0. The point is the explore camera's focus, not the eye or the feet (corrected 2026-10-23 by lib-agent-2; details below). An object in another area, or with no model, is at 1000.
       - **The origin is ChunkManager +0x550** (corrected 2026-10-23 by lib-agent-2; batch 26 had the followed object's feet) (the area's +0x658), copied each pass by 0x006170B0 [C]. Its writers:
         - **The ChunkManager's per-frame update 0x005CA1B0** (from the area's update, 0x0068B035 → 0x0067B200) [C], skipped while +0x580 is set:

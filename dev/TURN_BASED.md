@@ -595,7 +595,17 @@ GOG addresses.
         - the creature is in the party (byte +0x504);
         - the global byte 0x00C021C0 is 0.
       - Otherwise it throttles by the +0x70 holder's slot 0x64 answer: 0 gives 0.1 s, 2 gives 0.2 s, anything else 0.5 s (0x00B0F290, 0x00B0F294, 0x00B0F28C).
-      - What 0x00C021C0 and slot 0x64 are was not read [I].
+      - **The global byte 0x00C021C0** is `CCCreature::ThrottleUpdate::s_throttleUpdates` (ID 97156) (read 2026-11-06 by lib-agent-3, two readings reconciled; DAOParagonEngine #169) [C]:
+        - It is 1 in the file's `.data`.
+        - Its one code reference in the whole image is ThrottleUpdate's read (0x006A5261), and nothing writes it.
+        - So in the shipped game the throttle is always on: only a creature with +0xCFC set, or one in the party, updates every frame.
+      - **Slot 0x64 of the +0x70 holder** is `CCObject::GetModelLodLevel` 0x00695DE0 [C]:
+        - It returns the model holder's stored level (`AnimBase` +0x150, PARTY.md "What writes it"), or −1 with no holder.
+        - The gap is chosen by the model's level of detail, not its AI level: level 0 gives 0.1 s, level 2 gives 0.2 s, and 3 or −1 give 0.5 s (bands 0–3 store levels 0, 0, 2 and 3).
+      - **+0xD00 is the time since the last update** [C]. ThrottleUpdate adds dt to it.
+        - **When the gate passes**, it writes the whole accumulated time back through the dt pointer and sets +0xD00 to 0. So the update that runs is given all the time it missed, and none is lost.
+        - **When it throttles**, it returns false, and the caller (slot 0x160, RefreshIsInParty 0x006BD4D0) runs only `DispatchAnimationEvents(0)`.
+        - **Where it is set:** the constructor sets 0. `SetVisible(true)`, `SetShownInRoom(true)` and `SetStealthEnabled` set −1.0, so the next frame passes at once with its own dt.
 - **Release** [C, a .text scan for call and jmp]: `0x007CC060` (all rings, per attacker id) has exactly two callers, `0x006A3610` (the command end; its one caller is `0x00746A65`) and `0x007CC5E5` (inside the choice `0x007CC5B0`, the release before a claim); `0x007CC000` (per ring) has one caller, `0x007CC096` inside `0x007CC060`. No code path releases a place on the target's death or deletion. A dead target ends each attacker's command through the swing's -7 (`COMBAT.md`, "The swing", point 1), and that command end is what releases.
 - **The facing the centre and the arc use** [C, already in this file at "Q3, the centre"]: the creature's +0x130 vector as stored; `Vector::FromAngle` = (-sin a, cos a, 0) (`script_commands/posorient.md`) is how an engine angle becomes that vector.
 
