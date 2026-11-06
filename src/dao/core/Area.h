@@ -94,10 +94,12 @@ struct Sound
     float pitch = 0;
     std::int32_t fadeIn = 0;
     std::int32_t fadeOut = 0;
-    float maxDistanceMult = 1;
-    float coneInside = 360; // degrees
-    float coneOutside = 360;
-    float coneVolume = 1;
+    // Each empty when the struct lacks it. The engine then reads 0, and leaves its event's own
+    // max distance as it is.
+    std::optional<float> maxDistanceMult;
+    std::optional<float> coneInside; // degrees
+    std::optional<float> coneOutside;
+    std::optional<float> coneVolume;
     std::int32_t priority = 0;
     bool occludable = false;
 };

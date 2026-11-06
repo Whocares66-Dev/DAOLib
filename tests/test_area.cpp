@@ -237,6 +237,7 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
     REQUIRE(read->sounds.size() == 1);
     CHECK(read->sounds[0].sound == "global_amb_glo/amb_ext_crow_sgl");
     CHECK(read->sounds[0].maxDistanceMult == 1.5F);
+    CHECK_FALSE(read->sounds[0].coneInside); // a field the struct lacks stays empty
     CHECK(read->sounds[0].priority == 225);
 }
 

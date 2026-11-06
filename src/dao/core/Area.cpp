@@ -146,10 +146,13 @@ Sound SoundOf(const gff3::Struct &in)
         .pitch = Number(in, "Pitch", 0.0F),
         .fadeIn = Number<std::int32_t>(in, "FadeIn", 0),
         .fadeOut = Number<std::int32_t>(in, "FadeOut", 0),
-        .maxDistanceMult = Number(in, "MaxDistanceMult", 1.0F),
-        .coneInside = Number(in, "ConeInside", 360.0F),
-        .coneOutside = Number(in, "ConeOutside", 360.0F),
-        .coneVolume = Number(in, "ConeVolume", 1.0F),
+        // CCSoundObject::ReadFields 0x007C21C0 reads these four with 0 for one the struct lacks (fldz
+        // before each, from 0x007C22F2), and leaves the event's max distance when it has none
+        // (read 2026-11-05 by paragon-agent-2's audio batch, the defaults checked by lib-agent).
+        .maxDistanceMult = in.Get<float>("MaxDistanceMult"),
+        .coneInside = in.Get<float>("ConeInside"),
+        .coneOutside = in.Get<float>("ConeOutside"),
+        .coneVolume = in.Get<float>("ConeVolume"),
         .priority = Number<std::int32_t>(in, "Priority", 0),
         .occludable = Flag(in, "Occludable", false),
     };
