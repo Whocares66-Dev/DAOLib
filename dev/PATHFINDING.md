@@ -1066,7 +1066,7 @@ State 0 = idle, 1 = walk, 2 = run, 3 = stopping, 4 = turn in place (SetState's j
 | 0x00A64593, 0x00A645FD | the controller step 0x00A644E0 (ID 33616) | 0 | the stopping state (3) finished, or nothing to follow |
 | 0x00A63AFE | `Cancel/Reset` 0x00A63AF0 (ID 33606) | 0 | hard stop (cancels the animation controller too); callers 0x006917AA (0x006913E0, ID 13952, the conversation owner's stop at the dialogue's start, `dev/TURN_BASED.md` "Start"; 0x0069158C there sets 0 on the controlled creature), 0x00692A47 (0x00692980), 0x006B3636 (0x006B3620, a CCCreature virtual, base +0x70 slot), 0x006C74C9 (0x006C73C0), 0x007F25B6 (0x007F2460) and 0x007F2AA4 (0x007F2800, the end of a conversation or a staged scene), 0x00A63D28 |
 | 0x006A2A37 | creature function 0x006A2A20 (ID 14464): `Movement()->0xA62F30()` then | 0 | movement cleared |
-| 0x00745EC4 | the melee attack's set-up 0x00745E10 (ID 17720) | 0 | an attack stops the walk |
+| 0x00745EC4 | the deathblow's start 0x00745E10 (ID 17720), after its humanoid test | 0 | a deathblow stops the walk |
 | 0x00746E52 | 0x00746E10 (ID 17733), after SetDesiredFacing | 0 | a facing command (turn, then idle) |
 | 0x00A60BF6, 0x00A633AF | 0x00A632D0 is A's constructor and 0x00A633AF a line in it; 0x00A60B50 is another class's constructor (corrected 2026-10-25 by lib-agent-2) | 0 | initial / reset |
 
