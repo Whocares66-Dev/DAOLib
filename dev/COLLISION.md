@@ -458,3 +458,12 @@ No direct call (the 32-bit E8 scan of .text finds none): the only way in is the 
 - The report's sweep callback (vtable 0x00B27144 slot 2, `0x00820FE0`) and how it applies the exclude list for `NxSweepQueryHit`.
 - PhysX's `linearCapsuleSweep` itself: the order of hits, `t` units, the initial-overlap case, and the meaning of NX_SF_ALL_HITS.
 - `0x00819550`'s vtable +8 / +0xC calls around the sweep, and what `0x0081C560` / `0x0081C4F0` / the object's vtable +0x48 return.
+
+## 7. What a dynamic body touches: the scene's group pairs (read 2026-11-05 for DAOParagonEngine #363, the pairs checked by lib-agent)
+
+A query (the ray, the overlap, the sweep: sections 1, 5 and 6) is filtered by its mask against a shape's bits0. A dynamic body's contacts are not: they go by PhysX's collision groups, which the scene sets once.
+
+- **The group pairs** [C]: the `PhysicsScene` constructor 0x0082DA80 first turns every pair of the 32 groups off (a 32 by 32 loop of `setGroupCollisionFlag(i, j, ebx)`, 0x0082DCC7..0x0082DCF0; PhysX's default is on), then on: (1, 5) at 0x0082DCFD, (6, 5) at 0x0082DD10, (3, 4) at 0x0082DD23 and (4, 8) after it. Nothing else calls the setter. It also sets the scene's actor-pair flags (the slot at +0xCC, `setActorGroupPairFlags` [I for the name]) for (6, 5) with 8 and (8, 4) with 0x7FE.
+- **The contact filter** [I: no writer found]: only the queries' push and pop (0x0082D900, 0x0082C930, 0x0082A150, 0x008248A0) touch the scene's filter bool, constants and ops, so between queries it is PhysX's default, and a body's groupsMask takes no part in its contacts.
+- **An effect's physics particle** (its sphere and its group 1 or 6: EFFECTS.md, "Each particle is a PhysX sphere"; groupsMask bits0 0x40): a particle, in either group, collides with the statics (group 5) alone, whatever their bits0: walls, terrain and water alike. It passes through creatures' controllers (group 4), so a drop never hits a creature, and through other particles. A splatting particle's (6, 5) pair has the actor-pair flag 8, which is where its splat comes from [I; the splats are EFFECTS.md's]. Placeables: their shapes take the group the prototype leaves, 0, so a particle passes through them too [I: where a placeable's shape group is set was not traced].
+- Group 3 (which meets the creatures' 4) and group 8 (the (4, 8) pair) are not identified.
