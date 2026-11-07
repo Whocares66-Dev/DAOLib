@@ -39,6 +39,10 @@ constexpr std::uint32_t kActorCreature = 5208;
 constexpr std::uint32_t kActorCameraTarget = 5209;
 constexpr std::uint32_t kActorPose = 5211;
 constexpr std::uint32_t kActorPoseHumanoid = 5213;
+// Read by EC::Cutscene::Actor's constructor (0x007DFC60) with -1 for one the actor lacks (0x007E0357,
+// kept at +0x4EC, 0x007E0390); the conversation's release of a participant (0x007F0790) restores
+// AMBIENT_ANIM_PATTERN from it when it is above 0 (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
+constexpr std::uint32_t kActorAmbientAnim = 5225;
 constexpr std::uint32_t kActorOriginPosition = 5214;
 constexpr std::uint32_t kActorOriginOrientation = 5215;
 constexpr std::uint32_t kActorMappingTag = 5216;
@@ -309,6 +313,7 @@ Actor ActorOf(const gff4::Struct &in)
         .cameraTarget = in.Get<std::int32_t>(kActorCameraTarget).value_or(-1),
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
+        .ambientAnim = in.Get<std::int32_t>(kActorAmbientAnim).value_or(-1),
         .originPosition = Several<3>(in, kActorOriginPosition),
         .originOrientation = Several<4>(in, kActorOriginOrientation),
         .finalPosition = Several<3>(in, kActorFinalPosition),
