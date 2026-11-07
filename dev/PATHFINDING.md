@@ -722,7 +722,7 @@ obj.AddToArea(area, pos)           // not Loading: a creature's new controller s
 3. **GroundHeight (0x00685430) is not the walking z.** It is used for spawn (CreateObject), GetSafeLocation, the snap 0x006B1790, a cached ground height and normal at the creature (`creature+0x1C0` z, `+0x1B0` vec4 normal, refreshed by 0x006954C0), and the root-motion (gob clip) / script-moved path, where z is taken from that cached ground height (0x006A3487 region). It is a physics ray: origin (x, y, z+3.0), straight down, **unlimited length** (FLT_MAX), group mask 0x2000000 (Walkable); if that misses, a second ray from z+100 collects all hits and takes the hit nearest in z to the input z (inferred from the loop, checked shape). The input z is returned if nothing is hit (cited, PATHFINDING.md:154).
 4. **The walk grid's cell height is not read by any of this** (checked: 0x006B6880 and 0x006B2220 never touch the grid). It only supplies z for GetSafeLocation's candidate cells (0x0073DE20 -> 0x00A473A0, cited PATHFINDING.md:171-200), and even there the result is re-snapped by GroundHeight. Whether the grid interpolates between cells: not read, and it does not matter for walking.
 5. **No foot IK.** `IKDNode` (vtable 0x00B0D9B4, 2 slots: destructor + one) is not inverse kinematics: its constructors/destructors sit in area code (0x0067A5C0, 0x0067B830, 0x0067E3F0, the CCArea region) and it is a two-pointer container (fields +4/+8 or +0xC/+0x10 zeroed). Refutes the "probably the physics" guess in ANIMATION.md:606 (checked: the code, inferred: what the name stands for). Confirms "no foot IK" (no per-foot ray or bone solve found in the movement or animation code I read; not an exhaustive scan of every animation system).
-6. **Body tilt exists, for quadrupeds, and it is not a controller thing.** `TerrainFollowPitch/Roll/Precision` (apr_base row +0xA8/+0xAC/+0xB0) are consumed by a per-frame creature routine **0x006A7AE0** (from the creature update at 0x006BD566) which calls **0x006A7520** to compute a target pitch and roll from the ground, clamps them to +-TerrainFollowPitch and +-TerrainFollowRoll, and slews the model toward them (checked structure; formulas inferred). A biped's pitch limit is 0, so its target is 0 (inferred from the clamp; it never tilts).
+6. **Body tilt exists, for quadrupeds, and it is not a controller thing.** `TerrainFollowPitch/Roll/Precision` (apr_base row +0xA8/+0xAC/+0xB0) are consumed by a creature routine run on each full (unthrottled) update, **0x006A7AE0** (from the creature update at 0x006BD566) which calls **0x006A7520** to compute a target pitch and roll from the ground, clamps them to +-TerrainFollowPitch and +-TerrainFollowRoll, and slews the model toward them (checked structure; formulas inferred). A biped's pitch limit is 0, so its target is 0 (inferred from the clamp; it never tilts).
 
 ### Pseudo-code a port can copy
 
@@ -872,8 +872,18 @@ Other consumers of +0x7C besides 0x0067B4D0 (no xref scan of `[reg+0x7c]` outsid
 
 #### Body tilt (0x006A7AE0 -> 0x006A7520), structure checked, maths inferred
 
+- **When the target is recomputed** (read 2026-11-07 by a reader of lib-agent-3's, for DAOParagonEngine #169; the setter, the clear and the gate checked by lib-agent-3) [C unless marked]. The mark is the creature's byte +0xB40 ("placement dirty"). +0xB41 beside it is "apply at once". `CCCreature::MarkPlacementDirty` 0x0069EE60 is the only setter of +0xB40: its whole body is `mov [ecx+0xB40],1; mov [ecx+0xB41],arg`. Its callers, from a scan of every disp32 0xB40 in `.text`:
+  - `CCCreature::Play` 0x006AA7E0, at 0x006AA884 (arg 0), when `HasAnimation` (0x006AA850) is true and the old animation's `State` (taken before the play) is 1 or differs from the new one's;
+  - `OnPositionChanged` 0x006B5EF0, at 0x006B60F1 (arg 0);
+  - `OnOrientationChanged` 0x006A0190, at 0x006A019C (arg 0);
+  - `BuildModel` 0x006BDC70, at 0x006BE1E1 (arg **1**: apply at once).
+  - Cleared to 0 by the constructors (0x006BA537, 0x006BA543; the clone's 0x006BAE4D, 0x006BAE59), and at run time only by 0x006A7520 itself, at its end (0x006A7ACB). +0xB41 is never cleared on its own; each setting rewrites it.
+  - Readers: 0x006A7520 tests +0xB40 as its gate (0x006A754E) and +0xB41 at 0x006A79B2; 0x006A7AE0 tests +0xB41 (0x006A7BCD, 0x006A7C57) and never +0xB40.
+  - 0x006A7AE0 runs only from the creature's full update (0x006BD566), which `ThrottleUpdate` 0x006A5200 gates (`dev/TURN_BASED.md`); a throttled update dispatches animation events and returns (0x006BD4EB). On a full update 0x006A7520 returns with the mark still set in game modes 4 and 5 (0x006A7548), when the mark is 0 (0x006A7555), or with no area (vslot 0xA0, 0x006A75EB). Otherwise it computes the target pitch +0xB30 and roll +0xB34. With +0xB41 = 0 it also fills the slew weights +0xB38/+0xB3C (0x006A79CD..0x006A7AC5). With +0xB41 set it skips them (0x006A79C7), and 0x006A7AE0 then snaps the tilt to the target (to 0x006A7C16) instead of slewing. Then it clears the mark.
+  - 0x006A7AE0 slews the current tilt toward +0xB30/+0xB34 on every full update, mark or not. **So a creature that stands still, does not turn and plays no `Play` with a changed State keeps its last target**: the target is not recomputed every frame. A dialog or cutscene leaves the mark set, and it is used on the first full update after. Not read [I]: whether `CCObject::Play` 0x0069B3D0's other callers can change the State without `CCCreature::Play`.
+
 ```
-// needs: game mode not 4 or 5 (0x005D5E70), creature.dirty (+0xB40, set by 0x0069EE60 on a position change; +0xB41 = "apply at once")
+// needs: game mode not 4 or 5 (0x005D5E70), creature.dirty (+0xB40, set by 0x0069EE60: "When the target is recomputed" above; +0xB41 = "apply at once")
 row = apr_base[creature.appearanceRow]                 // cache 0x00C0CB78; row id = word at [creature+0x7B0]+0x58
 P, R, prec = row.TerrainFollowPitch, row.TerrainFollowRoll, row.TerrainFollowPrecision   // row +0xA8/+0xAC/+0xB0
 if modelKind(creature)==1 (0x005CA710 GDA lookup, column 0xE991BD51): P = max(P, 60), R = ..., prec = 1   // corrected 2026-10-19: not a model kind but the current animation row's State column = 1 (deaths and sleeps), below
@@ -985,7 +995,7 @@ Note the first-order picture for a hand check: with a unit normal n and heading 
 ###### Not read
 
 - Which scene node slot +0x1C of `[[AnimBase+0x18]+4]` is (root of the model or another), and whether its parent adds a transform.
-- Who sets the dirty flag (+0xB40, beyond 0x0069EE60 from the earlier note), "apply at once" (+0xB41) and the tilt mode (+0xB20); the creature update's frequency (the tick is called at 0x006BD566; dt there was not read, assumed seconds).
+- The tilt mode (+0xB20); the creature update's frequency (the tick is called at 0x006BD566; dt there was not read, assumed seconds).
 - The special branches of 0x004EDF80 for d near +-1 (0x004EE071-0x004EE0F3, uses 0x004D4EB0) and the exact cross-product lines.
 - The actual TerrainFollowPitch/Roll values per appearance row (the table was not read in this pass; DAOTurnBased only uses Pitch as a "body kind").
 - Whether the corpse (State 1) case matters for a port that has no death-animation rows; the dead creature's GroundHeight mask (the area flag at 0x0067B4D0) was not revisited.
