@@ -1608,7 +1608,7 @@ void Write(Writer &w, const Node &top, const Save &v)
         w.Put(c, L::kMapLegend, s.mapLegend);
         w.Put(c, L::kTimePlayed, s.timePlayedSeconds);
     });
-    w.PutPlain(top, L::kPartyList, v.party, [&w](const Node &c, const Party &x) { Write(w, c, x); });
+    w.PutChild(top, L::kPartyList, v.party, [&w](const Node &c, const Party &x) { Write(w, c, x); });
     w.PutPlain(top, L::kVersion, v.version, [&w](const Node &c, const Version &x) {
         w.Put(c, L::kCheatUsed, x.cheatUsed);
         w.Put(c, L::kBuildNumber, x.buildNumber);

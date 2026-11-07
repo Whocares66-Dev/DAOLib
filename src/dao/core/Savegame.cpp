@@ -1248,12 +1248,15 @@ std::vector<std::uint32_t> Save::DuplicateIds() const
     {
         CountCreature(seen, *hero);
     }
-    for (const Creature &c : party.pool)
+    if (party)
     {
-        CountCreature(seen, c);
+        for (const Creature &c : party->pool)
+        {
+            CountCreature(seen, c);
+        }
+        CountItems(seen, party->backpack);
+        CountItems(seen, party->plotItems);
     }
-    CountItems(seen, party.backpack);
-    CountItems(seen, party.plotItems);
     for (const Area &a : areas)
     {
         CountIds(seen, a.Used() ? std::optional<std::uint32_t>(a.id) : std::nullopt);
@@ -1300,11 +1303,14 @@ const Creature *Save::FindCreature(std::uint32_t id) const
     {
         return &*hero;
     }
-    for (const Creature &c : party.pool)
+    if (party)
     {
-        if (c.id == id)
+        for (const Creature &c : party->pool)
         {
-            return &c;
+            if (c.id == id)
+            {
+                return &c;
+            }
         }
     }
     for (const Area &a : areas)
@@ -1387,7 +1393,7 @@ std::optional<Save> Read(const gff4::File &das)
     }
     if (const auto p = top->Child(L::kPartyList))
     {
-        Fill(*p, save.party);
+        Fill(*p, save.party.emplace());
     }
     if (const auto v = top->Child(L::kVersion))
     {

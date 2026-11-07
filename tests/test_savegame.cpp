@@ -616,14 +616,15 @@ TEST_CASE("the hero, the party and the game's state are mapped", "[savegame]")
     CHECK(save->hero->playerMorph.size() == 3);
     CHECK(save->timePlayedSeconds == 555);
 
-    REQUIRE(save->party.pool.size() == 1);
-    CHECK(save->party.pool[0].kind == sg::Creature::Kind::Pool);
-    CHECK(save->party.pool[0].id == 269);
-    CHECK(save->party.money == 1234);
-    CHECK(save->party.leader == 1);
-    CHECK(save->party.seenLines == std::vector<std::uint32_t>{7, 8, 9});
-    REQUIRE(save->party.plots.size() == 1);
-    const auto *plot = save->party.FindPlot(L"0123456789ABCDEF0123456789ABCDEF");
+    REQUIRE(save->party);
+    REQUIRE(save->party->pool.size() == 1);
+    CHECK(save->party->pool[0].kind == sg::Creature::Kind::Pool);
+    CHECK(save->party->pool[0].id == 269);
+    CHECK(save->party->money == 1234);
+    CHECK(save->party->leader == 1);
+    CHECK(save->party->seenLines == std::vector<std::uint32_t>{7, 8, 9});
+    REQUIRE(save->party->plots.size() == 1);
+    const auto *plot = save->party->FindPlot(L"0123456789ABCDEF0123456789ABCDEF");
     REQUIRE(plot);
     CHECK(plot->flags[0] == 1);
     CHECK(plot->flags[3] == 4);
@@ -905,8 +906,9 @@ TEST_CASE("the player's saves in game/saves, when there, read with the counts to
         CHECK(save->hero->appearance);
         REQUIRE(save->hero->playerMorph.size() > 16);
         CHECK(save->hero->playerMorph[0] == 'G'); // "GFF V4.0 MORP"
-        CHECK(save->party.pool.size() == 1);
-        CHECK(save->party.plots.size() == 994);
+        REQUIRE(save->party);
+        CHECK(save->party->pool.size() == 1);
+        CHECK(save->party->plots.size() == 994);
         CHECK(save->version.buildNumber == 13263);
         REQUIRE(save->hero->id);
         CHECK(save->FindCreature(*save->hero->id) == &*save->hero);
@@ -915,7 +917,7 @@ TEST_CASE("the player's saves in game/saves, when there, read with the counts to
             CHECK(c.id);
             CHECK(c.templateResRef);
         }
-        for (const auto &p : save->party.plots)
+        for (const auto &p : save->party->plots)
         {
             CHECK(p.guid.size() == 32); // upper-case hex, no dashes
         }
@@ -927,14 +929,15 @@ TEST_CASE("the player's saves in game/saves, when there, read with the counts to
         const auto save = sg::Read(bytes);
         REQUIRE(save);
         CHECK(save->areas.size() == 157);
-        CHECK(save->party.pool.size() == 8);
+        REQUIRE(save->party);
+        CHECK(save->party->pool.size() == 8);
         CHECK(save->campaign.journal.activeResRef == L"gwb000pt_sideplot");
         CHECK(save->campaign.journal.active.size() == 1);
         CHECK(save->campaign.journal.completed.size() == 95);
         REQUIRE(save->hero);
         REQUIRE(save->hero->stats);
         CHECK(save->hero->stats->stats.size() > 32);
-        CHECK(save->party.plots.size() == 994);
+        CHECK(save->party->plots.size() == 994);
         CHECK(save->version.buildNumber == 13263);
     }
 }
@@ -1029,8 +1032,9 @@ TEST_CASE("numbers, floats and flags changed read back changed, and nothing else
     save.areas[0].creatures[0].position = sg::Vec3{5, 6, 7};
     save.areas[0].creatures[0].active = 0;
     save.campaign.variables[0].value = std::int32_t{99};
-    save.party.plots[0].flags[0] = 0xF0;
-    save.party.money = 5;
+    REQUIRE(save.party);
+    save.party->plots[0].flags[0] = 0xF0;
+    save.party->money = 5;
     save.timePlayedSeconds = 777;
     save.state.worldTimeMs = 1;
 
@@ -1046,9 +1050,10 @@ TEST_CASE("numbers, floats and flags changed read back changed, and nothing else
     CHECK(wolf.stats->spells == std::vector<std::uint32_t>{10, 20, 30});
     CHECK(std::get<std::int32_t>(out.save.campaign.variables[0].value) == 99);
     CHECK(out.save.campaign.variables[0].name == L"COUNT");
-    CHECK(out.save.party.plots[0].flags[0] == 0xF0);
-    CHECK(out.save.party.plots[0].flags[3] == 4);
-    CHECK(out.save.party.money == 5);
+    REQUIRE(out.save.party);
+    CHECK(out.save.party->plots[0].flags[0] == 0xF0);
+    CHECK(out.save.party->plots[0].flags[3] == 4);
+    CHECK(out.save.party->money == 5);
     CHECK(out.save.timePlayedSeconds == 777);
     CHECK(out.save.state.worldTimeMs == 1);
     CHECK(out.save.state.worldDay == 3);
@@ -1912,8 +1917,9 @@ TEST_CASE("the player's saves in game/saves, when there, are written back unchan
         auto changed = *save;
         const std::size_t variables = changed.campaign.variables.size();
         changed.campaign.variables.push_back({.name = L"DAOLIB_WRITE_TEST", .value = std::int32_t{4}});
-        REQUIRE_FALSE(changed.party.plots.empty());
-        changed.party.plots[0].flags[1] = 0x1234;
+        REQUIRE(changed.party);
+        REQUIRE_FALSE(changed.party->plots.empty());
+        changed.party->plots[0].flags[1] = 0x1234;
         REQUIRE_FALSE(changed.areas.empty());
         changed.areas.push_back(changed.areas[0]);
         changed.areas.back().tag = L"daolib_write_copy";
@@ -1934,13 +1940,15 @@ TEST_CASE("the player's saves in game/saves, when there, are written back unchan
         REQUIRE(back);
         CHECK(back->campaign.variables.size() == variables + 1);
         CHECK(std::get<std::int32_t>(back->campaign.variables.back().value) == 4);
-        CHECK(back->party.plots.size() == save->party.plots.size());
-        CHECK(back->party.plots[0].flags[1] == 0x1234);
-        CHECK(back->party.plots[0].guid == save->party.plots[0].guid);
+        REQUIRE(back->party);
+        REQUIRE(save->party);
+        CHECK(back->party->plots.size() == save->party->plots.size());
+        CHECK(back->party->plots[0].flags[1] == 0x1234);
+        CHECK(back->party->plots[0].guid == save->party->plots[0].guid);
         CHECK(back->areas.size() == changed.areas.size());
         CHECK(back->areas[0].creatures.size() == creatures + (creatures != 0 ? 1 : 0));
         CHECK(back->hero.has_value() == save->hero.has_value());
-        CHECK(back->party.pool.size() == save->party.pool.size());
+        CHECK(back->party->pool.size() == save->party->pool.size());
         CHECK(back->state.eventQueue.size() == save->state.eventQueue.size());
         CHECK(back->version.buildNumber == save->version.buildNumber);
         // The area written afresh is the area it was copied from.
@@ -2148,7 +2156,8 @@ TEST_CASE("a blank save is a GFF4 SAVE of the engine's 78 templates that Read ta
     REQUIRE(save);
     CHECK(save->areas.empty());
     CHECK_FALSE(save->hero);
-    CHECK(save->party.pool.empty());
+    REQUIRE(save->party); // a blank party list, so an empty party
+    CHECK(save->party->pool.empty());
     CHECK(save->campaign.variables.empty());
     CHECK(save->campaign.resource.empty());
 }
@@ -2179,7 +2188,7 @@ TEST_CASE("a blank save written over reads back what was set", "[savegame][blank
     save.campaign.variables.push_back({L"COUNT", std::int32_t{5}, sg::kNoSource});
     save.campaign.variables.push_back({L"NAME", std::wstring(L"a name"), sg::kNoSource});
     save.areas.push_back(AreaToAdd());
-    save.party.money = 42;
+    save.party.emplace().money = 42; // made if the blank has none
     save.timePlayedSeconds = 99;
     save.state.worldDay = 3;
 
@@ -2197,7 +2206,8 @@ TEST_CASE("a blank save written over reads back what was set", "[savegame][blank
     CHECK(out.save.areas[0].tag == L"ar_new");
     CHECK(out.save.areas[0].id == 9100);
     CHECK(out.save.areas[0].placeables.size() == 1);
-    CHECK(out.save.party.money == 42);
+    REQUIRE(out.save.party);
+    CHECK(out.save.party->money == 42);
     CHECK(out.save.timePlayedSeconds == 99);
     CHECK(out.save.state.worldDay == 3);
     // The file it made is itself again when written unchanged.
@@ -2297,4 +2307,22 @@ TEST_CASE("a saved area without its ObjectID reads as 0, and its struct is taken
     REQUIRE(save->areas.size() == 1);
     CHECK(save->areas[0].id == 0);
     CHECK(save->areas[0].Used());
+}
+
+TEST_CASE("a save without a party list reads as none, one with an empty list as an empty party", "[savegame]")
+{
+    namespace gff4 = dao::core::gff4;
+    {
+        gff4::Writer out("SAVE", "V1.0");
+        out.Root("SAVE", {{16999, gff4::Type::String}}); // a field no reader asks for
+        const auto save = sg::Read(out.Save());
+        REQUIRE(save);
+        CHECK_FALSE(save->party);
+    }
+    gff4::Writer out("SAVE", "V1.0");
+    const auto party = out.AddTemplate("PRTY", {{16290, gff4::Type::U8}});
+    out.Root("SAVE", {{16003, party, 0}});
+    const auto save = sg::Read(out.Save());
+    REQUIRE(save);
+    CHECK(save->party);
 }

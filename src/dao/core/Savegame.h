@@ -988,7 +988,9 @@ struct Save
     float mapZoom = 0;
     std::uint8_t mapLegend = 0;
     std::int32_t timePlayedSeconds = 0;
-    Party party;
+    // PartyList (16003); none where the save has no list, which the engine tells from an empty one (its
+    // getter, 0x00642F60, answers no struct then).
+    std::optional<Party> party;
     Version version;
     GameState state;
     std::vector<IdPool> idPools; // SavegameWorldDatabase, 16500
