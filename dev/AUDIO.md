@@ -1046,7 +1046,8 @@ Tally over the VO projects:
 - AnimBase holds:
   - +0x1AC: the VO content;
   - +0x1B0: a sound emitter (0x60 bytes, made by 0x005B8AA0, created once);
-  - +0x1A8: a byte flag. When it is set, the emitter is placed at the listener (0x005B5E70) instead. Who sets it was not read.
+  - +0x1A8: a byte flag. When it is set, the emitter is placed at the listener (0x005B5E70, 0x00A5DBE0..0x00A5DBF2) instead. The constructor clears it (0x00A60CA8), and no other writer was found (a scan of `.text` for the displacement 0x1A8 on this object, and no store to +0x1A4..+0x1A7 in AnimBase's code) (read 2026-11-07 by lib-agent-2 with a subagent, for DAOParagonEngine) [C for the code; that no write is missed is I]. So in vanilla the voice is always placed by the next point.
+  - **With no model the voice is at the world's origin, 1.8 m up** (read 2026-11-07 by lib-agent-2 with a subagent, for DAOParagonEngine) [C]: the position comes from `AnimBase::GetPosition` (0x00A5D9B0, called at 0x00A5DC0F), which zeroes its out vector first (0x00A5D9B6..0x00A5D9CB) and returns (0, 0, 0) when the AnimBase has no model object (`[[AnimBase+0x18]+4]` null, 0x00A5D9BE). The emitter is made and attached before that, and the same null model is one of the cases where the sound is started with no face (`Start(0, 0)` at 0x00A5DCFB). So such a voice is 3-D at (0, 0, 1.8), not at the listener and not 2-D; with the VO events' 30 m rolloff it is heard only near the origin [I: not heard in play]. A speaker with no AnimBase does not reach PlayVoice.
 - **Position:** the emitter is placed at the object's position + **(0, 0, 1.8)** (constant 0x00AFEBA0; z is up). This is a fixed height, not a head bone. It is done at PlayVO (0x00A5DC05) and again by AnimBase's position setters 0x00A5CD50 and 0x00A5CDF0 whenever the object's position changes (callers include 0x00752007 and 0x007F2A7A). They store it into emitter +0x30 and mark the emitter dirty (+0x1D). The orientation is passed too (0x00A5CCC0). The voice therefore follows its speaker.
 - The emitter is pushed to FMOD by the content's `SetPosition` slot 25 (0x005C0880 → `Event::set3DAttributes(pos, 0, 0)`). The content's slots 26 and 27 set orientation and velocity. The step that copies the dirty emitter into the content each frame was not read (inferred).
 - Positions are given to 2-D events too; FMOD ignores them.
@@ -1173,7 +1174,7 @@ The user properties are read at Load (0x005BAB72), each property value in turn (
 
 - The FEV1 event header's field layout (the offsets above are fitted to the data) and the `(distance)` parameter's rolloff envelopes for VO (30 m custom curve): for the project reader.
 - FMOD 4.24's enums, as noted at the top.
-- Who sets AnimBase +0x1A8 (the voice at the listener). The emitter → content copy each frame (emitter +0x1D dirty).
+- The emitter → content copy each frame (emitter +0x1D dirty).
 - `g_eclipseGame`+0x254 (PlayVO's faceSync condition): read, only `capturemovie` (0x00404B10) writes it, 30.0f, so faceSync is on in normal play (ANIMATION.md, the face) (2026-10-31, lib-agent-2) [C].
 - `conversation.gfx`'s handling of HasVO, the subtitles option and `OnNPCLineFinished`.
 - Whether dialog +0x1A4 (kept replies) is cleared before a new line's replies are offered. A stale list would let the lone-continue test see the old one; not seen in play.
