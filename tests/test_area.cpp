@@ -116,7 +116,8 @@ dao::test::files::Bytes TowerArea()
     const auto sound = b.Struct(6, {{"Tag", kString, b.ExoString("amb_crow")},
                                     {"Sound", kString, b.ExoString("global_amb_glo/amb_ext_crow_sgl")},
                                     {"MaxDistanceMult", kFloat, Bits(1.5F)},
-                                    {"Priority", kInt, 225}});
+                                    {"Priority", kInt, 225},
+                                    {"ObjectId", kInt, 7}});
     b.Set(top, {{"Name", kLocString, b.LocString(355401)},
                 {"Tag", kString, b.ExoString("bhm100ar_tower_level_1")},
                 {"TemplateResRef", kResRef, b.ResRef("bhm100ar_tower_level_1")},
@@ -239,6 +240,7 @@ TEST_CASE("an area's objects, each with its kind's fields", "[area]")
     CHECK(read->sounds[0].maxDistanceMult == 1.5F);
     CHECK_FALSE(read->sounds[0].coneInside); // a field the struct lacks stays empty
     CHECK(read->sounds[0].priority == 225);
+    CHECK(read->sounds[0].objectId == 7);
 }
 
 // The Circle's basement's second door between rooms 1325 and 1103, as bhm700ar_tower_basement.are

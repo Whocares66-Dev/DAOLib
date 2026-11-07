@@ -155,6 +155,9 @@ Sound SoundOf(const gff3::Struct &in)
         .coneVolume = in.Get<float>("ConeVolume"),
         .priority = Number<std::int32_t>(in, "Priority", 0),
         .occludable = Flag(in, "Occludable", false),
+        // CCArea::ReadSoundList (0x0067DA40) reads it with -1 for one the struct lacks (0x0067DBF2;
+        // read 2026-11-06 by paragon-agent-2, checked by lib-agent).
+        .objectId = Number<std::int32_t>(in, "ObjectId", -1),
     };
 }
 

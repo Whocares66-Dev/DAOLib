@@ -829,6 +829,9 @@ void Fill(const Struct &s, Store &out)
 // areas linked by LinkAreaMiniMaps; 16020 is read by the creature loader [exe 0x00683820].
 void Fill(const Struct &s, Area &out)
 {
+    // An ARE1 without its ObjectID reads as 0, the value the engine sets before the read
+    // (0x0068B347), so the struct is taken (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
+    out.id = 0;
     Take(s, L::kTag, out.tag);
     Take(s, L::kObjectId, out.id);
     List(s, L::kAreaPlaceables, out.placeables);

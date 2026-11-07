@@ -1725,7 +1725,7 @@ TEST_CASE("a number is not written into a field of another width", "[savegame][w
 
     auto save = ReadOf(b.bytes);
     REQUIRE(save.areas.size() == 1);
-    CHECK(save.areas[0].id == sg::kNoObject); // not read either
+    CHECK(save.areas[0].id == 0); // not read either: 0, as the engine is left with where the field does not read
     save.areas[0].id = 0x1234;
     const auto out = sg::Write(b.bytes, save);
     REQUIRE(out);
@@ -2283,4 +2283,18 @@ TEST_CASE("an older save's add-ins, a list of strings, are each uid and name", "
     REQUIRE(save->addIns.size() == 2);
     CHECK(save->addIns[1].uid == L"DAO_PRC_CP_2");
     CHECK(save->addIns[1].NameIn(sg::AddInLanguage::English) == L"DAO_PRC_CP_2");
+}
+
+TEST_CASE("a saved area without its ObjectID reads as 0, and its struct is taken", "[savegame]")
+{
+    namespace gff4 = dao::core::gff4;
+    gff4::Writer out("SAVE", "V1.0");
+    const auto area = out.AddTemplate("ARE1", {{1, gff4::Type::String}});
+    const gff4::StructAt root = out.Root("SAVE", {{16001, area, gff4::kList}});
+    out.String(out.Structs(root, 16001, 1)[0], 1, L"bhm100ar_tower_level_1");
+    const auto save = sg::Read(out.Save());
+    REQUIRE(save);
+    REQUIRE(save->areas.size() == 1);
+    CHECK(save->areas[0].id == 0);
+    CHECK(save->areas[0].Used());
 }

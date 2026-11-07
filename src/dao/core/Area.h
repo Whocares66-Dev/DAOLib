@@ -102,6 +102,7 @@ struct Sound
     std::optional<float> coneVolume;
     std::int32_t priority = 0;
     bool occludable = false;
+    std::int32_t objectId = -1; // the id the area gives the sound object; -1 where the struct has none
 };
 
 struct Trigger

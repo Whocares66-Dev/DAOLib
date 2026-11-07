@@ -629,7 +629,9 @@ struct AreaMap
 struct Area
 {
     std::wstring tag;
-    std::uint32_t id = kNoObject; // SavegameAreaList's ObjectID; the engine ignores a struct whose id is -1 or absent
+    // SavegameAreaList's ObjectID: 0 where the struct lacks it, as the engine reads it. The engine ignores
+    // a struct whose id is -1.
+    std::uint32_t id = kNoObject;
     // Whether the engine takes this area's struct (an ObjectID that is not -1) rather than the .are's alone.
     bool Used() const
     {
