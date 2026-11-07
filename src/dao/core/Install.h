@@ -257,8 +257,8 @@ class Index
     // Thread safe.
     std::shared_ptr<const GdaFile> Table(std::string_view name) const;
     // Returns a worksheet merged as the game merges it: every table file m2da_base's row `id` takes,
-    // in the order the game lists them (dao/core/M2da.h). Made once and kept. Null where
-    // m2da_base.gda has no such row.
+    // in the order the game lists them (dao/core/M2da.h). Made once and kept. Null where no
+    // m2da_base file the game merges, m2da_base.gda or an add-in's m2da_base_<tag>.gda, has such a row.
     // Thread safe; the first call for a worksheet merges it, so ask early, from any thread. A merge
     // holds up no other thread's asking, though two threads asking one worksheet first may both
     // merge it.

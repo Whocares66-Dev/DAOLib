@@ -782,6 +782,14 @@ TEST_CASE("a table is parsed once and kept, and a worksheet merged from its file
                files::Gda({"ID", "Label"}, {{1, std::string("one")}, {2, std::string("two")}}, hashes));
     root.Write(L"game/packages/core/override/abi_more.gda",
                files::Gda({"ID", "Label"}, {{3, std::string("three")}}, hashes));
+    // An add-in's base file adds a worksheet, as m2da_base_<tag>.gda does; its row for 7 loses to m2da_base's.
+    root.Write(L"game/packages/core/override/m2da_base_tst.gda",
+               files::Gda({"ID", "Label", "Worksheet"},
+                          {{22009, std::string("ModuleOverrides"), std::string("ModuleOverrides")},
+                           {7, std::string("Other"), std::string("other_")}},
+                          baseHashes));
+    root.Write(L"game/packages/core/override/moduleoverrides_tst.gda",
+               files::Gda({"ID", "Label"}, {{5, std::string("five")}}, hashes));
     const auto index = install::Index::Build(root.path / L"game", {});
 
     // Kept: the same table for a name in any case (DAOLib #207).
@@ -797,6 +805,9 @@ TEST_CASE("a table is parsed once and kept, and a worksheet merged from its file
     CHECK(dao::core::m2da::Taken(*merged, 3) != nullptr);
     CHECK(index->Worksheet(7) == merged);
     CHECK(index->Worksheet(8) == nullptr);
+    const auto *overrides = index->Worksheet(22009);
+    REQUIRE(overrides != nullptr);
+    CHECK(dao::core::m2da::Taken(*overrides, 5) != nullptr);
 }
 
 // A worksheet is merged outside its lock, so threads asking at once may each merge it; every one is

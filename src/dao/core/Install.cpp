@@ -727,14 +727,16 @@ const m2da::Merged *Index::Worksheet(std::int64_t id) const
     }
     // Merged outside the lock, as Table parses, so that a thread merging one worksheet does not
     // hold up another's reads (Paragon's workers held its main thread so, DAOLib #283).
+    // The worksheets are m2da_base's merged as any worksheet is, by the prefix "m2da_" (the game's
+    // M2DA_, 0x004E0BF0; dev/FILES.md), so an add-in's m2da_base_<tag>.gda adds its tables: the
+    // add-ins' ModuleOverrides (22009) among them, which SaveLoadProxy::RefreshHeroes finds (read
+    // 2026-11-06 for DAOParagonEngine's hero import; core took m2da_base.gda alone before).
     std::unique_ptr<const m2da::Merged> made;
-    if (const auto base = Table("m2da_base.gda"))
+    const std::vector<m2da::Worksheet> sheets = m2da::Worksheets(
+        MergedSheet(*this, m2da::Worksheet{.id = -1, .label = L"", .prefix = L"m2da_", .merged = true}));
+    if (const auto sheet = std::ranges::find(sheets, id, &m2da::Worksheet::id); sheet != sheets.end())
     {
-        const std::vector<m2da::Worksheet> sheets = m2da::Worksheets(*base, true);
-        if (const auto sheet = std::ranges::find(sheets, id, &m2da::Worksheet::id); sheet != sheets.end())
-        {
-            made = std::make_unique<const m2da::Merged>(MergedSheet(*this, *sheet));
-        }
+        made = std::make_unique<const m2da::Merged>(MergedSheet(*this, *sheet));
     }
     // Two threads may both merge one worksheet; the first kept is the one every caller gets.
     const std::scoped_lock held(worksheetsLock_);

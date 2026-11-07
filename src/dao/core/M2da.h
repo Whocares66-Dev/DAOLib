@@ -84,6 +84,10 @@ struct Merged
     SortedIndex<std::int64_t> takenOf;
 };
 
+// Returns the tables a merged m2da_base names, from the rows the game takes: m2da_base.gda's and
+// each add-in's m2da_base_<tag>.gda, as the game merges them (Index::Worksheet).
+std::vector<Worksheet> Worksheets(const Merged &table);
+
 // Makes a table's lookups from its columns and rows, for a table made other than by Merge.
 void Index(Merged &table);
 

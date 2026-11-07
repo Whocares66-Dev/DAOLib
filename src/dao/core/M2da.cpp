@@ -146,6 +146,32 @@ void MarkTaken(std::vector<Row> &rows, const std::unordered_map<std::int64_t, st
 
 } // namespace
 
+namespace
+{
+
+// A row of m2da_base or 2da_base as a worksheet, from its ID, Label and Worksheet cells; none for a
+// row with no worksheet.
+std::optional<Worksheet> SheetOf(const GdaFile::Cell &id, const GdaFile::Cell *label, const GdaFile::Cell &worksheet,
+                                 bool merged)
+{
+    const auto *prefix = std::get_if<std::wstring>(&worksheet);
+    if (prefix == nullptr || prefix->empty())
+    {
+        return std::nullopt;
+    }
+    Worksheet sheet;
+    sheet.id = IdOf(id).value_or(-1);
+    if (const auto *text = label != nullptr ? std::get_if<std::wstring>(label) : nullptr)
+    {
+        sheet.label = *text;
+    }
+    sheet.prefix = Lower(*prefix);
+    sheet.merged = merged;
+    return sheet;
+}
+
+} // namespace
+
 std::vector<Worksheet> Worksheets(const GdaFile &table, bool merged)
 {
     std::vector<Worksheet> out;
@@ -158,23 +184,29 @@ std::vector<Worksheet> Worksheets(const GdaFile &table, bool merged)
     }
     for (const auto &row : table.Rows())
     {
-        const auto *prefix = std::get_if<std::wstring>(&row[*worksheet]);
-        if (prefix == nullptr || prefix->empty())
+        if (auto sheet = SheetOf(row[*id], label ? &row[*label] : nullptr, row[*worksheet], merged))
+        {
+            out.push_back(std::move(*sheet));
+        }
+    }
+    return out;
+}
+
+std::vector<Worksheet> Worksheets(const Merged &table)
+{
+    std::vector<Worksheet> out;
+    for (const Row &row : table.rows)
+    {
+        const GdaFile::Cell *id = row.taken ? CellOf(table, row, "ID") : nullptr;
+        const GdaFile::Cell *worksheet = id != nullptr ? CellOf(table, row, "Worksheet") : nullptr;
+        if (worksheet == nullptr)
         {
             continue;
         }
-        Worksheet sheet;
-        sheet.id = IdOf(row[*id]).value_or(-1);
-        if (label)
+        if (auto sheet = SheetOf(*id, CellOf(table, row, "Label"), *worksheet, true))
         {
-            if (const auto *text = std::get_if<std::wstring>(&row[*label]))
-            {
-                sheet.label = *text;
-            }
+            out.push_back(std::move(*sheet));
         }
-        sheet.prefix = Lower(*prefix);
-        sheet.merged = merged;
-        out.push_back(std::move(sheet));
     }
     return out;
 }
