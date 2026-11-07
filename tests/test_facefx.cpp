@@ -203,6 +203,12 @@ TEST_CASE("a curve's value: Hermite by the slopes, linear, and held outside its 
     // Between the keys at 0 and 1: v0 = 1, v1 = 0, m0 = 2, m1 = -1, s = 0.5.
     // v = 1 + 0.5 * (2 + 0.5 * ((-3 - 4 + 1) + 0.5 * (2 - 1 + 2))) = 1 + 0.5 * (2 + 0.5 * (-6 + 1.5)) = 0.875
     CHECK(hermite.Evaluate(0.5f) == Approx(0.875f));
+    facefx::AnimCurve unknown; // another interpolation type is 0 between keys, its end keys still held
+    unknown.interpolation = 2;
+    unknown.keys = {{0.0f, 1.0f, 0, 0}, {1.0f, 3.0f, 0, 0}};
+    CHECK(unknown.Evaluate(0.5f) == 0.0f);
+    CHECK(unknown.Evaluate(-1.0f) == Approx(1.0f));
+    CHECK(unknown.Evaluate(2.0f) == Approx(3.0f));
     CHECK(linear.Evaluate(1.0f) == Approx(0.5f));
     CHECK(linear.Evaluate(3.0f) == Approx(1.0f));
     CHECK(facefx::AnimCurve{}.Evaluate(1.0f) == 0.0f);

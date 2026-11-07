@@ -651,6 +651,13 @@ float AnimCurve::Evaluate(float time) const
     {
         return k0.value + (s * d);
     }
+    // Any type but these two gives 0 between keys: the evaluation (0x00A16890) starts its result at 0
+    // (0x00A168B8), takes Hermite for 0 and linear for 1 (0x00A16ADF, 0x00A16B7A) and writes nothing
+    // otherwise (read 2026-11-06 by paragon-agent, checked by lib-agent).
+    if (interpolation != static_cast<std::uint32_t>(Interpolation::Hermite))
+    {
+        return 0;
+    }
     const float m0 = k0.slopeOut * dt;
     const float m1 = k1.slopeIn * dt;
     const float cubic = (m0 + m1) - (2 * d);
