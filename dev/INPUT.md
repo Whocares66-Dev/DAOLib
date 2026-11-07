@@ -116,7 +116,7 @@ Read 2026-10-31 by paragon-agent's helpers, checked by lib-agent-2 with a subage
   - **When it runs:** `EclipseGame::Update` (0x00412F4C) runs the mapper's dispatch (0x0087D690, through 0x004025B0) unless 0x004028A0 answers true [I for that byte].
   - **The mapping:** the dispatch takes the frame's events. For each one in order, it looks up the word in the map at +0x14 and the word less its modifiers in the map at +0x38, and collects the bound messages through 0x0087C950.
   - **The gate:** for each entry, `Allowed(text)` is asked (0x0087CA32, its one caller). **A barred text is dropped, not kept for later.** An allowed one is made into a message (`FromBindingText` 0x007957D0). A null message, for an unknown name, ends that key's list.
-  - **Then the sending:** only once every event of the frame is mapped are the messages sent, in order, to the game mode controller.
+  - **Then the sending:** only once every event of the frame is mapped are the messages sent, in order, to the game mode controller. The sends are synchronous (`Messages::Send` 0x004D20C0 calls the handler at once, through 0x004D8330) and happen in `DispatchInput`, before `FrameUpdate` in the same loop iteration (2026-11-07 by lib-agent-2).
   - **So** a message that changes the mode does not change the gating of keys pressed in the same frame [I, from the order].
   - **While remapping** (mapper +0x5C), each event goes out as one `RawInputMessage` instead, ungated.
 

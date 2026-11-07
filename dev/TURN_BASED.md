@@ -702,7 +702,7 @@ A cutscene and the mode controller (requests refused during a cutscene, Cutscene
 - Its leave (0x006910D0) pauses again only if it was paused before.
 - It ends no combat and changes no hostility (no group is touched), but it does deactivate the hostile creatures, which clears their commands: see the next section.
 
-**The world pass runs.** The controller's update (0x00641F90) runs the world pass (0x0064B010: `AIMaster::Update`, then every object's `Update`) when the mode's slot 18 (+0x48) answers true, and pause (app +0x100) isn't set. Dialog, Explore and Combat answer true; Cutscene answers false.
+**The world pass runs.** The controller's update (0x00641F90) runs the world pass (0x0064B010: `AIMaster::Update`, then every object's `Update`) when the mode's slot 18 (+0x48) answers true, and pause (app +0x100) isn't set. Dialog, Explore and Combat answer true; Cutscene answers false. Inside that update the creatures' movement step (`ClientAIMaster::Update` 0x0064A2D0, each creature's `UpdateMovement`) runs before the world pass, and the mode's own update after it, so a command started in a frame first moves its creature the next frame (PATHFINDING.md, the click's frame; 2026-11-07 by lib-agent-2).
 
 **The conversation's participants are frozen.** In mode 4, `CCCreature::Update` (0x006BE4B0) returns at once for a creature in the conversation (0x006BE500–0x006BE51C, checked: 0x0068CC30 on the dialogue mode).
 - So their commands, effect ageing, regeneration and heartbeat don't run.
