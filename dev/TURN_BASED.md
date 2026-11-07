@@ -600,7 +600,7 @@ GOG addresses.
     - **Word +0x58 == 0xE:** +0x58 is the apr_base row (CHARACTERS.md), and row 14 is the Wisp (`Cn_WISPa`, EFFECTS.md "The wisp") [C].
     - **+0xA08 is the selection ring's effect id** [C]:
       - 0x006A5F90 replaces it, with its vfx row at +0xA0C.
-      - Its only caller, 0x006AAC50, passes rows 30002–30012 ("Neutral Creature" … "Enemy Targeted"), or 0 when the ring is off.
+      - Its callers and the rows each passes are in EFFECTS.md, "Which ring, and when it is placed and removed" (corrected 2026-11-07 by lib-agent-3: it said 0x006AAC50 was its only caller; there are six).
     - **Its other reader, 0x006A5200** (ID 14563, a creature's per-frame update gate, (float* dt)) [C]:
       - It calls 0x006A42E0 first, then adds dt to +0xD00.
       - It lets the update through when any of these holds:
