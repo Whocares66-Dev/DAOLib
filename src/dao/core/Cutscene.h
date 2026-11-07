@@ -178,6 +178,9 @@ struct Actor
     // CutsceneActorAmbientAnim: the ambient pattern the creature takes back when the cut releases it, if
     // above 0; -1 where the actor has none.
     std::int32_t ambientAnim = -1;
+    // CutsceneActionApplycrustTargetID: the id of the actor it is a crust of, -1 for an actor that is none.
+    // The player binds crust actors after the others.
+    std::int32_t crustParent = -1;
     std::array<float, 3> originPosition{};
     std::array<float, 4> originOrientation{}; // a quaternion
     std::array<float, 3> finalPosition{};

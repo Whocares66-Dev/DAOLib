@@ -43,6 +43,10 @@ constexpr std::uint32_t kActorPoseHumanoid = 5213;
 // kept at +0x4EC, 0x007E0390); the conversation's release of a participant (0x007F0790) restores
 // AMBIENT_ANIM_PATTERN from it when it is above 0 (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
 constexpr std::uint32_t kActorAmbientAnim = 5225;
+// Read by the same constructor with -1 for one the actor lacks (label pushed at 0x007E0384, the -1 at
+// 0x007E0396, kept at +0x508 at 0x007E03C3); CutscenePlayer::Update moves the crust actors to the end of
+// its bind order (read 2026-11-07 by paragon-agent-2, the read checked by lib-agent).
+constexpr std::uint32_t kActorCrustParent = 5640;
 constexpr std::uint32_t kActorOriginPosition = 5214;
 constexpr std::uint32_t kActorOriginOrientation = 5215;
 constexpr std::uint32_t kActorMappingTag = 5216;
@@ -314,6 +318,7 @@ Actor ActorOf(const gff4::Struct &in)
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
         .ambientAnim = in.Get<std::int32_t>(kActorAmbientAnim).value_or(-1),
+        .crustParent = in.Get<std::int32_t>(kActorCrustParent).value_or(-1),
         .originPosition = Several<3>(in, kActorOriginPosition),
         .originOrientation = Several<4>(in, kActorOriginOrientation),
         .finalPosition = Several<3>(in, kActorFinalPosition),
