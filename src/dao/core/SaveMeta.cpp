@@ -32,6 +32,8 @@ std::optional<SaveMeta> SaveMeta::Parse(std::span<const std::byte> bytes)
     meta.gender = root->Get<std::int32_t>(kGender).value_or(0);
     meta.race = root->Get<std::int32_t>(kRace).value_or(0);
     meta.background = root->Get<std::int32_t>(kBackground).value_or(0);
+    meta.modules = root->String(kModules).value_or(L"");
+    meta.moduleOverrides = root->String(kModuleOverrides).value_or(L"");
     return meta;
 }
 
@@ -61,8 +63,11 @@ bool PutNumber(gff4::Editor &ed, const gff4::Struct &root, std::uint32_t label, 
 
 // Read 2026-10-21 for #226: the engine writes the metadata with the save (SaveGame::Write 0x00646280 appends
 // ".met" to the .das name, 0x00648110 fills it) and the save list reads it for every save, listing only one
-// whose file has 16809 ("single player;"; 16810 is "SP;"), so neither is touched here. A string that changes
-// is appended and its slot pointed at it; a number is written over its slot. dev/SAVES.md has the rest.
+// whose file has 16809 ("single player;"; 16810 is "SP;"). SaveLoadProxy::RefreshHeroes (0x006CFB60) reads
+// both (0x006CFD27, 0x006CFD56): for the hero import it leaves out a hero whose newest metadata's modules,
+// with their overrides, hold the module being played (read 2026-11-06 by paragon-agent-2, the reads checked
+// by lib-agent). A string that changes is appended and its slot pointed at it; a number is written over
+// its slot. dev/SAVES.md has the rest.
 std::optional<SaveMeta::Written> SaveMeta::Write(std::span<const std::byte> original, const SaveMeta &meta)
 {
     const auto file = gff4::File::Parse(original);
@@ -99,6 +104,8 @@ std::optional<SaveMeta::Written> SaveMeta::Write(std::span<const std::byte> orig
     number(kBackground, meta.background);
     text(kCharacter, meta.character);
     text(kName, meta.name);
+    text(kModules, meta.modules);
+    text(kModuleOverrides, meta.moduleOverrides);
     out.bytes = ed.Bytes();
     return out;
 }
@@ -118,7 +125,7 @@ std::vector<std::byte> SaveMeta::Blank()
     }
     gff4::Editor ed(*bare);
     const auto root = ed.New(0);
-    if (!root || !ed.SetString(*root, kListed, L"single player;") || !ed.SetString(*root, kListedShort, L"SP;"))
+    if (!root || !ed.SetString(*root, kModules, L"single player;") || !ed.SetString(*root, kModuleOverrides, L"SP;"))
     {
         return {};
     }

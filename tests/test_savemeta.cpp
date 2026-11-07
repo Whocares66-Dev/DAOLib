@@ -152,7 +152,8 @@ TEST_CASE("each changed field of the metadata reads back changed and nothing els
     const auto same = [](const SaveMeta &a, const SaveMeta &b) {
         return a.area == b.area && a.character == b.character && a.name == b.name && a.story == b.story &&
                a.secondsPlayed == b.secondsPlayed && a.level == b.level && a.characterClass == b.characterClass &&
-               a.gender == b.gender && a.race == b.race && a.background == b.background;
+               a.gender == b.gender && a.race == b.race && a.background == b.background && a.modules == b.modules &&
+               a.moduleOverrides == b.moduleOverrides;
     };
 
     auto got = write([](SaveMeta &m) { m.secondsPlayed = 99999; });
@@ -236,8 +237,8 @@ TEST_CASE("a blank metadata file parses as empty but for the two strings the sav
     CHECK(meta->level == 0);
     const auto root = file->Root();
     REQUIRE(root);
-    CHECK(root->String(SaveMeta::kListed).value_or(L"") == L"single player;");
-    CHECK(root->String(SaveMeta::kListedShort).value_or(L"") == L"SP;");
+    CHECK(root->String(SaveMeta::kModules).value_or(L"") == L"single player;");
+    CHECK(root->String(SaveMeta::kModuleOverrides).value_or(L"") == L"SP;");
 }
 
 TEST_CASE("a blank metadata file written over reads back what was set", "[savemeta][blank][write]")
@@ -269,12 +270,14 @@ TEST_CASE("a blank metadata file written over reads back what was set", "[saveme
     CHECK(back->gender == 1);
     CHECK(back->race == 3);
     CHECK(back->background == 5);
+    CHECK(back->modules == L"single player;");
+    CHECK(back->moduleOverrides == L"SP;");
     // The two strings the list tests ride along, and the file written again unchanged is itself.
     const auto file = dao::core::gff4::File::Parse(out->bytes);
     REQUIRE(file);
     const auto root = file->Root();
     REQUIRE(root);
-    CHECK(root->String(SaveMeta::kListed).value_or(L"") == L"single player;");
+    CHECK(root->String(SaveMeta::kModules).value_or(L"") == L"single player;");
     const auto again = SaveMeta::Write(out->bytes, *back);
     REQUIRE(again);
     CHECK(again->bytes == out->bytes);

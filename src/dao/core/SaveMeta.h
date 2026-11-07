@@ -41,6 +41,12 @@ struct SaveMeta
     std::int32_t gender = 0;
     std::int32_t race = 0;
     std::int32_t background = 0;
+    // The modules the save was made in, each followed by ';' ("single player;"), and their overrides
+    // ("SP;" for each). The save list lists a save only with the first, and the hero import leaves out a
+    // hero whose newest save holds the module being played. A new SaveMeta's are a single-player save's, as
+    // the engine writes them.
+    std::wstring modules = L"single player;";
+    std::wstring moduleOverrides = L"SP;";
 
     // The metadata in `bytes`; nothing if they are not a save's metadata.
     // A field the file lacks is left empty or 0.
@@ -54,9 +60,9 @@ struct SaveMeta
     };
 
     // A save's metadata file with `meta` written over `original`, the file `meta` was parsed from.
-    // Only the fields that differ from the original are set; the rest, the two fields the load screen needs
-    // among them, go through untouched, and an unchanged write is byte-identical. Nothing for bytes that are
-    // not a save's metadata. The screenshot is not in this file but beside the save.
+    // Only the fields that differ from the original are set; the rest go through untouched, and an unchanged write is
+    // byte-identical. Nothing for bytes that are not a save's metadata. The screenshot is not in this file but beside
+    // the save.
     static std::optional<Written> Write(std::span<const std::byte> original, const SaveMeta &meta);
 
     // The bytes of a metadata file with the two fields the save list lists a save by (16809 and 16810) set and
@@ -75,8 +81,8 @@ struct SaveMeta
     static constexpr std::uint32_t kBackground = 16806;
     static constexpr std::uint32_t kCharacter = 16807;
     static constexpr std::uint32_t kName = 16808;
-    static constexpr std::uint32_t kListed = 16809;      // "single player;", which the save list tests for
-    static constexpr std::uint32_t kListedShort = 16810; // "SP;"
+    static constexpr std::uint32_t kModules = 16809;
+    static constexpr std::uint32_t kModuleOverrides = 16810;
 };
 
 // A slot's kind as the engine numbers it (0 a manual save, 1 an autosave,

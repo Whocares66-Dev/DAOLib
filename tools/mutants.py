@@ -1172,8 +1172,8 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "savemeta-blank-listed: the blank sets 16809, which the save list tests for",
         SAVEMETA,
-        '!ed.SetString(*root, kListed, L"single player;")',
-        '!ed.SetString(*root, kListedShort, L"single player;")',
+        '!ed.SetString(*root, kModules, L"single player;")',
+        '!ed.SetString(*root, kModuleOverrides, L"single player;")',
     ),
     Mutant(
         "savemeta-blank-no-end-word: a metadata file's fields are not closed by a word of 0xFFFFFFFF",
