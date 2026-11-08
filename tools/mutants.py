@@ -2618,7 +2618,7 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "mat-semantic-name: a semantic with no name draws nothing",
         MATDEF,
-        "chosen->name.empty() || ",
+        "semantic.name.empty() || ",
         "",
     ),
     Mutant(
@@ -2668,6 +2668,12 @@ MUTANTS: list[Mutant] = [
         MATDEF,
         "return MatrixDefault().value_or(kIdentity);",
         "return MatrixDefault().value_or(Matrix{});",
+    ),
+    Mutant(
+        "mat-load-next-block: a technique that does not load is passed over for the next block",
+        MATDEF,
+        "return !loads || loads(*block.technique) ? &*block.technique : nullptr;",
+        "return &*block.technique;",
     ),
     Mutant(
         "mat-attributes-end: the next attribute starts after a value's closing quote",

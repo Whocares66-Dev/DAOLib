@@ -691,8 +691,10 @@ bool TestsPass(std::uint32_t flags, int level, bool shaderModel3)
 }
 
 // MaterialLogicBlock::SelectTechnique (0x005073C0): a block whose tests fail gives nothing, with its blocks;
-// one with a technique gives it; else the first block inside that gives one.
-const Technique *Select(const Block &block, int level, bool shaderModel3)
+// one with a technique gives it if its passes load (ValidatePasses 0x00506E40), else nothing; else the
+// first block inside that gives one. A block that gives nothing does not stop its siblings (0x00507437;
+// read 2026-11-07 for DAOParagonEngine's render port, which corrected "does not go on").
+const Technique *Select(const Block &block, int level, bool shaderModel3, const TechniqueLoads &loads)
 {
     if (!TestsPass(FlagsOf(block), level, shaderModel3))
     {
@@ -700,11 +702,11 @@ const Technique *Select(const Block &block, int level, bool shaderModel3)
     }
     if (block.technique)
     {
-        return &*block.technique;
+        return !loads || loads(*block.technique) ? &*block.technique : nullptr;
     }
     for (const Block &child : block.children)
     {
-        if (const Technique *chosen = Select(child, level, shaderModel3))
+        if (const Technique *chosen = Select(child, level, shaderModel3, loads))
         {
             return chosen;
         }
@@ -919,15 +921,80 @@ std::optional<Definition> Read(std::string_view text)
 // block above it. A pass is cleared (MaterialPass::Validate 0x005040F0) for an empty vertex or pixel shader,
 // no state block, a parameter that is not valid, two of one name, and two textures on one stage.
 // The state block, and whether a shader loads, are the files'; nothing here looks at them.
-const Technique *SelectTechnique(const Definition &definition, std::string_view semantic, int detailLevel,
-                                 bool shaderModel3)
+namespace
 {
-    const Semantic *chosen = semantic.empty() ? definition.DefaultSemantic() : definition.SemanticNamed(semantic);
-    if (chosen == nullptr || chosen->name.empty() || !chosen->logic || !BlockValid(*chosen->logic))
+
+const Technique *TechniqueOf(const Semantic &semantic, int detailLevel, bool shaderModel3, const TechniqueLoads &loads)
+{
+    if (semantic.name.empty() || !semantic.logic || !BlockValid(*semantic.logic))
     {
         return nullptr;
     }
-    return Select(*chosen->logic, detailLevel, shaderModel3);
+    return Select(*semantic.logic, detailLevel, shaderModel3, loads);
+}
+
+} // namespace
+
+const Technique *SelectTechnique(const Definition &definition, std::string_view semantic, int detailLevel,
+                                 bool shaderModel3, const TechniqueLoads &loads)
+{
+    const Semantic *chosen = semantic.empty() ? definition.DefaultSemantic() : definition.SemanticNamed(semantic);
+    return chosen != nullptr ? TechniqueOf(*chosen, detailLevel, shaderModel3, loads) : nullptr;
+}
+
+// Read 2026-11-07 for DAOParagonEngine's render port (dev/MATERIALS.md, "Which materials are valid"):
+// MaterialSemantic::Validate (0x004F6CD0) once at the build, Material::Validate (0x00503240) true when
+// one semantic's flag is set, and the object's ApplyMaterialDefaults (0x00502BB0), which for a parsed
+// .mat fails only with the material, so the instance's fallback to Default_Miss01 (0x004F49B0) follows
+// the material alone.
+std::vector<SemanticState> Semantics(const Definition &definition, int detailLevel, bool shaderModel3,
+                                     const TechniqueLoads &loads)
+{
+    std::vector<SemanticState> states;
+    for (const Semantic &semantic : definition.semantics)
+    {
+        const Technique *technique = TechniqueOf(semantic, detailLevel, shaderModel3, loads);
+        states.push_back({.semantic = &semantic, .technique = technique, .valid = technique != nullptr});
+    }
+    return states;
+}
+
+bool Valid(const Definition &definition, int detailLevel, bool shaderModel3, const TechniqueLoads &loads)
+{
+    return std::ranges::any_of(Semantics(definition, detailLevel, shaderModel3, loads),
+                               [](const SemanticState &state) { return state.valid; });
+}
+
+// ApplyMaterialDefaults (0x00502BB0) and ApplyParamDefaults (0x005028C0): the semantics last to first,
+// each with a technique (0x00502C3A), its passes last to first, and each pass's parameters last to first,
+// one table a kind keyed by the name, a name filled only where the table lacks it.
+std::vector<const Parameter *> Defaults(const Definition &definition, int detailLevel, bool shaderModel3,
+                                        const TechniqueLoads &loads)
+{
+    std::vector<const Parameter *> taken;
+    const auto seen = [&taken](const Parameter &p) {
+        return std::ranges::any_of(taken,
+                                   [&p](const Parameter *t) { return t->KindOf() == p.KindOf() && t->name == p.name; });
+    };
+    for (auto semantic = definition.semantics.rbegin(); semantic != definition.semantics.rend(); ++semantic)
+    {
+        const Technique *technique = TechniqueOf(*semantic, detailLevel, shaderModel3, loads);
+        if (technique == nullptr)
+        {
+            continue;
+        }
+        for (auto pass = technique->passes.rbegin(); pass != technique->passes.rend(); ++pass)
+        {
+            for (auto p = pass->parameters.rbegin(); p != pass->parameters.rend(); ++p)
+            {
+                if (p->KindOf() != Kind::Unknown && !seen(*p))
+                {
+                    taken.push_back(&*p);
+                }
+            }
+        }
+    }
+    return taken;
 }
 
 } // namespace dao::core::mat

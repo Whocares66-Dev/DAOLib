@@ -758,3 +758,48 @@ TEST_CASE("the game's definitions in game/materials, when there, read whole", "[
         }
     }
 }
+
+TEST_CASE("a technique that does not load is passed over for the next block", "[mat]")
+{
+    const auto definition = mat::Read(
+        OneSemantic("<Logic>" + Leaf(R"(ShaderModel="3")", "A") + Leaf(R"(ShaderModel="3")", "B") + "</Logic>"));
+    REQUIRE(definition);
+    const auto loads = [](const mat::Technique &technique) { return technique.name != "A"; };
+    const mat::Technique *chosen = mat::SelectTechnique(*definition, "S", 3, true, loads);
+    REQUIRE(chosen != nullptr);
+    CHECK(chosen->name == "B");
+    CHECK(mat::SelectTechnique(*definition, "S", 3, true)->name == "A"); // with no callback every one loads
+}
+
+TEST_CASE("a material is valid where one of its semantics is", "[mat]")
+{
+    const std::string semantics =
+        R"(<Semantic Name="Broken"/><Semantic Name="Good">)" + Leaf(R"(ShaderModel="3")", "T") + "</Semantic>";
+    const auto definition = mat::Read(R"(<Material Name="M">)" + semantics + "</Material>");
+    REQUIRE(definition);
+    const auto states = mat::Semantics(*definition, 3, true);
+    REQUIRE(states.size() == 2);
+    CHECK_FALSE(states[0].valid); // no logic
+    CHECK(states[0].technique == nullptr);
+    CHECK(states[1].valid);
+    CHECK(mat::Valid(*definition, 3, true));
+    const auto none = mat::Read(R"(<Material Name="M"><Semantic Name="Broken"/></Material>)");
+    REQUIRE(none);
+    CHECK_FALSE(mat::Valid(*none, 3, true));
+}
+
+TEST_CASE("an object's defaults are the last semantic's, pass's and parameter's of each name", "[mat]")
+{
+    const auto pass = [](std::string_view value) {
+        return R"(<Logic><Technique Name="T"><Pass VertexShader="a.vsh" PixelShader="a.psh" State="a.sta">)"
+               R"(<Parameter Type="Float" Name="x" Default=")" +
+               std::string(value) + R"("/></Pass></Technique></Logic>)";
+    };
+    const auto definition = mat::Read(R"(<Material Name="M"><Semantic Name="A">)" + pass("1") +
+                                      R"(</Semantic><Semantic Name="B">)" + pass("2") + "</Semantic></Material>");
+    REQUIRE(definition);
+    const auto defaults = mat::Defaults(*definition, 3, true);
+    REQUIRE(defaults.size() == 1);
+    CHECK(defaults[0]->name == "x");
+    CHECK(defaults[0]->FloatValue() == 2.0F);
+}

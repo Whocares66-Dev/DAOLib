@@ -14,6 +14,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -155,17 +156,45 @@ struct Definition
 // @return nullopt where the text has no Material element
 std::optional<Definition> Read(std::string_view text);
 
+// Answers whether a technique's passes load: both shaders of each found and compiled. The files a pass
+// names are not core's to look at; a caller with none takes every technique to load.
+using TechniqueLoads = std::function<bool(const Technique &technique)>;
+
 // Returns the technique the engine draws a semantic with, or nullptr where it draws nothing: the first
-// block, in file order and outermost first, whose tests hold and that has a technique. It draws nothing
-// if the semantic has no name or no logic, any block in its tree has
-// both a technique and blocks inside, any technique has no pass, or any pass is invalid (a shader
-// missing, a parameter not valid, two of a name, two textures on one stage). The files a pass names
-// are not looked at: a caller that finds a shader or a state missing treats the technique as the
-// engine does, as invalid, and does not go on to the next block.
+// block, in file order and outermost first, whose tests hold and that has a technique that loads; a
+// technique that does not load is passed over for the next block. It draws nothing if the semantic
+// has no name or no logic, any block in its tree has both a technique and blocks inside, any technique
+// has no pass, or any pass is invalid (a shader unnamed, a parameter not valid, two of a name, two
+// textures on one stage), wherever in the tree.
 // @param semantic the semantic's name; empty for the default
 // @param detailLevel the graphics detail level: 0 lowest, 3 highest
 // @param shaderModel3 whether the device has shader model 3; otherwise it is taken to have shader model 2
 const Technique *SelectTechnique(const Definition &definition, std::string_view semantic, int detailLevel,
-                                 bool shaderModel3);
+                                 bool shaderModel3, const TechniqueLoads &loads = {});
+
+// A semantic of a material as the engine builds it: the technique it draws with, and whether it is valid.
+struct SemanticState
+{
+    const Semantic *semantic = nullptr;
+    const Technique *technique = nullptr; // nullptr where it draws nothing
+    bool valid = false;                   // it has a name, a tree that is valid and a technique
+};
+
+// Returns every semantic of a material, in file order, with its technique and whether it is valid, as
+// SelectTechnique judges each.
+std::vector<SemanticState> Semantics(const Definition &definition, int detailLevel, bool shaderModel3,
+                                     const TechniqueLoads &loads = {});
+
+// Returns whether the engine takes a material as valid: it has a semantic that is. A material object of
+// one that is not draws Default_Miss01.mao in its place; one whose own semantic is not valid but whose
+// material is draws nothing.
+bool Valid(const Definition &definition, int detailLevel, bool shaderModel3, const TechniqueLoads &loads = {});
+
+// Returns the parameters a material object takes its defaults from, one of each kind and name, in
+// the order the engine visits them: the semantics, the passes of each one's technique, and the
+// parameters of each pass, each last to first, a name of a kind taken at its first visit. A semantic
+// that draws nothing gives none. The object's own value of a name comes before any of these.
+std::vector<const Parameter *> Defaults(const Definition &definition, int detailLevel, bool shaderModel3,
+                                        const TechniqueLoads &loads = {});
 
 } // namespace dao::core::mat
