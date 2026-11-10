@@ -30,6 +30,7 @@
 #include "dao/Module.h"
 #include "dao/Objects.h"
 #include "dao/SafeRead.h"
+#include "dao/SubActions.h"
 #include "dao/core/ObjectType.h"
 
 #include <cmath>
@@ -57,15 +58,8 @@ struct Held
     std::uintptr_t subAction = 0; // the conjure it is holding
 };
 
-struct Seen
-{
-    std::int32_t elapsed = 0;
-    std::int32_t duration = 0;
-};
-
 std::mutex g_lock;
 std::unordered_map<ObjectId, Held> g_held;
-std::unordered_map<ObjectId, Seen> g_seen;
 
 // CSSubActionHandler::Execute: __thiscall (object, sub-action), `ret 8`.
 using ExecuteFn = std::int32_t(__fastcall *)(void *handler, int edx, CCObject *object, std::uintptr_t subAction);
@@ -82,7 +76,6 @@ std::int32_t __fastcall Execute(void *handler, int edx, CCObject *object, std::u
         {
             const ObjectId id = object->Id();
             const std::lock_guard lock(g_lock);
-            std::int32_t now = *elapsed;
             if (const auto held = g_held.find(id); held != g_held.end())
             {
                 Held &hold = held->second;
@@ -95,10 +88,8 @@ std::int32_t __fastcall Execute(void *handler, int edx, CCObject *object, std::u
                 }
                 hold.elapsed = std::fmin(hold.elapsed + hold.fed, *duration);
                 hold.fed = 0;
-                now = static_cast<std::int32_t>(hold.elapsed);
-                *reinterpret_cast<std::int32_t *>(subAction + kElapsed) = now;
+                *reinterpret_cast<std::int32_t *>(subAction + kElapsed) = static_cast<std::int32_t>(hold.elapsed);
             }
-            g_seen[id] = Seen{now, *duration};
         }
     }
     return g_execute.Original()(handler, edx, object, subAction);
@@ -147,27 +138,16 @@ void FeedConjure(ObjectId caster, float seconds)
 
 std::optional<Conjuring> Conjure(ObjectId caster)
 {
-    Attach();
-    CClientExoApp *app = CClientExoApp::Get();
-    const CCObject *object = app != nullptr ? app->GetObjectById(caster) : nullptr;
-    if (object == nullptr || object->Type() != core::ObjectType::Creature)
+    // Read the live step, rather than the last Execute sample. Effects can
+    // update after a new conjure starts but before Execute sees it; a cached
+    // sample then belongs to the preceding cast (DAOTurnBased #123).
+    const auto steps = SubActions(caster);
+    if (steps.empty() || steps.front().type != kConjure || steps.front().durationMs <= 0)
     {
         return std::nullopt;
     }
-    // CCCreature::ForScript_IsConjuring: __thiscall, no arguments; the
-    // running sub-action's type (dev/TURN_BASED.md).
-    using IsConjuringFn = std::uint32_t(__fastcall *)(const CCObject *, int);
-    if (reinterpret_cast<IsConjuringFn>(Module::Address(addr::kCCCreature_IsConjuring))(object, 0) != kConjure)
-    {
-        return std::nullopt;
-    }
-    const std::lock_guard lock(g_lock);
-    const auto seen = g_seen.find(caster);
-    if (seen == g_seen.end())
-    {
-        return std::nullopt;
-    }
-    return Conjuring{static_cast<float>(seen->second.elapsed) / 1000, static_cast<float>(seen->second.duration) / 1000};
+    const auto &step = steps.front();
+    return Conjuring{static_cast<float>(step.elapsedMs) / 1000, static_cast<float>(step.durationMs) / 1000};
 }
 
 // The type of the sub-action a creature's current command is at, as the

@@ -258,6 +258,16 @@ class CGameEffect : public CDataArrays
         return Read<std::int32_t>(0x44);
     }
 
+    // Returns the engine's parameter arrays, separate from the script parameters at +0.
+    // GetEffectEngineInteger and the conjure-VFX matcher (GOG 0x00742D10) read this
+    // second CDataArrays at +0x54; EFFECT_INTEGER_VFX (2) is its visual-effect row.
+    // Seen in play 2026-11-09: Mass Paralysis's conjure reads row 90265 here,
+    // matching abi_base.ConjureVFX; its script parameters do not identify it.
+    const CDataArrays &EngineParameters() const
+    {
+        return *reinterpret_cast<const CDataArrays *>(reinterpret_cast<const std::byte *>(this) + 0x54);
+    }
+
     // Notes on a temporary effect's time, read 2026-09-30: Engine_ApplyEffectOnObject stores the
     // duration it is given, times 1000, at +0x2C (0x0065C760); AddElapsed (0x0079F2A0) adds each
     // update's time to +0x30, never past the duration; the effect ends when nothing is left

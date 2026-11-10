@@ -45,8 +45,7 @@ struct Conjuring
 };
 
 // Returns how far along a caster's conjure is, held or not.
-// @return nullopt if the caster is not conjuring or is not a creature, or if no game update has
-//  run since this part of the library was first used
+// @return nullopt if the caster is not conjuring, is not a creature, or its conjure is not timed
 //
 // Call it on the game thread (dao/Frame.h).
 std::optional<Conjuring> Conjure(ObjectId caster);
