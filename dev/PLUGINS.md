@@ -201,6 +201,7 @@ A detour on an engine function runs on whichever thread called the function. Nev
 | To | Use | Header |
 |---|---|---|
 | Run code every frame | `dao::OnFrame(fn)` | `dao/Frame.h` |
+| Finish a rendered frame before the engine presents it | `dao::render::OnFrameEnd(fn)` | `dao/RenderFrame.h` |
 | Watch or take any engine message | `dao::messages::OnMessage<SetGameModeMessage>(fn)`, `InterceptMessage<PerformAbilityMessage>(fn)`, `OnAnyMessage(fn)` | `dao/Messages.h` |
 | Hook an engine message handler | `dao::messages::handler::GameModeExplore_PerformAbilityMessage` with `TypedHandlerFn` | `dao/Messages.h`, `dao/generated/MessageHandlers.h` |
 | Send an engine message | `dao::messages::Send(modes->CurrentModeObject(), message)`, `Make<CenterOnObjectMessage>()` | `dao/Messages.h` |

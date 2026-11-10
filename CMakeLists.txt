@@ -322,6 +322,7 @@ add_library(
     src/dao/Party.cpp
     src/dao/Portraits.cpp
     src/dao/Render.cpp
+    src/dao/RenderFrame.cpp
     src/dao/Resources.cpp
     src/dao/Creatures.cpp
     src/dao/Events.cpp

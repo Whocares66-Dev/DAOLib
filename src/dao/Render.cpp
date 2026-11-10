@@ -4,6 +4,7 @@
 #include "dao/GraphicsNodes.h"
 #include "dao/Hook.h"
 #include "dao/Module.h"
+#include "dao/RenderFrame.h"
 #include "dao/Resources.h"
 #include "dao/SafeRead.h"
 
@@ -29,7 +30,9 @@
 // methods are hooked by their vtable entries, not detoured in d3d9.dll's code: an overlay that
 // hooks them inline and writes its bytes back when it lets the game go (RivaTuner Statistics
 // Server, seen 2026-11-04, DAOElgaraShaders #73) erased the detours placed after it, and then no
-// frame ended. Direct3DCreate9, an export, stays a detour (DAOLib #319).
+// frame ended. Direct3DCreate9, an export, stays a detour (DAOLib #319). Presentation
+// is watched at the engine's callers instead: Steam can rehook a COM Present vtable
+// replacement and create a recursion loop (DAOElgaraShaders #80, 2026-11-10).
 
 namespace dao::render
 {
@@ -40,9 +43,6 @@ namespace
 using CreateFn = IDirect3D9 *(__stdcall *)(UINT);
 using CreateDeviceFn = HRESULT(__stdcall *)(IDirect3D9 *, UINT, D3DDEVTYPE, HWND, DWORD, D3DPRESENT_PARAMETERS *,
                                             IDirect3DDevice9 **);
-using PresentFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, const RECT *, const RECT *, HWND, const RGNDATA *);
-using ChainPresentFn = HRESULT(__stdcall *)(IDirect3DSwapChain9 *, const RECT *, const RECT *, HWND, const RGNDATA *,
-                                            DWORD);
 using DrawFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, UINT);
 using DrawIndexedFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
 using DrawUpFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, const void *, UINT);
@@ -50,18 +50,14 @@ using DrawIndexedUpFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYP
                                              D3DFORMAT, const void *, UINT);
 
 constexpr std::size_t kCreateDeviceSlot = 16;  // IDirect3D9::CreateDevice
-constexpr std::size_t kPresentSlot = 17;       // IDirect3DDevice9::Present
 constexpr std::size_t kDrawSlot = 81;          // IDirect3DDevice9::DrawPrimitive
 constexpr std::size_t kDrawIndexedSlot = 82;   // IDirect3DDevice9::DrawIndexedPrimitive
 constexpr std::size_t kDrawUpSlot = 83;        // IDirect3DDevice9::DrawPrimitiveUP
 constexpr std::size_t kDrawIndexedUpSlot = 84; // IDirect3DDevice9::DrawIndexedPrimitiveUP
-constexpr std::size_t kChainPresentSlot = 3;   // IDirect3DSwapChain9::Present
 constexpr DWORD kVertexSamplers = D3DVERTEXTEXTURESAMPLER0;
 
 Detour<CreateFn> g_create;
 VtableHook<CreateDeviceFn> g_createDevice;
-VtableHook<PresentFn> g_present;
-VtableHook<ChainPresentFn> g_chainPresent;
 VtableHook<DrawFn> g_draw;
 VtableHook<DrawIndexedFn> g_drawIndexed;
 VtableHook<DrawUpFn> g_drawUp;
@@ -625,35 +621,13 @@ HRESULT __stdcall DrawIndexedPrimitiveUp(IDirect3DDevice9 *device, D3DPRIMITIVET
     return g_drawIndexedUp.Original()(device, type, minIndex, vertices, count, indices, format, data, stride);
 }
 
-HRESULT __stdcall Present(IDirect3DDevice9 *device, const RECT *source, const RECT *dest, HWND window,
-                          const RGNDATA *dirty)
-{
-    EndFrame();
-    return g_present.Original()(device, source, dest, window, dirty);
-}
-
-HRESULT __stdcall ChainPresent(IDirect3DSwapChain9 *chain, const RECT *source, const RECT *dest, HWND window,
-                               const RGNDATA *dirty, DWORD flags)
-{
-    EndFrame();
-    return g_chainPresent.Original()(chain, source, dest, window, dirty, flags);
-}
-
 void AttachDevice(IDirect3DDevice9 *device)
 {
     const bool drawn = g_draw.Attach(device, kDrawSlot, &DrawPrimitive) &&
                        g_drawIndexed.Attach(device, kDrawIndexedSlot, &DrawIndexedPrimitive) &&
                        g_drawUp.Attach(device, kDrawUpSlot, &DrawPrimitiveUp) &&
                        g_drawIndexedUp.Attach(device, kDrawIndexedUpSlot, &DrawIndexedPrimitiveUp);
-    bool presented = g_present.Attach(device, kPresentSlot, &Present);
-    IDirect3DSwapChain9 *chain = nullptr;
-    if (SUCCEEDED(device->GetSwapChain(0, &chain)) && chain != nullptr)
-    {
-        presented = g_chainPresent.Attach(chain, kChainPresentSlot, &ChainPresent) && presented;
-        chain->Release();
-    }
-    spdlog::info("render: {} on the device's draws, {} on its presents", drawn ? "hooks" : "no hooks",
-                 presented ? "hooks" : "not all hooks");
+    spdlog::info("render: {} on the device's draws", drawn ? "hooks" : "no hooks");
 }
 
 HRESULT __stdcall CreateDevice(IDirect3D9 *direct3d, UINT adapter, D3DDEVTYPE type, HWND window, DWORD behaviour,
@@ -682,6 +656,7 @@ void Attach()
 {
     static std::once_flag once;
     std::call_once(once, [] {
+        OnFrameEnd([](IDirect3DDevice9 *, bool) { EndFrame(); });
         resources::OnTexture(
             [](const resources::Texture &texture) {
                 const std::lock_guard lock(g_lock);

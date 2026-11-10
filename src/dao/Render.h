@@ -98,7 +98,8 @@ struct Draw
 
 // What a watch hands a draw to, on the render thread.
 using DrawEvent = std::function<void(const Draw &draw)>;
-// What a watch hands the end of an armed frame to, on the render thread, at the frame's present.
+// What a watch hands the end of an armed frame to, on the render thread, before the engine's
+// present (also if fast loading subsequently skips displaying it; dao/RenderFrame.h).
 using PresentEvent = std::function<void(std::uint64_t frame)>;
 
 // A plugin's watch on the draws: a handle to the library's record of it.
