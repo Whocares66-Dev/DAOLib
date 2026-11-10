@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Ability targeting for plugins:** `GameModeExplore::RequestTarget` forwards to the normal quickbar handler, so circle and cone spells get their ground indicators. It uses vanilla target selection: an existing valid target may be used immediately, otherwise the player is asked to pick one (#330; DAOTurnBased #122).
+
 ## 0.10.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). The loader and its contract with plugins are as in 0.3.0.

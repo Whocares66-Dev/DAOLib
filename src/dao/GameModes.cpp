@@ -55,6 +55,7 @@
 
 #include "dao/Guard.h"
 #include "dao/Hook.h"
+#include "dao/Messages.h"
 #include "dao/SafeRead.h"
 #include "dao/TypeName.h"
 
@@ -66,6 +67,15 @@
 
 namespace dao
 {
+
+void GameModeExplore::RequestTarget(std::int32_t ability, ObjectId caster)
+{
+    auto message = messages::Make<messages::PerformAbilityMessage>();
+    message.ability = ability;
+    message.caster = caster;
+    using Fn = messages::TypedHandlerFn<messages::PerformAbilityMessage>;
+    reinterpret_cast<Fn>(Module::Address(messages::handler::GameModeExplore_PerformAbilityMessage))(this, 0, &message);
+}
 
 // +0x58 points to an array of the mode objects indexed by the mode's number, 13 entries (seen in
 // play 2026-09-30, one GameMode class per number: dao::GameMode), as SetGameMode finds them. Not
