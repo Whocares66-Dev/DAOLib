@@ -367,13 +367,14 @@ TEST_CASE("the Game tab's free rows are under its two columns", "[options]")
     using dao::core::options_movie::FreeSlots;
     const auto slots = FreeSlots(OptionsMovie());
     REQUIRE(slots);
-    // Under OptLootShimmer_mc at (7, 228), a row every 35 to 403; then
+    // Under OptLootShimmer_mc at (7, 228), a row every 35 to 438; then
     // under OptShowTutorials_mc at (483, 166).
-    REQUIRE(slots->size() == 11);
+    REQUIRE(slots->size() == 12);
     CHECK((*slots)[0] == dao::core::options_movie::Slot{7, 263, 0});
     CHECK((*slots)[4] == dao::core::options_movie::Slot{7, 403, 0});
-    CHECK((*slots)[5] == dao::core::options_movie::Slot{483, 201, 1});
-    CHECK((*slots)[10] == dao::core::options_movie::Slot{483, 376, 1});
+    CHECK((*slots)[5] == dao::core::options_movie::Slot{7, 438, 0});
+    CHECK((*slots)[6] == dao::core::options_movie::Slot{483, 201, 1});
+    CHECK((*slots)[11] == dao::core::options_movie::Slot{483, 376, 1});
     CHECK_FALSE(FreeSlots({}));
 }
 
@@ -413,7 +414,7 @@ TEST_CASE("a section is the game's heading over its checkboxes, in one column", 
     CHECK(toggle->y == 333);
 
     // The second needs four rows one under the other, and the left column
-    // has two left: it goes to the right column, whose bar is 37 left of
+    // has three left: it goes to the right column, whose bar is 37 left of
     // its checkboxes.
     const auto second = gfx::FindInstance(*patched, HeadingInstance({483, 201, 1}));
     const auto a = gfx::FindInstance(*patched, ControlInstance("DAOLibA"));
@@ -457,13 +458,14 @@ TEST_CASE("a second plugin's sections go in the rows the first left", "[options]
         movie, std::vector<Section>{{"First", {{"DAOLibOne", "One", ""}, {"DAOLibTwo", "Two", ""}}}}, shown);
     REQUIRE(first);
     CHECK(Shown(shown) == 1);
-    // The bar lies in two rows and the checkboxes in two: one row is left
+    // The bar lies in two rows and the checkboxes in two: two rows are left
     // on the left, and the right column's six.
     const auto slots = FreeSlots(*first);
     REQUIRE(slots);
-    REQUIRE(slots->size() == 7);
+    REQUIRE(slots->size() == 8);
     CHECK((*slots)[0] == Slot{7, 403, 0});
-    CHECK((*slots)[1] == Slot{483, 201, 1});
+    CHECK((*slots)[1] == Slot{7, 438, 0});
+    CHECK((*slots)[2] == Slot{483, 201, 1});
 
     const auto both = AddSections(*first, std::vector<Section>{{"Second", {{"DAOLibThree", "Three", ""}}}}, shown);
     REQUIRE(both);
@@ -567,8 +569,8 @@ TEST_CASE("a section goes in the column it asks for, or in the other for want of
 
     // The right holds a heading and four: with those in it, a section that
     // asks for the right goes in the left.
-    const Section four{"Four",
-                       {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
+    Section four{"Four", {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
+    four.column = 1;
     const auto full = AddSections(movie, std::vector<Section>{four, right}, shown);
     REQUIRE(full);
     CHECK(Shown(shown) == 2);
@@ -581,24 +583,24 @@ TEST_CASE("a section with no room is left out, and those after it", "[options]")
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
     const Bytes movie = OptionsMovie();
-    // A heading and four checkboxes are six rows: only the right column
-    // has them. A heading and three are the left's five. Then nothing is
-    // free, and what comes after is left out.
-    const Section four{"Four",
-                       {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
-    const Section three{"Three", {{"DAOLibX", "X", ""}, {"DAOLibY", "Y", ""}, {"DAOLibZ", "Z", ""}}};
+    // Fill the right and then the left, six rows each. What comes after
+    // is left out, without moving any control into the bottom buttons.
+    Section four{"Four", {{"DAOLibF0", "0", ""}, {"DAOLibF1", "1", ""}, {"DAOLibF2", "2", ""}, {"DAOLibF3", "3", ""}}};
+    four.column = 1;
+    const Section left{"Left",
+                       {{"DAOLibX", "X", ""}, {"DAOLibY", "Y", ""}, {"DAOLibZ", "Z", ""}, {"DAOLibW", "W", ""}}};
     const Section small{"Small", {{"DAOLibS", "S", ""}}};
     std::vector<bool> shown(9, true);
-    const auto patched = AddSections(movie, std::vector<Section>{four, three, small}, shown);
+    const auto patched = AddSections(movie, std::vector<Section>{four, left, small}, shown);
     REQUIRE(patched);
     CHECK(shown == std::vector<bool>{true, true, false});
     const auto lastOfFour = gfx::FindInstance(*patched, ControlInstance("DAOLibF3"));
-    const auto lastOfThree = gfx::FindInstance(*patched, ControlInstance("DAOLibZ"));
-    REQUIRE((lastOfFour && lastOfThree));
+    const auto lastOfLeft = gfx::FindInstance(*patched, ControlInstance("DAOLibW"));
+    REQUIRE((lastOfFour && lastOfLeft));
     CHECK(lastOfFour->x == 483);
     CHECK(lastOfFour->y == 376);
-    CHECK(lastOfThree->x == 7);
-    CHECK(lastOfThree->y == 403);
+    CHECK(lastOfLeft->x == 7);
+    CHECK(lastOfLeft->y == 438);
     CHECK_FALSE(gfx::FindInstance(*patched, ControlInstance("DAOLibS")));
     const auto none = FreeSlots(*patched);
     REQUIRE(none);
@@ -659,12 +661,13 @@ TEST_CASE("a choice is the game's slider with named stops, under the checkboxes"
                    gfx::Do(gfx::Op::CallMethod), gfx::Do(gfx::Op::SetMember)});
     CHECK(Holds(*patched, setUp));
 
-    // Both of its rows are taken for whoever comes next: the left column is
-    // full, and the right's six rows are free still.
+    // Both of its rows are taken for whoever comes next. The left has its
+    // extra bottom row, and the right's six rows are free still.
     const auto after = FreeSlots(*patched);
     REQUIRE(after);
-    CHECK(after->size() == 6);
-    CHECK(std::all_of(after->begin(), after->end(), [](const auto &slot) { return slot.column == 1; }));
+    REQUIRE(after->size() == 7);
+    CHECK(after->front() == dao::core::options_movie::Slot{7, 438, 0});
+    CHECK(std::all_of(after->begin() + 1, after->end(), [](const auto &slot) { return slot.column == 1; }));
 }
 
 TEST_CASE("a choice can be the game's dropdown, deepest so that its list covers what is under it", "[options]")
@@ -675,9 +678,10 @@ TEST_CASE("a choice can be the game's dropdown, deepest so that its list covers 
     using dao::core::options_movie::FreeSlots;
     using dao::core::options_movie::Section;
     const Bytes movie = OptionsMovie();
-    // Two sections with a dropdown each: one over a slider, six rows, which
-    // only the right column has; one under a checkbox, the left's five.
+    // Two sections with a dropdown each: one over a slider on the right;
+    // one under a checkbox on the left.
     Section graphics{"Graphics", {}};
+    graphics.column = 1;
     graphics.choices.push_back({"DAOLibAntiAliasing", "Anti-aliasing", "Which", {"Default", "SMAA"}, true});
     graphics.choices.push_back({"DAOLibLook", "Look", "", {"Plain", "Vivid"}});
     Section other{"Other", {{"DAOLibBox", "A box", ""}}};
@@ -730,17 +734,17 @@ TEST_CASE("a choice can be the game's dropdown, deepest so that its list covers 
     CHECK(gfx::InsertBefore(*patched, {2, "OptAutoPause_mc_init"}, gfx::Do(gfx::Op::Pop)));
 
     // A dropdown's two rows are taken for whoever comes next, as a slider's
-    // are: nothing is free after these two, and after a heading and a
-    // dropdown alone the left column has its last row.
+    // are: the left's extra bottom row is free after these two, and after
+    // a heading and a dropdown alone the left column has two rows.
     const auto after = FreeSlots(*patched);
     REQUIRE(after);
-    CHECK(after->empty());
+    CHECK(*after == std::vector<dao::core::options_movie::Slot>{{7, 438, 0}});
     const auto alone =
         AddSections(movie, std::vector<Section>{{"One", {}, {{"DAOLibOnly", "Only", "", {"a", "b"}, true}}}}, shown);
     REQUIRE(alone);
     const auto left = FreeSlots(*alone);
     REQUIRE(left);
-    REQUIRE(left->size() == 7);
+    REQUIRE(left->size() == 8);
     CHECK((*left)[0] == dao::core::options_movie::Slot{7, 403, 0});
 }
 
@@ -763,7 +767,7 @@ TEST_CASE("a section with a choice that does not fit is left out", "[options]")
     using dao::core::options_movie::AddSections;
     using dao::core::options_movie::Section;
     // A heading, a checkbox and two sliders are six rows, the sliders' 82
-    // in three, which the right column has; a third slider makes it seven,
+    // in three, which either column has; a third slider makes it seven,
     // more than either column has.
     Section section{"Big", {{"DAOLibOne", "One", ""}}};
     section.choices.push_back({"DAOLibA", "A", "", {"x", "y"}});
@@ -773,10 +777,45 @@ TEST_CASE("a section with a choice that does not fit is left out", "[options]")
     REQUIRE(fits);
     CHECK(Shown(shown) == 1);
     CHECK(gfx::FindInstance(*fits, "OptDAOLibA_mc")->sprite == kGameTab);
-    CHECK(gfx::FindInstance(*fits, "OptDAOLibA_mc")->x == 483 + 40);
+    CHECK(gfx::FindInstance(*fits, "OptDAOLibA_mc")->x == 7 + 40);
     section.choices.push_back({"DAOLibC", "C", "", {"x", "y"}});
     CHECK_FALSE(AddSections(OptionsMovie(), std::vector<Section>{section}, shown));
     CHECK(Shown(shown) == 0);
+}
+
+TEST_CASE("the left fits two fight sliders while the loader's Performance section stays right", "[options]")
+{
+    using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
+    Section performance{"Performance",
+                        {{"DAOLibOcclusion", "Dynamic occlusion", ""}, {"DAOLibFastLoad", "Fast loading", ""}}};
+    performance.column = 1;
+    std::vector<bool> shown;
+    const auto loader = AddSections(OptionsMovie(), std::vector<Section>{performance}, shown);
+    REQUIRE(loader);
+    REQUIRE(shown == std::vector<bool>{true});
+    Section turns{"Turn-based", {{"TurnBasedCombat", "Turn-based combat", ""}}};
+    turns.choices.push_back({"TurnBasedDamageScale", "Damage scaling", "", {"1x", "1.25x", "1.5x", "2x", "3x"}});
+    turns.choices.push_back({"TurnBasedSpeed", "Fight speed", "", {"0.5x", "1x", "2x", "3x"}});
+    // A plugin patches the movie the loader already patched, as in play.
+    const auto patched = AddSections(*loader, std::vector<Section>{turns}, shown);
+    REQUIRE(patched);
+    REQUIRE(shown == std::vector<bool>{true});
+    const auto damage = gfx::FindInstance(*patched, ControlInstance("TurnBasedDamageScale"));
+    const auto speed = gfx::FindInstance(*patched, ControlInstance("TurnBasedSpeed"));
+    const auto fast = gfx::FindInstance(*patched, ControlInstance("DAOLibFastLoad"));
+    REQUIRE((damage && speed && fast));
+    CHECK(damage->x == 47);
+    CHECK(damage->y == 368);
+    CHECK(speed->x == damage->x);
+    CHECK(speed->y == 409);
+    // Including the slider's full pitch, its bottom is stage y=650,
+    // above the bottom buttons at 674.5. Restore Defaults is only right.
+    CHECK(200 + speed->y + 41 < 674);
+    CHECK(fast->x == 483);
+    CHECK(fast->y == 306);
+    const auto free = FreeSlots(*patched);
+    REQUIRE(free);
+    CHECK(std::all_of(free->begin(), free->end(), [](const Slot &slot) { return slot.column == 1; }));
 }
 
 TEST_CASE("the Video tab's free rows are its right column's, from the bars' height down", "[options]")

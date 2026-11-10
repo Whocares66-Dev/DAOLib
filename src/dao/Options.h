@@ -122,7 +122,7 @@ enum class Column
 // A tab of the options screen.
 enum class Tab
 {
-    Game,     // five free rows in its left column, six in its right
+    Game,     // six free rows in each column
     Video,    // its right column, fourteen rows: a heading, two checkboxes and eight sliders, say
     Online,   // nine free rows in its left column, seven in its right
     Controls, // the key bindings; no room for a section

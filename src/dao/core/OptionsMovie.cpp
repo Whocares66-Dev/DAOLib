@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <ranges>
 #include <utility>
 
 namespace dao::core::options_movie
@@ -44,7 +45,11 @@ struct ColumnLayout
 };
 using TabLayout = std::array<ColumnLayout, 2>;
 
-constexpr TabLayout kGameTab = {{{"OptLootShimmer_mc", 403, 15, 40, 4}, {"OptShowTutorials_mc", 403, 37, 40, 4}}};
+// Restore Defaults is on the right at stage y=628.5. The left is clear
+// down to the bottom buttons at y=674.5: its final checkbox can start at
+// 438 in this clip (stage y=638) and end at 668. Sharing the right's lower
+// limit discarded that row and hid a checkbox with two sliders (TB #125).
+constexpr TabLayout kGameTab = {{{"OptLootShimmer_mc", 438, 15, 40, 4}, {"OptShowTutorials_mc", 403, 37, 40, 4}}};
 // The Video tab as LayOutVideo leaves it: the left column full to its last
 // control, no row under it, and the right column a clip with nothing of the
 // game's, its rows from kVideoRightTop to the Game tab's last row on the
@@ -128,9 +133,9 @@ gfx::Bytes ValuesArray(const Choice &choice)
 {
     using namespace gfx;
     std::vector<Value> values;
-    for (auto it = choice.values.rbegin(); it != choice.values.rend(); ++it)
+    for (const auto &value : std::views::reverse(choice.values))
     {
-        values.push_back(Text(*it));
+        values.push_back(Text(value));
     }
     values.push_back(Integer(static_cast<std::int32_t>(choice.values.size())));
     return Join({Push(values), Do(Op::InitArray)});

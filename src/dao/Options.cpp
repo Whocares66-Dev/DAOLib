@@ -17,10 +17,10 @@
 // it takes the checkbox's request to be told its option's value, and its
 // click, before the engine sees either.
 //
-// There is room for eleven rows: five under the left column and six under
-// the right. A heading is the game's own gold bar and takes two, so the
-// left column holds a heading and three checkboxes, the right a heading
-// and four. The rows are shared with every other plugin that adds a
+// There is room for twelve rows: six under each column. The left can go
+// lower than the right, where Restore Defaults stands. A heading is the
+// game's own gold bar and takes two, leaving four checkboxes in either.
+// The rows are shared with every other plugin that adds a
 // section, each taking what the ones before it left.
 //
 // Seen in play, 2026-10-01, with examples/options/ beside examples/input/
