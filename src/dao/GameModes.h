@@ -101,21 +101,16 @@ class GameModeExplore
         return {hits, count > 0 && count <= kMaxHits ? static_cast<std::size_t>(count) : 0};
     }
 
-    // Notes on RequestTarget: it is what the quickbar's handler does when it finds no target
-    // (dao/Messages.h, PerformAbilityMessage), and the click uses the ability through
-    // PerformAbilityOnTargetUnderCursorMessage. BeginTargeting (dao/Addresses.h) shows "Target
-    // Required" instead when its input check fails. Seen in play 2026-09-30, by the turn-based
-    // mod: Shield Pummel asked for its target, and the click used it.
+    // Notes on RequestTarget: forward to the normal quickbar handler, which owns the whole
+    // targeting setup, including the area row and circle/cone shape. BeginTargeting alone
+    // left the shape at creature (issue #330). Call the handler directly so an interceptor
+    // forwarding this message does not intercept its own forwarding again.
 
-    // Asks the player to pick a target for an ability. It shows the targeting cursor, and uses
-    // the ability on whatever the player clicks. Call it on the game thread.
+    // Handles an ability as the quickbar does: uses a valid existing target, or asks the
+    // player to pick one with the ability's targeting indicator. Call it on the game thread.
     // @param ability the ability's id
     // @param caster the creature that will use it
-    void RequestTarget(std::int32_t ability, ObjectId caster)
-    {
-        using Fn = void(__fastcall *)(GameModeExplore *, int, std::int32_t, ObjectId, ObjectId);
-        reinterpret_cast<Fn>(Module::Address(addr::kGameModeExplore_BeginTargeting))(this, 0, ability, caster, 0);
-    }
+    void RequestTarget(std::int32_t ability, ObjectId caster);
 
     // Notes on Targeting: read 2026-10-02 from BeginTargeting, and corrected 2026-10-31
     // (DAOLib #282): an aim is its ability, +0x40, not 0, as the engine's GetAimTargetType tests it;
