@@ -46,6 +46,7 @@
 #include "dao/Resources.h"
 #include "dao/String.h"
 #include "fix/ArchiveRead.h"
+#include "fix/LastName.h"
 #include "fix/LightFlicker.h"
 #include "fix/MouseRecords.h"
 #include "fix/SavedFileName.h"
@@ -223,6 +224,7 @@ void BeforeTheGame()
     loader::windowlog::Start();
     perf::InstallEngineHeap();
     fix::InstallArchiveReadFix();
+    fix::InstallLastNameFix();
     fix::InstallSavedFileNameFix();
     fix::InstallMouseRecordsFix();
     fix::InstallLightFlickerFix();

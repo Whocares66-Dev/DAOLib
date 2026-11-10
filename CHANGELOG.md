@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Ability targeting for plugins:** `GameModeExplore::RequestTarget` forwards to the normal quickbar handler, so circle and cone spells get their ground indicators. It uses vanilla target selection: an existing valid target may be used immediately, otherwise the player is asked to pick one (#330; DAOTurnBased #122).
+- **The hero's surname survives a save load:** `<LastName/>` and `<FullName/>` use the restored character's background, including in existing saves (#328).
 
 ## 0.10.0
 

@@ -35,6 +35,9 @@ Always on.
 | Saved file names | A screenshot's file name was read past its end, which could crash the game ([#78](https://github.com/Whocares66-Dev/DAOLib/issues/78)). |
 | Mouse records | The mouse's movement was timed from a record past the last one read, which could crash the game ([#105](https://github.com/Whocares66-Dev/DAOLib/issues/105)). |
 | Flickering lights | Fires and torches jumped from one brightness to the next many times a second; they now ease between them, about twice a second ([#150](https://github.com/Whocares66-Dev/DAOLib/issues/150)). |
+| Hero's surname | Loading a save left the surname empty in `<LastName/>` and `<FullName/>`. The name is now refreshed after the saved character stats load, including for existing saves ([#328](https://github.com/Whocares66-Dev/DAOLib/issues/328)). |
+
+The surname fix needs no plugin or setting. It uses the character's background and the game's localized name tables, so a mod's dialogue can use both name tokens after loading a save.
 
 ## Performance
 

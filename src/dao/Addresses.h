@@ -360,6 +360,15 @@ DAO_ADDRESS(kStore_WillBuy, 21206)
 // the party (the app's +0xD0, its +0x58), whose inventory at +0x20C knows the recipes. Read
 // 2026-10-25 (DAOLib #259).
 DAO_ADDRESS(kCClientExoApp_GetParty, 10504)
+// The hero's name cache, read 2026-11-10 (DAOLib #328). GetHero is __thiscall on the party,
+// no arguments, returning its hero id. SetHero is __thiscall (CCCreature*), ret 4: copies the
+// first name and resolves the surname from background_defaults using the creature's stats.
+// LoadFromStruct is __thiscall (GFF struct*), ret 4, success 1 or failure 0 in EAX (the
+// decompiler's void return is incorrect): joins the party before restoring stats, so the
+// loader refreshes the name after a successful restore (dev/LAST_NAME_TOKEN.md).
+DAO_ADDRESS(kCCParty_GetHero, 12246)
+DAO_ADDRESS(kCCParty_SetHero, 12277)
+DAO_ADDRESS(kCCCreature_LoadFromStruct, 14952)
 // An item's requirements (dao/Items.h), each __thiscall: on the item, IgnoresRequirements (a bool),
 // GetRequirementCount (0 to 2) and GetRequirement (index, int* property, float* value, CCCreature*),
 // `ret 0x10`; on the creature, MeetsItemRequirement (CCItem*, index), `ret 8`, a bool. Read
