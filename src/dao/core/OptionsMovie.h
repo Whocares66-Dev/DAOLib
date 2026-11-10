@@ -8,7 +8,9 @@
 //   the left two choices and four checkboxes, the last OptLootShimmer_mc
 //   at (7, 228); at the right a choice and four checkboxes, the last
 //   OptShowTutorials_mc at (483, 166). Below them the tab is empty to the
-//   screen's buttons, about 440.
+//   screen's buttons. Restore Defaults occupies only the right, so the
+//   left can extend a row lower: its last checkbox ends at stage 668,
+//   above the bottom buttons at 674.5.
 // - A checkbox is the symbol the movie exports as checkbox_mc, placed with
 //   a name; its set-up function is found by that name with "_init" after
 //   it, on the clip or any clip above it up to the root. The movie makes

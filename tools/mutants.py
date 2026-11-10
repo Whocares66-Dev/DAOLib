@@ -1328,6 +1328,12 @@ MUTANTS: list[Mutant] = [
         "if (file.size() < length)",
         "if (file.size() + 1 < length)",
     ),
+    Mutant(
+        "options-game-left-last-row: Restore Defaults occupies only the right column",
+        OPTIONS,
+        '{"OptLootShimmer_mc", 438,',
+        '{"OptLootShimmer_mc", 403,',
+    ),
     # The options screen's dropdown (DAOLib #66): an open list is drawn at the
     # dropdown's depth, and a dropdown stands in two rows.
     Mutant(
