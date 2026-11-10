@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). Plugin API remains 2.
+
+- **Game options:** a checkbox and two sliders fit on the left while Performance remains on the right.
+- **Native casting progress:** plugins can read live conjure progress and native effect parameters, fixing lingering casting effects in turn-based combat.
 
 - **Ability targeting for plugins:** `GameModeExplore::RequestTarget` forwards to the normal quickbar handler, so circle and cone spells get their ground indicators. It uses vanilla target selection: an existing valid target may be used immediately, otherwise the player is asked to pick one (#330; DAOTurnBased #122).
 - **The hero's surname survives a save load:** `<LastName/>` and `<FullName/>` use the restored character's background, including in existing saves (#328).
