@@ -41,16 +41,28 @@ struct Variable
     std::variant<std::int32_t, float, std::string> value;
 };
 
-// Where an object is and what it is, the fields every kind has but where it says otherwise.
+// An object listening for an event of another's: the event and the objects it hears it from.
+struct EventListener
+{
+    std::int32_t eventType = 0;
+    std::vector<std::int32_t> objectIds;
+};
+
+// Where an object is and what it is, the fields every kind has but where it says otherwise. A field
+// held as none, or a tag left empty, is one the engine leaves at the template's value.
 struct Placed
 {
-    std::string tag;
+    std::string tag;            // empty: the template's
     std::string templateResRef; // empty for a waypoint, a sound and a region with no template
     Point at{};
     Quaternion turn{0, 0, 0, 1};
-    std::int32_t active = 1; // 0 for an object placed inactive
+    std::optional<std::int32_t> active; // 0 for an object placed inactive
     std::int32_t importance = 0;
     std::vector<Variable> variables;
+    std::optional<std::uint32_t> lastHostileActor;
+    std::optional<std::uint8_t> groupOverridden;
+    std::optional<std::uint8_t> groupForceHostile; // GroupForceHsti in the file
+    std::vector<EventListener> eventListeners;     // EventScripts' EventListeners
 };
 
 // A creature placed in an area. Each of its own fields is none where the instance lacks it: the

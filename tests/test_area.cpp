@@ -27,6 +27,8 @@ namespace
 {
 
 constexpr std::uint32_t kByte = 0;
+constexpr std::uint32_t kDword = 4;
+constexpr std::uint32_t kStruct = 14;
 constexpr std::uint32_t kInt = 5;
 constexpr std::uint32_t kFloat = 8;
 constexpr std::uint32_t kString = 10;
@@ -251,7 +253,8 @@ TEST_CASE("a placed object's own fields it lacks are none, the template's then s
     // 0x006C06F0): each over the template's value, which stands where the instance lacks it.
     Builder b("ARE");
     const auto top = b.Struct(0xFFFFFFFF, {});
-    const auto creature = b.Struct(4, {{"TemplateResRef", kResRef, b.ResRef("gen00fl_dog")}});
+    const auto creature =
+        b.Struct(4, {{"TemplateResRef", kResRef, b.ResRef("gen00fl_dog")}, {"Tag", kString, b.ExoString("")}});
     const auto placeable = b.Struct(9, {{"TemplateResRef", kResRef, b.ResRef("genip_chest")}});
     b.Set(top, {{"CreatureList", kList, b.List({creature})}, {"PlaceableList", kList, b.List({placeable})}});
     const auto bytes = b.Done();
@@ -268,6 +271,12 @@ TEST_CASE("a placed object's own fields it lacks are none, the template's then s
     CHECK_FALSE(dog.isSelectable.has_value());
     CHECK_FALSE(dog.trackable.has_value());
     CHECK_FALSE(dog.weaponsDrawn.has_value());
+    CHECK(dog.placed.tag.empty()); // the template's
+    CHECK_FALSE(dog.placed.active.has_value());
+    CHECK_FALSE(dog.placed.lastHostileActor.has_value());
+    CHECK_FALSE(dog.placed.groupOverridden.has_value());
+    CHECK_FALSE(dog.placed.groupForceHostile.has_value());
+    CHECK(dog.placed.eventListeners.empty());
     REQUIRE(read->placeables.size() == 1);
     const auto &chest = read->placeables[0];
     CHECK_FALSE(chest.teamId.has_value());
@@ -357,4 +366,34 @@ TEST_CASE("the game's areas in game/areas, when there, read whole with an AREA_I
     // And 2026-10-18 (#186): 7,190 placeables, 815 of them between two rooms.
     CHECK(placeables == 7190);
     CHECK(doors == 815);
+}
+
+TEST_CASE("a placed object's hostility, group and event listeners, as CCObject::ReadFields reads them", "[area]")
+{
+    Builder b("ARE");
+    const auto top = b.Struct(0xFFFFFFFF, {});
+    const auto heard = b.Struct(0, {{"ObjectId", kInt, 7}});
+    const auto listener = b.Struct(0, {{"EventType", kInt, 1003}, {"OjbectList", kList, b.List({heard})}});
+    const auto scripts = b.Struct(0, {{"EventListeners", kList, b.List({listener})}});
+    const auto waypoint = b.Struct(5, {{"Tag", kString, b.ExoString("wp_gate")},
+                                       {"Active", kInt, 1},
+                                       {"LastHostileActor", kDword, 42},
+                                       {"GroupOverridden", kByte, 1},
+                                       {"GroupForceHsti", kByte, 1},
+                                       {"EventScripts", kStruct, scripts}});
+    b.Set(top, {{"WaypointList", kList, b.List({waypoint})}});
+    const auto bytes = b.Done();
+    const auto file = gff3::File::Parse(bytes);
+    REQUIRE(file);
+    const auto read = area::AreaOf(*file);
+    REQUIRE(read);
+    REQUIRE(read->waypoints.size() == 1);
+    const auto &placed = read->waypoints[0].placed;
+    CHECK(placed.active == 1);
+    CHECK(placed.lastHostileActor == 42U);
+    CHECK(placed.groupOverridden == 1);
+    CHECK(placed.groupForceHostile == 1);
+    REQUIRE(placed.eventListeners.size() == 1);
+    CHECK(placed.eventListeners[0].eventType == 1003);
+    CHECK(placed.eventListeners[0].objectIds == std::vector<std::int32_t>{7});
 }

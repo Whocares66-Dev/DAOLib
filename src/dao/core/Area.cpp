@@ -77,8 +77,34 @@ std::vector<Variable> Variables(const gff3::Struct &in)
     return variables;
 }
 
+// The listeners an object's EventScripts hold (EventListener::ReadFromGff3 0x00706290): each an
+// EventType and an OjbectList, so spelled in the files, of ObjectIds.
+std::vector<EventListener> EventListenersOf(const gff3::Struct &in)
+{
+    std::vector<EventListener> listeners;
+    const auto scripts = in.Child("EventScripts");
+    if (!scripts)
+    {
+        return listeners;
+    }
+    for (const auto &entry : scripts->List("EventListeners"))
+    {
+        EventListener listener{.eventType = entry.Get<std::int32_t>("EventType").value_or(0), .objectIds = {}};
+        for (const auto &object : entry.List("OjbectList"))
+        {
+            listener.objectIds.push_back(object.Get<std::int32_t>("ObjectId").value_or(0));
+        }
+        listeners.push_back(std::move(listener));
+    }
+    return listeners;
+}
+
 // Triggers of Types 4 and 5 have no WOrientation (2026-10-17), nor
-// Active or Importance: a missing part is the unturned, active object's.
+// Active or Importance: a missing part is the unturned object's.
+// CCObject::ReadFields (0x0069AAD0) reads the instance over its template: Active only where it is
+// written, a Tag only where it is not empty, and LastHostileActor, GroupOverridden and GroupForceHsti
+// (its label, cut to 16) each with the template's value as its default (paragon-agent's Game sweep,
+// checked by lib-agent 2026-11-10).
 Placed PlacedOf(const gff3::Struct &in)
 {
     return {
@@ -87,9 +113,13 @@ Placed PlacedOf(const gff3::Struct &in)
         .at = {Number(in, "XPosition", 0.0F), Number(in, "YPosition", 0.0F), Number(in, "ZPosition", 0.0F)},
         .turn = {Number(in, "XOrientation", 0.0F), Number(in, "YOrientation", 0.0F), Number(in, "ZOrientation", 0.0F),
                  Number(in, "WOrientation", 1.0F)},
-        .active = Number<std::int32_t>(in, "Active", 1),
+        .active = in.Get<std::int32_t>("Active"),
         .importance = Number<std::int32_t>(in, "Importance", 0),
         .variables = Variables(in),
+        .lastHostileActor = in.Get<std::uint32_t>("LastHostileActor"),
+        .groupOverridden = in.Get<std::uint8_t>("GroupOverridden"),
+        .groupForceHostile = in.Get<std::uint8_t>("GroupForceHsti"),
+        .eventListeners = EventListenersOf(in),
     };
 }
 
