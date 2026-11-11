@@ -56,7 +56,8 @@ std::vector<LoadedTable> TalkTables(const Index &index, bool female);
 class Strings
 {
   public:
-    // Reads the tables; one whose copy does not read or parse is left out.
+    // Reads the tables; one whose copy is unreadable (Index::Readable) or does not parse is left out.
+    // @throws dao::core::ReadError if a table's file is there but cannot be read, as Index::Read
     Strings(const Index &index, std::vector<LoadedTable> tables);
 
     struct Found

@@ -68,6 +68,7 @@
 
 #include "dao/core/AddInOrder.h"
 #include "dao/core/Gff4.h"
+#include "dao/core/ReadError.h"
 
 #include <algorithm>
 #include <atomic>
@@ -751,6 +752,22 @@ bool Index::Whole(std::string_view uid) const
            found->unreadable == 0;
 }
 
+namespace
+{
+
+// A file a copy names that did not read: nothing if it has gone since the index, an error if it is there.
+std::optional<std::vector<std::byte>> ThereButUnread(const fs::path &file)
+{
+    std::error_code error;
+    if (!fs::exists(file, error))
+    {
+        return std::nullopt;
+    }
+    throw ReadError("cannot read " + file.string());
+}
+
+} // namespace
+
 std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
 {
     if (!Readable(copy))
@@ -761,11 +778,12 @@ std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
     if (copy.archive == kLoose)
     {
         const std::string &relative = loose_[copy.entry];
-        std::ifstream in(base / fs::path(std::u8string(relative.begin(), relative.end())), std::ios::binary);
+        const fs::path file = base / fs::path(std::u8string(relative.begin(), relative.end()));
+        std::ifstream in(file, std::ios::binary);
         std::vector<std::byte> bytes(copy.size);
         if (!in.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
         {
-            return std::nullopt;
+            return ThereButUnread(file);
         }
         return bytes;
     }
@@ -774,11 +792,16 @@ std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
     {
         // A plain copy of an archive the index cannot read (DAOLib #211): the file whole.
         const std::string &file = record.copied[copy.entry];
-        std::ifstream in(record.copies / fs::path(std::u8string(file.begin(), file.end())), std::ios::binary);
+        const fs::path path = record.copies / fs::path(std::u8string(file.begin(), file.end()));
+        std::ifstream in(path, std::ios::binary);
+        if (!in)
+        {
+            return ThereButUnread(path);
+        }
         std::vector<char> chars{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
         if (!in.eof() && in.fail())
         {
-            return std::nullopt;
+            return ThereButUnread(path);
         }
         std::vector<std::byte> bytes(chars.size());
         std::memcpy(bytes.data(), chars.data(), chars.size());
@@ -796,10 +819,11 @@ std::optional<std::vector<std::byte>> Index::Read(const Copy &copy) const
         else
         {
             const std::string &relative = archives_[copy.archive].path;
-            auto opened = erf::Archive::Open(base / fs::path(std::u8string(relative.begin(), relative.end())), true);
+            const fs::path file = base / fs::path(std::u8string(relative.begin(), relative.end()));
+            auto opened = erf::Archive::Open(file, true);
             if (!opened)
             {
-                return std::nullopt;
+                return ThereButUnread(file);
             }
             archive = std::make_shared<erf::Archive>(std::move(*opened));
             open_.insert(open_.begin(), {copy.archive, archive});

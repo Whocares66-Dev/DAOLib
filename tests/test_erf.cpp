@@ -2,6 +2,9 @@
 // an archive on disk read by name. Version 2.0's directory over bytes is
 // test_lightprobes.cpp's, where the levels first needed it.
 #include "dao/core/Erf.h"
+#include "dao/core/ReadError.h"
+
+#include <windows.h>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -369,4 +372,29 @@ TEST_CASE("many threads read different files of one archive at once, each its ow
         }
         CHECK(wrong == 0);
     }
+}
+
+TEST_CASE("an archive another handle holds for writing still reads", "[erf]")
+{
+    const TempFile file(Build(false, {{"one", "1111"}}));
+    HANDLE writer = CreateFileW(file.path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    REQUIRE(writer != INVALID_HANDLE_VALUE);
+    const auto opened = archive::Archive::Open(file.path);
+    REQUIRE(opened);
+    CHECK(Text(opened->Read(L"one").value()) == "1111");
+    CloseHandle(writer);
+}
+
+TEST_CASE("an archive that is there but cannot be opened is an error, not a missing file", "[erf]")
+{
+    const TempFile file(Build(false, {{"one", "1111"}}));
+    const auto opened = archive::Archive::Open(file.path);
+    REQUIRE(opened);
+    HANDLE alone =
+        CreateFileW(file.path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    REQUIRE(alone != INVALID_HANDLE_VALUE);
+    CHECK_THROWS_AS(opened->Read(L"one"), dao::core::ReadError);
+    CHECK_FALSE(opened->Read(L"none").has_value()); // a file the archive lacks is still none
+    CloseHandle(alone);
 }

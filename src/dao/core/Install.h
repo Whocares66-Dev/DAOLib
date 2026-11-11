@@ -168,6 +168,7 @@ class Index
     // Returns the index of an install: its sources walked, every archive's directory read on
     // several threads, AddIns.xml and offers.xml read from the Documents folder.
     // @param documents Documents\BioWare\Dragon Age, or an instance's; empty for none
+    // @throws dao::core::ReadError if the loaded campaign's .cif is there but cannot be read, as Read
     static std::unique_ptr<Index> Build(const std::filesystem::path &game, const std::filesystem::path &documents,
                                         const Options &options = {});
 
@@ -254,6 +255,7 @@ class Index
     // Returns a data table file as the game takes it, its first copy, parsed once and kept: a later
     // call for the name, in any case, gives the same table. Null where there is none.
     // @param name the file's name: "apr_base.gda"
+    // @throws dao::core::ReadError as Read does
     // Thread safe.
     std::shared_ptr<const GdaFile> Table(std::string_view name) const;
     // Returns a worksheet merged as the game merges it: every table file m2da_base's row `id` takes,
@@ -262,6 +264,7 @@ class Index
     // Thread safe; the first call for a worksheet merges it, so ask early, from any thread. A merge
     // holds up no other thread's asking, though two threads asking one worksheet first may both
     // merge it.
+    // @throws dao::core::ReadError as Read does, for any of the worksheet's files
     const m2da::Merged *Worksheet(std::int64_t id) const;
 
     // Returns whether an add-in is installed, enabled in AddIns.xml, and has every copy readable:
@@ -272,9 +275,11 @@ class Index
     // with a plain copy under Options::archiveCopies.
     bool Readable(const Copy &copy) const;
     // Returns a copy's bytes.
-    // @return nullopt if it is not Readable, or its file has gone or shrunk since the index. An
+    // @return nullopt if it is not Readable, or its file has gone since the index. An
     // archive rewritten since may give another file's bytes: build the index again after the
     // install changes.
+    // @throws dao::core::ReadError if its file is there but cannot be opened or read whole, a file
+    // that shrank since the index among them: a failure is never taken for a file that is missing.
     std::optional<std::vector<std::byte>> Read(const Copy &copy) const;
 
   private:

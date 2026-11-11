@@ -29,12 +29,14 @@
 
 #include "dao/core/Bytes.h"
 #include "dao/core/ReadAt.h"
+#include "dao/core/ReadError.h"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
 #include <fstream>
+#include <string>
 
 namespace dao::core::erf
 {
@@ -156,10 +158,18 @@ std::vector<Entry> Entries(std::span<const std::byte> start)
 namespace
 {
 
+// Shared with every other opener, a writer and a scanner among them: a share of reads alone failed the
+// open while any other handle had the file for writing (DAOParagonEngine's loaded tests, 2026-11-07).
 HANDLE OpenForReading(const std::filesystem::path &path)
 {
-    return CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-                       nullptr);
+    return CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+[[noreturn]] void Failed(const std::filesystem::path &path, const char *what)
+{
+    throw ReadError("cannot " + std::string(what) + " " + path.string() + ": system error " +
+                    std::to_string(GetLastError()));
 }
 
 } // namespace
@@ -266,11 +276,11 @@ std::optional<std::vector<std::byte>> Archive::Read(const Entry &entry) const
     HANDLE handle = (stream_ != nullptr ? *stream_ : own).Get(path_);
     if (handle == INVALID_HANDLE_VALUE)
     {
-        return std::nullopt;
+        Failed(path_, "open");
     }
     if (ReadAt(handle, bytes.data(), entry.size, entry.offset) != entry.size)
     {
-        return std::nullopt;
+        Failed(path_, "read all of");
     }
     return bytes;
 }

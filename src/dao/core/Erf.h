@@ -122,7 +122,8 @@ class Archive
     const Entry *Find(std::wstring_view name) const;
 
     // Returns a file's bytes.
-    // @return nullopt if the archive is not Readable, or the file runs past its end
+    // @return nullopt if the archive is not Readable, holds no such file, or the file runs past its end
+    // @throws dao::core::ReadError if the archive's file cannot be opened, or the read comes up short
     std::optional<std::vector<std::byte>> Read(const Entry &entry) const;
     std::optional<std::vector<std::byte>> Read(std::wstring_view name) const;
 
