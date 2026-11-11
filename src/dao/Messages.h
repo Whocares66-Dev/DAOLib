@@ -300,7 +300,7 @@ static_assert(sizeof(ActivateAnalogTargetModeMessage) == 4);
 // the two strings (0x004C2510). Read 2026-10-24 (DAOLib #253): explore mode's handler
 // (0x0070BE30) looks the creature up and hands the message to the creature's (0x006A74B0), which
 // sets the slot of its quickbar (0x0071F230, the creature's stats at +0x7C4; nothing without
-// their interface object, +0x1B4) and rebuilds the bar (0x00719AB0). A slot of -1 is the first
+// their CreatureAbilities, +0x1B4) and rebuilds the bar (0x00719AB0). A slot of -1 is the first
 // free one (0x0062AD80); otherwise it must be at most 49 (0x0071F360). With a tag the slot is an
 // item's, found through the party's inventory (0x005D4FC0); an empty template is the item's own
 // (item +0x1CC). The quickbar movie sends it as an icon is dropped on a slot or dragged off

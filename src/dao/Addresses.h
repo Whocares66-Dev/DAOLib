@@ -340,7 +340,7 @@ DAO_ADDRESS(kCooldownManager_Tick, 16532)
 DAO_ADDRESS(kCCCreatureStats_CanUseAbility, 16539)
 // The level-up screen's tests (dao/LevelUp.h): IsAbilityAvailable, __thiscall on the stats (ability),
 // `ret 4`, a bool, the screen's and the script command's (13096 calls it at 0x0065A6FA); and
-// AbilityChains::Find, cdecl (stats, kind, mode), which builds the party data's lists of offers.
+// AbilityChains::Find, cdecl (stats, kind, mode), which builds the CreatureAbilities' lists of offers.
 // Read 2026-10-24 (DAOLib #259).
 DAO_ADDRESS(kCCCreatureStats_IsAbilityAvailable, 16521)
 DAO_ADDRESS(kAbilityChains_Find, 12208)

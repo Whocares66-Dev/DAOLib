@@ -50,7 +50,7 @@ struct Offer
 };
 
 // Returns the abilities of a kind the screen shows a creature, in the screen's order.
-// @return none for a creature with no party data (one that has never been a party member), and
+// @return none for a creature with no CreatureAbilities (one that has never been a party member), and
 // none of the kind the screen does not show it: spells for a class without mana, talents for one with
 //
 // Call it on the game thread, in a module. An open level-up or creation screen redraws from it.
@@ -83,7 +83,7 @@ std::optional<Points> PointsOf(ObjectId creature);
 enum class Refusal : std::uint8_t
 {
     None,
-    NoCreature, // the object is no creature, or it has no party data
+    NoCreature, // the object is no creature, or it has no CreatureAbilities
     NotOffered, // the screen does not show the ability, or the attribute is not one of the six
     Held,       // the creature has the ability already
     Locked,     // the engine's availability test refuses it (CCCreatureStats::IsAbilityAvailable), or a

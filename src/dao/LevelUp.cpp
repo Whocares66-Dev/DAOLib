@@ -5,16 +5,15 @@
 // 35 (skills), 36 (talents and spells) and 38 (specializations), granted with its level
 // (Levelup_SetReadyToLevelUp, sys_autoscale_h.nss). What it is offered is AbilityChains::Find
 // (0x0062E9C0, cdecl (stats, kind, mode), mode 2 for level-up), which the screen's
-// FindAbilityChains handlers reach (through 0x00719A90) and which fills the party data's lists
-// (stats +0x1B4; talents +0xB0, spells +0xCC, skills +0xE8, each a SmartData attribute holding a
-// vector at +0xC, its begin at +4 and end at +8), each entry an AbilityGUIInfo whose ability
-// record is the attribute value at +0x64 (the record's id the value at its +0x64) and whose
-// display state is the value at +0x94: 1 have, 2 learnable (CCCreatureStats::IsAbilityAvailable,
-// 0x0071BEF0), 3 locked. The builder ends by notifying the lists' observers, so a screen open on
-// the creature redraws. A pick is the screen's CharGenAssignAbility, whose handler (0x007FCE60)
-// ignores the screen and raises the module's EVENT_TYPE_CHARGEN_ASSIGN_ABILITIES (51), object 0
-// the creature, int 0 the ability, int 1 0 for a skill, talent or spell or 1 for a
-// specialization; sys_chargen.nss then spends the point (35 for a skill, 36 else, 38 for a
+// FindAbilityChains handlers reach (through 0x00719A90) and which fills the CreatureAbilities' lists
+// (stats +0x1B4, made when the creature joins the party pool, 0x0071CCD0; talents +0xB0, spells +0xCC, skills +0xE8,
+// each a SmartData attribute holding a vector at +0xC, its begin at +4 and end at +8), each entry an AbilityGUIInfo
+// whose ability record is the attribute value at +0x64 (the record's id the value at its +0x64) and whose display state
+// is the value at +0x94: 1 have, 2 learnable (CCCreatureStats::IsAbilityAvailable, 0x0071BEF0), 3 locked. The builder
+// ends by notifying the lists' observers, so a screen open on the creature redraws. A pick is the screen's
+// CharGenAssignAbility, whose handler (0x007FCE60) ignores the screen and raises the module's
+// EVENT_TYPE_CHARGEN_ASSIGN_ABILITIES (51), object 0 the creature, int 0 the ability, int 1 0 for a skill, talent or
+// spell or 1 for a specialization; sys_chargen.nss then spends the point (35 for a skill, 36 else, 38 for a
 // specialization) and adds the ability, checking nothing, so the checks are here. An attribute is
 // event 50 (int 0 the attribute, int 1 the points; 34 spent), Auto Level Up 56 (AL_DoAutoLevelUp,
 // which never spends a specialization's point), Done 59 (int 0 the mode, 1 for level-up, int 1 1),
@@ -62,11 +61,11 @@ namespace
 
 namespace api = script::api;
 
-constexpr std::size_t kPartyData = 0x1B4;  // in the creature's stats: the party data
-constexpr std::size_t kListBegin = 0x10;   // in a list's attribute: the vector's begin (+0xC, then +4)
-constexpr std::size_t kInfoAbility = 0x64; // in an AbilityGUIInfo: its ability record
-constexpr std::size_t kRecordId = 0x64;    // in an ability record: its id
-constexpr std::size_t kInfoState = 0x94;   // in an AbilityGUIInfo: its display state
+constexpr std::size_t kCreatureAbilities = 0x1B4; // in the creature's stats: its CreatureAbilities
+constexpr std::size_t kListBegin = 0x10;          // in a list's attribute: the vector's begin (+0xC, then +4)
+constexpr std::size_t kInfoAbility = 0x64;        // in an AbilityGUIInfo: its ability record
+constexpr std::size_t kRecordId = 0x64;           // in an ability record: its id
+constexpr std::size_t kInfoState = 0x94;          // in an AbilityGUIInfo: its display state
 constexpr std::size_t kMostOffers = 1024;
 
 constexpr std::int32_t kAttributePoints = 34;
@@ -239,17 +238,18 @@ std::vector<Offer> Offers(ObjectId creature, Kind kind, Mode mode)
         return offers;
     }
     void *stats = found != nullptr ? found->Stats() : nullptr;
-    const auto party = stats != nullptr
-                           ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(stats) + kPartyData).value_or(0)
-                           : 0;
-    if (party == 0)
+    const auto abilities =
+        stats != nullptr
+            ? TryRead<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(stats) + kCreatureAbilities).value_or(0)
+            : 0;
+    if (abilities == 0)
     {
         return offers;
     }
     using FindFn = void(__cdecl *)(void *stats, std::int32_t kind, std::int32_t mode);
     reinterpret_cast<FindFn>(Module::Address(addr::kAbilityChains_Find))(stats, static_cast<std::int32_t>(kind),
                                                                          static_cast<std::int32_t>(mode));
-    const std::uintptr_t list = party + ListOf(kind);
+    const std::uintptr_t list = abilities + ListOf(kind);
     const auto begin = TryRead<std::uintptr_t>(list + kListBegin).value_or(0);
     const auto end = TryRead<std::uintptr_t>(list + kListBegin + 4).value_or(0);
     for (std::uintptr_t at = begin; begin != 0 && at < end && offers.size() < kMostOffers; at += 4)
