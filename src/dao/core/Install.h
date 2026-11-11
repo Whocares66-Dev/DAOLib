@@ -121,7 +121,9 @@ struct Options
 {
     std::string campaign = "Single Player"; // the loaded campaign, as AddIns.xml's ExtendedModuleUID names
                                             // one; empty for none (the main menu)
-    std::string language = "en-us";
+    std::string language = "en-us";         // the talk tables' and the locale folders' (DragonAge.ini's Locale)
+    // The voice folders', audio\vo\<voice> (DragonAge.ini's VOLanguage); empty for the language's.
+    std::string voice = {};        // NOLINT(readability-redundant-member-init): designated initializers omit it
     std::string textures = "high"; // a folder of packages\core\textures: "high" or "medium"
     // The plugins folder the game was started with (DAOLIB_PLUGINS), read in place of the game's
     // bin_ship\daolib\plugins; empty for the game's.
@@ -136,6 +138,30 @@ struct Options
     // its bytes come from the plain file.
     std::filesystem::path archiveCopies{};
 };
+
+// The two languages the game plays in: its text's and its voice's.
+struct Languages
+{
+    std::string locale; // the talk tables' and the locale folders', as Options::language takes it
+    std::string voice;  // the voice folders', as Options::voice takes it
+};
+
+// Returns the languages the game settles on at start, DragonAge.ini's Locale and VOLanguage each
+// checked against the install's files as the game checks them.
+// @param setup  the setup's language, as SetupLanguage returns it; empty for none
+// A voice with no folder in packages\core\audio\vo, or a locale with no core_<locale>.tlk in
+// packages\core\data\talktables, gives way to the setup's language, then en-us, then the first
+// the folder lists. One kept as given where the folder is missing or empty.
+Languages SettledLanguages(const std::filesystem::path &game, std::string_view locale, std::string_view voice,
+                           std::string_view setup);
+
+// Returns a setup's language as the game's code: "de" as "de-de", "cz" as "cs-cz"; empty for one
+// the game does not know.
+std::string SetupLanguageCode(std::string_view setup);
+
+// Returns the language the game's setup recorded, as its code ("de-de"); empty where there is
+// none or the game does not know it. Windows only: read in the registry.
+std::string SetupLanguage();
 
 // Returns a name with its ASCII letters in lower case, as the index keeps names.
 std::string Lower(std::string_view text);

@@ -71,6 +71,7 @@
 #include "dao/core/ReadError.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -81,6 +82,8 @@
 #include <sstream>
 #include <thread>
 #include <unordered_map>
+
+#include <Windows.h>
 
 namespace dao::core::install
 {
@@ -170,6 +173,7 @@ std::unique_ptr<Index> Index::Build(const fs::path &game, const fs::path &docume
     index->plugins_ = options.plugins.empty() ? game / L"bin_ship" / L"daolib" / L"plugins" : options.plugins;
     index->options_ = options;
     index->options_.language = Lower(options.language); // as the folders' and files' names are compared
+    index->options_.voice = Lower(options.voice.empty() ? options.language : options.voice);
     index->options_.textures = Lower(options.textures);
     if (!documents.empty())
     {
@@ -562,6 +566,124 @@ std::string CampaignFileName(std::string_view campaign)
     return name;
 }
 
+namespace
+{
+
+// A folder's entries, files and folders, in the order the system lists them, "." and ".." left
+// out: ECFileAccess::FindFiles (0x004C97C0), through FindFirstFileW as std::filesystem lists.
+std::vector<std::string> Entries(const fs::path &folder)
+{
+    std::vector<std::string> out;
+    std::error_code error;
+    for (fs::directory_iterator it(folder, error), end; !error && it != end; it.increment(error))
+    {
+        out.push_back(Utf8(it->path().filename()));
+    }
+    return out;
+}
+
+// 0x00409EA0: an entry named as wanted (in any case of its ASCII letters) keeps the setting;
+// else the first fallback an entry is named as, else the first entry, is taken. Nothing is taken
+// (the setting kept) from a missing or empty folder.
+std::optional<std::string> Checked(const fs::path &folder, std::string_view wanted,
+                                   const std::vector<std::string> &fallbacks)
+{
+    const std::vector<std::string> entries = Entries(folder);
+    const auto named = [&entries](std::string_view name) {
+        return std::ranges::find_if(entries, [&name](const std::string &e) { return Lower(e) == Lower(name); });
+    };
+    if (entries.empty() || named(wanted) != entries.end())
+    {
+        return std::nullopt;
+    }
+    for (const std::string &fallback : fallbacks)
+    {
+        if (const auto at = named(fallback); at != entries.end())
+        {
+            return *at;
+        }
+    }
+    return entries.front();
+}
+
+} // namespace
+
+// EclipseGame::SetUpFileAliases (0x0040F000) checks the voice first (0x0040F456 on), then the locale
+// (0x0040F65E on), each with 0x00409EA0, the fallbacks the setup's language where there is one, then
+// en-us. A locale is taken from its talk table's name: past "core_", up to its first '_' or '.'
+// (0x0040F815 to 0x0040F896). The game writes a language it took back to DragonAge.ini (0x005E6280).
+// The audio and locale aliases are made from the two (AUDIO_VO 0x0041058A, CAMP_AUDIO_VO
+// 0x00410916), and the campaigns' and add-ins' folders through those aliases (0x005FD07B,
+// 0x005EFA0B). Read 2026-11-11 by lib-agent, from paragon-agent-2's batch.
+Languages SettledLanguages(const fs::path &game, std::string_view locale, std::string_view voice,
+                           std::string_view setup)
+{
+    Languages out{.locale = std::string(locale), .voice = std::string(voice)};
+    std::vector<std::string> voices;
+    if (!setup.empty())
+    {
+        voices.emplace_back(setup);
+    }
+    voices.emplace_back("en-us");
+    if (auto taken = Checked(game / L"packages" / L"core" / L"audio" / L"vo", voice, voices))
+    {
+        out.voice = std::move(*taken);
+    }
+    std::vector<std::string> tables;
+    tables.reserve(voices.size());
+    for (const std::string &language : voices)
+    {
+        tables.push_back("core_" + language + ".tlk");
+    }
+    if (auto taken = Checked(game / L"packages" / L"core" / L"data" / L"talktables",
+                             "core_" + std::string(locale) + ".tlk", tables))
+    {
+        const std::string rest = taken->size() > 5 ? taken->substr(5) : std::string();
+        out.locale = rest.substr(0, rest.find_first_of("_."));
+    }
+    return out;
+}
+
+// 0x00402390: the setup's two letters to the game's code, in any case of their letters.
+std::string SetupLanguageCode(std::string_view setup)
+{
+    static constexpr std::array<std::pair<std::string_view, std::string_view>, 9> kCodes{{
+        {"en", "en-us"},
+        {"fr", "fr-fr"},
+        {"de", "de-de"},
+        {"it", "it-it"},
+        {"es", "es-es"},
+        {"cz", "cs-cz"},
+        {"hu", "hu-hu"},
+        {"pl", "pl-pl"},
+        {"ru", "ru-ru"},
+    }};
+    const std::string lower = Lower(setup);
+    for (const auto &[letters, code] : kCodes)
+    {
+        if (lower == letters)
+        {
+            return std::string(code);
+        }
+    }
+    return {};
+}
+
+// 0x00402270: HKLM\SOFTWARE\BioWare\Dragon Age's Language, read by the 32-bit game in its 32-bit
+// view, a value of 1 to 256 bytes.
+std::string SetupLanguage()
+{
+    std::array<wchar_t, 129> value{};
+    DWORD size = sizeof(value) - sizeof(wchar_t);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\BioWare\\Dragon Age", L"Language",
+                     RRF_RT_REG_SZ | RRF_SUBKEY_WOW6432KEY, nullptr, value.data(), &size) != ERROR_SUCCESS ||
+        size == 0)
+    {
+        return {};
+    }
+    return SetupLanguageCode(Utf8(fs::path(value.data())));
+}
+
 // The loaded campaign's .cif is its name with no spaces and ".cif" (singleplayer.cif,
 // dao_prc_ep_1.cif); any copy of it that reads gives its packages.
 void Index::ReadPackages()
@@ -903,7 +1025,7 @@ Place CorePlace(std::span<const std::string_view> path, const Options &options)
     }
     if (top == "audio" && path[1] == "vo")
     {
-        return {100006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+        return {100006, path.size() > 3 && path[2] == options.voice ? Unused::No : Unused::Language};
     }
     if (top == "audio" && path[1] == "sound")
     {
@@ -942,7 +1064,7 @@ Place CampaignPlace(std::span<const std::string_view> path, const Options &optio
     }
     if (top == "audio" && path[1] == "vo")
     {
-        return {50006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+        return {50006, path.size() > 3 && path[2] == options.voice ? Unused::No : Unused::Language};
     }
     if (top == "audio" && path[1] == "sound")
     {
@@ -993,7 +1115,7 @@ Place PackagePlace(std::span<const std::string_view> path, std::int32_t base, co
     }
     if (top == "audio" && path[1] == "vo")
     {
-        return {base + 7, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+        return {base + 7, path.size() > 3 && path[2] == options.voice ? Unused::No : Unused::Language};
     }
     if (top == "audio" && path[1] == "sound")
     {
@@ -1020,7 +1142,7 @@ Place AddInPlace(std::span<const std::string_view> path, std::int32_t base, cons
     }
     if (top == "audio" && path[1] == "vo")
     {
-        return {base - 2, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};
+        return {base - 2, path.size() > 3 && path[2] == options.voice ? Unused::No : Unused::Language};
     }
     if (top == "textures")
     {

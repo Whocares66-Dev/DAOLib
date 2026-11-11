@@ -372,7 +372,7 @@ MUTANTS: list[Mutant] = [
     Mutant(
         "install-campaign-voice-language: the campaign's voice of another language is not the game's",
         INSTALL,
-        "return {50006, path.size() > 3 && path[2] == options.language ? Unused::No : Unused::Language};",
+        "return {50006, path.size() > 3 && path[2] == options.voice ? Unused::No : Unused::Language};",
         "return {50006};",
     ),
     Mutant(

@@ -507,6 +507,56 @@ TEST_CASE("FMOD's banks and projects by the audio folders' priorities and the la
     CHECK(Text(german->Read(german->Find("line.fsb")->front())) == "campaign de");
 }
 
+TEST_CASE("the voice folders by the voice's language, the rest by the text's", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/audio/vo/de-de/vo/line.fsb", files::FromText("core de"));
+    root.Write(L"game/packages/core/audio/vo/en-us/vo/line.fsb", files::FromText("core en"));
+    root.Write(L"game/packages/core/locale/en-us/a.bik", files::FromText("locale en"));
+    root.Write(L"game/packages/core/locale/de-de/a.bik", files::FromText("locale de"));
+    const auto index = install::Index::Build(root.path / L"game", {}, {.language = "en-us", .voice = "DE-DE"});
+    CHECK(Text(index->Read(index->Find("line.fsb")->front())) == "core de");
+    CHECK(Text(index->Read(index->Find("a.bik")->front())) == "locale en");
+}
+
+TEST_CASE("the languages the game settles on: as set, else the setup's, en-us, then the folder's first", "[install]")
+{
+    files::TempFolder root;
+    root.Write(L"game/packages/core/audio/vo/fr-fr/x.fsb", files::FromText("fr"));
+    root.Write(L"game/packages/core/audio/vo/en-us/x.fsb", files::FromText("en"));
+    root.Write(L"game/packages/core/data/talktables/core_En-US.tlk", files::FromText("en"));
+    root.Write(L"game/packages/core/data/talktables/core_fr-fr_f.tlk", files::FromText("fr, hers"));
+    const auto game = root.path / L"game";
+
+    const install::Languages set = install::SettledLanguages(game, "EN-us", "fr-FR", "");
+    CHECK(set.locale == "EN-us"); // found in any case, and kept as set
+    CHECK(set.voice == "fr-FR");
+
+    const install::Languages setup = install::SettledLanguages(game, "de-de", "de-de", "fr-fr");
+    CHECK(setup.voice == "fr-fr");
+    CHECK(setup.locale == "En-US"); // core_fr-fr_f.tlk is not core_fr-fr.tlk, so en-us's, as its file is named
+
+    files::TempFolder other;
+    other.Write(L"game/packages/core/audio/vo/pl-pl/x.fsb", files::FromText("pl"));
+    other.Write(L"game/packages/core/data/talktables/core_pl-pl_f.tlk", files::FromText("pl, hers"));
+    const install::Languages first = install::SettledLanguages(other.path / L"game", "de-de", "", "");
+    CHECK(first.voice == "pl-pl");
+    CHECK(first.locale == "pl-pl"); // up to the first '_' or '.'
+
+    const install::Languages none = install::SettledLanguages(root.path / L"missing", "de-de", "it-it", "en-us");
+    CHECK(none.locale == "de-de");
+    CHECK(none.voice == "it-it");
+}
+
+TEST_CASE("a setup's language as the game's code", "[install]")
+{
+    CHECK(install::SetupLanguageCode("de") == "de-de");
+    CHECK(install::SetupLanguageCode("CZ") == "cs-cz");
+    CHECK(install::SetupLanguageCode("ru") == "ru-ru");
+    CHECK(install::SetupLanguageCode("ja").empty());
+    CHECK(install::SetupLanguageCode("").empty());
+}
+
 TEST_CASE("a talk table of another language is not the game's", "[install]")
 {
     files::TempFolder root;
