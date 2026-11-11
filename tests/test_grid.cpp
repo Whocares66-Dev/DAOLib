@@ -48,7 +48,7 @@ std::uint32_t Shorts(Builder &b, const std::vector<std::int16_t> &values)
 // of its 4-cell block across, cell (2, 0). Before each first-level block's records is its
 // entrance's parent byte, 0: the second level's one entrance. The cells: 10, 1, 1 with a counter in
 // its high bits, 9, 10, 10; heights 0, 16, -8, 0, 0, 0; sound data -1, 0, 0, 1, -1, -1.
-std::vector<std::byte> LayoutFile()
+std::vector<std::byte> LayoutFile(Point normal = {0, 0, 1}, float cellSize = 0.5F, bool lights16 = false)
 {
     Builder b = Start("ARL ", {{"AREA", 96, {{3020, 1, gff4::kStruct, 0}}},
                                {"ARPA", 96, {{3110, 2, gff4::kStruct, 0}}},
@@ -65,15 +65,16 @@ std::vector<std::byte> LayoutFile()
                                  {3114, 1, gff4::kList, 60},
                                  {3094, 5, 0, 72},
                                  {3095, 3, gff4::kList | gff4::kStruct, 76},
-                                 {3096, 0, gff4::kList, 84}}},
+                                 {3096, 0, gff4::kList, 84},
+                                 {3118, 2, gff4::kList, 88}}},
                                {"SECT", 4, {{3116, 2, 0, 0}, {3115, 0, 0, 2}}}});
     const std::size_t root = Struct(b, 96);
     const std::size_t grid = root; // AREA's ARPA and its NAVI are in place at its start
     Floats(b, grid, {10, 20, 0});
-    Floats(b, grid + 16, {0, 0, 1});
+    Floats(b, grid + 16, {normal[0], normal[1], normal[2]});
     b.U32(grid + 32, 3);
     b.U32(grid + 36, 2);
-    dao::test::Float(b, grid + 40, 0.5F);
+    dao::test::Float(b, grid + 40, cellSize);
     dao::test::Float(b, grid + 48, 2.1F);
     b.U32(grid + 52, Bytes(b, {10, 1, 0x31, 9, 10, 10}));
     b.U32(grid + 56, Shorts(b, {0, 16, -8, 0, 0, 0}));
@@ -92,6 +93,7 @@ std::vector<std::byte> LayoutFile()
     b.U8(super, 8);
     b.U8(super + 2, 1);
     b.U32(grid + 84, Bytes(b, {0, 1, 1, 0x20, 0, 0, 1, 0x60, 0x80, 0}));
+    b.U32(grid + 88, lights16 ? Shorts(b, {300, -1, 0, 1, 2, 3}) : 0xFFFFFFFF);
     return b.bytes;
 }
 
@@ -165,6 +167,30 @@ TEST_CASE("a walk grid's coarse levels have their entrances where the exe puts t
     CHECK(second.blocks[0][0].row == 0);
     CHECK(second.blocks[0][0].edges.empty());
     CHECK(second.blocks[0][0].parent == -1); // the second level has none
+}
+
+TEST_CASE(
+    "a walk grid's cell size floored, its normal normalized and its 16-bit light subsets, as the engine reads them",
+    "[grid]")
+{
+    const std::vector<std::byte> bytes = LayoutFile({0, 3, 4}, 0.002F, true);
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    const std::optional<navigation::Grid> grid = navigation::GridOf(*file);
+    REQUIRE(grid.has_value());
+    CHECK(grid->cellSize == 0.01F);
+    CHECK(grid->padding == Approx(0.001F)); // half the size as written
+    CHECK(grid->normal[0] == Approx(0.0F));
+    CHECK(grid->normal[1] == Approx(0.6F));
+    CHECK(grid->normal[2] == Approx(0.8F));
+    CHECK(grid->lightSubsets.empty());
+    CHECK(grid->lightSubsets16 == std::vector<std::uint16_t>{300, 0xFFFF, 0, 1, 2, 3});
+
+    const std::vector<std::byte> flat = LayoutFile({0, 0, 0});
+    const std::optional<navigation::Grid> none = navigation::GridOf(*gff4::File::Parse(flat));
+    REQUIRE(none.has_value());
+    CHECK(none->normal == Point{1, 0, 0});
+    CHECK(none->lightSubsets16.empty());
 }
 
 TEST_CASE("a layout with no grid has none", "[grid]")

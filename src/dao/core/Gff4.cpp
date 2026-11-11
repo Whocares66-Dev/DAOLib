@@ -311,6 +311,17 @@ std::vector<float> Struct::Floats(std::uint32_t label) const
     return floats;
 }
 
+bool Struct::HasList(std::uint32_t label) const
+{
+    const Field *field = Shape().Find(label);
+    if (field == nullptr || (field->flags & kList) == 0)
+    {
+        return false;
+    }
+    const auto offset = file_->U32(at_ + field->offset);
+    return offset && *offset != kNull;
+}
+
 std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) const
 {
     std::size_t size = 0;

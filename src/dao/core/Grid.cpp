@@ -32,6 +32,7 @@ constexpr std::uint32_t kPadding = 3120;
 constexpr std::uint32_t kSectorEntrances = 3115;
 constexpr std::uint32_t kSectorOffset = 3116;
 constexpr std::uint32_t kLightSubsets = 3117;
+constexpr std::uint32_t kLightSubsets16 = 3118;
 constexpr std::uint32_t kCollision = 3744;
 constexpr std::uint32_t kCollisionData = 3745;
 
@@ -66,6 +67,19 @@ template <class T> std::vector<T> ListOf(const gff4::Struct &grid, std::uint32_t
 Point PointOf(const std::vector<float> &floats)
 {
     return floats.size() >= 3 ? Point{floats[0], floats[1], floats[2]} : Point{};
+}
+
+// Vector3::Normalized (0x00451A30), which Grid::SetNormal (0x00A48F70) keeps: (1, 0, 0) where the squared
+// length is at most 1e-6 (0x00AE7094), else the vector over its length.
+Point Normalized(const Point &v)
+{
+    const float squared = (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]);
+    if (squared <= 1e-6F)
+    {
+        return {1, 0, 0};
+    }
+    const float inverse = 1.0F / std::sqrt(squared);
+    return {v[0] * inverse, v[1] * inverse, v[2] * inverse};
 }
 
 // A point's index along one axis, as 0x00A49410 and 0x00A49440 work it out: truncated by cvttsd2si, and negative
@@ -284,16 +298,25 @@ Grid GridOf(const gff4::Struct &area)
     Grid grid;
     grid.columns = area.Get<std::int32_t>(kColumns).value_or(0);
     grid.rows = area.Get<std::int32_t>(kRows).value_or(0);
-    grid.cellSize = area.Get<float>(kCellSize).value_or(0.0F);
+    // AreaGridEntry::Load (0x00A48900) floors the cell size at 0.01 and takes half the size as written for
+    // the padding's default; it keeps the normal normalized (SetNormal 0x00A48F70); and it reads the
+    // 16-bit light subsets only where the 8-bit list is not there (paragon-agent-2's batch, checked by
+    // lib-agent 2026-11-11).
+    const float cellSize = area.Get<float>(kCellSize).value_or(0.0F);
+    grid.cellSize = cellSize < 0.01F ? 0.01F : cellSize;
     grid.clearance = area.Get<float>(kClearance).value_or(0.0F);
     const std::optional<float> padding = area.Get<float>(kPadding);
-    grid.padding = padding && !std::isnan(*padding) ? *padding : grid.cellSize / 2;
+    grid.padding = padding && !std::isnan(*padding) ? *padding : cellSize * 0.5F;
     grid.base = PointOf(area.Floats(kBase));
-    grid.normal = PointOf(area.Floats(kNormal));
+    grid.normal = Normalized(PointOf(area.Floats(kNormal)));
     grid.cells = ListOf<std::uint8_t>(area, kCells, gff4::Type::U8);
     grid.heights = ListOf<std::int16_t>(area, kHeights, gff4::Type::S16);
     grid.sounds = ListOf<std::int8_t>(area, kSoundData, gff4::Type::S8);
     grid.lightSubsets = ListOf<std::uint8_t>(area, kLightSubsets, gff4::Type::U8);
+    if (!area.HasList(kLightSubsets))
+    {
+        grid.lightSubsets16 = ListOf<std::uint16_t>(area, kLightSubsets16, gff4::Type::U16);
+    }
     grid.sectorSize = area.Get<std::int32_t>(kSectorSize).value_or(0);
     const std::vector<std::uint8_t> memory = ListOf<std::uint8_t>(area, kMemory, gff4::Type::U8);
     grid.abstraction = AbstractionOf(grid, SectorsOf(area), memory);

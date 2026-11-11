@@ -129,15 +129,16 @@ struct Grid
 {
     std::int32_t columns = 0;
     std::int32_t rows = 0;
-    float cellSize = 0;  // metres
-    float clearance = 0; // the most a WalkLine segment may climb; dev/PATHFINDING.md
-    float padding = 0;   // a cell's point from its corner, across and up
-    Point base{};        // cell (0, 0)'s corner in the level's space; its z is not the floor's
-    Point normal{};
-    std::vector<std::uint8_t> cells;        // a byte a cell, row by row
-    std::vector<std::int16_t> heights;      // a height a cell, in kHeightUnit
-    std::vector<std::int8_t> sounds;        // AreaGridSoundData, a byte a cell: -1 at the edges
-    std::vector<std::uint8_t> lightSubsets; // AreaGridLightSubsetData8, a byte a cell: 255 for none
+    float cellSize = 0;                        // metres; at least 0.01, as the engine floors it
+    float clearance = 0;                       // the most a WalkLine segment may climb; dev/PATHFINDING.md
+    float padding = 0;                         // a cell's point from its corner, across and up
+    Point base{};                              // cell (0, 0)'s corner in the level's space; its z is not the floor's
+    Point normal{};                            // of unit length, (1, 0, 0) for one written too short to turn into one
+    std::vector<std::uint8_t> cells;           // a byte a cell, row by row
+    std::vector<std::int16_t> heights;         // a height a cell, in kHeightUnit
+    std::vector<std::int8_t> sounds;           // AreaGridSoundData, a byte a cell: -1 at the edges
+    std::vector<std::uint8_t> lightSubsets;    // AreaGridLightSubsetData8, a byte a cell: 255 for none
+    std::vector<std::uint16_t> lightSubsets16; // AreaGridLightSubsetData16, where the file has no 8-bit list
     std::int32_t sectorSize = 0;
     std::vector<Level> abstraction;      // the first level, and the second where the file has one
     std::vector<std::uint8_t> collision; // EnvStatPhysData as written: a cooked PhysX stream
