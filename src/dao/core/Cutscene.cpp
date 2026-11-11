@@ -90,6 +90,7 @@ constexpr std::uint32_t kLineVoBank = 5563;
 // The face player's level for the action (AnimateFace +0x64, read 2026-11-06 for
 // DAOParagonEngine; dev/CUTSCENES.md, "AnimateFace", and ANIMATION.md's face levels).
 constexpr std::uint32_t kLineFaHeadMove = 5564;
+constexpr std::uint32_t kLineNoVoInGame = 5565;
 constexpr std::uint32_t kStageCameraDefault = 5570;
 constexpr std::uint32_t kStageCameraHenchman = 5571;
 constexpr std::uint32_t kStageLookAt = 5580;
@@ -270,6 +271,8 @@ Action ActionOf(const gff4::Struct &in)
     action.voBank = in.String(kLineVoBank).value_or(L"");
     action.lipsync = in.String(kLineLipsync).value_or(L"");
     action.faHeadMove = in.Get<std::uint8_t>(kLineFaHeadMove).value_or(0) != 0;
+    // Read per action, 0 if unwritten (0x007DC2A7).
+    action.noVoInGame = in.Get<std::uint8_t>(kLineNoVoInGame).value_or(0) != 0;
     action.sound = in.String(kSound).value_or(L"");
     for (const std::uint32_t label : kOtherActor)
     {
@@ -279,7 +282,8 @@ Action ActionOf(const gff4::Struct &in)
         }
     }
     action.node = in.Get<std::int32_t>(kLinkNode).value_or(-1);
-    action.lookSpeed = in.Get<float>(kHeadtrackSpeed).value_or(0.0F);
+    // 1.0 where the action has none (fld1 at 0x007DA85A).
+    action.lookSpeed = in.Get<float>(kHeadtrackSpeed).value_or(1.0F);
     action.realignStart = in.Get<std::uint8_t>(kHeadtrackRealignStart).value_or(0) != 0;
     action.realignContinue = in.Get<std::uint8_t>(kHeadtrackRealignCont).value_or(0) != 0;
     action.tag = in.String(kTag).value_or(L"");
@@ -712,10 +716,13 @@ Cutscene CutsceneOf(const gff4::Struct &root)
         .runTime = root.Get<float>(kRunTime).value_or(0.0F),
         .endScript = root.String(kEndScript).value_or(L""),
         .blendTree = root.String(kBlendTree).value_or(L""),
-        .fps = root.Get<std::uint32_t>(kFps).value_or(0),
+        // The load (0x007E1910) takes 30 for an unwritten FPS and keeps a written 0 (0x007E1AEB,
+        // 0x007E1B1E), and 1 for an unwritten AreaRequired (0x007E19F6) (paragon-agent's sweep, checked
+        // by lib-agent 2026-11-10).
+        .fps = root.Get<std::uint32_t>(kFps).value_or(kDefaultFps),
         .stage = root.String(kStage).value_or(L""),
         .playUntilVoCompletes = root.Get<std::uint8_t>(kPlayUntilVoCompletes).value_or(0),
-        .areaRequired = root.Get<std::uint8_t>(kAreaRequired).value_or(0),
+        .areaRequired = root.Get<std::uint8_t>(kAreaRequired).value_or(1),
         .henchmanTag = root.String(kHenchmanTag).value_or(L""),
         .lodCurves = {},
         .lodOriginPosition = Several<3>(root, kLodOriginPosition),

@@ -133,20 +133,21 @@ struct Action
     // ASLN, AANF: the face's level, CutsceneActionSpeakLineFaHeadMove: set, the face moves the
     // head (from headBase) and not the neck; clear, the neck too.
     bool faHeadMove = false;
-    std::wstring sound;               // ACSP
-    std::int32_t actor = -1;          // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
-    std::int32_t node = -1;           // ALNK: the target's weaponparts.gda row linked to; 0 for a link with none
-    float lookSpeed = 0.0F;           // ACHT: the look-at multiplier set on the action's first frame
-    bool realignStart = false;        // ACHT: the creature's facing refreshed on the action's first frame
-    bool realignContinue = false;     // ACHT: and on each step of the cut while the action runs
-    std::wstring tag;                 // AJSC's and AJSP's stage tag
-    std::wstring lookAt;              // AJSP
-    bool stageCameraDefault = false;  // AJSC: the tag is a place's, its default camera is the camera
-    bool stageCameraHenchman = false; // AJSC: the camera is the henchman's place's default; wins over the above
-    bool visible = false;             // ACVI
-    bool drawMain = false;            // ADW_: the main hand's weapon drawn
-    bool drawOff = false;             // ADW_
-    std::wstring effect;              // AFBE: "da_dof", "da_colorfade"
+    bool noVoInGame = false;         // ASLN: CutsceneActionSpeakLineNoVOIngame, the line's voice not played in the game
+    std::wstring sound;              // ACSP
+    std::int32_t actor = -1;         // the other actor's id: AACC's camera, ACHT's look, ALNK's and ACRU's target
+    std::int32_t node = -1;          // ALNK: the target's weaponparts.gda row linked to; 0 for a link with none
+    float lookSpeed = 1.0F;          // ACHT: the look-at multiplier set on the action's first frame; 1 if unwritten
+    bool realignStart = false;       // ACHT: the creature's facing refreshed on the action's first frame
+    bool realignContinue = false;    // ACHT: and on each step of the cut while the action runs
+    std::wstring tag;                // AJSC's and AJSP's stage tag
+    std::wstring lookAt;             // AJSP
+    bool stageCameraDefault = false; // AJSC: the tag is a place's, its default camera is the camera
+    bool stageCameraHenchman = false;        // AJSC: the camera is the henchman's place's default; wins over the above
+    bool visible = false;                    // ACVI
+    bool drawMain = false;                   // ADW_: the main hand's weapon drawn
+    bool drawOff = false;                    // ADW_
+    std::wstring effect;                     // AFBE: "da_dof", "da_colorfade"
     std::vector<EffectParameter> parameters; // AFBE
     std::wstring movie;                      // APBM
     std::optional<Fog> fog;                  // AFOG
@@ -197,10 +198,10 @@ struct Cutscene
     float runTime = 0.0F;   // seconds
     std::wstring endScript; // run when a script's cutscene ends, skipped or not, never for a line's; empty for none
     std::wstring blendTree; // "bhmcs_intro.cub"
-    std::uint32_t fps = 0;
-    std::wstring stage;                    // CutsceneStageResRef; empty for none
+    std::uint32_t fps = 30; // 30 if unwritten; a written 0 is kept
+    std::wstring stage;     // CutsceneStageResRef; empty for none
     std::uint8_t playUntilVoCompletes = 0; // 255 or 0, as written; only a line's cut waits on its voices
-    std::uint8_t areaRequired = 0;         // 255 or 0, as written
+    std::uint8_t areaRequired = 1;         // 255 or 0, as written; 1 if unwritten
     std::wstring henchmanTag;
     std::vector<Curve> lodCurves;                // the player's LOD position by time, x, y and z in the origin's frame
     std::array<float, 3> lodOriginPosition{};    // that frame's place
@@ -218,7 +219,7 @@ struct Stage
 };
 
 // Returns the time the cutscene's clock shows after some seconds: the nearest of its frames.
-// @param fps the cutscene's frames a second; 0, a file with none, is read as 30.
+// @param fps the cutscene's frames a second; 0 is taken as 30.
 float FrameTime(float seconds, std::uint32_t fps);
 
 // Returns a curve's value at a time on the cutscene's clock, as the engine samples it.

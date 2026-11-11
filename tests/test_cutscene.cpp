@@ -2,6 +2,7 @@
 // game/cutscenes when ghilana's extract has written them there (DAOLib #170).
 #include "dao/core/Cutscene.h"
 #include "dao/core/Gff4.h"
+#include "dao/core/Gff4Writer.h"
 #include "gff4_builder.h"
 
 #include <catch2/catch_approx.hpp>
@@ -374,7 +375,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK(camera.tag == L"gen00fl_alistair");
     CHECK_FALSE(camera.stageCameraDefault);
     CHECK(camera.stageCameraHenchman);
-    CHECK(camera.lookSpeed == 0.0F);
+    CHECK(camera.lookSpeed == 1.0F); // none written, as the engine reads it
 
     const auto &headtrack = actor.actions[3];
     CHECK(headtrack.kind == "ACHT");
@@ -1039,4 +1040,25 @@ TEST_CASE("jowan_attacks' clips carry their actors metres from FinalPos, which i
     // 2.4 s into the clip, and the cut stops at 3.1 s into it. A lone blend clip is applied whole, so the actor
     // follows the keys, as the engine's arithmetic does; it has not been seen in play.
     CHECK(carried == 5);
+}
+
+TEST_CASE("a cutscene's unwritten FPS and AreaRequired read as the load reads them, a written FPS of 0 kept",
+          "[cutscene]")
+{
+    {
+        gff4::Writer out("CUT ", "V1.0");
+        out.Root("CUT ", {{5021, gff4::Type::F32}});
+        const std::vector<std::byte> bytes = out.Save();
+        const auto read = cutscene::CutsceneOf(*gff4::File::Parse(bytes));
+        REQUIRE(read);
+        CHECK(read->fps == 30);
+        CHECK(read->areaRequired == 1);
+    }
+    gff4::Writer out("CUT ", "V1.0");
+    const gff4::StructAt root = out.Root("CUT ", {{5016, gff4::Type::U32}});
+    out.U32(root, 5016, 0);
+    const std::vector<std::byte> bytes = out.Save();
+    const auto read = cutscene::CutsceneOf(*gff4::File::Parse(bytes));
+    REQUIRE(read);
+    CHECK(read->fps == 0);
 }

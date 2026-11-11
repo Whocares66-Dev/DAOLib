@@ -316,6 +316,7 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(npc->animation == 820);
     CHECK(npc->slideShowTexture == L"ss_shield.dds");
     CHECK(npc->cutscene == L"390762");
+    CHECK(npc->hasCut);
     CHECK_FALSE(npc->cutsceneInLine);
     CHECK_FALSE(conversation->LineCutscene(0));
     REQUIRE(npc->switches.size() == 2);
@@ -342,6 +343,7 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK(reply->revertAnimation);
     CHECK(reply->animation == 0xFFFFFFFF);
     CHECK(reply->cutscene.empty());
+    CHECK(reply->hasCut);
     CHECK(reply->cutsceneInLine);
     CHECK(reply->switches.empty());
     CHECK(reply->stageName.empty());
@@ -353,6 +355,7 @@ TEST_CASE("a conversation's lines read as the file holds them")
     CHECK_FALSE(conversation->LineCutscene(2));
     // The action field is not in this file: an empty check, not a failure.
     CHECK(reply->action.Empty());
+    CHECK(reply->action.flag == 0); // none written, as the engine reads it
 
     CHECK_FALSE(conversation->Line(2));
 }

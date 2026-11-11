@@ -68,14 +68,14 @@ namespace dao::core
 struct PlotCheck
 {
     std::wstring plot;        // the plot's GUID, as 32 hex digits
-    std::int32_t flag = -1;   // the flag, -1 for none
+    std::int32_t flag = 0;    // the flag; 0 where none is written, as the engine reads it
     std::uint8_t test = 0xFF; // how the flag is tested, as the file has it; 255 by default
     std::wstring script;      // a script's resource name
     std::int32_t parameter = 0;
 
     bool Empty() const
     {
-        return plot.empty() && flag == -1 && script.empty();
+        return plot.empty() && script.empty();
     }
 };
 
@@ -132,6 +132,7 @@ struct ConversationLine
     std::uint32_t animation = 0xFFFFFFFF; // a row of the Animations table played with the line; 0xFFFFFFFF for none
     std::wstring slideShowTexture;        // a picture shown with the line, "ss_shield.dds"; empty for none
     std::wstring cutscene;                // the cutscene (.cut) the line plays, by name; empty for none
+    bool hasCut = false;                  // the line has a cut, by name or its own (LineHasCut)
     bool cutsceneInLine = false;          // the line holds its own cutscene: ConversationFile::LineCutscene
     std::wstring stageName;               // the stage the line's cut is set on (0x007D2AA0); may be empty
     bool stageAtCurrentLocation = false;  // the stage placed at the speaker (0x007CD040)

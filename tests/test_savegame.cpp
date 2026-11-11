@@ -2326,3 +2326,16 @@ TEST_CASE("a save without a party list reads as none, one with an empty list as 
     REQUIRE(save);
     CHECK(save->party);
 }
+
+TEST_CASE("a save whose VERS lacks its save version reads it as -1, which the load refuses", "[savegame]")
+{
+    namespace gff4 = dao::core::gff4;
+    gff4::Writer out("SAVE", "V1.0");
+    const auto version = out.AddTemplate("VERS", {{16770, gff4::Type::S32}});
+    const gff4::StructAt root = out.Root("SAVE", {{16004, version, 0}});
+    out.S32(out.Child(root, 16004), 16770, 13263);
+    const auto save = sg::Read(out.Save());
+    REQUIRE(save);
+    CHECK(save->version.buildNumber == 13263);
+    CHECK(save->version.saveVersion == -1);
+}

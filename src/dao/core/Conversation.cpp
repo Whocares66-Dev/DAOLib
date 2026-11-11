@@ -14,7 +14,10 @@ PlotCheck ReadCheck(const std::optional<gff4::Struct> &check)
         return out;
     }
     out.plot = check->String(ConversationFile::kPlotGuid).value_or(L"");
-    out.flag = check->Get<std::int32_t>(ConversationFile::kPlotFlag).value_or(-1);
+    // LineCondPlotFlag (0x007EF740) and GetLineActionPlotFlag (0x007EFA00) read the flag with 0 for one
+    // the struct lacks (0x007EF790, 0x007EFA50), and answer 0 where the line has no such struct
+    // (0x007EF7B9) (read 2026-11-10 from paragon-agent's Conversation audit, checked by lib-agent).
+    out.flag = check->Get<std::int32_t>(ConversationFile::kPlotFlag).value_or(0);
     out.test = check->Get<std::uint8_t>(ConversationFile::kPlotTest).value_or(0xFF);
     out.script = check->String(ConversationFile::kScript).value_or(L"");
     out.parameter = check->Get<std::int32_t>(ConversationFile::kScriptParameter).value_or(0);
@@ -100,8 +103,10 @@ std::optional<ConversationLine> ConversationFile::Line(std::uint32_t index) cons
     out.animation = line.Get<std::uint32_t>(kLineAnimation).value_or(0xFFFFFFFF);
     out.slideShowTexture = line.String(kLineSlideShowTexture).value_or(L"");
     // The generic field holds a CUTR, a cutscene by name, or a CUT, one of its own.
+    // LineHasCut (0x007EFC30) is true where the field holds either (setne at 0x007EFC59).
     if (const auto cut = line.Child(kLineCut))
     {
+        out.hasCut = true;
         out.cutscene = cut->String(kLineCutResRef).value_or(L"");
         out.cutsceneInLine = cut->Label() == "CUT";
     }

@@ -941,8 +941,9 @@ struct GameState
 struct Version
 {
     std::uint8_t cheatUsed = 0;
-    std::int32_t buildNumber = 0;
-    std::int32_t saveVersion = 0;
+    // Each -1 where the struct lacks it, as the load reads it, so such a save is refused.
+    std::int32_t buildNumber = -1;
+    std::int32_t saveVersion = -1;
 };
 
 // One of the three pools the object ids are drawn from (a WDBE): group 0 ids from 1, group 1 from

@@ -1398,6 +1398,8 @@ std::optional<Save> Read(const gff4::File &das)
     if (const auto v = top->Child(L::kVersion))
     {
         Take(*v, L::kCheatUsed, save.version.cheatUsed);
+        // SaveGame::IsSupportedVersion (0x00645510) reads both with -1 for one the struct lacks (0x0064552E,
+        // 0x006455B2), so such a save is refused (read 2026-11-10 by paragon-agent-2, checked by lib-agent).
         Take(*v, L::kBuildNumber, save.version.buildNumber);
         Take(*v, L::kSaveVersion, save.version.saveVersion);
     }
