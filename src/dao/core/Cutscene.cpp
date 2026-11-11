@@ -29,6 +29,8 @@ constexpr std::uint32_t kLodOriginPosition = 5014;
 constexpr std::uint32_t kLodOriginOrientation = 5015;
 constexpr std::uint32_t kPlayUntilVoCompletes = 5018;
 constexpr std::uint32_t kAreaRequired = 5019;
+constexpr std::uint32_t kEnableLevelFbes = 5013;
+constexpr std::uint32_t kShadowRadius = 5020;
 constexpr std::uint32_t kHenchmanTag = 5050;
 constexpr std::uint32_t kResources = 5100;
 constexpr std::uint32_t kActors = 5200;
@@ -723,6 +725,9 @@ Cutscene CutsceneOf(const gff4::Struct &root)
         .stage = root.String(kStage).value_or(L""),
         .playUntilVoCompletes = root.Get<std::uint8_t>(kPlayUntilVoCompletes).value_or(0),
         .areaRequired = root.Get<std::uint8_t>(kAreaRequired).value_or(1),
+        // 1 and 30.0 (0x00ADEBCC) where unwritten (0x007E2125, 0x007E2163; dev/CUTSCENES.md, "The file").
+        .enableLevelFbes = root.Get<std::uint8_t>(kEnableLevelFbes).value_or(1) != 0,
+        .shadowRadius = root.Get<float>(kShadowRadius).value_or(30.0F),
         .henchmanTag = root.String(kHenchmanTag).value_or(L""),
         .lodCurves = {},
         .lodOriginPosition = Several<3>(root, kLodOriginPosition),

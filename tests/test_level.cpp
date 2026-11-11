@@ -220,7 +220,7 @@ std::vector<std::byte> LayoutFile()
 // (0.5, 0.25, 0.125, 1), da_hsvmatrix with a Brightness of 0.75 held in a generic field, the
 // chunks' switch on with 10 rows, the cut-off on, an atmosphere of a sun's intensity and a field
 // with no name, and one tree.
-std::vector<std::byte> LevelLayoutFile()
+std::vector<std::byte> LevelLayoutFile(bool chunked = false)
 {
     Builder b =
         Start("ARL ", {{"AREA",
@@ -248,7 +248,7 @@ std::vector<std::byte> LevelLayoutFile()
     Floats(b, root + 12, {1, 2, 3});
     Floats(b, root + 28, {0, 0, -1});
     Floats(b, root + 40, {0.5F, 0.25F, 0.125F, 1});
-    b.U8(root + 56, 1);
+    b.U8(root + 56, chunked ? 1 : 0);
     b.U32(root + 60, 10);
     b.U8(root + 64, 1);
     Float(b, root + 68, 19.95F);
@@ -556,14 +556,20 @@ TEST_CASE("a level's layout has its rooms, sun, effects with their values, atmos
     CHECK(read->atmosphere[1].name == "22999");
     CHECK(read->clouds.empty());
 
-    REQUIRE(read->chunks.has_value());
-    CHECK(read->chunks->rows == 10);
-    CHECK(read->chunks->columns == 0);
+    CHECK(!read->chunks.has_value());
     CHECK(read->cutoffEnabled == std::optional<bool>(true));
     CHECK(!read->cutoffHeight.has_value());
     CHECK(!read->sunColourOnCharacters.has_value());
     CHECK(read->trees == std::vector<std::wstring>{L"Lak100d_tre_m_mossy"});
     CHECK(read->treeTint == std::array<float, 4>{1, 1, 1, 1});
+}
+
+TEST_CASE("a chunked layout with no columns, width or height is refused, as the engine refuses it", "[level]")
+{
+    const std::vector<std::byte> bytes = LevelLayoutFile(true); // 10 rows and nothing else
+    const std::optional<gff4::File> file = gff4::File::Parse(bytes);
+    REQUIRE(file.has_value());
+    CHECK(!level::LevelLayoutOf(*file).has_value());
 }
 
 TEST_CASE("a room's layout is no level's layout", "[level]")

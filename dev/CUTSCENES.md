@@ -44,6 +44,8 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in the GOG exe and `script.ldf`, for
 
 ### The file (`0x007E1910`, the player's load)
 
+- **`CutsceneEnableLevelFbes` (5013)**, a byte, 1 where unwritten (0x007E2125): `g_frameBufferEffects` (0x00C1E8B0, the area's frame-effects list) +0x10 is set to `byte != 0`, and `FrameBufferEffects::Draw` (0x00456C10) draws the list only while it is set, so a cut with 0 turns the area's own frame effects off while it plays. `CutscenePlayer::Teardown` (0x007E10A0) sets it back to 1. 34 of the 3,158 shipped cuts set 0. Read 2026-11-10 by paragon-agent's porter, checked by lib-agent.
+- **`CutsceneShadowRadius` (5020)**, a float, 30.0 where unwritten (the constant at 0x00ADEBCC, 0x007E2163): above 0, `g_shadowRangeOverrideSq` (0x00BF2094) becomes its square (0x007E219E), the old value kept at the player's +0x24 (0x007E215C) for Teardown to put back. `ShadowMaps::ResetMatrices` (0x00452CB0) reads it. 13 shipped cuts set it above 0. Read as the one before.
 - Fields read from the `.cut` (GFF4, `dev/gff4_fields.csv`): `CutsceneAnimatic` (5008), `CutsceneAreaRequired` (5019), `CutsceneStageResRef` (5017), `CutsceneRunTime` (5000, seconds), `CutsceneFPS` (5016, default 30), `CutsceneEndScript` (5001), `CutsceneBlendtree` (5007), the actors' list (field 0x1450) and more (fields 0x1393..0x139D). Read.
 
 ### The end, and the end script (`GameModeCutscene` slot 8, `0x00692450`)

@@ -243,7 +243,8 @@ struct LevelLayout
     std::vector<std::vector<std::uint32_t>> lightSubsets; // as written; not yet read in the exe
 };
 
-// Returns a level's layout, or nothing for a file that is not one.
+// Returns a level's layout, or nothing for a file that is not one or a chunked one whose rows, columns,
+// width or height is 0, which the engine refuses to load.
 std::optional<LevelLayout> LevelLayoutOf(const gff4::File &layout);
 
 // A lightmapped part of a model placed in a room.

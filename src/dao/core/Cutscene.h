@@ -202,6 +202,8 @@ struct Cutscene
     std::wstring stage;     // CutsceneStageResRef; empty for none
     std::uint8_t playUntilVoCompletes = 0; // 255 or 0, as written; only a line's cut waits on its voices
     std::uint8_t areaRequired = 1;         // 255 or 0, as written; 1 if unwritten
+    bool enableLevelFbes = true;           // the area's own frame effects drawn while the cut plays
+    float shadowRadius = 30.0F;            // above 0, the shadows' range while the cut plays
     std::wstring henchmanTag;
     std::vector<Curve> lodCurves;                // the player's LOD position by time, x, y and z in the origin's frame
     std::array<float, 3> lodOriginPosition{};    // that frame's place

@@ -660,6 +660,13 @@ std::optional<LevelLayout> LevelLayoutOf(const gff4::File &layout)
                             .columns = root->Get<std::int32_t>(kAreaChunkColumns).value_or(0),
                             .width = root->Get<float>(kAreaChunkWidth).value_or(0.0F),
                             .height = root->Get<float>(kAreaChunkHeight).value_or(0.0F)};
+        // IAreaLayout::Load (0x005D1290) fails the load of a chunked layout whose rows, columns,
+        // width or height is 0 (to 0x005D1A57) (paragon-agent's sweep, checked by lib-agent 2026-11-10).
+        if (out.chunks->rows == 0 || out.chunks->columns == 0 || out.chunks->width == 0.0F ||
+            out.chunks->height == 0.0F)
+        {
+            return std::nullopt;
+        }
     }
     out.startPoint = root->String(kAreaStartPoint).value_or(L"");
     out.cutoffHeight = root->Get<std::int32_t>(kAreaCutoffHeight);

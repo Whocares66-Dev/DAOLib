@@ -1053,6 +1053,8 @@ TEST_CASE("a cutscene's unwritten FPS and AreaRequired read as the load reads th
         REQUIRE(read);
         CHECK(read->fps == 30);
         CHECK(read->areaRequired == 1);
+        CHECK(read->enableLevelFbes);
+        CHECK(read->shadowRadius == 30.0F);
     }
     gff4::Writer out("CUT ", "V1.0");
     const gff4::StructAt root = out.Root("CUT ", {{5016, gff4::Type::U32}});
