@@ -140,27 +140,27 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 
 ### SetQuickslot (748)
 - **Handler:** 0x0066B690 (own) → `CCCreatureStats` (creature +0x7C4) 0x0071F230 (slot, ability, tag, item reference).
-- **Does:** pops object, slot, ability, and the tag only with 4 arguments. Works on the stats' party data (+0x1B4; made when the creature joins the party, 0x0071CCD0 from CCParty 0x0063A020). Ability 0 clears the slot (0x0062C0F0). A tag finds the item in the creature's inventory (0x006A6400 on +0x5C, by ability and tag); not found → nothing. An ability whose `ABI_base` `UseType` is 3 (passive) is refused. Slot -1: nothing if the ability (and item) is already on the bar, else the first free slot (0x0062AD80), searched from slot 9 for skills (`abilitytype` 3). A slot above 49 (unsigned) is refused. Writes the entry into the current bar's map (party data +0x14C + 20 × bar), sets the dirty byte +0x2C. Checked.
-- **State:** party data bars (5 bars × 50 slots); with a tag and a tutorial control, signals training event 1064 (`EVENT_TYPE_TRAINING_QBAR_ITEM_EQUIPPED`, 0x00693290). For an item ability (type 4) not yet linked, 0x0071EF00 runs (not read).
-- **Edge cases:** non-creature or no party data (never in the party) → nothing (checked). Writes the current bar only.
+- **Does:** pops object, slot, ability, and the tag only with 4 arguments. Works on the stats' CreatureAbilities (+0x1B4; made when the creature joins the party, 0x0071CCD0 from CCParty 0x0063A020). Ability 0 clears the slot (0x0062C0F0). A tag finds the item in the creature's inventory (0x006A6400 on +0x5C, by ability and tag); not found → nothing. An ability whose `ABI_base` `UseType` is 3 (passive) is refused. Slot -1: nothing if the ability (and item) is already on the bar, else the first free slot (0x0062AD80), searched from slot 9 for skills (`abilitytype` 3). A slot above 49 (unsigned) is refused. Writes the entry into the current bar's map (CreatureAbilities +0x14C + 20 × bar), sets the dirty byte +0x2C. Checked.
+- **State:** CreatureAbilities bars (5 bars × 50 slots); with a tag and a tutorial control, signals training event 1064 (`EVENT_TYPE_TRAINING_QBAR_ITEM_EQUIPPED`, 0x00693290). For an item ability (type 4) not yet linked, 0x0071EF00 runs (not read).
+- **Edge cases:** non-creature or no CreatureAbilities (never in the party) → nothing (checked). Writes the current bar only.
 
 ### GetQuickslot (330)
 - **Handler:** 0x0066B800 (own) → `ForScript_GetQuickslot` 0x0071C620.
-- **Does:** returns the ability id in slot n of the current bar (party data +0x1B0), 0 if empty. Checked.
+- **Does:** returns the ability id in slot n of the current bar (CreatureAbilities +0x1B0), 0 if empty. Checked.
 - **State:** reads only; the lookup is the map's find 0x005D0AB0 (whether it inserts an empty entry is not read).
-- **Edge cases:** invalid object, non-creature, no party data → 0 (checked). Slot out of range → 0 (no entry, inferred). Other bars are not reachable.
+- **Edge cases:** invalid object, non-creature, no CreatureAbilities → 0 (checked). Slot out of range → 0 (no entry, inferred). Other bars are not reachable.
 
 ### SetQuickslotBar (328)
 - **Handler:** 0x0066BE50, shared with 296, 329, 333, 335, 642, 643, 645, 676, 698, 758, 764, 805, 813, 839; case 0x148 at 0x0066BF1B → 0x00719AE0.
-- **Does:** sets the party data's current bar (+0x1B0) and the dirty byte, when the bar differs and is below 5. Checked.
-- **State:** party data +0x1B0, +0x2C.
-- **Edge cases:** the test is signed (`jge 5`): a negative bar is stored, and later reads index outside the bars (checked the test; consequence inferred). Object default 0 and int default 0 (popped only with 2 args). Non-creature → the handler's placeable branch, which has no case 328 (nothing). No party data → nothing.
+- **Does:** sets CreatureAbilities' current bar (+0x1B0) and the dirty byte, when the bar differs and is below 5. Checked.
+- **State:** CreatureAbilities +0x1B0, +0x2C.
+- **Edge cases:** the test is signed (`jge 5`): a negative bar is stored, and later reads index outside the bars (checked the test; consequence inferred). Object default 0 and int default 0 (popped only with 2 args). Non-creature → the handler's placeable branch, which has no case 328 (nothing). No CreatureAbilities → nothing.
 
 ### LockQuickslotBar (329)
 - **Handler:** 0x0066BE50 (shared, above), case 0x149 at 0x0066BEF6 → 0x00719AC0.
-- **Does:** sets the party data's own attribute (its +0, slot 21 Set) to `bLock > 0`. Checked.
-- **State:** party data +0 (observers notified; the quickbar movie reads it, inferred).
-- **Edge cases:** negative bLock unlocks (checked). No party data → nothing.
+- **Does:** sets CreatureAbilities' own attribute (its +0, slot 21 Set) to `bLock > 0`. Checked.
+- **State:** CreatureAbilities +0 (observers notified; the quickbar movie reads it, inferred).
+- **Edge cases:** negative bLock unlocks (checked). No CreatureAbilities → nothing.
 
 ### ShowFloatyIcon (749)
 - **Handler:** 0x00662DB0 (own) → floaty manager 0x0063FCF0 (creature, icon).
@@ -176,17 +176,17 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 
 ### GetAutoLevelUp (384)
 - **Handler:** 0x0066B980 (own) → `CCCreatureStats::GetAutoLevelUp` 0x0071A1F0.
-- **Does:** returns party data +0x30 (an int attribute). Checked.
+- **Does:** returns CreatureAbilities +0x30 (an int attribute). Checked.
 - **State:** read only.
-- **Edge cases:** invalid, non-creature, or no party data → 0 (checked). Values: 0 off, 1 on, 2 forced (scripts set 2 on followers; joining the party keeps 2 and otherwise copies the party's own setting, party +0x84, 0x0063A09F, checked). A save holds the value as a signed byte, field 16329 (`dev/GUI.md`, the quickbars' load 0x0062C3D0).
+- **Edge cases:** invalid, non-creature, or no CreatureAbilities → 0 (checked). Values: 0 off, 1 on, 2 forced (scripts set 2 on followers; joining the party keeps 2 and otherwise copies the party's own setting, party +0x84, 0x0063A09F, checked). A save holds the value as a signed byte, field 16329 (`dev/GUI.md`, the quickbars' load 0x0062C3D0).
 
 ### SetAutoLevelUp (385)
 - **Handler:** 0x0066B900 (own) → `ForScript_SetAutoLevelUp` 0x00719B10.
-- **Does:** sets party data +0x30 to the int as given (Set, notifies). Checked.
-- **State:** party data +0x30.
-- **Edge cases:** no range check (checked). No party data → nothing, so it does not stick on a creature never in the party (checked; on joining, party +0x84 decides unless 2, but the data is made after that copy, 0x0063A11C, so on a creature with no party data the copy does nothing, checked 2026-10-22).
+- **Does:** sets CreatureAbilities +0x30 to the int as given (Set, notifies). Checked.
+- **State:** CreatureAbilities +0x30.
+- **Edge cases:** no range check (checked). No CreatureAbilities → nothing, so it does not stick on a creature never in the party (checked; on joining, party +0x84 decides unless 2, but the data is made after that copy, 0x0063A11C, so on a creature with no CreatureAbilities the copy does nothing, checked 2026-10-22).
   - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) The creature abilities object (CreatureAbilities, at stats+0x1B4) is made by CCCreatureStats::EnsureCreatureAbilities (0x0071CCD0): when the stats object's +0x1B4 is null it allocates the 0x1B4-byte record (0x0062E460) and fills the four cooldown groups. ForScript_SetAutoLevelUp (0x00719B10) does nothing when +0x1B4 is null; CCCreatureStats::GetAutoLevelUp (0x0071A1F0) returns 0 then.
-  - [C] The pool-join function (0x0063A020) copies the join record's byte +0x84 through SetAutoLevelUp (the call at 0x0063A0C1) when the creature's current auto-level value is not 2, and reaches EnsureCreatureAbilities only later (the call at 0x0063A11C). So on a creature with no party data the copy does nothing, and "the data is made on joining the pool" is read, not inferred.
+  - [C] The pool-join function (0x0063A020) copies the join record's byte +0x84 through SetAutoLevelUp (the call at 0x0063A0C1) when the creature's current auto-level value is not 2, and reaches EnsureCreatureAbilities only later (the call at 0x0063A11C). So on a creature with no CreatureAbilities the copy does nothing, and "the data is made on joining the pool" is read, not inferred.
   - [I] What the data's defaults are for auto-level (the 0x0062E460 constructor) was not read.
 
 ### GetMaxLevel (840)

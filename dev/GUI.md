@@ -2201,11 +2201,11 @@ GOG addresses. [C] read in the code, [I] inferred. With "gui4a" above.
   - Bars 0–4 are the lists 16308 and 16313–16316 (`SavegameQuickslots`, then 1 to 4; the ids from the table at 0x00B05594).
   - A slot is keyed by its number field 16331, else by its list index. Of two equal keys the first is kept.
   - 16317 (`SavegameCurentQbar`) is the bar shown, taken only if under 5 (0x0062C5B9). 16318 is the lock.
-  - 16329 (`SavegameAutoLevelUp`) is the creature's auto level-up (party data +0x30, `dev/script_commands/inventory.md` GetAutoLevelUp): a signed byte holding 0, 1 or 2, not a bool [C]. The load tests the field (0x0062C613), reads a byte and sign-extends it into the int attribute (`movsx ecx, al` at 0x0062C64E); the writer tests it (0x0062B44E) and writes the int as a byte (0x0062B46B-0x0062B476). read 2026-11-06 by paragon-agent-2's reader, checked by lib-agent.
+  - 16329 (`SavegameAutoLevelUp`) is the creature's auto level-up (CreatureAbilities +0x30, `dev/script_commands/inventory.md` GetAutoLevelUp): a signed byte holding 0, 1 or 2, not a bool [C]. The load tests the field (0x0062C613), reads a byte and sign-extends it into the int attribute (`movsx ecx, al` at 0x0062C64E); the writer tests it (0x0062B44E) and writes the int as a byte (0x0062B46B-0x0062B476). read 2026-11-06 by paragon-agent-2's reader, checked by lib-agent.
 - **The writer** (0x0062B1E0) always writes the slot number (16331) [C]. core's `savegame::Quickslot::number` is an Opt, none for a slot without the field, and its writer leaves such a slot without one (DAOLib #248).
 - **What the movie is given** (0x0062E680, its one caller 0x00719AB0 after SetQuickslot) [C]: when the bar is marked changed, the movie's `QuickSlots` list is rebuilt from the current bar, entry n being slot n. 0x0071AB10 registers `QuickSlots` and `QuickbarLocked`.
 - **The message** `SetQuickslotMessage` (`CCCreature`'s handler 0x006A74B0) [C]: slot, ability, tag and template go to 0x0071F230; then the rebuild (0x00719AB0); then the usable step 0x0071D4A0. `SetQuickslotBar` is 0x00719AE0.
-- **Placing a slot** [C]: the first free slot 0x0062AD80 has one caller, 0x0071F230 (at 0x0071F354). `AddAbility` 0x0071EAC0 and the party data's set-up 0x0071CCD0 place none.
+- **Placing a slot** [C]: the first free slot 0x0062AD80 has one caller, 0x0071F230 (at 0x0071F354). `AddAbility` 0x0071EAC0 and CreatureAbilities' set-up 0x0071CCD0 place none.
 - **A slot's item and its grey:**
   - **An item ability's slot holds the item's object id**, its record's `SourceItem` (+0xB8), with copies of its tag (+0xC8), template (+0x118), icon (+0x140) and name (+0xF0) [C].
     - The record is found by ability id, and for items by tag (0x0062A300). Its item is resolved by object id only (0x005D5870).
