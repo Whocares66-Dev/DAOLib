@@ -786,8 +786,7 @@ TEST_CASE("a section with a choice that does not fit is left out", "[options]")
 TEST_CASE("the left fits two fight sliders while the loader's Performance section stays right", "[options]")
 {
     using namespace dao::core::options_movie; // NOLINT(google-build-using-namespace)
-    Section performance{"Performance",
-                        {{"DAOLibOcclusion", "Dynamic occlusion", ""}, {"DAOLibFastLoad", "Fast loading", ""}}};
+    Section performance{"Performance", {{"DAOLibFastLoad", "Fast loading", ""}}};
     performance.column = 1;
     std::vector<bool> shown;
     const auto loader = AddSections(OptionsMovie(), std::vector<Section>{performance}, shown);
@@ -812,7 +811,7 @@ TEST_CASE("the left fits two fight sliders while the loader's Performance sectio
     // above the bottom buttons at 674.5. Restore Defaults is only right.
     CHECK(200 + speed->y + 41 < 674);
     CHECK(fast->x == 483);
-    CHECK(fast->y == 306);
+    CHECK(fast->y == 271);
     const auto free = FreeSlots(*patched);
     REQUIRE(free);
     CHECK(std::all_of(free->begin(), free->end(), [](const Slot &slot) { return slot.column == 1; }));

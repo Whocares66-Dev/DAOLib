@@ -56,7 +56,6 @@
 #include "loader/Proxy.h"
 #include "loader/WindowLog.h"
 #include "perf/AllProcessors.h"
-#include "perf/DynamicOcclusion.h"
 #include "perf/EngineHeap.h"
 #include "perf/FastLoad.h"
 #include "perf/Options.h"
@@ -229,12 +228,9 @@ void BeforeTheGame()
     fix::InstallMouseRecordsFix();
     fix::InstallLightFlickerFix();
     std::vector<dao::options::Toggle> performance;
-    for (auto toggle : {perf::InstallDynamicOcclusion(), perf::InstallFastLoad()})
+    if (auto toggle = perf::InstallFastLoad())
     {
-        if (toggle)
-        {
-            performance.push_back(std::move(*toggle));
-        }
+        performance.push_back(std::move(*toggle));
     }
     perf::AddOptions(std::move(performance));
     LoadPlugins();

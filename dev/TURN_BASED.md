@@ -596,7 +596,7 @@ GOG addresses.
           - The scan covered every `mov r,[r+0x9C]` or `call [r+0x9C]` in `.text` with a pushed mask holding 0x20, decoded from its owner's start, and every immediate store to +0x260 or +0x258. The other hits are Direct3D render states on the driver, not Objects.
         - **So the byte +0xCFC means, for a creature with a model:** its model was found visible by the culler, or it is the Wisp (apr_base row 14), or its selection ring's effect object (`+0xA08`) was found visible. Each frame ThrottleUpdate reads the flags left by the last resolve, so a creature on screen, or whose ring is on screen, updates every frame, and one off screen or hidden by occlusion is throttled by its LOD level.
         - Whether the game's update runs before or after the frame's resolve, so whether a frame's flag is the same frame's or the previous one's, wasn't read [I].
-        - The visibility is Umbra's occlusion culling, not the view frustum alone: an object on screen but hidden behind a wall isn't visible. DAOLib's DynamicOcclusion can switch Umbra to frustum culling alone, which isn't vanilla.
+        - The visibility is Umbra's occlusion culling, not the view frustum alone: an object on screen but hidden behind a wall isn't visible.
     - **Word +0x58 == 0xE:** +0x58 is the apr_base row (CHARACTERS.md), and row 14 is the Wisp (`Cn_WISPa`, EFFECTS.md "The wisp") [C].
     - **+0xA08 is the selection ring's effect id** [C]:
       - 0x006A5F90 replaces it, with its vfx row at +0xA0C.

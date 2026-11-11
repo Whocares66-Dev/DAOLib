@@ -45,9 +45,8 @@ The surname fix needs no plugin or setting. It uses the character's background a
 |---|---|---|---|
 | Engine heap | The engine's memory from the system's heap, not its own 850 MiB of pools ([#69](https://github.com/Whocares66-Dev/DAOLib/issues/69)). | on | `DAOLIB_ENGINE_HEAP=0` |
 | All processors | The game on every processor; GOG's exe starts it on two ([#92](https://github.com/Whocares66-Dev/DAOLib/issues/92)). | on | `DAOLIB_ALL_PROCESSORS=0` |
-| Dynamic occlusion culling | The game uses occlusion culling only while it makes the game faster for what the camera sees ([#281](https://github.com/Whocares66-Dev/DAOLib/issues/281), [#286](https://github.com/Whocares66-Dev/DAOLib/issues/286)). | on | `DAOLIB_DYNAMIC_OCCLUSION=0` |
 | Fast loading | Areas the party leaves are kept, nearby indoor areas are loaded ahead, and the loading screen is quicker ([#75](https://github.com/Whocares66-Dev/DAOLib/issues/75)). | off | `DAOLIB_FAST_LOAD=0` |
 
-Turn either one on or off under **Performance** on the options screen's **Game** tab: **Dynamic occlusion culling** and **Fast loading** ([#115](https://github.com/Whocares66-Dev/DAOLib/issues/115)).
+Turn **Fast loading** on or off under **Performance** on the options screen's **Game** tab ([#115](https://github.com/Whocares66-Dev/DAOLib/issues/115)).
 
-![The Performance section of the options screen's Game tab, with Dynamic occlusion culling and Fast loading]({{ '/assets/loader-performance.png' | relative_url }})
+![The Performance section of the options screen's Game tab, with Fast loading]({{ '/assets/loader-performance.png' | relative_url }})
