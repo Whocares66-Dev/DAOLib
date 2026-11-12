@@ -96,7 +96,7 @@ std::vector<std::byte> CutsceneFile()
            {5562, 14, 0, 24},
            {5563, 14, 0, 28}}},
          {"ACTR",
-          48,
+          52,
           {{2, 14, 0, 0},
            {5201, 4, 0, 4},
            {5202, 14, 0, 8},
@@ -106,7 +106,8 @@ std::vector<std::byte> CutsceneFile()
            {5214, 10, 0, 24},
            {5213, 0, 0, 36},
            {5225, 5, 0, 40},
-           {5640, 5, 0, 44}}},
+           {5640, 5, 0, 44},
+           {5218, 8, 0, 48}}},
          {"AJSC",
           20,
           {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {1, 14, 0, 12}, {5570, 0, 0, 16}, {5571, 0, 0, 17}}},
@@ -174,7 +175,7 @@ std::vector<std::byte> CutsceneFile()
 
     const std::size_t actors = b.bytes.size();
     b.U32(actors, 1);
-    const std::size_t actor = Struct(b, 48);
+    const std::size_t actor = Struct(b, 52);
     b.U32(root + 36, static_cast<std::uint32_t>(actors - b.data));
     b.U32(actor, b.String(u"Jowan"));
     b.U32(actor + 4, 7);
@@ -185,6 +186,7 @@ std::vector<std::byte> CutsceneFile()
     b.U8(actor + 36, 0xFF);
     b.U32(actor + 40, 3);
     b.U32(actor + 44, 2);
+    Float(b, actor + 48, 4.25F);
 
     const std::size_t animation = Struct(b, 48);
     b.U8(animation, 4);
@@ -318,6 +320,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK(actor.mappingTag == L"bhm_jowan");
     CHECK(actor.scale == 1.5F);
     CHECK(actor.poseHumanoid == 0xFF);
+    CHECK(actor.transitionDelay == 4.25F);
     CHECK(actor.ambientAnim == 3);
     CHECK(actor.crustParent == 2);
     CHECK(actor.originPosition == std::array<float, 3>{1.0F, 2.0F, 3.0F});

@@ -41,6 +41,10 @@ constexpr std::uint32_t kActorCreature = 5208;
 constexpr std::uint32_t kActorCameraTarget = 5209;
 constexpr std::uint32_t kActorPose = 5211;
 constexpr std::uint32_t kActorPoseHumanoid = 5213;
+// A float, 0 where unwritten: the Actor constructor (0x007DFC60) keeps it at the actor's +0x4D8
+// (0x007E02F7), and CollectStepTimes (0x007D8B00) makes it plus the pose's length (+0x4D0) a step
+// time (0x007D8D05). Read 2026-11-11 by lib-agent, for paragon-agent-2.
+constexpr std::uint32_t kActorTransitionDelay = 5218;
 // Read by EC::Cutscene::Actor's constructor (0x007DFC60) with -1 for one the actor lacks (0x007E0357,
 // kept at +0x4EC, 0x007E0390); the conversation's release of a participant (0x007F0790) restores
 // AMBIENT_ANIM_PATTERN from it when it is above 0 (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
@@ -323,6 +327,7 @@ Actor ActorOf(const gff4::Struct &in)
         .cameraTarget = in.Get<std::int32_t>(kActorCameraTarget).value_or(-1),
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
+        .transitionDelay = in.Get<float>(kActorTransitionDelay).value_or(0.0F),
         .ambientAnim = in.Get<std::int32_t>(kActorAmbientAnim).value_or(-1),
         .crustParent = in.Get<std::int32_t>(kActorCrustParent).value_or(-1),
         .originPosition = Several<3>(in, kActorOriginPosition),

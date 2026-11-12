@@ -176,6 +176,7 @@ struct Actor
     std::int32_t cameraTarget = -1;
     std::int32_t pose = -1;
     std::uint8_t poseHumanoid = 0; // CutsceneActorPoseHumanoid: 255 or 0, as written; what it changes is unread
+    float transitionDelay = 0.0F;  // CutsceneActorTransitionDelay: seconds into the cut the pose starts
     // CutsceneActorAmbientAnim: the ambient pattern the creature takes back when the cut releases it, if
     // above 0; -1 where the actor has none.
     std::int32_t ambientAnim = -1;
