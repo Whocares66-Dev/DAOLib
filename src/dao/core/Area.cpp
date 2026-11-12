@@ -77,6 +77,32 @@ std::vector<Variable> Variables(const gff3::Struct &in)
     return variables;
 }
 
+// The events an object's EventScripts enable: each EnabledEvents entry's EventId, 0 where it has
+// none, put into the object's set of them (0x00600F00), so beside the template's.
+std::vector<std::int32_t> EnabledEventsOf(const gff3::Struct &in)
+{
+    std::vector<std::int32_t> events;
+    if (const auto scripts = in.Child("EventScripts"))
+    {
+        for (const auto &entry : scripts->List("EnabledEvents"))
+        {
+            events.push_back(entry.Get<std::int32_t>("EventId").value_or(0));
+        }
+    }
+    return events;
+}
+
+// An instance's EventScript, where it is written and not empty: an empty one leaves the template's.
+std::optional<std::string> EventScriptOf(const gff3::Struct &in)
+{
+    std::optional<std::string> script = in.ResRef("EventScript");
+    if (script && script->empty())
+    {
+        return std::nullopt;
+    }
+    return script;
+}
+
 // The listeners an object's EventScripts hold (EventListener::ReadFromGff3 0x00706290): each an
 // EventType and an OjbectList, so spelled in the files, of ObjectIds.
 std::vector<EventListener> EventListenersOf(const gff3::Struct &in)
@@ -104,7 +130,10 @@ std::vector<EventListener> EventListenersOf(const gff3::Struct &in)
 // CCObject::ReadFields (0x0069AAD0) reads the instance over its template: Active only where it is
 // written, a Tag only where it is not empty, and LastHostileActor, GroupOverridden and GroupForceHsti
 // (its label, cut to 16) each with the template's value as its default (paragon-agent's Game sweep,
-// checked by lib-agent 2026-11-10).
+// checked by lib-agent 2026-11-10). The same for IsDestroyable, Plot and Immortal (bytes), GroupId
+// (a dword), AILevel (an int; one written also sets the object's AI level lock) and Conversation; an
+// EventScript only where it is written and not empty; EnabledEvents added to the template's
+// (paragon-agent-2's batch, read by lib-agent 2026-11-12).
 Placed PlacedOf(const gff3::Struct &in)
 {
     return {
@@ -120,6 +149,14 @@ Placed PlacedOf(const gff3::Struct &in)
         .groupOverridden = in.Get<std::uint8_t>("GroupOverridden"),
         .groupForceHostile = in.Get<std::uint8_t>("GroupForceHsti"),
         .eventListeners = EventListenersOf(in),
+        .eventScript = EventScriptOf(in),
+        .isDestroyable = Flag(in, "IsDestroyable"),
+        .plot = Flag(in, "Plot"),
+        .immortal = in.Get<std::uint8_t>("Immortal"),
+        .enabledEvents = EnabledEventsOf(in),
+        .groupId = in.Get<std::uint32_t>("GroupId"),
+        .aiLevel = in.Get<std::int32_t>("AILevel"),
+        .conversation = in.ResRef("Conversation"),
     };
 }
 

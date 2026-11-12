@@ -277,6 +277,14 @@ TEST_CASE("a placed object's own fields it lacks are none, the template's then s
     CHECK_FALSE(dog.placed.groupOverridden.has_value());
     CHECK_FALSE(dog.placed.groupForceHostile.has_value());
     CHECK(dog.placed.eventListeners.empty());
+    CHECK_FALSE(dog.placed.eventScript.has_value());
+    CHECK_FALSE(dog.placed.isDestroyable.has_value());
+    CHECK_FALSE(dog.placed.plot.has_value());
+    CHECK_FALSE(dog.placed.immortal.has_value());
+    CHECK(dog.placed.enabledEvents.empty());
+    CHECK_FALSE(dog.placed.groupId.has_value());
+    CHECK_FALSE(dog.placed.aiLevel.has_value());
+    CHECK_FALSE(dog.placed.conversation.has_value());
     REQUIRE(read->placeables.size() == 1);
     const auto &chest = read->placeables[0];
     CHECK_FALSE(chest.teamId.has_value());
@@ -374,21 +382,40 @@ TEST_CASE("a placed object's hostility, group and event listeners, as CCObject::
     const auto top = b.Struct(0xFFFFFFFF, {});
     const auto heard = b.Struct(0, {{"ObjectId", kInt, 7}});
     const auto listener = b.Struct(0, {{"EventType", kInt, 1003}, {"OjbectList", kList, b.List({heard})}});
-    const auto scripts = b.Struct(0, {{"EventListeners", kList, b.List({listener})}});
+    const auto enabled = b.Struct(0, {{"EventId", kInt, 1001}});
+    const auto scripts =
+        b.Struct(0, {{"EventListeners", kList, b.List({listener})}, {"EnabledEvents", kList, b.List({enabled})}});
     const auto waypoint = b.Struct(5, {{"Tag", kString, b.ExoString("wp_gate")},
                                        {"Active", kInt, 1},
                                        {"LastHostileActor", kDword, 42},
                                        {"GroupOverridden", kByte, 1},
                                        {"GroupForceHsti", kByte, 1},
-                                       {"EventScripts", kStruct, scripts}});
-    b.Set(top, {{"WaypointList", kList, b.List({waypoint})}});
+                                       {"EventScripts", kStruct, scripts},
+                                       {"EventScript", kResRef, b.ResRef("gen00_wp")},
+                                       {"IsDestroyable", kByte, 0},
+                                       {"Plot", kByte, 1},
+                                       {"Immortal", kByte, 1},
+                                       {"GroupId", kDword, 3},
+                                       {"AILevel", kInt, 2},
+                                       {"Conversation", kResRef, b.ResRef("gate_talk")}});
+    const auto unscripted = b.Struct(5, {{"EventScript", kResRef, b.ResRef("")}});
+    b.Set(top, {{"WaypointList", kList, b.List({waypoint, unscripted})}});
     const auto bytes = b.Done();
     const auto file = gff3::File::Parse(bytes);
     REQUIRE(file);
     const auto read = area::AreaOf(*file);
     REQUIRE(read);
-    REQUIRE(read->waypoints.size() == 1);
+    REQUIRE(read->waypoints.size() == 2);
     const auto &placed = read->waypoints[0].placed;
+    CHECK(placed.eventScript == "gen00_wp");
+    CHECK(placed.isDestroyable == false);
+    CHECK(placed.plot == true);
+    CHECK(placed.immortal == 1);
+    CHECK(placed.enabledEvents == std::vector<std::int32_t>{1001});
+    CHECK(placed.groupId == 3U);
+    CHECK(placed.aiLevel == 2);
+    CHECK(placed.conversation == "gate_talk");
+    CHECK_FALSE(read->waypoints[1].placed.eventScript.has_value()); // an empty one leaves the template's
     CHECK(placed.active == 1);
     CHECK(placed.lastHostileActor == 42U);
     CHECK(placed.groupOverridden == 1);

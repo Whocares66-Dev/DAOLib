@@ -63,6 +63,15 @@ struct Placed
     std::optional<std::uint8_t> groupOverridden;
     std::optional<std::uint8_t> groupForceHostile; // GroupForceHsti in the file
     std::vector<EventListener> eventListeners;     // EventScripts' EventListeners
+    // Each of these is none where the instance lacks it, and the template's stands.
+    std::optional<std::string> eventScript;  // EventScript, where written and not empty
+    std::optional<bool> isDestroyable;       // IsDestroyable
+    std::optional<bool> plot;                // Plot
+    std::optional<std::uint8_t> immortal;    // Immortal
+    std::vector<std::int32_t> enabledEvents; // EventScripts' EnabledEvents: added to the template's
+    std::optional<std::uint32_t> groupId;    // GroupId
+    std::optional<std::int32_t> aiLevel;     // AILevel: one written is locked against later changes
+    std::optional<std::string> conversation; // Conversation
 };
 
 // A creature placed in an area. Each of its own fields is none where the instance lacks it: the
