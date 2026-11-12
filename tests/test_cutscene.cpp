@@ -51,7 +51,7 @@ std::vector<std::byte> CutsceneFile()
     Builder b = Start(
         "CUT ",
         {{"CUT",
-          72,
+          76,
           {{3010, 14, 0, 0},
            {5000, 8, 0, 4},
            {5001, 14, 0, 8},
@@ -65,7 +65,8 @@ std::vector<std::byte> CutsceneFile()
            {5200, 6, kStructList, 36},
            {5011, 3, kStructList, 40},
            {5014, 10, 0, 44},
-           {5015, 13, 0, 56}}},
+           {5015, 13, 0, 56},
+           {5051, dao::test::kGeneric, gff4::kList | gff4::kReference, 72}}},
          {"VERT", 8, {{5370, 8, 0, 0}, {5371, 8, 0, 4}}},
          {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
          {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
@@ -150,7 +151,7 @@ std::vector<std::byte> CutsceneFile()
          {"ALNK", 16, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}}},
          {"AGOR", 20, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}, {5750, 8, 0, 16}}},
          {"ACTP", 16, {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {5304, 0, 0, 12}, {5700, 0, 0, 13}}}});
-    const std::size_t root = Struct(b, 72);
+    const std::size_t root = Struct(b, 76);
     b.U32(root, b.String(u"bhm500ar_tower_harrowing"));
     Float(b, root + 4, 61.0F);
     b.U32(root + 8, b.String(u"gen00cs_cutscene_end"));
@@ -276,6 +277,7 @@ std::vector<std::byte> CutsceneFile()
                                    {12, gore},
                                    {13, cloth},
                                    {12, bareGore}}));
+    b.U32(root + 72, Children(b, {{5, line}}));
     return b.bytes;
 }
 
@@ -306,6 +308,8 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK(read->playUntilVoCompletes == 0);
     CHECK(read->areaRequired == 255);
     CHECK(read->henchmanTag == L"gen00fl_alistair");
+    REQUIRE(read->henchmanActions.size() == 1);
+    CHECK(read->henchmanActions[0].kind == "ASLN");
     CHECK(read->resources == std::vector<std::wstring>{L"bhmcs_intro.cub", L"da_dof.ffx.xml"});
     REQUIRE(read->lodCurves.size() == 2);
     CHECK(read->lodCurves[0].base == 1.5F);

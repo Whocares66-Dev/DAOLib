@@ -206,6 +206,9 @@ struct Cutscene
     bool enableLevelFbes = true;           // the area's own frame effects drawn while the cut plays
     float shadowRadius = 30.0F;            // above 0, the shadows' range while the cut plays
     std::wstring henchmanTag;
+    // The henchman's actions: the player puts them on the henchman's actor after its first animation,
+    // in place of its other animations.
+    std::vector<Action> henchmanActions;
     std::vector<Curve> lodCurves;                // the player's LOD position by time, x, y and z in the origin's frame
     std::array<float, 3> lodOriginPosition{};    // that frame's place
     std::array<float, 4> lodOriginOrientation{}; // and its turn, a quaternion

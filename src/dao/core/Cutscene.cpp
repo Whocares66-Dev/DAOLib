@@ -32,6 +32,7 @@ constexpr std::uint32_t kAreaRequired = 5019;
 constexpr std::uint32_t kEnableLevelFbes = 5013;
 constexpr std::uint32_t kShadowRadius = 5020;
 constexpr std::uint32_t kHenchmanTag = 5050;
+constexpr std::uint32_t kHenchmanActions = 5051;
 constexpr std::uint32_t kResources = 5100;
 constexpr std::uint32_t kActors = 5200;
 constexpr std::uint32_t kActorId = 5201;
@@ -734,6 +735,7 @@ Cutscene CutsceneOf(const gff4::Struct &root)
         .enableLevelFbes = root.Get<std::uint8_t>(kEnableLevelFbes).value_or(1) != 0,
         .shadowRadius = root.Get<float>(kShadowRadius).value_or(30.0F),
         .henchmanTag = root.String(kHenchmanTag).value_or(L""),
+        .henchmanActions = {},
         .lodCurves = {},
         .lodOriginPosition = Several<3>(root, kLodOriginPosition),
         .lodOriginOrientation = Several<4>(root, kLodOriginOrientation),
@@ -743,6 +745,15 @@ Cutscene CutsceneOf(const gff4::Struct &root)
     for (const gff4::Struct &curve : root.Structs(kLodCurves))
     {
         cutscene.lodCurves.push_back(CurveOf(curve));
+    }
+    // CutsceneHenchmanActions, a list of generic references as an actor's actions are: the load keeps it
+    // (0x007E1FD9 to 0x007E2042) and CutscenePlayer::ApplyHenchmanActions (0x007DF120) removes the
+    // henchman's animations (type 4) but its first, then adds each entry through the actor's AddAction
+    // (0x007DEAC0, as the Actor constructor does at 0x007E04B6). Read 2026-11-11 by lib-agent, for
+    // paragon-agent.
+    for (const gff4::Struct &action : root.Structs(kHenchmanActions))
+    {
+        cutscene.henchmanActions.push_back(ActionOf(action));
     }
     const std::vector<gff4::Struct> actors = root.Structs(kActors);
     cutscene.actors.reserve(actors.size());
