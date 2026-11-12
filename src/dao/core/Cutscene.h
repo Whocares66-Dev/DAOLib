@@ -177,6 +177,8 @@ struct Actor
     std::int32_t pose = -1;
     std::uint8_t poseHumanoid = 0; // CutsceneActorPoseHumanoid: 255 or 0, as written; what it changes is unread
     float transitionDelay = 0.0F;  // CutsceneActorTransitionDelay: seconds into the cut the pose starts
+    // CutsceneActorPreviousPose: the pose the creature stood in before the cut; -1 for none.
+    std::int32_t previousPose = -1;
     // CutsceneActorAmbientAnim: the ambient pattern the creature takes back when the cut releases it, if
     // above 0; -1 where the actor has none.
     std::int32_t ambientAnim = -1;
@@ -205,6 +207,7 @@ struct Cutscene
     std::uint8_t areaRequired = 1;         // 255 or 0, as written; 1 if unwritten
     bool enableLevelFbes = true;           // the area's own frame effects drawn while the cut plays
     float shadowRadius = 30.0F;            // above 0, the shadows' range while the cut plays
+    bool lightOcclusion = false;           // the sun's shade under figures while the cut plays
     std::wstring henchmanTag;
     // The henchman's actions: the player puts them on the henchman's actor after its first animation,
     // in place of its other animations.

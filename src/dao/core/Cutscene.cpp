@@ -31,6 +31,10 @@ constexpr std::uint32_t kPlayUntilVoCompletes = 5018;
 constexpr std::uint32_t kAreaRequired = 5019;
 constexpr std::uint32_t kEnableLevelFbes = 5013;
 constexpr std::uint32_t kShadowRadius = 5020;
+// A byte, 0 where unwritten, kept as byte != 0 at the player's +0x28 (0x007E21AA to 0x007E21DC);
+// the update puts it in the light manager's +0x121 (0x007E4294). Read 2026-11-12 by lib-agent,
+// for paragon-agent.
+constexpr std::uint32_t kLightOcclusion = 5021;
 constexpr std::uint32_t kHenchmanTag = 5050;
 constexpr std::uint32_t kHenchmanActions = 5051;
 constexpr std::uint32_t kResources = 5100;
@@ -46,6 +50,11 @@ constexpr std::uint32_t kActorPoseHumanoid = 5213;
 // (0x007E02F7), and CollectStepTimes (0x007D8B00) makes it plus the pose's length (+0x4D0) a step
 // time (0x007D8D05). Read 2026-11-11 by lib-agent, for paragon-agent-2.
 constexpr std::uint32_t kActorTransitionDelay = 5218;
+// An int, -1 where unwritten: the Actor constructor keeps it at the actor's +0x458 (0x007E02FD to
+// 0x007E032A), beside the pose at +0x454. UpdateBetweenCategories (0x007D8610) resets the creature
+// to neutral (0x007D8689 to 0x007D86B1) for an actor with no pose (+0x454 -1) but a previous one,
+// at a time of at most 1e-4 (0x00B10B98). Read 2026-11-12 by lib-agent, for paragon-agent.
+constexpr std::uint32_t kActorPreviousPose = 5219;
 // Read by EC::Cutscene::Actor's constructor (0x007DFC60) with -1 for one the actor lacks (0x007E0357,
 // kept at +0x4EC, 0x007E0390); the conversation's release of a participant (0x007F0790) restores
 // AMBIENT_ANIM_PATTERN from it when it is above 0 (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
@@ -329,6 +338,7 @@ Actor ActorOf(const gff4::Struct &in)
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
         .transitionDelay = in.Get<float>(kActorTransitionDelay).value_or(0.0F),
+        .previousPose = in.Get<std::int32_t>(kActorPreviousPose).value_or(-1),
         .ambientAnim = in.Get<std::int32_t>(kActorAmbientAnim).value_or(-1),
         .crustParent = in.Get<std::int32_t>(kActorCrustParent).value_or(-1),
         .originPosition = Several<3>(in, kActorOriginPosition),
@@ -734,6 +744,7 @@ Cutscene CutsceneOf(const gff4::Struct &root)
         // 1 and 30.0 (0x00ADEBCC) where unwritten (0x007E2125, 0x007E2163; dev/CUTSCENES.md, "The file").
         .enableLevelFbes = root.Get<std::uint8_t>(kEnableLevelFbes).value_or(1) != 0,
         .shadowRadius = root.Get<float>(kShadowRadius).value_or(30.0F),
+        .lightOcclusion = root.Get<std::uint8_t>(kLightOcclusion).value_or(0) != 0,
         .henchmanTag = root.String(kHenchmanTag).value_or(L""),
         .henchmanActions = {},
         .lodCurves = {},
