@@ -179,6 +179,9 @@ struct Actor
     float transitionDelay = 0.0F;  // CutsceneActorTransitionDelay: seconds into the cut the pose starts
     // CutsceneActorPreviousPose: the pose the creature stood in before the cut; -1 for none.
     std::int32_t previousPose = -1;
+    // CutsceneActorLod: the model level the creature is held at while bound; 0 where unwritten, and
+    // -1 in the shipped cuts.
+    std::int32_t lod = 0;
     // CutsceneActorAmbientAnim: the ambient pattern the creature takes back when the cut releases it, if
     // above 0; -1 where the actor has none.
     std::int32_t ambientAnim = -1;

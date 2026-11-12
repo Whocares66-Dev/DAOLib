@@ -55,6 +55,12 @@ constexpr std::uint32_t kActorTransitionDelay = 5218;
 // to neutral (0x007D8689 to 0x007D86B1) for an actor with no pose (+0x454 -1) but a previous one,
 // at a time of at most 1e-4 (0x00B10B98). Read 2026-11-12 by lib-agent, for paragon-agent.
 constexpr std::uint32_t kActorPreviousPose = 5219;
+// A dword, 0 where unwritten (ReadDword 0x004E4300 with ebx's 0), kept at the actor's +0x4E8
+// (0x007E03F8). Bind calls ForceModelLevel (0x007CD160, at 0x007E39C6) for any actor with a model,
+// whatever this holds: SetUnavailableLevels(~(1 << lod) & 0xF), then the model's slot 0x44 with
+// (lod, 0). The shift takes the low five bits, so -1 makes the mask 0xF. Read 2026-11-12 by
+// lib-agent, for paragon-agent-2.
+constexpr std::uint32_t kActorLod = 5224;
 // Read by EC::Cutscene::Actor's constructor (0x007DFC60) with -1 for one the actor lacks (0x007E0357,
 // kept at +0x4EC, 0x007E0390); the conversation's release of a participant (0x007F0790) restores
 // AMBIENT_ANIM_PATTERN from it when it is above 0 (read 2026-11-06 by paragon-agent-2, checked by lib-agent).
@@ -339,6 +345,7 @@ Actor ActorOf(const gff4::Struct &in)
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
         .transitionDelay = in.Get<float>(kActorTransitionDelay).value_or(0.0F),
         .previousPose = in.Get<std::int32_t>(kActorPreviousPose).value_or(-1),
+        .lod = in.Get<std::int32_t>(kActorLod).value_or(0),
         .ambientAnim = in.Get<std::int32_t>(kActorAmbientAnim).value_or(-1),
         .crustParent = in.Get<std::int32_t>(kActorCrustParent).value_or(-1),
         .originPosition = Several<3>(in, kActorOriginPosition),
