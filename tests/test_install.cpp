@@ -297,6 +297,31 @@ TEST_CASE("AddIns.xml's items, their attributes and titles; offers.xml's", "[add
     CHECK(offers[0].priority == 3);
 }
 
+TEST_CASE("an add-in's title in each language, as the game reads and shows it", "[addins]")
+{
+    const auto items =
+        dao::core::ReadAddIns("<AddInsList><AddInItem UID=\"A\"><Title DefaultText=\"Awakening\">\n"
+                              "  <en-us>\n    <![CDATA[Dragon Age: Awakening]]>\n</en-us>\n"
+                              "  <es-es>\n    <![CDATA[Dragon Age: El Despertar]]>\n</es-es>\n"
+                              "  <de-de>  Das   Erwachen &amp; mehr\n</de-de>\n"
+                              "  <fr-fr><b>bold</b></fr-fr>\n"
+                              "  <ja-jp>unread</ja-jp>\n"
+                              "</Title></AddInItem>"
+                              "<AddInItem UID=\"B\"><Title DefaultText=\"Only\"/></AddInItem></AddInsList>",
+                              "AddInItem");
+    REQUIRE(items.size() == 2);
+    const auto &a = items[0];
+    CHECK(a.title == "Awakening");
+    CHECK(a.titles.size() == 3); // no text for fr-fr's element child, and ja-jp is no language the game reads
+    CHECK(dao::core::TitleIn(a, "ES-es") == "Dragon Age: El Despertar");
+    CHECK(dao::core::TitleIn(a, "de-de") == "Das Erwachen & mehr");
+    CHECK(dao::core::TitleIn(a, "fr-fr").empty()); // its own slot, empty: never the DefaultText
+    CHECK(dao::core::TitleIn(a, "ja-jp") == "Dragon Age: Awakening");
+    CHECK(dao::core::TitleIn(a, "") == "Dragon Age: Awakening");
+    CHECK(items[1].titles.empty());
+    CHECK(dao::core::TitleIn(items[1], "en-us").empty());
+}
+
 TEST_CASE("an attribute is found by its whole name, not inside another's", "[addins]")
 {
     // ExtendedModuleUID ends in UID: before UID, it must not be taken for it.
