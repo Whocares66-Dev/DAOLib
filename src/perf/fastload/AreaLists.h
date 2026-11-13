@@ -16,7 +16,9 @@
 //
 // - At the swap's step 5 the engine asks the module to drop its list. The
 //   list is taken out of the module instead and kept, with the RIM tree the
-//   module's resources had loaded for it.
+//   module's resources had loaded for it. Its areas' sounds are stopped, as
+//   the engine stops those of an area left by a door within a list; the
+//   arrival's load starts them again when the list is handed back (#337).
 // - At step 6, before the engine makes the new list, the lists kept are
 //   asked for the area the party is going to (the engine's own FindArea).
 //   One that has it goes back into the module, where the engine finds a
@@ -39,7 +41,11 @@
 // What it leaves as it is: a kept list's objects stay in the module's table
 // of tags, so a script's search by tag can meet one (in play the same
 // character standing in three kept lists was spoken to in the right one);
-// and a tree whose list is deleted outside a swap stays loaded. Read
+// a tree whose list is deleted outside a swap stays loaded; a delayed event
+// that comes due for a kept list's object runs its script, where the engine
+// would have dropped it; the add-ins' PRCSCR scripts of a list handed back
+// do not run again; and projectiles and ambient conversations are not
+// cleared at the keep (#337's second comment). Read
 // 2026-10-10 and 11; in play 2026-10-11, 27 loading screens over six lists
 // with four kept.
 #pragma once

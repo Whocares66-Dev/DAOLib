@@ -156,6 +156,33 @@ void DeleteKept(const char *why)
     g_kept.clear();
 }
 
+// A kept list is to the engine an area left by a door, and the engine stops
+// such an area's sounds (GameModeLoading::ResetWorldForLoad, 0x006C5E61). At
+// a swap it leaves that to the list's delete, so a list kept played on, its
+// sounds stacking with each list kept (DAOLib #337). The arrival's load calls
+// the same with true for the area arrived in (0x006C937E), so a list handed
+// back sounds again with nothing more here.
+void Silence(std::uintptr_t list)
+{
+    using AreaFn = std::uintptr_t(__fastcall *)(dao::CClientExoApp * app, int edx, std::uint32_t id);
+    using SoundsFn = void(__fastcall *)(std::uintptr_t area, int edx, bool active);
+    dao::CClientExoApp *app = dao::CClientExoApp::Get();
+    if (app == nullptr)
+    {
+        return;
+    }
+    const auto areaById = reinterpret_cast<AreaFn>(dao::Module::Address(dao::addr::kCClientExoApp_GetAreaById));
+    const auto sounds = reinterpret_cast<SoundsFn>(dao::Module::Address(dao::addr::kCCArea_SetSoundsAndMusicActive));
+    const auto first = At<std::uintptr_t>(list, kListFirst);
+    for (std::uint32_t i = 0; i < AreaCount(list); ++i)
+    {
+        if (const std::uintptr_t area = areaById(app, 0, At<std::uint32_t>(first, i * kEntrySize)); area != 0)
+        {
+            sounds(area, 0, false);
+        }
+    }
+}
+
 // CCModule::DropAreaList: __thiscall, no arguments; deletes the module's
 // list and nulls the field. What it leaves in eax is passed on unread. The
 // swap's step 5 is the one call answered by keeping the list; its others (a
@@ -171,6 +198,7 @@ std::uintptr_t __fastcall DropAreaList(std::uintptr_t module, int edx)
     if (On() && g_doing.state == kStateListSwap && g_doing.step == kStepDrop && list != 0 && g_leaving.list == 0 &&
         resources != 0)
     {
+        Silence(list);
         g_leaving = Kept{list, At<std::uintptr_t>(resources, kCurrentTree)};
         At<std::uintptr_t>(module, kModuleList) = 0;
         return 0;

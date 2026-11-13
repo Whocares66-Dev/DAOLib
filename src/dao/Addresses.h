@@ -1472,6 +1472,14 @@ DAO_ADDRESS(kRIMTreeManager_FindNode, 33377)
 // back from the call. Read 2026-10-10 for DAOLib #64, used for #72. The
 // name is ours.
 DAO_ADDRESS(kCCArea_UnloadRooms, 13595)
+// SetSoundsAndMusicActive, __thiscall on an area (bool active), `ret 4`:
+// calls slot +0x140 of each of the area's sound objects (0x007C2090; false
+// stops the event and frees its instance, true makes one), then with false
+// sets the music's intensity to 0. Its callers: ResetWorldForLoad with false
+// (0x006C5E61, a door within a list) and the end of every area load with
+// true (0x006C937E). Read 2026-11-13 for DAOLib #337, where a list kept by
+// fast load played on.
+DAO_ADDRESS(kCCArea_SetSoundsAndMusicActive, 13631)
 // GetAreaById, __thiscall on the application (area id), `ret 4`: the area,
 // or null. A list's entry begins with the id (0x006FA910 walks them so).
 // Read 2026-10-11 for DAOLib #72, with what a layout needs before a room of
