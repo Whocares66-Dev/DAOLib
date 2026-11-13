@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with the address files of [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). Plugin API remains 2.
+
+- **Fast load no longer stacks sounds:** an area list kept for a quick return now has its sounds silenced when the party leaves it, as vanilla silences an area left by a door, so its ambience no longer keeps playing over the next area's (#337).
+- **Dynamic occlusion culling taken out:** since water, heat haze, depth of field and skin were drawn right again (0.9.0), the frames it gained were gone, and its probes cost frames besides; its switch leaves the options screen's Performance section, and `DAOLIB_DYNAMIC_OCCLUSION` is no longer read (#336).
+- **Plugins and the Steam overlay:** a plugin's end-of-frame work now runs from the game's own presentation, not Direct3D's `Present`, so Steam's overlay can no longer hook into itself through it, and an overlay that restores Direct3D's code cannot drop it (`dao::render::OnFrameEnd`, DAOElgaraShaders #80).
+- **More of the game's files read as the engine reads them, with no game running:** the walk grid with the engine's floors and defaults; a cutscene's actors' level of detail, previous pose and transition delay, its followers' actions and light occlusion; a placed object's own scripts, plot, group, AI level, conversation and event listeners; an add-in's title in each language; and the voice's language apart from the text's, with the languages the game settles on at start (`daolib_core`).
+- **A file that cannot be read is no longer taken for a missing one:** an archive or install read that fails throws `dao::core::ReadError` naming the file, and an archive opens while another program holds it.
+
 ## 0.11.0
 
 For Dragon Age: Origins 1.05.13263.0 from GOG, EA and Steam, with [DAOAddressLibrary 0.10.0](https://github.com/Whocares66-Dev/DAOAddressLibrary/releases/tag/v0.10.0). Plugin API remains 2.
