@@ -353,7 +353,10 @@ Splat SplatOf(const gff4::Struct &splat)
             .flipbookColumns = U8(splat, kSplatFlipbookColumns),
             .flipbookRandomStartFrame = Flag(splat, kSplatFlipbookRandomStart),
             .holdLastFrame = Flag(splat, kSplatHoldLastFrame),
-            .ageMapColourMultiplier = Floats<4>(splat, kSplatColourMultiplier),
+            // Missing, {1, 1, 1, 1}: ReadEmitterSplatParams 0x005902D0 stores fld1 four times as the
+            // default (0x005904BC-0x005904D8) before it reads field 0x18C8 into the blueprint's +0x260
+            // (read 2026-11-14, #339). Zeros drew a splat at alpha 0 (Paragon #381).
+            .ageMapColourMultiplier = Floats<4>(splat, kSplatColourMultiplier, Splat{}.ageMapColourMultiplier),
             .ageMap = AgeMapOf(splat)};
 }
 
@@ -444,7 +447,9 @@ Emitter EmitterOf(const gff4::Struct &node)
         .lod = U8(node, kLod),
         .userParamName = Text(node, kUserParamName),
         .useVariationTint = Flag(node, kVariationTint),
-        .ageMapColourMultiplier = Floats<4>(node, kAgeColourMultiplier),
+        // Missing, {1, 1, 1, 1}: ReadEmitterBlueprint 0x00592C60 stores fld1 four times as the default
+        // (0x005932EA-0x00593313) before it reads field 0x1887 into +0x1E4 (read 2026-11-14, #339).
+        .ageMapColourMultiplier = Floats<4>(node, kAgeColourMultiplier, Emitter{}.ageMapColourMultiplier),
         .ageMapScaleXMultiplier = F(node, kAgeScaleXMultiplier, 1),
         .ageMapScaleYMultiplier = F(node, kAgeScaleYMultiplier, 1),
         .ageMap = {},

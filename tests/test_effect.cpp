@@ -48,8 +48,9 @@ constexpr std::uint32_t kUnknown = 9999;
 
 // An effect as fxc_wisp_c.mmh is: GOB, with a bounding box, an attribute nothing reads and the
 // crust hook 1, which holds the emitter "glow" and the light "Light_c". The emitter exports
-// glow_birthrate (tag 8) and has two age keys and a mesh spawn volume of three points, kept as the
-// game keeps a Vector3 list, 16 bytes each; the light exports light_c_radius (tag 25). The model
+// glow_birthrate (tag 8) and has two age keys, a mesh spawn volume of three points, kept as the
+// game keeps a Vector3 list, 16 bytes each, and a splat; neither the emitter nor its splat has its
+// age map's colour multiplier; the light exports light_c_radius (tag 25). The model
 // has a remote material as the exe reads one (0x005960E8): with the tint, whose absence leaves it
 // out whatever else is there, or the tint alone.
 enum class Remote : std::uint8_t
@@ -87,7 +88,6 @@ std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
            {6011, 8, 0, 12},
            {6013, 8, 0, 16},
            {6234, 0, 0, 20},
-           {6279, 15, 0, 24},
            {6294, 10, 0, 40},
            {6999, kGeneric, children, 52},
            {kUnknown, 4, 0, 56}}},
@@ -102,7 +102,8 @@ std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
          {"spnv", 12, {{6285, 0, 0, 0}, {6045, 0, 0, 1}, {6286, 8, 0, 4}, {6999, kGeneric, children, 8}}},
          {"data", 12, {{6168, 0, 0, 0}, {16, 10, gff4::kList, 4}, {8, 2, gff4::kList, 8}}},
          {"bbox", 32, {{6054, 12, 0, 0}, {6055, 12, 0, 16}}},
-         {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}}});
+         {"attr", 8, {{6049, 14, 0, 0}, {6050, 14, 0, 4}}},
+         {"spla", 4, {{6324, 14, 0, 0}}}});
     const std::size_t root = Struct(b, 48);
     const std::size_t gob = Struct(b, 12);
     const std::size_t box = Struct(b, 32);
@@ -118,6 +119,7 @@ std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
     const std::size_t volume = Struct(b, 12);
     const std::size_t points = Struct(b, 12);
     const std::size_t indices = Struct(b, 12);
+    const std::size_t splat = Struct(b, 4);
     const std::size_t light = Struct(b, 32);
     const std::size_t lightRadius = Struct(b, 16);
 
@@ -149,7 +151,6 @@ std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
     Float(b, glow + 12, 7.0F);
     Float(b, glow + 16, 1.0F);
     b.U8(glow + 20, 1);
-    Floats(b, glow + 24, {1, 1, 1, 1});
     Floats(b, glow + 40, {0, 0, 0.5F});
     b.U32(glow + 56, 42);
     b.U32(glowRate, 8);
@@ -177,7 +178,8 @@ std::vector<std::byte> EffectFile(Remote remote = Remote::Whole)
     b.U32(shorts + 8, 0);          // 0
     b.U32(indices + 8, static_cast<std::uint32_t>(shorts - b.data));
     b.U32(volume + 8, Children(b, {{11, points}, {11, indices}}));
-    b.U32(glow + 52, Children(b, {{7, glowRate}, {8, ageMap}, {10, volume}}));
+    b.U32(splat, b.String(u"fxm_splat"));
+    b.U32(glow + 52, Children(b, {{7, glowRate}, {8, ageMap}, {10, volume}, {14, splat}}));
 
     b.U32(light, b.String(u"Light_c"));
     Floats(b, light + 4, {0.6F, 1.4F, 2, 1});
@@ -360,7 +362,11 @@ TEST_CASE("an effect's model is its nodes, each read by its kind", "[effect]")
     CHECK(emitter.life == Approx(1.0F));
     CHECK(emitter.type == 1);
     CHECK(emitter.worldAxisAcceleration[2] == Approx(0.5F));
-    CHECK(emitter.ageMapScaleXMultiplier == Approx(1.0F)); // not in the file: the multiplier's own
+    CHECK(emitter.ageMapScaleXMultiplier == Approx(1.0F));               // not in the file: the multiplier's own
+    CHECK(emitter.ageMapColourMultiplier == effect::Colour{1, 1, 1, 1}); // likewise (#339)
+    REQUIRE(emitter.splat);
+    CHECK(emitter.splat->material == L"fxm_splat");
+    CHECK(emitter.splat->ageMapColourMultiplier == effect::Colour{1, 1, 1, 1});
     REQUIRE(emitter.ageMap.size() == 2);
     CHECK(emitter.ageMap[0].lifeElapsed == Approx(0.0F));
     CHECK(emitter.ageMap[0].scaleX == Approx(0.6F));
