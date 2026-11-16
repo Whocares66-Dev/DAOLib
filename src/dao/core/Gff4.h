@@ -131,6 +131,8 @@ class Struct
     // are lists of bytes and of 16-bit numbers a megabyte long. Empty for a
     // field that is no such list or runs out of the file.
     std::span<const std::byte> ListBytes(std::uint32_t label, Type element) const;
+    // The floats of a list of F32, copied out; empty as ListBytes is.
+    std::vector<float> FloatList(std::uint32_t label) const;
     // Returns whether the struct has a list field of this label that points at a list, empty or not: false
     // where the field is not there or its offset is null.
     bool HasList(std::uint32_t label) const;

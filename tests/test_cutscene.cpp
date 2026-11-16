@@ -45,7 +45,9 @@ std::uint32_t FloatList(Builder &b, const std::vector<float> &values)
 // one actor, and in its generic queue an animation with one curve of one vertex and a
 // transition, a spoken line, a stage camera by the henchman's place as alistair_main's
 // line 1351 has (DAOLib #203), and a head-tracking action laid out as the game's are (DAOLib #245).
-std::vector<std::byte> CutsceneFile()
+// The animation's PlayGad set, or clear, which keeps its link to movement; the actor's pose
+// speed written, or left out (DAOLib #340).
+std::vector<std::byte> CutsceneFile(bool playGad = true, bool poseSpeed = true)
 {
     constexpr std::uint16_t kStructList = gff4::kList | gff4::kStruct;
     Builder b = Start(
@@ -71,7 +73,7 @@ std::vector<std::byte> CutsceneFile()
          {"TRAN", 20, {{5380, 0, 0, 0}, {5381, 1, gff4::kStruct, 4}, {5382, 1, gff4::kStruct, 12}}},
          {"CURV", 12, {{5350, 8, 0, 0}, {5351, 1, kStructList, 4}, {5352, 2, kStructList, 8}}},
          {"AANI",
-          48,
+          56,
           {{5300, 0, 0, 0},
            {5301, 8, 0, 4},
            {5302, 8, 0, 8},
@@ -86,7 +88,9 @@ std::vector<std::byte> CutsceneFile()
            {5411, 0, 0, 38},
            {5413, 0, 0, 39},
            {5408, 8, gff4::kList, 40},
-           {5409, 8, gff4::kList, 44}}},
+           {5409, 8, gff4::kList, 44},
+           {5407, 8, 0, 48},
+           {5412, 8, gff4::kList, 52}}},
          {"ASLN",
           32,
           {{22, 17, 0, 0},
@@ -97,7 +101,7 @@ std::vector<std::byte> CutsceneFile()
            {5562, 14, 0, 24},
            {5563, 14, 0, 28}}},
          {"ACTR",
-          60,
+          64,
           {{2, 14, 0, 0},
            {5201, 4, 0, 4},
            {5202, 14, 0, 8},
@@ -110,7 +114,8 @@ std::vector<std::byte> CutsceneFile()
            {5640, 5, 0, 44},
            {5218, 8, 0, 48},
            {5219, 5, 0, 52},
-           {5224, 5, 0, 56}}},
+           {5224, 5, 0, 56},
+           {poseSpeed ? 5212U : 9999U, 8, 0, 60}}},
          {"AJSC",
           20,
           {{5300, 0, 0, 0}, {5301, 8, 0, 4}, {5302, 8, 0, 8}, {1, 14, 0, 12}, {5570, 0, 0, 16}, {5571, 0, 0, 17}}},
@@ -178,7 +183,7 @@ std::vector<std::byte> CutsceneFile()
 
     const std::size_t actors = b.bytes.size();
     b.U32(actors, 1);
-    const std::size_t actor = Struct(b, 60);
+    const std::size_t actor = Struct(b, 64);
     b.U32(root + 36, static_cast<std::uint32_t>(actors - b.data));
     b.U32(actor, b.String(u"Jowan"));
     b.U32(actor + 4, 7);
@@ -192,8 +197,9 @@ std::vector<std::byte> CutsceneFile()
     Float(b, actor + 48, 4.25F);
     b.U32(actor + 52, 6);
     b.U32(actor + 56, 0xFFFFFFFFU);
+    Float(b, actor + 60, 0.75F);
 
-    const std::size_t animation = Struct(b, 48);
+    const std::size_t animation = Struct(b, 56);
     b.U8(animation, 4);
     Float(b, animation + 4, 2.0F);
     Float(b, animation + 8, 1e10F);
@@ -202,10 +208,12 @@ std::vector<std::byte> CutsceneFile()
     b.U32(animation + 24, b.String(u"bhmcs_intro.cub"));
     Float(b, animation + 28, 0.5F);
     Float(b, animation + 32, 0.25F);
-    b.U8(animation + 36, 255);
+    b.U8(animation + 36, playGad ? 255 : 0);
     b.U8(animation + 38, 255);
     b.U32(animation + 40, FloatList(b, {0.0F, 0.0F, 0.0F, 0.0F, 0.5F, 1.0F, 2.0F, 3.0F}));
     b.U32(animation + 44, FloatList(b, {0.0F, 0.0F, 0.0F, 0.0F, 1.0F}));
+    Float(b, animation + 48, 0.5F);
+    b.U32(animation + 52, FloatList(b, {0.0F, 0.05F, 0.1F}));
     const std::size_t curves = b.bytes.size();
     b.U32(curves, 1);
     const std::size_t curve = Struct(b, 12);
@@ -329,6 +337,7 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK(actor.scale == 1.5F);
     CHECK(actor.poseHumanoid == 0xFF);
     CHECK(actor.transitionDelay == 4.25F);
+    CHECK(actor.poseSpeed == 0.75F);
     CHECK(actor.previousPose == 6);
     CHECK(actor.lod == -1);
     CHECK(actor.ambientAnim == 3);
@@ -351,6 +360,8 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK_FALSE(animation.blendGad);
     CHECK(animation.extendGad);
     CHECK_FALSE(animation.applyFutureGads);
+    CHECK(animation.linkToMovement == 0.0F); // written 0.5, zeroed by PlayGad as the engine does
+    CHECK(animation.linkToMoveDistance == std::vector<float>{0.0F, 0.05F, 0.1F});
     REQUIRE(animation.gadPositions.size() == 2);
     CHECK(animation.gadPositions[1].time == 0.5F);
     CHECK(animation.gadPositions[1].position == cutscene::Vector3{1.0F, 2.0F, 3.0F});
@@ -437,6 +448,25 @@ TEST_CASE("a cutscene's header, an actor, and its queue of actions of nine templ
     CHECK_FALSE(actor.actions[9].clothPhysics);
 }
 
+TEST_CASE(
+    "an animation without PlayGad keeps its link to movement, other actions have none, an unwritten pose speed is 1",
+    "[cutscene]")
+{
+    const auto bytes = CutsceneFile(false, false);
+    const auto file = gff4::File::Parse(bytes);
+    REQUIRE(file);
+    const auto read = cutscene::CutsceneOf(*file);
+    REQUIRE(read);
+    const auto &actions = read->actors.at(0).actions;
+    REQUIRE(actions.size() == 10);
+    CHECK_FALSE(actions[0].playGad);
+    CHECK(actions[0].linkToMovement == 0.5F);
+    CHECK(actions[0].linkToMoveDistance == std::vector<float>{0.0F, 0.05F, 0.1F});
+    CHECK(actions[1].linkToMovement == 0.0F); // the line has no field 5407
+    CHECK(actions[1].linkToMoveDistance.empty());
+    CHECK(read->actors.at(0).poseSpeed == 1.0F); // its field left out
+}
+
 TEST_CASE("a file of another type is no cutscene", "[cutscene]")
 {
     Builder b = Start("PLTS", {{"PLTS", 4, {{13016, 14, 0, 0}}}});
@@ -475,6 +505,8 @@ struct Counts
     std::size_t goreSet = 0; // a gore action whose level is not 0
     std::size_t clothSwitches = 0;
     std::size_t fogs = 0;
+    std::size_t animations = 0;
+    std::size_t movementLinks = 0; // an animation whose time its actor's movement drives (#340)
 
     // The actions of DAOLib #301: a shake, a link, gore, the cloth switch and fog.
     void AddSmallActions(const cutscene::Action &action)
@@ -496,6 +528,8 @@ struct Counts
         goreSet += action.gore != 0.0F ? 1 : 0;
         clothSwitches += action.kind == "ACTP" ? 1 : 0;
         fogs += action.fog ? 1 : 0;
+        animations += action.kind == "AANI" ? 1 : 0;
+        movementLinks += action.linkToMovement > 0.0F ? 1 : 0;
     }
 
     void Add(const cutscene::Action &action)
@@ -586,6 +620,8 @@ TEST_CASE("the game's cutscenes in game/cutscenes, when there, each read with it
     CHECK(counts.crustLinks == 436);
     CHECK(counts.offsetLinks == 458);
     CHECK(counts.goreSet == 777); // of 781; the others are the engine's default, 0
+    CHECK(counts.animations == 70110);
+    CHECK(counts.movementLinks == 193); // 218 written above 0, 25 of them with PlayGad
 }
 
 namespace

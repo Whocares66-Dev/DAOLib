@@ -121,10 +121,16 @@ struct Action
     std::wstring blendTree; // AANI
     float speed = 0.0F;     // AANI
     float startOffset = 0.0F;
-    bool playGad = false;                        // AANI: the clip's travel (below) is applied
-    bool blendGad = false;                       // AANI
-    bool extendGad = false;                      // AANI: the last key stays when the clip ends
-    bool applyFutureGads = false;                // AANI
+    bool playGad = false;         // AANI: the clip's travel (below) is applied
+    bool blendGad = false;        // AANI
+    bool extendGad = false;       // AANI: the last key stays when the clip ends
+    bool applyFutureGads = false; // AANI
+    // AANI: CutsceneActionAnimLinkToMovement. Above 0, the clip's time is driven by the actor's
+    // movement and not the clock: at local time t, with i = floor(t / (1/30)) and f the fraction
+    // past it, the time is linkToMovement * ((1 - f) * linkToMoveDistance[i] + f *
+    // linkToMoveDistance[i + 1]) + startOffset. 0 when PlayGad is set, as the engine keeps it.
+    float linkToMovement = 0.0F;
+    std::vector<float> linkToMoveDistance;       // AANI: CutsceneActionAnimLinkToMoveDist, a key each 1/30 s
     std::vector<PositionKey> gadPositions;       // AANI: GadKeysPos, in the order of the file
     std::vector<OrientationKey> gadOrientations; // AANI: GadKeysOri
     gff4::TlkString text;                        // ASLN's line, AANF's
@@ -175,6 +181,7 @@ struct Actor
     std::uint8_t mappingRequired = 0; // 255 or 0, as written
     std::int32_t cameraTarget = -1;
     std::int32_t pose = -1;
+    float poseSpeed = 1.0F;        // CutsceneActorPoseSpeed: 1 if unwritten
     std::uint8_t poseHumanoid = 0; // CutsceneActorPoseHumanoid: 255 or 0, as written; what it changes is unread
     float transitionDelay = 0.0F;  // CutsceneActorTransitionDelay: seconds into the cut the pose starts
     // CutsceneActorPreviousPose: the pose the creature stood in before the cut; -1 for none.

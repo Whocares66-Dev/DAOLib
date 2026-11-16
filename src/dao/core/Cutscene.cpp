@@ -45,6 +45,10 @@ constexpr std::uint32_t kActorActions = 5206;
 constexpr std::uint32_t kActorCreature = 5208;
 constexpr std::uint32_t kActorCameraTarget = 5209;
 constexpr std::uint32_t kActorPose = 5211;
+// A float, 1 where unwritten: the Actor constructor (0x007DFC60) loads 1 as the default
+// (0x007E0260) and keeps it at the actor's +0x4D4 (0x007E0291). Read 2026-11-15 by paragon-agent,
+// checked by lib-agent (DAOLib #340, Paragon #516).
+constexpr std::uint32_t kActorPoseSpeed = 5212;
 constexpr std::uint32_t kActorPoseHumanoid = 5213;
 // A float, 0 where unwritten: the Actor constructor (0x007DFC60) keeps it at the actor's +0x4D8
 // (0x007E02F7), and CollectStepTimes (0x007D8B00) makes it plus the pose's length (+0x4D0) a step
@@ -96,10 +100,12 @@ constexpr std::uint32_t kAnimationBlendTree = 5401;
 constexpr std::uint32_t kAnimationSpeed = 5402;
 constexpr std::uint32_t kAnimationStartOffset = 5403;
 constexpr std::uint32_t kAnimationPlayGad = 5405;
+constexpr std::uint32_t kAnimationLinkToMovement = 5407;
 constexpr std::uint32_t kAnimationGadKeysPos = 5408;
 constexpr std::uint32_t kAnimationGadKeysOri = 5409;
 constexpr std::uint32_t kAnimationBlendGad = 5410;
 constexpr std::uint32_t kAnimationExtendGad = 5411;
+constexpr std::uint32_t kAnimationLinkToMoveDist = 5412;
 constexpr std::uint32_t kAnimationApplyFutureGads = 5413;
 constexpr std::uint32_t kEffectName = 5521;
 constexpr std::uint32_t kEffectParameters = 5522;
@@ -287,6 +293,15 @@ Action ActionOf(const gff4::Struct &in)
     action.blendGad = in.Get<std::uint8_t>(kAnimationBlendGad).value_or(0) != 0;
     action.extendGad = in.Get<std::uint8_t>(kAnimationExtendGad).value_or(0) != 0;
     action.applyFutureGads = in.Get<std::uint8_t>(kAnimationApplyFutureGads).value_or(0) != 0;
+    // As ActionPlayAnimation's constructor keeps them (read 2026-11-15, #340): 5407 at +0x6C, 0 if
+    // unwritten (0x007DAEB5-0x007DAEE0), and zeroed when it is above 0 and PlayGad is set
+    // (0x007DB058-0x007DB072); 5412 at +0xC4/+0xC8 (0x007DAF49-0x007DAF91).
+    action.linkToMovement = in.Get<float>(kAnimationLinkToMovement).value_or(0.0F);
+    if (action.playGad && action.linkToMovement > 0.0F)
+    {
+        action.linkToMovement = 0.0F;
+    }
+    action.linkToMoveDistance = in.FloatList(kAnimationLinkToMoveDist);
     action.gadPositions = gad::PositionKeysOf(in, kAnimationGadKeysPos);
     action.gadOrientations = gad::OrientationKeysOf(in, kAnimationGadKeysOri);
     action.text = in.Tlk(kText).value_or(gff4::TlkString{});
@@ -342,6 +357,7 @@ Actor ActorOf(const gff4::Struct &in)
         .mappingRequired = in.Get<std::uint8_t>(kActorMappingRequired).value_or(0),
         .cameraTarget = in.Get<std::int32_t>(kActorCameraTarget).value_or(-1),
         .pose = in.Get<std::int32_t>(kActorPose).value_or(-1),
+        .poseSpeed = in.Get<float>(kActorPoseSpeed).value_or(1.0F),
         .poseHumanoid = in.Get<std::uint8_t>(kActorPoseHumanoid).value_or(0),
         .transitionDelay = in.Get<float>(kActorTransitionDelay).value_or(0.0F),
         .previousPose = in.Get<std::int32_t>(kActorPreviousPose).value_or(-1),

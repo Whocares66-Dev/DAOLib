@@ -322,6 +322,17 @@ bool Struct::HasList(std::uint32_t label) const
     return offset && *offset != kNull;
 }
 
+std::vector<float> Struct::FloatList(std::uint32_t label) const
+{
+    const std::span<const std::byte> bytes = ListBytes(label, Type::F32);
+    std::vector<float> floats(bytes.size() / sizeof(float));
+    if (!floats.empty())
+    {
+        std::memcpy(floats.data(), bytes.data(), floats.size() * sizeof(float));
+    }
+    return floats;
+}
+
 std::span<const std::byte> Struct::ListBytes(std::uint32_t label, Type element) const
 {
     std::size_t size = 0;

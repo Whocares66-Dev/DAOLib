@@ -3,9 +3,7 @@
 
 #include <cmath>
 #include <cstddef>
-#include <cstring>
 #include <numbers>
-#include <span>
 #include <string_view>
 
 namespace dao::core::gad
@@ -33,12 +31,7 @@ constexpr float kNearlyOne = 1e-6F;
 template <std::size_t Width, class Key, class Make>
 std::vector<Key> KeysOf(const gff4::Struct &in, std::uint32_t label, Make make)
 {
-    const std::span<const std::byte> bytes = in.ListBytes(label, gff4::Type::F32);
-    std::vector<float> floats(bytes.size() / sizeof(float));
-    if (!floats.empty())
-    {
-        std::memcpy(floats.data(), bytes.data(), floats.size() * sizeof(float));
-    }
+    const std::vector<float> floats = in.FloatList(label);
     std::vector<Key> keys;
     keys.reserve(floats.size() / (Width + 1));
     for (std::size_t at = 0; at + Width + 1 <= floats.size(); at += Width + 1)
