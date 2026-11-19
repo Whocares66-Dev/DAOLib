@@ -315,7 +315,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05) w
 - **Edge cases:** no object: nothing. There is no type check, no range check on nResult, and no check that a command is running, so the word is simply left there. The note in COMBAT.md that the command layer reads it is still inferred; this handler never touches a command. (checked)
 
 ### ClearAllCommands (538)
-- **Handler:** 0x0065BDE0 (not shared). Pops the object, then nHardClear (always popped, no count test; the handler's own default is 1). Calls `GetObjectById` and `CCObject::ClearAllCommands` 0x0073C930 as `(hard = (nHardClear == 1), 0)`.
+- **Handler:** 0x0065BDE0 (not shared). Pops the object, then nHardClear (always popped, no count test; the handler's own default is 1). Calls `GetObjectById` and `CCObject::ForScript_ClearAllCommands` 0x0073C930 as `(hard = (nHardClear == 1), 0)`.
 - **Described in:** `dev/TURN_BASED.md` ("A soft ClearAllCommands mid-swing: the blow lands") for what soft and hard do; `dev/COMBAT.md` for the queue override.
 - **Does:** clears the queue and the current command; pushes 1 when the object was found, else 0 (script.ldf's "TRUE on success"). Only the value 1 is hard; 0, 2, -1 or any other value is soft. (checked)
 - **Edge cases:** no object: nothing is cleared and 0 is pushed. The push is the only result, so a script cannot tell a clear that left a static or uninterruptible command from a full one. (checked)

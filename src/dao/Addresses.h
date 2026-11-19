@@ -1171,7 +1171,7 @@ DAO_DATA(kDirectorySource_Vftable, 63048)
 DAO_DATA(kRimSource_Vftable, 63045)
 DAO_DATA(kFileAccess_Vftable, 62906)
 // A texture made from a .dds (dao/Resources.h, DAOLib #228), read 2026-10-21.
-// The processor's slot 1 (TexManager::DDSResourceHelper, 0x00847670,
+// The processor's slot 1 (TexManager::DDSResourceHelper::LoadResource, 0x00847670,
 // __thiscall (bytes, size, out buffer, out size, ?), `ret 0x14`) asks the
 // texture manager (0x008472C0, its singleton) to make the texture
 // (0x008456D0), which calls MakeTexture, __cdecl (bytes, size, the driver's

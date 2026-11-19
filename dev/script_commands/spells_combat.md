@@ -165,7 +165,7 @@ Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, ba
 - **Edge cases:** a non-creature attacker **or** a non-creature target pushes -0.1. A missing weapon pushes 0.0. (checked)
 
 ### SpawnBodyBag (672)
-- **Handler:** 0x0065E3A0 (not shared). `GetCreatureById`, then `CCCreature::SpawnBodyBag` 0x006A91E0. (checked)
+- **Handler:** 0x0065E3A0 (not shared). `GetCreatureById`, then `CCCreature::ForScript_SpawnBodyBag` 0x006A91E0. (checked)
 - **Described in:** `dev/COMBAT.md`, "The body bag".
 - **Does:** pops the creature and, if given (param count over 1), bForce; calls the native with `bForce != 0`. (checked)
 - **Edge cases:** a non-creature does nothing. Default `bForce` is 0, so a living creature, one without loot and no bag yet, or a pooled creature gets no bag (the native's tests, COMBAT.md). The handler returns 0.

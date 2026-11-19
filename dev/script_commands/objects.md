@@ -186,7 +186,7 @@ Not read: the other eleven tag-index removers' classes, one by one; the order of
   - The impact event is as for 193: nothing without oEventTarget. (checked)
 
 ### SetProjectileImpactEvent (371)
-- **Handler:** 0x00661E50 (not shared). It calls `StackPopEngineStructure(0)` 0x00A2F650, `CClientExoApp::GetProjectileById` 0x005D5AF0 and `CScriptEvent::CScriptEvent_copy` 0x0069CB10. (checked)
+- **Handler:** 0x00661E50 (not shared). It calls `StackPopEngineStructure(0)` 0x00A2F650, `CClientExoApp::GetProjectileById` 0x005D5AF0 and `CScriptEvent::CScriptEvent(const CScriptEvent&)` 0x0069CB10. (checked)
 - **Does:** pops oProjectile, then eCustom. If the id is a projectile and the event is non-null, it stores a new copy of the event (0x50 bytes) at the projectile's +0x4F4, then frees the popped event. (checked)
 - **On impact:** if the event's type (+0x20) is non-zero, it replaces the default ATTACK_IMPACT event. Its creator is set to the projectile, and it goes to the event target alone: not to the +0x4F8 list, and with no impact position or hit list added. A type-0 event leaves the default. (checked, 0x007E8A26–0x007E8A72)
 - **Edge cases:**
@@ -261,7 +261,7 @@ Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, ba
 - **Edge cases:** an invalid id or a non-`CCObject` pushes -1, not 0. Any `CCObject` is accepted (items, placeables). Push failure -638. (checked)
 
 ### SetAILevel (222)
-- **Handler:** 0x00659E40 (not shared). `GetObjectById`, then `AIMaster::Set` 0x0064B480 on `app+0x1AC`, or slot +0x154 (UpdateAILevel). (checked)
+- **Handler:** 0x00659E40 (not shared). `GetObjectById`, then `ScriptBackend::ForScript_SetAILevel` 0x0064B480 on `app+0x1AC`, or slot +0x154 (UpdateAILevel). (checked)
 - **Described in:** `dev/AI.md`, "One creature's AI switched off"; `dev/PARTY.md`, "The AI and the controlled creature" (+0x2B4 stops the engine's own changes).
 - **Does:** pops the object and the level. -1 clears the script's override (+0x2B4 = 0) and calls UpdateAILevel, so the engine chooses again. Any other value is handed to `AIMaster::Set` and then +0x2B4 = 1.
 - **Edge cases:** an invalid id does nothing. The level is not range-checked here (0 to 4 are lists, per PARTY.md, and `AIMaster::Set` decides for anything else; its body was not read). Any `CCObject` works. Returns 0.
@@ -292,6 +292,6 @@ Read 2026-10-18 by lib-agent-2's subagent (b4b) in `game\DAOrigins.exe` (GOG, ba
 
 ## Not read
 - `CCArea::CreateObject`'s (0x00687830, 0x006861F0) per-type creation and what each OBJECT_TYPE does with a bad template.
-- `AIMaster::Set` (0x0064B480) for levels outside 0 to 4.
+- `ScriptBackend::ForScript_SetAILevel` (0x0064B480) for levels outside 0 to 4.
 - What `[this+4]` of the commands object is (the gate of `CreateItemOnObject`) and what 0x0079F270 counts in `SetObjectActive`.
 - The bodies of 0x0079F410 and 0x007A1A20 (the VFX of `SetObjectActive`).

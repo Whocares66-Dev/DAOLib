@@ -160,7 +160,7 @@ Shared facts (checked unless marked):
 ### SetCreatureIsStatue (642)
 - **Handler:** 0x0066BE50 (shared setter), creature case at 0x0066BF89 → 0x0069F4A0(value != 0).
 - **Does:** writes byte +0xC94.
-  - On: `ClearAllCommands(1, 1)` (0x0073C930, a hard clear). Effects holder slot +0x4C(1) pauses the animation (`CCObject::SetAnimationPaused`, `CCreatureAnimController::Pause`). Creature slot +0xB0 replays the current animation ([+0x154]+0x140) as (1.0, -2.0, 1). Slot +0x58 sets float +0xB04 to 0.0 (inferred: the animation speed).
+  - On: `ClearAllCommands(1, 1)` (0x0073C930, a hard clear). Effects holder slot +0x4C(1) pauses the animation (`CCObject::SetAnimationPaused`) and turns the look-at off (`LookAt::Disable` 0x006C9E60; dev/ANIMATION.md). Creature slot +0xB0 replays the current animation ([+0x154]+0x140) as (1.0, -2.0, 1). Slot +0x58 sets float +0xB04 to 0.0 (inferred: the animation speed).
   - Off: resumes the animation and sets +0xB04 to 1.0. Checked.
 - **State:** +0xC94 is read by `CCCreature::Update` (0x006BE7A9: a statue skips a block of the per-frame update, inferred to be perception and AI), by the cursor (0x0070CE74: "examine" in place of "converse"), and by the save (GFF field 0x4056, 0x006B27F6). Checked except as marked.
 - **Edge cases:** off on a creature that was never a statue still resets the speed to 1.0, whatever it was (inferred). Commands queued while it is a statue are not refused here (not read). Not a creature: nothing.
@@ -224,7 +224,7 @@ Shared facts (checked unless marked):
 - `ClientOptions` is `[0x00C32938]` (master's `dev/CAMERA.md`).
 
 ### SetItemIndestructible (377)
-- **Handler:** 0x00665510 (not shared). Pops oItem, then the int; `0x005D5870`; `ScriptBackend::ForScript_SetItemIndestructible` (0x00752C30). Checked.
+- **Handler:** 0x00665510 (not shared). Pops oItem, then the int; `0x005D5870`; `CCItem::SetIndestructible` (0x00752C30). Checked.
 - **Does:** sets the item's attribute at +0x640 to `bIndestructible != 0` (vtable +0x54), then if the item has a holder (+0x4E8) calls the holder's vtable +0x28(item), then the item's vtable +0x64: the same tail as `SetItemAbilityId` (master's `items.md`). Checked.
 - **State:** item+0x640 (its bool at +0x64C). It is one of the 17 attributes `0x007141F0` publishes to the GUI as `_root.ReturnedItemAttributes`; read also in the item code at 0x00754020–0x007589D0. Checked; that the inventory screen hides its destroy option for it is inferred (`script.ldf`: "cannot be destroyed by the player").
 - **Edge cases:** no item or not an item: nothing, returns 0. Any non-zero int is TRUE. Checked.
@@ -315,7 +315,7 @@ Shared facts (checked unless marked):
 - **Edge cases:** no +0x14C object, no GFF, no struct or no field: nothing. No way to clear it. 30 shipped (cheat) scripts call it. Checked.
 
 ### ShowAllCodexEntries (619)
-- **Handler:** 0x006658B0 (not shared, no arguments). The party (`0x005D57C0`: app+0xD0 → +0x58), its +0x210; `ScriptBackend::ForScript_ShowAllCodexEntries` (0x00760250). Checked.
+- **Handler:** 0x006658B0 (not shared, no arguments). The party (`0x005D57C0`: app+0xD0 → +0x58), its +0x210; `PlotManager::ShowAllCodexEntries` (0x00760250). Checked.
 - **Does:** party+0x210 is a 0x6C-byte object built from every `.plo` resource (`0x0075DAC0`/`0x0075DB80`, made at 0x0062EBE0). The backend walks its list, loads each plot's resource and, for entries with an index other than −1, calls `0x0075F7E0` with a name (checked in outline); that this sets each codex plot's flags so the journal shows them is `script.ldf`'s, inferred.
 - **Edge cases:** no party or no plot table: nothing. A debug command; no shipped script calls it.
 

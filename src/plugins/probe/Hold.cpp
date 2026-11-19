@@ -34,7 +34,7 @@ namespace
 // __thiscall (bool), `ret 4`) takes the object's model from the same
 // interface's slot 24 and calls 0x00A5D820 on it, which sets the graphics
 // object's animation rate (a double at +0x2E8, the frame's time multiplied
-// by it in Animation::AnimationTask, 0x008154D0) to 0 when paused and 1 when
+// by it in Animation::AnimationTask::Execute, 0x008154D0) to 0 when paused and 1 when
 // not, and keeps the rate as a float at the model's +0xEC. CCCreature's own
 // slot 19 (0x0069F590) does that and then turns its look-at at +0x768 off
 // (0x006C9E60) or back on (0x006CAB00), a LookAt made at first use

@@ -12,7 +12,7 @@
 //
 // So the process is given the machine's processors, before the game's code
 // runs: what EA's and Steam's builds of the same game have from the start.
-// The game's thread manager (Eclipse::DAThreadManager, 0x004017D0) counts
+// The game's thread manager (Eclipse::DAThreadManager::Initialize, 0x004017D0) counts
 // the processors it has and makes that many worker threads less one, as it
 // was written to, and Windows puts each thread on a processor that is free.
 // The game pins no thread of its own (its thread class sets no affinity).

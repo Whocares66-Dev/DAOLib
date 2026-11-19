@@ -855,8 +855,8 @@ Matrix Parameter::MatrixValue() const
 // As the engine has it (read 2026-11-01 in GOG's exe for DAOLib #296, from DAOParagonEngine #351's render-16
 // and render-21). Material::AddSemantic (0x00503520) drops a semantic whose name is exactly one it has, compared
 // with case (0x004C0DE0, a wstring compare equal to 0), so the first of those is the one kept. Then
-// Material::FindSemantic (0x00503140) walks what is kept from the last to the first, comparing names ignoring
-// case (0x004C0A50). This keeps the file's list as written, so it skips what AddSemantic would have dropped.
+// Graphics::Material::FindSemanticByName (0x00503140) walks what is kept from the last to the first, comparing names
+// ignoring case (0x004C0A50). This keeps the file's list as written, so it skips what AddSemantic would have dropped.
 const Semantic *Definition::SemanticNamed(std::string_view wanted) const
 {
     for (std::size_t at = semantics.size(); at-- > 0;)

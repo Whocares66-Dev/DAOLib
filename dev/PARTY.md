@@ -549,7 +549,7 @@ Read 2026-10-18 by lib-agent-2 (with a forked subagent for part 2) in GOG's `DAO
 
 | | Where | Read by | Set by |
 |---|---|---|---|
-| **Selected** | `CCParty`+0x184, a `std::vector<id>` in the order selected; +0x194 the same as creature pointers, a SmartData list whose change notifies observers | `IsControlled` (714): **any** selected member answers TRUE (`std::vector::Contains`, 0x006316D0, checked) | `0x006368F0` (replace), `Party::Select` 0x00639E50 (add), `0x00639DB0` (remove); part 2 |
+| **Selected** | `CCParty`+0x184, a `std::vector<id>` in the order selected; +0x194 the same as creature pointers, a SmartData list whose change notifies observers | `IsControlled` (714): **any** selected member answers TRUE (`CCParty::IsSelected`, 0x006316D0, checked) | `0x006368F0` (replace), `Party::Select` 0x00639E50 (add), `0x00639DB0` (remove); part 2 |
 | **Controlled** ("main controlled") | `CCPlayer`+0x5C, the id, beside the party at `CCPlayer`+0x58; `CCPlayer` is `[app+0xD0]` (vftable 0x00B0F1D8 names it; its constructor 0x0069D600 writes +0x58 and +0x5C = -1, checked) | `GetMainControlled`, `0x005D5CA0`; the camera, the formation's leader on arrival, the AI's follow distance | only `CCPlayer::SetControlled` 0x0069D540 (checked: the one write of +0x5C in `CCPlayer`'s code), and it is always **the first selected**, below |
 | **Leader** | `CCParty`+0x1E8, a SmartData attribute | `GetPartyLeader` (624); perception's party range (0x006B85A7, checked: it is the leader attribute, which `dev/COMBAT.md`'s "Range, line of sight" had as "the controlled creature", corrected the same day); the active party's order | `SetPartyLeader` (625, 0x00636180), and the first member to join an empty active party (0x006376A3, checked) |
 
@@ -710,7 +710,7 @@ Reached from `CCParty`'s `Messages::Observer` base (+0x20): its vftable 0x00B05E
 | Caller | Arguments | When |
 |---|---|---|
 | `Party::Select` 0x00639E50, add = 0 | (id, 1, 1), then ON_SELECT | a click on a portrait or a member, `CenterOnObject`, `SelectPartyMemberIndex` without the add byte; below |
-| `CCParty::HandleMessage_ToggleFullPartySelect` 0x00636E40 | (first selected, 0, 1) | collapsing "all selected" back to one; below |
+| `CCParty::HandleMessage_ToggleFullPartySelectMessage` 0x00636E40 | (first selected, 0, 1) | collapsing "all selected" back to one; below |
 | `0x00636CD0`, `SelectNext/PreviousCharacterMessage` 0x00636E20 / 0x00636E30 | (id, 1, 1) | cycles the party bar's slots (the list at party+0xC8; inferred: the bar) from the controlled creature by ±1, skipping empty, not controllable (+0x7F9 = 0) and dead (slot 0x1D0) members (checked) |
 | `ScriptCommand::SETCONTROLLABLE`'s handler 0x00661050 (815, `SetPrimaryControlled`) | (id, 0, 1) | `spells_combat.md`; it crashes on an invalid object |
 | `0x00636C00` (from `SetControllable(false)` 0x006A5F40) | (id, 1, 1) | the first controllable (+0x7F9) living (slot 0x1D0 = 0) member of the active party (+0x234, its items at +0x238), else -1 |
@@ -732,7 +732,7 @@ Read by the forked subagent; checked unless marked. +0x184 holds the ids; +0x194
 - **Its callers:**
   - 0x00639F90 is `CCParty::HandleMessage_SelectCharacterMessage` (built at 0x0063A2C1 in 0x0063A2B0, called from 0x0063B837; vftable 0x00B058E0; in `dev/message_handlers.csv` since DAOLib #188): `Select(msg+4, 0)`. Sent as the binding text "SelectCharacterMessage 219" through Eluvian (2026-10-23, lib-agent-3) it reached neither this handler nor the selection, where "SelectPartyMemberIndexMessage 1 0" did both. Why (read 2026-10-24, DAOLib #253): a binding's text reaches only what the current game mode handles, and explore mode has no SelectCharacter handler; the argument is read as an unsigned decimal (the class's text reader, 0x007749C0). Sent as "Party.SelectCharacterMessage 19", a movie's text naming its receiver, it reached this handler with Leliana (examples/messages).
   - `SelectPartyMemberIndexMessage` 0x00639FB0: msg+4 an index into the party's list +0xC8 (inferred: the bar's order); `Select(id, msg byte +6)`, the byte the add flag (inferred: Shift).
-  - `GameModeExplore::SelectPartyMemberUnderCursorMessage` 0x0070C0B0: `Select(explore+0xCC, msg byte +4)`.
+  - `GameModeExplore::HandleMessage_SelectPartyMemberUnderCursorMessage` 0x0070C0B0: `Select(explore+0xCC, msg byte +4)`.
   - The primary click 0x00712830: case "select" (0x00712D1E) `Select(target, 0)`; case "deselect" (0x00712D57) 0x00639DB0.
   - Explore mode passes SelectNext/Previous, Index, ToggleFullPartySelect and ToggleHoldParty on to the party's receiver at party+0x18 (0x0070B9E0).
 - **Select all, `ToggleFullPartySelectMessage` 0x00636E40:** counts the living active members (+0x234; no controllable test in the count). All selected → collapse to the first selected (0x006368F0(first, 0, 1)); else 0x00635860 appends every unselected, controllable, living active member (0x006355A0, no event).

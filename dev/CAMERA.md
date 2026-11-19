@@ -325,7 +325,7 @@ The orbit tests nothing, but the scene camera's manager (0x006C4C60, checked) ac
 
 #### Object flag 8: EnvModelCutAwayOverride (read 2026-10-22 in the GOG exe by paragon-agent's helper, for DAOParagonEngine #151)
 
-- **The only writer is slot 0x148** of the Object's +8 interface [C]: `GraphicsStructures::Object::vfunction83`, 0x00546650 (the vtable word at 0x00AF857C, in `Object::vftable_at_8` at +0x148).
+- **The only writer is slot 0x148** of the Object's +8 interface [C]: `GraphicsStructures::Object::SetEnvModelCutAwayOverride`, 0x00546650 (the vtable word at 0x00AF857C, in `Object::vftable_at_8` at +0x148).
   - It takes a bool b. It sets byte +0x1C9 of every kind-1 node in the Object's node list (+0x5C..+0x60) to b, then sets (b) or clears (not b) bit 8 of +0x258 on the interface, which is the Object's +0x260 [C].
 - **Its caller is a room model's creation, 0x0053A510** (0x0053A737–0x0053A755) [C]:
   - the record's byte +0x13C = 1 → slot 0x148(false);

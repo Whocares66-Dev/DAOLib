@@ -440,7 +440,7 @@ All of them are started with `manager.PlaySound(path, NULL, 0, 0)`, so they are 
 | `.../OnExploreMusic` | the music's track is `main`, it plays and its gain is above 0 (stops OnCombatMusic) | the track changes to another, or stops, or the music option is ≤ −60 dB |
 | `.../OnCombatMusic` | the track is `combat`, it plays and its gain is above 0 (stops OnExploreMusic) | the same |
 | `.../OnGamePause` | `CClientExoApp::SetPaused(true)` (0x005D6740) in modes 0, 1, 2, 4, 5 | `SetPaused(false)`, in any mode |
-| `.../OnMovie` | `ScriptBackend::ForScript_PlayMovie` (0x006DC680, after `SetGameMode(10)`), and a cut's `ActionPlayMovie` start (0x007CE7CB) unless the player's +0x94 is 5 | the movie queue empties (0x006DC0BA), or the cut's movie ends (0x007CE8D1) |
+| `.../OnMovie` | `GameModeMovie::PlayMovie` (0x006DC680, after `SetGameMode(10)`), and a cut's `ActionPlayMovie` start (0x007CE7CB) unless the player's +0x94 is 5 | the movie queue empties (0x006DC0BA), or the cut's movie ends (0x007CE8D1) |
 
 - **Dialog and cutscene share one OnCutscene**: a switch between them neither restarts nor stops it. The cutscene step also calls `Update(5)` (§1), and that rule keeps the duck steady if the two alternate (inferred).
 - **Music ducks**: 0x005BCCD0, on the music object at manager+0x120, runs every frame from 0x005BD220 (even with no change of mode). It acts only when the track name or the playing flag changes (kept at the object's +0 and +0x93), and compares exact names `main` (0x00AFEBD8) and `combat` (0x00AFED3C). Gain is the object's +0x84, linear. The options' volume function (0x005BC2F0) also stops both when music is set to ≤ −60 dB (0x00AFEE58 = −60.0). (checked)
@@ -1382,7 +1382,7 @@ Key kind 1: row = the surface (0x006A0590), column = +0x934 (`Sound_Monster_Size
   - 0x007E67F0 reads the projectile's prj_base `SoundMatType` (21 for arrows) [C]. It plays nothing when that cell cannot be read, or when the hit's groups mask (the world ray's +0x24) has 0x1000, trees [C].
   - Otherwise it fetches the sound manager (0x005B9020, the singleton) and hands the record's +0x28 (the surface's sound material; COLLISION.md) to 0x005BCAB0 [C].
   - 0x005BCAB0 (unnamed in the address library) builds the event's column name: `sound_geometry_mat_types` (table 156) `Label` at that row; an empty label or "INVALID" becomes "Unknown"; the name is trimmed of spaces and tabs (0x00ADEE0C) [C].
-  - The event is `sound_weapon_hits[SoundMatType][that column]` (0x005B6BA0), the column found by name without regard to case (the GDA column hash lowercases: "Hollow_wood" finds "Hollow_Wood") [C], played at the hit point (`ScriptBackend::ForScript_PlaySound`, 0x005BC7F0) [C].
+  - The event is `sound_weapon_hits[SoundMatType][that column]` (0x005B6BA0), the column found by name without regard to case (the GDA column hash lowercases: "Hollow_wood" finds "Hollow_Wood") [C], played at the hit point (`SoundManager::PlayOneShot`, 0x005BC7F0) [C].
   - Not yet heard in the running game.
 
 ##### 8.7 Weapon actions: data notes [C]
@@ -1586,4 +1586,4 @@ ApplyVolumeAndPitch (slot +0xA0, 0x005C3D10, above) reads the category entry fou
 
 #### Pan level
 
-Content +0x18 is FMOD's 3-D pan level: `CContent_FMOD`'s setter (0x005C0910) writes it as event property 0x19 (25) on the instance (0x005C0932). The enum's numbering is anchored in the exe by `GetEventProperties` 0x005BE8E0, which tests property 14 for `FMOD_3D` (0x10), 16 for `FMOD_3D_LOGROLLOFF` (0x100000) and 19 for `FMOD_3D_HEADRELATIVE` (0x40000), so 25 is 3D_PANLEVEL, and 34, 36 and 37 are the reverb wet level, fade-in and fade-out already used above [C]. Occlusion (+0x10, +0x14) reaches the event through `Event::set3DOcclusion` (0x005C08D0).
+Content +0x18 is FMOD's 3-D pan level: `CContent_FMOD`'s setter (0x005C0910) writes it as event property 0x19 (25) on the instance (0x005C0932). The enum's numbering is anchored in the exe by `GetEventProperties` 0x005BE8E0, which tests property 14 for `FMOD_3D` (0x10), 16 for `FMOD_3D_LOGROLLOFF` (0x100000) and 19 for `FMOD_3D_HEADRELATIVE` (0x40000), so 25 is 3D_PANLEVEL, and 34, 36 and 37 are the reverb wet level, fade-in and fade-out already used above [C]. Occlusion (+0x10, +0x14) reaches the event through `EclipsePrivate::CContent_FMOD::SetOcclusion` (0x005C08D0).

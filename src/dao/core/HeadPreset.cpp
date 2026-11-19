@@ -95,7 +95,7 @@ Preset PresetIn(const gff4::Struct &mop)
 // Notes on ComposeHead, 2026-10-18. The blend, a mesh's part plus each target's difference from
 // its mesh's base by its weight, is inferred from the weights (each base takes minus the sum of
 // its targets'), not read in the engine's blend code; lib-agent-2 read that the engine composes
-// the head from the editor's state (GUI::ComposeMorphTask, 0x00802E60) and writes an ordinary
+// the head from the editor's state (GUI::ComposeMorphTask::Execute, 0x00802E60) and writes an ordinary
 // morph of it (GFF4 "MORP V0.1", the morph writer 0x0056FA20), kept as "Head_Morph" and a
 // counter, so the result is a .mor's shape. The base entries are left out of the sum: with their
 // weights as written the two are the same.

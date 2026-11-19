@@ -16,13 +16,13 @@ Shared facts:
   - [C] (read 2026-10-22 by paragon-agent-2's helper, for DAOParagonEngine #169) 0x004C0DE0 is a std::wstring equality: it calls 0x00414170 (std::wstring::compare(pos, n, ptr, count)), which clamps the lengths and compares with 0x00413800, a loop over 16-bit units where the first differing unit decides and nothing is case-folded, then compares the lengths. So the tag compare is ordinal, case-sensitive and over the whole string.
 
 ### PlaySound (477)
-- **Handler:** 0x0065CEB0 (not shared). Calls `GetObjectById` 0x005D5BE0, the manager getter, and `ScriptBackend::ForScript_PlaySound` 0x005BC7F0 (a manager method). (checked)
+- **Handler:** 0x0065CEB0 (not shared). Calls `GetObjectById` 0x005D5BE0, the manager getter, and `SoundManager::PlayOneShot` 0x005BC7F0 (a manager method). (checked)
 - **Does:** pops oTarget, then sSoundEventName. Copies the object's position (+0x120..+0x128) and calls `PlaySound(name, &pos, 0, 0)`: a new 0xC8 instance is made, the name resolved (0x005BA530), the position set, and the event started; on failure the instance is destroyed. (checked)
 - **State:** the sound plays at the position the object had at the call; it does not follow the object (checked). The instance is kept in the manager's list +0xAC that StopSound walks (inferred: registration not read).
 - **Edge cases:** an invalid object, or one that is not a `CCObject` (an area, the module), does nothing; an empty string returns at once (length +0x14 = 0). An unknown event name: the start fails and the instance is freed, silently. No failure reaches the script. (checked)
 
 ### StopSound (478)
-- **Handler:** 0x00651190 (not shared). Calls `ScriptBackend::ForScript_StopSound` 0x005BA100 on the manager. (checked)
+- **Handler:** 0x00651190 (not shared). Calls `SoundManager::StopByPath` 0x005BA100 on the manager. (checked)
 - **Does:** pops sSoundEventName. Walks the manager's instance vector (+0xAC begin, +0xB0 end); for each, builds its full path (0x005B6860: the event's group path up to its last `/`, plus the FMOD event's name, via the event's vtable +0xA8) and, when it equals the string, stops it (0x005B9330(0)). Every match is stopped, not just the first. (checked)
 - **Edge cases:** the compare is exact (the full path, case-sensitive: inferred), so a short name matches nothing. An instance with no FMOD event (+0x70 null) gives an empty name. Sound objects' own events are not in this list (inferred), so it does not stop them. No game script calls it. (checked except as marked)
 
@@ -36,7 +36,7 @@ Shared facts:
 - **Does: nothing**: pops the string and returns 0. script.ldf's "Stop specified or all music" is not implemented. No game script calls it. (checked)
 
 ### SetMusicIntensity (486)
-- **Handler:** 0x0065D070 (not shared). Calls `ScriptBackend::ForScript_SetMusicIntensity` 0x005B6CD0 on the manager's music event (+0x120). (checked)
+- **Handler:** 0x0065D070 (not shared). Calls `MusicController::SetIntensity` 0x005B6CD0 on the manager's music event (+0x120). (checked)
 - **Does:** pops nIntensity; if the manager has a current music event, calls `SetParameter((float)nIntensity, 0.0f)`: the value goes to event+0x8C and the 0.0 to event+0x88 (inferred: the transition time, here immediate). (checked)
 - **State:** the same two fields SetMusicVolumeStateByTag's trigger writes (0x005B6E80 → 0x005B6CD0): "intensity" and the volume state are one parameter of the music event, the last writer wins. (checked)
 - **Edge cases:** no music event (+0x120 null): nothing. Any integer, negative included, is converted to float and stored; no clamp. (checked)
@@ -54,7 +54,7 @@ Shared facts:
 - **Edge cases:** no controlled creature or area: nothing; no matching trigger: nothing. No range check on nMusicState. With no music event playing the trigger's value is stored but nothing sounds. (checked)
 
 ### PlaySoundSet (479)
-- **Handler:** 0x006624C0 (not shared). Calls `GetCreatureById` 0x005D58C0, then `ScriptBackend::ForScript_PlaySoundSet` 0x006B5740 `(entry, probability, bForce)` on the creature. (checked)
+- **Handler:** 0x006624C0 (not shared). Calls `GetCreatureById` 0x005D58C0, then `CCCreature::PlaySoundSet` 0x006B5740 `(entry, probability, bForce)` on the creature. (checked)
 - **Does:** pops oTarget, nSoundSetEntry, and fProbabilityOverride only when argCount > 2 (else 0.0). If GUI scene 8 is open (gui vtable +0x60(8), scene +0xBC) and its +0xC0 object's +0x58 is this creature, the line is played on that object's stand-in (+0x5C → +0xC) instead (inferred: a preview character of a GUI stage). (checked)
 - **The backend (checked):**
   - Entry 18 (COMBAT DEATH) is forced. Unforced, it returns if the creature is already speaking (its effects-holder's +0x60 emitter, 0x00A5C9E0: +0x1AC instance playing).

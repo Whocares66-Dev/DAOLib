@@ -17,7 +17,7 @@ Shared facts (checked):
 - **Does:** the same with 'A' to 'Z' (0x41–0x5A) plus 0x20. ASCII only. (checked)
 
 ### StringRight (99)
-- **Handler:** 0x00650030. It calls 0x004C31A0 (the right part) and `std::wstring::substr` 0x004C2670.
+- **Handler:** 0x00650030. It calls 0x004C31A0 (the right part) and `std::wstring::wstring(const std::wstring&,unsigned int,unsigned int)` 0x004C2670.
 - **Does:** pops sString, then nCount, and pushes the **last** nCount units: `substr(len - n)` with `n = min((unsigned)nCount, len)`. (checked)
 - **Edge cases:** nCount ≥ length gives the whole string. **A negative nCount gives the whole string**, not an empty one (unsigned). 0 gives "". script.ldf's prose has Right and Left the wrong way round ("the first nCount characters ... from the right"); the engine does the usual. (checked)
 

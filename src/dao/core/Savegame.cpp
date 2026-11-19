@@ -1189,7 +1189,7 @@ const PlotEntry *Party::FindPlot(std::wstring_view guid) const
 }
 
 // CSAreaList::FindArea [exe 0x006FA910, read 2026-10-21, DAOLib #219] upper-cases the wanted tag and each
-// listed area's (String::ToUpper 0x004C3800: only 'a' to 'z' change) and compares them as wide strings, so a
+// listed area's (String::ToUpperAscii 0x004C3800: only 'a' to 'z' change) and compares them as wide strings, so a
 // tag matches whatever its case. (It first strips the wanted tag to letters, digits and '_', 63 at most,
 // through 0x004C3BC0; a real area tag is that already.)
 static bool SameTag(std::wstring_view a, std::wstring_view b)

@@ -88,7 +88,7 @@ Shared facts (checked unless marked):
 Shared facts (checked): the VM is `[0xC1D080]`, the app `[0xC327EC]`. Object pop is 0xA2F6D0, int pop 0xA2F3C0; a failed pop returns -639 (0xFFFFFD81). `GetPlaceableById` is 0x005D5B40, `GetCreatureById` 0x005D58C0. A push failure returns -638.
 
 ### SetPlaceableState (287)
-- **Handler:** 0x0065EE60 (not shared); `GetPlaceableById`, then `CCPlaceable::SetState` 0x0074F9D0(nState, 0).
+- **Handler:** 0x0065EE60 (not shared); `GetPlaceableById`, then `CCPlaceable::ForScript_SetPlaceableState` 0x0074F9D0(nState, 0).
 - **Described in:** `dev/PLACEABLES.md` ("The use, the animation and EVENT_TYPE_USE").
 - **Does:** plays the [old][new] transition and the new idle, stores the state and swaps the walk-grid patch. The second argument to 0x0074F9D0 is always 0 from the script.
 - **Edge cases:** an invalid or non-placeable object does nothing and returns 0, no failure (checked). nState is passed unchecked at the command (inferred: a state past the table's columns is the state function's problem). A failed pop of either argument returns -639 (checked).

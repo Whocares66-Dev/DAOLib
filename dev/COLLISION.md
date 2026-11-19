@@ -138,7 +138,7 @@ GOG 1.05 addresses. [C] read in the code, [S] seen in play, [I] inferred.
   - **A `.phy` shape is in its model node's frame:** the actor carries the node's world matrix, and the shape its own pose under it.
     - **The overlay:** `ReadPHYNode` calls `PHYToBlueprintBuilder::BeginNode` (0x005B01F0), which takes the current node's child of the same name, or makes one. So a `.phy` node overlays the `.mmh` node of its name [I that the builder starts on the `.mmh`'s blueprint root].
     - **The cobj:** `EndCollisionObject` (0x005B00D0) keeps the `cobj`'s prototype on that node. `ReadPHYShape` (0x00589DB0) reads only the shape's own pose; no node pose is read there.
-    - **The actors:** they are made when the model's physics is attached (`Object::AttachPhysics` 0x0054D730). The root node's slot 0x54 (0x0055E310) walks the tree. Each node with a collision prototype calls `PhysicsObject::CreateActor` (0x00839DA0) with its own name.
+    - **The actors:** they are made when the model's physics is attached (`GraphicsStructures::Object::CreateNodePhysicsActors` 0x0054D730). The root node's slot 0x54 (0x0055E310) walks the tree. Each node with a collision prototype calls `PhysicsObject::CreateActor` (0x00839DA0) with its own name.
     - **The actor's pose:** `CreateActor` finds that node in the Object's tree by name (0x005426C0 → 0x0055E8E0 → 0x0055E280) and calls `PhysicsActor::Create` (0x00820470) with it.
       - Create takes the node's slot 1 (0x0055DFB0). That updates the Object's tree (0x00542700) and copies the node's world matrix from node +0x5C. 0x00837AE0 makes it the actor's `globalPose`.
       - So the actor's pose is the node's world matrix, the object's place included.

@@ -50,7 +50,7 @@ Shared facts, all checked:
 - **Edge cases:** no `GRAPHICS_DETAIL_LEVEL_*` constants exist in script.ldf or the scripts despite its doc comment; no range check. A failed push returns -638. (checked)
 
 ### DebugSpawnScriptDebugger (16)
-- **Handler:** 0x00654D10. It calls `CClientExoApp::GetModule` (0x005D4FC0) and `ScriptBackend::ForScript_DebugSpawnScriptDebugger` (0x00A2D230). (checked)
+- **Handler:** 0x00654D10. It calls `CClientExoApp::GetModule` (0x005D4FC0) and `CVirtualMachine::RequestDebuggerBreak` (0x00A2D230). (checked)
 - **Does:** only if there is a module and its byte **+0x194** is set, it sets the VM's +0x196C to 1 (the debugger requested; what reads it not followed). Otherwise nothing. (checked)
 - **Edge cases:** no parameters; void; always returns 0. What the module's +0x194 is (inferred: a debug or toolset-run flag) and whether it is ever set in a shipped game is not read. (checked)
 

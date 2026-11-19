@@ -11,7 +11,7 @@ Read 2026-10-18 by lib-agent-2 in the GOG exe (`game\DAOrigins.exe`, base 0x4000
 - **The party's inventory is one object.** `CCParty` +0x20C is an `Inventory` (vtable 0x00B1B974). When a creature joins the pool (`0x0063A020` → `CCCreature 0x006A8C10` at 0x0063A10E), its own `Inventory` (attribute creature+0xBF0) is replaced by the party's: its items are moved in (`0x00762E90`), its money is added to the party's, the pointer is set, and the old `Inventory` is deleted. So every pool member's +0xBF0 is the same shared backpack and purse. Checked. Leaving the pool gives the creature a new, empty `Inventory` (0x006A29A0; read 2026-10-19 by lib-agent-2), and the shared one's ADDED and REMOVED go to the party, then the main controlled creature: `dev/ITEMS.md`, "The party's shared inventory".
 - **An `Inventory`** has three `ItemLocation`s: +0x8 the backpack (a `ListItemLocation`, vtable 0x00B2308C; its max slot count is attribute +0x28), +0x18 plot items (an item with +0x2C4 set goes here), +0x28 money (base item 17). Checked in `Inventory`'s remove (`0x00740300`). Equipped items are not in it: they are in the `Equipment` at creature+0xBE0 (attribute), per creature. A placeable's inventory is attribute +0x678.
 - **Money location** (`Inventory`+0x28): attribute +0x90 the total in copper, with +0x60 gold (/10000), +0x70 silver, +0x80 copper derived by `0x007C9F50`. Add `0x007C9FE0(n)`, subtract `0x007CA020(n)`: no bounds on either. Checked.
-- **Taking an item from its holder:** `ScriptBackend::ForScript_RemoveItem` (`0x00762100`, `(result*, item, n)`). With no holder (+0x4E8 null) the result is the item itself. Otherwise the holder's vtable slot 2: for a list (`0x007619E0`), n = −1 or n > stack takes the whole stack; 0 < n < stack splits off a copy of n (`0x00759740`) and takes that; **any other n (0, −2, …) takes the whole item**. The taken item's +0x4E8 is cleared and the holder's owner is told (possessor slot +0x20). `Inventory`'s slot 2 routes plot items to +0x18 and copper to the money location. Checked.
+- **Taking an item from its holder:** `ItemLocation::RemoveItemFromItsLocation` (`0x00762100`, `(result*, item, n)`). With no holder (+0x4E8 null) the result is the item itself. Otherwise the holder's vtable slot 2: for a list (`0x007619E0`), n = −1 or n > stack takes the whole stack; 0 < n < stack splits off a copy of n (`0x00759740`) and takes that; **any other n (0, −2, …) takes the whole item**. The taken item's +0x4E8 is cleared and the holder's owner is told (possessor slot +0x20). `Inventory`'s slot 2 routes plot items to +0x18 and copper to the money location. Checked.
 
 ## The GUI and messaging part: shared facts
 
@@ -20,13 +20,13 @@ Read 2026-10-18 in GOG's `DAOrigins.exe` 1.05 (base 0x400000) with capstone, for
 There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is `%TEMP%\lib-agent-2-fade.md`. Correction to it: SetTrainingMode's object is `module+0x498` (the module's tutorial control), not `app+0x498` (0x0066371F-0x00663751, checked).
 
 ### RemoveItem (403)
-- **Handler:** 0x0066C400 → `ScriptBackend::ForScript_RemoveItem` (0x00762100), then the taken item's vtable +0x198(0).
+- **Handler:** 0x0066C400 → `ItemLocation::RemoveItemFromItsLocation` (0x00762100), then the taken item's vtable +0x198(0).
 - **Does:** takes n of the item from wherever it is (the common "taking" above) and **destroys what was taken**: the whole item, or the split-off copy, the rest staying in its stack. Checked.
 - **State:** the holder's list, item+0x4E8, item+0x5F0 when split. Checked.
 - **Edge cases:** n defaults to −1 (popped only with two arguments); n = 0 or < −1 destroys the whole stack; n ≥ stack the whole stack. An item being destroyed (+0x5D0): nothing. An item on no holder: destroyed. An equipped item: taken from the `Equipment` location (inferred: the unequip, its stats and `EVENT_TYPE_UNEQUIP`, through the location; `dev/ITEMS.md`). A plot item: no exemption. Checked except as marked.
 
 ### RemoveItemsByTag (379)
-- **Handler:** 0x006660C0. Pops the possessor, the tag, n (−1 unless three arguments). Calls the possessor's vtable slot 2 (+0x08), then `ScriptBackend::ForScript_RemoveItemsByTag` (0x007621E0) destroys every taken item (+0x198(0)).
+- **Handler:** 0x006660C0. Pops the possessor, the tag, n (−1 unless three arguments). Calls the possessor's vtable slot 2 (+0x08), then `ItemMove::DestroyDisplacedItems` (0x007621E0) destroys every taken item (+0x198(0)).
 - **Does:** a creature (0x006B3410): the backpack (+0xBF0, `Inventory` slot 3 0x00740430) first, then, **only when n ≠ −1** and fewer than n were taken, the creature's equipment (+0xBE0) for the rest. `Inventory` slot 3: the backpack, then the plot items with the same n when n = −1 or the backpack gave nothing. A placeable or the party (0x00763070): its inventory's slot 3. Checked.
 - **State:** the possessor's lists; for a party member the shared party backpack. Checked.
 - **Edge cases:** `RemoveItemsByTag(o, tag)` never takes equipped items; with an explicit n it can. Stacks count by their size and are split at the end (inferred from `CountItemsByTag` and the list's take). Not a possessor (an item, a waypoint): nothing. Checked except as marked.
@@ -53,7 +53,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Edge cases:** no match or not a possessor: `OBJECT_INVALID`. For a party member the backpack searched is the party's, so any member finds an item another member carries in the backpack; equipped items only on that creature. First match is the list's order (not read). Checked except as marked.
 
 ### GetActiveWeaponSet (167)
-- **Handler:** 0x0065CD20 → `ScriptBackend::ForScript_GetActiveWeaponSet` (0x00797410): `Equipment`(+0xBE0)+0x10, an attribute.
+- **Handler:** 0x0065CD20 → `Equipment::GetActiveWeaponSet` (0x00797410): `Equipment`(+0xBE0)+0x10, an attribute.
 - **Does:** pushes the active weapon set (0 or 1). Checked.
 - **Edge cases:** not a creature, or no `Equipment`: 0, as `script.ldf` warns. Checked.
 
@@ -69,7 +69,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Edge cases:** not a creature, or no backpack: −1. For a party member it is the shared backpack's size. Checked.
 
 ### SetMaxInventorySize (405)
-- **Handler:** 0x0066C340 → `ScriptBackend::ForScript_SetMaxInventorySize` (0x007CA4F0): backpack attribute +0x28 set.
+- **Handler:** 0x0066C340 → `ListItemLocation::SetMaxInventorySize` (0x007CA4F0): backpack attribute +0x28 set.
 - **Does:** clamps nMaxSize to 1..125 (≥ 0x7D → 125, ≤ 1 → 1) and sets it. Same default creature as 404. Checked.
 - **Edge cases:** no items are dropped or moved when the size falls below the count (checked: the setter only sets the attribute; its observers not read). `module_core` adds 10 per `gen_im_misc_backpack` acquired by a follower. Not a creature: nothing. Checked.
 
@@ -94,7 +94,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Edge cases:** the slot is not re-validated beyond `0x00762990`'s `0x007611A0` (can the location take it); if refused the item stays in the chest (checked in 0x00762990) and keeps its map entry [I]; the entries of the items moved are erased by the move (see RestorePartyInventory). `Prelude`: `StoreFollowerInventory(oPC, footlocker)` and its restore use this for the hero. Checked.
 
 ### MoveItem (349)
-- **Handler:** 0x00665EF0 → the target possessor's `ScriptBackend::ForScript_MoveItem` (0x007633F0). Pops oSource, oTarget, oItem.
+- **Handler:** 0x00665EF0 → the target possessor's `ItemPossessor::MoveItemIn` (0x007633F0). Pops oSource, oTarget, oItem.
 - **Does:** both oSource and oTarget must be possessors and oItem an item; then the item goes to the target's inventory (possessor slot +0x18: creature +0xBF0, placeable +0x678, party +0x20C) through `0x00762C40`: a slot chosen (`0x00761340`), the **whole stack** taken from its actual holder (`ForScript_RemoveItem(item, −1)`) and added (`0x00762010`), the target's owner told. Global flag | 0x10 meanwhile. Checked.
 - **Edge cases:** **oSource is only checked to exist**: the item is taken from wherever it is, not from oSource. Moving to a party member puts it in the shared backpack. If the target cannot take it (`0x007611A0`), nothing moves. An equipped item is taken out of its `Equipment` (inferred: unequipped). Checked except as marked.
 
@@ -199,7 +199,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 - **Handler:** 0x00662F40 (own) → the journal (0x005D5810) 0x006F46A0(board), then full-screen GUI `Chanters`.
 - **Does:** rebuilds the board's list: table 115 by the board's row (`Texture`, `Label`, `HeaderStrID`), then table 116's quests with that `BoardID` (`VisibleFlag`, `AcceptedFlag`, `PlotRef`) into the data tree. Then opens the `Chanters` scene: GUI mode 3, paused, `EVENT_TYPE_GUI_OPENED`. Checked (columns by their hashes; the filter by flags inferred).
 - **State:** journal +0xE8 list; game mode.
-- **Edge cases:** an unknown board leaves an empty list (inferred). Accepting goes through `Journal::AcceptChantersQuestMessage` (0x006EB850). No close event read.
+- **Edge cases:** an unknown board leaves an empty list (inferred). Accepting goes through `Journal::HandleMessage_AcceptChantersQuestMessage` (0x006EB850). No close event read.
 
 ### ShowGeneralScoreboardGUI (788)
 - **Handler:** 0x00663030 (own).
@@ -277,7 +277,7 @@ There is no dev/CAMERA.md in DAOLib; the SetTrainingMode reading reused here is 
 ### ShowCraftingGUI (355)
 - **Handler:** 0x00663AB0 (own; it tests the command number is 355). `ShowCraftingGUIMessage(skill)` to `gui`, handled at 0x0060B300.
 - **Does:** sets the crafting scene's (0x26) skill attribute (+0xC0); unless the scene's byte +0xBC is set, opens the full-screen GUI `Crafting`: GUI mode 3, paused, `EVENT_TYPE_GUI_OPENED`. Checked.
-- **Edge cases:** skill 0 → nothing (checked). Any other id is passed on unchecked (the movie and `ABI_base` decide, inferred). Crafting itself is `GUICrafting::CraftItemMessage` (0x00726430), `EVENT_TYPE_CRAFT_ITEM` (102) not read.
+- **Edge cases:** skill 0 → nothing (checked). Any other id is passed on unchecked (the movie and `ABI_base` decide, inferred). Crafting itself is `GUI::GUICrafting::HandleMessage_CraftItemMessage` (0x00726430), `EVENT_TYPE_CRAFT_ITEM` (102) not read.
 
 ### ShowSpecUnlockedNotification (722)
 - **Handler:** 0x00663B80 (own) → `ForScript_ShowSpecUnlockedNotification` 0x00628E10 on party +0x330.
@@ -383,7 +383,7 @@ Shared facts (checked): the VM stack object is `[0xC1D080]`; `0x00A2F6D0` pops a
 Shared: every handler pops with the VM stack helpers 0xA2F6D0 (object) and 0xA2F3C0 (int); a failed pop returns -639 (0xFFFFFD81) (checked). All six return 0 on every other path, so a bad object is a silent no-op, not a script failure (checked).
 
 ### MoveAllItems (350)
-- **Handler:** 0x00666020 (own), `ScriptBackend::ForScript_MoveAllItems` 0x00763570.
+- **Handler:** 0x00666020 (own), `ItemPossessor::MoveAllItemsIn` 0x00763570.
 - **Described in:** `dev/PLACEABLES.md` (a container's loot: OPEN_INVENTORY), one line: `_autoloot` containers get `MoveAllItems` instead of the loot screen.
 - **Does:** pops oSource then oTarget, resolves each with `GetObjectById` 0x005D5C20, and calls `ForScript_MoveAllItems` on the target object with the source's id; a temporary list is destroyed after (0x007616C0). Checked.
 - **Edge cases:** either id unresolved (OBJECT_INVALID or no such object) -> nothing moves, returns 0, no failure (checked). It uses `GetObjectById`, not `GetCreatureById`, so any object type resolves here (a container, a creature, a placeable); what a non-inventory object does is in the backend (not read). Argument order: source is popped first (checked).

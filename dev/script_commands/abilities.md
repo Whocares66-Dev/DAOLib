@@ -33,7 +33,7 @@ Read 2026-10-18 by lib-agent-2 (a subagent) in `game\DAOrigins.exe` (GOG 1.05). 
 ### IsModalAbilityActive (726)
 - **Handler:** 0x0066DD80 (not shared) (checked).
 - **Described in:** `dev/ABILITIES.md`, same section (the +0xF8 vector).
-- **Does:** `GetCreatureById`, then pushes TRUE when the ability id is in the stats' +0xF8 vector (`std::vector<unsigned>::Contains` 0x008663A0), else FALSE.
+- **Does:** `GetCreatureById`, then pushes TRUE when the ability id is in the stats' +0xF8 vector (`Core::VectorContains<unsigned int>` 0x008663A0), else FALSE.
 - **Edge cases:** invalid or non-creature: FALSE (`esi` zeroed first) (checked). It tests the list `Engine_SetModalAbilityGUI` and a save's load fill, not whether the effect is applied: a modal ability whose upkeep was removed by another route stays TRUE until 725 clears it (inferred from the writers in ABILITIES.md).
 
 ### SetCooldown (194)

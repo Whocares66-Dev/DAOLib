@@ -7,7 +7,7 @@
 // the store being the data tree's Store, bound to the store object by OpenStore (0x007EB9D0); it
 // refuses nothing itself but greys an entry the party cannot pay for, and offers only the party's
 // backpack for sale, never the plot items' list. BuyItem's handler (0x007ED340) checks only the
-// price against the party's money (Store::BuyItemFrom, 0x007ECF00) and, with the backpack full,
+// price against the party's money (Store::BuyItem, 0x007ECF00) and, with the backpack full,
 // keeps the item and flashes the screen's full notice; SellItem's (0x007EC740) only the store's
 // own rules (Store::WillBuy, 21206: WillNotBuy and WillOnlyBuy by the item's base row, the store's
 // money and MaxBuyPrice against the total). Neither looks at where the item is or its plot flag,

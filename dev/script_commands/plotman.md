@@ -34,7 +34,7 @@ Shared facts, all checked:
 - **Edge cases:** with no module, nothing happens. Neither name is checked, so an empty or unknown table means the picker's table lookups fail (inferred). Whether the names are saved was not read. No vanilla script calls it. (checked except as marked)
 
 ### SetStoryPlot (750)
-- **Handler:** 0x00663DA0 (not shared). Calls `ScriptBackend::ForScript_GetPlotResRef` (0x0075F070) and `Journal` 0x0064DBA0. (checked)
+- **Handler:** 0x00663DA0 (not shared). Calls `PlotManager::GetPlotResRef` (0x0075F070) and `Journal` 0x0064DBA0. (checked)
 - **Does:** pops sPlot. It turns sPlot into the plot's resref through the party's plot manager, which takes a GUID or a resref. It then stores the resref as the journal's story plot. The journal is the module's +0x490 (getter 0x005D5810; its class is `Journal`, vtable 0x00B14B38), and the plot goes at journal+0x1CC (a `std::wstring`). (checked)
 - **State:** journal+0x1CC. The journal's copy (0x006F8320) copies it. Its reader (script.ldf: the loading screen) was not found. (checked except the reader)
 - **Edge cases:** with no app party, plot manager or journal, nothing happens. **An unknown plot stores ""**, which clears the story plot: `GetPlotResRef` answers an empty string for it (0x0075F0CE). (checked)
@@ -78,14 +78,14 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Shared facts (the party is alw
 - **Edge cases:** no app party, no plot manager, an unknown plot or a plot whose entry is -1 pushes **-1**, not 0 (the default `LocalizedString` object starts with the string id -1: 0x004D1B8B, checked). A failed pop is -639.
 
 ### GetPlotResRef (742)
-- **Handler:** 0x0065FD30 (not shared). The plot manager's `ScriptBackend::ForScript_GetPlotResRef` 0x0075F070, a string copy 0x004C2AB0, `StackPushString`.
+- **Handler:** 0x0065FD30 (not shared). The plot manager's `PlotManager::GetPlotResRef` 0x0075F070, a string copy 0x004C2AB0, `StackPushString`.
 - **Described in:** `plotman.md` (`SetStoryPlot`: "an unknown plot stores "", which clears the story plot: `GetPlotResRef` answers an empty string for it, 0x0075F0CE"); `dev/LIBRARY.md`.
 - **Does:** pops strPlot (a GUID, or a resref which comes back as it is named in the file) and pushes the plot's resource name. (checked)
 - **State:** read only.
 - **Edge cases:** no party, no plot manager or no such plot pushes "" (the copied string starts empty). The GUID is matched by the manager's lookup 0x0075E850, which also takes a resref, so the call is a normaliser too (inferred from the shared lookup). A failed pop is -639.
 
 ### GetPlotGUID (853)
-- **Handler:** 0x0065FE60 (not shared). `ScriptBackend::ForScript_GetPlotGUID` 0x0075CB30, `StackPushString`.
+- **Handler:** 0x0065FE60 (not shared). `PlotManager::GetPlotGuidByResRef` 0x0075CB30, `StackPushString`.
 - **Described in:** `dev/LIBRARY.md` ("`GetPlotGUID(resref)` gives a plot's GUID ("" for no such plot)").
 - **Does:** pops strPlotResRef; the manager's 0x0075CB30 answers a bool and fills the GUID string; on false the string is set to the empty literal (0x00ADFF52, which is a wide NUL, checked) and that is pushed. (checked)
 - **State:** read only.

@@ -162,7 +162,7 @@ Read 2026-10-18 in the GOG exe. Not seen in play. Arrays on the VM stack: `dev/N
   - So outside mode 3 the click reaches no handler, and no `BEGIN_TRAVEL` follows.
   - In mode 3 the handler needs only the module's WorldMap (0x005D57E0) and always returns true. 0x00700CA0 does nothing without a primary map, and sends nothing without a destination pin. It does not test that scene 0x10 is up.
 - **The map's close** [C]:
-  - **The scene:** `GUIWorldMap` (constructor 0x0072ECE0) is `GUIScene("WorldMap", "WorldMap", 3, 8, 0x10)`. Its hide (vtable +0x18 = `GUIWorldMap::Close` 0x0072EF40; slot 6 is Close, slot 7 Hide) calls `GUIScene::OnHide` 0x00A55910, then 0x00716A00(0) on scene 0x3B (the book background, not read).
+  - **The scene:** `GUIWorldMap` (constructor 0x0072ECE0) is `GUIScene("WorldMap", "WorldMap", 3, 8, 0x10)`. Its hide (vtable +0x18 = `GUIWorldMap::Close` 0x0072EF40; slot 6 is Close, slot 7 Hide) calls `GUI::GUIScene::Close` 0x00A55910, then 0x00716A00(0) on scene 0x3B (the book background, not read).
   - **OnHide** tests the mask at +0xA0:
     - it returns at once when the name (+0x58) is empty;
     - bit 1 calls `[0xC31650]` slot 0x98(1);
