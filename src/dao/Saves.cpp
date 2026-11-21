@@ -12,13 +12,10 @@
 //   character, the slot and the kind resolved; in play a quicksave asked
 //   for "any slot" and Write was called for slot 1, kind 2, and returned
 //   1. OnSaved runs after Write returns and has succeeded.
-// - Loading. A load looks for its file with SaveGame::FindSave, with the
-//   same three (in play once per load), before the game reads the save;
-//   the world is built after. OnGameLoaded runs at the module's load
-//   event (EVENT_TYPE_MODULE_LOAD) that follows, with the save's slot, the
-//   world there. The event alone is not enough: BioWare's module_core.nss
-//   says it "can fire more than once for a single module", so a load
-//   event with no save found before it is not a load and calls nothing.
+// - Loading. SaveGame::Read sees the file chosen by both the Load screen
+//   and Resume. Once the engine accepts the saved module, OnGameLoaded
+//   waits for EVENT_TYPE_MODULE_LOAD before handing out the slot. The
+//   event can also fire without a new save load (dev/SAVES.md, #343).
 // - A new game. module_core.nss: EVENT_TYPE_MODULE_START happens "only
 //   once for a single game instance". OnGameLoaded runs there with no
 //   slot, so a plugin starts a new playthrough from nothing rather than
@@ -88,8 +85,9 @@ using LoadedCallback = std::function<void(const std::optional<Slot> &)>;
 std::mutex g_lock;
 std::vector<SavedCallback> g_saved;
 std::vector<LoadedCallback> g_loaded;
-// The save a load found, until the module's load event says the world is
-// there. Only the game's thread touches it.
+// The game thread carries the slot from the file read to the module that
+// accepts it, then to the module's load event.
+std::optional<Slot> g_readSlot;
 std::optional<Slot> g_loading;
 
 template <class T> std::vector<T> Copy(const std::vector<T> &callbacks)
@@ -122,18 +120,51 @@ int __fastcall Write(void *self, int edx, std::int32_t slot, std::int32_t kind, 
     return written;
 }
 
-// SaveGame::FindSave: __cdecl (out, const std::wstring &character, slot,
-// kind), the save's file in the slot's folder, for a load.
-using FindFn = int(__cdecl *)(void *out, const core::WStringRep *character, std::int32_t slot, std::int32_t kind);
-Detour<FindFn> g_find;
-
-int __cdecl Find(void *out, const core::WStringRep *character, std::int32_t slot, std::int32_t kind)
+std::optional<Slot> SlotFromPath(const std::filesystem::path &path)
 {
-    if (character != nullptr)
+    const auto folder = path.parent_path();
+    const auto saves = folder.parent_path();
+    const auto character = saves.parent_path();
+    if (character.filename().empty() || _wcsicmp(saves.filename().c_str(), L"Saves") != 0 ||
+        _wcsicmp(character.parent_path().filename().c_str(), L"Characters") != 0)
     {
-        g_loading = Slot{std::wstring(character->View()), slot, static_cast<Kind>(kind)};
+        return std::nullopt;
     }
-    return g_find.Original()(out, character, slot, kind);
+    const auto slot = core::SlotFolderName::Parse(folder.filename().native());
+    if (!slot)
+    {
+        return std::nullopt;
+    }
+    return Slot{character.filename().native(), slot->number, static_cast<Kind>(slot->kind)};
+}
+
+using ReadFn = bool(__fastcall *)(void *self, int edx, const core::WStringRep *path);
+Detour<ReadFn> g_read;
+
+bool __fastcall Read(void *self, int edx, const core::WStringRep *path)
+{
+    g_readSlot.reset();
+    const bool read = g_read.Original()(self, edx, path);
+    if (read)
+    {
+        detail::Guard("reading the loaded save's slot", [&] { g_readSlot = SlotFromPath(path->View()); });
+    }
+    return read;
+}
+
+// The engine takes ownership of the by-value string and destroys it before returning.
+using LoadModuleFn = int(__fastcall *)(CClientExoApp *self, int edx, core::WStringRep module, bool fromSave);
+Detour<LoadModuleFn> g_loadModule;
+
+int __fastcall LoadModule(CClientExoApp *self, int edx, core::WStringRep module, bool fromSave)
+{
+    auto slot = std::exchange(g_readSlot, std::nullopt);
+    const int accepted = g_loadModule.Original()(self, edx, module, fromSave);
+    if (accepted != 0)
+    {
+        g_loading = fromSave ? std::move(slot) : std::nullopt;
+    }
+    return accepted;
 }
 
 void Loaded(const std::optional<Slot> &loaded)
@@ -154,15 +185,15 @@ void AttachLoading()
 {
     static std::once_flag once;
     std::call_once(once, [] {
-        g_find.Attach(addr::kSaveGame_FindSave, &Find);
+        g_read.Attach(addr::kSaveGame_Read, &Read);
+        g_loadModule.Attach(addr::kCClientExoApp_LoadModule, &LoadModule);
         events::OnScriptEvent(script::EventType::ModuleStart, [](ObjectId, const CScriptEvent &) {
             g_loading.reset();
             Loaded(std::nullopt);
         });
         events::OnScriptEvent(script::EventType::ModuleLoad, [](ObjectId, const CScriptEvent &) {
-            if (g_loading)
+            if (const auto loaded = std::exchange(g_loading, std::nullopt))
             {
-                const Slot loaded = *std::exchange(g_loading, std::nullopt);
                 Loaded(loaded);
             }
         });

@@ -1338,6 +1338,12 @@ DAO_ADDRESS(kFileAccess_Read, 4681)
 DAO_ADDRESS(kSaveGame_SlotFolder, 12666)
 DAO_ADDRESS(kSaveGame_Write, 12680)
 DAO_ADDRESS(kSaveGame_FindSave, 12676)
+// Both the file and slot loaders call Read with the actual .das path by
+// reference (`ret 4`, success in AL). They then ask LoadModule to load the
+// saved world (by-value engine string and bool, `ret 0x20`, 1 if queued).
+// Read 2026-11-20 at 0x00645650 and 0x005D95C0 (dev/SAVES.md, #343).
+DAO_ADDRESS(kSaveGame_Read, 12673)
+DAO_ADDRESS(kCClientExoApp_LoadModule, 10611)
 // Where a save is done, read 2026-09-30: in the loading game mode, whose
 // slot 8 calls the Worker, a state machine in numbered steps behind the
 // SaveScreen movie. Write runs only when a check (0x004C9B10) passes. Step

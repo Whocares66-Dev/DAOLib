@@ -118,6 +118,10 @@ TEST_CASE("a slot's kind and number from its folder's name")
     REQUIRE(quick);
     CHECK(quick->kind == 2);
     CHECK(quick->number == 1);
+    const auto postCampaign = SlotFolderName::Parse(L"POSTCAMPAIGN_1");
+    REQUIRE(postCampaign);
+    CHECK(postCampaign->kind == 3);
+    CHECK(postCampaign->number == 1);
     CHECK_FALSE(SlotFolderName::Parse(L"Slot_"));
     CHECK_FALSE(SlotFolderName::Parse(L"Slot_1a"));
     CHECK_FALSE(SlotFolderName::Parse(L"Screenshots"));

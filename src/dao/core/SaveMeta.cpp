@@ -4,6 +4,7 @@
 #include "dao/core/SaveDirectory.h"
 #include "dao/core/generated/SaveMetaTemplates.h"
 
+#include <algorithm>
 #include <array>
 
 namespace dao::core
@@ -135,14 +136,16 @@ std::vector<std::byte> SaveMeta::Blank()
 std::optional<SlotFolderName> SlotFolderName::Parse(std::wstring_view folder)
 {
     // The kinds' prefixes, by the engine's number for the kind.
-    constexpr std::array<std::wstring_view, 3> kPrefixes{L"Slot_", L"AutoSave_", L"QuickSave_"};
+    constexpr std::array<std::wstring_view, 4> kPrefixes{L"slot_", L"autosave_", L"quicksave_", L"postcampaign_"};
     for (std::size_t kind = 0; kind < kPrefixes.size(); ++kind)
     {
-        if (!folder.starts_with(kPrefixes[kind]))
+        const auto prefix = kPrefixes[kind];
+        const auto lower = [](wchar_t c) { return c >= L'A' && c <= L'Z' ? c + (L'a' - L'A') : c; };
+        if (!std::ranges::equal(folder.substr(0, prefix.size()), prefix, {}, lower))
         {
             continue;
         }
-        const std::wstring_view digits = folder.substr(kPrefixes[kind].size());
+        const std::wstring_view digits = folder.substr(prefix.size());
         if (digits.empty() || digits.size() > 9)
         {
             return std::nullopt;

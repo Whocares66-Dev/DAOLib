@@ -36,7 +36,7 @@ enum class Kind : std::int32_t
     Manual = 0, // Slot_<n>: a save the player named, or a slot the player chose
     Auto = 1,   // AutoSave_<n>, numbered 1 to 4
     Quick = 2,  // QuickSave_<n>
-    Other = 3,  // a fourth kind the engine accepts; the game does not appear to use it
+    Other = 3,  // PostCampaign_<n>
 };
 
 // Returns "manual", "auto", "quick" or "other", for logging.
@@ -127,8 +127,8 @@ struct Slot
 // needs no lock. They must not throw.
 void OnSaved(std::function<void(const Slot &saved)> callback);
 
-// Registers a callback that runs each time a game starts in the world: a save loaded, or a new
-// game.
+// Registers a callback that runs each time a game starts in the world, including a save opened
+// with Resume.
 // @param callback receives the slot the save came from, or nullopt for a new game
 //
 // Callbacks run on the game thread, one at a time, and must not throw. They run while the game
@@ -146,8 +146,7 @@ std::vector<std::wstring> Characters();
 // @return the folder name, or an empty string before the game has finished starting
 std::wstring Character();
 
-// Returns a character's save slots: manual saves first, then autosaves, then quicksaves, each in
-// order of number.
+// Returns a character's save slots in order of kind, then slot number.
 // @param character the character's folder name
 std::vector<Slot> List(std::wstring_view character);
 

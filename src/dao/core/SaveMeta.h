@@ -85,9 +85,8 @@ struct SaveMeta
     static constexpr std::uint32_t kModuleOverrides = 16810;
 };
 
-// A slot's kind as the engine numbers it (0 a manual save, 1 an autosave,
-// 2 the quicksave; dao/Saves.h, Kind) and its number, from its folder's
-// name; nothing for a folder of another name.
+// A slot's kind as the engine numbers it (dao/Saves.h, Kind) and its slot
+// number, from its folder's name. Matches the prefix without regard to case.
 struct SlotFolderName
 {
     std::int32_t kind = 0;
